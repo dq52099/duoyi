@@ -55,5 +55,5 @@ backend/.venv/
 build/
 
 # Release signing — keep keystore out of repo, CI restores from secrets
-android/keys/
+android/app/keys/
 android/key.properties

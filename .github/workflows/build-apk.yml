@@ -29,9 +29,9 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.DUOYI_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p android/keys
-          echo "$KEYSTORE_BASE64" | base64 -d > android/keys/duoyi-release.jks
-          ls -lh android/keys
+          mkdir -p android/app/keys
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keys/duoyi-release.jks
+          ls -lh android/app/keys
           cat > android/key.properties <<EOF
           storeFile=keys/duoyi-release.jks
           storePassword=${{ secrets.DUOYI_KEYSTORE_PASSWORD }}
@@ -89,4 +89,4 @@ jobs:
 
       - name: Cleanup keystore
         if: always()
-        run: rm -f android/keys/duoyi-release.jks android/key.properties
+        run: rm -f android/app/keys/duoyi-release.jks android/key.properties
