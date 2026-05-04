@@ -1,4 +1,4 @@
-package com.example.fingertip_time
+package com.duoyi.duoyi
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
@@ -10,7 +10,7 @@ import android.os.Bundle
  * MIUI requires a configurable widget to declare this activity even if
  * it does nothing more than acknowledge placement.
  */
-class FingertipWidgetConfigActivity : Activity() {
+class DuoyiWidgetConfigActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setResult(RESULT_CANCELED)
@@ -26,7 +26,7 @@ class FingertipWidgetConfigActivity : Activity() {
         }
 
         // Ask the provider to render the initial state immediately.
-        FingertipWidgetProvider.requestUpdate(applicationContext)
+        DuoyiWidgetProvider.requestUpdate(applicationContext)
 
         val resultValue = Intent().apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)

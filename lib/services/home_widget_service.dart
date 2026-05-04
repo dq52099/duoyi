@@ -5,8 +5,8 @@ import '../core/brand_strings.dart';
 
 /// Pushes today's stats and brand strings out to the Android home widget.
 class HomeWidgetService {
-  static const String _androidProviderName = 'FingertipWidgetProvider';
-  static const String _appGroupId = 'group.com.example.fingertip_time';
+  static const String _androidProviderName = 'DuoyiWidgetProvider';
+  static const String _appGroupId = 'group.com.duoyi.duoyi';
 
   static bool get _supported => !kIsWeb && Platform.isAndroid;
 

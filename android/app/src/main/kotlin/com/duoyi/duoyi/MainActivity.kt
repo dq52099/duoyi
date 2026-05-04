@@ -1,4 +1,4 @@
-package com.example.fingertip_time
+package com.duoyi.duoyi
 
 import io.flutter.embedding.android.FlutterActivity
 

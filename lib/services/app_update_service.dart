@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 /// Polls a GitHub repo's latest release and exposes update info.
 /// Mirrors RE0's lib/core/app_update_service.dart pattern, simplified.
 class AppUpdateService extends ChangeNotifier {
-  final String repo; // e.g. "dq52099/fingertip_time"
+  final String repo; // e.g. "dq52099/duoyi"
   final String currentVersion; // e.g. "1.0.0"
 
   AppUpdateService({required this.repo, required this.currentVersion});
@@ -36,7 +36,7 @@ class AppUpdateService extends ChangeNotifier {
       final client = HttpClient();
       try {
         final req = await client.getUrl(uri);
-        req.headers.set('User-Agent', 'fingertip_time/1.0');
+        req.headers.set('User-Agent', 'duoyi/1.0');
         req.headers.set('Accept', 'application/vnd.github+json');
         final resp = await req.close();
         final raw = await resp.transform(utf8.decoder).join();

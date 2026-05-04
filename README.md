@@ -1,4 +1,4 @@
-# 指尖时光 (Fingertip Time)
+# 多仪 (Duoyi)
 
 一款跨平台效率工具，整合 **待办四象限 / 习惯打卡热力图 / 番茄专注 / 日历 / 个人中心** 五大模块，支持 8 套主题切换（含背景图）、AI 助手、云同步、Android 小米桌面小组件。
 
@@ -15,14 +15,14 @@
 
 ### 主题
 8 套可切换主题（含 7 张背景图）：
-- **指尖时光**（默认 / 暖橙）
+- **多仪**（默认 / 暖橙）
 - **从零开始**（RE0）/ **原神** / **星穹铁道** / **鸣潮** / **绝区零** / **燕云十六声** / **希卡之石**
 
 每套主题不仅切换颜色，还会切换背景图、文案（待办→咒文/委托/符文…）、问候语和通知话术。
 
 ### 平台特性
 - **桌面**：Linux 系统托盘 + DBus 桌面通知
-- **Android**：MIUI/通用桌面小组件（待办/习惯/番茄三栏，深链 `fingertip://`）
+- **Android**：MIUI/通用桌面小组件（待办/习惯/番茄三栏，深链 `duoyi://`）
 - **多端云同步**：Python FastAPI 后端，按时间戳合并
 
 ### AI 助手
@@ -73,7 +73,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ## 发布
 
 GitHub Actions 在 `.github/workflows/build-apk.yml`：
-- `main` 推送 → 出 `fingertip_time-apk` artifact
+- `main` 推送 → 出 `duoyi-apk` artifact
 - 推送 `v*` tag → 自动创建 GitHub Release，带 APK
 
 ```bash

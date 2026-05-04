@@ -436,7 +436,7 @@ class MineScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('指尖时光'),
+        title: const Text('多仪'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -1,12 +1,25 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Read keystore properties from android/key.properties (local) or env (CI).
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) {
+        FileInputStream(file).use { load(it) }
+    }
+}
+
+fun ksProp(name: String, env: String): String? =
+    (keystoreProperties[name] as? String) ?: System.getenv(env)
+
 android {
-    namespace = "com.example.fingertip_time"
+    namespace = "com.duoyi.duoyi"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,21 +33,34 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.fingertip_time"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.duoyi.duoyi"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val storePath = ksProp("storeFile", "DUOYI_KEYSTORE_PATH")
+            val storePass = ksProp("storePassword", "DUOYI_KEYSTORE_PASSWORD")
+            val keyAlias = ksProp("keyAlias", "DUOYI_KEY_ALIAS")
+            val keyPass = ksProp("keyPassword", "DUOYI_KEY_PASSWORD")
+            if (storePath != null && storePass != null && keyAlias != null && keyPass != null) {
+                storeFile = file(storePath)
+                storePassword = storePass
+                this.keyAlias = keyAlias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            val sc = signingConfigs.getByName("release")
+            signingConfig = if (sc.storeFile != null) sc else signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

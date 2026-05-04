@@ -20,12 +20,12 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Deep link from home widget taps (fingertip://tab/<name>, fingertip://action/<name>) -->
+            <!-- Deep link from home widget taps (duoyi://tab/<name>, duoyi://action/<name>) -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="fingertip" />
+                <data android:scheme="duoyi" />
             </intent-filter>
         </activity>
         <meta-data
@@ -34,7 +34,7 @@
 
         <!-- MIUI / Android home widget -->
         <receiver
-            android:name=".FingertipWidgetProvider"
+            android:name=".DuoyiWidgetProvider"
             android:label="@string/widget_label"
             android:exported="true">
             <intent-filter>
@@ -44,7 +44,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/fingertip_widget_info" />
+                android:resource="@xml/duoyi_widget_info" />
             <!-- MIUI specific marker so 小米桌面 picks it up reliably -->
             <meta-data
                 android:name="miui.appwidget.previewImage"
@@ -52,7 +52,7 @@
         </receiver>
 
         <activity
-            android:name=".FingertipWidgetConfigActivity"
+            android:name=".DuoyiWidgetConfigActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>

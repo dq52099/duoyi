@@ -165,7 +165,7 @@ class BrandStrings {
 
   // ---- Default (no game skin) ----
   static const defaultBrand = BrandStrings(
-    appTitle: '指尖时光',
+    appTitle: '多仪',
     greetingMorning: '早上好',
     greetingNoon: '中午好',
     greetingAfternoon: '下午好',
@@ -228,7 +228,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知设置',
     mineCloudSyncLabel: '云同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '番茄钟完成',
     notifPomodoroDoneBody: '完成了一次专注，休息一下吧',
     notifBreakDoneTitle: '休息结束',
@@ -239,7 +239,7 @@ class BrandStrings {
 
   // ---- RE0 ----
   static const re0 = BrandStrings(
-    appTitle: '指尖时光',
+    appTitle: '多仪 · 露格尼卡',
     greetingMorning: '黎明已破，魔女',
     greetingNoon: '正午之光',
     greetingAfternoon: '午后之契',
@@ -302,7 +302,7 @@ class BrandStrings {
     mineNotificationsLabel: '魔法通知',
     mineCloudSyncLabel: '记忆同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '咏唱完成',
     notifPomodoroDoneBody: '玛那耗尽，请稍作休息',
     notifBreakDoneTitle: '玛那已恢复',
@@ -313,7 +313,7 @@ class BrandStrings {
 
   // ---- 原神 ----
   static const genshin = BrandStrings(
-    appTitle: '指尖时光 · 提瓦特历',
+    appTitle: '多仪 · 提瓦特历',
     greetingMorning: '清晨，旅行者',
     greetingNoon: '正午元素活跃',
     greetingAfternoon: '午后好天气',
@@ -376,7 +376,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '冥想完成',
     notifPomodoroDoneBody: '元素已蓄满，去休息一下吧',
     notifBreakDoneTitle: '调息结束',
@@ -387,7 +387,7 @@ class BrandStrings {
 
   // ---- 星穹铁道 ----
   static const starRail = BrandStrings(
-    appTitle: '指尖时光 · 列车日志',
+    appTitle: '多仪 · 列车日志',
     greetingMorning: '早安，开拓者',
     greetingNoon: '正午开拓时刻',
     greetingAfternoon: '午后跃迁',
@@ -450,7 +450,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '跃迁完成',
     notifPomodoroDoneBody: '能量耗尽，请稍作停靠',
     notifBreakDoneTitle: '停靠结束',
@@ -461,7 +461,7 @@ class BrandStrings {
 
   // ---- 鸣潮 ----
   static const wuthering = BrandStrings(
-    appTitle: '指尖时光 · 共鸣志',
+    appTitle: '多仪 · 共鸣志',
     greetingMorning: '清晨，漂泊者',
     greetingNoon: '正午潮声',
     greetingAfternoon: '午后回响',
@@ -524,7 +524,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '共鸣结束',
     notifPomodoroDoneBody: '声场耗散，去冷却一下吧',
     notifBreakDoneTitle: '冷却完成',
@@ -535,7 +535,7 @@ class BrandStrings {
 
   // ---- 绝区零 ----
   static const zzz = BrandStrings(
-    appTitle: '指尖时光 · 委托台',
+    appTitle: '多仪 · 委托台',
     greetingMorning: '早，代理人',
     greetingNoon: '街区午时',
     greetingAfternoon: '午后霓虹',
@@ -598,7 +598,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '剪辑完成',
     notifPomodoroDoneBody: '影碟已存档，先休息一下',
     notifBreakDoneTitle: '休息结束',
@@ -609,7 +609,7 @@ class BrandStrings {
 
   // ---- 燕云十六声 ----
   static const yanyun = BrandStrings(
-    appTitle: '指尖时光 · 江湖卷',
+    appTitle: '多仪 · 江湖卷',
     greetingMorning: '晨光熹微，少侠',
     greetingNoon: '正午江湖',
     greetingAfternoon: '午后茶香',
@@ -672,7 +672,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '入定完成',
     notifPomodoroDoneBody: '已成一段功课，且去歇歇',
     notifBreakDoneTitle: '小憩已尽',
@@ -683,7 +683,7 @@ class BrandStrings {
 
   // ---- 希卡之石 (BOTW) ----
   static const botw = BrandStrings(
-    appTitle: '指尖时光 · 希卡石板',
+    appTitle: '多仪 · 希卡石板',
     greetingMorning: '晨光未明，林克',
     greetingNoon: '正午海拉鲁',
     greetingAfternoon: '午后阳光',
@@ -746,7 +746,7 @@ class BrandStrings {
     mineNotificationsLabel: '通知',
     mineCloudSyncLabel: '云端同步',
     mineDataMgmtLabel: '数据管理',
-    mineAboutLabel: '关于指尖时光',
+    mineAboutLabel: '关于多仪',
     notifPomodoroDoneTitle: '具现完成',
     notifPomodoroDoneBody: '能量耗尽，回流一下吧',
     notifBreakDoneTitle: '能量已回流',

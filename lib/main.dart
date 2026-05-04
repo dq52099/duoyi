@@ -36,7 +36,7 @@ void main() async {
   final systemTray = SystemTrayService();
   final authProvider = AuthProvider();
   final aiService = AiService();
-  final appUpdate = AppUpdateService(repo: 'dq52099/fingertip_time', currentVersion: '1.0.0');
+  final appUpdate = AppUpdateService(repo: 'dq52099/duoyi', currentVersion: '1.0.0');
 
   await Future.wait([
     todoProvider.loadFromStorage(),
@@ -105,7 +105,7 @@ void main() async {
         ChangeNotifierProvider.value(value: appUpdate),
         Provider.value(value: systemTray),
       ],
-      child: const FingertipTimeApp(),
+      child: const DuoyiApp(),
     ),
   );
 }
@@ -134,7 +134,7 @@ Future<void> _pushHomeWidget(
 
 void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   if (uri == null) return;
-  if (uri.scheme != 'fingertip') return;
+  if (uri.scheme != 'duoyi') return;
 
   final state = mainShellKey.currentState;
 
@@ -158,8 +158,8 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   }
 }
 
-class FingertipTimeApp extends StatelessWidget {
-  const FingertipTimeApp({super.key});
+class DuoyiApp extends StatelessWidget {
+  const DuoyiApp({super.key});
 
   @override
   Widget build(BuildContext context) {

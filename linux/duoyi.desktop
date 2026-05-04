@@ -1,13 +1,13 @@
 [Desktop Entry]
-Name=指尖时光
-Name[en]=Fingertip Time
+Name=多仪
+Name[en]=Duoyi
 Comment=待办、习惯、日历、番茄专注于一体的效率工具
 Comment[en]=Todo, habits, calendar and pomodoro focus app
-Exec=fingertip_time
-Icon=fingertip_time
+Exec=duoyi
+Icon=duoyi
 Terminal=false
 Type=Application
 Categories=Office;Utility;ProjectManagement;
 StartupNotify=true
-StartupWMClass=fingertip_time
-Keywords=todo;habit;pomodoro;calendar;productivity;
+StartupWMClass=duoyi
+Keywords=todo;habit;pomodoro;calendar;productivity;duoyi;
