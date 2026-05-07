@@ -27,7 +27,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _error = null;
     });
     try {
-      final list = await context.read<AuthProvider>().client.getList('/api/announcements');
+      final list = await context.read<AuthProvider>().client.getList(
+        '/api/announcements',
+      );
       _items = list.cast<Map<String, dynamic>>();
     } catch (e) {
       _error = e.toString();
@@ -51,62 +53,89 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('公告'), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        title: const Text('公告'),
+        backgroundColor: Colors.transparent,
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : (_items.isEmpty
-                ? EmptyState(
-                    icon: Icons.campaign_outlined,
-                    message: _error ?? '暂无公告',
-                    actionLabel: '刷新',
-                    onAction: _load,
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _items.length,
-                    itemBuilder: (_, i) {
-                      final a = _items[i];
-                      final level = (a['level'] ?? 'info').toString();
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: _levelColor(level).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(4),
+                  ? EmptyState(
+                      icon: Icons.campaign_outlined,
+                      message: _error ?? '暂无公告',
+                      actionLabel: '刷新',
+                      onAction: _load,
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _items.length,
+                      itemBuilder: (_, i) {
+                        final a = _items[i];
+                        final level = (a['level'] ?? 'info').toString();
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _levelColor(
+                                          level,
+                                        ).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        level,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: _levelColor(level),
+                                        ),
+                                      ),
                                     ),
-                                    child: Text(level,
-                                        style: TextStyle(fontSize: 10, color: _levelColor(level))),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      (a['title'] ?? '').toString(),
-                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        (a['title'] ?? '').toString(),
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  (a['body'] ?? '').toString(),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text((a['body'] ?? '').toString(), style: const TextStyle(fontSize: 13, height: 1.5)),
-                              const SizedBox(height: 6),
-                              Text((a['created_at'] ?? '').toString(),
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                            ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  (a['created_at'] ?? '').toString(),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  )),
+                        );
+                      },
+                    )),
       ),
     );
   }

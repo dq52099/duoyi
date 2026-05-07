@@ -18,26 +18,26 @@ class UserProfile {
   });
 
   Map<String, dynamic> toJson() => {
-        'username': username,
-        'avatarInitials': avatarInitials,
-        'totalTodosCompleted': totalTodosCompleted,
-        'totalFocusMinutes': totalFocusMinutes,
-        'currentStreak': currentStreak,
-        'bestStreak': bestStreak,
-        'lastSyncTime': lastSyncTime?.toIso8601String(),
-      };
+    'username': username,
+    'avatarInitials': avatarInitials,
+    'totalTodosCompleted': totalTodosCompleted,
+    'totalFocusMinutes': totalFocusMinutes,
+    'currentStreak': currentStreak,
+    'bestStreak': bestStreak,
+    'lastSyncTime': lastSyncTime?.toIso8601String(),
+  };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
-        username: json['username'] ?? '用户',
-        avatarInitials: json['avatarInitials'] ?? '我',
-        totalTodosCompleted: json['totalTodosCompleted'] ?? 0,
-        totalFocusMinutes: json['totalFocusMinutes'] ?? 0,
-        currentStreak: json['currentStreak'] ?? 0,
-        bestStreak: json['bestStreak'] ?? 0,
-        lastSyncTime: json['lastSyncTime'] != null
-            ? DateTime.parse(json['lastSyncTime'])
-            : null,
-      );
+    username: json['username'] ?? '用户',
+    avatarInitials: json['avatarInitials'] ?? '我',
+    totalTodosCompleted: json['totalTodosCompleted'] ?? 0,
+    totalFocusMinutes: json['totalFocusMinutes'] ?? 0,
+    currentStreak: json['currentStreak'] ?? 0,
+    bestStreak: json['bestStreak'] ?? 0,
+    lastSyncTime: json['lastSyncTime'] != null
+        ? DateTime.parse(json['lastSyncTime'])
+        : null,
+  );
 
   String get greeting {
     final hour = DateTime.now().hour;

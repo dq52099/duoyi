@@ -24,7 +24,11 @@ class AppUpdateService extends ChangeNotifier {
 
   bool get hasUpdate {
     if (_latestVersion == null) return false;
-    return _compareSemver(_normalize(_latestVersion!), _normalize(currentVersion)) > 0;
+    return _compareSemver(
+          _normalize(_latestVersion!),
+          _normalize(currentVersion),
+        ) >
+        0;
   }
 
   Future<void> checkNow() async {
@@ -32,7 +36,9 @@ class AppUpdateService extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final uri = Uri.parse('https://api.github.com/repos/$repo/releases/latest');
+      final uri = Uri.parse(
+        'https://api.github.com/repos/$repo/releases/latest',
+      );
       final client = HttpClient();
       try {
         final req = await client.getUrl(uri);
@@ -75,7 +81,8 @@ class AppUpdateService extends ChangeNotifier {
     }
   }
 
-  String _normalize(String v) => v.replaceFirst(RegExp(r'^v'), '').split('-').first;
+  String _normalize(String v) =>
+      v.replaceFirst(RegExp(r'^v'), '').split('-').first;
 
   int _compareSemver(String a, String b) {
     final pa = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();

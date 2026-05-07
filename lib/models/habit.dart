@@ -31,47 +31,51 @@ class Habit {
     this.endDate,
     this.sortOrder = 0,
     DateTime? createdAt,
-  })  : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
-        completions = completions ?? {},
-        createdAt = createdAt ?? DateTime.now();
+  }) : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
+       completions = completions ?? {},
+       createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'icon': icon,
-        'colorValue': colorValue,
-        'activeWeekdays': activeWeekdays,
-        'targetCount': targetCount,
-        'currentStreak': currentStreak,
-        'bestStreak': bestStreak,
-        'completions': completions,
-        'category': category,
-        'weeklyTarget': weeklyTarget,
-        'startDate': startDate?.toIso8601String(),
-        'endDate': endDate?.toIso8601String(),
-        'sortOrder': sortOrder,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'icon': icon,
+    'colorValue': colorValue,
+    'activeWeekdays': activeWeekdays,
+    'targetCount': targetCount,
+    'currentStreak': currentStreak,
+    'bestStreak': bestStreak,
+    'completions': completions,
+    'category': category,
+    'weeklyTarget': weeklyTarget,
+    'startDate': startDate?.toIso8601String(),
+    'endDate': endDate?.toIso8601String(),
+    'sortOrder': sortOrder,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory Habit.fromJson(Map<String, dynamic> json) => Habit(
-        id: json['id'],
-        name: json['name'],
-        icon: json['icon'] ?? 'star',
-        colorValue: json['colorValue'] ?? 0xFF4CAF50,
-        activeWeekdays: List<int>.from(json['activeWeekdays'] ?? [0, 1, 2, 3, 4, 5, 6]),
-        targetCount: json['targetCount'] ?? 1,
-        currentStreak: json['currentStreak'] ?? 0,
-        bestStreak: json['bestStreak'] ?? 0,
-        completions: json['completions'] != null
-            ? Map<String, int>.from(json['completions'])
-            : {},
-        category: json['category'],
-        weeklyTarget: json['weeklyTarget'] ?? 7,
-        startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
-        endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
-        sortOrder: json['sortOrder'] ?? 0,
-        createdAt: DateTime.parse(json['createdAt']),
-      );
+    id: json['id'],
+    name: json['name'],
+    icon: json['icon'] ?? 'star',
+    colorValue: json['colorValue'] ?? 0xFF4CAF50,
+    activeWeekdays: List<int>.from(
+      json['activeWeekdays'] ?? [0, 1, 2, 3, 4, 5, 6],
+    ),
+    targetCount: json['targetCount'] ?? 1,
+    currentStreak: json['currentStreak'] ?? 0,
+    bestStreak: json['bestStreak'] ?? 0,
+    completions: json['completions'] != null
+        ? Map<String, int>.from(json['completions'])
+        : {},
+    category: json['category'],
+    weeklyTarget: json['weeklyTarget'] ?? 7,
+    startDate: json['startDate'] != null
+        ? DateTime.parse(json['startDate'])
+        : null,
+    endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
+    sortOrder: json['sortOrder'] ?? 0,
+    createdAt: DateTime.parse(json['createdAt']),
+  );
 
   int todayCount() => completions[todayKey()] ?? 0;
   double todayProgress() =>

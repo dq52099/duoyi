@@ -33,7 +33,12 @@ class AiService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> configure({String? baseUrl, String? apiKey, String? model, bool? enabled}) async {
+  Future<void> configure({
+    String? baseUrl,
+    String? apiKey,
+    String? model,
+    bool? enabled,
+  }) async {
     final p = await SharedPreferences.getInstance();
     if (baseUrl != null) {
       _baseUrl = baseUrl.trim();
@@ -55,22 +60,31 @@ class AiService extends ChangeNotifier {
   }
 
   /// Generic chat completion. Returns the assistant message text.
-  Future<String> _chat(String systemPrompt, String userPrompt, {double temperature = 0.4}) async {
-    if (!isConfigured) throw const AiException('未配置 AI 服务，请在我的→AI 助手中填写 base_url 与 key');
-    final uri = Uri.parse('${_baseUrl.replaceAll(RegExp(r'/+$'), '')}/v1/chat/completions');
+  Future<String> _chat(
+    String systemPrompt,
+    String userPrompt, {
+    double temperature = 0.4,
+  }) async {
+    if (!isConfigured)
+      throw const AiException('未配置 AI 服务，请在我的→AI 助手中填写 base_url 与 key');
+    final uri = Uri.parse(
+      '${_baseUrl.replaceAll(RegExp(r'/+$'), '')}/v1/chat/completions',
+    );
     final client = HttpClient();
     try {
       final req = await client.postUrl(uri);
       req.headers.set('Content-Type', 'application/json');
       req.headers.set('Authorization', 'Bearer $_apiKey');
-      req.write(json.encode({
-        'model': _model,
-        'temperature': temperature,
-        'messages': [
-          {'role': 'system', 'content': systemPrompt},
-          {'role': 'user', 'content': userPrompt},
-        ],
-      }));
+      req.write(
+        json.encode({
+          'model': _model,
+          'temperature': temperature,
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': userPrompt},
+          ],
+        }),
+      );
       final resp = await req.close();
       final raw = await resp.transform(utf8.decoder).join();
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -80,7 +94,8 @@ class AiService extends ChangeNotifier {
       final choices = data['choices'];
       if (choices is List && choices.isNotEmpty) {
         final msg = choices.first['message'];
-        if (msg is Map && msg['content'] is String) return msg['content'] as String;
+        if (msg is Map && msg['content'] is String)
+          return msg['content'] as String;
       }
       return '';
     } finally {
@@ -98,7 +113,10 @@ class AiService extends ChangeNotifier {
     );
     return out
         .split(RegExp(r'\r?\n'))
-        .map((line) => line.trim().replaceFirst(RegExp(r'^[\-\*\d\.\s]+'), '').trim())
+        .map(
+          (line) =>
+              line.trim().replaceFirst(RegExp(r'^[\-\*\d\.\s]+'), '').trim(),
+        )
         .where((line) => line.isNotEmpty)
         .toList();
   }

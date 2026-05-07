@@ -9,23 +9,28 @@ class AuthState {
   final String? token;
   final bool isAdmin;
 
-  const AuthState({this.userId, this.username, this.token, this.isAdmin = false});
+  const AuthState({
+    this.userId,
+    this.username,
+    this.token,
+    this.isAdmin = false,
+  });
 
   bool get isLoggedIn => token != null && token!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
-        'user_id': userId,
-        'username': username,
-        'token': token,
-        'is_admin': isAdmin,
-      };
+    'user_id': userId,
+    'username': username,
+    'token': token,
+    'is_admin': isAdmin,
+  };
 
   factory AuthState.fromJson(Map<String, dynamic> j) => AuthState(
-        userId: j['user_id'] as String?,
-        username: j['username'] as String?,
-        token: j['token'] as String?,
-        isAdmin: j['is_admin'] == true,
-      );
+    userId: j['user_id'] as String?,
+    username: j['username'] as String?,
+    token: j['token'] as String?,
+    isAdmin: j['is_admin'] == true,
+  );
 }
 
 class AuthProvider extends ChangeNotifier {
@@ -91,7 +96,8 @@ class AuthProvider extends ChangeNotifier {
     final res = await _client.post('/api/auth/register', {
       'username': username,
       'password': password,
-      if (inviteCode != null && inviteCode.isNotEmpty) 'invite_code': inviteCode,
+      if (inviteCode != null && inviteCode.isNotEmpty)
+        'invite_code': inviteCode,
     });
     _state = AuthState(
       userId: res['user_id'] as String?,
@@ -104,7 +110,10 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login({required String username, required String password}) async {
+  Future<void> login({
+    required String username,
+    required String password,
+  }) async {
     if (_baseUrl.isEmpty) throw const ApiException('请先在设置里填写服务器地址');
     final res = await _client.post('/api/auth/login', {
       'username': username,

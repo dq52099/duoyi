@@ -19,7 +19,11 @@ class ApiClient {
     return const [];
   }
 
-  Future<Map<String, dynamic>> _send(String method, String path, {Object? body}) async {
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path, {
+    Object? body,
+  }) async {
     final raw = await _sendRaw(method, path, body: body);
     if (raw is Map<String, dynamic>) return raw;
     return {};

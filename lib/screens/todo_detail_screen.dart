@@ -33,19 +33,29 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   }
 
   void _save() {
-    context.read<TodoProvider>().updateTodo(widget.todoId, _todo.copyWith(
-          title: _titleCtrl.text.trim(),
-          notes: _notesCtrl.text.trim(),
-        ));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存'), duration: Duration(seconds: 1)));
+    context.read<TodoProvider>().updateTodo(
+      widget.todoId,
+      _todo.copyWith(
+        title: _titleCtrl.text.trim(),
+        notes: _notesCtrl.text.trim(),
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已保存'), duration: Duration(seconds: 1)),
+    );
   }
 
   void _addSubtask() {
     if (_subtaskCtrl.text.trim().isEmpty) return;
-    context.read<TodoProvider>().addSubtask(widget.todoId, _subtaskCtrl.text.trim());
+    context.read<TodoProvider>().addSubtask(
+      widget.todoId,
+      _subtaskCtrl.text.trim(),
+    );
     _subtaskCtrl.clear();
     setState(() {
-      _todo = context.read<TodoProvider>().todos.firstWhere((t) => t.id == widget.todoId);
+      _todo = context.read<TodoProvider>().todos.firstWhere(
+        (t) => t.id == widget.todoId,
+      );
     });
   }
 
@@ -60,7 +70,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TodoProvider>();
-    _todo = provider.todos.firstWhere((t) => t.id == widget.todoId, orElse: () => _todo);
+    _todo = provider.todos.firstWhere(
+      (t) => t.id == widget.todoId,
+      orElse: () => _todo,
+    );
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -71,57 +84,105 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(controller: _titleCtrl, decoration: const InputDecoration(labelText: '任务名称'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          TextField(
+            controller: _titleCtrl,
+            decoration: const InputDecoration(labelText: '任务名称'),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _notesCtrl, decoration: const InputDecoration(labelText: '备注'), maxLines: 3),
+          TextField(
+            controller: _notesCtrl,
+            decoration: const InputDecoration(labelText: '备注'),
+            maxLines: 3,
+          ),
           const SizedBox(height: 16),
 
           DropdownButtonFormField<EisenhowerQuadrant>(
             initialValue: _todo.quadrant,
             decoration: const InputDecoration(labelText: '四象限'),
             items: const [
-              DropdownMenuItem(value: EisenhowerQuadrant.urgentImportant, child: Text('Q1 重要且紧急')),
-              DropdownMenuItem(value: EisenhowerQuadrant.notUrgentImportant, child: Text('Q2 重要不紧急')),
-              DropdownMenuItem(value: EisenhowerQuadrant.urgentNotImportant, child: Text('Q3 紧急不重要')),
-              DropdownMenuItem(value: EisenhowerQuadrant.notUrgentNotImportant, child: Text('Q4 不重要不紧急')),
+              DropdownMenuItem(
+                value: EisenhowerQuadrant.urgentImportant,
+                child: Text('Q1 重要且紧急'),
+              ),
+              DropdownMenuItem(
+                value: EisenhowerQuadrant.notUrgentImportant,
+                child: Text('Q2 重要不紧急'),
+              ),
+              DropdownMenuItem(
+                value: EisenhowerQuadrant.urgentNotImportant,
+                child: Text('Q3 紧急不重要'),
+              ),
+              DropdownMenuItem(
+                value: EisenhowerQuadrant.notUrgentNotImportant,
+                child: Text('Q4 不重要不紧急'),
+              ),
             ],
-            onChanged: (v) => setState(() => _todo = _todo.copyWith(quadrant: v!)),
+            onChanged: (v) =>
+                setState(() => _todo = _todo.copyWith(quadrant: v!)),
           ),
 
           const SizedBox(height: 24),
           Row(
             children: [
-              const Text('子任务', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const Text(
+                '子任务',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
               const Spacer(),
-              Text('${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
-                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+              Text(
+                '${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: TextField(controller: _subtaskCtrl, decoration: const InputDecoration(labelText: '新增子任务', isDense: true))),
-              IconButton(onPressed: _addSubtask, icon: Icon(Icons.add_circle, color: cs.primary)),
+              Expanded(
+                child: TextField(
+                  controller: _subtaskCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '新增子任务',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _addSubtask,
+                icon: Icon(Icons.add_circle, color: cs.primary),
+              ),
             ],
           ),
-          ..._todo.subtasks.map((s) => ListTile(
-                dense: true,
-                leading: Checkbox(
-                  value: s.isCompleted,
-                  onChanged: (_) {
-                    provider.toggleSubtask(widget.todoId, s.id);
-                    setState(() {});
-                  },
+          ..._todo.subtasks.map(
+            (s) => ListTile(
+              dense: true,
+              leading: Checkbox(
+                value: s.isCompleted,
+                onChanged: (_) {
+                  provider.toggleSubtask(widget.todoId, s.id);
+                  setState(() {});
+                },
+              ),
+              title: Text(
+                s.title,
+                style: TextStyle(
+                  fontSize: 14,
+                  decoration: s.isCompleted ? TextDecoration.lineThrough : null,
                 ),
-                title: Text(s.title, style: TextStyle(fontSize: 14, decoration: s.isCompleted ? TextDecoration.lineThrough : null)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () {
-                    provider.deleteSubtask(widget.todoId, s.id);
-                    setState(() {});
-                  },
-                ),
-              )),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, size: 16),
+                onPressed: () {
+                  provider.deleteSubtask(widget.todoId, s.id);
+                  setState(() {});
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );

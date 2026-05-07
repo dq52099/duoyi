@@ -18,7 +18,9 @@ class SyncConfig {
 }
 
 class CloudSyncProvider extends ChangeNotifier {
-  SyncConfig _config = SyncConfig(lastSync: DateTime.fromMillisecondsSinceEpoch(0));
+  SyncConfig _config = SyncConfig(
+    lastSync: DateTime.fromMillisecondsSinceEpoch(0),
+  );
   bool _isSyncing = false;
 
   SyncConfig get config => _config;
@@ -34,15 +36,28 @@ class CloudSyncProvider extends ChangeNotifier {
         : DateTime.fromMillisecondsSinceEpoch(0);
     final autoSync = prefs.getBool('sync_auto') ?? false;
 
-    _config = SyncConfig(serverUrl: url, token: token, lastSync: lastSync, autoSync: autoSync);
+    _config = SyncConfig(
+      serverUrl: url,
+      token: token,
+      lastSync: lastSync,
+      autoSync: autoSync,
+    );
     notifyListeners();
   }
 
-  Future<void> configure({required String serverUrl, required String token}) async {
+  Future<void> configure({
+    required String serverUrl,
+    required String token,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('sync_server_url', serverUrl);
     await prefs.setString('sync_token', token);
-    _config = SyncConfig(serverUrl: serverUrl, token: token, lastSync: _config.lastSync, autoSync: _config.autoSync);
+    _config = SyncConfig(
+      serverUrl: serverUrl,
+      token: token,
+      lastSync: _config.lastSync,
+      autoSync: _config.autoSync,
+    );
     notifyListeners();
   }
 
@@ -71,7 +86,12 @@ class CloudSyncProvider extends ChangeNotifier {
       }
 
       final now = DateTime.now();
-      _config = SyncConfig(serverUrl: _config.serverUrl, token: _config.token, lastSync: now, autoSync: _config.autoSync);
+      _config = SyncConfig(
+        serverUrl: _config.serverUrl,
+        token: _config.token,
+        lastSync: now,
+        autoSync: _config.autoSync,
+      );
       await prefs.setString('sync_last_time', now.toIso8601String());
     } catch (_) {}
 
@@ -79,7 +99,10 @@ class CloudSyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>?> _httpPost(String url, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>?> _httpPost(
+    String url,
+    Map<String, dynamic> body,
+  ) async {
     final uri = Uri.parse(url);
     final httpClient = HttpClient();
     try {

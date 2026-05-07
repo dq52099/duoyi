@@ -59,7 +59,7 @@ class PomodoroProvider extends ChangeNotifier {
       isRunning: false,
       type: PomodoroType.focus,
       completedSessions: 0,
-      whiteNoiseEnabled: _config.whiteNoiseEnabled,
+      whiteNoiseSound: _config.whiteNoiseSound,
     );
   }
 
@@ -90,8 +90,10 @@ class PomodoroProvider extends ChangeNotifier {
 
   Future<void> _saveSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('pomodoro_sessions',
-        json.encode(_sessions.map((e) => e.toJson()).toList()));
+    await prefs.setString(
+      'pomodoro_sessions',
+      json.encode(_sessions.map((e) => e.toJson()).toList()),
+    );
   }
 
   // --- Timer controls ---
@@ -127,12 +129,14 @@ class PomodoroProvider extends ChangeNotifier {
     _timer?.cancel();
     final session = PomodoroSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      startTime: DateTime.now().subtract(Duration(seconds: _state.totalSeconds)),
+      startTime: DateTime.now().subtract(
+        Duration(seconds: _state.totalSeconds),
+      ),
       endTime: DateTime.now(),
       durationSeconds: _state.totalSeconds,
       type: _state.type,
       taskName: _state.taskName,
-      whiteNoiseEnabled: _state.whiteNoiseEnabled,
+      whiteNoiseSound: _state.whiteNoiseSound,
     );
     _sessions.add(session);
     _saveSessions();
@@ -221,7 +225,7 @@ class PomodoroProvider extends ChangeNotifier {
       _state = _state.copyWith(
         remainingSeconds: cfg.focusDuration,
         totalSeconds: cfg.focusDuration,
-        whiteNoiseEnabled: cfg.whiteNoiseEnabled,
+        whiteNoiseSound: cfg.whiteNoiseSound,
       );
     }
     notifyListeners();
@@ -232,18 +236,24 @@ class PomodoroProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleWhiteNoise() {
-    _state = _state.copyWith(whiteNoiseEnabled: !_state.whiteNoiseEnabled);
+  void setWhiteNoiseSound(String sound) {
+    _state = _state.copyWith(whiteNoiseSound: sound);
+    _config.whiteNoiseSound = sound;
+    _saveConfig();
     notifyListeners();
   }
 
   // --- Queries ---
 
   List<PomodoroSession> getSessionsForDateRange(DateTime start, DateTime end) {
-    return _sessions.where((s) =>
-        s.type == PomodoroType.focus &&
-        s.startTime.isAfter(start) &&
-        s.startTime.isBefore(end)).toList();
+    return _sessions
+        .where(
+          (s) =>
+              s.type == PomodoroType.focus &&
+              s.startTime.isAfter(start) &&
+              s.startTime.isBefore(end),
+        )
+        .toList();
   }
 
   List<PomodoroSession> get todayFocusSessions {
@@ -254,8 +264,9 @@ class PomodoroProvider extends ChangeNotifier {
 
   int get totalFocusMinutes {
     return _sessions
-        .where((s) => s.type == PomodoroType.focus)
-        .fold(0, (sum, s) => sum + s.durationSeconds) ~/ 60;
+            .where((s) => s.type == PomodoroType.focus)
+            .fold(0, (sum, s) => sum + s.durationSeconds) ~/
+        60;
   }
 
   @override

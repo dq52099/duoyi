@@ -33,12 +33,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
   Future<void> _save() async {
     await context.read<AiService>().configure(
-          baseUrl: _baseCtrl.text,
-          apiKey: _keyCtrl.text,
-          model: _modelCtrl.text,
-        );
+      baseUrl: _baseCtrl.text,
+      apiKey: _keyCtrl.text,
+      model: _modelCtrl.text,
+    );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
     }
   }
 
@@ -47,7 +49,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     final ai = context.watch<AiService>();
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('AI 助手'), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        title: const Text('AI 助手'),
+        backgroundColor: Colors.transparent,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

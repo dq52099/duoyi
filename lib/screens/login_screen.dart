@@ -53,7 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
           inviteCode: auth.inviteCodeRequired ? _inviteCtrl.text.trim() : null,
         );
       } else {
-        await auth.login(username: _userCtrl.text.trim(), password: _pwdCtrl.text);
+        await auth.login(
+          username: _userCtrl.text.trim(),
+          password: _pwdCtrl.text,
+        );
       }
       if (mounted) Navigator.pop(context);
     } on ApiException catch (e) {
@@ -73,23 +76,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: Text(_isRegister ? '注册账号' : '登录'), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        title: Text(_isRegister ? '注册账号' : '登录'),
+        backgroundColor: Colors.transparent,
+      ),
       body: BrandBackground(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           children: [
             const SizedBox(height: 12),
-            Text(s.appTitle, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: cs.primary)),
+            Text(
+              s.appTitle,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: cs.primary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(_isRegister ? '创建一个账号开启多端同步' : '使用账号登录享受云同步与公告',
-                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7))),
+            Text(
+              _isRegister ? '创建一个账号开启多端同步' : '使用账号登录享受云同步与公告',
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
+            ),
             const SizedBox(height: 24),
             TextField(
               controller: _serverCtrl,
-              decoration: const InputDecoration(labelText: '服务器地址', hintText: 'http://your-server:8000'),
+              decoration: const InputDecoration(
+                labelText: '服务器地址',
+                hintText: 'http://your-server:8000',
+              ),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _userCtrl, decoration: const InputDecoration(labelText: '用户名')),
+            TextField(
+              controller: _userCtrl,
+              decoration: const InputDecoration(labelText: '用户名'),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _pwdCtrl,
@@ -113,7 +134,11 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: _busy
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : Text(_isRegister ? '注册' : '登录'),
               ),
             ),

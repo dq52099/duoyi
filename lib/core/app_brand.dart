@@ -130,9 +130,9 @@ ThemeData _lightTheme({
     fontFamilyFallback: _cnFontFallback,
     textTheme: _textTheme(
       brightness: Brightness.light,
-      bodyColor: const Color(0xFF20242E),
-      mutedColor: const Color(0xFF67707F),
-      headingColor: const Color(0xFF1A2230),
+      bodyColor: const Color(0xFF2C323D),
+      mutedColor: const Color(0xFF8B95A6),
+      headingColor: const Color(0xFF1E2532),
     ),
     colorScheme: ColorScheme.light(
       primary: primary,
@@ -142,40 +142,48 @@ ThemeData _lightTheme({
     ),
     scaffoldBackgroundColor: background,
     cardTheme: CardThemeData(
-      color: surface.withValues(alpha: 0.92),
-      elevation: 2,
-      shadowColor: primary.withValues(alpha: 0.14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: primary.withValues(alpha: 0.14)),
-      ),
+      color: surface,
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shadowColor: Colors.black.withValues(alpha: 0.05),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surface.withValues(alpha: 0.96),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      fillColor: surface.withValues(alpha: 0.8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary.withValues(alpha: 0.36)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary, width: 2),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: primary, width: 1.5),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
-      foregroundColor: primary,
+      foregroundColor: const Color(0xFF1E2532),
+      titleTextStyle: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF1E2532),
+      ),
     ),
   );
 }
@@ -266,7 +274,10 @@ final _re0Theme = ThemeData(
     shadowColor: const Color(0xFF4682B4).withValues(alpha: 0.2),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: const Color(0xFFE6E6FA).withValues(alpha: 0.5), width: 1.5),
+      side: BorderSide(
+        color: const Color(0xFFE6E6FA).withValues(alpha: 0.5),
+        width: 1.5,
+      ),
     ),
   ),
   inputDecorationTheme: InputDecorationTheme(
@@ -275,7 +286,9 @@ final _re0Theme = ThemeData(
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: const Color(0xFF4682B4).withValues(alpha: 0.34)),
+      borderSide: BorderSide(
+        color: const Color(0xFF4682B4).withValues(alpha: 0.34),
+      ),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
@@ -361,9 +374,15 @@ final _botwTheme = ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: Colors.black.withValues(alpha: 0.58),
-    border: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF00D2FF))),
-    enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF00D2FF), width: 2)),
+    border: const OutlineInputBorder(
+      borderSide: BorderSide(color: Color(0xFF00D2FF)),
+    ),
+    enabledBorder: const OutlineInputBorder(
+      borderSide: BorderSide(color: Colors.white24),
+    ),
+    focusedBorder: const OutlineInputBorder(
+      borderSide: BorderSide(color: Color(0xFF00D2FF), width: 2),
+    ),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
@@ -371,7 +390,10 @@ final _botwTheme = ThemeData(
       foregroundColor: const Color(0xFF00D2FF),
       side: const BorderSide(color: Color(0xFF00D2FF), width: 1.5),
       shape: const BeveledRectangleBorder(
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(10),
+          bottomRight: Radius.circular(10),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
     ),
@@ -384,10 +406,10 @@ final _botwTheme = ThemeData(
 );
 
 final _defaultTheme = _lightTheme(
-  primary: const Color(0xFFFF6B6B),
+  primary: const Color(0xFFFF7474),
   secondary: const Color(0xFFFFB088),
   surface: const Color(0xFFFFFFFF),
-  background: const Color(0xFFFFF8F0),
+  background: const Color(0xFFF7F8FA),
 );
 
 class AppBrands {
@@ -455,7 +477,16 @@ class AppBrands {
     backgroundOverlayOpacity: 0.68,
   );
 
-  static List<AppBrand> get all => [defaultBrand, re0, genshin, starRail, wuthering, zzz, yanyun, botw];
+  static List<AppBrand> get all => [
+    defaultBrand,
+    re0,
+    genshin,
+    starRail,
+    wuthering,
+    zzz,
+    yanyun,
+    botw,
+  ];
 
   static AppBrand byId(String? id) {
     return all.firstWhere((b) => b.id == id, orElse: () => defaultBrand);

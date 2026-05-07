@@ -59,21 +59,30 @@ class NotificationService extends ChangeNotifier {
     Timer(delay, () {
       _pendingNotifications--;
       _send(_strings.notifTodoDueTitle, '"$todoTitle" 已到期');
-      _addToHistory(NotificationItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _strings.notifTodoDueTitle,
-        body: '"$todoTitle" 已到期',
-        scheduledTime: dueDate,
-        type: NotificationType.todo,
-      ));
+      _addToHistory(
+        NotificationItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: _strings.notifTodoDueTitle,
+          body: '"$todoTitle" 已到期',
+          scheduledTime: dueDate,
+          type: NotificationType.todo,
+        ),
+      );
       notifyListeners();
     });
   }
 
   void scheduleHabitReminder(String habitName, TimeOfDay time) {
     final now = DateTime.now();
-    var scheduled = DateTime(now.year, now.month, now.day, time.hour, time.minute);
-    if (scheduled.isBefore(now)) scheduled = scheduled.add(const Duration(days: 1));
+    var scheduled = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    if (scheduled.isBefore(now))
+      scheduled = scheduled.add(const Duration(days: 1));
 
     _pendingNotifications++;
     notifyListeners();
@@ -81,13 +90,15 @@ class NotificationService extends ChangeNotifier {
     Timer(scheduled.difference(now), () {
       _pendingNotifications--;
       _send(_strings.notifHabitRemindTitle, '别忘了: $habitName');
-      _addToHistory(NotificationItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _strings.notifHabitRemindTitle,
-        body: '别忘了: $habitName',
-        scheduledTime: scheduled,
-        type: NotificationType.habit,
-      ));
+      _addToHistory(
+        NotificationItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: _strings.notifHabitRemindTitle,
+          body: '别忘了: $habitName',
+          scheduledTime: scheduled,
+          type: NotificationType.habit,
+        ),
+      );
       notifyListeners();
     });
   }
@@ -98,25 +109,29 @@ class NotificationService extends ChangeNotifier {
         ? '"$taskName" — ${_strings.notifPomodoroDoneBody}'
         : _strings.notifPomodoroDoneBody;
     _send(_strings.notifPomodoroDoneTitle, body);
-    _addToHistory(NotificationItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _strings.notifPomodoroDoneTitle,
-      body: body,
-      scheduledTime: DateTime.now(),
-      type: NotificationType.pomodoro,
-    ));
+    _addToHistory(
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _strings.notifPomodoroDoneTitle,
+        body: body,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.pomodoro,
+      ),
+    );
     notifyListeners();
   }
 
   void notifyBreakComplete() {
     _send(_strings.notifBreakDoneTitle, _strings.notifBreakDoneBody);
-    _addToHistory(NotificationItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _strings.notifBreakDoneTitle,
-      body: _strings.notifBreakDoneBody,
-      scheduledTime: DateTime.now(),
-      type: NotificationType.pomodoro,
-    ));
+    _addToHistory(
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _strings.notifBreakDoneTitle,
+        body: _strings.notifBreakDoneBody,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.pomodoro,
+      ),
+    );
     notifyListeners();
   }
 

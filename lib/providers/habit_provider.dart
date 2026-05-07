@@ -11,10 +11,12 @@ class HabitProvider extends ChangeNotifier {
   double get todayOverallProgress {
     final active = _habits.where((h) => h.isActiveToday()).toList();
     if (active.isEmpty) return 0;
-    return active.fold(0.0, (sum, h) => sum + h.todayProgress()) / active.length;
+    return active.fold(0.0, (sum, h) => sum + h.todayProgress()) /
+        active.length;
   }
 
-  int get todayTotalCompletions => _habits.fold(0, (sum, h) => sum + h.todayCount());
+  int get todayTotalCompletions =>
+      _habits.fold(0, (sum, h) => sum + h.todayCount());
 
   double get todayCompletionRate {
     final active = _habits.where((h) => h.isActiveToday()).toList();
@@ -22,8 +24,10 @@ class HabitProvider extends ChangeNotifier {
     return active.where((h) => h.isCompletedToday()).length / active.length;
   }
 
-  int get longestCurrentStreak =>
-      _habits.fold(0, (max, h) => h.currentStreak > max ? h.currentStreak : max);
+  int get longestCurrentStreak => _habits.fold(
+    0,
+    (max, h) => h.currentStreak > max ? h.currentStreak : max,
+  );
 
   int get longestBestStreak =>
       _habits.fold(0, (max, h) => h.bestStreak > max ? h.bestStreak : max);
@@ -36,13 +40,16 @@ class HabitProvider extends ChangeNotifier {
     if (data != null) {
       final list = json.decode(data) as List;
       _habits = list.map((e) => Habit.fromJson(e)).toList();
-      notifyListeners();
     }
+    notifyListeners();
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('habits', json.encode(_habits.map((e) => e.toJson()).toList()));
+    await prefs.setString(
+      'habits',
+      json.encode(_habits.map((e) => e.toJson()).toList()),
+    );
   }
 
   // --- CRUD ---
@@ -137,9 +144,12 @@ class HabitProvider extends ChangeNotifier {
     final now = DateTime.now();
     return List.generate(7, (i) {
       final d = now.subtract(Duration(days: 6 - i));
-      final active = _habits.where((h) => h.activeWeekdays.contains(d.weekday - 1)).toList();
+      final active = _habits
+          .where((h) => h.activeWeekdays.contains(d.weekday - 1))
+          .toList();
       if (active.isEmpty) return 0;
-      return active.where((h) => h.progressForDate(d) >= 1.0).length / active.length;
+      return active.where((h) => h.progressForDate(d) >= 1.0).length /
+          active.length;
     });
   }
 }

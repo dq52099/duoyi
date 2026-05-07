@@ -12,14 +12,22 @@ class ThemePickerScreen extends StatelessWidget {
 
   String _styleDescription(BrandStyle style) {
     switch (style) {
-      case BrandStyle.defaultBrand: return '简洁原版 · 暖橙基调';
-      case BrandStyle.re0: return '银发魔女 · 露格尼卡圣域';
-      case BrandStyle.genshin: return '元素绘卷 · 提瓦特画架';
-      case BrandStyle.starRail: return '星穹列车 · 开拓之旅';
-      case BrandStyle.wuthering: return '共鸣终端 · 潮声频谱';
-      case BrandStyle.zzz: return '委托影像 · 新艾利都';
-      case BrandStyle.yanyun: return '江湖画案 · 墨痕回转';
-      case BrandStyle.botw: return '希卡之石 · 具现化';
+      case BrandStyle.defaultBrand:
+        return '简洁原版 · 暖橙基调';
+      case BrandStyle.re0:
+        return '银发魔女 · 露格尼卡圣域';
+      case BrandStyle.genshin:
+        return '元素绘卷 · 提瓦特画架';
+      case BrandStyle.starRail:
+        return '星穹列车 · 开拓之旅';
+      case BrandStyle.wuthering:
+        return '共鸣终端 · 潮声频谱';
+      case BrandStyle.zzz:
+        return '委托影像 · 新艾利都';
+      case BrandStyle.yanyun:
+        return '江湖画案 · 墨痕回转';
+      case BrandStyle.botw:
+        return '希卡之石 · 具现化';
     }
   }
 
@@ -41,7 +49,8 @@ class ThemePickerScreen extends StatelessWidget {
 
           return ListTile(
             leading: Container(
-              width: 48, height: 48,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
@@ -49,7 +58,10 @@ class ThemePickerScreen extends StatelessWidget {
               ),
               child: Icon(Icons.palette, color: accent),
             ),
-            title: Text(brand.name, style: TextStyle(fontWeight: FontWeight.w600, color: accent)),
+            title: Text(
+              brand.name,
+              style: TextStyle(fontWeight: FontWeight.w600, color: accent),
+            ),
             subtitle: Text(
               _styleDescription(brand.style),
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),

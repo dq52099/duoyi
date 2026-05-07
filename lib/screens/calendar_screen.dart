@@ -46,7 +46,9 @@ class _CalendarScreenState extends State<CalendarScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日'),
+        title: Text(
+          '${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日',
+        ),
         content: TextField(
           controller: titleCtrl,
           decoration: const InputDecoration(labelText: '任务名称'),

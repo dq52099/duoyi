@@ -59,7 +59,7 @@ class BrandStrings {
   final String focusTitle;
   final String focusTabTimer;
   final String focusTabHistory;
-  final String focusStateFocus;     // "专注中" equivalent
+  final String focusStateFocus; // "专注中" equivalent
   final String focusStateShortBreak;
   final String focusStateLongBreak;
   final String focusCompletedSuffix; // "完成 X 次"
@@ -757,14 +757,22 @@ class BrandStrings {
 
   static BrandStrings forStyle(BrandStyle style) {
     switch (style) {
-      case BrandStyle.defaultBrand: return defaultBrand;
-      case BrandStyle.re0: return re0;
-      case BrandStyle.genshin: return genshin;
-      case BrandStyle.starRail: return starRail;
-      case BrandStyle.wuthering: return wuthering;
-      case BrandStyle.zzz: return zzz;
-      case BrandStyle.yanyun: return yanyun;
-      case BrandStyle.botw: return botw;
+      case BrandStyle.defaultBrand:
+        return defaultBrand;
+      case BrandStyle.re0:
+        return re0;
+      case BrandStyle.genshin:
+        return genshin;
+      case BrandStyle.starRail:
+        return starRail;
+      case BrandStyle.wuthering:
+        return wuthering;
+      case BrandStyle.zzz:
+        return zzz;
+      case BrandStyle.yanyun:
+        return yanyun;
+      case BrandStyle.botw:
+        return botw;
     }
   }
 }

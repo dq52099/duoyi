@@ -11,12 +11,18 @@ from datetime import datetime, timezone
 
 app = FastAPI(title="指尖时光 Sync API", version="3.0.0")
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "fingertip_time.db")
 
 # Feature flags
-INVITE_CODE_REQUIRED = os.getenv("INVITE_CODE_REQUIRED", "false").lower() in {"1", "true", "yes"}
+INVITE_CODE_REQUIRED = os.getenv("INVITE_CODE_REQUIRED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 ADMIN_BOOTSTRAP_USER = os.getenv("ADMIN_BOOTSTRAP_USER", "admin")
 ADMIN_BOOTSTRAP_PASSWORD = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "admin123")
 
@@ -86,10 +92,14 @@ def init_db():
     for col in ("pomodoro_sessions", "pomodoro_config", "user_profile"):
         if col not in cols:
             default = "'[]'" if col == "pomodoro_sessions" else "'{}'"
-            conn.execute(f"ALTER TABLE sync_data ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.execute(
+                f"ALTER TABLE sync_data ADD COLUMN {col} TEXT DEFAULT {default}"
+            )
 
     # Bootstrap an admin user once
-    cur = conn.execute("SELECT 1 FROM users WHERE username=?", (ADMIN_BOOTSTRAP_USER,)).fetchone()
+    cur = conn.execute(
+        "SELECT 1 FROM users WHERE username=?", (ADMIN_BOOTSTRAP_USER,)
+    ).fetchone()
     if cur is None:
         admin_id = secrets.token_hex(16)
         conn.execute(
@@ -131,6 +141,7 @@ init_db()
 
 
 # ---- Schemas ----
+
 
 class RegisterRequest(BaseModel):
     username: str
@@ -175,6 +186,7 @@ class InviteCodeCreate(BaseModel):
 
 # ---- Public ----
 
+
 @app.get("/api/health")
 def health():
     return {
@@ -192,6 +204,7 @@ def public_config():
 
 # ---- Auth ----
 
+
 @app.post("/api/auth/register")
 def register(req: RegisterRequest):
     db = get_db()
@@ -200,7 +213,9 @@ def register(req: RegisterRequest):
             code = (req.invite_code or "").strip()
             if not code:
                 raise HTTPException(status_code=400, detail="Invite code required")
-            row = db.execute("SELECT used_by FROM invite_codes WHERE code=?", (code,)).fetchone()
+            row = db.execute(
+                "SELECT used_by FROM invite_codes WHERE code=?", (code,)
+            ).fetchone()
             if row is None:
                 raise HTTPException(status_code=400, detail="Invalid invite code")
             if row["used_by"]:
@@ -287,6 +302,7 @@ def logout(user_id: str = Depends(_verify_token)):
 
 # ---- Sync ----
 
+
 def _merge_by_timestamp(server: list, client: list) -> list:
     merged = {item.get("id"): item for item in server if isinstance(item, dict)}
     for item in client:
@@ -364,6 +380,7 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
 
 # ---- Announcements ----
 
+
 @app.get("/api/announcements")
 def list_announcements(limit: int = Query(20, ge=1, le=100)):
     db = get_db()
@@ -392,6 +409,7 @@ def create_announcement(req: AnnouncementCreate, _: str = Depends(_require_admin
 
 
 # ---- Feedback ----
+
 
 @app.post("/api/feedback")
 def create_feedback(req: FeedbackCreate, user_id: str = Depends(_verify_token)):
@@ -453,6 +471,7 @@ def reply_feedback(req: FeedbackReply, _: str = Depends(_require_admin)):
 
 
 # ---- Invite codes (admin) ----
+
 
 @app.post("/api/admin/invite-codes")
 def create_invite_codes(req: InviteCodeCreate, _: str = Depends(_require_admin)):

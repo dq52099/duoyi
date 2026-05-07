@@ -20,8 +20,10 @@ class TodoProvider extends ChangeNotifier {
     return _todos.where((t) => _dateKey(t.date) == key).toList();
   }
 
-  List<TodoItem> get activeTodos => _todos.where((t) => !t.isCompleted).toList();
-  List<TodoItem> get completedTodos => _todos.where((t) => t.isCompleted).toList();
+  List<TodoItem> get activeTodos =>
+      _todos.where((t) => !t.isCompleted).toList();
+  List<TodoItem> get completedTodos =>
+      _todos.where((t) => t.isCompleted).toList();
 
   Map<EisenhowerQuadrant, List<TodoItem>> get quadrantGroups {
     final map = <EisenhowerQuadrant, List<TodoItem>>{};
@@ -61,8 +63,8 @@ class TodoProvider extends ChangeNotifier {
     if (data != null) {
       final list = json.decode(data) as List;
       _todos = list.map((e) => TodoItem.fromJson(e)).toList();
-      _notify();
     }
+    _notify();
   }
 
   Future<void> _saveToStorage() async {
@@ -121,7 +123,8 @@ class TodoProvider extends ChangeNotifier {
     if (idx != -1) {
       final sIdx = _todos[idx].subtasks.indexWhere((s) => s.id == subtaskId);
       if (sIdx != -1) {
-        _todos[idx].subtasks[sIdx].isCompleted = !_todos[idx].subtasks[sIdx].isCompleted;
+        _todos[idx].subtasks[sIdx].isCompleted =
+            !_todos[idx].subtasks[sIdx].isCompleted;
         _notify();
         await _saveToStorage();
       }

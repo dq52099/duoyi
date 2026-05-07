@@ -9,6 +9,8 @@ import 'providers/calendar_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/notification_service.dart';
 import 'providers/auth_provider.dart';
+import 'providers/countdown_provider.dart';
+import 'providers/note_provider.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
@@ -35,8 +37,13 @@ void main() async {
   final notificationService = NotificationService();
   final systemTray = SystemTrayService();
   final authProvider = AuthProvider();
+  final countdownProvider = CountdownProvider();
+  final noteProvider = NoteProvider();
   final aiService = AiService();
-  final appUpdate = AppUpdateService(repo: 'dq52099/duoyi', currentVersion: '1.0.0');
+  final appUpdate = AppUpdateService(
+    repo: 'dq52099/duoyi',
+    currentVersion: '1.0.0',
+  );
 
   await Future.wait([
     todoProvider.loadFromStorage(),
@@ -45,6 +52,8 @@ void main() async {
     themeProvider.loadFromStorage(),
     cloudSyncProvider.loadFromStorage(),
     userProvider.loadFromStorage(),
+    countdownProvider.loadFromStorage(),
+    noteProvider.loadFromStorage(),
     notificationService.init(),
     systemTray.init(),
     HomeWidgetService.init(),
@@ -58,7 +67,12 @@ void main() async {
   notificationService.setStrings(themeProvider.brand.strings);
   themeProvider.addListener(() {
     notificationService.setStrings(themeProvider.brand.strings);
-    _pushHomeWidget(todoProvider, habitProvider, pomodoroProvider, themeProvider);
+    _pushHomeWidget(
+      todoProvider,
+      habitProvider,
+      pomodoroProvider,
+      themeProvider,
+    );
   });
 
   // Tray actions
@@ -68,20 +82,27 @@ void main() async {
 
   // Push to Android home widget on every data change
   void onDataChange() => _pushHomeWidget(
-        todoProvider,
-        habitProvider,
-        pomodoroProvider,
-        themeProvider,
-      );
+    todoProvider,
+    habitProvider,
+    pomodoroProvider,
+    themeProvider,
+  );
   todoProvider.addListener(onDataChange);
   habitProvider.addListener(onDataChange);
   pomodoroProvider.addListener(onDataChange);
 
   // Initial push
-  await _pushHomeWidget(todoProvider, habitProvider, pomodoroProvider, themeProvider);
+  await _pushHomeWidget(
+    todoProvider,
+    habitProvider,
+    pomodoroProvider,
+    themeProvider,
+  );
 
   // Listen to home widget taps (deep link routing)
-  HomeWidgetService.widgetClickedStream.listen((uri) => _handleWidgetUri(uri, pomodoroProvider));
+  HomeWidgetService.widgetClickedStream.listen(
+    (uri) => _handleWidgetUri(uri, pomodoroProvider),
+  );
   final initial = await HomeWidgetService.initialLaunchUri();
   if (initial != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,6 +120,8 @@ void main() async {
         ChangeNotifierProvider.value(value: cloudSyncProvider),
         ChangeNotifierProvider.value(value: calendarProvider),
         ChangeNotifierProvider.value(value: userProvider),
+        ChangeNotifierProvider.value(value: countdownProvider),
+        ChangeNotifierProvider.value(value: noteProvider),
         ChangeNotifierProvider.value(value: notificationService),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
@@ -195,11 +218,31 @@ class MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
     final destinations = [
-      NavigationDestination(icon: const Icon(Icons.checklist), selectedIcon: const Icon(Icons.checklist_rounded), label: s.navTodo),
-      NavigationDestination(icon: const Icon(Icons.repeat), selectedIcon: const Icon(Icons.repeat_rounded), label: s.navHabit),
-      NavigationDestination(icon: const Icon(Icons.calendar_month_outlined), selectedIcon: const Icon(Icons.calendar_month), label: s.navCalendar),
-      NavigationDestination(icon: const Icon(Icons.timer_outlined), selectedIcon: const Icon(Icons.timer), label: s.navFocus),
-      NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: s.navMine),
+      NavigationDestination(
+        icon: const Icon(Icons.checklist),
+        selectedIcon: const Icon(Icons.checklist_rounded),
+        label: s.navTodo,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.repeat),
+        selectedIcon: const Icon(Icons.repeat_rounded),
+        label: s.navHabit,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.calendar_month_outlined),
+        selectedIcon: const Icon(Icons.calendar_month),
+        label: s.navCalendar,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.timer_outlined),
+        selectedIcon: const Icon(Icons.timer),
+        label: s.navFocus,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.person_outline),
+        selectedIcon: const Icon(Icons.person),
+        label: s.navMine,
+      ),
     ];
 
     return Scaffold(
@@ -216,10 +259,46 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        destinations: destinations,
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 64,
+          elevation: 0,
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surface.withValues(alpha: 0.95),
+          indicatorColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.15),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.primary,
+              );
+            }
+            return const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return IconThemeData(
+                color: Theme.of(context).colorScheme.primary,
+                size: 24,
+              );
+            }
+            return const IconThemeData(color: Colors.grey, size: 24);
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          destinations: destinations,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        ),
       ),
     );
   }

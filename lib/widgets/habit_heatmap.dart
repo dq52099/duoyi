@@ -44,19 +44,34 @@ class HabitHeatmap extends StatelessWidget {
           Row(
             children: [
               Column(
-                children: ['一', '', '三', '', '五', '', '日'].map((s) => SizedBox(
-                      height: 14, width: 24,
-                      child: s.isEmpty ? null : Center(child: Text(s, style: const TextStyle(fontSize: 9)))),
-                ).toList(),
+                children: ['一', '', '三', '', '五', '', '日']
+                    .map(
+                      (s) => SizedBox(
+                        height: 14,
+                        width: 24,
+                        child: s.isEmpty
+                            ? null
+                            : Center(
+                                child: Text(
+                                  s,
+                                  style: const TextStyle(fontSize: 9),
+                                ),
+                              ),
+                      ),
+                    )
+                    .toList(),
               ),
               ...List.generate(columns, (c) {
                 return Column(
                   children: List.generate(rows, (r) {
                     final date = startDate.add(Duration(days: c * 7 + r));
-                    final key = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                    final key =
+                        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                     final intensity = heatmapData[key] ?? 0;
                     return Container(
-                      width: 14, height: 14, margin: const EdgeInsets.all(1),
+                      width: 14,
+                      height: 14,
+                      margin: const EdgeInsets.all(1),
                       decoration: BoxDecoration(
                         color: _cellColor(intensity, primary),
                         borderRadius: BorderRadius.circular(2),

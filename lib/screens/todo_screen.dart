@@ -4,6 +4,7 @@ import '../models/todo.dart';
 import '../providers/todo_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/ai_service.dart';
+import '../core/todo_templates.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
 import 'todo_detail_screen.dart';
@@ -28,25 +29,88 @@ class _TodoScreenState extends State<TodoScreen> {
     List<String> aiSubtasks = [];
     String? aiError;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          title: Text(s.todoCreateTitle),
-          content: SingleChildScrollView(
+        builder: (ctx, setSt) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            left: 20,
+            right: 20,
+            top: 24,
+          ),
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: '任务名称'), autofocus: true),
-                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  s.todoCreateTitle,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    hintText: '准备做什么？',
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(18),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+
+                // AI Action
                 if (ai.enabled)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      icon: aiBusy
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.auto_awesome, size: 18),
-                      label: const Text('AI 拆解为子任务'),
+                    child: ActionChip(
+                      avatar: aiBusy
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: Colors.purple,
+                            ),
+                      label: const Text(
+                        'AI 智能拆解',
+                        style: TextStyle(
+                          color: Colors.purple,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      backgroundColor: Colors.purple.shade50,
+                      side: BorderSide.none,
                       onPressed: aiBusy
                           ? null
                           : () async {
@@ -56,86 +120,186 @@ class _TodoScreenState extends State<TodoScreen> {
                                 aiError = null;
                               });
                               try {
-                                final list = await ai.breakDownTask(titleCtrl.text.trim());
+                                final list = await ai.breakDownTask(
+                                  titleCtrl.text.trim(),
+                                );
                                 setSt(() => aiSubtasks = list);
-                              } on AiException catch (e) {
-                                setSt(() => aiError = e.message);
                               } catch (e) {
-                                setSt(() => aiError = e.toString());
+                                setSt(() => aiError = 'AI 拆解失败');
                               } finally {
                                 setSt(() => aiBusy = false);
                               }
                             },
                     ),
                   ),
+
                 if (aiError != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(aiError!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    padding: const EdgeInsets.only(top: 8, left: 4),
+                    child: Text(
+                      aiError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
                   ),
-                if (aiSubtasks.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+
+                if (aiSubtasks.isNotEmpty)
                   Container(
-                    constraints: const BoxConstraints(maxHeight: 160),
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    padding: const EdgeInsets.all(8),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: aiSubtasks
-                            .map((sub) => Row(
-                                  children: [
-                                    const Icon(Icons.subdirectory_arrow_right, size: 14, color: Colors.grey),
-                                    const SizedBox(width: 4),
-                                    Expanded(child: Text(sub, style: const TextStyle(fontSize: 12))),
-                                  ],
-                                ))
-                            .toList(),
-                      ),
+                    child: Column(
+                      children: aiSubtasks
+                          .map(
+                            (t) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.subdirectory_arrow_right,
+                                    size: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      t,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
-                ],
+
+                const SizedBox(height: 20),
+                const Text(
+                  '清单类型',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: TodoListTemplates.all
+                        .map(
+                          (t) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              avatar: Icon(
+                                t.icon,
+                                size: 16,
+                                color: groupName == t.name
+                                    ? Colors.white
+                                    : t.color,
+                              ),
+                              label: Text(t.name),
+                              selected: groupName == t.name,
+                              selectedColor: t.color,
+                              labelStyle: TextStyle(
+                                color: groupName == t.name
+                                    ? Colors.white
+                                    : null,
+                              ),
+                              onSelected: (sel) =>
+                                  setSt(() => groupName = sel ? t.name : ''),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                const Text(
+                  '优先级',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<EisenhowerQuadrant>(
                   initialValue: quadrant,
-                  decoration: const InputDecoration(labelText: '四象限'),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                   items: const [
-                    DropdownMenuItem(value: EisenhowerQuadrant.urgentImportant, child: Text('Q1 重要且紧急')),
-                    DropdownMenuItem(value: EisenhowerQuadrant.notUrgentImportant, child: Text('Q2 重要不紧急')),
-                    DropdownMenuItem(value: EisenhowerQuadrant.urgentNotImportant, child: Text('Q3 紧急不重要')),
-                    DropdownMenuItem(value: EisenhowerQuadrant.notUrgentNotImportant, child: Text('Q4 不重要不紧急')),
+                    DropdownMenuItem(
+                      value: EisenhowerQuadrant.urgentImportant,
+                      child: Text('🔴 重要且紧急 (Q1)'),
+                    ),
+                    DropdownMenuItem(
+                      value: EisenhowerQuadrant.notUrgentImportant,
+                      child: Text('🟠 重要不紧急 (Q2)'),
+                    ),
+                    DropdownMenuItem(
+                      value: EisenhowerQuadrant.urgentNotImportant,
+                      child: Text('🔵 紧急不重要 (Q3)'),
+                    ),
+                    DropdownMenuItem(
+                      value: EisenhowerQuadrant.notUrgentNotImportant,
+                      child: Text('⚪ 不重要不紧急 (Q4)'),
+                    ),
                   ],
                   onChanged: (v) => setSt(() => quadrant = v!),
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  decoration: const InputDecoration(labelText: '清单组 (可选)', hintText: '如: 工作、个人、学习'),
-                  onChanged: (v) => groupName = v,
+
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (titleCtrl.text.trim().isNotEmpty) {
+                        final sub = aiSubtasks
+                            .map((t) => Subtask(title: t))
+                            .toList();
+                        context.read<TodoProvider>().addTodo(
+                          TodoItem(
+                            title: titleCtrl.text.trim(),
+                            quadrant: quadrant,
+                            listGroupName: groupName.isEmpty ? null : groupName,
+                            subtasks: sub,
+                          ),
+                        );
+                        Navigator.pop(ctx);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      '添加任务',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            FilledButton(
-              onPressed: () {
-                if (titleCtrl.text.trim().isNotEmpty) {
-                  final subtasks = aiSubtasks.map((t) => Subtask(title: t)).toList();
-                  context.read<TodoProvider>().addTodo(TodoItem(
-                        title: titleCtrl.text.trim(),
-                        quadrant: quadrant,
-                        listGroupName: groupName.isEmpty ? null : groupName,
-                        subtasks: subtasks,
-                      ));
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('添加'),
-            ),
-          ],
         ),
       ),
     );
@@ -161,18 +325,36 @@ class _TodoScreenState extends State<TodoScreen> {
         ],
       ),
       body: todoProvider.activeTodos.isEmpty
-          ? EmptyState(icon: Icons.task_alt, message: s.todoEmpty, actionLabel: s.todoAddAction, onAction: _showAddDialog)
+          ? EmptyState(
+              icon: Icons.task_alt,
+              message: s.todoEmpty,
+              actionLabel: s.todoAddAction,
+              onAction: _showAddDialog,
+            )
           : _isMatrixView
-              ? SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: EisenhowerMatrix(quadrantGroups: quadrantGroups, onQuadrantTap: (q) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => QuadrantListScreen(quadrant: q)));
-                  }),
-                )
-              : ListView(
-                  children: listGroups.entries.map((e) => _ListGroupTile(groupName: e.key, todos: e.value)).toList(),
-                ),
-      floatingActionButton: FloatingActionButton(onPressed: _showAddDialog, child: const Icon(Icons.add)),
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: EisenhowerMatrix(
+                quadrantGroups: quadrantGroups,
+                onQuadrantTap: (q) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuadrantListScreen(quadrant: q),
+                    ),
+                  );
+                },
+              ),
+            )
+          : ListView(
+              children: listGroups.entries
+                  .map((e) => _ListGroupTile(groupName: e.key, todos: e.value))
+                  .toList(),
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddDialog,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
@@ -199,12 +381,17 @@ class _ListGroupTileState extends State<_ListGroupTile> {
         children: [
           ListTile(
             leading: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
-            title: Text(widget.groupName, style: const TextStyle(fontWeight: FontWeight.w600)),
-            trailing: Text('${widget.todos.length}', style: TextStyle(color: cs.primary)),
+            title: Text(
+              widget.groupName,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            trailing: Text(
+              '${widget.todos.length}',
+              style: TextStyle(color: cs.primary),
+            ),
             onTap: () => setState(() => _expanded = !_expanded),
           ),
-          if (_expanded)
-            ...widget.todos.map((t) => _TodoTile(todo: t)),
+          if (_expanded) ...widget.todos.map((t) => _TodoTile(todo: t)),
         ],
       ),
     );
@@ -215,38 +402,143 @@ class _TodoTile extends StatelessWidget {
   final TodoItem todo;
   const _TodoTile({required this.todo});
 
+  Color _quadrantColor(EisenhowerQuadrant q) {
+    switch (q) {
+      case EisenhowerQuadrant.urgentImportant:
+        return const Color(0xFFE53935);
+      case EisenhowerQuadrant.notUrgentImportant:
+        return const Color(0xFFF6A339);
+      case EisenhowerQuadrant.urgentNotImportant:
+        return const Color(0xFF42A5F5);
+      case EisenhowerQuadrant.notUrgentNotImportant:
+        return const Color(0xFF8E8E8E);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
+    final qColor = _quadrantColor(todo.quadrant);
 
-    return ListTile(
-      leading: Checkbox(
-        value: todo.isCompleted,
-        onChanged: (_) => provider.toggleTodo(todo.id),
+    return Dismissible(
+      key: ValueKey(todo.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.error,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
-      title: Text(todo.title, style: TextStyle(
-        fontSize: 14,
-        decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
-      )),
-      subtitle: Row(
-        children: [
-          if (todo.subtasks.isNotEmpty)
-            Text('${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length} 子任务 ',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-          if (todo.dueDate != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(3)),
-              child: Text('${todo.dueDate!.month}/${todo.dueDate!.day}', style: TextStyle(fontSize: 10, color: cs.primary)),
+      onDismissed: (_) => provider.deleteTodo(todo.id),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-        ],
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                Container(width: 4, color: qColor),
+                Expanded(
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    leading: Checkbox(
+                      value: todo.isCompleted,
+                      shape: const CircleBorder(),
+                      activeColor: qColor,
+                      onChanged: (_) => provider.toggleTodo(todo.id),
+                    ),
+                    title: Text(
+                      todo.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: todo.isCompleted ? Colors.grey : null,
+                        decoration: todo.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    subtitle: Row(
+                      children: [
+                        if (todo.subtasks.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.account_tree_outlined,
+                                  size: 12,
+                                  color: Colors.grey.shade500,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (todo.dueDate != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: qColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 10,
+                                  color: qColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${todo.dueDate!.month}/${todo.dueDate!.day}',
+                                  style: TextStyle(fontSize: 11, color: qColor),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TodoDetailScreen(todoId: todo.id),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      trailing: IconButton(
-        icon: const Icon(Icons.delete_outline, size: 18),
-        onPressed: () => provider.deleteTodo(todo.id),
-      ),
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TodoDetailScreen(todoId: todo.id))),
     );
   }
 }
@@ -258,10 +550,14 @@ class QuadrantListScreen extends StatelessWidget {
 
   String _title(EisenhowerQuadrant q) {
     switch (q) {
-      case EisenhowerQuadrant.urgentImportant: return '重要且紧急';
-      case EisenhowerQuadrant.notUrgentImportant: return '重要不紧急';
-      case EisenhowerQuadrant.urgentNotImportant: return '紧急不重要';
-      case EisenhowerQuadrant.notUrgentNotImportant: return '不重要不紧急';
+      case EisenhowerQuadrant.urgentImportant:
+        return '重要且紧急';
+      case EisenhowerQuadrant.notUrgentImportant:
+        return '重要不紧急';
+      case EisenhowerQuadrant.urgentNotImportant:
+        return '紧急不重要';
+      case EisenhowerQuadrant.notUrgentNotImportant:
+        return '不重要不紧急';
     }
   }
 

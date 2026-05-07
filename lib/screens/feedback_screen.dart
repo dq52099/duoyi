@@ -89,7 +89,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('反馈与许愿'), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        title: const Text('反馈与许愿'),
+        backgroundColor: Colors.transparent,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -99,41 +102,62 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('提交新反馈', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  const Text(
+                    '提交新反馈',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _category,
-                    decoration: const InputDecoration(labelText: '分类', isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: '分类',
+                      isDense: true,
+                    ),
                     items: const [
                       DropdownMenuItem(value: 'feature', child: Text('功能建议')),
                       DropdownMenuItem(value: 'bug', child: Text('问题反馈')),
                       DropdownMenuItem(value: 'wish', child: Text('许愿池')),
                       DropdownMenuItem(value: 'other', child: Text('其他')),
                     ],
-                    onChanged: (v) => setState(() => _category = v ?? 'feature'),
+                    onChanged: (v) =>
+                        setState(() => _category = v ?? 'feature'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _contentCtrl,
                     minLines: 3,
                     maxLines: 6,
-                    decoration: const InputDecoration(labelText: '描述一下你想反馈或希望增加的功能'),
+                    decoration: const InputDecoration(
+                      labelText: '描述一下你想反馈或希望增加的功能',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: FilledButton(onPressed: _submit, child: const Text('提交')),
+                    child: FilledButton(
+                      onPressed: _submit,
+                      child: const Text('提交'),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('我的反馈', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          const Text(
+            '我的反馈',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
           if (_loading)
-            const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
           else if (_items.isEmpty)
-            EmptyState(icon: Icons.feedback_outlined, message: _error ?? '还没有反馈记录')
+            EmptyState(
+              icon: Icons.feedback_outlined,
+              message: _error ?? '还没有反馈记录',
+            )
           else
             ..._items.map((f) {
               final status = (f['status'] ?? 'open').toString();
@@ -145,25 +169,53 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     children: [
                       Row(
                         children: [
-                          Text((f['category'] ?? '').toString(),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(
+                            (f['category'] ?? '').toString(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
                           const Spacer(),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: _statusColor(status).withValues(alpha: 0.15),
+                              color: _statusColor(
+                                status,
+                              ).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: Text(status, style: TextStyle(color: _statusColor(status), fontSize: 11)),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                color: _statusColor(status),
+                                fontSize: 11,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text((f['content'] ?? '').toString(), style: const TextStyle(fontSize: 13)),
+                      Text(
+                        (f['content'] ?? '').toString(),
+                        style: const TextStyle(fontSize: 13),
+                      ),
                       if ((f['admin_reply'] ?? '').toString().isNotEmpty) ...[
                         const Divider(),
-                        Text('管理员回复', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                        Text((f['admin_reply'] ?? '').toString(), style: const TextStyle(fontSize: 13)),
+                        Text(
+                          '管理员回复',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          (f['admin_reply'] ?? '').toString(),
+                          style: const TextStyle(fontSize: 13),
+                        ),
                       ],
                     ],
                   ),
