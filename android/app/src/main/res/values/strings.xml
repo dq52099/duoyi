@@ -2,4 +2,6 @@
     <string name="app_name">多仪</string>
     <string name="widget_description">多仪 · 今日待办 / 习惯 / 番茄概览</string>
     <string name="widget_label">多仪</string>
+    <string name="widget_todo_label">多仪 · 今日待办</string>
+    <string name="widget_todo_description">显示当日未完成待办 Top 3</string>
 </resources>

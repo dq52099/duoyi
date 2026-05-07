@@ -7,6 +7,7 @@ import '../core/platform_info.dart';
 /// 在 web / 其他平台下为空实现。
 class HomeWidgetService {
   static const String _androidProviderName = 'DuoyiWidgetProvider';
+  static const String _androidTodoProviderName = 'DuoyiTodoWidgetProvider';
   static const String _appGroupId = 'group.com.duoyi.duoyi';
 
   static bool get _supported {
@@ -26,6 +27,7 @@ class HomeWidgetService {
     required int habitPercent,
     required int pomodoroToday,
     required BrandStrings strings,
+    List<String> todoTop3 = const [],
   }) async {
     if (!_supported) return;
     try {
@@ -37,10 +39,28 @@ class HomeWidgetService {
         HomeWidget.saveWidgetData<String>('nav_todo', strings.navTodo),
         HomeWidget.saveWidgetData<String>('nav_habit', strings.navHabit),
         HomeWidget.saveWidgetData<String>('nav_focus', strings.navFocus),
+        // 今日待办 Top 3
+        HomeWidget.saveWidgetData<int>('todo_top3_count', todoCount),
+        HomeWidget.saveWidgetData<String>(
+          'todo_top3_1',
+          todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'todo_top3_2',
+          todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'todo_top3_3',
+          todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
+        ),
       ]);
       await HomeWidget.updateWidget(
         name: _androidProviderName,
         androidName: _androidProviderName,
+      );
+      await HomeWidget.updateWidget(
+        name: _androidTodoProviderName,
+        androidName: _androidTodoProviderName,
       );
     } catch (_) {}
   }

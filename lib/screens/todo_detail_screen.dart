@@ -191,6 +191,63 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: _pickRecurrence,
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _todo.hasReminder,
+            title: const Text('到期提醒'),
+            subtitle: Text(_todo.reminderAt != null
+                ? '${_todo.reminderAt!.hour.toString().padLeft(2, '0')}:${_todo.reminderAt!.minute.toString().padLeft(2, '0')} 提醒'
+                : '使用截止日期时间'),
+            onChanged: (v) {
+              setState(() {
+                _todo = _todo.copyWith(hasReminder: v);
+                if (v && _todo.dueDate != null && _todo.reminderAt == null) {
+                  _todo = _todo.copyWith(reminderAt: _todo.dueDate);
+                }
+              });
+            },
+          ),
+          if (_todo.hasReminder)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alarm),
+              title: const Text('提醒时间'),
+              subtitle: Text(
+                _todo.reminderAt == null
+                    ? '未设置具体时间'
+                    : '${_todo.reminderAt!.year}-${_todo.reminderAt!.month.toString().padLeft(2, '0')}-${_todo.reminderAt!.day.toString().padLeft(2, '0')} ${_todo.reminderAt!.hour.toString().padLeft(2, '0')}:${_todo.reminderAt!.minute.toString().padLeft(2, '0')}',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                final baseDate = _todo.reminderAt ??
+                    _todo.dueDate ??
+                    DateTime.now().add(const Duration(hours: 1));
+                final pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate: baseDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2099, 12, 31),
+                );
+                if (pickedDate == null) return;
+                if (!context.mounted) return;
+                final pickedTime = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(baseDate),
+                );
+                if (pickedTime == null) return;
+                setState(() {
+                  _todo = _todo.copyWith(
+                    reminderAt: DateTime(
+                      pickedDate.year,
+                      pickedDate.month,
+                      pickedDate.day,
+                      pickedTime.hour,
+                      pickedTime.minute,
+                    ),
+                  );
+                });
+              },
+            ),
           const SizedBox(height: 12),
           const Text('标签', style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),

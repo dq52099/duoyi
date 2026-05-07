@@ -17,10 +17,13 @@ import 'providers/goal_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/preferences_provider.dart';
+import 'models/todo.dart' show TodoPriorityX;
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
+import 'services/local_notifications.dart';
+import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
 import 'screens/todo_screen.dart';
 import 'screens/habit_screen.dart';
@@ -85,6 +88,27 @@ void main() async {
 
   pomodoroProvider.attachNotifier(notificationService);
 
+  // 提醒调度器：监听数据变化，幂等地同步本地通知队列
+  final reminderScheduler = ReminderScheduler(notificationService);
+  Future<void> resyncReminders() async {
+    await reminderScheduler.syncTodos(todoProvider.todos);
+    await reminderScheduler.syncHabits(habitProvider.habits);
+    await reminderScheduler.syncAnniversaries(anniversaryProvider.items);
+  }
+
+  todoProvider.addListener(resyncReminders);
+  habitProvider.addListener(resyncReminders);
+  anniversaryProvider.addListener(resyncReminders);
+  // 初次同步
+  await resyncReminders();
+
+  // 通知点击后的深链接(打开对应 Tab)
+  LocalNotifications.instance.onTap = (payload) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null) return;
+    _handleWidgetUri(uri, pomodoroProvider);
+  };
+
   // AI / CloudSync 依赖 AuthProvider 的 ApiClient
   aiService.attachClient(authProvider.client);
   cloudSyncProvider.apiClientGetter = () => authProvider.client;
@@ -111,6 +135,8 @@ void main() async {
     goalProvider.loadFromStorage();
     courseProvider.loadFromStorage();
     userProvider.loadFromStorage();
+    // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
+    resyncReminders();
   };
 
   authProvider.addListener(() {
@@ -200,18 +226,27 @@ Future<void> _pushHomeWidget(
   ThemeProvider tp,
 ) async {
   final today = DateTime.now();
-  final activeTodayTodos = t.todos.where((todo) {
+  final activeToday = t.todos.where((todo) {
     return !todo.isCompleted &&
         todo.date.year == today.year &&
         todo.date.month == today.month &&
         todo.date.day == today.day;
-  }).length;
+  }).toList()
+    ..sort((a, b) {
+      // 按优先级倒序
+      final r = b.priority.rank.compareTo(a.priority.rank);
+      if (r != 0) return r;
+      return a.sortOrder.compareTo(b.sortOrder);
+    });
+  final activeTodayTodos = activeToday.length;
+  final top3 = activeToday.take(3).map((e) => e.title).toList();
   final habitPercent = (h.todayCompletionRate * 100).round();
   await HomeWidgetService.push(
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
     pomodoroToday: p.sessionCountToday,
     strings: tp.brand.strings,
+    todoTop3: top3,
   );
 }
 

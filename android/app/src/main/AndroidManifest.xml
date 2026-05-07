@@ -1,4 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 本地通知 / 闹钟 所需权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- 网络 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -32,7 +44,22 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- MIUI / Android home widget -->
+        <!-- flutter_local_notifications: 开机恢复已调度闹钟 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- MIUI / Android 主屏小组件(简版) -->
         <receiver
             android:name=".DuoyiWidgetProvider"
             android:label="@string/widget_label"
@@ -45,7 +72,24 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_widget_info" />
-            <!-- MIUI specific marker so 小米桌面 picks it up reliably -->
+            <meta-data
+                android:name="miui.appwidget.previewImage"
+                android:resource="@mipmap/ic_launcher" />
+        </receiver>
+
+        <!-- 今日待办 小组件 -->
+        <receiver
+            android:name=".DuoyiTodoWidgetProvider"
+            android:label="@string/widget_todo_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_todo_widget_info" />
             <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@mipmap/ic_launcher" />

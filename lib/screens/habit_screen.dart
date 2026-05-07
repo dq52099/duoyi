@@ -38,6 +38,8 @@ class _HabitScreenState extends State<HabitScreen>
     final targetCtrl = TextEditingController(text: '1');
     var selectedColor = 0xFF4CAF50;
     var selectedKind = HabitKind.positive;
+    var remindEnabled = false;
+    TimeOfDay? remindTime;
     final templatesByCategory = HabitTemplates.byCategory;
 
     final colors = [
@@ -185,6 +187,47 @@ class _HabitScreenState extends State<HabitScreen>
                 ),
                 const SizedBox(height: 12),
 
+                // --- Remind ---
+                Row(
+                  children: [
+                    const Icon(Icons.alarm, size: 18, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    const Text('每日提醒'),
+                    const Spacer(),
+                    Switch(
+                      value: remindEnabled,
+                      onChanged: (v) async {
+                        setSt(() => remindEnabled = v);
+                        if (v && remindTime == null) {
+                          final t = await showTimePicker(
+                            context: ctx,
+                            initialTime: const TimeOfDay(hour: 20, minute: 0),
+                          );
+                          if (t != null) setSt(() => remindTime = t);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                if (remindEnabled)
+                  TextButton.icon(
+                    icon: const Icon(Icons.schedule, size: 16),
+                    label: Text(
+                      remindTime == null
+                          ? '选择时间'
+                          : '${remindTime!.hour.toString().padLeft(2, '0')}:${remindTime!.minute.toString().padLeft(2, '0')}',
+                    ),
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                        context: ctx,
+                        initialTime:
+                            remindTime ?? const TimeOfDay(hour: 20, minute: 0),
+                      );
+                      if (t != null) setSt(() => remindTime = t);
+                    },
+                  ),
+                const SizedBox(height: 4),
+
                 // --- Manual Entry ---
                 TextField(
                   controller: nameCtrl,
@@ -285,6 +328,9 @@ class _HabitScreenState extends State<HabitScreen>
                             colorValue: selectedColor,
                             kind: selectedKind,
                             targetCount: int.tryParse(targetCtrl.text) ?? 1,
+                            remind: remindEnabled && remindTime != null,
+                            remindHour: remindTime?.hour,
+                            remindMinute: remindTime?.minute,
                           ),
                         );
                         Navigator.pop(ctx);

@@ -40,6 +40,9 @@ dependencies:
   home_widget: ^0.7.0
   http: ^1.2.2
   crypto: ^3.0.5
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

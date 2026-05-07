@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/notification_service.dart';
 import '../providers/preferences_provider.dart';
 
 /// 偏好设置页。纯本地的用户习惯，与服务器/管理员配置无关。
@@ -134,6 +135,55 @@ class PreferencesScreen extends StatelessWidget {
                     .read<PreferencesProvider>()
                     .setAutoArchiveCompletedDays(v.toInt()),
               ),
+            ),
+          ),
+          _section('通知与闹钟'),
+          Consumer<NotificationService>(
+            builder: (_, notif, __) => Column(
+              children: [
+                ListTile(
+                  leading: Icon(
+                    notif.permissionGranted
+                        ? Icons.notifications_active
+                        : Icons.notifications_off,
+                    color: notif.permissionGranted
+                        ? Colors.green
+                        : Colors.orange,
+                  ),
+                  title: const Text('系统通知权限'),
+                  subtitle: Text(notif.permissionGranted ? '已授权' : '未授权'),
+                  trailing: notif.permissionGranted
+                      ? null
+                      : FilledButton(
+                          onPressed: () =>
+                              context.read<NotificationService>().requestPermission(),
+                          child: const Text('去授权'),
+                        ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications),
+                  title: const Text('发送测试通知'),
+                  subtitle: const Text('检查是否能收到提醒'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.read<NotificationService>().sendTest(),
+                ),
+                FutureBuilder<List<int>>(
+                  future: notif.pendingIds(),
+                  builder: (_, snap) {
+                    final n = snap.data?.length ?? 0;
+                    return ListTile(
+                      leading: const Icon(Icons.schedule),
+                      title: const Text('已调度闹钟数'),
+                      subtitle: Text('$n 条待触发'),
+                      trailing: TextButton(
+                        child: const Text('全部取消'),
+                        onPressed: () =>
+                            context.read<NotificationService>().cancelAll(),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ],
