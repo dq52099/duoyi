@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 
-enum CalendarEventType { todo, habit, pomodoro }
+enum CalendarEventType {
+  todo,
+  habit,
+  pomodoro,
+  anniversary,
+  course,
+  diary,
+  countdown,
+  goal,
+}
 
 class CalendarEvent {
   final String id;

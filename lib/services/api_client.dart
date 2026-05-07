@@ -1,8 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:http/http.dart' as http;
 
-/// Tiny HTTP wrapper around dart:io HttpClient so we don't need to add
-/// http/dio. All endpoints under our Python backend.
+/// 跨平台 HTTP 封装(web/android/linux 通用)。
 class ApiClient {
   String baseUrl;
   String? token;
@@ -12,6 +11,9 @@ class ApiClient {
   Future<Map<String, dynamic>> get(String path) => _send('GET', path);
   Future<Map<String, dynamic>> post(String path, [Object? body]) =>
       _send('POST', path, body: body);
+  Future<Map<String, dynamic>> patch(String path, [Object? body]) =>
+      _send('PATCH', path, body: body);
+  Future<Map<String, dynamic>> delete(String path) => _send('DELETE', path);
 
   Future<List<dynamic>> getList(String path) async {
     final res = await _sendRaw('GET', path);
@@ -26,7 +28,7 @@ class ApiClient {
   }) async {
     final raw = await _sendRaw(method, path, body: body);
     if (raw is Map<String, dynamic>) return raw;
-    return {};
+    return <String, dynamic>{};
   }
 
   Future<dynamic> _sendRaw(String method, String path, {Object? body}) async {
@@ -34,31 +36,41 @@ class ApiClient {
       throw const ApiException('未配置后端地址');
     }
     final uri = Uri.parse('$baseUrl$path');
-    final client = HttpClient();
-    try {
-      final req = await client.openUrl(method, uri);
-      req.headers.set('Content-Type', 'application/json');
-      if (token != null && token!.isNotEmpty) {
-        req.headers.set('Authorization', 'Bearer $token');
-      }
-      if (body != null) req.write(json.encode(body));
-      final resp = await req.close();
-      final raw = await resp.transform(utf8.decoder).join();
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        if (raw.isEmpty) return const <String, dynamic>{};
-        return json.decode(raw);
-      }
-      String detail = '';
-      try {
-        final m = json.decode(raw);
-        if (m is Map && m['detail'] != null) detail = m['detail'].toString();
-      } catch (_) {
-        detail = raw;
-      }
-      throw ApiException('${resp.statusCode}: $detail');
-    } finally {
-      client.close();
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (token != null && token!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
     }
+
+    http.Response resp;
+    final encoded = body == null ? null : json.encode(body);
+    switch (method) {
+      case 'GET':
+        resp = await http.get(uri, headers: headers);
+        break;
+      case 'POST':
+        resp = await http.post(uri, headers: headers, body: encoded);
+        break;
+      case 'PATCH':
+        resp = await http.patch(uri, headers: headers, body: encoded);
+        break;
+      case 'DELETE':
+        resp = await http.delete(uri, headers: headers, body: encoded);
+        break;
+      default:
+        throw ApiException('不支持的方法: $method');
+    }
+
+    final raw = utf8.decode(resp.bodyBytes, allowMalformed: true);
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      if (raw.isEmpty) return const <String, dynamic>{};
+      return json.decode(raw);
+    }
+    String detail = raw;
+    try {
+      final m = json.decode(raw);
+      if (m is Map && m['detail'] != null) detail = m['detail'].toString();
+    } catch (_) {}
+    throw ApiException('${resp.statusCode}: $detail');
   }
 }
 

@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 /// Polls a GitHub repo's latest release and exposes update info.
-/// Mirrors RE0's lib/core/app_update_service.dart pattern, simplified.
 class AppUpdateService extends ChangeNotifier {
   final String repo; // e.g. "dq52099/duoyi"
   final String currentVersion; // e.g. "1.0.0"
@@ -39,39 +38,31 @@ class AppUpdateService extends ChangeNotifier {
       final uri = Uri.parse(
         'https://api.github.com/repos/$repo/releases/latest',
       );
-      final client = HttpClient();
-      try {
-        final req = await client.getUrl(uri);
-        req.headers.set('User-Agent', 'duoyi/1.0');
-        req.headers.set('Accept', 'application/vnd.github+json');
-        final resp = await req.close();
-        final raw = await resp.transform(utf8.decoder).join();
-        if (resp.statusCode == 404) {
-          // No release yet
-          _latestVersion = null;
-          _error = '尚未发布 Release';
-          return;
-        }
-        if (resp.statusCode != 200) {
-          _error = '检查更新失败: ${resp.statusCode}';
-          return;
-        }
-        final data = json.decode(raw);
-        _latestVersion = (data['tag_name'] as String?)?.trim();
-        _latestNotes = (data['body'] as String?)?.trim();
-        // Find first APK asset
-        final assets = data['assets'];
-        if (assets is List) {
-          for (final a in assets) {
-            final name = (a['name'] as String?) ?? '';
-            if (name.toLowerCase().endsWith('.apk')) {
-              _latestUrl = a['browser_download_url'] as String?;
-              break;
-            }
+      final resp = await http.get(uri, headers: {
+        'User-Agent': 'duoyi/1.0',
+        'Accept': 'application/vnd.github+json',
+      });
+      if (resp.statusCode == 404) {
+        _latestVersion = null;
+        _error = '尚未发布 Release';
+        return;
+      }
+      if (resp.statusCode != 200) {
+        _error = '检查更新失败: ${resp.statusCode}';
+        return;
+      }
+      final data = json.decode(utf8.decode(resp.bodyBytes));
+      _latestVersion = (data['tag_name'] as String?)?.trim();
+      _latestNotes = (data['body'] as String?)?.trim();
+      final assets = data['assets'];
+      if (assets is List) {
+        for (final a in assets) {
+          final name = (a['name'] as String?) ?? '';
+          if (name.toLowerCase().endsWith('.apk')) {
+            _latestUrl = a['browser_download_url'] as String?;
+            break;
           }
         }
-      } finally {
-        client.close();
       }
     } catch (e) {
       _error = e.toString();

@@ -1,14 +1,18 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 import '../core/brand_strings.dart';
+import '../core/platform_info.dart';
 
 /// Pushes today's stats and brand strings out to the Android home widget.
+/// 在 web / 其他平台下为空实现。
 class HomeWidgetService {
   static const String _androidProviderName = 'DuoyiWidgetProvider';
   static const String _appGroupId = 'group.com.duoyi.duoyi';
 
-  static bool get _supported => !kIsWeb && Platform.isAndroid;
+  static bool get _supported {
+    if (kIsWeb) return false;
+    return PlatformInfo.isAndroid;
+  }
 
   static Future<void> init() async {
     if (!_supported) return;
@@ -41,7 +45,6 @@ class HomeWidgetService {
     } catch (_) {}
   }
 
-  /// Stream of deep link Uris that arrive when the user taps a widget cell.
   static Stream<Uri?> get widgetClickedStream {
     if (!_supported) return const Stream.empty();
     return HomeWidget.widgetClicked;

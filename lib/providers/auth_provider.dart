@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/app_config.dart';
 import '../services/api_client.dart';
 
 class AuthState {
@@ -19,29 +20,40 @@ class AuthState {
   bool get isLoggedIn => token != null && token!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
-    'user_id': userId,
-    'username': username,
-    'token': token,
-    'is_admin': isAdmin,
-  };
+        'user_id': userId,
+        'username': username,
+        'token': token,
+        'is_admin': isAdmin,
+      };
 
   factory AuthState.fromJson(Map<String, dynamic> j) => AuthState(
-    userId: j['user_id'] as String?,
-    username: j['username'] as String?,
-    token: j['token'] as String?,
-    isAdmin: j['is_admin'] == true,
-  );
+        userId: j['user_id'] as String?,
+        username: j['username'] as String?,
+        token: j['token'] as String?,
+        isAdmin: j['is_admin'] == true,
+      );
 }
 
+/// 登录态 + 服务器配置。
+/// 普通用户不再感知 baseUrl，服务器地址由 [AppConfig.bakedServerUrl] 提供，
+/// 仅管理员可通过 [setBaseUrlByAdmin] 覆盖并存入本地。
 class AuthProvider extends ChangeNotifier {
   AuthState _state = const AuthState();
   String _baseUrl = '';
-  bool _inviteRequired = false;
+  Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
+
+  /// 拉取到 /api/config 之后会触发此回调，供 AiService / CloudSyncProvider 等订阅。
+  void Function(Map<String, dynamic> cfg)? onServerConfigChanged;
 
   AuthState get state => _state;
   String get baseUrl => _baseUrl;
-  bool get inviteCodeRequired => _inviteRequired;
+  Map<String, dynamic> get serverConfig => _serverConfig;
+  bool get inviteCodeRequired => _serverConfig['invite_code_required'] == true;
+  bool get registrationEnabled => _serverConfig['registration_enabled'] != false;
+  bool get maintenanceMode => _serverConfig['maintenance_mode'] == true;
+  String get maintenanceMessage =>
+      (_serverConfig['maintenance_message'] ?? '').toString();
   ApiClient get client => _client;
 
   AuthProvider() {
@@ -50,7 +62,12 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString('auth_base_url') ?? '';
+    // 管理员覆盖值优先；没有则用 baked URL
+    final adminOverride = prefs.getString('auth_base_url_admin') ?? '';
+    _baseUrl = adminOverride.isNotEmpty
+        ? adminOverride
+        : AppConfig.bakedServerUrl;
+
     final raw = prefs.getString('auth_state');
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -59,27 +76,33 @@ class AuthProvider extends ChangeNotifier {
     }
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     notifyListeners();
-    // Best effort: refresh feature flag from server
-    if (_baseUrl.isNotEmpty) {
-      try {
-        final cfg = await _client.get('/api/config');
-        _inviteRequired = cfg['invite_code_required'] == true;
-        notifyListeners();
-      } catch (_) {}
+    await _refreshServerConfig();
+  }
+
+  Future<void> _refreshServerConfig() async {
+    if (_baseUrl.isEmpty) return;
+    try {
+      final cfg = await _client.get('/api/config');
+      _serverConfig = cfg;
+      onServerConfigChanged?.call(cfg);
+      notifyListeners();
+    } catch (_) {
+      // offline or server down — 保留旧配置
     }
   }
 
-  Future<void> setBaseUrl(String url) async {
-    _baseUrl = url.trim();
+  /// 只有管理员可以调用。
+  Future<void> setBaseUrlByAdmin(String url) async {
+    _baseUrl = url.trim().isEmpty ? AppConfig.bakedServerUrl : url.trim();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_base_url', _baseUrl);
+    if (_baseUrl == AppConfig.bakedServerUrl) {
+      await prefs.remove('auth_base_url_admin');
+    } else {
+      await prefs.setString('auth_base_url_admin', _baseUrl);
+    }
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     notifyListeners();
-    try {
-      final cfg = await _client.get('/api/config');
-      _inviteRequired = cfg['invite_code_required'] == true;
-      notifyListeners();
-    } catch (_) {}
+    await _refreshServerConfig();
   }
 
   Future<void> _persistState() async {
@@ -92,7 +115,6 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     String? inviteCode,
   }) async {
-    if (_baseUrl.isEmpty) throw const ApiException('请先在设置里填写服务器地址');
     final res = await _client.post('/api/auth/register', {
       'username': username,
       'password': password,
@@ -108,13 +130,13 @@ class AuthProvider extends ChangeNotifier {
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
     notifyListeners();
+    await _refreshServerConfig();
   }
 
   Future<void> login({
     required String username,
     required String password,
   }) async {
-    if (_baseUrl.isEmpty) throw const ApiException('请先在设置里填写服务器地址');
     final res = await _client.post('/api/auth/login', {
       'username': username,
       'password': password,
@@ -128,6 +150,7 @@ class AuthProvider extends ChangeNotifier {
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
     notifyListeners();
+    await _refreshServerConfig();
   }
 
   Future<void> logout() async {
@@ -139,5 +162,21 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_state');
     notifyListeners();
+  }
+
+  /// 在 /api/auth/me 成功后更新最新角色。
+  Future<void> refreshMe() async {
+    if (!_state.isLoggedIn) return;
+    try {
+      final me = await _client.get('/api/auth/me');
+      _state = AuthState(
+        userId: (me['user_id'] ?? _state.userId) as String?,
+        username: (me['username'] ?? _state.username) as String?,
+        token: _state.token,
+        isAdmin: me['is_admin'] == true,
+      );
+      await _persistState();
+      notifyListeners();
+    } catch (_) {}
   }
 }

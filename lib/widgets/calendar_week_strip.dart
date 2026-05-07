@@ -13,6 +13,27 @@ class CalendarWeekStrip extends StatelessWidget {
     required this.onDaySelected,
   });
 
+  static Color _colorFor(CalendarEventType t, ColorScheme cs) {
+    switch (t) {
+      case CalendarEventType.todo:
+        return cs.primary;
+      case CalendarEventType.habit:
+        return cs.tertiary;
+      case CalendarEventType.pomodoro:
+        return Colors.red;
+      case CalendarEventType.anniversary:
+        return const Color(0xFFE91E63);
+      case CalendarEventType.course:
+        return const Color(0xFF42A5F5);
+      case CalendarEventType.diary:
+        return const Color(0xFF26A69A);
+      case CalendarEventType.countdown:
+        return Colors.orange;
+      case CalendarEventType.goal:
+        return const Color(0xFFFFA726);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -80,11 +101,7 @@ class CalendarWeekStrip extends StatelessWidget {
                                   height: 5,
                                   margin: const EdgeInsets.only(right: 1),
                                   decoration: BoxDecoration(
-                                    color: t == CalendarEventType.todo
-                                        ? cs.primary
-                                        : (t == CalendarEventType.habit
-                                              ? cs.tertiary
-                                              : Colors.red),
+                                    color: _colorFor(t, cs),
                                     shape: BoxShape.circle,
                                   ),
                                 ),

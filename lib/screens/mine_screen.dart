@@ -15,10 +15,20 @@ import 'theme_picker_screen.dart';
 import 'login_screen.dart';
 import 'announcements_screen.dart';
 import 'feedback_screen.dart';
-import 'ai_settings_screen.dart';
 import 'countdown_screen.dart';
 import 'note_screen.dart';
 import 'statistics_screen.dart';
+import 'anniversary_screen.dart';
+import 'diary_screen.dart';
+import 'goal_screen.dart';
+import 'course_schedule_screen.dart';
+import 'almanac_screen.dart';
+import 'admin_screen.dart';
+import 'achievements_screen.dart';
+import 'backup_screen.dart';
+import 'lock_settings_screen.dart';
+import 'export_screen.dart';
+import 'search_screen.dart';
 
 class MineScreen extends StatelessWidget {
   const MineScreen({super.key});
@@ -217,6 +227,33 @@ class MineScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _Section(title: '效率与工具'),
           _Tile(
+            icon: Icons.flag_outlined,
+            label: '目标管理',
+            color: Colors.orange,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GoalScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.emoji_events_outlined,
+            label: '成就墙',
+            color: Colors.amber,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AchievementsScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.search,
+            label: '全局搜索',
+            color: Colors.blueGrey,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+          ),
+          _Tile(
             icon: Icons.pie_chart_outline,
             label: '时光足迹 (数据报表)',
             color: Colors.indigo,
@@ -227,11 +264,20 @@ class MineScreen extends StatelessWidget {
           ),
           _Tile(
             icon: Icons.event_available_outlined,
-            label: '倒数日',
+            label: '纪念日 · 生日 · 倒数',
             color: Colors.pink,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const CountdownScreen()),
+              MaterialPageRoute(builder: (_) => const AnniversaryScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.book_outlined,
+            label: '日记',
+            color: Colors.teal,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DiaryScreen()),
             ),
           ),
           _Tile(
@@ -241,6 +287,52 @@ class MineScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const NoteScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.school_outlined,
+            label: '课程表',
+            color: Colors.blue,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const CourseScheduleScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.wb_sunny_outlined,
+            label: '黄历 · 万年历',
+            color: Colors.deepOrange,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AlmanacScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.timer_outlined,
+            label: '简易倒数日 (兼容旧数据)',
+            color: Colors.grey,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CountdownScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.event_note_outlined,
+            label: '导出为日历 (.ics)',
+            color: Colors.lightBlue,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ExportScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.backup_outlined,
+            label: '备份 · 恢复',
+            color: Colors.brown,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BackupScreen()),
             ),
           ),
 
@@ -321,24 +413,6 @@ class MineScreen extends StatelessWidget {
             ),
           ),
           _Tile(
-            icon: Icons.smart_toy_outlined,
-            label: 'AI 助手',
-            color: Colors.purple,
-            trailing: Text(
-              ai.isConfigured ? (ai.enabled ? '已启用' : '已配置') : '未配置',
-              style: TextStyle(
-                fontSize: 13,
-                color: ai.isConfigured && ai.enabled
-                    ? Colors.green
-                    : Colors.grey,
-              ),
-            ),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
-            ),
-          ),
-          _Tile(
             icon: Icons.notifications_outlined,
             label: s.mineNotificationsLabel,
             color: Colors.orange,
@@ -349,26 +423,59 @@ class MineScreen extends StatelessWidget {
             onTap: () => _notifDialog(context, notifService),
           ),
           _Tile(
-            icon: Icons.cloud_outlined,
-            label: s.mineCloudSyncLabel,
-            color: Colors.cyan,
-            trailing: Text(
-              syncProvider.config.serverUrl.isEmpty ? '未配置' : '已配置',
-              style: TextStyle(
-                fontSize: 13,
-                color: syncProvider.config.serverUrl.isEmpty
-                    ? Colors.grey
-                    : Colors.green,
+            icon: Icons.lock_outline,
+            label: '应用锁',
+            color: Colors.red.shade400,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LockSettingsScreen()),
+            ),
+          ),
+          if (auth.state.isLoggedIn)
+            _Tile(
+              icon: Icons.cloud_sync_outlined,
+              label: '立即同步',
+              color: Colors.cyan,
+              trailing: syncProvider.isSyncing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      syncProvider.hasEverSynced
+                          ? _formatTime(syncProvider.config.lastSync)
+                          : '未同步',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: syncProvider.hasEverSynced
+                            ? Colors.green
+                            : Colors.grey,
+                      ),
+                    ),
+              onTap: syncProvider.isSyncing
+                  ? null
+                  : () async {
+                      await syncProvider.syncNow();
+                      if (!context.mounted) return;
+                      final err = syncProvider.lastError;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(err == null ? '同步完成' : '同步失败: $err'),
+                        ),
+                      );
+                    },
+            ),
+          if (auth.state.isLoggedIn && auth.state.isAdmin)
+            _Tile(
+              icon: Icons.admin_panel_settings_outlined,
+              label: '管理员后台',
+              color: Colors.deepOrange,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminScreen()),
               ),
             ),
-            onTap: () => _syncDialog(context, syncProvider),
-          ),
-          _Tile(
-            icon: Icons.backup_outlined,
-            label: s.mineDataMgmtLabel,
-            color: Colors.grey,
-            onTap: () => _dataDialog(context),
-          ),
           _Tile(
             icon: Icons.info_outline,
             label: s.mineAboutLabel,
@@ -379,6 +486,16 @@ class MineScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatTime(DateTime t) {
+    if (t.millisecondsSinceEpoch == 0) return '未同步';
+    final now = DateTime.now();
+    final diff = now.difference(t);
+    if (diff.inMinutes < 1) return '刚刚';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+    if (diff.inHours < 24) return '${diff.inHours} 小时前';
+    return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
   }
 
   int _todoRate(TodoProvider t) {
@@ -498,70 +615,6 @@ class MineScreen extends StatelessWidget {
             },
             child: const Text('清空历史'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _syncDialog(BuildContext context, CloudSyncProvider sp) {
-    final urlCtrl = TextEditingController(text: sp.config.serverUrl);
-    final tokenCtrl = TextEditingController(text: sp.config.token);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('云同步设置'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(
-                labelText: '服务器地址',
-                hintText: 'http://your-server:8000',
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: tokenCtrl,
-              decoration: const InputDecoration(labelText: 'Token'),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              sp.configure(
-                serverUrl: urlCtrl.text.trim(),
-                token: tokenCtrl.text.trim(),
-              );
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('云同步已配置')));
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _dataDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('数据管理'),
-        content: const Text('所有数据存储在本地，登录后可走云同步备份到自托管服务器。'),
-        actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('关闭'),

@@ -16,23 +16,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _userCtrl = TextEditingController();
   final _pwdCtrl = TextEditingController();
   final _inviteCtrl = TextEditingController();
-  final _serverCtrl = TextEditingController();
   bool _isRegister = false;
   bool _busy = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _serverCtrl.text = context.read<AuthProvider>().baseUrl;
-  }
 
   @override
   void dispose() {
     _userCtrl.dispose();
     _pwdCtrl.dispose();
     _inviteCtrl.dispose();
-    _serverCtrl.dispose();
     super.dispose();
   }
 
@@ -43,9 +35,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     final auth = context.read<AuthProvider>();
     try {
-      if (_serverCtrl.text.trim() != auth.baseUrl) {
-        await auth.setBaseUrl(_serverCtrl.text.trim());
-      }
       if (_isRegister) {
         await auth.register(
           username: _userCtrl.text.trim(),
@@ -98,15 +87,33 @@ class _LoginScreenState extends State<LoginScreen> {
               _isRegister ? '创建一个账号开启多端同步' : '使用账号登录享受云同步与公告',
               style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
             ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _serverCtrl,
-              decoration: const InputDecoration(
-                labelText: '服务器地址',
-                hintText: 'http://your-server:8000',
+            if (auth.maintenanceMode) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.build_circle,
+                        color: Colors.orange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        auth.maintenanceMessage.isEmpty
+                            ? '服务正在维护中'
+                            : auth.maintenanceMessage,
+                        style: const TextStyle(
+                            color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 24),
             TextField(
               controller: _userCtrl,
               decoration: const InputDecoration(labelText: '用户名'),
@@ -124,13 +131,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const InputDecoration(labelText: '邀请码'),
               ),
             ],
+            if (_isRegister && !auth.registrationEnabled) ...[
+              const SizedBox(height: 12),
+              const Text(
+                '当前站点已关闭注册',
+                style: TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: const TextStyle(color: Colors.red)),
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _busy ? null : _submit,
+              onPressed: _busy ||
+                      (_isRegister && !auth.registrationEnabled)
+                  ? null
+                  : _submit,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: _busy
@@ -142,10 +159,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     : Text(_isRegister ? '注册' : '登录'),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: () => setState(() => _isRegister = !_isRegister),
               child: Text(_isRegister ? '已有账号？去登录' : '没有账号？去注册'),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                '服务器: ${auth.baseUrl}',
+                style: TextStyle(
+                    fontSize: 10, color: Colors.grey.shade500),
+              ),
             ),
           ],
         ),

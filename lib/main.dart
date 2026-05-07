@@ -11,16 +11,25 @@ import 'providers/notification_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/countdown_provider.dart';
 import 'providers/note_provider.dart';
+import 'providers/anniversary_provider.dart';
+import 'providers/diary_provider.dart';
+import 'providers/goal_provider.dart';
+import 'providers/course_provider.dart';
+import 'providers/app_lock_provider.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
+import 'screens/today_screen.dart';
 import 'screens/todo_screen.dart';
 import 'screens/habit_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/pomodoro_screen.dart';
 import 'screens/mine_screen.dart';
+import 'screens/lock_screen.dart';
+import 'screens/search_screen.dart';
 import 'widgets/brand_background.dart';
+import 'widgets/quick_capture_fab.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 
@@ -39,6 +48,11 @@ void main() async {
   final authProvider = AuthProvider();
   final countdownProvider = CountdownProvider();
   final noteProvider = NoteProvider();
+  final anniversaryProvider = AnniversaryProvider();
+  final diaryProvider = DiaryProvider();
+  final goalProvider = GoalProvider();
+  final courseProvider = CourseProvider();
+  final appLockProvider = AppLockProvider();
   final aiService = AiService();
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
@@ -54,6 +68,11 @@ void main() async {
     userProvider.loadFromStorage(),
     countdownProvider.loadFromStorage(),
     noteProvider.loadFromStorage(),
+    anniversaryProvider.loadFromStorage(),
+    diaryProvider.loadFromStorage(),
+    goalProvider.loadFromStorage(),
+    courseProvider.loadFromStorage(),
+    appLockProvider.loadFromStorage(),
     notificationService.init(),
     systemTray.init(),
     HomeWidgetService.init(),
@@ -63,7 +82,42 @@ void main() async {
 
   pomodoroProvider.attachNotifier(notificationService);
 
-  // Brand strings → notifier
+  // AI / CloudSync 依赖 AuthProvider 的 ApiClient
+  aiService.attachClient(authProvider.client);
+  cloudSyncProvider.apiClientGetter = () => authProvider.client;
+
+  authProvider.onServerConfigChanged = (cfg) {
+    aiService.updateFromServerConfig(cfg);
+  };
+  authProvider.addListener(() {
+    aiService.attachClient(authProvider.client);
+  });
+  if (authProvider.serverConfig.isNotEmpty) {
+    aiService.updateFromServerConfig(authProvider.serverConfig);
+  }
+
+  cloudSyncProvider.onSynced = () {
+    todoProvider.loadFromStorage();
+    habitProvider.loadFromStorage();
+    pomodoroProvider.loadFromStorage();
+    countdownProvider.loadFromStorage();
+    noteProvider.loadFromStorage();
+    anniversaryProvider.loadFromStorage();
+    diaryProvider.loadFromStorage();
+    goalProvider.loadFromStorage();
+    courseProvider.loadFromStorage();
+    userProvider.loadFromStorage();
+  };
+
+  authProvider.addListener(() {
+    if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
+      cloudSyncProvider.syncNow();
+    }
+  });
+  if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
+    cloudSyncProvider.syncNow();
+  }
+
   notificationService.setStrings(themeProvider.brand.strings);
   themeProvider.addListener(() {
     notificationService.setStrings(themeProvider.brand.strings);
@@ -75,12 +129,10 @@ void main() async {
     );
   });
 
-  // Tray actions
   systemTray.onActivate.listen((action) {
     if (action == 'pomodoro_quick_start') pomodoroProvider.toggleTimer();
   });
 
-  // Push to Android home widget on every data change
   void onDataChange() => _pushHomeWidget(
     todoProvider,
     habitProvider,
@@ -91,7 +143,6 @@ void main() async {
   habitProvider.addListener(onDataChange);
   pomodoroProvider.addListener(onDataChange);
 
-  // Initial push
   await _pushHomeWidget(
     todoProvider,
     habitProvider,
@@ -99,7 +150,6 @@ void main() async {
     themeProvider,
   );
 
-  // Listen to home widget taps (deep link routing)
   HomeWidgetService.widgetClickedStream.listen(
     (uri) => _handleWidgetUri(uri, pomodoroProvider),
   );
@@ -122,6 +172,11 @@ void main() async {
         ChangeNotifierProvider.value(value: userProvider),
         ChangeNotifierProvider.value(value: countdownProvider),
         ChangeNotifierProvider.value(value: noteProvider),
+        ChangeNotifierProvider.value(value: anniversaryProvider),
+        ChangeNotifierProvider.value(value: diaryProvider),
+        ChangeNotifierProvider.value(value: goalProvider),
+        ChangeNotifierProvider.value(value: courseProvider),
+        ChangeNotifierProvider.value(value: appLockProvider),
         ChangeNotifierProvider.value(value: notificationService),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
@@ -164,34 +219,70 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   if (uri.host == 'tab') {
     final tab = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     final idx = switch (tab) {
-      'todo' => 0,
-      'habit' => 1,
-      'calendar' => 2,
-      'focus' => 3,
-      'mine' => 4,
-      _ => 2,
+      'today' => 0,
+      'todo' => 1,
+      'habit' => 2,
+      'calendar' => 3,
+      'focus' => 4,
+      'mine' => 5,
+      _ => 3,
     };
     state?.navigateTo(idx);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     if (action == 'start_pomodoro') {
-      state?.navigateTo(3);
+      state?.navigateTo(4);
       if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
     }
   }
 }
 
-class DuoyiApp extends StatelessWidget {
+class DuoyiApp extends StatefulWidget {
   const DuoyiApp({super.key});
+
+  @override
+  State<DuoyiApp> createState() => _DuoyiAppState();
+}
+
+class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final lock = context.read<AppLockProvider>();
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      lock.onAppLifecycleInactive();
+    } else if (state == AppLifecycleState.resumed) {
+      lock.onAppLifecycleResume();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final brand = context.watch<ThemeProvider>().brand;
+    final lock = context.watch<AppLockProvider>();
     return MaterialApp(
       title: brand.strings.appTitle,
       debugShowCheckedModeBanner: false,
       theme: brand.theme,
-      home: MainShell(key: mainShellKey),
+      home: Stack(
+        children: [
+          MainShell(key: mainShellKey),
+          if (lock.isLocked)
+            const Positioned.fill(child: Material(child: LockScreen())),
+        ],
+      ),
     );
   }
 }
@@ -204,8 +295,9 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
-  int _currentIndex = 2; // Calendar is primary
+  int _currentIndex = 0; // Today first
 
+  static final GlobalKey todayKey = GlobalKey();
   static final GlobalKey todoKey = GlobalKey();
   static final GlobalKey habitKey = GlobalKey();
   static final GlobalKey calendarKey = GlobalKey();
@@ -218,6 +310,11 @@ class MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
     final destinations = [
+      const NavigationDestination(
+        icon: Icon(Icons.today_outlined),
+        selectedIcon: Icon(Icons.today),
+        label: '今日',
+      ),
       NavigationDestination(
         icon: const Icon(Icons.checklist),
         selectedIcon: const Icon(Icons.checklist_rounded),
@@ -251,6 +348,7 @@ class MainShellState extends State<MainShell> {
         child: IndexedStack(
           index: _currentIndex,
           children: [
+            TodayScreen(key: todayKey),
             TodoScreen(key: todoKey),
             HabitScreen(key: habitKey),
             CalendarScreen(key: calendarKey),
@@ -259,6 +357,25 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
+      floatingActionButton: _currentIndex == 0 || _currentIndex == 5
+          ? const QuickCaptureFab()
+          : null,
+      appBar: _currentIndex == 0
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              toolbarHeight: 0,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchScreen()),
+                  ),
+                ),
+              ],
+            )
+          : null,
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
           height: 64,

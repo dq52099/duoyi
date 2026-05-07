@@ -5,6 +5,11 @@ import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/anniversary_provider.dart';
+import '../providers/course_provider.dart';
+import '../providers/diary_provider.dart';
+import '../providers/countdown_provider.dart';
+import '../providers/goal_provider.dart';
 import '../models/todo.dart';
 import '../widgets/calendar_month_grid.dart';
 import '../widgets/calendar_week_strip.dart';
@@ -105,6 +110,11 @@ class _CalendarScreenState extends State<CalendarScreen>
     final habitProvider = context.watch<HabitProvider>();
     final pomodoroProvider = context.watch<PomodoroProvider>();
     final calendarProvider = context.watch<CalendarProvider>();
+    final anniversaryProvider = context.watch<AnniversaryProvider>();
+    final courseProvider = context.watch<CourseProvider>();
+    final diaryProvider = context.watch<DiaryProvider>();
+    final countdownProvider = context.watch<CountdownProvider>();
+    final goalProvider = context.watch<GoalProvider>();
     final s = context.watch<ThemeProvider>().brand.strings;
     final cs = Theme.of(context).colorScheme;
 
@@ -114,6 +124,12 @@ class _CalendarScreenState extends State<CalendarScreen>
       habitProvider.habits,
       pomodoroProvider.sessions,
       cs,
+      anniversaries: anniversaryProvider.items,
+      courses: courseProvider.courses,
+      courseSettings: courseProvider.settings,
+      diaries: diaryProvider.entries,
+      countdowns: countdownProvider.items,
+      goals: goalProvider.goals,
     );
 
     final dateTypes = calendarProvider.dateEventTypes;
