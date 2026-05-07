@@ -32,10 +32,11 @@ class ApiClient {
   }
 
   Future<dynamic> _sendRaw(String method, String path, {Object? body}) async {
-    if (baseUrl.isEmpty) {
-      throw const ApiException('未配置后端地址');
-    }
-    final uri = Uri.parse('$baseUrl$path');
+    // baseUrl 为空时走相对路径(web 前后端同域反代)；
+    // 移动端固定构建时注入的 url。
+    final uri = baseUrl.isEmpty
+        ? Uri.parse(path)
+        : Uri.parse('$baseUrl$path');
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null && token!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';

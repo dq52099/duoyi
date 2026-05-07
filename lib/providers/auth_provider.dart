@@ -34,16 +34,17 @@ class AuthState {
       );
 }
 
-/// 登录态 + 服务器配置。
-/// 普通用户不再感知 baseUrl，服务器地址由 [AppConfig.bakedServerUrl] 提供，
-/// 仅管理员可通过 [setBaseUrlByAdmin] 覆盖并存入本地。
+/// 登录态 + 连接到服务器的 ApiClient。
+///
+/// 服务器地址完全由 [AppConfig.bakedServerUrl] 决定，不可在运行时修改。
+/// 对于历史版本在本地留下的 `auth_base_url_admin` 键，启动时会清理掉。
 class AuthProvider extends ChangeNotifier {
   AuthState _state = const AuthState();
-  String _baseUrl = '';
+  late String _baseUrl;
   Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
 
-  /// 拉取到 /api/config 之后会触发此回调，供 AiService / CloudSyncProvider 等订阅。
+  /// 拉取到 /api/config 之后会触发，供 AiService / CloudSyncProvider 订阅。
   void Function(Map<String, dynamic> cfg)? onServerConfigChanged;
 
   AuthState get state => _state;
@@ -57,16 +58,17 @@ class AuthProvider extends ChangeNotifier {
   ApiClient get client => _client;
 
   AuthProvider() {
-    _client = ApiClient();
+    _baseUrl = AppConfig.bakedServerUrl;
+    _client = ApiClient(baseUrl: _baseUrl);
   }
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    // 管理员覆盖值优先；没有则用 baked URL
-    final adminOverride = prefs.getString('auth_base_url_admin') ?? '';
-    _baseUrl = adminOverride.isNotEmpty
-        ? adminOverride
-        : AppConfig.bakedServerUrl;
+    // 清理旧版本可能遗留的本地服务器覆盖；当前策略不允许 APP 内改地址。
+    await prefs.remove('auth_base_url');
+    await prefs.remove('auth_base_url_admin');
+
+    _baseUrl = AppConfig.bakedServerUrl;
 
     final raw = prefs.getString('auth_state');
     if (raw != null && raw.isNotEmpty) {
@@ -80,7 +82,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshServerConfig() async {
-    if (_baseUrl.isEmpty) return;
+    if (_baseUrl.isEmpty) {
+      // 同域相对路径下也可以拉 /api/config
+    }
     try {
       final cfg = await _client.get('/api/config');
       _serverConfig = cfg;
@@ -89,20 +93,6 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       // offline or server down — 保留旧配置
     }
-  }
-
-  /// 只有管理员可以调用。
-  Future<void> setBaseUrlByAdmin(String url) async {
-    _baseUrl = url.trim().isEmpty ? AppConfig.bakedServerUrl : url.trim();
-    final prefs = await SharedPreferences.getInstance();
-    if (_baseUrl == AppConfig.bakedServerUrl) {
-      await prefs.remove('auth_base_url_admin');
-    } else {
-      await prefs.setString('auth_base_url_admin', _baseUrl);
-    }
-    _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
-    notifyListeners();
-    await _refreshServerConfig();
   }
 
   Future<void> _persistState() async {
@@ -164,7 +154,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 在 /api/auth/me 成功后更新最新角色。
   Future<void> refreshMe() async {
     if (!_state.isLoggedIn) return;
     try {

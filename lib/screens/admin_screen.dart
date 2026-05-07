@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/app_config.dart';
 import '../providers/auth_provider.dart';
 import '../services/admin_api.dart';
 import '../services/api_client.dart';
@@ -21,7 +22,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 7, vsync: this);
+    _tabs = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -51,6 +52,7 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(icon: Icon(Icons.dashboard_outlined), text: '概览'),
             Tab(icon: Icon(Icons.tune), text: '全站设置'),
             Tab(icon: Icon(Icons.auto_awesome), text: 'AI 配置'),
+            Tab(icon: Icon(Icons.cloud_outlined), text: '云端备份'),
             Tab(icon: Icon(Icons.people_outline), text: '用户'),
             Tab(icon: Icon(Icons.campaign_outlined), text: '公告'),
             Tab(icon: Icon(Icons.feedback_outlined), text: '反馈'),
@@ -64,6 +66,7 @@ class _AdminScreenState extends State<AdminScreen>
           _DashboardTab(api: api),
           _SettingsTab(api: api),
           _AiSettingsTab(api: api),
+          _BackupSettingsTab(api: api),
           _UsersTab(api: api, selfId: auth.state.userId),
           _AnnouncementsTab(api: api),
           _FeedbackTab(api: api),
@@ -132,6 +135,30 @@ class _DashboardTabState extends State<_DashboardTab> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          // 构建信息小卡
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.indigo.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border:
+                  Border.all(color: Colors.indigo.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_outlined,
+                    color: Colors.indigo, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '当前客户端连接: ${AppConfig.bakedServerUrl.isEmpty ? "相对路径 (同域反代)" : AppConfig.bakedServerUrl}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
           _GridCards([
             _Kpi('总用户', '${users['total'] ?? 0}', Icons.people, Colors.blue),
             _Kpi('管理员', '${users['admin'] ?? 0}', Icons.shield,
@@ -273,7 +300,6 @@ class _SettingsTabState extends State<_SettingsTab> {
   bool _saving = false;
   String? _error;
   final _msgCtrl = TextEditingController();
-  final _serverCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -284,7 +310,6 @@ class _SettingsTabState extends State<_SettingsTab> {
   @override
   void dispose() {
     _msgCtrl.dispose();
-    _serverCtrl.dispose();
     super.dispose();
   }
 
@@ -296,7 +321,6 @@ class _SettingsTabState extends State<_SettingsTab> {
     try {
       _data = await widget.api.getSettings();
       _msgCtrl.text = (_data['maintenance_message'] ?? '').toString();
-      _serverCtrl.text = context.read<AuthProvider>().baseUrl;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -307,8 +331,6 @@ class _SettingsTabState extends State<_SettingsTab> {
   Future<void> _set(String key, dynamic value) async {
     setState(() => _saving = true);
     try {
-      final kwargs = <String, dynamic>{};
-      kwargs[key] = value;
       await widget.api.updateSettings(
         inviteCodeRequired: key == 'invite_code_required' ? value : null,
         registrationEnabled: key == 'registration_enabled' ? value : null,
@@ -330,7 +352,6 @@ class _SettingsTabState extends State<_SettingsTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
-    final auth = context.watch<AuthProvider>();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -356,7 +377,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         SwitchListTile(
           value: _data['maintenance_mode'] == true,
           title: const Text('启用维护模式'),
-          subtitle: const Text('开启后 /api/sync 将拒绝服务'),
+          subtitle: const Text('开启后 /api/sync 拒绝服务；客户端登录页会提示'),
           onChanged: _saving
               ? null
               : (v) => _set('maintenance_mode', v),
@@ -373,44 +394,24 @@ class _SettingsTabState extends State<_SettingsTab> {
                 _set('maintenance_message', _msgCtrl.text.trim()),
           ),
         ),
-        const SizedBox(height: 20),
-        _section('服务器地址 (仅管理员可改)'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _serverCtrl,
-            decoration: const InputDecoration(
-              labelText: '当前使用的服务器 URL',
-              hintText: 'https://duoyi.example.com',
-            ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              FilledButton.tonal(
-                onPressed: () async {
-                  await auth.setBaseUrlByAdmin(_serverCtrl.text.trim());
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('服务器地址已更新，需要重新登录')),
-                  );
-                },
-                child: const Text('保存并重载'),
-              ),
+              const Icon(Icons.info_outline,
+                  size: 16, color: Colors.amber),
               const SizedBox(width: 8),
-              TextButton(
-                onPressed: () async {
-                  await auth.setBaseUrlByAdmin('');
-                  if (!context.mounted) return;
-                  _serverCtrl.text = auth.baseUrl;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已恢复为内置默认地址')),
-                  );
-                },
-                child: const Text('恢复默认'),
+              const Expanded(
+                child: Text(
+                  '服务器地址在 APK / Web 构建时就已锁定，运行期不可修改。'
+                  '如需切换后端，请重新构建并分发新版本。',
+                  style: TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ),
@@ -443,12 +444,15 @@ class _AiSettingsTab extends StatefulWidget {
 class _AiSettingsTabState extends State<_AiSettingsTab> {
   bool _loading = true;
   bool _saving = false;
+  bool _testing = false;
+  String? _testResult;
+  Color _testColor = Colors.grey;
   String? _error;
   bool _enabled = false;
   final _baseCtrl = TextEditingController();
   final _keyCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
-  int _quota = 0;
+  final _quotaCtrl = TextEditingController(text: '0');
   bool _keyMasked = true;
 
   @override
@@ -462,6 +466,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     _baseCtrl.dispose();
     _keyCtrl.dispose();
     _modelCtrl.dispose();
+    _quotaCtrl.dispose();
     super.dispose();
   }
 
@@ -474,10 +479,11 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       final data = await widget.api.getSettings();
       _enabled = data['ai_enabled'] == true;
       _baseCtrl.text = (data['ai_base_url'] ?? '').toString();
-      _keyCtrl.text = (data['ai_api_key'] ?? '').toString(); // masked
+      _keyCtrl.text = (data['ai_api_key'] ?? '').toString();
       _keyMasked = (data['ai_api_key_set'] == true);
       _modelCtrl.text = (data['ai_model'] ?? '').toString();
-      _quota = ((data['ai_daily_quota'] as num?) ?? 0).toInt();
+      _quotaCtrl.text =
+          (((data['ai_daily_quota'] as num?) ?? 0).toInt()).toString();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -488,14 +494,6 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await widget.api.updateSettings(
-        // key 如果仍是掩码，不提交
-        inviteCodeRequired: null,
-        registrationEnabled: null,
-        maintenanceMode: null,
-        maintenanceMessage: null,
-      );
-      // 单独提交 AI 字段
       final newKey = _keyCtrl.text.trim();
       final submitKey = (_keyMasked && newKey.contains('***')) ? null : newKey;
       await widget.api.client.patch('/api/admin/settings', {
@@ -503,7 +501,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
         'ai_base_url': _baseCtrl.text.trim(),
         if (submitKey != null) 'ai_api_key': submitKey,
         'ai_model': _modelCtrl.text.trim(),
-        'ai_daily_quota': _quota,
+        'ai_daily_quota': int.tryParse(_quotaCtrl.text.trim()) ?? 0,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -518,6 +516,32 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    try {
+      final res = await widget.api.testAi();
+      setState(() {
+        _testResult = '✅ 模型 ${res['model']} 可达，回复: ${res['sample']}';
+        _testColor = Colors.green;
+      });
+    } on ApiException catch (e) {
+      setState(() {
+        _testResult = '❌ ${e.message}';
+        _testColor = Colors.red;
+      });
+    } catch (e) {
+      setState(() {
+        _testResult = '❌ $e';
+        _testColor = Colors.red;
+      });
+    } finally {
+      if (mounted) setState(() => _testing = false);
     }
   }
 
@@ -553,7 +577,6 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                 ? '已配置（显示为掩码，保持不动即不修改）'
                 : '尚未配置',
           ),
-          obscureText: false,
         ),
         const SizedBox(height: 10),
         TextField(
@@ -564,31 +587,243 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
           ),
         ),
         const SizedBox(height: 10),
+        TextField(
+          controller: _quotaCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '每用户每日调用上限',
+            helperText: '0 = 不限',
+          ),
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
-            const Expanded(child: Text('每用户每日调用上限 (0 = 不限)')),
-            SizedBox(
-              width: 120,
-              child: TextField(
-                controller: TextEditingController(text: '$_quota'),
-                keyboardType: TextInputType.number,
-                onChanged: (v) =>
-                    _quota = int.tryParse(v) ?? _quota,
-                decoration: const InputDecoration(isDense: true),
-              ),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? '保存中…' : '保存'),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              icon: _testing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.network_check),
+              label: const Text('测试连接'),
+              onPressed: _testing ? null : _test,
             ),
           ],
+        ),
+        if (_testResult != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(_testResult!,
+                style: TextStyle(color: _testColor, fontSize: 12)),
+          ),
+        const Divider(height: 32),
+        const Text(
+          '所有用户的 AI 请求都通过后端 /api/ai/chat 代理，'
+          '前端永远拿不到 API Key。',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+      ],
+    );
+  }
+}
+
+// ====================================================================
+// 云端备份
+// ====================================================================
+
+class _BackupSettingsTab extends StatefulWidget {
+  final AdminApi api;
+  const _BackupSettingsTab({required this.api});
+  @override
+  State<_BackupSettingsTab> createState() => _BackupSettingsTabState();
+}
+
+class _BackupSettingsTabState extends State<_BackupSettingsTab> {
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  bool _backupEnabled = true;
+  final _maxSizeCtrl = TextEditingController(text: '2048');
+  final _intervalCtrl = TextEditingController(text: '30');
+  final _retainCtrl = TextEditingController(text: '0');
+
+  List<Map<String, dynamic>> _backups = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _maxSizeCtrl.dispose();
+    _intervalCtrl.dispose();
+    _retainCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.getSettings();
+      _backupEnabled = data['backup_enabled'] != false;
+      _maxSizeCtrl.text =
+          (((data['backup_max_size_kb'] as num?) ?? 2048).toInt()).toString();
+      _intervalCtrl.text =
+          (((data['backup_interval_minutes'] as num?) ?? 30).toInt())
+              .toString();
+      _retainCtrl.text =
+          (((data['backup_retain_days'] as num?) ?? 0).toInt()).toString();
+      _backups = await widget.api.listBackups();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await widget.api.client.patch('/api/admin/settings', {
+        'backup_enabled': _backupEnabled,
+        'backup_max_size_kb':
+            int.tryParse(_maxSizeCtrl.text.trim()) ?? 2048,
+        'backup_interval_minutes':
+            int.tryParse(_intervalCtrl.text.trim()) ?? 30,
+        'backup_retain_days':
+            int.tryParse(_retainCtrl.text.trim()) ?? 0,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('云端备份配置已保存')),
+        );
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _wipe(Map<String, dynamic> row) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('清空 ${row['username']} 的云端备份?'),
+        content: const Text('账号保留，但服务器上的同步数据会清零，用户下次同步后本地数据将被覆盖。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('清空')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.api.wipeBackup(row['user_id'].toString());
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return Center(child: Text(_error!));
+
+    final totalKb =
+        _backups.fold<int>(0, (s, e) => s + ((e['size_kb'] as int?) ?? 0));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _backupEnabled,
+          title: const Text('启用云端备份'),
+          subtitle: const Text('关闭后所有 /api/sync 请求会被拒绝'),
+          onChanged: (v) => setState(() => _backupEnabled = v),
+        ),
+        TextField(
+          controller: _maxSizeCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '单用户同步大小上限 (KB)',
+            helperText: '0 = 不限，默认 2048',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _intervalCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '客户端最小自动同步间隔 (分钟)',
+            helperText: '用于客户端回退策略参考',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _retainCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '备份历史保留天数',
+            helperText: '0 = 永久保留 (当前后端仅保留最新快照)',
+          ),
         ),
         const SizedBox(height: 14),
         FilledButton(
           onPressed: _saving ? null : _save,
           child: Text(_saving ? '保存中…' : '保存'),
         ),
-        const SizedBox(height: 14),
-        const Text(
-          '提示：所有用户的 AI 请求都会通过后端 /api/ai/chat 代理，前端永远拿不到 API Key。',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+        const Divider(height: 32),
+        Text(
+          '所有用户备份 (${_backups.length} 个 · ${(totalKb / 1024).toStringAsFixed(1)} MB)',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         ),
+        const SizedBox(height: 6),
+        if (_backups.isEmpty)
+          const Text('暂无备份',
+              style: TextStyle(color: Colors.grey, fontSize: 12)),
+        ..._backups.map((b) {
+          return ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.cloud_done_outlined),
+            title: Text(b['username'].toString()),
+            subtitle: Text(
+              '${b['updated_at'] ?? '-'} · ${b['size_kb']} KB',
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _wipe(b),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -941,7 +1176,8 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     final bodyCtrl = TextEditingController(
         text: (item?['body'] ?? '').toString());
     String level = (item?['level'] ?? 'info').toString();
-    bool published = (item?['published'] ?? 1) == 1 || item?['published'] == true;
+    bool published =
+        (item?['published'] ?? 1) == 1 || item?['published'] == true;
 
     final saved = await showDialog<bool>(
       context: context,
@@ -1364,7 +1600,8 @@ class _InvitesTabState extends State<_InvitesTab> {
     );
     if (ok != true) return;
     try {
-      final codes = await widget.api.createInviteCodes(count: count, note: note);
+      final codes =
+          await widget.api.createInviteCodes(count: count, note: note);
       await _load();
       if (!mounted) return;
       await showDialog(

@@ -150,4 +150,16 @@ class AdminApi {
     final list = await client.getList(path);
     return list.cast<Map<String, dynamic>>();
   }
+
+  // ---- AI diagnostic ----
+  Future<Map<String, dynamic>> testAi() => client.post('/api/admin/ai/test');
+
+  // ---- Backups ----
+  Future<List<Map<String, dynamic>>> listBackups() async {
+    final list = await client.getList('/api/admin/backups');
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> wipeBackup(String userId) =>
+      client.delete('/api/admin/backups/$userId');
 }

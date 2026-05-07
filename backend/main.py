@@ -152,7 +152,12 @@ def init_db():
         "ai_base_url": os.getenv("AI_BASE_URL", "https://api.openai.com"),
         "ai_api_key": os.getenv("AI_API_KEY", ""),
         "ai_model": os.getenv("AI_MODEL", "gpt-4o-mini"),
-        "ai_daily_quota": 100,  # 每用户每日调用上限(0=不限)
+        "ai_daily_quota": 100,
+        # 云端备份/同步
+        "backup_enabled": True,
+        "backup_max_size_kb": 2048,          # 单用户同步 payload 上限
+        "backup_interval_minutes": 30,       # 客户端 autoSync 最小间隔
+        "backup_retain_days": 0,             # 0=永久保留
     }
     for k, v in default_settings.items():
         conn.execute(
@@ -310,12 +315,17 @@ class SettingsUpdate(BaseModel):
     registration_enabled: Optional[bool] = None
     maintenance_mode: Optional[bool] = None
     maintenance_message: Optional[str] = None
-    # AI 相关(仅管理员可改)
+    # AI
     ai_enabled: Optional[bool] = None
     ai_base_url: Optional[str] = None
     ai_api_key: Optional[str] = None
     ai_model: Optional[str] = None
     ai_daily_quota: Optional[int] = None
+    # 云端备份
+    backup_enabled: Optional[bool] = None
+    backup_max_size_kb: Optional[int] = None
+    backup_interval_minutes: Optional[int] = None
+    backup_retain_days: Optional[int] = None
 
 
 class AiChatRequest(BaseModel):
@@ -470,6 +480,114 @@ def ai_usage(user_id: str = Depends(_verify_token)):
         db.close()
 
 
+@app.post("/api/admin/ai/test")
+def admin_ai_test(_: str = Depends(_require_admin)):
+    """调一个极短 prompt 验证当前 AI 配置连通。"""
+    import urllib.request
+    import urllib.error
+
+    db = get_db()
+    try:
+        if not _setting_get(db, "ai_enabled", False):
+            raise HTTPException(status_code=503, detail="AI 未启用")
+        api_key = str(_setting_get(db, "ai_api_key", "")).strip()
+        if not api_key:
+            raise HTTPException(status_code=503, detail="尚未配置 API Key")
+        base_url = str(
+            _setting_get(db, "ai_base_url", "https://api.openai.com")
+        ).rstrip("/")
+        model = str(_setting_get(db, "ai_model", "gpt-4o-mini"))
+        payload = json.dumps(
+            {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": "回复一个 'ok' 即可"},
+                ],
+                "temperature": 0,
+                "max_tokens": 8,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"{base_url}/v1/chat/completions",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                data = json.loads(body)
+        except urllib.error.HTTPError as e:
+            text = e.read().decode("utf-8", errors="replace")
+            raise HTTPException(status_code=e.code, detail=text[:200])
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"不可达: {e}")
+
+        content = ""
+        choices = data.get("choices") or []
+        if choices:
+            content = (choices[0].get("message") or {}).get("content", "")
+        return {"ok": True, "model": model, "sample": content}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/backups")
+def admin_backups(_: str = Depends(_require_admin)):
+    """列出每个用户最近一次备份的时间 + 估算大小。"""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """
+            SELECT u.id, u.username, sd.updated_at,
+                   (length(sd.todos) + length(sd.habits) + length(sd.pomodoro_sessions)
+                    + length(sd.pomodoro_config) + length(sd.user_profile)
+                    + length(sd.notes) + length(sd.countdowns) + length(sd.anniversaries)
+                    + length(sd.diaries) + length(sd.goals) + length(sd.courses)
+                    + length(sd.course_settings)) AS bytes
+            FROM users u LEFT JOIN sync_data sd ON sd.user_id = u.id
+            ORDER BY sd.updated_at DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "user_id": r["id"],
+                "username": r["username"],
+                "updated_at": r["updated_at"],
+                "size_kb": ((r["bytes"] or 0) + 1023) // 1024,
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+@app.delete("/api/admin/backups/{user_id}")
+def admin_backup_wipe(user_id: str, actor: str = Depends(_require_admin)):
+    """清空某用户的所有云端备份(账号保留)。"""
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE sync_data SET todos='[]', habits='[]', pomodoro_sessions='[]', "
+            "pomodoro_config='{}', user_profile='{}', notes='[]', countdowns='[]', "
+            "anniversaries='[]', diaries='[]', goals='[]', courses='[]', "
+            "course_settings='{}', updated_at=datetime('now') WHERE user_id=?",
+            (user_id,),
+        )
+        _audit(
+            db, actor, _get_username(db, actor),
+            "backup.wipe", target=user_id,
+        )
+        db.commit()
+        return {"status": "ok"}
+    finally:
+        db.close()
+
+
 # ---- Auth ----
 
 
@@ -617,6 +735,20 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
     try:
         if _setting_get(db, "maintenance_mode", False):
             raise HTTPException(status_code=503, detail="Maintenance mode")
+        if not _setting_get(db, "backup_enabled", True):
+            raise HTTPException(status_code=503, detail="云端备份已被管理员关闭")
+
+        # 简单的 payload 大小保护
+        max_kb = int(_setting_get(db, "backup_max_size_kb", 2048) or 2048)
+        if max_kb > 0:
+            payload_size = len(
+                json.dumps(req.model_dump(), ensure_ascii=False).encode("utf-8")
+            )
+            if payload_size > max_kb * 1024:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"同步数据过大 ({payload_size // 1024}KB > {max_kb}KB)",
+                )
 
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "

@@ -431,7 +431,8 @@ class MineScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const LockSettingsScreen()),
             ),
           ),
-          if (auth.state.isLoggedIn)
+          if (auth.state.isLoggedIn &&
+              (auth.serverConfig['backup_enabled'] != false))
             _Tile(
               icon: Icons.cloud_sync_outlined,
               label: '立即同步',

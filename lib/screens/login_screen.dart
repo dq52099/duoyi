@@ -164,14 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () => setState(() => _isRegister = !_isRegister),
               child: Text(_isRegister ? '已有账号？去登录' : '没有账号？去注册'),
             ),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                '服务器: ${auth.baseUrl}',
-                style: TextStyle(
-                    fontSize: 10, color: Colors.grey.shade500),
-              ),
-            ),
           ],
         ),
       ),

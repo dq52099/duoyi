@@ -85,6 +85,7 @@ void main() async {
   // AI / CloudSync 依赖 AuthProvider 的 ApiClient
   aiService.attachClient(authProvider.client);
   cloudSyncProvider.apiClientGetter = () => authProvider.client;
+  cloudSyncProvider.serverConfigGetter = () => authProvider.serverConfig;
 
   authProvider.onServerConfigChanged = (cfg) {
     aiService.updateFromServerConfig(cfg);

@@ -35,9 +35,6 @@ class AiService extends ChangeNotifier {
     int maxTokens = 512,
   }) async {
     if (!_enabled) throw const AiException('AI 功能未启用，请联系管理员');
-    if (_client.baseUrl.isEmpty) {
-      throw const AiException('未登录或未连接到服务器');
-    }
     try {
       final res = await _client.post('/api/ai/chat', {
         'system': systemPrompt,

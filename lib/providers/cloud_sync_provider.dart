@@ -29,6 +29,9 @@ class CloudSyncProvider extends ChangeNotifier {
   // 由 main.dart 注入(通过 AuthProvider 取活跃的 ApiClient)
   ApiClient? Function()? apiClientGetter;
 
+  /// 可选：返回当前服务端 /api/config，用来判断 backup_enabled
+  Map<String, dynamic>? Function()? serverConfigGetter;
+
   SyncConfig get config => _config;
   bool get isSyncing => _isSyncing;
   String? get lastError => _lastError;
@@ -82,6 +85,15 @@ class CloudSyncProvider extends ChangeNotifier {
       _lastError = '请先登录';
       notifyListeners();
       return;
+    }
+    // 如果服务端关掉了 backup_enabled，就不要浪费网络
+    if (serverConfigGetter != null) {
+      final cfg = serverConfigGetter!.call();
+      if (cfg != null && cfg['backup_enabled'] == false) {
+        _lastError = '管理员已关闭云端备份';
+        notifyListeners();
+        return;
+      }
     }
     _isSyncing = true;
     _lastError = null;
