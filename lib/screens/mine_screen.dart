@@ -29,6 +29,8 @@ import 'backup_screen.dart';
 import 'lock_settings_screen.dart';
 import 'export_screen.dart';
 import 'search_screen.dart';
+import 'ai_history_screen.dart';
+import 'preferences_screen.dart';
 
 class MineScreen extends StatelessWidget {
   const MineScreen({super.key});
@@ -413,6 +415,15 @@ class MineScreen extends StatelessWidget {
             ),
           ),
           _Tile(
+            icon: Icons.tune,
+            label: '偏好设置',
+            color: Colors.indigo,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PreferencesScreen()),
+            ),
+          ),
+          _Tile(
             icon: Icons.notifications_outlined,
             label: s.mineNotificationsLabel,
             color: Colors.orange,
@@ -431,6 +442,21 @@ class MineScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const LockSettingsScreen()),
             ),
           ),
+          if (ai.enabled)
+            _Tile(
+              icon: Icons.history,
+              label: 'AI 周回顾历史',
+              color: Colors.purple,
+              trailing: ai.reviewHistory.isEmpty
+                  ? null
+                  : Text('${ai.reviewHistory.length}',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
+              ),
+            ),
           if (auth.state.isLoggedIn &&
               (auth.serverConfig['backup_enabled'] != false))
             _Tile(

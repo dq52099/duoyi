@@ -91,7 +91,7 @@ class HabitProvider extends ChangeNotifier {
     final now = DateTime.now();
     for (int i = 0; i < 365; i++) {
       final d = now.subtract(Duration(days: i));
-      if (h.countForDate(d) >= h.targetCount) {
+      if (h.isCompletedForDate(d)) {
         streak++;
       } else if (i > 0) {
         break;
@@ -148,8 +148,27 @@ class HabitProvider extends ChangeNotifier {
           .where((h) => h.activeWeekdays.contains(d.weekday - 1))
           .toList();
       if (active.isEmpty) return 0;
-      return active.where((h) => h.progressForDate(d) >= 1.0).length /
+      return active.where((h) => h.isCompletedForDate(d)).length /
           active.length;
     });
+  }
+
+  // --- Reorder ---
+
+  Future<void> reorder(List<String> orderedIds) async {
+    final map = {for (final h in _habits) h.id: h};
+    final newList = <Habit>[];
+    for (int i = 0; i < orderedIds.length; i++) {
+      final h = map[orderedIds[i]];
+      if (h != null) {
+        h.sortOrder = i;
+        newList.add(h);
+        map.remove(orderedIds[i]);
+      }
+    }
+    newList.addAll(map.values);
+    _habits = newList;
+    notifyListeners();
+    await _save();
   }
 }

@@ -24,6 +24,7 @@ class _TodoScreenState extends State<TodoScreen> {
     final ai = context.read<AiService>();
     final titleCtrl = TextEditingController();
     var quadrant = EisenhowerQuadrant.notUrgentImportant;
+    var priority = TodoPriority.none;
     String groupName = '';
     bool aiBusy = false;
     List<String> aiSubtasks = [];
@@ -260,6 +261,27 @@ class _TodoScreenState extends State<TodoScreen> {
                   ],
                   onChanged: (v) => setSt(() => quadrant = v!),
                 ),
+                const SizedBox(height: 16),
+                const Text(
+                  '优先级标记',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final p in TodoPriority.values)
+                      ChoiceChip(
+                        label: Text(p.label),
+                        selected: priority == p,
+                        onSelected: (_) => setSt(() => priority = p),
+                      ),
+                  ],
+                ),
 
                 const SizedBox(height: 32),
                 SizedBox(
@@ -275,6 +297,7 @@ class _TodoScreenState extends State<TodoScreen> {
                           TodoItem(
                             title: titleCtrl.text.trim(),
                             quadrant: quadrant,
+                            priority: priority,
                             listGroupName: groupName.isEmpty ? null : groupName,
                             subtasks: sub,
                           ),
@@ -402,6 +425,21 @@ class _TodoTile extends StatelessWidget {
   final TodoItem todo;
   const _TodoTile({required this.todo});
 
+  Color _priorityColor(TodoPriority p) {
+    switch (p) {
+      case TodoPriority.urgent:
+        return const Color(0xFFD32F2F);
+      case TodoPriority.high:
+        return const Color(0xFFEF6C00);
+      case TodoPriority.medium:
+        return const Color(0xFFFBC02D);
+      case TodoPriority.low:
+        return const Color(0xFF388E3C);
+      case TodoPriority.none:
+        return Colors.grey;
+    }
+  }
+
   Color _quadrantColor(EisenhowerQuadrant q) {
     switch (q) {
       case EisenhowerQuadrant.urgentImportant:
@@ -478,6 +516,44 @@ class _TodoTile extends StatelessWidget {
                     ),
                     subtitle: Row(
                       children: [
+                        if (todo.priority != TodoPriority.none)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: _priorityColor(todo.priority)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              todo.priority.label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: _priorityColor(todo.priority),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        if (todo.recurrence.isActive)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Icon(Icons.repeat,
+                                size: 11, color: Colors.grey.shade500),
+                          ),
+                        if (todo.isOverdue)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: const Text('过期',
+                                style: TextStyle(
+                                    fontSize: 10, color: Colors.red)),
+                          ),
                         if (todo.subtasks.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(right: 8.0),

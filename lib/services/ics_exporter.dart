@@ -1,5 +1,10 @@
 import '../models/anniversary.dart';
 import '../models/calendar_event.dart';
+import '../models/diary_entry.dart';
+import '../models/goal.dart';
+import '../models/habit.dart';
+import '../models/note.dart';
+import '../models/todo.dart';
 
 /// 把日历事件导出为 RFC 5545 iCalendar 文本，供用户下载或复制到他处订阅。
 class IcsExporter {
@@ -73,4 +78,139 @@ class IcsExporter {
         .replaceAll(';', '\\;')
         .replaceAll('\n', '\\n');
   }
+}
+
+/// 单模块文本导出 (CSV / Markdown)。
+class ModuleExporter {
+  static String todosCsv(Iterable<TodoItem> todos) {
+    final sb = StringBuffer('title,completed,priority,quadrant,list,due,tags\n');
+    for (final t in todos) {
+      final row = [
+        _csv(t.title),
+        t.isCompleted ? '1' : '0',
+        t.priority.label,
+        _quadLabel(t.quadrant),
+        _csv(t.listGroupName ?? ''),
+        t.dueDate?.toIso8601String() ?? '',
+        _csv(t.tags.join('|')),
+      ].join(',');
+      sb.writeln(row);
+    }
+    return sb.toString();
+  }
+
+  static String todosMarkdown(Iterable<TodoItem> todos) {
+    final sb = StringBuffer('# 待办清单\n\n');
+    final groups = <String, List<TodoItem>>{};
+    for (final t in todos) {
+      groups.putIfAbsent(t.listGroupName ?? '未分组', () => []).add(t);
+    }
+    for (final g in groups.entries) {
+      sb.writeln('## ${g.key}\n');
+      for (final t in g.value) {
+        final mark = t.isCompleted ? '[x]' : '[ ]';
+        final due = t.dueDate == null
+            ? ''
+            : ' — ⏰ ${t.dueDate!.toIso8601String().substring(0, 10)}';
+        sb.writeln('- $mark ${t.title}$due');
+        for (final s in t.subtasks) {
+          sb.writeln('  - ${s.isCompleted ? '[x]' : '[ ]'} ${s.title}');
+        }
+      }
+      sb.writeln();
+    }
+    return sb.toString();
+  }
+
+  static String habitsCsv(Iterable<Habit> habits) {
+    final sb = StringBuffer(
+        'name,kind,target,current_streak,best_streak,category,tags\n');
+    for (final h in habits) {
+      sb.writeln([
+        _csv(h.name),
+        h.kind.name,
+        h.targetCount,
+        h.currentStreak,
+        h.bestStreak,
+        _csv(h.category ?? ''),
+        _csv(h.tags.join('|')),
+      ].join(','));
+    }
+    return sb.toString();
+  }
+
+  static String notesMarkdown(Iterable<NoteItem> notes) {
+    final sb = StringBuffer('# 笔记\n\n');
+    for (final n in notes) {
+      sb.writeln('## ${n.title}');
+      sb.writeln(
+          '*${n.updatedAt.toIso8601String().substring(0, 16).replaceAll("T", " ")}*\n');
+      sb.writeln(n.content);
+      sb.writeln('\n---\n');
+    }
+    return sb.toString();
+  }
+
+  static String diaryMarkdown(Iterable<DiaryEntry> entries) {
+    final sb = StringBuffer('# 日记\n\n');
+    for (final d in entries) {
+      final date = '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
+      sb.writeln('## $date ${d.mood?.emoji ?? ''} ${d.weather?.emoji ?? ''}');
+      if (d.tags.isNotEmpty) {
+        sb.writeln('Tags: ${d.tags.map((t) => '#$t').join(' ')}\n');
+      }
+      sb.writeln(d.content);
+      sb.writeln('\n---\n');
+    }
+    return sb.toString();
+  }
+
+  static String anniversariesMarkdown(Iterable<Anniversary> items) {
+    final sb = StringBuffer('# 纪念日\n\n');
+    for (final a in items) {
+      sb.writeln(
+          '- **${a.title}** — ${_annType(a.type)} · ${a.calendarType == AnniversaryCalendarType.lunar ? "农历" : "公历"}');
+      sb.writeln('  下一次: ${a.nextOccurrence.toIso8601String().substring(0, 10)}');
+      if ((a.description ?? '').isNotEmpty) sb.writeln('  ${a.description!}');
+      sb.writeln();
+    }
+    return sb.toString();
+  }
+
+  static String goalsMarkdown(Iterable<GoalItem> goals) {
+    final sb = StringBuffer('# 目标\n\n');
+    for (final g in goals) {
+      sb.writeln(
+          '## ${g.title} — ${(g.computedProgress * 100).toStringAsFixed(0)}%');
+      if (g.description.isNotEmpty) sb.writeln(g.description);
+      sb.writeln();
+      for (final m in g.milestones) {
+        sb.writeln(
+            '- ${m.isCompleted ? '[x]' : '[ ]'} ${m.title}');
+      }
+      sb.writeln();
+    }
+    return sb.toString();
+  }
+
+  static String _csv(String s) {
+    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
+
+  static String _quadLabel(EisenhowerQuadrant q) => switch (q) {
+        EisenhowerQuadrant.urgentImportant => 'Q1',
+        EisenhowerQuadrant.notUrgentImportant => 'Q2',
+        EisenhowerQuadrant.urgentNotImportant => 'Q3',
+        EisenhowerQuadrant.notUrgentNotImportant => 'Q4',
+      };
+
+  static String _annType(AnniversaryType t) => switch (t) {
+        AnniversaryType.birthday => '生日',
+        AnniversaryType.memorial => '纪念日',
+        AnniversaryType.normal => '倒数',
+        AnniversaryType.custom => '自定义',
+      };
 }

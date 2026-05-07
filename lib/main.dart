@@ -16,6 +16,7 @@ import 'providers/diary_provider.dart';
 import 'providers/goal_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/app_lock_provider.dart';
+import 'providers/preferences_provider.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
@@ -53,6 +54,7 @@ void main() async {
   final goalProvider = GoalProvider();
   final courseProvider = CourseProvider();
   final appLockProvider = AppLockProvider();
+  final preferencesProvider = PreferencesProvider();
   final aiService = AiService();
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
@@ -73,6 +75,7 @@ void main() async {
     goalProvider.loadFromStorage(),
     courseProvider.loadFromStorage(),
     appLockProvider.loadFromStorage(),
+    preferencesProvider.loadFromStorage(),
     notificationService.init(),
     systemTray.init(),
     HomeWidgetService.init(),
@@ -178,6 +181,7 @@ void main() async {
         ChangeNotifierProvider.value(value: goalProvider),
         ChangeNotifierProvider.value(value: courseProvider),
         ChangeNotifierProvider.value(value: appLockProvider),
+        ChangeNotifierProvider.value(value: preferencesProvider),
         ChangeNotifierProvider.value(value: notificationService),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
@@ -308,6 +312,20 @@ class MainShellState extends State<MainShell> {
   void navigateTo(int index) => setState(() => _currentIndex = index);
 
   @override
+  void initState() {
+    super.initState();
+    // 延迟一帧再读 PreferencesProvider，避免 initState 中 read 异常
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final prefs = context.read<PreferencesProvider>();
+      if (prefs.defaultTab != _currentIndex &&
+          prefs.defaultTab >= 0 &&
+          prefs.defaultTab < 6) {
+        setState(() => _currentIndex = prefs.defaultTab);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
     final destinations = [
@@ -358,7 +376,8 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      floatingActionButton: _currentIndex == 0 || _currentIndex == 5
+      floatingActionButton: (_currentIndex == 0 || _currentIndex == 5) &&
+              context.watch<PreferencesProvider>().quickCaptureFab
           ? const QuickCaptureFab()
           : null,
       appBar: _currentIndex == 0

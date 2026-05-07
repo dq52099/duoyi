@@ -9,7 +9,15 @@ class TodoProvider extends ChangeNotifier {
   List<TodoItem> get todos => _todos;
 
   void _notify() {
-    _todos.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    _todos.sort((a, b) {
+      if (a.sortOrder != b.sortOrder) {
+        return a.sortOrder.compareTo(b.sortOrder);
+      }
+      // 次序相同时按优先级倒序，再按创建时间
+      final p = b.priority.rank.compareTo(a.priority.rank);
+      if (p != 0) return p;
+      return a.createdAt.compareTo(b.createdAt);
+    });
     notifyListeners();
   }
 
@@ -24,6 +32,9 @@ class TodoProvider extends ChangeNotifier {
       _todos.where((t) => !t.isCompleted).toList();
   List<TodoItem> get completedTodos =>
       _todos.where((t) => t.isCompleted).toList();
+
+  List<TodoItem> get overdueTodos =>
+      _todos.where((t) => t.isOverdue).toList();
 
   Map<EisenhowerQuadrant, List<TodoItem>> get quadrantGroups {
     final map = <EisenhowerQuadrant, List<TodoItem>>{};
@@ -54,6 +65,17 @@ class TodoProvider extends ChangeNotifier {
     }
     return names;
   }
+
+  Set<String> get allTags {
+    final tags = <String>{};
+    for (final t in _todos) {
+      tags.addAll(t.tags);
+    }
+    return tags;
+  }
+
+  List<TodoItem> byTag(String tag) =>
+      _todos.where((t) => t.tags.contains(tag)).toList();
 
   // --- Persistence ---
 
@@ -90,17 +112,69 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
+  /// 切换完成状态。若任务带有重复规则并且本次变为已完成，自动克隆一条下次的任务。
   Future<void> toggleTodo(String id) async {
     final idx = _todos.indexWhere((t) => t.id == id);
-    if (idx != -1) {
-      _todos[idx] = _todos[idx].copyWith(isCompleted: !_todos[idx].isCompleted);
-      _notify();
-      await _saveToStorage();
+    if (idx == -1) return;
+    final prev = _todos[idx];
+    final nowCompleted = !prev.isCompleted;
+    _todos[idx] = prev.copyWith(
+      isCompleted: nowCompleted,
+      completedAt: nowCompleted ? DateTime.now() : null,
+    );
+
+    if (nowCompleted && prev.recurrence.isActive) {
+      final anchor = prev.dueDate ?? prev.date;
+      final next = prev.recurrence.nextAfter(anchor);
+      if (next != null) {
+        final delta = prev.dueDate == null
+            ? Duration.zero
+            : prev.dueDate!.difference(prev.date);
+        _todos.add(
+          TodoItem(
+            title: prev.title,
+            notes: prev.notes,
+            quadrant: prev.quadrant,
+            priority: prev.priority,
+            listGroupId: prev.listGroupId,
+            listGroupName: prev.listGroupName,
+            tags: [...prev.tags],
+            dueDate: prev.dueDate == null ? null : next.add(delta),
+            date: next,
+            hasReminder: prev.hasReminder,
+            reminderAt: null,
+            subtasks: prev.subtasks
+                .map((s) => Subtask(title: s.title, sortOrder: s.sortOrder))
+                .toList(),
+            recurrence: prev.recurrence,
+            sortOrder: prev.sortOrder,
+          ),
+        );
+      }
     }
+
+    _notify();
+    await _saveToStorage();
   }
 
   Future<void> deleteTodo(String id) async {
     _todos.removeWhere((t) => t.id == id);
+    _notify();
+    await _saveToStorage();
+  }
+
+  Future<void> reorder(List<String> orderedIds) async {
+    final map = {for (final t in _todos) t.id: t};
+    final newList = <TodoItem>[];
+    for (int i = 0; i < orderedIds.length; i++) {
+      final t = map[orderedIds[i]];
+      if (t != null) {
+        newList.add(t.copyWith(sortOrder: i));
+        map.remove(orderedIds[i]);
+      }
+    }
+    newList.addAll(map.values);
+    _todos = newList;
     _notify();
     await _saveToStorage();
   }
@@ -138,6 +212,25 @@ class TodoProvider extends ChangeNotifier {
       _notify();
       await _saveToStorage();
     }
+  }
+
+  Future<void> reorderSubtasks(String todoId, List<String> orderedIds) async {
+    final idx = _todos.indexWhere((t) => t.id == todoId);
+    if (idx == -1) return;
+    final map = {for (final s in _todos[idx].subtasks) s.id: s};
+    final newList = <Subtask>[];
+    for (int i = 0; i < orderedIds.length; i++) {
+      final s = map[orderedIds[i]];
+      if (s != null) {
+        s.sortOrder = i;
+        newList.add(s);
+        map.remove(orderedIds[i]);
+      }
+    }
+    newList.addAll(map.values);
+    _todos[idx] = _todos[idx].copyWith(subtasks: newList);
+    _notify();
+    await _saveToStorage();
   }
 
   String _dateKey(DateTime d) =>

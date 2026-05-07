@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/todo.dart';
 import '../providers/todo_provider.dart';
+import '../widgets/recurrence_picker.dart';
 
 class TodoDetailScreen extends StatefulWidget {
   final String todoId;
@@ -16,6 +17,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   final _titleCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _subtaskCtrl = TextEditingController();
+  final _tagCtrl = TextEditingController();
   late TodoItem _todo;
 
   @override
@@ -34,12 +36,12 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   void _save() {
     context.read<TodoProvider>().updateTodo(
-      widget.todoId,
-      _todo.copyWith(
-        title: _titleCtrl.text.trim(),
-        notes: _notesCtrl.text.trim(),
-      ),
-    );
+          widget.todoId,
+          _todo.copyWith(
+            title: _titleCtrl.text.trim(),
+            notes: _notesCtrl.text.trim(),
+          ),
+        );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已保存'), duration: Duration(seconds: 1)),
     );
@@ -48,15 +50,41 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   void _addSubtask() {
     if (_subtaskCtrl.text.trim().isEmpty) return;
     context.read<TodoProvider>().addSubtask(
-      widget.todoId,
-      _subtaskCtrl.text.trim(),
-    );
+          widget.todoId,
+          _subtaskCtrl.text.trim(),
+        );
     _subtaskCtrl.clear();
     setState(() {
       _todo = context.read<TodoProvider>().todos.firstWhere(
-        (t) => t.id == widget.todoId,
-      );
+            (t) => t.id == widget.todoId,
+          );
     });
+  }
+
+  void _addTag() {
+    final v = _tagCtrl.text.trim();
+    if (v.isEmpty) return;
+    setState(() {
+      _todo = _todo.copyWith(tags: [..._todo.tags, v]);
+      _tagCtrl.clear();
+    });
+  }
+
+  Future<void> _pickDueDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _todo.dueDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2099, 12, 31),
+    );
+    if (picked != null) {
+      setState(() => _todo = _todo.copyWith(dueDate: picked));
+    }
+  }
+
+  Future<void> _pickRecurrence() async {
+    final r = await RecurrencePicker.show(context, initial: _todo.recurrence);
+    if (r != null) setState(() => _todo = _todo.copyWith(recurrence: r));
   }
 
   @override
@@ -64,6 +92,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     _titleCtrl.dispose();
     _notesCtrl.dispose();
     _subtaskCtrl.dispose();
+    _tagCtrl.dispose();
     super.dispose();
   }
 
@@ -79,7 +108,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('任务详情'),
-        actions: [IconButton(icon: const Icon(Icons.check), onPressed: _save)],
+        actions: [
+          IconButton(icon: const Icon(Icons.check), onPressed: _save),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -96,7 +127,6 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             maxLines: 3,
           ),
           const SizedBox(height: 16),
-
           DropdownButtonFormField<EisenhowerQuadrant>(
             initialValue: _todo.quadrant,
             decoration: const InputDecoration(labelText: '四象限'),
@@ -121,21 +151,86 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             onChanged: (v) =>
                 setState(() => _todo = _todo.copyWith(quadrant: v!)),
           ),
-
+          const SizedBox(height: 10),
+          DropdownButtonFormField<TodoPriority>(
+            initialValue: _todo.priority,
+            decoration: const InputDecoration(labelText: '优先级'),
+            items: TodoPriority.values
+                .map((p) => DropdownMenuItem(
+                      value: p,
+                      child: Text(p.label),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(
+                () => _todo = _todo.copyWith(priority: v ?? TodoPriority.none)),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_outlined),
+            title: const Text('截止日期'),
+            subtitle: Text(
+              _todo.dueDate == null
+                  ? '未设置'
+                  : '${_todo.dueDate!.year}-${_todo.dueDate!.month.toString().padLeft(2, '0')}-${_todo.dueDate!.day.toString().padLeft(2, '0')}',
+            ),
+            trailing: _todo.dueDate == null
+                ? const Icon(Icons.chevron_right)
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () =>
+                        setState(() => _todo = _todo.copyWith(dueDate: null)),
+                  ),
+            onTap: _pickDueDate,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.repeat),
+            title: const Text('重复'),
+            subtitle: Text(_todo.recurrence.label),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _pickRecurrence,
+          ),
+          const SizedBox(height: 12),
+          const Text('标签', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              ..._todo.tags.map(
+                (t) => Chip(
+                  label: Text('#$t'),
+                  onDeleted: () => setState(
+                    () => _todo = _todo.copyWith(
+                      tags: _todo.tags.where((x) => x != t).toList(),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 140,
+                child: TextField(
+                  controller: _tagCtrl,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: '+ 新标签',
+                  ),
+                  onSubmitted: (_) => _addTag(),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           Row(
             children: [
-              const Text(
-                '子任务',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
+              const Text('子任务',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
               const Spacer(),
               Text(
                 '${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
                 style: TextStyle(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+                    color: cs.primary, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -149,6 +244,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     labelText: '新增子任务',
                     isDense: true,
                   ),
+                  onSubmitted: (_) => _addSubtask(),
                 ),
               ),
               IconButton(
@@ -157,31 +253,49 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               ),
             ],
           ),
-          ..._todo.subtasks.map(
-            (s) => ListTile(
-              dense: true,
-              leading: Checkbox(
-                value: s.isCompleted,
-                onChanged: (_) {
-                  provider.toggleSubtask(widget.todoId, s.id);
-                  setState(() {});
-                },
-              ),
-              title: Text(
-                s.title,
-                style: TextStyle(
-                  fontSize: 14,
-                  decoration: s.isCompleted ? TextDecoration.lineThrough : null,
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            onReorder: (oldI, newI) {
+              final ids =
+                  _todo.subtasks.map((e) => e.id).toList();
+              if (newI > oldI) newI -= 1;
+              final id = ids.removeAt(oldI);
+              ids.insert(newI, id);
+              context
+                  .read<TodoProvider>()
+                  .reorderSubtasks(widget.todoId, ids);
+            },
+            children: [
+              for (final s in _todo.subtasks)
+                ListTile(
+                  key: ValueKey(s.id),
+                  dense: true,
+                  leading: Checkbox(
+                    value: s.isCompleted,
+                    onChanged: (_) {
+                      provider.toggleSubtask(widget.todoId, s.id);
+                      setState(() {});
+                    },
+                  ),
+                  title: Text(
+                    s.title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      decoration: s.isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () {
+                      provider.deleteSubtask(widget.todoId, s.id);
+                      setState(() {});
+                    },
+                  ),
                 ),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.close, size: 16),
-                onPressed: () {
-                  provider.deleteSubtask(widget.todoId, s.id);
-                  setState(() {});
-                },
-              ),
-            ),
+            ],
           ),
         ],
       ),

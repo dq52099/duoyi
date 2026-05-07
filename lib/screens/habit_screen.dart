@@ -37,6 +37,7 @@ class _HabitScreenState extends State<HabitScreen>
     final nameCtrl = TextEditingController();
     final targetCtrl = TextEditingController(text: '1');
     var selectedColor = 0xFF4CAF50;
+    var selectedKind = HabitKind.positive;
     final templatesByCategory = HabitTemplates.byCategory;
 
     final colors = [
@@ -160,6 +161,30 @@ class _HabitScreenState extends State<HabitScreen>
 
                 const Divider(height: 32),
 
+                // --- Kind Selector ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('✅ 正向养成'),
+                        selected: selectedKind == HabitKind.positive,
+                        onSelected: (_) => setSt(
+                            () => selectedKind = HabitKind.positive),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('🚫 反向戒除'),
+                        selected: selectedKind == HabitKind.negative,
+                        onSelected: (_) => setSt(
+                            () => selectedKind = HabitKind.negative),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
                 // --- Manual Entry ---
                 TextField(
                   controller: nameCtrl,
@@ -258,6 +283,7 @@ class _HabitScreenState extends State<HabitScreen>
                                 .toString(),
                             name: nameCtrl.text.trim(),
                             colorValue: selectedColor,
+                            kind: selectedKind,
                             targetCount: int.tryParse(targetCtrl.text) ?? 1,
                           ),
                         );
