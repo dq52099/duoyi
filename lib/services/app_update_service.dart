@@ -56,13 +56,7 @@ class AppUpdateService extends ChangeNotifier {
       _latestNotes = (data['body'] as String?)?.trim();
       final assets = data['assets'];
       if (assets is List) {
-        for (final a in assets) {
-          final name = (a['name'] as String?) ?? '';
-          if (name.toLowerCase().endsWith('.apk')) {
-            _latestUrl = a['browser_download_url'] as String?;
-            break;
-          }
-        }
+        _latestUrl = _selectBestApkUrl(assets);
       }
     } catch (e) {
       _error = e.toString();
@@ -84,5 +78,35 @@ class AppUpdateService extends ChangeNotifier {
       if (ai != bi) return ai.compareTo(bi);
     }
     return 0;
+  }
+
+  String? _selectBestApkUrl(List assets) {
+    final apkAssets = assets
+        .whereType<Map>()
+        .where((a) {
+          final name = ((a['name'] as String?) ?? '').toLowerCase();
+          return name.endsWith('.apk');
+        })
+        .toList()
+      ..sort((a, b) => _apkScore(b).compareTo(_apkScore(a)));
+
+    if (apkAssets.isEmpty) return null;
+    return apkAssets.first['browser_download_url'] as String?;
+  }
+
+  int _apkScore(Map asset) {
+    final name = ((asset['name'] as String?) ?? '').toLowerCase();
+    if (_latestVersion != null &&
+        name == 'duoyi-${_latestVersion!.toLowerCase()}.apk') {
+      return 100;
+    }
+    if (name.contains('universal')) return 90;
+    if (!RegExp(r'-(armeabi-v7a|arm64-v8a|x86_64)\.apk$').hasMatch(name)) {
+      return 80;
+    }
+    if (name.contains('arm64-v8a')) return 70;
+    if (name.contains('armeabi-v7a')) return 60;
+    if (name.contains('x86_64')) return 50;
+    return 10;
   }
 }

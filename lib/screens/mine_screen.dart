@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../core/app_version.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -592,11 +594,17 @@ class MineScreen extends StatelessWidget {
           ),
           if (u.hasUpdate && u.latestUrl != null)
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('请在浏览器中打开 ${u.latestUrl}')),
+                final opened = await launchUrl(
+                  Uri.parse(u.latestUrl!),
+                  mode: LaunchMode.externalApplication,
                 );
+                if (!opened && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('无法打开下载地址: ${u.latestUrl}')),
+                  );
+                }
               },
               child: const Text('前往下载'),
             ),
@@ -659,7 +667,7 @@ class MineScreen extends StatelessWidget {
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('版本: v1.0.0'),
+            Text('版本: ${AppVersion.display}'),
             SizedBox(height: 4),
             Text('Flutter 跨平台效率工具'),
             SizedBox(height: 4),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/app_version.dart';
 import 'providers/todo_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/pomodoro_provider.dart';
@@ -61,7 +62,7 @@ void main() async {
   final aiService = AiService();
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
-    currentVersion: '1.0.0',
+    currentVersion: AppVersion.name,
   );
 
   await Future.wait([
