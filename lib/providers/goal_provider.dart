@@ -11,7 +11,7 @@ class GoalProvider extends ChangeNotifier {
     final sorted = [..._goals];
     sorted.sort((a, b) {
       // 进行中 > 已完成 > 暂停 > 放弃
-      int statusRank(g) => switch (g.status) {
+      int statusRank(GoalItem g) => switch (g.status) {
             GoalStatus.active => 0,
             GoalStatus.paused => 2,
             GoalStatus.achieved => 1,
