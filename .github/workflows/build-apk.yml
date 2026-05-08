@@ -1,14 +1,37 @@
-name: build-apk
+name: build
 
 on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      server_url:
+        description: '覆盖 DUOYI_SERVER_URL (留空走仓库变量/默认值)'
+        required: false
+        default: ''
+      build_web:
+        description: '是否同时构建 web 产物'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.32.0
+  JAVA_VERSION: '17'
 
 jobs:
-  build:
+  # ─────────────────────────────────────────────
+  # 1. Analyze & test
+  # ─────────────────────────────────────────────
+  analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -16,28 +39,24 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.9'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Restore release keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.DUOYI_KEYSTORE_BASE64 }}
-        run: |
-          mkdir -p android/app/keys
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keys/duoyi-release.jks
-          ls -lh android/app/keys
-          cat > android/key.properties <<EOF
-          storeFile=keys/duoyi-release.jks
-          storePassword=${{ secrets.DUOYI_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.DUOYI_KEY_ALIAS }}
-          keyPassword=${{ secrets.DUOYI_KEY_PASSWORD }}
-          EOF
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
 
       - name: Flutter doctor
         run: flutter doctor -v
@@ -45,48 +64,265 @@ jobs:
       - name: Get packages
         run: flutter pub get
 
+      - name: Dart format check
+        run: dart format --output=none --set-exit-if-changed . || true
+
       - name: Analyze
         run: flutter analyze
 
-      - name: Build APK (release)
-        run: flutter build apk --release
+      - name: Run tests (if any)
+        run: |
+          if [ -d test ] && [ -n "$(ls -A test 2>/dev/null)" ]; then
+            flutter test --no-pub
+          else
+            echo "No tests found, skipping."
+          fi
 
-      - name: Build App Bundle (release)
+  # ─────────────────────────────────────────────
+  # 2. Android APK / AAB
+  # ─────────────────────────────────────────────
+  android:
+    needs: analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DUOYI_SERVER_URL: ${{ github.event.inputs.server_url || vars.DUOYI_SERVER_URL }}
+    outputs:
+      apk_name: ${{ steps.stage.outputs.apk_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Get packages
+        run: flutter pub get
+
+      # 只有当 secret 存在时才启用签名；PR / fork 会自动降级到 debug-signed
+      - name: Restore release keystore
+        id: keystore
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DUOYI_KEYSTORE_BASE64 }}
+          STORE_PWD: ${{ secrets.DUOYI_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.DUOYI_KEY_ALIAS }}
+          KEY_PWD: ${{ secrets.DUOYI_KEY_PASSWORD }}
+        run: |
+          mkdir -p android/app/keys
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/keys/duoyi-release.jks
+          {
+            printf 'storeFile=keys/duoyi-release.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PWD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PWD"
+          } > android/key.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "Keystore restored."
+
+      - name: Warn if keystore missing
+        if: env.KEYSTORE_BASE64 == ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DUOYI_KEYSTORE_BASE64 }}
+        run: echo "::warning::DUOYI_KEYSTORE_BASE64 secret 不存在，APK 将使用 debug 密钥签名"
+
+      - name: Build APK (release, split per ABI)
+        run: |
+          DART_DEFINES=""
+          if [ -n "$DUOYI_SERVER_URL" ]; then
+            DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+            echo "Using DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+          fi
+          flutter build apk --release --split-per-abi $DART_DEFINES
+
+      - name: Build universal APK (release)
+        run: |
+          DART_DEFINES=""
+          if [ -n "$DUOYI_SERVER_URL" ]; then
+            DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+          fi
+          flutter build apk --release $DART_DEFINES
+
+      - name: Build App Bundle (release, tag only)
         if: startsWith(github.ref, 'refs/tags/v')
-        run: flutter build appbundle --release
+        run: |
+          DART_DEFINES=""
+          if [ -n "$DUOYI_SERVER_URL" ]; then
+            DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+          fi
+          flutter build appbundle --release $DART_DEFINES
 
       - name: Stage artifacts
+        id: stage
         run: |
           mkdir -p artifacts
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF##refs/tags/}"
-            cp build/app/outputs/flutter-apk/app-release.apk artifacts/duoyi-${TAG}.apk
-            if [ -f build/app/outputs/bundle/release/app-release.aab ]; then
-              cp build/app/outputs/bundle/release/app-release.aab artifacts/duoyi-${TAG}.aab
-            fi
+            SUFFIX="${GITHUB_REF##refs/tags/}"
           else
-            cp build/app/outputs/flutter-apk/app-release.apk artifacts/duoyi-${GITHUB_SHA::7}.apk
+            SUFFIX="$(date +%Y%m%d)-${GITHUB_SHA::7}"
           fi
+          echo "Suffix: $SUFFIX"
+          echo "apk_name=duoyi-$SUFFIX" >> "$GITHUB_OUTPUT"
+
+          # universal APK
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk "artifacts/duoyi-$SUFFIX.apk"
+          fi
+
+          # per-ABI APKs
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            SRC="build/app/outputs/flutter-apk/app-$abi-release.apk"
+            if [ -f "$SRC" ]; then
+              cp "$SRC" "artifacts/duoyi-$SUFFIX-$abi.apk"
+            fi
+          done
+
+          # AAB
+          if [ -f build/app/outputs/bundle/release/app-release.aab ]; then
+            cp build/app/outputs/bundle/release/app-release.aab "artifacts/duoyi-$SUFFIX.aab"
+          fi
+
           ls -lh artifacts
 
       - name: Print signing fingerprint
         run: |
-          echo "Verifying APK signing identity (sha256):"
-          $JAVA_HOME/bin/keytool -printcert -jarfile artifacts/duoyi-*.apk | grep -E 'SHA256|Owner|Issuer' || true
+          APK="$(ls artifacts/*.apk | head -n 1)"
+          if [ -n "$APK" ]; then
+            echo "Verifying APK signing identity of $APK:"
+            "$JAVA_HOME/bin/keytool" -printcert -jarfile "$APK" | grep -E 'SHA256|Owner|Issuer' || true
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: duoyi-apk
+          name: duoyi-android
           path: artifacts/*
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*
-          generate_release_notes: true
+          retention-days: 30
 
       - name: Cleanup keystore
         if: always()
         run: rm -f android/app/keys/duoyi-release.jks android/key.properties
+
+  # ─────────────────────────────────────────────
+  # 3. Web (可选)
+  # ─────────────────────────────────────────────
+  web:
+    needs: analyze
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.build_web == 'true'
+      || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DUOYI_SERVER_URL: ${{ github.event.inputs.server_url || vars.DUOYI_SERVER_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build web (release)
+        run: |
+          DART_DEFINES=""
+          if [ -n "$DUOYI_SERVER_URL" ]; then
+            DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+          fi
+          flutter build web --release --base-href "/" $DART_DEFINES
+
+      - name: Package web
+        run: |
+          mkdir -p web-artifacts
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            SUFFIX="${GITHUB_REF##refs/tags/}"
+          else
+            SUFFIX="$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          tar -czf "web-artifacts/duoyi-web-$SUFFIX.tar.gz" -C build/web .
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: duoyi-web
+          path: web-artifacts/*
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # 4. Release (only on tag push)
+  # ─────────────────────────────────────────────
+  release:
+    needs: [android, web]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: duoyi-android
+          path: dist
+
+      - name: Download Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: duoyi-web
+          path: dist
+        continue-on-error: true
+
+      - name: List artifacts
+        run: ls -R dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

@@ -72,14 +72,46 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ## 发布
 
-GitHub Actions 在 `.github/workflows/build-apk.yml`：
-- `main` 推送 → 出 `duoyi-apk` artifact
-- 推送 `v*` tag → 自动创建 GitHub Release，带 APK
+### GitHub Actions
+
+`.github/workflows/build-apk.yml` 定义了 4 个作业：
+
+| 触发 | 作业 | 产物 |
+|---|---|---|
+| 每次 push / PR | `analyze` | `flutter analyze` + `dart format` + 可选 `flutter test` |
+| 每次 push / PR | `android` | 通用 APK + 分 ABI APK (armeabi-v7a / arm64-v8a / x86_64) |
+| 推 tag / 手动触发指定 | `web` | `duoyi-web-*.tar.gz` 可直接解压到 nginx |
+| 推 `v*` tag | `release` | 汇总 APK + AAB + web 打包，自动建 GitHub Release |
+
+#### 需要的仓库 Secrets
+- `DUOYI_KEYSTORE_BASE64` — keystore 文件的 base64，用于正式签名。**不设置时会降级为 debug 签名，依然能跑**。
+- `DUOYI_KEYSTORE_PASSWORD` / `DUOYI_KEY_ALIAS` / `DUOYI_KEY_PASSWORD`
+
+生成 keystore 并编码：
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+keytool -genkey -v -keystore duoyi-release.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias duoyi
+base64 -w0 duoyi-release.jks | pbcopy   # 或 | xclip -selection clipboard
 ```
+
+#### 可选的仓库 Variables
+- `DUOYI_SERVER_URL` — 构建期注入的后端地址，不设置时回退到 `lib/core/app_config.dart` 的 `defaultServerUrl`。
+- 手动触发时在 `workflow_dispatch` 表单里填 `server_url` 可临时覆盖。
+
+#### 发版
+
+```bash
+git tag v1.0.3
+git push origin v1.0.3
+```
+
+Release 页面会自动生成并附带：
+- `duoyi-v1.0.3.apk`（通用）
+- `duoyi-v1.0.3-arm64-v8a.apk` / `-armeabi-v7a.apk` / `-x86_64.apk`
+- `duoyi-v1.0.3.aab`（上架 Play Store 用）
+- `duoyi-web-v1.0.3.tar.gz`
 
 App 内 "我的 → 检查更新" 会拉取最新 Release。
 
