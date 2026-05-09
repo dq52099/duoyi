@@ -348,7 +348,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                   randomMaxPerMonth: _parsePositiveInt(_maxPerMonthCtrl.text),
                 );
               }
-              return _persist(pop: false);
+              _persist(pop: false);
             },
           ),
           _SkipHolidaysSection(
