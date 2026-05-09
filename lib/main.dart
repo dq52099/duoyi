@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/app_version.dart';
+import 'core/completion_visibility_policy.dart';
+import 'core/local_timezone_resolver.dart';
 import 'providers/todo_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/pomodoro_provider.dart';
@@ -38,8 +40,18 @@ import 'widgets/quick_capture_fab.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 
+/// 模块级的提醒调度器实例。
+///
+/// 在 `main()` 中构造后注入到各 Provider，并被 `_DuoyiAppState` 在
+/// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发 `resyncAll`。
+/// 放在顶层是因为 `_DuoyiAppState` 并不持有构造时的闭包引用。
+late ReminderScheduler _reminderScheduler;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 首帧前初始化本地时区，保证后续 tz.TZDateTime.from(.., tz.local) 正确。
+  await LocalTimezoneResolver.init();
 
   final todoProvider = TodoProvider();
   final habitProvider = HabitProvider();
@@ -88,18 +100,46 @@ void main() async {
   ]);
 
   pomodoroProvider.attachNotifier(notificationService);
+  // 让 PomodoroProvider 监听 AppLifecycle，以便在 resumed 时恢复白噪音。
+  pomodoroProvider.attachLifecycle();
+
+  // 冷启动执行一次 Daily Rollover（归档昨日完成 + 顺延过期 + 派发重复目标）。
+  // 须在 ReminderScheduler 初次同步之前，这样调度器拿到的已经是顺延 / 派发后的最新状态。
+  await CompletionVisibilityPolicy.runDailyRollover(
+    todoProvider,
+    DateTime.now(),
+    goalProvider: goalProvider,
+  );
 
   // 提醒调度器：监听数据变化，幂等地同步本地通知队列
   final reminderScheduler = ReminderScheduler(notificationService);
+  _reminderScheduler = reminderScheduler;
+  // 注入到 Provider，供 Provider 内部的局部 hook（例如 postponeOverdue、
+  // onTimezoneChanged）转发调度请求。
+  todoProvider.scheduler = reminderScheduler;
+  goalProvider.scheduler = reminderScheduler;
   Future<void> resyncReminders() async {
     await reminderScheduler.syncTodos(todoProvider.todos);
     await reminderScheduler.syncHabits(habitProvider.habits);
     await reminderScheduler.syncAnniversaries(anniversaryProvider.items);
+    await reminderScheduler.syncGoals(goalProvider.goals);
   }
 
   todoProvider.addListener(resyncReminders);
   habitProvider.addListener(resyncReminders);
   anniversaryProvider.addListener(resyncReminders);
+  goalProvider.addListener(resyncReminders);
+  // 本地有改动 → 在云同步侧标"有未同步改动"（Req 12.7）。
+  void markDirty() => cloudSyncProvider.markPendingLocalChange();
+  todoProvider.addListener(markDirty);
+  habitProvider.addListener(markDirty);
+  anniversaryProvider.addListener(markDirty);
+  goalProvider.addListener(markDirty);
+  noteProvider.addListener(markDirty);
+  countdownProvider.addListener(markDirty);
+  diaryProvider.addListener(markDirty);
+  courseProvider.addListener(markDirty);
+  pomodoroProvider.addListener(markDirty);
   // 初次同步
   await resyncReminders();
 
@@ -126,18 +166,22 @@ void main() async {
   }
 
   cloudSyncProvider.onSynced = () {
-    todoProvider.loadFromStorage();
-    habitProvider.loadFromStorage();
-    pomodoroProvider.loadFromStorage();
-    countdownProvider.loadFromStorage();
-    noteProvider.loadFromStorage();
-    anniversaryProvider.loadFromStorage();
-    diaryProvider.loadFromStorage();
-    goalProvider.loadFromStorage();
-    courseProvider.loadFromStorage();
-    userProvider.loadFromStorage();
-    // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
-    resyncReminders();
+    // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作"脏改动"。
+    // ignore: discarded_futures
+    cloudSyncProvider.suppressDirtyMarkWhile(() async {
+      await todoProvider.loadFromStorage();
+      await habitProvider.loadFromStorage();
+      await pomodoroProvider.loadFromStorage();
+      await countdownProvider.loadFromStorage();
+      await noteProvider.loadFromStorage();
+      await anniversaryProvider.loadFromStorage();
+      await diaryProvider.loadFromStorage();
+      await goalProvider.loadFromStorage();
+      await courseProvider.loadFromStorage();
+      await userProvider.loadFromStorage();
+      // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
+      await resyncReminders();
+    });
   };
 
   authProvider.addListener(() {
@@ -190,6 +234,10 @@ void main() async {
       _handleWidgetUri(initial, pomodoroProvider);
     });
   }
+
+  // 冷启动所有 loadFromStorage / resyncReminders / _pushHomeWidget 都已完成，
+  // 从这一刻起 Provider 的改动才算"用户发起的脏改动"。
+  cloudSyncProvider.dirtyMarkEnabled = true;
 
   runApp(
     MultiProvider(
@@ -286,10 +334,24 @@ class DuoyiApp extends StatefulWidget {
 }
 
 class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
+  /// 缓存上一次已知的"本地日"，用于在 resumed 时判定是否跨天。
+  /// 初始值写入于 [initState]。
+  DateTime? _lastLifecycleDay;
+
+  /// 缓存上一次已知的系统 IANA 时区名。
+  ///
+  /// 在 [initState] 初始化为 `LocalTimezoneResolver.currentIana`；
+  /// 之后每次 `AppLifecycleState.resumed` 都会先刷新时区再与此值比较，
+  /// 差异即触发 [ReminderScheduler.resyncAll]（Requirements 8.6 / 8.8）。
+  String? _lastIana;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final now = DateTime.now();
+    _lastLifecycleDay = DateTime(now.year, now.month, now.day);
+    _lastIana = LocalTimezoneResolver.currentIana;
   }
 
   @override
@@ -306,7 +368,86 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       lock.onAppLifecycleInactive();
     } else if (state == AppLifecycleState.resumed) {
       lock.onAppLifecycleResume();
+      // 先处理时区变更（可能影响调度），再做跨日 rollover。
+      _maybeResyncOnTimezoneChange();
+      _maybeRunDailyRolloverOnResume();
     }
+  }
+
+  /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并触发
+  /// [ReminderScheduler.resyncAll]，保证壁钟时间不变。
+  ///
+  /// 对应 Requirements 8.6 / 8.8：
+  /// - 8.6：resumed 且 IANA 变化时重新 `tz.setLocalLocation` 并 resync；
+  /// - 8.8：resync 后新调度的 `(hour, minute)` 仍等于用户原设定。
+  void _maybeResyncOnTimezoneChange() {
+    // 从 mainShellKey.currentContext（冷启动早期可能为 null）或当前 context
+    // 同步读取 Provider，避免异步 gap 之后再使用 BuildContext。
+    final ctx = mainShellKey.currentContext ?? context;
+    final todos = Provider.of<TodoProvider>(ctx, listen: false);
+    final habits = Provider.of<HabitProvider>(ctx, listen: false);
+    final annis = Provider.of<AnniversaryProvider>(ctx, listen: false);
+    final goals = Provider.of<GoalProvider>(ctx, listen: false);
+
+    final prevIana = _lastIana;
+
+    // ignore: discarded_futures
+    Future.microtask(() async {
+      try {
+        await LocalTimezoneResolver.refresh();
+      } catch (_) {
+        // 时区刷新失败（例如平台暂时不可用）不应阻断其它 lifecycle 钩子。
+        return;
+      }
+      final currentIana = LocalTimezoneResolver.currentIana;
+      if (prevIana != null && prevIana == currentIana) {
+        return;
+      }
+      _lastIana = currentIana;
+      try {
+        await _reminderScheduler.resyncAll(
+          todos: todos.todos,
+          habits: habits.habits,
+          annis: annis.items,
+          goals: goals.goals,
+        );
+      } catch (e, st) {
+        debugPrint('[DuoyiApp] resyncAll on timezone change failed: $e\n$st');
+      }
+    });
+  }
+
+  /// 当 App 从后台回到前台时，若"本地日"发生变化则触发一次
+  /// [CompletionVisibilityPolicy.runDailyRollover]。
+  ///
+  /// 调用路径对应 `requirements.md` 3.3：滚动归档必须在进程复用的长时间
+  /// 后台场景下也能按时执行。时区刷新由 [_maybeResyncOnTimezoneChange]
+  /// 负责，不在这里重复。
+  void _maybeRunDailyRolloverOnResume() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final last = _lastLifecycleDay;
+    _lastLifecycleDay = today;
+    if (last != null && last.isAtSameMomentAs(today)) {
+      return;
+    }
+
+    // 同步读取 TodoProvider / GoalProvider，避免在异步 gap 之后再使用 BuildContext。
+    // `DuoyiApp` 是应用根 widget，`mainShellKey` 在冷启动初期可能尚未 attach，
+    // 两处都位于 MultiProvider 之下，任一命中即可拿到实例。
+    final ctx = mainShellKey.currentContext ?? context;
+    final provider = Provider.of<TodoProvider>(ctx, listen: false);
+    final goalProv = Provider.of<GoalProvider>(ctx, listen: false);
+
+    // 异步触发，不阻塞 lifecycle 回调。
+    // ignore: discarded_futures
+    Future.microtask(() async {
+      await CompletionVisibilityPolicy.runDailyRollover(
+        provider,
+        now,
+        goalProvider: goalProv,
+      );
+    });
   }
 
   @override

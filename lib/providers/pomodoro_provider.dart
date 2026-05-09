@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pomodoro.dart';
+import '../services/focus_sound_service.dart';
 import 'notification_service.dart';
 
-class PomodoroProvider extends ChangeNotifier {
+class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   PomodoroState _state = PomodoroState(
     remainingSeconds: 1500,
     totalSeconds: 1500,
@@ -21,6 +23,12 @@ class PomodoroProvider extends ChangeNotifier {
   String? _lastDate;
   NotificationService? _notifier;
 
+  /// 真实白噪音服务。Task 16 接入：番茄钟状态 ↔ 音频播放。
+  final FocusSoundService _sound = FocusSoundService.instance;
+
+  /// 是否监听了 WidgetsBinding 生命周期（保证 `dispose` 时对称移除）。
+  bool _lifecycleAttached = false;
+
   PomodoroState get state => _state;
   PomodoroConfig get config => _config;
   List<PomodoroSession> get sessions => _sessions;
@@ -28,6 +36,32 @@ class PomodoroProvider extends ChangeNotifier {
 
   void attachNotifier(NotificationService n) {
     _notifier = n;
+  }
+
+  /// 由 `main.dart` 在 runApp 之前调用。幂等。
+  ///
+  /// - 绑定 `WidgetsBindingObserver`，在 `resumed` 时按 `state.isRunning` 恢复
+  ///   白噪音播放；在 `paused / inactive` 时按策略保持（Android 前台服务
+  ///   由 audioplayers 与 manifest 的 `foregroundServiceType=mediaPlayback`
+  ///   保证锁屏不被 kill）。
+  void attachLifecycle() {
+    if (_lifecycleAttached) return;
+    WidgetsBinding.instance.addObserver(this);
+    _sound.bindLifecycle(WidgetsBinding.instance);
+    _lifecycleAttached = true;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // 回到前台：若番茄钟正在跑 + 已选择白噪音，但服务静音了，补上。
+      final expected = _state.whiteNoiseSound;
+      if (_state.isRunning &&
+          expected != 'none' &&
+          !_sound.isPlaying) {
+        _sound.play(expected);
+      }
+    }
   }
 
   Future<void> loadFromStorage() async {
@@ -109,6 +143,7 @@ class PomodoroProvider extends ChangeNotifier {
   void _startTimer() {
     _state = _state.copyWith(isRunning: true);
     notifyListeners();
+    _syncSoundToState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_state.remainingSeconds <= 1) {
         _completeSession();
@@ -123,6 +158,32 @@ class PomodoroProvider extends ChangeNotifier {
     _timer?.cancel();
     _state = _state.copyWith(isRunning: false);
     notifyListeners();
+    // 300ms 淡出；FocusSoundService.fadeOut 结束后会把 isPlaying 置为 false，
+    // 满足 Requirement 5.6（500ms 内静音）。
+    // ignore: discarded_futures
+    _sound.fadeOut(const Duration(milliseconds: 300));
+  }
+
+  /// 依据当前 [_state]（`isRunning`、`type`、`whiteNoiseSound`）与
+  /// [_config.playSoundInBreak] 决定播放 / 停止白噪音。
+  ///
+  /// 调用点：`_startTimer` 与 `_completeSession` 的相位切换后。
+  void _syncSoundToState() {
+    final sound = _state.whiteNoiseSound;
+    final shouldPlay = _state.isRunning &&
+        sound != 'none' &&
+        (_state.type == PomodoroType.focus || _config.playSoundInBreak);
+    if (shouldPlay) {
+      if (!_sound.isPlaying || _sound.currentSound != sound) {
+        // ignore: discarded_futures
+        _sound.play(sound);
+      }
+    } else {
+      if (_sound.isPlaying) {
+        // ignore: discarded_futures
+        _sound.stop();
+      }
+    }
   }
 
   void _completeSession() {
@@ -180,6 +241,10 @@ class PomodoroProvider extends ChangeNotifier {
 
     if (_state.isRunning) {
       _startTimer();
+    } else {
+      // 本相位不自动续跑：立刻把声音停掉（focus→break 过渡，或已到末尾）。
+      // ignore: discarded_futures
+      _sound.stop();
     }
     notifyListeners();
   }
@@ -201,6 +266,8 @@ class PomodoroProvider extends ChangeNotifier {
         type: PomodoroType.focus,
       );
     }
+    // ignore: discarded_futures
+    _sound.stop();
     notifyListeners();
   }
 
@@ -213,6 +280,8 @@ class PomodoroProvider extends ChangeNotifier {
       type: PomodoroType.focus,
       completedSessions: 0,
     );
+    // ignore: discarded_futures
+    _sound.stop();
     notifyListeners();
   }
 
@@ -241,6 +310,7 @@ class PomodoroProvider extends ChangeNotifier {
     _config.whiteNoiseSound = sound;
     _saveConfig();
     notifyListeners();
+    _syncSoundToState();
   }
 
   // --- Queries ---
@@ -272,6 +342,13 @@ class PomodoroProvider extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    if (_lifecycleAttached) {
+      WidgetsBinding.instance.removeObserver(this);
+      _lifecycleAttached = false;
+    }
+    // 不 dispose FocusSoundService（它是进程级单例），只停播。
+    // ignore: discarded_futures
+    _sound.stop();
     super.dispose();
   }
 }

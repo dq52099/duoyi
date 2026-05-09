@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/feature_flags.dart';
 import '../services/api_client.dart';
 
 class SyncConfig {
@@ -36,6 +37,54 @@ class CloudSyncProvider extends ChangeNotifier {
   bool get isSyncing => _isSyncing;
   String? get lastError => _lastError;
   bool get hasEverSynced => _config.lastSync.millisecondsSinceEpoch > 0;
+
+  /// 是否有未同步到后端的本地改动（由 Provider 写入时打上时间戳；本次同步成功后清零）。
+  /// 对应 Requirement 12.7 —— UI 侧可据此显示小角标提醒用户。
+  bool _hasPendingChanges = false;
+  bool get hasPendingChanges => _hasPendingChanges;
+
+  /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
+  /// 标记"有未同步改动"，以便 UI 角标显示。
+  ///
+  /// 为避免冷启动 `loadFromStorage` 触发的 notifyListeners 与同步回写
+  /// `onSynced → loadFromStorage` 触发的 notifyListeners 被当作"脏改动"
+  /// 误报 badge，本方法仅在 [_suppressDirtyMark] = false 时生效。
+  void markPendingLocalChange() {
+    if (_suppressDirtyMark) return;
+    if (!_hasPendingChanges) {
+      _hasPendingChanges = true;
+      notifyListeners();
+    }
+  }
+
+  /// 让一段代码块内的 `markPendingLocalChange` 静默（调用链返回后自动恢复）。
+  ///
+  /// 用法：
+  /// ```dart
+  /// await cloudSync.suppressDirtyMarkWhile(() async {
+  ///   await todoProvider.loadFromStorage();
+  /// });
+  /// ```
+  Future<void> suppressDirtyMarkWhile(Future<void> Function() body) async {
+    _suppressDirtyMark = true;
+    try {
+      await body();
+    } finally {
+      _suppressDirtyMark = false;
+    }
+  }
+
+  bool _suppressDirtyMark = true; // 初始 true，等 main.dart 显式放开
+
+  /// 让外部显式放开 dirty 抑制。`main.dart` 在所有冷启动 `loadFromStorage`
+  /// 完成、即将 `runApp` 之前调一次 `setDirtyMarkEnabled(true)`。
+  set dirtyMarkEnabled(bool value) {
+    _suppressDirtyMark = !value;
+  }
+
+  /// cloud_sync_v2 特性开关：关闭时 [syncNow] 直接返回，不发出网络请求。
+  /// 对应 Requirements 12.6。
+  bool get isCloudSyncV2Enabled => FeatureFlags.cloudSyncV2;
 
   static const _stringEncodedListKeys = <String>{
     'todos',
@@ -80,6 +129,10 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
+    // Req 12.6：关闭 cloud_sync_v2 时完全离线可用，不发出任何网络请求。
+    if (!FeatureFlags.cloudSyncV2) {
+      return;
+    }
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       _lastError = '请先登录';
@@ -176,6 +229,7 @@ class CloudSyncProvider extends ChangeNotifier {
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
+      _hasPendingChanges = false; // Req 12.7: 同步成功后清零"未同步"标记
 
       onSynced?.call();
     } catch (e) {

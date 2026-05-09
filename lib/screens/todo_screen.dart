@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/completion_visibility_policy.dart';
+import '../core/design_tokens.dart';
+import '../models/goal.dart' show ReminderKind;
 import '../models/todo.dart';
 import '../providers/todo_provider.dart';
 import '../providers/theme_provider.dart';
@@ -7,7 +10,7 @@ import '../services/ai_service.dart';
 import '../core/todo_templates.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
-import 'todo_detail_screen.dart';
+import 'todo_detail_screen.dart' show TodoDetailScreen, priorityColor;
 
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
@@ -425,21 +428,6 @@ class _TodoTile extends StatelessWidget {
   final TodoItem todo;
   const _TodoTile({required this.todo});
 
-  Color _priorityColor(TodoPriority p) {
-    switch (p) {
-      case TodoPriority.urgent:
-        return const Color(0xFFD32F2F);
-      case TodoPriority.high:
-        return const Color(0xFFEF6C00);
-      case TodoPriority.medium:
-        return const Color(0xFFFBC02D);
-      case TodoPriority.low:
-        return const Color(0xFF388E3C);
-      case TodoPriority.none:
-        return Colors.grey;
-    }
-  }
-
   Color _quadrantColor(EisenhowerQuadrant q) {
     switch (q) {
       case EisenhowerQuadrant.urgentImportant:
@@ -455,6 +443,12 @@ class _TodoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = CompletionVisibilityPolicy.visualState(todo);
+    // 已归档的任务不在今日 / 列表中渲染（P5）。
+    if (visual == TodoVisualState.archived) {
+      return const SizedBox.shrink();
+    }
+
     final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
     final qColor = _quadrantColor(todo.quadrant);
@@ -463,149 +457,85 @@ class _TodoTile extends StatelessWidget {
       key: ValueKey(todo.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spaceMd,
+          vertical: DesignTokens.spaceSm,
+        ),
         decoration: BoxDecoration(
           color: cs.error,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: DesignTokens.borderRadiusMd,
         ),
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+        padding: const EdgeInsets.only(right: DesignTokens.spaceXl),
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       onDismissed: (_) => provider.deleteTodo(todo.id),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spaceMd,
+          vertical: DesignTokens.spaceSm,
+        ),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: DesignTokens.borderRadiusMd,
+          boxShadow: DesignTokens.shadowXs,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: DesignTokens.borderRadiusMd,
           child: IntrinsicHeight(
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(width: 4, color: qColor),
                 Expanded(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    leading: Checkbox(
-                      value: todo.isCompleted,
-                      shape: const CircleBorder(),
-                      activeColor: qColor,
-                      onChanged: (_) => provider.toggleTodo(todo.id),
-                    ),
-                    title: Text(
-                      todo.title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: todo.isCompleted ? Colors.grey : null,
-                        decoration: todo.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    subtitle: Row(
-                      children: [
-                        if (todo.priority != TodoPriority.none)
-                          Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: _priorityColor(todo.priority)
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              todo.priority.label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: _priorityColor(todo.priority),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        if (todo.recurrence.isActive)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Icon(Icons.repeat,
-                                size: 11, color: Colors.grey.shade500),
-                          ),
-                        if (todo.isOverdue)
-                          Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: const Text('过期',
-                                style: TextStyle(
-                                    fontSize: 10, color: Colors.red)),
-                          ),
-                        if (todo.subtasks.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.account_tree_outlined,
-                                  size: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (todo.dueDate != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: qColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 10,
-                                  color: qColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${todo.dueDate!.month}/${todo.dueDate!.day}',
-                                  style: TextStyle(fontSize: 11, color: qColor),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
+                  child: InkWell(
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => TodoDetailScreen(todoId: todo.id),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spaceSm,
+                        DesignTokens.spaceSm,
+                        DesignTokens.spaceSm,
+                        DesignTokens.spaceSm,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: DesignTokens.spaceXxs,
+                            ),
+                            child: SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Checkbox(
+                                value: todo.isCompleted,
+                                shape: const CircleBorder(),
+                                activeColor: qColor,
+                                onChanged: (_) => provider.toggleTodo(todo.id),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: DesignTokens.spaceXs),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _TitleRow(todo: todo, visual: visual),
+                                const SizedBox(height: DesignTokens.spaceXxs),
+                                _MetaRow(
+                                  todo: todo,
+                                  quadrantColor: qColor,
+                                  visual: visual,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -615,6 +545,367 @@ class _TodoTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 标题 + 优先级色点。
+class _TitleRow extends StatelessWidget {
+  final TodoItem todo;
+  final TodoVisualState visual;
+  const _TitleRow({required this.todo, required this.visual});
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompleted = visual == TodoVisualState.completed;
+    final baseColor = Theme.of(context).colorScheme.onSurface;
+    final titleColor = isCompleted
+        ? baseColor.withValues(alpha: DesignTokens.completedTextOpacity)
+        : null;
+
+    return Row(
+      children: [
+        if (todo.priority != TodoPriority.none) ...[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: priorityColor(todo.priority),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: DesignTokens.spaceXs),
+        ],
+        Expanded(
+          child: Text(
+            todo.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeBase,
+              color: titleColor,
+              decoration:
+                  isCompleted ? TextDecoration.lineThrough : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 元信息行：优先级胶囊、重复、过期、子任务、标签、目标时长、下次提醒、截止日。
+class _MetaRow extends StatelessWidget {
+  final TodoItem todo;
+  final Color quadrantColor;
+  final TodoVisualState visual;
+
+  const _MetaRow({
+    required this.todo,
+    required this.quadrantColor,
+    required this.visual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[];
+
+    if (todo.priority != TodoPriority.none) {
+      final c = priorityColor(todo.priority);
+      chips.add(_MetaPill(
+        color: c,
+        child: Text(
+          todo.priority.label,
+          style: TextStyle(
+            fontSize: DesignTokens.fontSizeXs,
+            color: c,
+            fontWeight: DesignTokens.fontWeightSemiBold,
+          ),
+        ),
+      ));
+    }
+
+    if (todo.recurrence.isActive) {
+      chips.add(Icon(
+        Icons.repeat,
+        size: 12,
+        color: Colors.grey.shade500,
+      ));
+    }
+
+    // 已完成：绿色 "已完成" 徽章。
+    if (visual == TodoVisualState.completed) {
+      final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.completed);
+      chips.add(_MetaPill(
+        color: c,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 11, color: c),
+            const SizedBox(width: 2),
+            Text(
+              '已完成',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: c,
+                fontWeight: DesignTokens.fontWeightSemiBold,
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    // 临期：橙色 "临期" 胶囊 + 闪烁 alarm icon。
+    if (visual == TodoVisualState.dueSoon) {
+      final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.dueSoon);
+      chips.add(_MetaPill(
+        color: c,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _BlinkingIcon(
+              icon: Icons.alarm,
+              color: c,
+              size: 11,
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '临期',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: c,
+                fontWeight: DesignTokens.fontWeightSemiBold,
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    // 已过期：红色 "过期" 胶囊。沿用已有视觉语义，统一 token 色。
+    if (visual == TodoVisualState.overdue) {
+      final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.overdue);
+      chips.add(_MetaPill(
+        color: c,
+        child: Text(
+          '过期',
+          style: TextStyle(
+            fontSize: DesignTokens.fontSizeXs,
+            color: c,
+            fontWeight: DesignTokens.fontWeightSemiBold,
+          ),
+        ),
+      ));
+    }
+
+    if (todo.subtasks.isNotEmpty) {
+      chips.add(Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.account_tree_outlined,
+            size: 12,
+            color: Colors.grey.shade500,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length}',
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeSm,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ));
+    }
+
+    // 标签：最多展示前 3 个，多出部分以 "+N" 汇总。
+    if (todo.tags.isNotEmpty) {
+      const maxShown = 3;
+      final shown = todo.tags.take(maxShown).toList();
+      for (final t in shown) {
+        chips.add(_MetaPill(
+          color: Theme.of(context).colorScheme.primary,
+          child: Text(
+            '#$t',
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeXs,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ));
+      }
+      final overflow = todo.tags.length - shown.length;
+      if (overflow > 0) {
+        chips.add(_MetaPill(
+          color: Colors.grey.shade600,
+          child: Text(
+            '+$overflow',
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeXs,
+              color: Colors.grey.shade700,
+            ),
+          ),
+        ));
+      }
+    }
+
+    // 目标时长
+    final tSec = todo.timeTargetSeconds;
+    if (tSec != null && tSec > 0) {
+      chips.add(_MetaPill(
+        color: Colors.teal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.hourglass_bottom, size: 11, color: Colors.teal),
+            const SizedBox(width: 2),
+            Text(
+              '目标 ${tSec ~/ 60}m',
+              style: const TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: Colors.teal,
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    // 下一次提醒。临期状态下把 alarm icon 也闪烁一下，强化提示。
+    final r = todo.reminder;
+    if (r.enabled && r.hour != null && r.minute != null) {
+      final hh = r.hour!.toString().padLeft(2, '0');
+      final mm = r.minute!.toString().padLeft(2, '0');
+      final icon =
+          r.kind == ReminderKind.alarm ? Icons.alarm : Icons.notifications;
+      final reminderColor = visual == TodoVisualState.dueSoon
+          ? CompletionVisibilityPolicy.colorFor(TodoVisualState.dueSoon)
+          : Colors.indigo;
+      final iconWidget = visual == TodoVisualState.dueSoon
+          ? _BlinkingIcon(icon: icon, color: reminderColor, size: 11)
+          : Icon(icon, size: 11, color: reminderColor);
+      chips.add(_MetaPill(
+        color: reminderColor,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconWidget,
+            const SizedBox(width: 2),
+            Text(
+              '下次 $hh:$mm',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: reminderColor,
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    if (todo.dueDate != null) {
+      chips.add(_MetaPill(
+        color: quadrantColor,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today, size: 10, color: quadrantColor),
+            const SizedBox(width: 4),
+            Text(
+              '${todo.dueDate!.month}/${todo.dueDate!.day}',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: quadrantColor,
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: DesignTokens.spaceXs,
+      runSpacing: DesignTokens.spaceXxs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: chips,
+    );
+  }
+}
+
+/// 临期任务的闪烁图标：1s 周期内 opacity 在 0.5↔1.0 之间来回过渡。
+///
+/// 使用 [AnimationController] + `reverse = true` 实现"脉冲"效果，
+/// 给"临期"胶囊上的 alarm / notifications icon 一个可视化的警示感。
+class _BlinkingIcon extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  const _BlinkingIcon({
+    required this.icon,
+    required this.color,
+    this.size = 12,
+  });
+
+  @override
+  State<_BlinkingIcon> createState() => _BlinkingIconState();
+}
+
+class _BlinkingIconState extends State<_BlinkingIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+    _opacity = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Icon(widget.icon, size: widget.size, color: widget.color),
+    );
+  }
+}
+
+/// 统一的元信息胶囊（带 12% 底色）。
+class _MetaPill extends StatelessWidget {
+  final Color color;
+  final Widget child;
+
+  const _MetaPill({required this.color, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spaceXs,
+        vertical: 1,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: DesignTokens.borderRadiusSm,
+      ),
+      child: child,
     );
   }
 }

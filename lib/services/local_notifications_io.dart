@@ -5,6 +5,8 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 
+import '../core/local_timezone_resolver.dart';
+
 /// 本地通知 / 每日闹钟(Android + iOS + Linux 实现)。
 class LocalNotifications {
   static final LocalNotifications instance = LocalNotifications._();
@@ -22,12 +24,16 @@ class LocalNotifications {
   Future<void> init() async {
     if (_initialized) return;
     tzdata.initializeTimeZones();
-    // 默认用系统本地时区(无需额外 platform channel)
-    try {
-      tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
-    } catch (_) {
-      // 某些设备 timeZoneName 不是 IANA；回退到 UTC，仍可工作。
-      tz.setLocalLocation(tz.UTC);
+    // 若主入口已经通过 LocalTimezoneResolver.init() 设置过 tz.local，则直接沿用；
+    // 否则按原有回退策略（系统 timeZoneName → UTC）临时设置，等主入口
+    // 下次 resolver 刷新时再覆盖。
+    if (!LocalTimezoneResolver.isInitialized) {
+      try {
+        tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
+      } catch (_) {
+        // 某些设备 timeZoneName 不是 IANA；回退到 UTC，仍可工作。
+        tz.setLocalLocation(tz.UTC);
+      }
     }
 
     const androidInit =
