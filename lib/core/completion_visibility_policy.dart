@@ -1,0 +1,144 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
+
+import '../models/todo.dart';
+import '../providers/goal_provider.dart';
+import '../providers/todo_provider.dart';
+import '../services/recurrence_engine.dart';
+import 'design_tokens.dart';
+
+/// 一条 Todo 在 UI 上呈现的"语义可视状态"。
+///
+/// 对应 `requirements.md` Requirement 3 与 `design.md §4 P4/P5` 的不变式：
+/// - `normal`    ：普通任务（未完成，未过期，未临期）。
+/// - `dueSoon`   ：临期（距离 `dueDate` < 3 小时 且仍在未来）。
+/// - `overdue`   ：已过期（未完成，`dueDate` < now）。
+/// - `completed` ：已完成（按 P4，"当日完成不销毁"）。
+/// - `archived`  ：已在次日 00:00 归档，不再出现在"今日"视图。
+enum TodoVisualState { normal, dueSoon, overdue, completed, archived }
+
+/// 完成态 / 过期 / 归档的可视与可见性策略。
+///
+/// 设计目标：把"一条 Todo 今天是否露出"与"它的视觉语义"收敛到一个地方，
+/// 让 Today 列表、日历、Widget 等调用方遵循同一套规则。
+///
+/// 详见 `design.md §3.5` 与 `requirements.md §3`。
+class CompletionVisibilityPolicy {
+  CompletionVisibilityPolicy._();
+
+  /// 判断一条 Todo 是否应该出现在"今日"视图。
+  ///
+  /// 规则：
+  /// 1. 已经被"次日 00:00 归档"的任务不再在今日列表出现（P5）。
+  /// 2. 其余情况下，以 `t.date` 的本地"日"与 `now` 的本地"日"是否相同决定。
+  ///    完成态不作为隐藏条件 —— 当日完成的任务仍然保留，对应可视状态 `completed`（P4）。
+  static bool shouldShowInToday(TodoItem t, DateTime now) {
+    if (t.isArchivedAfterRollover) return false;
+    final today = dateOnly(now);
+    final day = dateOnly(t.date);
+    return day == today;
+  }
+
+  /// 把一条 Todo 映射到它当前的可视语义状态。
+  ///
+  /// 优先级：`archived` > `completed` > `overdue` > `dueSoon` > `normal`。
+  /// `now` 用于计算"过期 / 临期"，缺省使用 `DateTime.now()`。
+  static TodoVisualState visualState(TodoItem t, {DateTime? now}) {
+    if (t.isArchivedAfterRollover) return TodoVisualState.archived;
+    if (t.isCompleted) return TodoVisualState.completed;
+
+    final due = t.dueDate;
+    if (due == null) return TodoVisualState.normal;
+
+    final reference = now ?? DateTime.now();
+    if (due.isBefore(reference)) return TodoVisualState.overdue;
+
+    final delta = due.difference(reference);
+    if (delta.inHours < 3 && due.isAfter(reference)) {
+      return TodoVisualState.dueSoon;
+    }
+    return TodoVisualState.normal;
+  }
+
+  /// 把 [TodoVisualState] 映射到 `DesignTokens` 颜色。
+  ///
+  /// 调用方可以在列表项上直接使用这里返回的颜色作为主色 / 徽章色。
+  static Color colorFor(TodoVisualState s) {
+    switch (s) {
+      case TodoVisualState.normal:
+        return DesignTokens.todoNormal;
+      case TodoVisualState.dueSoon:
+        return DesignTokens.todoDueSoon;
+      case TodoVisualState.overdue:
+        return DesignTokens.todoOverdue;
+      case TodoVisualState.completed:
+        return DesignTokens.todoCompleted;
+      case TodoVisualState.archived:
+        return DesignTokens.todoArchived;
+    }
+  }
+
+  /// 截断到"本地日"：把 [d] 的 `hour/minute/second/ms/µs` 全部置 0。
+  ///
+  /// 公开此工具是为了让 `DailyRollover`、`TodoProvider` 等调用方
+  /// 与本策略保持相同的"当日"判定口径。
+  static DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// 每日跨天的"滚动归档"批处理入口（P5 / Requirement 3.3-3.6）。
+  ///
+  /// 在本地 00:00 或 `AppLifecycleState.resumed` 且日期跨天时由外层
+  /// （Task 11.2 的 `main.dart` hookpoint）调用一次：
+  ///
+  /// 1. **归档昨日及更早的已完成任务**：调用
+  ///    [TodoProvider.archivePastCompletions]，把
+  ///    `isCompleted ∧ dateOnly(completedAt) < today` 的条目置为
+  ///    `isArchivedAfterRollover = true`。
+  /// 2. **顺延未完成且已过期的任务**：调用
+  ///    [TodoProvider.postponeOverdue]，将 `dueDate < today` 的未完成项
+  ///    迁移到今日同一时刻，并在 `postponeHistory` 追加
+  ///    `reason = 'auto_daily_rollover'`。
+  /// 3. **基于 recurrence 派发今日实例**：`materializeTodayFromRecurring`
+  ///    目前还未接入（见 Task 22.2 / Requirement 11.8），此处先留占位
+  ///    hook，防止回归时忘记接线。
+  ///
+  /// [now] 作为参数注入便于测试；内部只使用其"日"部分做对齐。
+  /// [goalProvider] 可选，传入时会触发 `materializeTodayFromRecurring` 并
+  /// 对命中的 goal 刷新 `updatedAt` 以触发 ReminderScheduler 重同步。
+  static Future<void> runDailyRollover(
+    TodoProvider provider,
+    DateTime now, {
+    GoalProvider? goalProvider,
+  }) async {
+    final todayDay = dateOnly(now);
+
+    // Step 1: 归档昨日及更早的已完成任务。
+    await provider.archivePastCompletions(todayDay);
+
+    // Step 2: 顺延未完成且已过期的任务。
+    await provider.postponeOverdue(todayDay);
+
+    // Step 3: 基于 recurrence 派发今日实例。
+    if (goalProvider != null) {
+      final matched = <String>[];
+      RecurrenceEngine.materializeTodayFromRecurring(
+        goals: goalProvider.goals,
+        today: todayDay,
+        onHit: (g, _) => matched.add(g.id),
+      );
+      if (matched.isNotEmpty) {
+        debugPrint(
+          '[CompletionVisibilityPolicy] runDailyRollover: '
+          'materialized ${matched.length} recurring goal(s) for today.',
+        );
+        // 触发一次 onTimezoneChanged（它会通过 scheduler 重同步 goals），
+        // 让命中的 goal 进入当日调度。这条路径是幂等的。
+        await goalProvider.onTimezoneChanged();
+      }
+    } else {
+      debugPrint(
+        '[CompletionVisibilityPolicy] runDailyRollover: '
+        'goalProvider omitted; skipping materializeTodayFromRecurring.',
+      );
+    }
+  }
+}

@@ -9,6 +9,10 @@ class PomodoroConfig {
   bool autoStartBreaks;
   bool autoStartFocus;
 
+  /// 休息阶段是否继续播放白噪音。默认 `false`，与 `design.md §3.7` 对齐
+  /// （focus 播、break 可配置）。
+  bool playSoundInBreak;
+
   PomodoroConfig({
     this.focusDuration = 1500,
     this.shortBreakDuration = 300,
@@ -17,6 +21,7 @@ class PomodoroConfig {
     this.whiteNoiseSound = 'none',
     this.autoStartBreaks = false,
     this.autoStartFocus = false,
+    this.playSoundInBreak = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -27,6 +32,7 @@ class PomodoroConfig {
     'whiteNoiseSound': whiteNoiseSound,
     'autoStartBreaks': autoStartBreaks,
     'autoStartFocus': autoStartFocus,
+    'playSoundInBreak': playSoundInBreak,
   };
 
   factory PomodoroConfig.fromJson(Map<String, dynamic> json) {
@@ -45,6 +51,7 @@ class PomodoroConfig {
       whiteNoiseSound: sound,
       autoStartBreaks: json['autoStartBreaks'] ?? false,
       autoStartFocus: json['autoStartFocus'] ?? false,
+      playSoundInBreak: json['playSoundInBreak'] ?? false,
     );
   }
 }

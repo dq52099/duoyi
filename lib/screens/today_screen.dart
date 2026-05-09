@@ -11,10 +11,10 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
-import 'anniversary_screen.dart';
 import 'diary_screen.dart';
 import 'habit_screen.dart';
 import 'pomodoro_screen.dart';
+import 'today_detail_router.dart';
 import 'todo_screen.dart';
 
 /// 今日概览：登录后展示的聚合首屏。
@@ -185,7 +185,10 @@ class TodayScreen extends StatelessWidget {
                     final d = DateTime(t.date.year, t.date.month, t.date.day);
                     return d == todayKey;
                   }).length} 项 (已完成 $todayTodoCompleted)',
-              onMore: () => _go(context, const TodoScreen()),
+              onMore: () => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.todos,
+              ),
               child: Column(
                 children: todayTodos.take(5).map((t) {
                   return ListTile(
@@ -202,6 +205,11 @@ class TodayScreen extends StatelessWidget {
                         ? null
                         : Text(t.listGroupName!,
                             style: const TextStyle(fontSize: 11)),
+                    onTap: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.todos,
+                      id: t.id,
+                    ),
                   );
                 }).toList(),
               ),
@@ -211,6 +219,10 @@ class TodayScreen extends StatelessWidget {
           if (todayCourses.isNotEmpty)
             _section(
               '今日课程 · ${todayCourses.length} 节',
+              onMore: () => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.courses,
+              ),
               child: Column(
                 children: todayCourses.map((c) {
                   return ListTile(
@@ -230,6 +242,10 @@ class TodayScreen extends StatelessWidget {
                       '第${c.startSection}-${c.endSection}节${c.location.isEmpty ? '' : ' · ${c.location}'}${c.teacher.isEmpty ? '' : ' · ${c.teacher}'}',
                       style: const TextStyle(fontSize: 11),
                     ),
+                    onTap: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.courses,
+                    ),
                   );
                 }).toList(),
               ),
@@ -239,7 +255,10 @@ class TodayScreen extends StatelessWidget {
           if (soon.isNotEmpty)
             _section(
               '即将到来的纪念日',
-              onMore: () => _go(context, const AnniversaryScreen()),
+              onMore: () => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.anniversaries,
+              ),
               child: Column(
                 children: soon.map((a) {
                   final d = a.daysRemaining;
@@ -263,6 +282,11 @@ class TodayScreen extends StatelessWidget {
                       d == 0 ? '就是今天' : '还有 $d 天',
                       style: const TextStyle(fontSize: 11),
                     ),
+                    onTap: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.anniversaries,
+                      id: a.id,
+                    ),
                   );
                 }).toList(),
               ),
@@ -272,6 +296,10 @@ class TodayScreen extends StatelessWidget {
           if (activeGoals.isNotEmpty)
             _section(
               '进行中的目标',
+              onMore: () => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.goals,
+              ),
               child: Column(
                 children: activeGoals.map((g) {
                   final p = g.computedProgress;
@@ -297,6 +325,11 @@ class TodayScreen extends StatelessWidget {
                         Text('${(p * 100).toStringAsFixed(0)}%',
                             style: const TextStyle(fontSize: 11)),
                       ],
+                    ),
+                    onTap: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.goals,
+                      id: g.id,
                     ),
                   );
                 }).toList(),

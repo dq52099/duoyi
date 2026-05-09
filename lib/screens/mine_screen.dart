@@ -463,25 +463,32 @@ class MineScreen extends StatelessWidget {
               (auth.serverConfig['backup_enabled'] != false))
             _Tile(
               icon: Icons.cloud_sync_outlined,
-              label: '立即同步',
-              color: Colors.cyan,
+              label: syncProvider.hasPendingChanges
+                  ? '立即同步 · 有未同步改动'
+                  : '立即同步',
+              color: syncProvider.hasPendingChanges
+                  ? Colors.orange
+                  : Colors.cyan,
               trailing: syncProvider.isSyncing
                   ? const SizedBox(
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(
-                      syncProvider.hasEverSynced
-                          ? _formatTime(syncProvider.config.lastSync)
-                          : '未同步',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: syncProvider.hasEverSynced
-                            ? Colors.green
-                            : Colors.grey,
-                      ),
-                    ),
+                  : (syncProvider.hasPendingChanges
+                      ? const Icon(Icons.fiber_manual_record,
+                          color: Colors.orange, size: 12)
+                      : Text(
+                          syncProvider.hasEverSynced
+                              ? _formatTime(syncProvider.config.lastSync)
+                              : '未同步',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: syncProvider.hasEverSynced
+                                ? Colors.green
+                                : Colors.grey,
+                          ),
+                        )),
               onTap: syncProvider.isSyncing
                   ? null
                   : () async {
