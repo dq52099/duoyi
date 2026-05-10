@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
 
@@ -15,10 +16,28 @@ class UserProvider extends ChangeNotifier {
     int currentStreak = 0,
     int bestStreak = 0,
   }) {
+    final unchanged =
+        _profile.totalTodosCompleted == completedTodos &&
+        _profile.totalFocusMinutes == totalFocusMinutes &&
+        _profile.currentStreak == currentStreak &&
+        _profile.bestStreak == bestStreak;
+    if (unchanged) return;
+
     _profile.totalTodosCompleted = completedTodos;
     _profile.totalFocusMinutes = totalFocusMinutes;
     _profile.currentStreak = currentStreak;
     _profile.bestStreak = bestStreak;
+    _notifyListenersSafely();
+  }
+
+  void _notifyListenersSafely() {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (hasListeners) notifyListeners();
+      });
+      return;
+    }
     notifyListeners();
   }
 

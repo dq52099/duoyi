@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/calendar_event.dart';
 import '../models/todo.dart';
 import '../models/habit.dart';
@@ -28,6 +29,7 @@ class CalendarProvider extends ChangeNotifier {
     List<CountdownItem>? countdowns,
     List<GoalItem>? goals,
   }) {
+    final previousEvents = List<CalendarEvent>.of(_events);
     _events.clear();
 
     // Todo
@@ -178,7 +180,46 @@ class CalendarProvider extends ChangeNotifier {
       }
     }
 
+    if (!_eventsEqual(previousEvents, _events)) {
+      _notifyListenersSafely();
+    }
+  }
+
+  void _notifyListenersSafely() {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (hasListeners) notifyListeners();
+      });
+      return;
+    }
     notifyListeners();
+  }
+
+  bool _eventsEqual(List<CalendarEvent> a, List<CalendarEvent> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_eventEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  bool _eventEqual(CalendarEvent a, CalendarEvent b) {
+    return a.id == b.id &&
+        a.title == b.title &&
+        a.date == b.date &&
+        a.type == b.type &&
+        a.color == b.color &&
+        a.isCompleted == b.isCompleted &&
+        a.sourceId == b.sourceId &&
+        _timeEqual(a.time, b.time);
+  }
+
+  bool _timeEqual(TimeOfDay? a, TimeOfDay? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return a.hour == b.hour && a.minute == b.minute;
   }
 
   List<CalendarEvent> getEventsForDate(DateTime date) {
