@@ -107,7 +107,7 @@ void main() {
         await tester.pump();
 
         // 点 AppBar 的 check 按钮触发保存。
-        final checkBtn = find.byIcon(Icons.check);
+        final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
         expect(checkBtn, findsOneWidget);
         await tester.tap(checkBtn);
         // 等 updateTodo 的 Future、snackbar 弹出与可能的过渡动画。
@@ -172,7 +172,9 @@ void main() {
         final ModalRoute<Object?>? before = ModalRoute.of(detailCtx);
 
         // 不做任何编辑，直接点 check。
-        await tester.tap(find.byIcon(Icons.check));
+        final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
+        expect(checkBtn, findsOneWidget);
+        await tester.tap(checkBtn);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 300));
@@ -215,7 +217,9 @@ void main() {
 
         expect(find.textContaining('闹钟 ·'), findsOneWidget);
 
-        await tester.tap(find.byIcon(Icons.check));
+        final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
+        expect(checkBtn, findsOneWidget);
+        await tester.tap(checkBtn);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 300));

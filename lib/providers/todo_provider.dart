@@ -154,8 +154,7 @@ class TodoProvider extends ChangeNotifier {
     );
 
     if (nowCompleted && prev.recurrence.isActive) {
-      final anchor = prev.dueDate ?? prev.date;
-      final next = prev.recurrence.nextAfter(anchor);
+      final next = prev.recurrence.nextAfter(prev.date);
       if (next != null) {
         final delta = prev.dueDate == null
             ? Duration.zero
@@ -164,7 +163,7 @@ class TodoProvider extends ChangeNotifier {
         DateTime? nextReminderAt;
         // ignore: deprecated_member_use_from_same_package
         final reminderEnabled = prev.reminder.enabled || prev.hasReminder;
-        if (reminderEnabled && nextDue != null) {
+        if (reminderEnabled) {
           final hour = prev.reminder.enabled
               ? prev.reminder.hour
               // ignore: deprecated_member_use_from_same_package
@@ -174,10 +173,11 @@ class TodoProvider extends ChangeNotifier {
               // ignore: deprecated_member_use_from_same_package
               : prev.reminderAt?.minute;
           if (hour != null && minute != null) {
+            final reminderAnchor = nextDue ?? next;
             nextReminderAt = DateTime(
-              nextDue.year,
-              nextDue.month,
-              nextDue.day,
+              reminderAnchor.year,
+              reminderAnchor.month,
+              reminderAnchor.day,
               hour,
               minute,
             );
