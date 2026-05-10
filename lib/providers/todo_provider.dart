@@ -160,6 +160,29 @@ class TodoProvider extends ChangeNotifier {
         final delta = prev.dueDate == null
             ? Duration.zero
             : prev.dueDate!.difference(prev.date);
+        final nextDue = prev.dueDate == null ? null : next.add(delta);
+        DateTime? nextReminderAt;
+        // ignore: deprecated_member_use_from_same_package
+        final reminderEnabled = prev.reminder.enabled || prev.hasReminder;
+        if (reminderEnabled && nextDue != null) {
+          final hour = prev.reminder.enabled
+              ? prev.reminder.hour
+              // ignore: deprecated_member_use_from_same_package
+              : prev.reminderAt?.hour;
+          final minute = prev.reminder.enabled
+              ? prev.reminder.minute
+              // ignore: deprecated_member_use_from_same_package
+              : prev.reminderAt?.minute;
+          if (hour != null && minute != null) {
+            nextReminderAt = DateTime(
+              nextDue.year,
+              nextDue.month,
+              nextDue.day,
+              hour,
+              minute,
+            );
+          }
+        }
         _todos.add(
           TodoItem(
             title: prev.title,
@@ -169,13 +192,17 @@ class TodoProvider extends ChangeNotifier {
             listGroupId: prev.listGroupId,
             listGroupName: prev.listGroupName,
             tags: [...prev.tags],
-            dueDate: prev.dueDate == null ? null : next.add(delta),
+            dueDate: nextDue,
             date: next,
-            hasReminder: prev.hasReminder,
-            reminderAt: null,
+            hasReminder: reminderEnabled,
+            reminderAt: nextReminderAt,
+            reminder: prev.reminder,
+            focusLink: prev.focusLink,
+            timeTargetSeconds: prev.timeTargetSeconds,
             subtasks: prev.subtasks
                 .map((s) => Subtask(title: s.title, sortOrder: s.sortOrder))
                 .toList(),
+            autoToggleByChildren: prev.autoToggleByChildren,
             recurrence: prev.recurrence,
             sortOrder: prev.sortOrder,
           ),

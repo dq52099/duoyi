@@ -86,15 +86,24 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   void _load() {
     final provider = context.read<TodoProvider>();
     final todo = provider.todos.firstWhere((t) => t.id == widget.todoId);
-    _todo = todo;
-    _titleCtrl.text = todo.title;
-    _notesCtrl.text = todo.notes;
-    final sec = todo.timeTargetSeconds;
-    if (sec != null && sec > 0) {
-      _timeTargetCtrl.text = (sec ~/ 60).toString();
-    }
+    _syncDraftFromProvider(todo);
     _baseline = _snapshot(_todo);
     _state = _EditState.clean;
+  }
+
+  void _syncDraftFromProvider(TodoItem todo) {
+    _todo = todo;
+    if (_titleCtrl.text != todo.title) {
+      _titleCtrl.text = todo.title;
+    }
+    if (_notesCtrl.text != todo.notes) {
+      _notesCtrl.text = todo.notes;
+    }
+    final sec = todo.timeTargetSeconds;
+    final minutesText = sec != null && sec > 0 ? (sec ~/ 60).toString() : '';
+    if (_timeTargetCtrl.text != minutesText) {
+      _timeTargetCtrl.text = minutesText;
+    }
   }
 
   /// 任一可编辑字段变动时调用；根据是否偏离基线切换状态。
@@ -308,8 +317,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final nowForMirror = DateTime.now();
     DateTime? mirroredAt;
     if (r.enabled && r.hour != null && r.minute != null) {
-      final base = _todo.dueDate ?? nowForMirror;
+      final base = _todo.dueDate ?? _todo.reminderAt ?? nowForMirror;
       mirroredAt = DateTime(base.year, base.month, base.day, r.hour!, r.minute!);
+      if (_todo.dueDate == null && !mirroredAt.isAfter(nowForMirror)) {
+        mirroredAt = mirroredAt.add(const Duration(days: 1));
+      }
     }
     setState(() {
       // ignore: deprecated_member_use_from_same_package
@@ -329,7 +341,14 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     int? minute = current.minute;
     if (v && (hour == null || minute == null)) {
       final seed = _todo.reminderAt ??
-          _todo.dueDate ??
+          (_todo.dueDate == null
+              ? null
+              : DateTime(
+                  _todo.dueDate!.year,
+                  _todo.dueDate!.month,
+                  _todo.dueDate!.day,
+                  9,
+                )) ??
           DateTime.now().add(const Duration(hours: 1));
       hour = seed.hour;
       minute = seed.minute;
@@ -384,10 +403,13 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TodoProvider>();
-    _todo = provider.todos.firstWhere(
+    final providerTodo = provider.todos.firstWhere(
       (t) => t.id == widget.todoId,
       orElse: () => _todo,
     );
+    if (_state == _EditState.clean) {
+      _syncDraftFromProvider(providerTodo);
+    }
     final cs = Theme.of(context).colorScheme;
 
     // canPop 反映当前状态机是否允许直接 pop：

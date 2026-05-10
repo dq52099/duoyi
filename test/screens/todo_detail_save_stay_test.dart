@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:duoyi/models/todo.dart';
+import 'package:duoyi/models/recurrence.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/todo_detail_screen.dart';
 
@@ -182,6 +183,52 @@ void main() {
         expect(ModalRoute.of(after)!.isCurrent, isTrue);
         expect(identical(ModalRoute.of(after), before), isTrue);
         expect(find.text('无未保存改动'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '设置重复与到期提醒后保存：provider 持久化新值',
+      (tester) async {
+        final (provider, item) = await buildProviderWithOne();
+
+        await tester.pumpWidget(
+          buildApp(provider: provider, todoId: item.id),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('open-detail'));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('重复'));
+        await tester.tap(find.text('重复'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('每天'));
+        await tester.pump();
+        await tester.tap(find.widgetWithText(FilledButton, '保存'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('每天'), findsOneWidget);
+
+        await tester.ensureVisible(find.text('到期提醒'));
+        await tester.tap(find.text('到期提醒'));
+        await tester.pump();
+
+        expect(find.textContaining('闹钟 ·'), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.check));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final stored = provider.todos.firstWhere((t) => t.id == item.id);
+        expect(stored.recurrence.frequency, RecurrenceFrequency.daily);
+        expect(stored.reminder.enabled, isTrue);
+        expect(stored.reminder.hour, isNotNull);
+        expect(stored.reminder.minute, isNotNull);
+        // ignore: deprecated_member_use_from_same_package
+        expect(stored.hasReminder, isTrue);
+        // ignore: deprecated_member_use_from_same_package
+        expect(stored.reminderAt, isNotNull);
       },
     );
   });

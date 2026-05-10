@@ -3,6 +3,7 @@ import 'goal.dart' show FocusLink, ReminderConfig, ReminderKind;
 import 'recurrence.dart';
 
 const uuid = Uuid();
+const Object _copyWithUnset = Object();
 
 enum EisenhowerQuadrant {
   urgentImportant, // Q1 - red: Do First
@@ -290,22 +291,22 @@ class TodoItem {
     bool? isCompleted,
     EisenhowerQuadrant? quadrant,
     TodoPriority? priority,
-    String? listGroupId,
-    String? listGroupName,
+    Object? listGroupId = _copyWithUnset,
+    Object? listGroupName = _copyWithUnset,
     List<String>? tags,
-    DateTime? dueDate,
+    Object? dueDate = _copyWithUnset,
     DateTime? date,
     bool? hasReminder,
-    DateTime? reminderAt,
+    Object? reminderAt = _copyWithUnset,
     ReminderConfig? reminder,
     FocusLink? focusLink,
-    int? timeTargetSeconds,
+    Object? timeTargetSeconds = _copyWithUnset,
     List<PostponeRecord>? postponeHistory,
     List<Subtask>? subtasks,
     bool? autoToggleByChildren,
     int? sortOrder,
     RecurrenceRule? recurrence,
-    DateTime? completedAt,
+    Object? completedAt = _copyWithUnset,
     bool? isArchivedAfterRollover,
   }) =>
       TodoItem(
@@ -315,23 +316,35 @@ class TodoItem {
         isCompleted: isCompleted ?? this.isCompleted,
         quadrant: quadrant ?? this.quadrant,
         priority: priority ?? this.priority,
-        listGroupId: listGroupId ?? this.listGroupId,
-        listGroupName: listGroupName ?? this.listGroupName,
+        listGroupId: identical(listGroupId, _copyWithUnset)
+            ? this.listGroupId
+            : listGroupId as String?,
+        listGroupName: identical(listGroupName, _copyWithUnset)
+            ? this.listGroupName
+            : listGroupName as String?,
         tags: tags ?? this.tags,
-        dueDate: dueDate ?? this.dueDate,
+        dueDate: identical(dueDate, _copyWithUnset)
+            ? this.dueDate
+            : dueDate as DateTime?,
         date: date ?? this.date,
         hasReminder: hasReminder ?? this.hasReminder,
-        reminderAt: reminderAt ?? this.reminderAt,
+        reminderAt: identical(reminderAt, _copyWithUnset)
+            ? this.reminderAt
+            : reminderAt as DateTime?,
         reminder: reminder ?? this.reminder,
         focusLink: focusLink ?? this.focusLink,
-        timeTargetSeconds: timeTargetSeconds ?? this.timeTargetSeconds,
+        timeTargetSeconds: identical(timeTargetSeconds, _copyWithUnset)
+            ? this.timeTargetSeconds
+            : timeTargetSeconds as int?,
         postponeHistory: postponeHistory ?? this.postponeHistory,
         subtasks: subtasks ?? this.subtasks,
         autoToggleByChildren:
             autoToggleByChildren ?? this.autoToggleByChildren,
         sortOrder: sortOrder ?? this.sortOrder,
         recurrence: recurrence ?? this.recurrence,
-        completedAt: completedAt ?? this.completedAt,
+        completedAt: identical(completedAt, _copyWithUnset)
+            ? this.completedAt
+            : completedAt as DateTime?,
         isArchivedAfterRollover:
             isArchivedAfterRollover ?? this.isArchivedAfterRollover,
         createdAt: createdAt,
