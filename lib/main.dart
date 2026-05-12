@@ -56,11 +56,28 @@ final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 late ReminderScheduler _reminderScheduler;
 bool _initialExactAlarmGranted = false;
 
+Future<void> _startupGuard(String label, Future<void> Function() task) async {
+  try {
+    await task();
+  } catch (e, st) {
+    debugPrint('[startup] $label failed: $e\n$st');
+  }
+}
+
+Future<T?> _startupValue<T>(String label, Future<T?> Function() task) async {
+  try {
+    return await task();
+  } catch (e, st) {
+    debugPrint('[startup] $label failed: $e\n$st');
+    return null;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 首帧前初始化本地时区，保证后续 tz.TZDateTime.from(.., tz.local) 正确。
-  await LocalTimezoneResolver.init();
+  await _startupGuard('timezone', () => LocalTimezoneResolver.init());
 
   final todoProvider = TodoProvider();
   final habitProvider = HabitProvider();
@@ -90,31 +107,54 @@ void main() async {
   );
 
   await Future.wait([
-    todoProvider.loadFromStorage(),
-    habitProvider.loadFromStorage(),
-    pomodoroProvider.loadFromStorage(),
-    themeProvider.loadFromStorage(),
-    cloudSyncProvider.loadFromStorage(),
-    userProvider.loadFromStorage(),
-    countdownProvider.loadFromStorage(),
-    noteProvider.loadFromStorage(),
-    anniversaryProvider.loadFromStorage(),
-    diaryProvider.loadFromStorage(),
-    goalProvider.loadFromStorage(),
-    courseProvider.loadFromStorage(),
-    appLockProvider.loadFromStorage(),
-    preferencesProvider.loadFromStorage(),
-    timeAuditProvider.loadFromStorage(),
-    achievementProvider.loadFromStorage(),
-    notificationService.init(),
-    systemTray.init(),
-    HomeWidgetService.init(),
-    authProvider.loadFromStorage(),
-    aiService.loadFromStorage(),
+    _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
+    _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
+    _startupGuard('pomodoro storage', () => pomodoroProvider.loadFromStorage()),
+    _startupGuard('theme storage', () => themeProvider.loadFromStorage()),
+    _startupGuard(
+      'cloud sync storage',
+      () => cloudSyncProvider.loadFromStorage(),
+    ),
+    _startupGuard('user storage', () => userProvider.loadFromStorage()),
+    _startupGuard(
+      'countdown storage',
+      () => countdownProvider.loadFromStorage(),
+    ),
+    _startupGuard('note storage', () => noteProvider.loadFromStorage()),
+    _startupGuard(
+      'anniversary storage',
+      () => anniversaryProvider.loadFromStorage(),
+    ),
+    _startupGuard('diary storage', () => diaryProvider.loadFromStorage()),
+    _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
+    _startupGuard('course storage', () => courseProvider.loadFromStorage()),
+    _startupGuard('app lock storage', () => appLockProvider.loadFromStorage()),
+    _startupGuard(
+      'preferences storage',
+      () => preferencesProvider.loadFromStorage(),
+    ),
+    _startupGuard(
+      'time audit storage',
+      () => timeAuditProvider.loadFromStorage(),
+    ),
+    _startupGuard(
+      'achievement storage',
+      () => achievementProvider.loadFromStorage(),
+    ),
+    _startupGuard('notifications', () => notificationService.init()),
+    _startupGuard('system tray', () => systemTray.init()),
+    _startupGuard('home widget', () => HomeWidgetService.init()),
+    _startupGuard('auth storage', () => authProvider.loadFromStorage()),
+    _startupGuard('ai storage', () => aiService.loadFromStorage()),
   ]);
 
-  _initialExactAlarmGranted = await AlarmService.instance
-      .hasExactAlarmPermission();
+  try {
+    _initialExactAlarmGranted = await AlarmService.instance
+        .hasExactAlarmPermission();
+  } catch (e, st) {
+    debugPrint('[startup] exact alarm probe failed: $e\n$st');
+    _initialExactAlarmGranted = false;
+  }
 
   pomodoroProvider.attachNotifier(notificationService);
   pomodoroProvider.attachTimeAudit(timeAuditProvider);
@@ -129,10 +169,13 @@ void main() async {
 
   // 冷启动执行一次 Daily Rollover（归档昨日完成 + 顺延过期 + 派发重复目标）。
   // 须在 ReminderScheduler 初次同步之前，这样调度器拿到的已经是顺延 / 派发后的最新状态。
-  await CompletionVisibilityPolicy.runDailyRollover(
-    todoProvider,
-    DateTime.now(),
-    goalProvider: goalProvider,
+  await _startupGuard(
+    'daily rollover',
+    () => CompletionVisibilityPolicy.runDailyRollover(
+      todoProvider,
+      DateTime.now(),
+      goalProvider: goalProvider,
+    ),
   );
 
   // 提醒调度器：监听数据变化，幂等地同步本地通知队列
@@ -214,7 +257,7 @@ void main() async {
   noteProvider.addListener(refreshAchievements);
   themeProvider.addListener(refreshAchievements);
   // 初次同步
-  await resyncReminders();
+  await _startupGuard('initial reminder resync', resyncReminders);
   refreshUserStats();
   refreshAchievements();
 
@@ -311,17 +354,27 @@ void main() async {
   habitProvider.addListener(onDataChange);
   pomodoroProvider.addListener(onDataChange);
 
-  await _pushHomeWidget(
-    todoProvider,
-    habitProvider,
-    pomodoroProvider,
-    themeProvider,
+  await _startupGuard(
+    'initial home widget push',
+    () => _pushHomeWidget(
+      todoProvider,
+      habitProvider,
+      pomodoroProvider,
+      themeProvider,
+    ),
   );
 
-  HomeWidgetService.widgetClickedStream.listen(
-    (uri) => _handleWidgetUri(uri, pomodoroProvider),
+  try {
+    HomeWidgetService.widgetClickedStream.listen(
+      (uri) => _handleWidgetUri(uri, pomodoroProvider),
+    );
+  } catch (e, st) {
+    debugPrint('[startup] home widget stream failed: $e\n$st');
+  }
+  final initial = await _startupValue<Uri>(
+    'home widget initial launch',
+    () => HomeWidgetService.initialLaunchUri(),
   );
-  final initial = await HomeWidgetService.initialLaunchUri();
   if (initial != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleWidgetUri(initial, pomodoroProvider);

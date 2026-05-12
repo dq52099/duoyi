@@ -108,30 +108,38 @@ class AlarmService implements ReminderAlarmSink {
       },
     );
 
-    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    final launchPayload = launchDetails?.notificationResponse?.payload;
-    if (launchDetails?.didNotificationLaunchApp == true &&
-        launchPayload != null &&
-        launchPayload.isNotEmpty) {
-      _launchPayload = launchPayload;
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      final launchPayload = launchDetails?.notificationResponse?.payload;
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchPayload != null &&
+          launchPayload.isNotEmpty) {
+        _launchPayload = launchPayload;
+      }
+    } catch (e, st) {
+      debugPrint('[AlarmService] launch payload probe failed: $e\n$st');
     }
 
     if (_isAndroid) {
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      await android?.createNotificationChannel(
-        AndroidNotificationChannel(
-          channelId,
-          _channelName,
-          description: _channelDesc,
-          importance: Importance.max,
-          enableVibration: true,
-          vibrationPattern: _vibrationPattern,
-          playSound: true,
-        ),
-      );
+      try {
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        await android?.createNotificationChannel(
+          AndroidNotificationChannel(
+            channelId,
+            _channelName,
+            description: _channelDesc,
+            importance: Importance.max,
+            enableVibration: true,
+            vibrationPattern: _vibrationPattern,
+            playSound: true,
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('[AlarmService] channel setup failed: $e\n$st');
+      }
     }
 
     _initialized = true;

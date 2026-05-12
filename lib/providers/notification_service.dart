@@ -91,10 +91,6 @@ class NotificationService extends ChangeNotifier
     // （Importance.high）与 duoyi_alarm 渠道（由 AlarmService 使用）。
     await LocalNotifications.instance.init();
     await _loadHistory();
-    // 首次使用时尝试一次(用户可在偏好页再次申请)
-    if (!LocalNotifications.instance.permissionGranted) {
-      await LocalNotifications.instance.requestPermission();
-    }
   }
 
   Future<bool> requestPermission() =>

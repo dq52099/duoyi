@@ -53,36 +53,44 @@ class LocalNotifications {
       },
     );
 
-    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    final launchPayload = launchDetails?.notificationResponse?.payload;
-    if (launchDetails?.didNotificationLaunchApp == true &&
-        launchPayload != null &&
-        launchPayload.isNotEmpty) {
-      _launchPayload = launchPayload;
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      final launchPayload = launchDetails?.notificationResponse?.payload;
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchPayload != null &&
+          launchPayload.isNotEmpty) {
+        _launchPayload = launchPayload;
+      }
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] launch payload probe failed: $e\n$st');
     }
 
     // 建立默认渠道
     if (_isAndroid) {
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      await android?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'duoyi_general',
-          '多仪 · 常规',
-          description: '日常提醒(到期/打卡/番茄)',
-          importance: Importance.high,
-        ),
-      );
-      await android?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'duoyi_alarm',
-          '多仪 · 闹钟',
-          description: '重要提醒会发声',
-          importance: Importance.max,
-        ),
-      );
+      try {
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        await android?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'duoyi_general',
+            '多仪 · 常规',
+            description: '日常提醒(到期/打卡/番茄)',
+            importance: Importance.high,
+          ),
+        );
+        await android?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'duoyi_alarm',
+            '多仪 · 闹钟',
+            description: '重要提醒会发声',
+            importance: Importance.max,
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('[LocalNotifications] channel setup failed: $e\n$st');
+      }
     }
 
     _initialized = true;
@@ -109,7 +117,12 @@ class LocalNotifications {
   }
 
   Future<bool> requestPermission() async {
-    if (!_initialized) await init();
+    try {
+      if (!_initialized) await init();
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] init before permission failed: $e\n$st');
+      return false;
+    }
     if (_isAndroid) {
       try {
         final android = _plugin
