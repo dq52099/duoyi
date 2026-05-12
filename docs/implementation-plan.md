@@ -207,4 +207,4 @@
 - Phase B（M5-M7）已完成
 - Phase C（M8-M10）已完成
 - Phase D（M11-M14）已完成
-- Phase E 已进入发布验收：`flutter analyze`、`flutter test`、后端 `unittest` 已通过；本机缺 Android SDK，Android release build 交由 GitHub Actions 标签构建完成
+- Phase E 已完成发布链路：`flutter analyze`、`flutter test`、后端 `unittest`、GitHub Actions Android/Web 构建、`v1.0.8` GitHub Release、应用内 `releases/latest` 更新识别均已验证；小米真机通知仍需在实际设备上手工确认

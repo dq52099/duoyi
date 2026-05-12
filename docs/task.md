@@ -279,11 +279,11 @@
 
 - [x] T15.1 `flutter analyze`
 - [x] T15.2 `flutter test`
-- [~] T15.3 Android release build。
-- [ ] T15.4 小米真机通知回归。
-- [ ] T15.5 GitHub Actions 构建。
-- [ ] T15.6 发布 Release。
-- [ ] T15.7 应用内检查更新验证。
+- [x] T15.3 Android release build。
+- [~] T15.4 小米真机通知回归。
+- [x] T15.5 GitHub Actions 构建。
+- [x] T15.6 发布 Release。
+- [x] T15.7 应用内检查更新验证。
 
 验收：
 
