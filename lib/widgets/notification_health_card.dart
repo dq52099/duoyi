@@ -12,6 +12,7 @@ class NotificationHealthCard extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onOpenSystemSettings;
   final VoidCallback onSendTest;
+  final VoidCallback onSendScheduledTest;
   final VoidCallback onClearPending;
   final VoidCallback onRequestNotificationPermission;
   final VoidCallback onRequestExactAlarmPermission;
@@ -21,6 +22,7 @@ class NotificationHealthCard extends StatelessWidget {
     required this.onRefresh,
     required this.onOpenSystemSettings,
     required this.onSendTest,
+    required this.onSendScheduledTest,
     required this.onClearPending,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
@@ -84,6 +86,13 @@ class NotificationHealthCard extends StatelessWidget {
                 ? '触发一条测试通知，并写入通知历史'
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
+          ),
+          AppSettingsTile(
+            icon: Icons.alarm_add_outlined,
+            color: Colors.deepOrange,
+            title: '1 分钟后测试提醒',
+            subtitle: '验证系统定时调度，不只是立即通知',
+            onTap: onSendScheduledTest,
           ),
           AppSettingsTile(
             icon: Icons.settings_outlined,

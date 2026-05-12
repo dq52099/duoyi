@@ -227,6 +227,15 @@ void main() async {
 
   LocalNotifications.instance.onTap = handleNotificationPayload;
   AlarmService.instance.onTap = handleNotificationPayload;
+  final initialNotificationPayloads = <String>[];
+  final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
+  if (localLaunchPayload != null && localLaunchPayload.isNotEmpty) {
+    initialNotificationPayloads.add(localLaunchPayload);
+  }
+  final alarmLaunchPayload = AlarmService.instance.takeLaunchPayload();
+  if (alarmLaunchPayload != null && alarmLaunchPayload.isNotEmpty) {
+    initialNotificationPayloads.add(alarmLaunchPayload);
+  }
 
   // AI / CloudSync 依赖 AuthProvider 的 ApiClient
   aiService.attachClient(authProvider.client);
@@ -353,6 +362,14 @@ void main() async {
       child: const DuoyiApp(),
     ),
   );
+
+  if (initialNotificationPayloads.isNotEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final payload in initialNotificationPayloads.toSet()) {
+        handleNotificationPayload(payload);
+      }
+    });
+  }
 }
 
 Future<void> _pushHomeWidget(

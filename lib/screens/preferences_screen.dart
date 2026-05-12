@@ -324,7 +324,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     final alarmPending = await AlarmService.instance.pendingIds();
     DateTime? lastTestAt;
     for (final item in widget.notificationService.history) {
-      if (item.type == NotificationType.general && item.title == '测试通知') {
+      if (item.type == NotificationType.general &&
+          (item.title == '测试通知' || item.title == '定时测试通知')) {
         lastTestAt = item.scheduledTime;
         break;
       }
@@ -381,6 +382,18 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     await _refresh();
   }
 
+  Future<void> _sendScheduledTest() async {
+    await widget.notificationService.sendScheduledTest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('已安排 1 分钟后的测试提醒'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
   Future<void> _clearPending() async {
     await widget.notificationService.cancelAll();
     await AlarmService.instance.cancelAll();
@@ -411,6 +424,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
           onRefresh: _refresh,
           onOpenSystemSettings: () => _openAppSettings(context),
           onSendTest: _sendTest,
+          onSendScheduledTest: _sendScheduledTest,
           onClearPending: _clearPending,
           onRequestNotificationPermission: _requestNotificationPermission,
           onRequestExactAlarmPermission: _requestExactAlarmPermission,

@@ -290,6 +290,7 @@ class ReminderScheduler {
     }
     for (final id in _scheduledHabitIds.toList()) {
       await notif.cancelHabitReminder(id);
+      await alarm.cancel(_idFor('habit_$id'));
     }
     for (final id in _scheduledAnniIds.toList()) {
       await notif.cancelAnniversary(id);
@@ -345,7 +346,14 @@ class ReminderScheduler {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${payload.id}: $e',
           );
-          return false;
+          await notif.scheduleOnce(
+            id: payload.id,
+            title: payload.title,
+            body: payload.body,
+            when: payload.when,
+            payload: payload.payload,
+          );
+          return true;
         }
     }
   }
@@ -380,7 +388,16 @@ class ReminderScheduler {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${rule.key}: $e',
           );
-          return false;
+          await notif.scheduleDaily(
+            id: _idFor(rule.key),
+            title: rule.title,
+            body: rule.body,
+            hour: rule.hour!,
+            minute: rule.minute!,
+            weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
+            payload: rule.payload,
+          );
+          return true;
         }
     }
   }

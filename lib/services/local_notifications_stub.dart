@@ -43,6 +43,7 @@ class LocalNotifications {
   Future<void> cancelAll() async {}
   Future<List<int>> pendingIds() async => const [];
   Future<Set<String>?> notificationChannelIds() async => const <String>{};
+  String? takeLaunchPayload() => null;
 
   void Function(String payload)? onTap;
 }

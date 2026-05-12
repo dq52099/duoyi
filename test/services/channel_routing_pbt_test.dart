@@ -242,10 +242,7 @@ void main() {
         notif.scheduleOnceCalls.map((c) => c.id),
         contains(_ruleIntId('todo', todo.id, 'due')),
       );
-      expect(
-        notif.scheduleOnceCalls.single.payload,
-        'duoyi://todo/${todo.id}',
-      );
+      expect(notif.scheduleOnceCalls.single.payload, 'duoyi://todo/${todo.id}');
       expect(
         notif.scheduleDailyCalls.map((c) => c.id),
         contains(_ruleIntId('todo', todo.id, 'daily')),
@@ -303,9 +300,7 @@ void main() {
           ],
         ),
       );
-      notif.failScheduleOnceIds.add(
-        _ruleIntId('todo', todo.id, 'broken'),
-      );
+      notif.failScheduleOnceIds.add(_ruleIntId('todo', todo.id, 'broken'));
 
       await scheduler.syncTodos([todo]);
 
@@ -314,6 +309,34 @@ void main() {
         notif.scheduleDailyCalls.map((c) => c.id),
         contains(_ruleIntId('todo', todo.id, 'ok')),
       );
+    });
+
+    test('alarm 权限失败时回退到 push，避免提醒直接丢失', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(hours: 2));
+      final todo = TodoItem(
+        id: 'alarm-fallback',
+        title: '闹钟权限失败回退',
+        dueDate: due,
+        reminder: ReminderConfig(
+          enabled: true,
+          kind: ReminderKind.alarm,
+          hour: due.hour,
+          minute: due.minute,
+        ),
+      );
+      alarm.failFullScreenIds.add(_todoRuleIntId(todo));
+
+      await scheduler.syncTodos([todo]);
+
+      expect(
+        notif.scheduleOnceCalls.map((c) => c.id),
+        contains(_todoRuleIntId(todo)),
+      );
+      expect(notif.scheduleOnceCalls.single.payload, 'duoyi://todo/${todo.id}');
     });
   });
 
@@ -629,6 +652,8 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
   final List<_ScheduleFullScreenCall> scheduleFullScreenCalls = [];
   final List<_ScheduleDailyFullScreenCall> scheduleDailyFullScreenCalls = [];
   final List<int> cancelCalls = [];
+  final Set<int> failFullScreenIds = {};
+  final Set<int> failDailyFullScreenIds = {};
 
   @override
   Future<void> scheduleFullScreen({
@@ -640,6 +665,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     bool requireExactAlarm = true,
     bool fullScreen = true,
   }) async {
+    if (failFullScreenIds.remove(id)) {
+      throw const AlarmPermissionDeniedException('forced alarm failure');
+    }
     scheduleFullScreenCalls.add(
       _ScheduleFullScreenCall(
         id: id,
@@ -665,6 +693,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     bool requireExactAlarm = true,
     bool fullScreen = true,
   }) async {
+    if (failDailyFullScreenIds.remove(id)) {
+      throw const AlarmPermissionDeniedException('forced daily alarm failure');
+    }
     scheduleDailyFullScreenCalls.add(
       _ScheduleDailyFullScreenCall(
         id: id,

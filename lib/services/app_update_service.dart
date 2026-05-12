@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'app_update_installer.dart';
+
 /// Polls a GitHub repo's latest release and exposes update info.
 class AppUpdateService extends ChangeNotifier {
   final String repo; // e.g. "dq52099/duoyi"
@@ -11,14 +13,25 @@ class AppUpdateService extends ChangeNotifier {
 
   String? _latestVersion;
   String? _latestUrl;
+  String? _latestAssetName;
   String? _latestNotes;
   bool _checking = false;
+  bool _downloading = false;
+  bool _installing = false;
+  double? _downloadProgress;
+  String? _downloadedFilePath;
   String? _error;
 
   String? get latestVersion => _latestVersion;
   String? get latestUrl => _latestUrl;
+  String? get latestAssetName => _latestAssetName;
   String? get latestNotes => _latestNotes;
   bool get checking => _checking;
+  bool get downloading => _downloading;
+  bool get installing => _installing;
+  bool get busy => _checking || _downloading || _installing;
+  double? get downloadProgress => _downloadProgress;
+  String? get downloadedFilePath => _downloadedFilePath;
   String? get error => _error;
 
   bool get hasUpdate {
@@ -33,15 +46,21 @@ class AppUpdateService extends ChangeNotifier {
   Future<void> checkNow() async {
     _checking = true;
     _error = null;
+    _latestUrl = null;
+    _latestAssetName = null;
+    _downloadedFilePath = null;
     notifyListeners();
     try {
       final uri = Uri.parse(
         'https://api.github.com/repos/$repo/releases/latest',
       );
-      final resp = await http.get(uri, headers: {
-        'User-Agent': 'duoyi/1.0',
-        'Accept': 'application/vnd.github+json',
-      });
+      final resp = await http.get(
+        uri,
+        headers: {
+          'User-Agent': 'duoyi/1.0',
+          'Accept': 'application/vnd.github+json',
+        },
+      );
       if (resp.statusCode == 404) {
         _latestVersion = null;
         _error = '尚未发布 Release';
@@ -56,12 +75,68 @@ class AppUpdateService extends ChangeNotifier {
       _latestNotes = (data['body'] as String?)?.trim();
       final assets = data['assets'];
       if (assets is List) {
-        _latestUrl = _selectBestApkUrl(assets);
+        final asset = _selectBestApkAsset(assets);
+        _latestUrl = asset?['browser_download_url'] as String?;
+        _latestAssetName = asset?['name'] as String?;
       }
     } catch (e) {
       _error = e.toString();
     } finally {
       _checking = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> downloadAndInstallLatest() async {
+    if (_latestUrl == null) {
+      _error = '没有可下载的 APK';
+      notifyListeners();
+      return;
+    }
+    if (!AppUpdateInstaller.supportsInstall) {
+      _error = '当前平台不支持应用内 APK 更新';
+      notifyListeners();
+      return;
+    }
+
+    _error = null;
+    _downloading = true;
+    _installing = false;
+    _downloadProgress = 0;
+    notifyListeners();
+
+    try {
+      final path = await AppUpdateInstaller.downloadApk(
+        url: _latestUrl!,
+        fileName: _latestAssetName ?? 'duoyi-${latestVersion ?? 'latest'}.apk',
+        onProgress: (received, total) {
+          if (total != null && total > 0) {
+            _downloadProgress = (received / total).clamp(0, 1).toDouble();
+            notifyListeners();
+          }
+        },
+      );
+      _downloadedFilePath = path;
+      _downloading = false;
+      _installing = true;
+      _downloadProgress = 1;
+      notifyListeners();
+
+      final canInstall = await AppUpdateInstaller.canInstallPackages();
+      if (!canInstall) {
+        _installing = false;
+        _error = '需要允许多仪安装未知应用；授权后返回这里再次点击安装';
+        notifyListeners();
+        await AppUpdateInstaller.openInstallPermissionSettings();
+        return;
+      }
+
+      await AppUpdateInstaller.installApk(path);
+    } catch (e) {
+      _error = '更新失败: $e';
+    } finally {
+      _downloading = false;
+      _installing = false;
       notifyListeners();
     }
   }
@@ -80,18 +155,14 @@ class AppUpdateService extends ChangeNotifier {
     return 0;
   }
 
-  String? _selectBestApkUrl(List assets) {
-    final apkAssets = assets
-        .whereType<Map>()
-        .where((a) {
-          final name = ((a['name'] as String?) ?? '').toLowerCase();
-          return name.endsWith('.apk');
-        })
-        .toList()
-      ..sort((a, b) => _apkScore(b).compareTo(_apkScore(a)));
+  Map? _selectBestApkAsset(List assets) {
+    final apkAssets = assets.whereType<Map>().where((a) {
+      final name = ((a['name'] as String?) ?? '').toLowerCase();
+      return name.endsWith('.apk');
+    }).toList()..sort((a, b) => _apkScore(b).compareTo(_apkScore(a)));
 
     if (apkAssets.isEmpty) return null;
-    return apkAssets.first['browser_download_url'] as String?;
+    return apkAssets.first;
   }
 
   int _apkScore(Map asset) {

@@ -407,6 +407,33 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
+  Future<void> sendScheduledTest({
+    Duration delay = const Duration(minutes: 1),
+  }) async {
+    final when = DateTime.now().add(delay);
+    await LocalNotifications.instance.scheduleOnce(
+      id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+      title: '多仪 · 定时测试',
+      body: '如果你看到这条，定时提醒调度已经正常工作。',
+      when: when,
+      channelId: channelId,
+      payload: 'duoyi://tab/mine',
+    );
+    _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: '定时测试通知',
+        body:
+            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发',
+        scheduledTime: when,
+        type: NotificationType.general,
+      ),
+    );
+    await _saveHistory();
+    notifyListeners();
+  }
+
   void notifyAchievementUnlocked(Achievement achievement) {
     final title = '成就解锁：${achievement.title}';
     final body = achievement.description;

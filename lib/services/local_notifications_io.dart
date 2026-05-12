@@ -16,6 +16,7 @@ class LocalNotifications {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   bool _granted = false;
+  String? _launchPayload;
   bool get permissionGranted => _granted;
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
@@ -51,6 +52,14 @@ class LocalNotifications {
         if (payload != null && onTap != null) onTap!(payload);
       },
     );
+
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    final launchPayload = launchDetails?.notificationResponse?.payload;
+    if (launchDetails?.didNotificationLaunchApp == true &&
+        launchPayload != null &&
+        launchPayload.isNotEmpty) {
+      _launchPayload = launchPayload;
+    }
 
     // 建立默认渠道
     if (_isAndroid) {
@@ -102,12 +111,18 @@ class LocalNotifications {
   Future<bool> requestPermission() async {
     if (!_initialized) await init();
     if (_isAndroid) {
-      final status = await Permission.notification.request();
-      _granted = status.isGranted;
-      // 精准闹钟 (Android 12+) 需另外申请
       try {
-        await Permission.scheduleExactAlarm.request();
-      } catch (_) {}
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        _granted =
+            await android?.requestNotificationsPermission() ??
+            await Permission.notification.request().isGranted;
+      } catch (_) {
+        final status = await Permission.notification.request();
+        _granted = status.isGranted;
+      }
       return _granted;
     }
     if (_isIOS) {
@@ -302,6 +317,12 @@ class LocalNotifications {
     if (!_initialized) return const [];
     final pending = await _plugin.pendingNotificationRequests();
     return pending.map((e) => e.id).toList();
+  }
+
+  String? takeLaunchPayload() {
+    final payload = _launchPayload;
+    _launchPayload = null;
+    return payload;
   }
 
   Future<Set<String>?> notificationChannelIds() async {

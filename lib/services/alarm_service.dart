@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -50,6 +49,7 @@ class AlarmService implements ReminderAlarmSink {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  String? _launchPayload;
   bool get isInitialized => _initialized;
 
   /// Tap 回调（payload）——由主入口注册处理 deep link。
@@ -107,6 +107,14 @@ class AlarmService implements ReminderAlarmSink {
         if (payload != null && onTap != null) onTap!(payload);
       },
     );
+
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    final launchPayload = launchDetails?.notificationResponse?.payload;
+    if (launchDetails?.didNotificationLaunchApp == true &&
+        launchPayload != null &&
+        launchPayload.isNotEmpty) {
+      _launchPayload = launchPayload;
+    }
 
     if (_isAndroid) {
       final android = _plugin
@@ -208,7 +216,7 @@ class AlarmService implements ReminderAlarmSink {
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) rethrow;
       // 降级重试：精准闹钟权限缺失时，退化为非精准模式，让提醒至少还能响，
-      // 只是可能偏移几分钟；然后抛出结构化异常让调用方引导用户。
+      // 只是可能偏移几分钟。降级成功时视为已调度，避免上层误以为队列为空。
       if (requireExactAlarm) {
         try {
           await _plugin.zonedSchedule(
@@ -222,6 +230,7 @@ class AlarmService implements ReminderAlarmSink {
                 UILocalNotificationDateInterpretation.absoluteTime,
             payload: payload,
           );
+          return;
         } catch (_) {
           // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
         }
@@ -291,6 +300,7 @@ class AlarmService implements ReminderAlarmSink {
                   UILocalNotificationDateInterpretation.absoluteTime,
               payload: payload,
             );
+            continue;
           } catch (_) {
             // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
           }
@@ -353,8 +363,18 @@ class AlarmService implements ReminderAlarmSink {
   Future<bool> requestExactAlarmPermission() async {
     if (!_isAndroid) return true;
     try {
-      final status = await Permission.scheduleExactAlarm.request();
-      return status.isGranted;
+      if (!_initialized) await init();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final exactGranted = await android?.requestExactAlarmsPermission();
+      try {
+        await android?.requestFullScreenIntentPermission();
+      } catch (_) {
+        // Android 14+ 才有全屏 intent 开关，旧系统或厂商 ROM 不支持时忽略。
+      }
+      return exactGranted ?? true;
     } catch (_) {
       return false;
     }
@@ -368,11 +388,21 @@ class AlarmService implements ReminderAlarmSink {
   Future<bool> hasExactAlarmPermission() async {
     if (!_isAndroid) return true;
     try {
-      final status = await Permission.scheduleExactAlarm.status;
-      return status.isGranted;
+      if (!_initialized) await init();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      return await android?.canScheduleExactNotifications() ?? true;
     } catch (_) {
       return false;
     }
+  }
+
+  String? takeLaunchPayload() {
+    final payload = _launchPayload;
+    _launchPayload = null;
+    return payload;
   }
 
   NotificationDetails _notificationDetails({required bool fullScreen}) {
