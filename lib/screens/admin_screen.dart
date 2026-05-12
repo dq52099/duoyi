@@ -745,14 +745,34 @@ class _BackupSettingsTab extends StatefulWidget {
 class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   bool _loading = true;
   bool _saving = false;
+  bool _runningServerBackup = false;
   String? _error;
 
   bool _backupEnabled = true;
+  bool _serverBackupEnabled = true;
+  bool _openlistEnabled = false;
+  bool _backupEmailEnabled = false;
   final _maxSizeCtrl = TextEditingController(text: '2048');
   final _intervalCtrl = TextEditingController(text: '30');
   final _retainCtrl = TextEditingController(text: '0');
+  final _serverIntervalCtrl = TextEditingController(text: '720');
+  final _serverRetainCtrl = TextEditingController(text: '14');
+  final _openlistUrlCtrl = TextEditingController();
+  final _openlistPublicUrlCtrl = TextEditingController();
+  final _openlistUserCtrl = TextEditingController();
+  final _openlistPasswordCtrl = TextEditingController();
+  final _openlistPathCtrl = TextEditingController(text: '/duoyi-backups');
+  final _emailToCtrl = TextEditingController();
+  final _emailFromCtrl = TextEditingController();
+  final _smtpHostCtrl = TextEditingController();
+  final _smtpPortCtrl = TextEditingController(text: '465');
+  final _smtpUserCtrl = TextEditingController();
+  final _smtpPasswordCtrl = TextEditingController();
+  bool _openlistPasswordMasked = false;
+  bool _smtpPasswordMasked = false;
 
   List<Map<String, dynamic>> _backups = [];
+  List<Map<String, dynamic>> _serverBackups = [];
 
   @override
   void initState() {
@@ -765,6 +785,19 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     _maxSizeCtrl.dispose();
     _intervalCtrl.dispose();
     _retainCtrl.dispose();
+    _serverIntervalCtrl.dispose();
+    _serverRetainCtrl.dispose();
+    _openlistUrlCtrl.dispose();
+    _openlistPublicUrlCtrl.dispose();
+    _openlistUserCtrl.dispose();
+    _openlistPasswordCtrl.dispose();
+    _openlistPathCtrl.dispose();
+    _emailToCtrl.dispose();
+    _emailFromCtrl.dispose();
+    _smtpHostCtrl.dispose();
+    _smtpPortCtrl.dispose();
+    _smtpUserCtrl.dispose();
+    _smtpPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -783,7 +816,36 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               .toString();
       _retainCtrl.text = (((data['backup_retain_days'] as num?) ?? 0).toInt())
           .toString();
+      _serverBackupEnabled = data['server_backup_enabled'] != false;
+      _serverIntervalCtrl.text =
+          (((data['server_backup_interval_minutes'] as num?) ?? 720).toInt())
+              .toString();
+      _serverRetainCtrl.text =
+          (((data['server_backup_retain_days'] as num?) ?? 14).toInt())
+              .toString();
+      _openlistEnabled = data['openlist_backup_enabled'] == true;
+      _openlistUrlCtrl.text = (data['openlist_webdav_url'] ?? '').toString();
+      _openlistPublicUrlCtrl.text = (data['openlist_public_url'] ?? '')
+          .toString();
+      _openlistUserCtrl.text = (data['openlist_username'] ?? '').toString();
+      _openlistPasswordCtrl.text = (data['openlist_password'] ?? '').toString();
+      _openlistPasswordMasked = data['openlist_password_set'] == true;
+      _openlistPathCtrl.text =
+          (data['openlist_backup_path'] ?? '/duoyi-backups').toString();
+      _backupEmailEnabled = data['backup_email_enabled'] == true;
+      _emailToCtrl.text = (data['backup_email_to'] ?? '').toString();
+      _emailFromCtrl.text = (data['backup_email_from'] ?? '').toString();
+      _smtpHostCtrl.text = (data['backup_email_smtp_host'] ?? '').toString();
+      _smtpPortCtrl.text =
+          (((data['backup_email_smtp_port'] as num?) ?? 465).toInt())
+              .toString();
+      _smtpUserCtrl.text = (data['backup_email_smtp_username'] ?? '')
+          .toString();
+      _smtpPasswordCtrl.text = (data['backup_email_smtp_password'] ?? '')
+          .toString();
+      _smtpPasswordMasked = data['backup_email_smtp_password_set'] == true;
       _backups = await widget.api.listBackups();
+      _serverBackups = await widget.api.listServerBackups();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -794,13 +856,39 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await widget.api.client.patch('/api/admin/settings', {
+      final openlistPassword = _openlistPasswordCtrl.text.trim();
+      final smtpPassword = _smtpPasswordCtrl.text.trim();
+      final payload = <String, Object?>{
         'backup_enabled': _backupEnabled,
         'backup_max_size_kb': int.tryParse(_maxSizeCtrl.text.trim()) ?? 2048,
         'backup_interval_minutes':
             int.tryParse(_intervalCtrl.text.trim()) ?? 30,
         'backup_retain_days': int.tryParse(_retainCtrl.text.trim()) ?? 0,
-      });
+        'server_backup_enabled': _serverBackupEnabled,
+        'server_backup_interval_minutes':
+            int.tryParse(_serverIntervalCtrl.text.trim()) ?? 720,
+        'server_backup_retain_days':
+            int.tryParse(_serverRetainCtrl.text.trim()) ?? 14,
+        'openlist_backup_enabled': _openlistEnabled,
+        'openlist_webdav_url': _openlistUrlCtrl.text.trim(),
+        'openlist_public_url': _openlistPublicUrlCtrl.text.trim(),
+        'openlist_username': _openlistUserCtrl.text.trim(),
+        'openlist_backup_path': _openlistPathCtrl.text.trim(),
+        'backup_email_enabled': _backupEmailEnabled,
+        'backup_email_to': _emailToCtrl.text.trim(),
+        'backup_email_from': _emailFromCtrl.text.trim(),
+        'backup_email_smtp_host': _smtpHostCtrl.text.trim(),
+        'backup_email_smtp_port':
+            int.tryParse(_smtpPortCtrl.text.trim()) ?? 465,
+        'backup_email_smtp_username': _smtpUserCtrl.text.trim(),
+      };
+      if (!(_openlistPasswordMasked && openlistPassword.contains('***'))) {
+        payload['openlist_password'] = openlistPassword;
+      }
+      if (!(_smtpPasswordMasked && smtpPassword.contains('***'))) {
+        payload['backup_email_smtp_password'] = smtpPassword;
+      }
+      await widget.api.client.patch('/api/admin/settings', payload);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -815,6 +903,27 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _runServerBackup() async {
+    setState(() => _runningServerBackup = true);
+    try {
+      await widget.api.runServerBackup();
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('服务器备份已执行')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _runningServerBackup = false);
     }
   }
 
@@ -919,6 +1028,237 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        AppSettingsSection(
+          title: '服务器备份',
+          subtitle: '定期打包后台数据库，上传到 OpenList，并可邮件通知',
+          children: [
+            AppSwitchTile(
+              icon: Icons.dns_outlined,
+              color: Colors.indigo,
+              value: _serverBackupEnabled,
+              title: '启用服务器定期备份',
+              subtitle: '后台进程按间隔生成数据库 ZIP 快照',
+              onChanged: (v) => setState(() => _serverBackupEnabled = v),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _serverIntervalCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '服务器备份间隔 (分钟)',
+                      prefixIcon: Icon(Icons.schedule_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _serverRetainCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '本地保留天数',
+                      prefixIcon: Icon(Icons.history_toggle_off_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AppSwitchTile(
+              icon: Icons.cloud_upload_outlined,
+              color: Colors.blue,
+              value: _openlistEnabled,
+              title: '上传到 OpenList',
+              subtitle: '使用 OpenList WebDAV 保存服务器备份包',
+              onChanged: (v) => setState(() => _openlistEnabled = v),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _openlistUrlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'OpenList WebDAV URL',
+                hintText: 'http://127.0.0.1:5244/dav',
+                prefixIcon: Icon(Icons.link_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _openlistPublicUrlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'OpenList 公开 URL (可选)',
+                prefixIcon: Icon(Icons.public_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _openlistUserCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'OpenList 用户名',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _openlistPasswordCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'OpenList 密码',
+                      helperText: _openlistPasswordMasked
+                          ? '已配置，保持不动即不修改'
+                          : null,
+                      prefixIcon: const Icon(Icons.password_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _openlistPathCtrl,
+              decoration: const InputDecoration(
+                labelText: 'OpenList 备份目录',
+                hintText: '/duoyi-backups',
+                prefixIcon: Icon(Icons.folder_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            AppSwitchTile(
+              icon: Icons.mark_email_read_outlined,
+              color: Colors.teal,
+              value: _backupEmailEnabled,
+              title: '备份完成后发送邮件',
+              subtitle: '支持 SMTP，失败会写入备份记录',
+              onChanged: (v) => setState(() => _backupEmailEnabled = v),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _emailToCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '通知收件人',
+                      prefixIcon: Icon(Icons.alternate_email),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _emailFromCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '发件人',
+                      prefixIcon: Icon(Icons.outgoing_mail),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _smtpHostCtrl,
+              decoration: const InputDecoration(
+                labelText: 'SMTP Host',
+                prefixIcon: Icon(Icons.dns_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _smtpPortCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'SMTP 端口',
+                      prefixIcon: Icon(Icons.numbers_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _smtpUserCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'SMTP 用户名',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _smtpPasswordCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'SMTP 密码',
+                helperText: _smtpPasswordMasked ? '已配置，保持不动即不修改' : null,
+                prefixIcon: const Icon(Icons.key_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(_saving ? '保存中…' : '保存配置'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _runningServerBackup ? null : _runServerBackup,
+                  icon: _runningServerBackup
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.backup_outlined),
+                  label: Text(_runningServerBackup ? '备份中…' : '立即备份'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        AppSectionHeader(
+          title: '服务器备份记录',
+          subtitle: '${_serverBackups.length} 条',
+        ),
+        const SizedBox(height: 6),
+        if (_serverBackups.isEmpty)
+          Text(
+            '暂无服务器备份',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.58),
+            ),
+          ),
+        ..._serverBackups.take(10).map((b) {
+          final status = (b['status'] ?? '-').toString();
+          return AppListTileCard(
+            margin: const EdgeInsets.only(bottom: 8),
+            dense: true,
+            leading: Icon(Icons.backup_outlined, color: cs.primary),
+            title: Text((b['filename'] ?? '-').toString()),
+            subtitle: Text(
+              '${b['created_at'] ?? '-'} · $status · ${b['size_bytes'] ?? 0} bytes',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+              ),
+            ),
+          );
+        }),
         const SizedBox(height: 12),
         AppSectionHeader(
           title: '所有用户备份',

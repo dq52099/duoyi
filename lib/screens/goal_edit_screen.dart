@@ -438,6 +438,10 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                     onRequestExactAlarmPermission: () async {
                       await AlarmService.instance.requestExactAlarmPermission();
                     },
+                    onRequestFullScreenIntentPermission: () async {
+                      await AlarmService.instance
+                          .requestFullScreenIntentPermission();
+                    },
                   );
                 },
               ),

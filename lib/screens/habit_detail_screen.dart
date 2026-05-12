@@ -52,6 +52,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           Future<void> save() async {
             final messenger = ScaffoldMessenger.of(context);
             final navigator = Navigator.of(sheetCtx);
+            final habitProvider = context.read<HabitProvider>();
             final name = nameCtrl.text.trim();
             if (name.isEmpty) {
               messenger.showSnackBar(const SnackBar(content: Text('请填写习惯名称')));
@@ -82,6 +83,25 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       .map((d) => d - 1)
                       .toList()
                 : habit.activeWeekdays;
+            if (hasReminder) {
+              final notificationService = context.read<NotificationService?>();
+              final granted =
+                  notificationService == null ||
+                  await notificationService.requestPermission();
+              if (notificationService != null) {
+                await AlarmService.instance.requestExactAlarmPermission();
+                await AlarmService.instance.requestFullScreenIntentPermission();
+              }
+              if (!granted) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('系统通知未授权，习惯提醒不会响铃或弹出'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+            }
 
             final updated = habit.copyWith(
               name: name,
@@ -94,7 +114,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
               remindMinute: hasReminder ? reminderRule.minute : null,
             );
 
-            await context.read<HabitProvider>().updateHabit(habit.id, updated);
+            await habitProvider.updateHabit(habit.id, updated);
             if (!mounted) return;
             navigator.pop();
             messenger.showSnackBar(
@@ -223,6 +243,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                   allowSnooze: false,
                   hasAnchorDate: false,
                   maxRules: 1,
+                  defaultKind: ReminderKind.alarm,
                   onChanged: (plan) => setSt(() => reminderPlan = plan),
                 ),
                 const SizedBox(height: DesignTokens.spaceSm),
@@ -231,7 +252,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     final notif = context.watch<NotificationService?>();
                     if (notif == null) return const SizedBox.shrink();
                     return ReminderHealthHint(
-                      reminderKind: ReminderKind.push,
+                      reminderKind: ReminderKind.alarm,
                       onOpenSystemSettings: () => _openSystemSettings(context),
                       onRequestNotificationPermission: () async {
                         await context
@@ -241,6 +262,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       onRequestExactAlarmPermission: () async {
                         await AlarmService.instance
                             .requestExactAlarmPermission();
+                      },
+                      onRequestFullScreenIntentPermission: () async {
+                        await AlarmService.instance
+                            .requestFullScreenIntentPermission();
                       },
                     );
                   },
@@ -443,7 +468,7 @@ ReminderPlan _habitReminderPlan(Habit habit) {
         type: fullWeek
             ? ReminderRuleType.dailyTime
             : ReminderRuleType.weeklyTime,
-        kind: ReminderKind.push,
+        kind: ReminderKind.alarm,
         hour: habit.remindHour,
         minute: habit.remindMinute,
         weekdays: fullWeek ? const <int>[] : weekdays,

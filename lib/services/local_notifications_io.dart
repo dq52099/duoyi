@@ -74,18 +74,23 @@ class LocalNotifications {
             >();
         await android?.createNotificationChannel(
           const AndroidNotificationChannel(
-            'duoyi_general',
-            '多仪 · 常规',
-            description: '日常提醒(到期/打卡/番茄)',
+            'duoyi_general_alerts_v2',
+            '多仪 · 通知提醒',
+            description: '日常提醒会发声并弹出横幅',
             importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
           ),
         );
         await android?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'duoyi_alarm',
-            '多仪 · 闹钟',
-            description: '重要提醒会发声',
+          AndroidNotificationChannel(
+            'duoyi_alarm_fullscreen_v2',
+            '多仪 · 强提醒',
+            description: '重要提醒会响铃、震动并弹出确认界面',
             importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         );
       } catch (e, st) {
@@ -177,22 +182,33 @@ class LocalNotifications {
     return _granted;
   }
 
-  NotificationDetails _details({String channelId = 'duoyi_general'}) {
+  NotificationDetails _details({String channelId = 'duoyi_general_alerts_v2'}) {
+    final isAlarm = channelId == 'duoyi_alarm_fullscreen_v2';
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
-        channelId == 'duoyi_alarm' ? '多仪 · 闹钟' : '多仪 · 常规',
-        channelDescription: channelId == 'duoyi_alarm'
-            ? '重要提醒会发声'
-            : '日常提醒(到期/打卡/番茄)',
-        importance: channelId == 'duoyi_alarm'
-            ? Importance.max
-            : Importance.high,
-        priority: Priority.high,
+        isAlarm ? '多仪 · 强提醒' : '多仪 · 通知提醒',
+        channelDescription: isAlarm ? '重要提醒会响铃、震动并弹出确认界面' : '日常提醒会发声并弹出横幅',
+        importance: isAlarm ? Importance.max : Importance.high,
+        priority: isAlarm ? Priority.max : Priority.high,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: isAlarm
+            ? AudioAttributesUsage.alarm
+            : AudioAttributesUsage.notification,
+        visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
       ),
-      iOS: const DarwinNotificationDetails(),
-      macOS: const DarwinNotificationDetails(),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      ),
+      macOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      ),
       linux: const LinuxNotificationDetails(),
     );
   }
@@ -209,7 +225,7 @@ class LocalNotifications {
       id,
       title,
       body,
-      _details(channelId: channelId ?? 'duoyi_general'),
+      _details(channelId: channelId ?? 'duoyi_general_alerts_v2'),
       payload: payload,
     );
   }
@@ -229,7 +245,7 @@ class LocalNotifications {
       title,
       body,
       tz.TZDateTime.from(when, tz.local),
-      _details(channelId: channelId ?? 'duoyi_general'),
+      _details(channelId: channelId ?? 'duoyi_general_alerts_v2'),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -250,7 +266,7 @@ class LocalNotifications {
     List<int>? weekdays,
   }) async {
     if (!_initialized) await init();
-    final details = _details(channelId: channelId ?? 'duoyi_general');
+    final details = _details(channelId: channelId ?? 'duoyi_general_alerts_v2');
 
     if (weekdays == null || weekdays.isEmpty) {
       // 每天

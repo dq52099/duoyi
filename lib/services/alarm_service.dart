@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../core/local_timezone_resolver.dart';
+import '../core/platform_info.dart';
 import 'reminder_sinks.dart';
 
 /// 精准闹钟权限缺失异常。
@@ -56,9 +57,14 @@ class AlarmService implements ReminderAlarmSink {
   void Function(String payload)? onTap;
 
   /// Android 闹钟通道标识。
-  static const String channelId = 'duoyi_alarm';
-  static const String _channelName = '多仪 · 闹钟';
-  static const String _channelDesc = '到点必须处理的强提醒';
+  ///
+  /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
+  /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
+  /// 继续吞掉习惯提醒。
+  static const String channelId = 'duoyi_alarm_fullscreen_v2';
+  static const String legacyChannelId = 'duoyi_alarm';
+  static const String _channelName = '多仪 · 强提醒';
+  static const String _channelDesc = '到点响铃、震动并弹出确认界面的提醒';
 
   /// 震动模式：静 0 → 震 500 → 静 500 → 震 500（毫秒）。
   /// `Int64List` 无法 const 化，使用 late final 缓存。
@@ -68,6 +74,21 @@ class AlarmService implements ReminderAlarmSink {
     500,
     500,
   ]);
+  static const List<AndroidNotificationAction> _habitActions =
+      <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'habit_checkin',
+          '完成打卡',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'habit_open',
+          '打开',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ];
 
   /// 初始化插件与通道；幂等。
   Future<void> init() async {
@@ -135,6 +156,7 @@ class AlarmService implements ReminderAlarmSink {
             enableVibration: true,
             vibrationPattern: _vibrationPattern,
             playSound: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         );
       } catch (e, st) {
@@ -189,6 +211,9 @@ class AlarmService implements ReminderAlarmSink {
       playSound: true,
       enableVibration: true,
       vibrationPattern: _vibrationPattern,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      visibility: NotificationVisibility.public,
+      actions: _actionsForPayload(payload),
       icon: '@mipmap/ic_launcher',
     );
     const iosDetails = DarwinNotificationDetails(
@@ -261,7 +286,10 @@ class AlarmService implements ReminderAlarmSink {
   }) async {
     if (!_initialized) await init();
 
-    final details = _notificationDetails(fullScreen: fullScreen);
+    final details = _notificationDetails(
+      fullScreen: fullScreen,
+      payload: payload,
+    );
     final normalized = weekdays == null || weekdays.isEmpty
         ? const <int>[]
         : weekdays.where((w) => w >= 1 && w <= 7).toSet().toList();
@@ -377,15 +405,32 @@ class AlarmService implements ReminderAlarmSink {
             AndroidFlutterLocalNotificationsPlugin
           >();
       final exactGranted = await android?.requestExactAlarmsPermission();
-      try {
-        await android?.requestFullScreenIntentPermission();
-      } catch (_) {
-        // Android 14+ 才有全屏 intent 开关，旧系统或厂商 ROM 不支持时忽略。
-      }
       return exactGranted ?? true;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> requestFullScreenIntentPermission() async {
+    if (!_isAndroid) return true;
+    try {
+      if (!_initialized) await init();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      return await android?.requestFullScreenIntentPermission() ?? true;
+    } catch (e, st) {
+      debugPrint(
+        '[AlarmService] full screen intent permission failed: $e\n$st',
+      );
+      return hasFullScreenIntentPermission();
+    }
+  }
+
+  Future<bool> hasFullScreenIntentPermission() async {
+    if (!_isAndroid) return true;
+    return PlatformInfo.canUseFullScreenIntent();
   }
 
   /// 查询当前是否已授予精准闹钟权限（不弹系统对话框）。
@@ -413,7 +458,10 @@ class AlarmService implements ReminderAlarmSink {
     return payload;
   }
 
-  NotificationDetails _notificationDetails({required bool fullScreen}) {
+  NotificationDetails _notificationDetails({
+    required bool fullScreen,
+    String? payload,
+  }) {
     final androidDetails = AndroidNotificationDetails(
       channelId,
       _channelName,
@@ -425,6 +473,9 @@ class AlarmService implements ReminderAlarmSink {
       playSound: true,
       enableVibration: true,
       vibrationPattern: _vibrationPattern,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      visibility: NotificationVisibility.public,
+      actions: _actionsForPayload(payload),
       icon: '@mipmap/ic_launcher',
     );
     const iosDetails = DarwinNotificationDetails(
@@ -443,6 +494,11 @@ class AlarmService implements ReminderAlarmSink {
   }
 
   int _subId(int base, int weekday) => base * 10 + weekday;
+
+  List<AndroidNotificationAction>? _actionsForPayload(String? payload) {
+    if (payload == null || !payload.startsWith('duoyi://habit/')) return null;
+    return _habitActions;
+  }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);

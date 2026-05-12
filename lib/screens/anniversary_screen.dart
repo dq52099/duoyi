@@ -568,31 +568,40 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 6),
-            Row(
-              children: [
-                ChoiceChip(
-                  label: const Text('公历'),
-                  selected: _cal == AnniversaryCalendarType.solar,
-                  onSelected: (_) =>
-                      setState(() => _cal = AnniversaryCalendarType.solar),
+            SegmentedButton<AnniversaryCalendarType>(
+              segments: const [
+                ButtonSegment(
+                  value: AnniversaryCalendarType.solar,
+                  icon: Icon(Icons.wb_sunny_outlined),
+                  label: Text('公历'),
                 ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('农历'),
-                  selected: _cal == AnniversaryCalendarType.lunar,
-                  onSelected: (_) =>
-                      setState(() => _cal = AnniversaryCalendarType.lunar),
+                ButtonSegment(
+                  value: AnniversaryCalendarType.lunar,
+                  icon: Icon(Icons.nightlight_round),
+                  label: Text('农历'),
                 ),
               ],
+              selected: {_cal},
+              onSelectionChanged: (value) => setState(() => _cal = value.first),
             ),
             const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: Text(
-                '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+              leading: Icon(
+                _cal == AnniversaryCalendarType.solar
+                    ? Icons.calendar_today_outlined
+                    : Icons.nightlight_outlined,
               ),
-              subtitle: Text('农历: ${lunar.toString()}'),
+              title: Text(
+                _cal == AnniversaryCalendarType.solar
+                    ? '公历 ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'
+                    : '农历 ${lunar.toString()}',
+              ),
+              subtitle: Text(
+                _cal == AnniversaryCalendarType.solar
+                    ? '对应农历: ${lunar.toString()}'
+                    : '对应公历: ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
                 final picked = await showDatePicker(

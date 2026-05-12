@@ -112,12 +112,11 @@ class AdminApi {
     required int feedbackId,
     required String reply,
     String status = 'resolved',
-  }) =>
-      client.post('/api/admin/feedback/reply', {
-        'feedback_id': feedbackId,
-        'reply': reply,
-        'status': status,
-      });
+  }) => client.post('/api/admin/feedback/reply', {
+    'feedback_id': feedbackId,
+    'reply': reply,
+    'status': status,
+  });
 
   Future<void> deleteFeedback(int id) =>
       client.delete('/api/admin/feedback/$id');
@@ -162,4 +161,12 @@ class AdminApi {
 
   Future<void> wipeBackup(String userId) =>
       client.delete('/api/admin/backups/$userId');
+
+  Future<List<Map<String, dynamic>>> listServerBackups() async {
+    final list = await client.getList('/api/admin/server-backups');
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> runServerBackup() =>
+      client.post('/api/admin/server-backups/run');
 }

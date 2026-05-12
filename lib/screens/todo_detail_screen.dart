@@ -595,6 +595,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   onRequestExactAlarmPermission: () async {
                     await AlarmService.instance.requestExactAlarmPermission();
                   },
+                  onRequestFullScreenIntentPermission: () async {
+                    await AlarmService.instance
+                        .requestFullScreenIntentPermission();
+                  },
                 );
               },
             ),

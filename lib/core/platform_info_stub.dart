@@ -25,4 +25,5 @@ class PlatformInfo {
   static bool get isFuchsia => false;
 
   static Future<AndroidDeviceInfoLite?> getAndroidDeviceInfo() async => null;
+  static Future<bool> canUseFullScreenIntent() async => true;
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/core/platform_info.dart';
+import 'package:duoyi/providers/notification_service.dart';
+import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/permission_health_service.dart';
 import 'package:duoyi/widgets/notification_health_card.dart';
 
@@ -16,7 +18,11 @@ void main() {
     final report = NotificationHealthReport(
       notificationGranted: true,
       exactAlarmGranted: true,
-      channelIds: <String>{'duoyi_general', 'duoyi_alarm'},
+      fullScreenIntentGranted: true,
+      channelIds: <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+      },
       androidDevice: const AndroidDeviceInfoLite(
         manufacturer: 'Xiaomi',
         brand: 'xiaomi',
@@ -54,6 +60,7 @@ void main() {
               onClearPending: () => clearCount++,
               onRequestNotificationPermission: () {},
               onRequestExactAlarmPermission: () {},
+              onRequestFullScreenIntentPermission: () {},
             ),
           ),
         ),

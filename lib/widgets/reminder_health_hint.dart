@@ -9,6 +9,7 @@ class ReminderHealthHint extends StatefulWidget {
   final VoidCallback onOpenSystemSettings;
   final Future<void> Function() onRequestNotificationPermission;
   final Future<void> Function() onRequestExactAlarmPermission;
+  final Future<void> Function() onRequestFullScreenIntentPermission;
 
   const ReminderHealthHint({
     super.key,
@@ -16,6 +17,7 @@ class ReminderHealthHint extends StatefulWidget {
     required this.onOpenSystemSettings,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
+    required this.onRequestFullScreenIntentPermission,
   });
 
   @override
@@ -63,6 +65,11 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
     await _refresh();
   }
 
+  Future<void> _handleFullScreenIntentPermission() async {
+    await widget.onRequestFullScreenIntentPermission();
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<NotificationHealthReport>(
@@ -81,6 +88,8 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
         final report = snap.data;
         final notificationGranted = report?.notificationGranted ?? false;
         final exactGranted = report?.exactAlarmGranted ?? false;
+        final fullScreenIntentGranted =
+            report?.fullScreenIntentGranted ?? false;
         final isXiaomi = report?.isXiaomiLike ?? false;
         final alarmKind = widget.reminderKind == ReminderKind.alarm;
 
@@ -103,6 +112,12 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
             action = _handleExactAlarmPermission;
             actionLabel = '去授权';
             icon = Icons.alarm_off_outlined;
+          } else if (alarmKind && !fullScreenIntentGranted) {
+            status = PermissionHealthStatus.blocked;
+            subtitle = '弹出屏幕权限未允许，强提醒可能只显示在通知栏';
+            action = _handleFullScreenIntentPermission;
+            actionLabel = '去授权';
+            icon = Icons.phonelink_lock_outlined;
           } else if (report.hasWarnings) {
             status = PermissionHealthStatus.warning;
             subtitle = isXiaomi
@@ -119,7 +134,7 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
             icon = Icons.help_outline;
           } else {
             status = PermissionHealthStatus.ok;
-            subtitle = alarmKind ? '系统通知和精准闹钟均已就绪' : '系统通知已授权，提醒可正常进入通知中心';
+            subtitle = alarmKind ? '系统通知、精准闹钟和弹屏权限均已就绪' : '系统通知已授权，提醒可正常进入通知中心';
             action = widget.onOpenSystemSettings;
             actionLabel = '系统设置';
             icon = Icons.notifications_active_outlined;

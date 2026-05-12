@@ -65,4 +65,14 @@ class PlatformInfo {
       return null;
     }
   }
+
+  static Future<bool> canUseFullScreenIntent() async {
+    if (!isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('canUseFullScreenIntent') ??
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

@@ -370,6 +370,19 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     await _refresh();
   }
 
+  Future<void> _requestFullScreenIntentPermission() async {
+    final granted = await AlarmService.instance
+        .requestFullScreenIntentPermission();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(granted ? '弹出屏幕权限已允许' : '弹出屏幕权限未允许'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
   Future<void> _sendTest() async {
     await widget.notificationService.sendTest();
     if (!mounted) return;
@@ -428,6 +441,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
           onClearPending: _clearPending,
           onRequestNotificationPermission: _requestNotificationPermission,
           onRequestExactAlarmPermission: _requestExactAlarmPermission,
+          onRequestFullScreenIntentPermission:
+              _requestFullScreenIntentPermission,
         );
       },
     );

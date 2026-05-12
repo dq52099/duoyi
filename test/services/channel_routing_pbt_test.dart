@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/models/goal.dart';
+import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/services/alarm_service.dart';
@@ -14,9 +15,9 @@ import 'package:duoyi/services/reminder_sinks.dart';
 /// Feature: app-alignment-overhaul
 /// Property 14 (P14): ∀ `ReminderConfig r`,
 ///   `r.kind = push  ⟹ 调度最终落到 ReminderNotificationSink.scheduleOnce`
-///                     (NotificationService，channel = `duoyi_general`)；
+///                     (NotificationService，channel = `duoyi_general_alerts_v2`)；
 ///   `r.kind = alarm ⟹ 调度最终落到 ReminderAlarmSink.scheduleFullScreen`
-///                     (AlarmService，channel = `duoyi_alarm`)。
+///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v2`)。
 ///
 /// Validates: Requirements 4.4, 4.5
 ///
@@ -28,7 +29,7 @@ import 'package:duoyi/services/reminder_sinks.dart';
 ///   - 断言：
 ///       * push 项全部只出现在 Notification 侧，Alarm 侧无相应 id；
 ///       * alarm 项全部只出现在 Alarm 侧，Notification 侧无相应 id；
-///       * 两者的常量 channel id 与设计一致（`duoyi_general` / `duoyi_alarm`）。
+///       * 两者的常量 channel id 与设计一致。
 void main() {
   /// 固定种子，保证"随机"测试在 CI / 本地完全可复现。
   const int kSeed = 42;
@@ -39,8 +40,8 @@ void main() {
   test('channel id 常量与设计 §2.4 / §3.6 保持一致', () {
     // P14 的其中一半约束是"用对通道 id"：由 NotificationService / AlarmService
     // 的类级常量承载，Scheduler 不重复传递。这里显式断言，防止后续被误改。
-    expect(NotificationService.channelId, 'duoyi_general');
-    expect(AlarmService.channelId, 'duoyi_alarm');
+    expect(NotificationService.channelId, 'duoyi_general_alerts_v2');
+    expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v2');
   });
 
   group('P14 - 通道路由（Todo）', () {
@@ -408,36 +409,52 @@ void main() {
     });
   });
 
-  group('P14 - Habit 路径始终只走 push（通道单向约束）', () {
-    test('syncHabits 不会触发 AlarmSink（当前设计：habit 仅 push）', () async {
-      // Habit 模型暂无 ReminderKind 字段，R4.4 当前等价于"habit 恒走 push"。
-      // 本用例是 P14 的配套反例：无论 habit 如何随机，都不应流向 alarm sink。
-      final rng = Random(kSeed);
+  group('P14 - Habit 路径走强提醒', () {
+    test('syncHabits 下发全屏闹钟并携带确认打卡 payload', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
       final scheduler = ReminderScheduler(notif, alarm: alarm);
-
-      // 本测试不构造完整 Habit（避免拉入 HabitProvider 等副作用），
-      // 直接断言：没有任何 syncTodos / syncGoals 的 alarm 项时
-      // （todos/goals 均关闭 reminder），alarm sink 保持干净。
-      final todos = List<TodoItem>.generate(
-        5,
-        (i) => TodoItem(
-          title: 'no-reminder-$i',
-          dueDate: DateTime.now().add(Duration(hours: 1 + rng.nextInt(10))),
-          // 默认 reminder = disabled，不下发任何通道。
-        ),
-      );
-      final goals = List<GoalItem>.generate(
-        5,
-        (i) => GoalItem(title: 'no-reminder-goal-$i'),
+      final habit = Habit(
+        id: 'habit-alarm',
+        name: '喝水',
+        remind: true,
+        remindHour: 8,
+        remindMinute: 30,
+        activeWeekdays: const [0, 2, 4],
       );
 
-      await scheduler.syncTodos(todos);
-      await scheduler.syncGoals(goals);
+      await scheduler.syncHabits([habit]);
 
-      expect(notif.scheduleOnceCalls, isEmpty);
-      expect(alarm.scheduleFullScreenCalls, isEmpty);
+      expect(notif.scheduleHabitReminderCalls, isEmpty);
+      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
+      final call = alarm.scheduleDailyFullScreenCalls.single;
+      expect(call.id, _idFor('habit_${habit.id}'));
+      expect(call.title, contains('习惯打卡'));
+      expect(call.body, contains(habit.name));
+      expect(call.hour, 8);
+      expect(call.minute, 30);
+      expect(call.weekdays, [1, 3, 5]);
+      expect(call.payload, 'duoyi://habit/${habit.id}?confirm=1');
+      expect(call.fullScreen, isTrue);
+    });
+
+    test('alarm 权限失败时回退到 push，避免习惯提醒丢失', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final habit = Habit(
+        id: 'habit-fallback',
+        name: '晨练',
+        remind: true,
+        remindHour: 7,
+        remindMinute: 15,
+      );
+      alarm.failDailyFullScreenIds.add(_idFor('habit_${habit.id}'));
+
+      await scheduler.syncHabits([habit]);
+
+      expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
+      expect(notif.scheduleHabitReminderCalls, [habit.id]);
     });
   });
 }
@@ -537,16 +554,22 @@ class _ScheduleFullScreenCall {
 
 class _ScheduleDailyFullScreenCall {
   final int id;
+  final String title;
+  final String body;
   final int hour;
   final int minute;
   final List<int>? weekdays;
+  final String? payload;
   final bool fullScreen;
 
   const _ScheduleDailyFullScreenCall({
     required this.id,
+    required this.title,
+    required this.body,
     required this.hour,
     required this.minute,
     required this.weekdays,
+    required this.payload,
     required this.fullScreen,
   });
 }
@@ -699,9 +722,12 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     scheduleDailyFullScreenCalls.add(
       _ScheduleDailyFullScreenCall(
         id: id,
+        title: title,
+        body: body,
         hour: hour,
         minute: minute,
         weekdays: weekdays,
+        payload: payload,
         fullScreen: fullScreen,
       ),
     );

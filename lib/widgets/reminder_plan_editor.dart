@@ -16,6 +16,7 @@ class ReminderPlanEditor extends StatelessWidget {
   final bool allowSnooze;
   final bool hasAnchorDate;
   final int? maxRules;
+  final ReminderKind defaultKind;
 
   const ReminderPlanEditor({
     super.key,
@@ -30,6 +31,7 @@ class ReminderPlanEditor extends StatelessWidget {
     this.allowSnooze = true,
     this.hasAnchorDate = true,
     this.maxRules,
+    this.defaultKind = ReminderKind.push,
   });
 
   @override
@@ -111,7 +113,7 @@ class ReminderPlanEditor extends StatelessWidget {
         : ReminderRuleType.dailyTime;
     return ReminderRule(
       type: type,
-      kind: ReminderKind.push,
+      kind: defaultKind,
       hour: seed.hour,
       minute: minute,
       weekdays: type == ReminderRuleType.weeklyTime
@@ -130,6 +132,7 @@ class ReminderPlanEditor extends StatelessWidget {
         allowWeekly: allowWeekly,
         allowSnooze: allowSnooze,
         hasAnchorDate: hasAnchorDate,
+        defaultKind: defaultKind,
       ),
     );
     if (edited == null) return;
@@ -229,6 +232,7 @@ class _ReminderRuleSheet extends StatefulWidget {
   final bool allowWeekly;
   final bool allowSnooze;
   final bool hasAnchorDate;
+  final ReminderKind defaultKind;
 
   const _ReminderRuleSheet({
     required this.initial,
@@ -237,6 +241,7 @@ class _ReminderRuleSheet extends StatefulWidget {
     required this.allowWeekly,
     required this.allowSnooze,
     required this.hasAnchorDate,
+    required this.defaultKind,
   });
 
   @override
@@ -280,8 +285,8 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       _type = _availableTypes.first;
     }
     _kind = widget.allowAlarm
-        ? r?.kind ?? ReminderKind.push
-        : ReminderKind.push;
+        ? r?.kind ?? widget.defaultKind
+        : widget.defaultKind;
     _time = TimeOfDay(hour: r?.hour ?? now.hour, minute: r?.minute ?? 0);
     _offsetMinutes = r?.offsetMinutes ?? -30;
     _weekdays = r?.weekdays.isNotEmpty == true
@@ -475,7 +480,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       id: widget.initial?.id,
       enabled: _enabled,
       type: type,
-      kind: widget.allowAlarm ? _kind : ReminderKind.push,
+      kind: widget.allowAlarm ? _kind : widget.defaultKind,
       hour: _time.hour,
       minute: _time.minute,
       offsetMinutes: type == ReminderRuleType.relativeToDue

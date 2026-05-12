@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/core/platform_info.dart';
+import 'package:duoyi/providers/notification_service.dart';
+import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/permission_health_service.dart';
 
 void main() {
@@ -8,6 +10,7 @@ void main() {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => false,
       exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
       isAndroidReader: () => true,
       isIOSReader: () => false,
       androidDeviceReader: () async => const AndroidDeviceInfoLite(
@@ -16,7 +19,10 @@ void main() {
         model: 'SM-S9180',
         sdkInt: 34,
       ),
-      channelIdsReader: () async => <String>{'duoyi_general', 'duoyi_alarm'},
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+      },
     );
 
     final report = await service.check();
@@ -34,6 +40,7 @@ void main() {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => true,
       exactAlarmGrantedReader: () async => false,
+      fullScreenIntentGrantedReader: () async => true,
       isAndroidReader: () => true,
       isIOSReader: () => false,
       androidDeviceReader: () async => const AndroidDeviceInfoLite(
@@ -42,7 +49,7 @@ void main() {
         model: 'Pixel 8',
         sdkInt: 34,
       ),
-      channelIdsReader: () async => <String>{'duoyi_general'},
+      channelIdsReader: () async => <String>{NotificationService.channelId},
     );
 
     final report = await service.check();
@@ -62,6 +69,7 @@ void main() {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => true,
       exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
       isAndroidReader: () => true,
       isIOSReader: () => false,
       androidDeviceReader: () async => const AndroidDeviceInfoLite(
@@ -70,7 +78,10 @@ void main() {
         model: '2210132C',
         sdkInt: 34,
       ),
-      channelIdsReader: () async => <String>{'duoyi_general', 'duoyi_alarm'},
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+      },
     );
 
     final report = await service.check();
@@ -88,6 +99,38 @@ void main() {
         'xiaomi_lockscreen',
         'xiaomi_battery',
       ]),
+    );
+  });
+
+  test('弹出屏幕权限缺失时标为阻断状态', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => false,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+      },
+    );
+
+    final report = await service.check();
+
+    expect(report.summaryStatus, PermissionHealthStatus.blocked);
+    final fullScreen = report.checks.firstWhere(
+      (check) => check.id == 'full_screen_intent_permission',
+    );
+    expect(fullScreen.status, PermissionHealthStatus.blocked);
+    expect(
+      fullScreen.action,
+      PermissionHealthAction.requestFullScreenIntentPermission,
     );
   });
 }

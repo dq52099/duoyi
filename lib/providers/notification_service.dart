@@ -66,7 +66,7 @@ class NotificationService extends ChangeNotifier
   static const _kHistoryKey = 'duoyi_notif_history';
 
   /// 本服务使用的唯一通道 id。
-  static const String channelId = 'duoyi_general';
+  static const String channelId = 'duoyi_general_alerts_v2';
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;

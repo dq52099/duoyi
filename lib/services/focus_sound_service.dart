@@ -23,7 +23,7 @@ class FocusSoundService {
 
   String _currentSound = 'none';
   bool _isPlaying = false;
-  double _volume = 0.35;
+  double _volume = 0.85;
 
   /// 当前正在播放的音轨 id（`'none'` 表示未播）。
   String get currentSound => _currentSound;

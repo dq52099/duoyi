@@ -16,6 +16,7 @@ class NotificationHealthCard extends StatelessWidget {
   final VoidCallback onClearPending;
   final VoidCallback onRequestNotificationPermission;
   final VoidCallback onRequestExactAlarmPermission;
+  final VoidCallback onRequestFullScreenIntentPermission;
 
   const NotificationHealthCard({
     super.key,
@@ -26,6 +27,7 @@ class NotificationHealthCard extends StatelessWidget {
     required this.onClearPending,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
+    required this.onRequestFullScreenIntentPermission,
     this.report,
     this.loading = false,
     this.errorText,
@@ -72,6 +74,8 @@ class NotificationHealthCard extends StatelessWidget {
                 onRequestNotificationPermission:
                     onRequestNotificationPermission,
                 onRequestExactAlarmPermission: onRequestExactAlarmPermission,
+                onRequestFullScreenIntentPermission:
+                    onRequestFullScreenIntentPermission,
                 onOpenSystemSettings: onOpenSystemSettings,
               ),
               const SizedBox(height: 2),
@@ -196,12 +200,14 @@ class _HealthCheckTile extends StatelessWidget {
   final PermissionHealthCheck check;
   final VoidCallback onRequestNotificationPermission;
   final VoidCallback onRequestExactAlarmPermission;
+  final VoidCallback onRequestFullScreenIntentPermission;
   final VoidCallback onOpenSystemSettings;
 
   const _HealthCheckTile({
     required this.check,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
+    required this.onRequestFullScreenIntentPermission,
     required this.onOpenSystemSettings,
   });
 
@@ -212,6 +218,8 @@ class _HealthCheckTile extends StatelessWidget {
         onRequestNotificationPermission,
       PermissionHealthAction.requestExactAlarmPermission =>
         onRequestExactAlarmPermission,
+      PermissionHealthAction.requestFullScreenIntentPermission =>
+        onRequestFullScreenIntentPermission,
       PermissionHealthAction.openAppSettings => onOpenSystemSettings,
       null => null,
     };

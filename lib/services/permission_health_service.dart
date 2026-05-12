@@ -8,6 +8,7 @@ enum PermissionHealthStatus { ok, warning, blocked, unknown }
 enum PermissionHealthAction {
   requestNotificationPermission,
   requestExactAlarmPermission,
+  requestFullScreenIntentPermission,
   openAppSettings,
 }
 
@@ -34,6 +35,7 @@ class PermissionHealthCheck {
 class NotificationHealthReport {
   final bool notificationGranted;
   final bool exactAlarmGranted;
+  final bool fullScreenIntentGranted;
   final Set<String>? channelIds;
   final AndroidDeviceInfoLite? androidDevice;
   final bool isAndroid;
@@ -44,6 +46,7 @@ class NotificationHealthReport {
   const NotificationHealthReport({
     required this.notificationGranted,
     required this.exactAlarmGranted,
+    required this.fullScreenIntentGranted,
     required this.channelIds,
     required this.androidDevice,
     required this.isAndroid,
@@ -98,7 +101,7 @@ class NotificationHealthReport {
     if (hasUnknown) {
       return '部分系统状态无法自动读取';
     }
-    return '系统通知、渠道与精准闹钟均正常';
+    return '系统通知、渠道、精准闹钟与弹屏权限均正常';
   }
 }
 
@@ -111,6 +114,7 @@ class PermissionHealthService {
 
   final BoolReader _notificationGrantedReader;
   final BoolReader _exactAlarmGrantedReader;
+  final BoolReader _fullScreenIntentGrantedReader;
   final bool Function() _isAndroidReader;
   final bool Function() _isIOSReader;
   final AndroidDeviceReader _androidDeviceReader;
@@ -119,6 +123,7 @@ class PermissionHealthService {
   PermissionHealthService({
     BoolReader? notificationGrantedReader,
     BoolReader? exactAlarmGrantedReader,
+    BoolReader? fullScreenIntentGrantedReader,
     bool Function()? isAndroidReader,
     bool Function()? isIOSReader,
     AndroidDeviceReader? androidDeviceReader,
@@ -127,6 +132,8 @@ class PermissionHealthService {
            notificationGrantedReader ?? _defaultNotificationGranted,
        _exactAlarmGrantedReader =
            exactAlarmGrantedReader ?? _defaultExactAlarmGranted,
+       _fullScreenIntentGrantedReader =
+           fullScreenIntentGrantedReader ?? _defaultFullScreenIntentGranted,
        _isAndroidReader = isAndroidReader ?? (() => PlatformInfo.isAndroid),
        _isIOSReader = isIOSReader ?? (() => PlatformInfo.isIOS),
        _androidDeviceReader =
@@ -136,6 +143,7 @@ class PermissionHealthService {
   PermissionHealthService._()
     : _notificationGrantedReader = _defaultNotificationGranted,
       _exactAlarmGrantedReader = _defaultExactAlarmGranted,
+      _fullScreenIntentGrantedReader = _defaultFullScreenIntentGranted,
       _isAndroidReader = (() => PlatformInfo.isAndroid),
       _isIOSReader = (() => PlatformInfo.isIOS),
       _androidDeviceReader = PlatformInfo.getAndroidDeviceInfo,
@@ -147,6 +155,10 @@ class PermissionHealthService {
 
   static Future<bool> _defaultExactAlarmGranted() async {
     return AlarmService.instance.hasExactAlarmPermission();
+  }
+
+  static Future<bool> _defaultFullScreenIntentGranted() async {
+    return AlarmService.instance.hasFullScreenIntentPermission();
   }
 
   static Future<Set<String>?> _defaultChannelIds() async {
@@ -169,6 +181,9 @@ class PermissionHealthService {
     final notificationGranted = await _notificationGrantedReader();
     final exactAlarmGranted = isAndroid
         ? await _exactAlarmGrantedReader()
+        : true;
+    final fullScreenIntentGranted = isAndroid
+        ? await _fullScreenIntentGrantedReader()
         : true;
     final device = isAndroid ? await _androidDeviceReader() : null;
     final channelIds = isAndroid ? await _channelIdsReader() : const <String>{};
@@ -210,6 +225,30 @@ class PermissionHealthService {
         ),
       );
 
+      final fullScreenRelevant = sdkInt == null || sdkInt >= 34;
+      checks.add(
+        PermissionHealthCheck(
+          id: 'full_screen_intent_permission',
+          title: '弹出屏幕权限',
+          subtitle: fullScreenRelevant
+              ? (fullScreenIntentGranted
+                    ? '已允许，强提醒可弹出确认界面'
+                    : '未允许，锁屏或桌面时可能只进入通知栏')
+              : 'Android 14 以下通常无需单独申请',
+          status: fullScreenRelevant
+              ? (fullScreenIntentGranted
+                    ? PermissionHealthStatus.ok
+                    : PermissionHealthStatus.blocked)
+              : PermissionHealthStatus.ok,
+          action: fullScreenRelevant && !fullScreenIntentGranted
+              ? PermissionHealthAction.requestFullScreenIntentPermission
+              : null,
+          actionLabel: fullScreenRelevant && !fullScreenIntentGranted
+              ? '去授权'
+              : null,
+        ),
+      );
+
       final channelRelevant = sdkInt == null || sdkInt >= 26;
       if (channelRelevant) {
         final required = <String>{
@@ -232,7 +271,7 @@ class PermissionHealthService {
               id: 'notification_channels',
               title: '通知渠道',
               subtitle: missing.isEmpty
-                  ? 'duoyi_general / duoyi_alarm 均已创建'
+                  ? '通知提醒 / 强提醒渠道均已创建'
                   : '缺少 ${missing.join('、')} 渠道',
               status: missing.isEmpty
                   ? PermissionHealthStatus.ok
@@ -305,6 +344,7 @@ class PermissionHealthService {
     return NotificationHealthReport(
       notificationGranted: notificationGranted,
       exactAlarmGranted: exactAlarmGranted,
+      fullScreenIntentGranted: fullScreenIntentGranted,
       channelIds: channelIds,
       androidDevice: device,
       isAndroid: isAndroid,

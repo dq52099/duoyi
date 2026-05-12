@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
+import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
+import '../services/alarm_service.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
 import '../widgets/empty_state.dart';
@@ -31,6 +33,27 @@ class _HabitScreenState extends State<HabitScreen>
   void dispose() {
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  Future<bool> _ensureHabitReminderReady() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final notificationService = context.read<NotificationService?>();
+    final granted =
+        notificationService == null ||
+        await notificationService.requestPermission();
+    if (notificationService != null) {
+      await AlarmService.instance.requestExactAlarmPermission();
+      await AlarmService.instance.requestFullScreenIntentPermission();
+    }
+    if (!granted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('系统通知未授权，习惯提醒不会响铃或弹出'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return granted;
   }
 
   void _showAddDialog() {
@@ -196,14 +219,21 @@ class _HabitScreenState extends State<HabitScreen>
                     Switch(
                       value: remindEnabled,
                       onChanged: (v) async {
-                        setSt(() => remindEnabled = v);
-                        if (v && remindTime == null) {
+                        if (!v) {
+                          setSt(() => remindEnabled = false);
+                          return;
+                        }
+                        if (remindTime == null) {
                           final t = await showTimePicker(
                             context: ctx,
                             initialTime: const TimeOfDay(hour: 20, minute: 0),
                           );
                           if (t != null) setSt(() => remindTime = t);
                         }
+                        if (remindTime == null) return;
+                        final ready = await _ensureHabitReminderReady();
+                        if (!mounted) return;
+                        setSt(() => remindEnabled = ready);
                       },
                     ),
                   ],
@@ -302,9 +332,17 @@ class _HabitScreenState extends State<HabitScreen>
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (nameCtrl.text.trim().isNotEmpty) {
-                        context.read<HabitProvider>().addHabit(
+                        final habitProvider = context.read<HabitProvider>();
+                        final navigator = Navigator.of(ctx);
+                        final shouldRemind =
+                            remindEnabled && remindTime != null;
+                        final reminderReady = shouldRemind
+                            ? await _ensureHabitReminderReady()
+                            : false;
+                        if (!mounted || !ctx.mounted) return;
+                        await habitProvider.addHabit(
                           Habit(
                             id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
@@ -312,12 +350,12 @@ class _HabitScreenState extends State<HabitScreen>
                             colorValue: selectedColor,
                             kind: selectedKind,
                             targetCount: int.tryParse(targetCtrl.text) ?? 1,
-                            remind: remindEnabled && remindTime != null,
+                            remind: shouldRemind && reminderReady,
                             remindHour: remindTime?.hour,
                             remindMinute: remindTime?.minute,
                           ),
                         );
-                        Navigator.pop(ctx);
+                        navigator.pop();
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -621,36 +659,55 @@ class _HabitCheckinCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              SizedBox(
+                width: 112,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.remove, size: 20),
-                      onPressed: () => provider.decrementHabit(habit.id),
-                      color: Colors.grey.shade600,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        '${habit.todayCount()}/${habit.targetCount}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                          color: isDone ? const Color(0xFF4CAF50) : null,
-                        ),
+                    FilledButton.icon(
+                      onPressed: isDone
+                          ? null
+                          : () => provider.incrementHabit(habit.id),
+                      icon: Icon(isDone ? Icons.check : Icons.check_circle),
+                      label: Text(isDone ? '已完成' : '打卡'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Color(habit.colorValue),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade200,
+                        disabledForegroundColor: Colors.grey.shade600,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                       ),
                     ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.add, size: 20),
-                      onPressed: () => provider.incrementHabit(habit.id),
-                      color: isDone ? Colors.grey : Color(habit.colorValue),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${habit.todayCount()}/${habit.targetCount}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                            color: isDone
+                                ? const Color(0xFF4CAF50)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (habit.todayCount() > 0) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => provider.decrementHabit(habit.id),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.undo,
+                                size: 15,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

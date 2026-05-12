@@ -1,5 +1,7 @@
 package com.duoyi.duoyi
 
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -29,6 +31,14 @@ class MainActivity : FlutterActivity() {
                                 "sdkInt" to Build.VERSION.SDK_INT,
                             ),
                         )
+                    }
+                    "canUseFullScreenIntent" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            result.success(manager.canUseFullScreenIntent())
+                        } else {
+                            result.success(true)
+                        }
                     }
                     else -> result.notImplemented()
                 }
