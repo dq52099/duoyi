@@ -30,7 +30,7 @@ class EmptySurfaceEntry {
 
   @override
   String toString() =>
-      '${file}: ${reason}${fixTicketId == null ? '' : ' [${fixTicketId}]'}';
+      '$file: $reason${fixTicketId == null ? '' : ' [$fixTicketId]'}';
 }
 
 /// 空架子扫描器。
@@ -54,7 +54,8 @@ class EmptySurfaceAuditor {
     ),
     EmptySurfaceEntry(
       file: 'lib/services/recurrence_engine.dart',
-      reason: 'RecurrenceEngine 尚未实现，编辑页"下一派发日"使用 RecurrenceRule.nextAfter 临时回退',
+      reason:
+          'RecurrenceEngine 尚未实现，编辑页"下一派发日"使用 RecurrenceRule.nextAfter 临时回退',
       fixTicketId: '22.1',
     ),
     EmptySurfaceEntry(

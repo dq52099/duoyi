@@ -28,6 +28,8 @@ class HomeWidgetService {
     required int pomodoroToday,
     required BrandStrings strings,
     List<String> todoTop3 = const [],
+    List<String> todoTop3Ids = const [],
+    String todayEventSummary = '今日没有日程',
   }) async {
     if (!_supported) return;
     try {
@@ -46,12 +48,28 @@ class HomeWidgetService {
           todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
         ),
         HomeWidget.saveWidgetData<String>(
+          'todo_top3_1_id',
+          todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
           'todo_top3_2',
           todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
         ),
         HomeWidget.saveWidgetData<String>(
+          'todo_top3_2_id',
+          todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
           'todo_top3_3',
           todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'todo_top3_3_id',
+          todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'today_event_summary',
+          todayEventSummary,
         ),
       ]);
       await HomeWidget.updateWidget(

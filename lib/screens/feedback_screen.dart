@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});
@@ -85,144 +87,256 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
   }
 
+  String _categoryLabel(String category) {
+    switch (category) {
+      case 'feature':
+        return '功能建议';
+      case 'bug':
+        return '问题反馈';
+      case 'wish':
+        return '许愿池';
+      default:
+        return '其他';
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'resolved':
+        return '已处理';
+      case 'closed':
+        return '已关闭';
+      case 'in_progress':
+        return '处理中';
+      default:
+        return '待处理';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('反馈与许愿'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: AppBar(title: const Text('反馈与许愿')),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          children: [
+            AppSurfaceCard(
+              padding: const EdgeInsets.all(16),
+              gradient: LinearGradient(
+                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              child: Row(
                 children: [
-                  const Text(
-                    '提交新反馈',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: _category,
-                    decoration: const InputDecoration(
-                      labelText: '分类',
-                      isDense: true,
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'feature', child: Text('功能建议')),
-                      DropdownMenuItem(value: 'bug', child: Text('问题反馈')),
-                      DropdownMenuItem(value: 'wish', child: Text('许愿池')),
-                      DropdownMenuItem(value: 'other', child: Text('其他')),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _category = v ?? 'feature'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _contentCtrl,
-                    minLines: 3,
-                    maxLines: 6,
-                    decoration: const InputDecoration(
-                      labelText: '描述一下你想反馈或希望增加的功能',
+                    child: Icon(
+                      Icons.feedback_outlined,
+                      color: cs.primary,
+                      size: 28,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      onPressed: _submit,
-                      child: const Text('提交'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '反馈与许愿',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          auth.state.isLoggedIn
+                              ? '把功能建议、问题反馈和想要的能力直接写在这里'
+                              : '登录后可以提交反馈并查看处理记录',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.66),
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            '我的反馈',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_items.isEmpty)
-            EmptyState(
-              icon: Icons.feedback_outlined,
-              message: _error ?? '还没有反馈记录',
-            )
-          else
-            ..._items.map((f) {
-              final status = (f['status'] ?? 'open').toString();
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
+            const SizedBox(height: 12),
+            AppSettingsSection(
+              title: '提交新反馈',
+              subtitle: '功能建议、问题反馈或许愿都可以写在这里',
+              children: [
+                AppDropdownField<String>(
+                  initialValue: _category,
+                  labelText: '分类',
+                  items: const [
+                    DropdownMenuItem(value: 'feature', child: Text('功能建议')),
+                    DropdownMenuItem(value: 'bug', child: Text('问题反馈')),
+                    DropdownMenuItem(value: 'wish', child: Text('许愿池')),
+                    DropdownMenuItem(value: 'other', child: Text('其他')),
+                  ],
+                  onChanged: (v) => setState(() => _category = v ?? 'feature'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _contentCtrl,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: '描述一下你想反馈或希望增加的功能',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: _submit,
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('提交反馈'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AppSectionHeader(
+              title: '我的反馈',
+              subtitle: _loading ? '正在加载' : _error ?? '最近提交的记录',
+              padding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 8),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_items.isEmpty)
+              EmptyState(
+                icon: Icons.feedback_outlined,
+                message: _error ?? '还没有反馈记录',
+                actionLabel: '刷新',
+                onAction: _load,
+              )
+            else
+              ..._items.map((f) {
+                final status = (f['status'] ?? 'open').toString();
+                final reply = (f['admin_reply'] ?? '').toString();
+                final category = _categoryLabel(
+                  (f['category'] ?? '').toString(),
+                );
+                final statusColor = _statusColor(status);
+
+                return AppSurfaceCard(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Text(
-                            (f['category'] ?? '').toString(),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              category,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: cs.primary,
+                              ),
                             ),
                           ),
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                              horizontal: 8,
+                              vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: _statusColor(
-                                status,
-                              ).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
+                              color: statusColor.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
-                              status,
+                              _statusLabel(status),
                               style: TextStyle(
-                                color: _statusColor(status),
+                                color: statusColor,
                                 fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 10),
                       Text(
                         (f['content'] ?? '').toString(),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      if ((f['admin_reply'] ?? '').toString().isNotEmpty) ...[
-                        const Divider(),
-                        Text(
-                          '管理员回复',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface,
+                          height: 1.45,
                         ),
-                        Text(
-                          (f['admin_reply'] ?? '').toString(),
-                          style: const TextStyle(fontSize: 13),
+                      ),
+                      if (reply.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '管理员回复',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: cs.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                reply,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                      height: 1.45,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ],
                   ),
-                ),
-              );
-            }),
-        ],
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

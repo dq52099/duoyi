@@ -20,33 +20,30 @@ import 'package:duoyi/models/todo.dart';
 /// Requirements: 2.2
 void main() {
   group('TodoItem JSON backward compatibility', () {
-    test(
-      '1. minimal legacy JSON parses with safe defaults for new fields',
-      () {
-        final today = DateTime(2025, 1, 15, 9, 0).toIso8601String();
-        // ignore: deprecated_member_use_from_same_package
-        final todo = TodoItem.fromJson(<String, dynamic>{
-          'id': 'legacy-todo-1',
-          'title': '旧任务',
-          'quadrant': 1,
-          'priority': 0,
-          'date': today,
-          'createdAt': today,
-          'updatedAt': today,
-        });
+    test('1. minimal legacy JSON parses with safe defaults for new fields', () {
+      final today = DateTime(2025, 1, 15, 9, 0).toIso8601String();
+      // ignore: deprecated_member_use_from_same_package
+      final todo = TodoItem.fromJson(<String, dynamic>{
+        'id': 'legacy-todo-1',
+        'title': '旧任务',
+        'quadrant': 1,
+        'priority': 0,
+        'date': today,
+        'createdAt': today,
+        'updatedAt': today,
+      });
 
-        expect(todo.id, 'legacy-todo-1');
-        expect(todo.title, '旧任务');
-        expect(todo.focusLink.enabled, isFalse);
-        expect(todo.reminder.enabled, isFalse);
-        expect(todo.timeTargetSeconds, isNull);
-        expect(todo.postponeHistory, isEmpty);
-        expect(todo.tags, isEmpty);
-        expect(todo.subtasks, isEmpty);
-        // 重复规则缺省为 none。
-        expect(todo.recurrence.frequency, RecurrenceFrequency.none);
-      },
-    );
+      expect(todo.id, 'legacy-todo-1');
+      expect(todo.title, '旧任务');
+      expect(todo.focusLink.enabled, isFalse);
+      expect(todo.reminder.enabled, isFalse);
+      expect(todo.timeTargetSeconds, isNull);
+      expect(todo.postponeHistory, isEmpty);
+      expect(todo.tags, isEmpty);
+      expect(todo.subtasks, isEmpty);
+      // 重复规则缺省为 none。
+      expect(todo.recurrence.frequency, RecurrenceFrequency.none);
+    });
 
     test(
       '2. legacy hasReminder + reminderAt migrates to ReminderConfig(alarm)',
@@ -76,33 +73,30 @@ void main() {
       },
     );
 
-    test(
-      '3. new reminder takes precedence over legacy hasReminder=false',
-      () {
-        final today = DateTime(2025, 1, 15, 0, 0).toIso8601String();
-        final todo = TodoItem.fromJson(<String, dynamic>{
-          'id': 't-new-reminder',
-          'title': '新提醒任务',
-          'quadrant': 1,
-          'priority': 0,
-          'date': today,
-          'createdAt': today,
-          'updatedAt': today,
-          'hasReminder': false,
-          'reminder': <String, dynamic>{
-            'enabled': true,
-            'kind': 0, // push
-            'hour': 9,
-            'minute': 30,
-          },
-        });
+    test('3. new reminder takes precedence over legacy hasReminder=false', () {
+      final today = DateTime(2025, 1, 15, 0, 0).toIso8601String();
+      final todo = TodoItem.fromJson(<String, dynamic>{
+        'id': 't-new-reminder',
+        'title': '新提醒任务',
+        'quadrant': 1,
+        'priority': 0,
+        'date': today,
+        'createdAt': today,
+        'updatedAt': today,
+        'hasReminder': false,
+        'reminder': <String, dynamic>{
+          'enabled': true,
+          'kind': 0, // push
+          'hour': 9,
+          'minute': 30,
+        },
+      });
 
-        expect(todo.reminder.enabled, isTrue);
-        expect(todo.reminder.kind, ReminderKind.push);
-        expect(todo.reminder.hour, 9);
-        expect(todo.reminder.minute, 30);
-      },
-    );
+      expect(todo.reminder.enabled, isTrue);
+      expect(todo.reminder.kind, ReminderKind.push);
+      expect(todo.reminder.hour, 9);
+      expect(todo.reminder.minute, 30);
+    });
 
     test('4. PostponeRecord roundtrip preserves fields', () {
       final from = DateTime(2025, 1, 14, 9, 0);
@@ -126,7 +120,8 @@ void main() {
         updatedAt: at,
       );
 
-      final json = jsonDecode(jsonEncode(todo.toJson())) as Map<String, dynamic>;
+      final json =
+          jsonDecode(jsonEncode(todo.toJson())) as Map<String, dynamic>;
       // 保证往返时序列化确实包含 postponeHistory。
       expect(json['postponeHistory'], isA<List<dynamic>>());
       expect((json['postponeHistory'] as List).length, 1);
@@ -141,92 +136,80 @@ void main() {
       expect(r.at.toIso8601String(), at.toIso8601String());
     });
 
-    test(
-      '5. full TodoItem toJson → encode → decode → fromJson → toJson is '
-      'structurally equal',
-      () {
-        final original = TodoItem(
-          id: 'roundtrip-todo-1',
-          title: '写作 25 分钟',
-          notes: '专注写一段 app 设计稿。',
-          isCompleted: false,
-          quadrant: EisenhowerQuadrant.notUrgentImportant,
-          priority: TodoPriority.high,
-          listGroupId: 'lg-1',
-          listGroupName: '写作',
-          tags: const ['writing', 'deep-work'],
-          dueDate: DateTime(2025, 1, 15, 21, 0),
-          date: DateTime(2025, 1, 15, 9, 0),
-          // ignore: deprecated_member_use_from_same_package
-          hasReminder: true,
-          // ignore: deprecated_member_use_from_same_package
-          reminderAt: DateTime(2025, 1, 15, 20, 0),
-          reminder: const ReminderConfig(
-            enabled: true,
-            kind: ReminderKind.alarm,
-            hour: 20,
-            minute: 0,
-            daysBefore: 0,
-            vibrate: true,
-            fullScreen: true,
+    test('5. full TodoItem toJson → encode → decode → fromJson → toJson is '
+        'structurally equal', () {
+      final original = TodoItem(
+        id: 'roundtrip-todo-1',
+        title: '写作 25 分钟',
+        notes: '专注写一段 app 设计稿。',
+        isCompleted: false,
+        quadrant: EisenhowerQuadrant.notUrgentImportant,
+        priority: TodoPriority.high,
+        listGroupId: 'lg-1',
+        listGroupName: '写作',
+        tags: const ['writing', 'deep-work'],
+        dueDate: DateTime(2025, 1, 15, 21, 0),
+        date: DateTime(2025, 1, 15, 9, 0),
+        // ignore: deprecated_member_use_from_same_package
+        hasReminder: true,
+        // ignore: deprecated_member_use_from_same_package
+        reminderAt: DateTime(2025, 1, 15, 20, 0),
+        reminder: const ReminderConfig(
+          enabled: true,
+          kind: ReminderKind.alarm,
+          hour: 20,
+          minute: 0,
+          daysBefore: 0,
+          vibrate: true,
+          fullScreen: true,
+        ),
+        focusLink: const FocusLink(
+          enabled: true,
+          presetId: 'pomodoro-25',
+          focusSeconds: 1500,
+          whiteNoise: 'rain',
+        ),
+        timeTargetSeconds: 1500,
+        postponeHistory: [
+          PostponeRecord(
+            from: DateTime(2025, 1, 14, 21, 0),
+            to: DateTime(2025, 1, 15, 21, 0),
+            reason: 'auto_daily_rollover',
+            at: DateTime(2025, 1, 15, 0, 0, 1),
           ),
-          focusLink: const FocusLink(
-            enabled: true,
-            presetId: 'pomodoro-25',
-            focusSeconds: 1500,
-            whiteNoise: 'rain',
-          ),
-          timeTargetSeconds: 1500,
-          postponeHistory: [
-            PostponeRecord(
-              from: DateTime(2025, 1, 14, 21, 0),
-              to: DateTime(2025, 1, 15, 21, 0),
-              reason: 'auto_daily_rollover',
-              at: DateTime(2025, 1, 15, 0, 0, 1),
-            ),
-          ],
-          subtasks: [
-            Subtask(
-              id: 'st-1',
-              title: '写提纲',
-              isCompleted: true,
-              sortOrder: 0,
-            ),
-            Subtask(
-              id: 'st-2',
-              title: '写正文',
-              sortOrder: 1,
-            ),
-          ],
-          sortOrder: 2,
-          recurrence: const RecurrenceRule(
-            frequency: RecurrenceFrequency.weekly,
-            interval: 1,
-            byWeekdays: [0, 2, 4],
-          ),
-          completedAt: null,
-          createdAt: DateTime(2025, 1, 1, 8, 0),
-          updatedAt: DateTime(2025, 1, 14, 22, 30),
-        );
+        ],
+        subtasks: [
+          Subtask(id: 'st-1', title: '写提纲', isCompleted: true, sortOrder: 0),
+          Subtask(id: 'st-2', title: '写正文', sortOrder: 1),
+        ],
+        sortOrder: 2,
+        recurrence: const RecurrenceRule(
+          frequency: RecurrenceFrequency.weekly,
+          interval: 1,
+          byWeekdays: [0, 2, 4],
+        ),
+        completedAt: null,
+        createdAt: DateTime(2025, 1, 1, 8, 0),
+        updatedAt: DateTime(2025, 1, 14, 22, 30),
+      );
 
-        final firstJson = original.toJson();
+      final firstJson = original.toJson();
 
-        final decoded = TodoItem.fromJson(
-          jsonDecode(jsonEncode(firstJson)) as Map<String, dynamic>,
-        );
-        final secondJson = decoded.toJson();
+      final decoded = TodoItem.fromJson(
+        jsonDecode(jsonEncode(firstJson)) as Map<String, dynamic>,
+      );
+      final secondJson = decoded.toJson();
 
-        // 键集必须一致，避免意外新增/丢失字段。
-        expect(
-          secondJson.keys.toSet(),
-          firstJson.keys.toSet(),
-          reason: 'toJson key set must be stable across round-trip',
-        );
+      // 键集必须一致，避免意外新增/丢失字段。
+      expect(
+        secondJson.keys.toSet(),
+        firstJson.keys.toSet(),
+        reason: 'toJson key set must be stable across round-trip',
+      );
 
-        // 深度相等：列表、嵌套 map、null 值都应一致。
-        expect(secondJson, equals(firstJson));
-      },
-    );
+      // 深度相等：列表、嵌套 map、null 值都应一致。
+      expect(secondJson, equals(firstJson));
+    });
 
     test(
       '6. missing postponeHistory in legacy JSON parses to empty list (not null)',

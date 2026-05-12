@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/domain_event_bus.dart';
 import '../models/habit.dart';
+import '../models/time_entry.dart';
+import 'time_audit_provider.dart';
 
 class HabitProvider extends ChangeNotifier {
   List<Habit> _habits = [];
+  TimeAuditProvider? _timeAudit;
 
   List<Habit> get habits => _habits;
 
@@ -44,6 +48,11 @@ class HabitProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ignore: use_setters_to_change_properties
+  set timeAudit(TimeAuditProvider? provider) {
+    _timeAudit = provider;
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -56,6 +65,9 @@ class HabitProvider extends ChangeNotifier {
 
   Future<void> addHabit(Habit habit) async {
     _habits.add(habit);
+    DomainEventBus.instance.publish(
+      DomainEvent(type: DomainEventType.habitCreated, objectId: habit.id),
+    );
     notifyListeners();
     await _save();
   }
@@ -66,8 +78,19 @@ class HabitProvider extends ChangeNotifier {
       _habits[idx].completions[_habits[idx].todayKey()] =
           (_habits[idx].completions[_habits[idx].todayKey()] ?? 0) + 1;
       _recalcStreak(idx);
+      DomainEventBus.instance.publish(
+        DomainEvent(
+          type: DomainEventType.habitCheckedIn,
+          objectId: _habits[idx].id,
+          metadata: {'count': _habits[idx].todayCount()},
+        ),
+      );
       notifyListeners();
       await _save();
+      await _timeAudit?.recordHabitCheckIn(
+        _habits[idx],
+        cumulativeCount: _habits[idx].todayCount(),
+      );
     }
   }
 
@@ -81,6 +104,7 @@ class HabitProvider extends ChangeNotifier {
         _recalcStreak(idx);
         notifyListeners();
         await _save();
+        await _timeAudit?.removeHabitCheckIn(_habits[idx], count: v);
       }
     }
   }
@@ -102,6 +126,10 @@ class HabitProvider extends ChangeNotifier {
   }
 
   Future<void> deleteHabit(String id) async {
+    final idx = _habits.indexWhere((h) => h.id == id);
+    if (idx != -1) {
+      await _timeAudit?.deleteBySource(TimeEntrySource.habit, id);
+    }
     _habits.removeWhere((h) => h.id == id);
     notifyListeners();
     await _save();

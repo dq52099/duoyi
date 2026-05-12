@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/design_tokens.dart';
+import '../core/goal_icons.dart';
 import '../core/goal_validation.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
 import '../providers/goal_provider.dart';
+import '../providers/notification_service.dart';
+import '../services/alarm_service.dart';
 import '../widgets/recurrence_picker.dart';
+import '../widgets/reminder_health_hint.dart';
+import '../widgets/reminder_plan_editor.dart';
+import '../widgets/surface_components.dart';
 
 const List<int> _presetColors = <int>[
   0xFFFFA726,
@@ -46,6 +53,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   DateTime? _targetDate;
   GoalStatus _status = GoalStatus.active;
   int _colorValue = 0xFFFFA726;
+  late String _iconName;
 
   // ---- Recurrence ----
   RecurrenceRule _recurrence = const RecurrenceRule();
@@ -65,6 +73,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
 
   // ---- Reminder ----
   ReminderConfig _reminder = const ReminderConfig.disabled();
+  ReminderPlan _reminderPlan = const ReminderPlan.disabled();
 
   // ---- Time target ----
   late final TextEditingController _timeTargetCtrl;
@@ -100,13 +109,17 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     _targetDate = g?.targetDate;
     _status = g?.status ?? GoalStatus.active;
     _colorValue = g?.colorValue ?? 0xFFFFA726;
+    _iconName = g?.icon ?? 'flag';
     _recurrence = g?.recurrence ?? const RecurrenceRule();
     _scheduling = g?.scheduling ?? const GoalScheduling.fixed();
     _skipHolidays = g?.skipHolidays ?? false;
     _focus = g?.focusLink ?? const FocusLink.disabled();
     _reminder = g?.reminder ?? const ReminderConfig.disabled();
+    _reminderPlan = g?.reminderPlan ?? ReminderPlan.fromLegacy(_reminder);
     _autoProgress = g?.autoProgress ?? true;
-    _manualProgress = g?.progress ?? 0;
+    _manualProgress = g?.autoProgress == true
+        ? g?.computedProgress ?? 0
+        : g?.progress ?? 0;
     _milestones = <GoalMilestone>[...?g?.milestones];
 
     _minGapCtrl = TextEditingController(
@@ -157,24 +170,24 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
       id: _editingId,
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
-      icon: widget.goal?.icon ?? 'flag',
+      icon: _iconName,
       colorValue: _colorValue,
       startDate: _startDate,
       targetDate: _targetDate,
       status: _status,
       autoProgress: _autoProgress,
-      progress: _autoProgress
-          ? (widget.goal?.progress ?? 0)
-          : _manualProgress,
+      progress: _autoProgress ? _currentAutoProgress() : _manualProgress,
       milestones: _milestones,
       category: widget.goal?.category ?? GoalCategory.custom,
       recurrence: _recurrence,
       scheduling: _scheduling,
       skipHolidays: _skipHolidays,
       focusLink: _focus,
-      reminder: _reminder,
-      timeTargetSeconds:
-          _parsePositiveInt(_timeTargetCtrl.text).let((min) => min * 60),
+      reminder: _reminderPlan.toLegacyReminderConfig(fallback: _reminder),
+      reminderPlan: _reminderPlan,
+      timeTargetSeconds: _parsePositiveInt(
+        _timeTargetCtrl.text,
+      ).let((min) => min * 60),
       dailyTargetCount: _parsePositiveInt(_dailyCountCtrl.text),
       sortOrder: widget.goal?.sortOrder ?? 0,
       createdAt: _createdAt,
@@ -252,9 +265,10 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
               tooltip: '删除',
               icon: const Icon(Icons.delete_outline),
               onPressed: () async {
+                final navigator = Navigator.of(context);
                 await context.read<GoalProvider>().delete(_editingId!);
                 if (!mounted) return;
-                Navigator.pop(context);
+                navigator.pop();
               },
             ),
           IconButton(
@@ -279,10 +293,12 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             targetDate: _targetDate,
             status: _status,
             colorValue: _colorValue,
+            iconName: _iconName,
             onPickStart: (d) => setState(() => _startDate = d),
             onPickTarget: (d) => setState(() => _targetDate = d),
             onStatus: (s) => setState(() => _status = s),
             onColor: (v) => setState(() => _colorValue = v),
+            onIcon: (v) => setState(() => _iconName = v),
             onSave: () => _persist(pop: false),
           ),
           _RecurrenceSection(
@@ -309,7 +325,9 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             onWeekdaysChange: (days) => setState(() {
               _scheduling = GoalScheduling(
                 mode: _scheduling.mode,
-                fixedWeekdays: days.isEmpty ? null : List<int>.unmodifiable(days),
+                fixedWeekdays: days.isEmpty
+                    ? null
+                    : List<int>.unmodifiable(days),
                 fixedMonthDays: _scheduling.fixedMonthDays,
                 randomMinGapDays: _scheduling.randomMinGapDays,
                 randomMaxPerWeek: _scheduling.randomMaxPerWeek,
@@ -320,7 +338,9 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
               _scheduling = GoalScheduling(
                 mode: _scheduling.mode,
                 fixedWeekdays: _scheduling.fixedWeekdays,
-                fixedMonthDays: days.isEmpty ? null : List<int>.unmodifiable(days),
+                fixedMonthDays: days.isEmpty
+                    ? null
+                    : List<int>.unmodifiable(days),
                 randomMinGapDays: _scheduling.randomMinGapDays,
                 randomMaxPerWeek: _scheduling.randomMaxPerWeek,
                 randomMaxPerMonth: _scheduling.randomMaxPerMonth,
@@ -382,26 +402,46 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             }),
             onSave: () => _persist(pop: false),
           ),
-          _ReminderSection(
-            reminder: _reminder,
-            hasTargetDate: _targetDate != null,
-            onToggle: (v) => setState(() {
-              _reminder = _reminder.copyWith(enabled: v);
-            }),
-            onPickTime: _pickReminderTime,
-            onKind: (k) => setState(() {
-              _reminder = _reminder.copyWith(kind: k);
-            }),
-            onDaysBeforeChange: (v) => setState(() {
-              _reminder = _reminder.copyWith(daysBefore: v);
-            }),
-            onVibrate: (v) => setState(() {
-              _reminder = _reminder.copyWith(vibrate: v);
-            }),
-            onFullScreen: (v) => setState(() {
-              _reminder = _reminder.copyWith(fullScreen: v);
-            }),
+          _SectionCard(
+            title: '提醒',
+            icon: Icons.notifications_active_outlined,
+            subtitle: reminderPlanSummary(_reminderPlan),
             onSave: () => _persist(pop: false),
+            children: [
+              ReminderPlanEditor(
+                plan: _reminderPlan,
+                showHeader: false,
+                allowAlarm: true,
+                allowRelativeToDue: true,
+                allowWeekly: true,
+                hasAnchorDate: _targetDate != null,
+                onChanged: (plan) => setState(() {
+                  _reminderPlan = plan;
+                  _reminder = plan.toLegacyReminderConfig(fallback: _reminder);
+                }),
+              ),
+              const SizedBox(height: DesignTokens.spaceSm),
+              Builder(
+                builder: (context) {
+                  final notif = context.watch<NotificationService?>();
+                  if (notif == null) return const SizedBox.shrink();
+                  final kind =
+                      _reminderPlan.primaryRule?.kind ?? _reminder.kind;
+                  return ReminderHealthHint(
+                    reminderKind: kind,
+                    onOpenSystemSettings: () => openAppSettings(),
+                    onRequestNotificationPermission: () async {
+                      await context
+                          .read<NotificationService>()
+                          .requestPermission();
+                    },
+                    onRequestExactAlarmPermission: () async {
+                      await AlarmService.instance.requestExactAlarmPermission();
+                    },
+                  );
+                },
+              ),
+            ],
           ),
           _TimeTargetSection(
             controller: _timeTargetCtrl,
@@ -446,12 +486,25 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
               _milestones.add(GoalMilestone(title: title));
               _milestoneCtrl.clear();
             }),
-            onAutoChange: (v) => setState(() => _autoProgress = v),
+            onAutoChange: (v) => setState(() {
+              if (!v) {
+                _manualProgress = _currentAutoProgress();
+              }
+              _autoProgress = v;
+            }),
             onManualChange: (v) => setState(() => _manualProgress = v),
           ),
         ],
       ),
     );
+  }
+
+  double _currentAutoProgress() {
+    if (_milestones.isEmpty) {
+      return _status == GoalStatus.achieved ? 1.0 : 0.0;
+    }
+    final done = _milestones.where((m) => m.isCompleted).length;
+    return (done / _milestones.length).clamp(0.0, 1.0);
   }
 
   String _nextDispatchLabel() {
@@ -468,24 +521,6 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     if (next == null) return '无（已到终止日）';
     return _formatDate(next);
   }
-
-  Future<void> _pickReminderTime() async {
-    final initial = TimeOfDay(
-      hour: _reminder.hour ?? TimeOfDay.now().hour,
-      minute: _reminder.minute ?? 0,
-    );
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-    );
-    if (picked == null) return;
-    setState(() {
-      _reminder = _reminder.copyWith(
-        hour: picked.hour,
-        minute: picked.minute,
-      );
-    });
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -499,10 +534,12 @@ class _BasicSection extends StatelessWidget {
   final DateTime? targetDate;
   final GoalStatus status;
   final int colorValue;
+  final String iconName;
   final ValueChanged<DateTime?> onPickStart;
   final ValueChanged<DateTime?> onPickTarget;
   final ValueChanged<GoalStatus> onStatus;
   final ValueChanged<int> onColor;
+  final ValueChanged<String> onIcon;
   final VoidCallback onSave;
 
   const _BasicSection({
@@ -512,10 +549,12 @@ class _BasicSection extends StatelessWidget {
     required this.targetDate,
     required this.status,
     required this.colorValue,
+    required this.iconName,
     required this.onPickStart,
     required this.onPickTarget,
     required this.onStatus,
     required this.onColor,
+    required this.onIcon,
     required this.onSave,
   });
 
@@ -564,10 +603,7 @@ class _BasicSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: DesignTokens.spaceLg),
-        Text(
-          '颜色',
-          style: _subtleLabel(context),
-        ),
+        Text('颜色', style: _subtleLabel(context)),
         const SizedBox(height: DesignTokens.spaceXs),
         Wrap(
           spacing: DesignTokens.spaceSm,
@@ -593,6 +629,14 @@ class _BasicSection extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: DesignTokens.spaceLg),
+        Text('图标', style: _subtleLabel(context)),
+        const SizedBox(height: DesignTokens.spaceXs),
+        _GoalIconField(
+          iconName: iconName,
+          colorValue: colorValue,
+          onPick: onIcon,
+        ),
+        const SizedBox(height: DesignTokens.spaceLg),
         Text('状态', style: _subtleLabel(context)),
         const SizedBox(height: DesignTokens.spaceXs),
         Wrap(
@@ -614,6 +658,177 @@ class _BasicSection extends StatelessWidget {
       ],
     );
   }
+}
+
+class _GoalIconField extends StatelessWidget {
+  final String iconName;
+  final int colorValue;
+  final ValueChanged<String> onPick;
+
+  const _GoalIconField({
+    required this.iconName,
+    required this.colorValue,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = Color(colorValue);
+    final icon = goalIconFromName(iconName);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: DesignTokens.borderRadiusSm,
+        onTap: () async {
+          final picked = await _showGoalIconPicker(context, iconName);
+          if (picked != null) onPick(picked);
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
+            borderRadius: DesignTokens.borderRadiusSm,
+            border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.spaceMd,
+              vertical: DesignTokens.spaceSm,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.14),
+                    borderRadius: DesignTokens.borderRadiusMd,
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                const SizedBox(width: DesignTokens.spaceMd),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goalIconLabel(iconName),
+                        style: const TextStyle(
+                          fontWeight: DesignTokens.fontWeightSemiBold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '点击更换',
+                        style: TextStyle(
+                          fontSize: DesignTokens.fontSizeSm,
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: cs.onSurface.withValues(alpha: 0.46),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<String?> _showGoalIconPicker(BuildContext context, String selected) {
+  return showAppModalSheet<String>(
+    context: context,
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      return AppModalSheet(
+        title: '选择图标',
+        scrollable: false,
+        child: SizedBox(
+          height: 420,
+          child: GridView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: goalIconChoices.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              mainAxisSpacing: DesignTokens.spaceSm,
+              crossAxisSpacing: DesignTokens.spaceSm,
+              childAspectRatio: 0.92,
+            ),
+            itemBuilder: (context, index) {
+              final choice = goalIconChoices[index];
+              final isSelected = choice.name == selected;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: DesignTokens.borderRadiusMd,
+                  onTap: () => Navigator.pop(context, choice.name),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? choice.color.withValues(alpha: 0.14)
+                          : cs.surfaceContainerHighest.withValues(alpha: 0.36),
+                      borderRadius: DesignTokens.borderRadiusMd,
+                      border: Border.all(
+                        color: isSelected
+                            ? choice.color
+                            : cs.outline.withValues(alpha: 0.16),
+                        width: isSelected ? 1.6 : 1,
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(choice.icon, color: choice.color, size: 24),
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: Text(
+                                  choice.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: DesignTokens.fontSizeXs,
+                                    fontWeight: DesignTokens.fontWeightSemiBold,
+                                    color: cs.onSurface.withValues(alpha: 0.76),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: choice.color,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -653,10 +868,9 @@ class _RecurrenceSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(DesignTokens.spaceMd),
           decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .primary
-                .withValues(alpha: 0.06),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.06),
             borderRadius: DesignTokens.borderRadiusSm,
           ),
           child: Row(
@@ -671,10 +885,9 @@ class _RecurrenceSection extends StatelessWidget {
                 '下一次派发日：',
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeSm,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(width: DesignTokens.spaceXs),
@@ -868,10 +1081,7 @@ class _FixedScheduling extends StatelessWidget {
       '当前重复规则下无需额外配置固定派发日。',
       style: TextStyle(
         fontSize: DesignTokens.fontSizeSm,
-        color: Theme.of(context)
-            .colorScheme
-            .onSurface
-            .withValues(alpha: 0.6),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
       ),
     );
   }
@@ -937,10 +1147,7 @@ class _RandomRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          flex: 3,
-          child: Text(label, style: _subtleLabel(context)),
-        ),
+        Expanded(flex: 3, child: Text(label, style: _subtleLabel(context))),
         Expanded(
           flex: 2,
           child: TextField(
@@ -948,10 +1155,7 @@ class _RandomRow extends StatelessWidget {
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: hint,
-            ),
+            decoration: InputDecoration(isDense: true, hintText: hint),
             onChanged: (_) => onChanged(),
           ),
         ),
@@ -1104,139 +1308,6 @@ class _FocusSection extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Section: 提醒
-// ---------------------------------------------------------------------------
-
-class _ReminderSection extends StatelessWidget {
-  final ReminderConfig reminder;
-  final bool hasTargetDate;
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onPickTime;
-  final ValueChanged<ReminderKind> onKind;
-  final ValueChanged<int> onDaysBeforeChange;
-  final ValueChanged<bool> onVibrate;
-  final ValueChanged<bool> onFullScreen;
-  final VoidCallback onSave;
-
-  const _ReminderSection({
-    required this.reminder,
-    required this.hasTargetDate,
-    required this.onToggle,
-    required this.onPickTime,
-    required this.onKind,
-    required this.onDaysBeforeChange,
-    required this.onVibrate,
-    required this.onFullScreen,
-    required this.onSave,
-  });
-
-  String _subtitle() {
-    if (!reminder.enabled) return '已关闭';
-    final hhmm = _formatHm(reminder.hour, reminder.minute) ?? '未设置时间';
-    final kind = reminder.kind == ReminderKind.alarm ? '闹钟' : '推送';
-    return '$kind · $hhmm';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final timeLabel = _formatHm(reminder.hour, reminder.minute) ?? '选择时间';
-    return _SectionCard(
-      title: '提醒',
-      icon: Icons.notifications_active_outlined,
-      subtitle: _subtitle(),
-      onSave: onSave,
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: reminder.enabled,
-          title: const Text('开启提醒'),
-          subtitle: const Text('派发日按时触发提醒'),
-          onChanged: onToggle,
-        ),
-        if (reminder.enabled) ...[
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.schedule),
-            title: const Text('提醒时间'),
-            subtitle: Text(timeLabel),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onPickTime,
-          ),
-          const SizedBox(height: DesignTokens.spaceXs),
-          Text('提醒类型', style: _subtleLabel(context)),
-          const SizedBox(height: DesignTokens.spaceXs),
-          SegmentedButton<ReminderKind>(
-            segments: const [
-              ButtonSegment(
-                value: ReminderKind.push,
-                label: Text('推送'),
-                icon: Icon(Icons.notifications),
-              ),
-              ButtonSegment(
-                value: ReminderKind.alarm,
-                label: Text('闹钟'),
-                icon: Icon(Icons.alarm),
-              ),
-            ],
-            selected: {reminder.kind},
-            onSelectionChanged: (s) => onKind(s.first),
-          ),
-          if (hasTargetDate) ...[
-            const SizedBox(height: DesignTokens.spaceMd),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child:
-                      Text('目标日前 N 天提醒', style: _subtleLabel(context)),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: reminder.daysBefore > 0
-                            ? () => onDaysBeforeChange(reminder.daysBefore - 1)
-                            : null,
-                      ),
-                      Expanded(
-                        child: Text(
-                          '${reminder.daysBefore} 天',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () =>
-                            onDaysBeforeChange(reminder.daysBefore + 1),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: reminder.vibrate,
-            title: const Text('震动'),
-            onChanged: onVibrate,
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: reminder.fullScreen,
-            title: const Text('全屏提醒'),
-            subtitle: const Text('仅对闹钟类型生效'),
-            onChanged: reminder.kind == ReminderKind.alarm ? onFullScreen : null,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Section: 目标时长
 // ---------------------------------------------------------------------------
 
@@ -1254,8 +1325,7 @@ class _TimeTargetSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final min = int.tryParse(controller.text.trim());
-    final subtitle =
-        (min == null || min <= 0) ? '未设置' : '$min 分钟 / 每次';
+    final subtitle = (min == null || min <= 0) ? '未设置' : '$min 分钟 / 每次';
     return _SectionCard(
       title: '目标时长',
       icon: Icons.hourglass_bottom,
@@ -1339,10 +1409,7 @@ class _DailyCountSection extends StatelessWidget {
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  isDense: true,
-                  hintText: '0',
-                ),
+                decoration: const InputDecoration(isDense: true, hintText: '0'),
                 onChanged: onChanged,
               ),
             ),
@@ -1390,16 +1457,15 @@ class _MilestonesSection extends StatelessWidget {
     return _SectionCard(
       title: '里程碑与进度',
       icon: Icons.flag_circle_outlined,
-      subtitle: '$completed/${milestones.length} · '
+      subtitle:
+          '$completed/${milestones.length} · '
           '${autoProgress ? '自动' : '手动 ${(manualProgress * 100).toInt()}%'}',
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: autoProgress,
           title: const Text('按里程碑自动计算进度'),
-          subtitle: Text(
-            autoProgress ? '完成度 = 已完成里程碑 / 总里程碑' : '手动设置当前进度',
-          ),
+          subtitle: Text(autoProgress ? '完成度 = 已完成里程碑 / 总里程碑' : '手动设置当前进度'),
           onChanged: onAutoChange,
         ),
         if (!autoProgress)
@@ -1419,34 +1485,33 @@ class _MilestonesSection extends StatelessWidget {
           ),
         const SizedBox(height: DesignTokens.spaceSm),
         ...milestones.asMap().entries.map(
-              (e) => Dismissible(
-                key: ValueKey(e.value.id),
-                direction: DismissDirection.endToStart,
-                onDismissed: (_) => onRemove(e.key),
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding:
-                      const EdgeInsets.only(right: DesignTokens.spaceLg),
-                  color: DesignTokens.resultError,
-                  child: const Icon(Icons.delete, color: Colors.white),
-                ),
-                child: CheckboxListTile(
-                  value: e.value.isCompleted,
-                  onChanged: (v) => onToggle(e.value, v ?? false),
-                  title: Text(
-                    e.value.title,
-                    style: TextStyle(
-                      decoration: e.value.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
-                      color: e.value.isCompleted ? Colors.grey : null,
-                    ),
-                  ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
+          (e) => Dismissible(
+            key: ValueKey(e.value.id),
+            direction: DismissDirection.endToStart,
+            onDismissed: (_) => onRemove(e.key),
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: DesignTokens.spaceLg),
+              color: DesignTokens.resultError,
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            child: CheckboxListTile(
+              value: e.value.isCompleted,
+              onChanged: (v) => onToggle(e.value, v ?? false),
+              title: Text(
+                e.value.title,
+                style: TextStyle(
+                  decoration: e.value.isCompleted
+                      ? TextDecoration.lineThrough
+                      : null,
+                  color: e.value.isCompleted ? Colors.grey : null,
                 ),
               ),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
             ),
+          ),
+        ),
         Row(
           children: [
             Expanded(
@@ -1616,9 +1681,7 @@ class _DateField extends StatelessWidget {
                   ),
                   Text(
                     date == null ? '未设置' : _formatDate(date!),
-                    style: const TextStyle(
-                      fontSize: DesignTokens.fontSizeBase,
-                    ),
+                    style: const TextStyle(fontSize: DesignTokens.fontSizeBase),
                   ),
                 ],
               ),
@@ -1643,22 +1706,12 @@ class _DateField extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 TextStyle _subtleLabel(BuildContext context) => TextStyle(
-      fontSize: DesignTokens.fontSizeSm,
-      color: Theme.of(context)
-          .colorScheme
-          .onSurface
-          .withValues(alpha: 0.65),
-    );
+  fontSize: DesignTokens.fontSizeSm,
+  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+);
 
 String _formatDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-String? _formatHm(int? hour, int? minute) {
-  if (hour == null || minute == null) return null;
-  final hh = hour.toString().padLeft(2, '0');
-  final mm = minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
-}
 
 /// 解析正整数输入；空串或非正整数返回 null。
 int? _parsePositiveInt(String raw) {

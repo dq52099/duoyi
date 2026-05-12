@@ -6,6 +6,7 @@ import '../providers/note_provider.dart';
 import '../providers/todo_provider.dart';
 import '../screens/diary_screen.dart';
 import '../screens/search_screen.dart';
+import 'surface_components.dart';
 
 /// 展开式快速捕获 FAB：3 个子按钮 + 一个搜索入口。
 class QuickCaptureFab extends StatefulWidget {
@@ -24,7 +25,9 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 220));
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
   }
 
   @override
@@ -47,7 +50,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('快速待办'),
         content: TextField(
           controller: ctrl,
@@ -56,11 +59,13 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('添加')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('添加'),
+          ),
         ],
       ),
     );
@@ -75,7 +80,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('随手记'),
         content: TextField(
           controller: ctrl,
@@ -85,11 +90,13 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
@@ -97,13 +104,13 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       if (!mounted) return;
       final now = DateTime.now();
       context.read<NoteProvider>().addOrUpdateNote(
-            NoteItem(
-              id: now.millisecondsSinceEpoch.toString(),
-              content: ctrl.text.trim(),
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
+        NoteItem(
+          id: now.millisecondsSinceEpoch.toString(),
+          content: ctrl.text.trim(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
     }
   }
 
@@ -137,8 +144,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,

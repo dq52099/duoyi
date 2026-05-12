@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
+import '../core/goal_icons.dart';
 import '../core/recommended_goals.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
@@ -49,8 +50,7 @@ class RecommendedGoalsPicker extends StatefulWidget {
   });
 
   @override
-  State<RecommendedGoalsPicker> createState() =>
-      _RecommendedGoalsPickerState();
+  State<RecommendedGoalsPicker> createState() => _RecommendedGoalsPickerState();
 }
 
 class _RecommendedGoalsPickerState extends State<RecommendedGoalsPicker> {
@@ -101,9 +101,7 @@ class _RecommendedGoalsPickerState extends State<RecommendedGoalsPicker> {
   Widget build(BuildContext context) {
     final items = RecommendedGoalsLibrary.byCategory(_selected);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('推荐目标'),
-      ),
+      appBar: AppBar(title: const Text('推荐目标')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -124,7 +122,7 @@ class _RecommendedGoalsPickerState extends State<RecommendedGoalsPicker> {
                       DesignTokens.spaceXxl,
                     ),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (context, _) =>
                         const SizedBox(height: DesignTokens.spaceMd),
                     itemBuilder: (_, i) => _RecommendedGoalCard(
                       goal: items[i],
@@ -161,7 +159,7 @@ class _CategoryChipRow extends StatelessWidget {
           vertical: DesignTokens.spaceSm,
         ),
         itemCount: categories.length,
-        separatorBuilder: (_, __) =>
+        separatorBuilder: (context, _) =>
             const SizedBox(width: DesignTokens.spaceSm),
         itemBuilder: (_, i) {
           final c = categories[i];
@@ -181,16 +179,13 @@ class _RecommendedGoalCard extends StatelessWidget {
   final RecommendedGoal goal;
   final VoidCallback onApply;
 
-  const _RecommendedGoalCard({
-    required this.goal,
-    required this.onApply,
-  });
+  const _RecommendedGoalCard({required this.goal, required this.onApply});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final color = Color(goal.colorValue);
-    final icon = _iconFromName(goal.icon);
+    final icon = goalIconFromName(goal.icon);
 
     return Material(
       color: cs.surface,
@@ -203,9 +198,7 @@ class _RecommendedGoalCard extends StatelessWidget {
             color: cs.surface,
             borderRadius: DesignTokens.borderRadiusLg,
             boxShadow: DesignTokens.shadowXs,
-            border: Border.all(
-              color: color.withValues(alpha: 0.12),
-            ),
+            border: Border.all(color: color.withValues(alpha: 0.12)),
           ),
           padding: const EdgeInsets.all(DesignTokens.spaceLg),
           child: Row(
@@ -276,62 +269,69 @@ class _MetaBadges extends StatelessWidget {
 
     // 重复规则 + 调度模式
     final recurrenceLabel = _recurrenceLabel(goal.recurrence, goal.scheduling);
-    badges.add(_Badge(
-      icon: Icons.repeat,
-      label: recurrenceLabel,
-      color: baseColor,
-    ));
+    badges.add(
+      _Badge(icon: Icons.repeat, label: recurrenceLabel, color: baseColor),
+    );
 
     // 跳过节假日
     if (goal.skipHolidays) {
-      badges.add(const _Badge(
-        icon: Icons.beach_access,
-        label: '跳节假日',
-        color: Color(0xFF8D6E63),
-      ));
+      badges.add(
+        const _Badge(
+          icon: Icons.beach_access,
+          label: '跳节假日',
+          color: Color(0xFF8D6E63),
+        ),
+      );
     }
 
     // 专注联动（番茄钟）
     if (goal.focusLink.enabled) {
-      badges.add(_Badge(
-        icon: Icons.timer,
-        label: _focusLabel(goal.focusLink.focusSeconds),
-        color: const Color(0xFF7E57C2),
-      ));
+      badges.add(
+        _Badge(
+          icon: Icons.timer,
+          label: _focusLabel(goal.focusLink.focusSeconds),
+          color: const Color(0xFF7E57C2),
+        ),
+      );
     }
 
     // 提醒（push / alarm）
     if (goal.reminder.enabled) {
       final hhmm = _formatHm(goal.reminder.hour, goal.reminder.minute);
-      final prefix =
-          goal.reminder.kind == ReminderKind.alarm ? '闹钟' : '推送';
-      badges.add(_Badge(
-        icon: goal.reminder.kind == ReminderKind.alarm
-            ? Icons.alarm
-            : Icons.notifications_active,
-        label: hhmm == null ? prefix : '$prefix $hhmm',
-        color: goal.reminder.kind == ReminderKind.alarm
-            ? const Color(0xFFEF5350)
-            : const Color(0xFF42A5F5),
-      ));
+      final prefix = goal.reminder.kind == ReminderKind.alarm ? '闹钟' : '推送';
+      badges.add(
+        _Badge(
+          icon: goal.reminder.kind == ReminderKind.alarm
+              ? Icons.alarm
+              : Icons.notifications_active,
+          label: hhmm == null ? prefix : '$prefix $hhmm',
+          color: goal.reminder.kind == ReminderKind.alarm
+              ? const Color(0xFFEF5350)
+              : const Color(0xFF42A5F5),
+        ),
+      );
     }
 
     // 每日次数
     if (goal.dailyTargetCount != null && goal.dailyTargetCount! > 0) {
-      badges.add(_Badge(
-        icon: Icons.format_list_numbered,
-        label: '×${goal.dailyTargetCount}',
-        color: const Color(0xFF26A69A),
-      ));
+      badges.add(
+        _Badge(
+          icon: Icons.format_list_numbered,
+          label: '×${goal.dailyTargetCount}',
+          color: const Color(0xFF26A69A),
+        ),
+      );
     }
 
     // 目标时长
     if (goal.timeTargetSeconds != null && goal.timeTargetSeconds! > 0) {
-      badges.add(_Badge(
-        icon: Icons.hourglass_bottom,
-        label: _formatDuration(goal.timeTargetSeconds!),
-        color: const Color(0xFFFFA726),
-      ));
+      badges.add(
+        _Badge(
+          icon: Icons.hourglass_bottom,
+          label: _formatDuration(goal.timeTargetSeconds!),
+          color: const Color(0xFFFFA726),
+        ),
+      );
     }
 
     return Wrap(
@@ -348,11 +348,7 @@ class _Badge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
+  const _Badge({required this.icon, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -397,8 +393,7 @@ class _EmptyCategoryPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.inbox_outlined,
-                size: 48, color: Colors.grey.shade400),
+            Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: DesignTokens.spaceSm),
             Text(
               '「${_categoryLabel(category)}」暂无推荐条目',
@@ -415,7 +410,7 @@ class _EmptyCategoryPlaceholder extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// 工具函数（中文标签 / 图标名映射 / 时长格式化）
+// 工具函数（中文标签 / 时长格式化）
 // ---------------------------------------------------------------------------
 
 /// 把 [GoalCategory] 渲染成顶部分段显示的中文标签。
@@ -510,63 +505,4 @@ String? _formatHm(int? hour, int? minute) {
   final hh = hour.toString().padLeft(2, '0');
   final mm = minute.toString().padLeft(2, '0');
   return '$hh:$mm';
-}
-
-/// 把 [RecommendedGoal.icon] 的字符串名映射成 [IconData]。
-///
-/// - 覆盖 [RecommendedGoalsLibrary] 当前内置 25 条推荐所使用的全部图标名；
-/// - 未命中时回退到 [Icons.flag]（与 [GoalItem.icon] 默认值一致）。
-IconData _iconFromName(String name) {
-  switch (name) {
-    case 'local_drink':
-      return Icons.local_drink;
-    case 'bedtime':
-      return Icons.bedtime;
-    case 'self_improvement':
-      return Icons.self_improvement;
-    case 'edit_note':
-      return Icons.edit_note;
-    case 'rate_review':
-      return Icons.rate_review;
-    case 'directions_walk':
-      return Icons.directions_walk;
-    case 'medical_services':
-      return Icons.medical_services;
-    case 'remove_red_eye':
-      return Icons.remove_red_eye;
-    case 'restaurant':
-      return Icons.restaurant;
-    case 'menu_book':
-      return Icons.menu_book;
-    case 'translate':
-      return Icons.translate;
-    case 'school':
-      return Icons.school;
-    case 'assignment':
-      return Icons.assignment;
-    case 'directions_run':
-      return Icons.directions_run;
-    case 'fitness_center':
-      return Icons.fitness_center;
-    case 'accessibility_new':
-      return Icons.accessibility_new;
-    case 'stairs':
-      return Icons.stairs;
-    case 'pedal_bike':
-      return Icons.pedal_bike;
-    case 'volunteer_activism':
-      return Icons.volunteer_activism;
-    case 'call':
-      return Icons.call;
-    case 'mood':
-      return Icons.mood;
-    case 'air':
-      return Icons.air;
-    case 'message':
-      return Icons.message;
-    case 'flag':
-      return Icons.flag;
-    default:
-      return Icons.flag;
-  }
 }

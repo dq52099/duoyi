@@ -6,6 +6,7 @@ import '../providers/theme_provider.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
 import '../core/habit_templates.dart';
 import 'habit_detail_screen.dart';
 
@@ -53,22 +54,18 @@ class _HabitScreenState extends State<HabitScreen>
       0xFF607D8B,
     ];
 
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
+        builder: (ctx, setSt) => AppSurfaceCard(
+          margin: EdgeInsets.zero,
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             left: 20,
             right: 20,
             top: 24,
           ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -79,7 +76,9 @@ class _HabitScreenState extends State<HabitScreen>
                     width: 40,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -170,8 +169,8 @@ class _HabitScreenState extends State<HabitScreen>
                       child: ChoiceChip(
                         label: const Text('✅ 正向养成'),
                         selected: selectedKind == HabitKind.positive,
-                        onSelected: (_) => setSt(
-                            () => selectedKind = HabitKind.positive),
+                        onSelected: (_) =>
+                            setSt(() => selectedKind = HabitKind.positive),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -179,8 +178,8 @@ class _HabitScreenState extends State<HabitScreen>
                       child: ChoiceChip(
                         label: const Text('🚫 反向戒除'),
                         selected: selectedKind == HabitKind.negative,
-                        onSelected: (_) => setSt(
-                            () => selectedKind = HabitKind.negative),
+                        onSelected: (_) =>
+                            setSt(() => selectedKind = HabitKind.negative),
                       ),
                     ),
                   ],
@@ -231,16 +230,10 @@ class _HabitScreenState extends State<HabitScreen>
                 // --- Manual Entry ---
                 TextField(
                   controller: nameCtrl,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: '习惯名称',
                     hintText: '输入或从上方选择',
-                    prefixIcon: const Icon(Icons.edit, size: 20),
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    prefixIcon: Icon(Icons.edit, size: 20),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -249,26 +242,17 @@ class _HabitScreenState extends State<HabitScreen>
                     Expanded(
                       child: TextField(
                         controller: targetCtrl,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: '每日目标次数',
-                          prefixIcon: const Icon(Icons.track_changes, size: 20),
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
+                          prefixIcon: Icon(Icons.track_changes, size: 20),
                         ),
                         keyboardType: TextInputType.number,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                    AppSurfaceCard(
+                      padding: const EdgeInsets.all(6),
+                      borderRadius: BorderRadius.circular(16),
                       child: Row(
                         children: colors
                             .take(4)
@@ -398,37 +382,38 @@ class _HabitScreenState extends State<HabitScreen>
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 56,
-                                height: 56,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      value: provider.todayOverallProgress,
-                                      strokeWidth: 5,
-                                      backgroundColor: cs.primary.withValues(
-                                        alpha: 0.12,
-                                      ),
+                      child: AppSurfaceCard(
+                        padding: const EdgeInsets.all(16),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: provider.todayOverallProgress,
+                                    strokeWidth: 5,
+                                    backgroundColor: cs.primary.withValues(
+                                      alpha: 0.12,
                                     ),
-                                    Text(
-                                      '${(provider.todayOverallProgress * 100).toInt()}%',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.primary,
-                                      ),
+                                  ),
+                                  Text(
+                                    '${(provider.todayOverallProgress * 100).toInt()}%',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: cs.primary,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 16),
-                              Column(
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
@@ -447,8 +432,8 @@ class _HabitScreenState extends State<HabitScreen>
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -524,170 +509,155 @@ class _HabitCheckinCard extends StatelessWidget {
     final progress = habit.todayProgress();
     final isDone = progress >= 1.0;
 
-    return Container(
+    return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(
+        color: isDone
+            ? Color(habit.colorValue).withValues(alpha: 0.3)
+            : Colors.transparent,
+        width: 1.5,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Color(habit.colorValue).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isDone ? Icons.star : Icons.star_border,
+                  color: Color(habit.colorValue),
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      habit.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                        color: isDone ? Colors.grey : null,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '目标: ${habit.targetCount} 次/天',
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.local_fire_department,
+                      size: 14,
+                      color: Colors.orange,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${habit.currentStreak} 天',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: 8,
+                      width:
+                          (MediaQuery.of(context).size.width - 150) * progress,
+                      decoration: BoxDecoration(
+                        color: isDone
+                            ? const Color(0xFF4CAF50)
+                            : Color(habit.colorValue),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.remove, size: 20),
+                      onPressed: () => provider.decrementHabit(habit.id),
+                      color: Colors.grey.shade600,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        '${habit.todayCount()}/${habit.targetCount}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: isDone ? const Color(0xFF4CAF50) : null,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.add, size: 20),
+                      onPressed: () => provider.incrementHabit(habit.id),
+                      color: isDone ? Colors.grey : Color(habit.colorValue),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
-        border: isDone
-            ? Border.all(
-                color: Color(habit.colorValue).withValues(alpha: 0.3),
-                width: 1.5,
-              )
-            : Border.all(color: Colors.transparent, width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Color(habit.colorValue).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    isDone ? Icons.star : Icons.star_border,
-                    color: Color(habit.colorValue),
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        habit.name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          decoration: isDone
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isDone ? Colors.grey : null,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '目标: ${habit.targetCount} 次/天',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.local_fire_department,
-                        size: 14,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${habit.currentStreak} 天',
-                        style: const TextStyle(
-                          color: Colors.orange,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        height: 8,
-                        width:
-                            (MediaQuery.of(context).size.width - 150) *
-                            progress,
-                        decoration: BoxDecoration(
-                          color: isDone
-                              ? const Color(0xFF4CAF50)
-                              : Color(habit.colorValue),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.remove, size: 20),
-                        onPressed: () => provider.decrementHabit(habit.id),
-                        color: Colors.grey.shade600,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          '${habit.todayCount()}/${habit.targetCount}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: isDone ? const Color(0xFF4CAF50) : null,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.add, size: 20),
-                        onPressed: () => provider.incrementHabit(habit.id),
-                        color: isDone ? Colors.grey : Color(habit.colorValue),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

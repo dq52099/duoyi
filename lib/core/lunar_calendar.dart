@@ -12,7 +12,8 @@ class LunarDate {
   const LunarDate(this.year, this.month, this.day, {this.isLeapMonth = false});
 
   /// "正月初一" / "三月十五"
-  String get chineseText => '${LunarCalendar._monthName(month, isLeapMonth)}${LunarCalendar._dayName(day)}';
+  String get chineseText =>
+      '${LunarCalendar._monthName(month, isLeapMonth)}${LunarCalendar._dayName(day)}';
 
   /// 仅日部分文字："初一"、"十五"
   String get dayChineseText => LunarCalendar._dayName(day);
@@ -24,7 +25,7 @@ class LunarDate {
 
   @override
   String toString() =>
-      '${year}年${isLeapMonth ? '闰' : ''}${LunarCalendar._monthName(month, false)}${LunarCalendar._dayName(day)}';
+      '$year年${isLeapMonth ? '闰' : ''}${LunarCalendar._monthName(month, false)}${LunarCalendar._dayName(day)}';
 }
 
 class LunarCalendar {
@@ -141,8 +142,12 @@ class LunarCalendar {
 
   /// 农历 → 公历
   /// 忽略闰月时，如果该年没有该月，当成普通月处理。
-  static DateTime toSolar(int lunarYear, int lunarMonth, int lunarDay,
-      {bool isLeap = false}) {
+  static DateTime toSolar(
+    int lunarYear,
+    int lunarMonth,
+    int lunarDay, {
+    bool isLeap = false,
+  }) {
     int offset = 0;
     for (int y = _baseYear; y < lunarYear; y++) {
       offset += _yearDays(y);
@@ -180,18 +185,30 @@ class LunarCalendar {
   static String? solarTerm(DateTime date) {
     // 简版：固定日期对照表(近似，非精确天文)
     const table = <String, String>{
-      '2-4': '立春', '2-19': '雨水',
-      '3-6': '惊蛰', '3-21': '春分',
-      '4-5': '清明', '4-20': '谷雨',
-      '5-6': '立夏', '5-21': '小满',
-      '6-6': '芒种', '6-21': '夏至',
-      '7-7': '小暑', '7-23': '大暑',
-      '8-8': '立秋', '8-23': '处暑',
-      '9-8': '白露', '9-23': '秋分',
-      '10-8': '寒露', '10-23': '霜降',
-      '11-7': '立冬', '11-22': '小雪',
-      '12-7': '大雪', '12-22': '冬至',
-      '1-6': '小寒', '1-20': '大寒',
+      '2-4': '立春',
+      '2-19': '雨水',
+      '3-6': '惊蛰',
+      '3-21': '春分',
+      '4-5': '清明',
+      '4-20': '谷雨',
+      '5-6': '立夏',
+      '5-21': '小满',
+      '6-6': '芒种',
+      '6-21': '夏至',
+      '7-7': '小暑',
+      '7-23': '大暑',
+      '8-8': '立秋',
+      '8-23': '处暑',
+      '9-8': '白露',
+      '9-23': '秋分',
+      '10-8': '寒露',
+      '10-23': '霜降',
+      '11-7': '立冬',
+      '11-22': '小雪',
+      '12-7': '大雪',
+      '12-22': '冬至',
+      '1-6': '小寒',
+      '1-20': '大寒',
     };
     return table['${date.month}-${date.day}'];
   }
@@ -220,11 +237,15 @@ class LunarCalendar {
   /// 农历节日(按农历月日)
   static String? lunarFestival(LunarDate d) {
     const t = <String, String>{
-      '1-1': '春节', '1-15': '元宵',
+      '1-1': '春节',
+      '1-15': '元宵',
       '2-2': '龙抬头',
-      '5-5': '端午', '7-7': '七夕',
-      '7-15': '中元', '8-15': '中秋',
-      '9-9': '重阳', '12-8': '腊八',
+      '5-5': '端午',
+      '7-7': '七夕',
+      '7-15': '中元',
+      '8-15': '中秋',
+      '9-9': '重阳',
+      '12-8': '腊八',
       '12-23': '小年',
     };
     final k = '${d.month}-${d.day}';
@@ -262,8 +283,18 @@ class LunarCalendar {
 
   static String _monthName(int m, bool isLeap) {
     const names = [
-      '正月', '二月', '三月', '四月', '五月', '六月',
-      '七月', '八月', '九月', '十月', '冬月', '腊月',
+      '正月',
+      '二月',
+      '三月',
+      '四月',
+      '五月',
+      '六月',
+      '七月',
+      '八月',
+      '九月',
+      '十月',
+      '冬月',
+      '腊月',
     ];
     if (m < 1 || m > 12) return '';
     return '${isLeap ? '闰' : ''}${names[m - 1]}';
@@ -271,7 +302,19 @@ class LunarCalendar {
 
   static String _dayName(int d) {
     if (d <= 10) {
-      const n = ['', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十'];
+      const n = [
+        '',
+        '初一',
+        '初二',
+        '初三',
+        '初四',
+        '初五',
+        '初六',
+        '初七',
+        '初八',
+        '初九',
+        '初十',
+      ];
       return n[d];
     }
     if (d < 20) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/recurrence.dart';
+import 'surface_components.dart';
 
 /// 重复规则编辑弹出层。
 class RecurrencePicker extends StatefulWidget {
@@ -10,10 +11,8 @@ class RecurrencePicker extends StatefulWidget {
     BuildContext context, {
     required RecurrenceRule initial,
   }) {
-    return showModalBottomSheet<RecurrenceRule>(
+    return showAppModalSheet<RecurrenceRule>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (_) => RecurrencePicker(initial: initial),
     );
   }
@@ -41,37 +40,43 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
+    return AppModalSheet(
+      title: '重复',
+      subtitle: '设置循环频率、间隔和结束日期',
+      leadingActions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, const RecurrenceRule()),
+          child: const Text('清除'),
+        ),
+      ],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            RecurrenceRule(
+              frequency: _freq,
+              interval: _interval < 1 ? 1 : _interval,
+              byWeekdays:
+                  _freq == RecurrenceFrequency.weekly && _weekdays.isNotEmpty
+                  ? [..._weekdays]
+                  : null,
+              byMonthDay: _freq == RecurrenceFrequency.monthly
+                  ? _byMonthDay
+                  : null,
+              endDate: _endDate,
+            ),
+          ),
+          child: const Text('保存'),
+        ),
+      ],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('重复',
-              style:
-                  TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
           Wrap(
             spacing: 6,
             children: [
@@ -107,8 +112,10 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
           ],
           if (_freq == RecurrenceFrequency.weekly) ...[
             const SizedBox(height: 12),
-            const Text('每周哪几天',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              '每周哪几天',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 4,
@@ -141,7 +148,8 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     controller: TextEditingController(
-                        text: _byMonthDay?.toString() ?? ''),
+                      text: _byMonthDay?.toString() ?? '',
+                    ),
                     decoration: const InputDecoration(
                       isDense: true,
                       hintText: '留空=同日',
@@ -178,8 +186,8 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
               onTap: () async {
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: _endDate ??
-                      DateTime.now().add(const Duration(days: 90)),
+                  initialDate:
+                      _endDate ?? DateTime.now().add(const Duration(days: 90)),
                   firstDate: DateTime.now(),
                   lastDate: DateTime(2099, 12, 31),
                 );
@@ -187,58 +195,24 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
               },
             ),
           ],
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(context, const RecurrenceRule()),
-                child: const Text('清除'),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  RecurrenceRule(
-                    frequency: _freq,
-                    interval: _interval < 1 ? 1 : _interval,
-                    byWeekdays:
-                        _freq == RecurrenceFrequency.weekly && _weekdays.isNotEmpty
-                            ? [..._weekdays]
-                            : null,
-                    byMonthDay: _freq == RecurrenceFrequency.monthly
-                        ? _byMonthDay
-                        : null,
-                    endDate: _endDate,
-                  ),
-                ),
-                child: const Text('保存'),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
   String _freqLabel(RecurrenceFrequency f) => switch (f) {
-        RecurrenceFrequency.none => '不重复',
-        RecurrenceFrequency.daily => '每天',
-        RecurrenceFrequency.weekly => '每周',
-        RecurrenceFrequency.monthly => '每月',
-        RecurrenceFrequency.yearly => '每年',
-      };
+    RecurrenceFrequency.none => '不重复',
+    RecurrenceFrequency.daily => '每天',
+    RecurrenceFrequency.weekly => '每周',
+    RecurrenceFrequency.monthly => '每月',
+    RecurrenceFrequency.yearly => '每年',
+  };
 
   String _unitLabel(RecurrenceFrequency f) => switch (f) {
-        RecurrenceFrequency.daily => '天',
-        RecurrenceFrequency.weekly => '周',
-        RecurrenceFrequency.monthly => '月',
-        RecurrenceFrequency.yearly => '年',
-        RecurrenceFrequency.none => '',
-      };
+    RecurrenceFrequency.daily => '天',
+    RecurrenceFrequency.weekly => '周',
+    RecurrenceFrequency.monthly => '月',
+    RecurrenceFrequency.yearly => '年',
+    RecurrenceFrequency.none => '',
+  };
 }

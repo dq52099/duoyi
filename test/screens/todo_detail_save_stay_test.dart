@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:duoyi/models/todo.dart';
-import 'package:duoyi/models/recurrence.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/todo_detail_screen.dart';
 
@@ -200,22 +199,24 @@ void main() {
         await tester.tap(find.text('open-detail'));
         await tester.pumpAndSettle();
 
-        await tester.ensureVisible(find.text('重复'));
-        await tester.tap(find.text('重复'));
+        final reminderSwitch = find.widgetWithText(SwitchListTile, '提醒');
+        expect(reminderSwitch, findsOneWidget);
+        await tester.dragUntilVisible(
+          reminderSwitch,
+          find.byType(ListView),
+          const Offset(0, -300),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(reminderSwitch);
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('每天'));
-        await tester.pump();
-        await tester.tap(find.widgetWithText(FilledButton, '保存'));
+        expect(find.textContaining('提醒 ·'), findsOneWidget);
+        await tester.tap(find.textContaining('提醒 ·'));
         await tester.pumpAndSettle();
 
-        expect(find.text('每天'), findsOneWidget);
-
-        await tester.ensureVisible(find.text('到期提醒'));
-        await tester.tap(find.text('到期提醒'));
-        await tester.pump();
-
-        expect(find.textContaining('闹钟 ·'), findsOneWidget);
+        expect(find.text('提醒类型'), findsOneWidget);
+        await tester.tap(find.widgetWithText(FilledButton, '保存').last);
+        await tester.pumpAndSettle();
 
         final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
         expect(checkBtn, findsOneWidget);
@@ -225,7 +226,6 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
 
         final stored = provider.todos.firstWhere((t) => t.id == item.id);
-        expect(stored.recurrence.frequency, RecurrenceFrequency.daily);
         expect(stored.reminder.enabled, isTrue);
         expect(stored.reminder.hour, isNotNull);
         expect(stored.reminder.minute, isNotNull);

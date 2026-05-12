@@ -7,6 +7,7 @@ import '../providers/theme_provider.dart';
 import '../widgets/pomodoro_timer_ring.dart';
 import '../widgets/pomodoro_session_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
 
 class PomodoroScreen extends StatefulWidget {
   const PomodoroScreen({super.key});
@@ -81,151 +82,261 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          // Timer tab
-          Column(
+          ListView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
             children: [
-              const Spacer(flex: 1),
-              Text(
-                typeLabel(state.type),
-                style: TextStyle(
-                  fontSize: 18,
-                  color: color,
-                  fontWeight: FontWeight.w600,
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(18),
+                gradient: LinearGradient(
+                  colors: [
+                    color.withValues(alpha: 0.14),
+                    Theme.of(context).colorScheme.surface,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ),
-              const SizedBox(height: 24),
-              PomodoroTimerRing(
-                progress: state.progress,
-                timeText: _formatTime(state.remainingSeconds),
-                color: color,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${s.focusTabTimer} · ${state.completedSessions} ${s.focusCompletedSuffix}',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-              ),
-              if (state.taskName != null && state.taskName!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.assignment,
-                        size: 14,
-                        color: Colors.grey.shade600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            Icons.timer_outlined,
+                            color: color,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                typeLabel(state.type),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${state.completedSessions} ${s.focusCompletedSuffix}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.68),
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            state.isRunning ? '进行中' : '已暂停',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: PomodoroTimerRing(
+                        progress: state.progress,
+                        timeText: _formatTime(state.remainingSeconds),
+                        color: color,
                       ),
-                      const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: () =>
-                            _editTaskName(context, provider, state.taskName!),
-                        child: Text(
-                          state.taskName!,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 13,
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Text(
+                        '${s.focusTabTimer} · ${state.completedSessions} ${s.focusCompletedSuffix}',
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.64),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (state.taskName != null && state.taskName!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: () => _editTaskName(
+                              context,
+                              provider,
+                              state.taskName!,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width - 96,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.assignment_outlined,
+                                      size: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.64),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        state.taskName!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.72),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-              const SizedBox(height: 24),
-              // Duration presets
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [25, 45, 60]
-                    .map(
-                      (min) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text('$min 分钟'),
-                          selected:
-                              state.totalSeconds == min * 60 &&
-                              state.type == PomodoroType.focus,
-                          onSelected: (_) => provider.setConfig(
-                            provider.config..focusDuration = min * 60,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
               ),
               const SizedBox(height: 12),
-              // White noise selector
-              ActionChip(
-                label: Text(
-                  _soundLabel(state.whiteNoiseSound, s),
-                  style: TextStyle(
-                    color: state.whiteNoiseSound != 'none'
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade600,
-                  ),
-                ),
-                avatar: Icon(
-                  _soundIcon(state.whiteNoiseSound),
-                  size: 16,
-                  color: state.whiteNoiseSound != 'none'
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade600,
-                ),
-                backgroundColor: state.whiteNoiseSound != 'none'
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1)
-                    : Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: state.whiteNoiseSound != 'none'
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.3)
-                        : Colors.grey.shade300,
-                  ),
-                ),
-                onPressed: () =>
-                    _showSoundPicker(context, provider, state.whiteNoiseSound),
-              ),
-              const SizedBox(height: 32),
-              // Controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton.filled(
-                    onPressed: provider.resetTimer,
-                    icon: const Icon(Icons.refresh),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey.shade200,
-                      foregroundColor: Colors.black87,
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppSectionHeader(
+                      title: '专注设置',
+                      subtitle: '时长预设、白噪音和控制',
+                      padding: EdgeInsets.zero,
                     ),
-                  ),
-                  const SizedBox(width: 24),
-                  SizedBox(
-                    width: 68,
-                    height: 68,
-                    child: FloatingActionButton(
-                      onPressed: provider.toggleTimer,
-                      backgroundColor: color,
-                      child: Icon(
-                        state.isRunning ? Icons.pause : Icons.play_arrow,
-                        size: 34,
-                        color: Colors.white,
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [25, 45, 60]
+                          .map(
+                            (min) => ChoiceChip(
+                              label: Text('$min 分钟'),
+                              selected:
+                                  state.totalSeconds == min * 60 &&
+                                  state.type == PomodoroType.focus,
+                              onSelected: (_) => provider.setConfig(
+                                provider.config..focusDuration = min * 60,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    AppActionTile(
+                      icon: _soundIcon(state.whiteNoiseSound),
+                      label: '白噪音',
+                      subtitle: _soundLabel(state.whiteNoiseSound, s),
+                      color: state.whiteNoiseSound != 'none'
+                          ? color
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      onTap: () => _showSoundPicker(
+                        context,
+                        provider,
+                        state.whiteNoiseSound,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 24),
-                  IconButton.filled(
-                    onPressed: provider.skipSession,
-                    icon: const Icon(Icons.skip_next),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey.shade200,
-                      foregroundColor: Colors.black87,
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton.filled(
+                          onPressed: provider.resetTimer,
+                          icon: const Icon(Icons.refresh),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        SizedBox(
+                          width: 68,
+                          height: 68,
+                          child: FloatingActionButton(
+                            onPressed: provider.toggleTimer,
+                            backgroundColor: color,
+                            child: Icon(
+                              state.isRunning ? Icons.pause : Icons.play_arrow,
+                              size: 34,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        IconButton.filled(
+                          onPressed: provider.skipSession,
+                          icon: const Icon(Icons.skip_next),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const Spacer(flex: 1),
             ],
           ),
           // History tab
@@ -244,7 +355,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
     final ctrl = TextEditingController(text: current);
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text(s.focusTaskLinkLabel),
         content: TextField(
           controller: ctrl,
@@ -317,60 +428,22 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       {'id': 'waves', 'label': '海浪拍岸', 'icon': Icons.waves},
     ];
 
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Text(
-                  '选择白噪音',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+      builder: (ctx) => AppPickerSheet<String>(
+        title: '选择白噪音',
+        subtitle: '专注时可切换环境音',
+        selectedValue: currentSound,
+        options: sounds
+            .map(
+              (s) => AppPickerOption<String>(
+                value: s['id'] as String,
+                title: s['label'] as String,
+                icon: s['icon'] as IconData,
               ),
-              const Divider(),
-              ...sounds.map((s) {
-                final isSelected = s['id'] == currentSound;
-                return ListTile(
-                  leading: Icon(
-                    s['icon'] as IconData,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                  ),
-                  title: Text(
-                    s['label'] as String,
-                    style: TextStyle(
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? Icon(
-                          Icons.check,
-                          color: Theme.of(context).colorScheme.primary,
-                        )
-                      : null,
-                  onTap: () {
-                    provider.setWhiteNoiseSound(s['id'] as String);
-                    Navigator.pop(ctx);
-                  },
-                );
-              }),
-            ],
-          ),
-        ),
+            )
+            .toList(),
+        onSelected: provider.setWhiteNoiseSound,
       ),
     );
   }
@@ -407,86 +480,120 @@ class _HistoryTab extends StatelessWidget {
     });
 
     return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
+        AppSurfaceCard(
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AppSectionHeader(
+                title: '最近 7 天',
+                subtitle: '按专注分钟统计',
+                padding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
-                  _MiniStat(
-                    label: '今日',
-                    value: '${provider.sessionCountToday} 次',
+                  Expanded(
+                    child: _MiniStat(
+                      label: '今日',
+                      value: '${provider.sessionCountToday} 次',
+                      icon: Icons.today_outlined,
+                      color: const Color(0xFFE53935),
+                    ),
                   ),
-                  const SizedBox(width: 16),
-                  _MiniStat(
-                    label: '本周',
-                    value: '${chartData.reduce((a, b) => a + b)} 分钟',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _MiniStat(
+                      label: '本周',
+                      value: '${chartData.reduce((a, b) => a + b)} 分钟',
+                      icon: Icons.view_week_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
-                  const SizedBox(width: 16),
-                  _MiniStat(
-                    label: '总计',
-                    value: '${provider.totalFocusMinutes} 分钟',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _MiniStat(
+                      label: '总计',
+                      value: '${provider.totalFocusMinutes} 分钟',
+                      icon: Icons.schedule,
+                      color: Theme.of(context).colorScheme.tertiary,
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 180,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: (chartData.reduce((a, b) => a > b ? a : b) + 10)
+                          .toDouble(),
+                      barGroups: List.generate(
+                        7,
+                        (i) => BarChartGroupData(
+                          x: i,
+                          barRods: [
+                            BarChartRodData(
+                              toY: chartData[i].toDouble(),
+                              color: const Color(0xFFE53935),
+                              width: 22,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ],
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            getTitlesWidget: (v, _) => Text(
+                              '${v.toInt()}m',
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (v, _) {
+                              final labels = [
+                                '一',
+                                '二',
+                                '三',
+                                '四',
+                                '五',
+                                '六',
+                                '日',
+                              ];
+                              final idx =
+                                  (now.weekday - (6 - v.toInt()) + 7) % 7;
+                              return Text(
+                                labels[idx],
+                                style: const TextStyle(fontSize: 10),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        SizedBox(
-          height: 180,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: (chartData.reduce((a, b) => a > b ? a : b) + 10)
-                    .toDouble(),
-                barGroups: List.generate(
-                  7,
-                  (i) => BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: chartData[i].toDouble(),
-                        color: const Color(0xFFE53935),
-                        width: 22,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      getTitlesWidget: (v, _) => Text(
-                        '${v.toInt()}m',
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (v, _) {
-                        final labels = ['一', '二', '三', '四', '五', '六', '日'];
-                        final idx = (now.weekday - (6 - v.toInt()) + 7) % 7;
-                        return Text(
-                          labels[idx],
-                          style: const TextStyle(fontSize: 10),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        const SizedBox(height: 12),
+        AppSectionHeader(
+          title: '会话记录',
+          subtitle: '${sessions.length} 次专注',
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
         ),
-        const Divider(),
         // Group sessions by date
         ..._groupedSessions(sessions).entries.map(
           (e) => Column(
@@ -499,7 +606,9 @@ class _HistoryTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.62),
                   ),
                 ),
               ),
@@ -527,20 +636,49 @@ class _HistoryTab extends StatelessWidget {
 class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
-  const _MiniStat({required this.label, required this.value});
+  final IconData icon;
+  final Color color;
+
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 15, color: color),
+        ),
+        const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: cs.onSurface,
+          ),
         ),
         Text(
           label,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.62),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

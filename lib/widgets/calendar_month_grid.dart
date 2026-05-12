@@ -176,6 +176,11 @@ class CalendarMonthGrid extends StatelessWidget {
                                     _dot(isSelected
                                         ? Colors.white60
                                         : const Color(0xFF26A69A)),
+                                  if (types
+                                      .contains(CalendarEventType.timeEntry))
+                                    _dot(isSelected
+                                        ? Colors.white54
+                                        : const Color(0xFF78909C)),
                                 ],
                               ),
                             ),

@@ -1,5 +1,5 @@
 import 'package:uuid/uuid.dart';
-import 'goal.dart' show FocusLink, ReminderConfig, ReminderKind;
+import 'goal.dart' show FocusLink, ReminderConfig, ReminderKind, ReminderPlan;
 import 'recurrence.dart';
 
 const uuid = Uuid();
@@ -17,20 +17,20 @@ enum TodoPriority { none, low, medium, high, urgent }
 
 extension TodoPriorityX on TodoPriority {
   String get label => switch (this) {
-        TodoPriority.none => '无',
-        TodoPriority.low => '低',
-        TodoPriority.medium => '中',
-        TodoPriority.high => '高',
-        TodoPriority.urgent => '紧急',
-      };
+    TodoPriority.none => '无',
+    TodoPriority.low => '低',
+    TodoPriority.medium => '中',
+    TodoPriority.high => '高',
+    TodoPriority.urgent => '紧急',
+  };
 
   int get rank => switch (this) {
-        TodoPriority.none => 0,
-        TodoPriority.low => 1,
-        TodoPriority.medium => 2,
-        TodoPriority.high => 3,
-        TodoPriority.urgent => 4,
-      };
+    TodoPriority.none => 0,
+    TodoPriority.low => 1,
+    TodoPriority.medium => 2,
+    TodoPriority.high => 3,
+    TodoPriority.urgent => 4,
+  };
 }
 
 class Subtask {
@@ -47,18 +47,18 @@ class Subtask {
   }) : id = id ?? uuid.v4();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'isCompleted': isCompleted,
-        'sortOrder': sortOrder,
-      };
+    'id': id,
+    'title': title,
+    'isCompleted': isCompleted,
+    'sortOrder': sortOrder,
+  };
 
   factory Subtask.fromJson(Map<String, dynamic> json) => Subtask(
-        id: json['id'],
-        title: json['title'],
-        isCompleted: json['isCompleted'] ?? false,
-        sortOrder: json['sortOrder'] ?? 0,
-      );
+    id: json['id'],
+    title: json['title'],
+    isCompleted: json['isCompleted'] ?? false,
+    sortOrder: json['sortOrder'] ?? 0,
+  );
 }
 
 /// 任务顺延记录：记录一次 `dueDate` 被改动的"从 → 到"以及触发原因。
@@ -79,18 +79,18 @@ class PostponeRecord {
   });
 
   Map<String, dynamic> toJson() => {
-        'from': from.toIso8601String(),
-        'to': to.toIso8601String(),
-        'reason': reason,
-        'at': at.toIso8601String(),
-      };
+    'from': from.toIso8601String(),
+    'to': to.toIso8601String(),
+    'reason': reason,
+    'at': at.toIso8601String(),
+  };
 
   factory PostponeRecord.fromJson(Map<String, dynamic> json) => PostponeRecord(
-        from: DateTime.parse(json['from']),
-        to: DateTime.parse(json['to']),
-        reason: json['reason'] ?? 'manual',
-        at: DateTime.parse(json['at']),
-      );
+    from: DateTime.parse(json['from']),
+    to: DateTime.parse(json['to']),
+    reason: json['reason'] ?? 'manual',
+    at: DateTime.parse(json['at']),
+  );
 }
 
 class TodoItem {
@@ -102,6 +102,9 @@ class TodoItem {
   TodoPriority priority;
   String? listGroupId;
   String? listGroupName;
+  String workspaceId;
+  String? createdBy;
+  String? updatedBy;
   List<String> tags;
   DateTime? dueDate;
   DateTime date;
@@ -119,6 +122,9 @@ class TodoItem {
   /// 新版提醒配置（push / alarm + hour/minute）。
   /// 当 [hasReminder] 为 true 时优先以此为准。
   ReminderConfig reminder;
+
+  /// 新版多提醒计划；当前仍以 legacy reminder 为主，后续 UI 会切到此字段。
+  ReminderPlan reminderPlan;
 
   /// 专注模式联动（番茄钟预设、专注时长、白噪音）。
   FocusLink focusLink;
@@ -161,12 +167,16 @@ class TodoItem {
     this.priority = TodoPriority.none,
     this.listGroupId,
     this.listGroupName,
+    this.workspaceId = 'private',
+    this.createdBy,
+    this.updatedBy,
     List<String>? tags,
     this.dueDate,
     DateTime? date,
-    this.hasReminder = false,
+    bool hasReminder = false,
     this.reminderAt,
     ReminderConfig? reminder,
+    ReminderPlan? reminderPlan,
     FocusLink? focusLink,
     this.timeTargetSeconds,
     List<PostponeRecord>? postponeHistory,
@@ -178,46 +188,62 @@ class TodoItem {
     this.isArchivedAfterRollover = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? uuid.v4(),
-        date = date ?? DateTime.now(),
-        tags = tags ?? [],
-        reminder = reminder ?? const ReminderConfig.disabled(),
-        focusLink = focusLink ?? const FocusLink.disabled(),
-        postponeHistory = postponeHistory ?? [],
-        subtasks = subtasks ?? [],
-        recurrence = recurrence ?? const RecurrenceRule(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? uuid.v4(),
+       date = date ?? DateTime.now(),
+       tags = tags ?? [],
+       reminder =
+           reminder ??
+           reminderPlan?.toLegacyReminderConfig() ??
+           const ReminderConfig.disabled(),
+       reminderPlan =
+           reminderPlan ??
+           ReminderPlan.fromLegacy(reminder ?? const ReminderConfig.disabled()),
+       hasReminder =
+           hasReminder ||
+           (reminder?.enabled ?? false) ||
+           (reminderPlan?.enabled ?? false),
+       focusLink = focusLink ?? const FocusLink.disabled(),
+       postponeHistory = postponeHistory ?? [],
+       subtasks = subtasks ?? [],
+       recurrence = recurrence ?? const RecurrenceRule(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'notes': notes,
-        'isCompleted': isCompleted,
-        'quadrant': quadrant.index,
-        'priority': priority.index,
-        'listGroupId': listGroupId,
-        'listGroupName': listGroupName,
-        'tags': tags,
-        'dueDate': dueDate?.toIso8601String(),
-        'date': date.toIso8601String(),
-        // 旧字段保留，方便旧代码与降级读取。
-        'hasReminder': hasReminder,
-        'reminderAt': reminderAt?.toIso8601String(),
-        // 新字段。
-        'reminder': reminder.toJson(),
-        'focusLink': focusLink.toJson(),
-        'timeTargetSeconds': timeTargetSeconds,
-        'postponeHistory': postponeHistory.map((p) => p.toJson()).toList(),
-        'subtasks': subtasks.map((s) => s.toJson()).toList(),
-        'autoToggleByChildren': autoToggleByChildren,
-        'sortOrder': sortOrder,
-        'recurrence': recurrence.toJson(),
-        'completedAt': completedAt?.toIso8601String(),
-        'isArchivedAfterRollover': isArchivedAfterRollover,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'notes': notes,
+    'isCompleted': isCompleted,
+    'quadrant': quadrant.index,
+    'priority': priority.index,
+    'listGroupId': listGroupId,
+    'listGroupName': listGroupName,
+    'workspaceId': workspaceId,
+    'createdBy': createdBy,
+    'updatedBy': updatedBy,
+    'tags': tags,
+    'dueDate': dueDate?.toIso8601String(),
+    'date': date.toIso8601String(),
+    // 旧字段保留，方便旧代码与降级读取。
+    'hasReminder': hasReminder,
+    'reminderAt': reminderAt?.toIso8601String(),
+    // 新字段。
+    'reminder': reminderPlan
+        .toLegacyReminderConfig(fallback: reminder)
+        .toJson(),
+    'reminderPlan': reminderPlan.toJson(),
+    'focusLink': focusLink.toJson(),
+    'timeTargetSeconds': timeTargetSeconds,
+    'postponeHistory': postponeHistory.map((p) => p.toJson()).toList(),
+    'subtasks': subtasks.map((s) => s.toJson()).toList(),
+    'autoToggleByChildren': autoToggleByChildren,
+    'sortOrder': sortOrder,
+    'recurrence': recurrence.toJson(),
+    'completedAt': completedAt?.toIso8601String(),
+    'isArchivedAfterRollover': isArchivedAfterRollover,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory TodoItem.fromJson(Map<String, dynamic> json) {
     // --- 提醒字段迁移：优先新 reminder，缺失则从旧 hasReminder / reminderAt 合成。
@@ -240,9 +266,16 @@ class TodoItem {
     } else {
       reminder = const ReminderConfig.disabled();
     }
+    final reminderPlanJson = json['reminderPlan'];
+    final reminderPlan = reminderPlanJson is Map
+        ? ReminderPlan.fromJson(Map<String, dynamic>.from(reminderPlanJson))
+        : ReminderPlan.fromLegacy(reminder);
+    final effectiveReminder = reminderPlan.toLegacyReminderConfig(
+      fallback: reminder,
+    );
 
     // 兜底：hasReminder 与 reminder.enabled 同步，让旧代码读 hasReminder 也正确。
-    final effectiveHasReminder = legacyHasReminder || reminder.enabled;
+    final effectiveHasReminder = legacyHasReminder || effectiveReminder.enabled;
 
     return TodoItem(
       id: json['id'],
@@ -253,29 +286,34 @@ class TodoItem {
       priority: TodoPriority.values[json['priority'] ?? 0],
       listGroupId: json['listGroupId'],
       listGroupName: json['listGroupName'],
+      workspaceId: json['workspaceId']?.toString() ?? 'private',
+      createdBy: json['createdBy']?.toString(),
+      updatedBy: json['updatedBy']?.toString(),
       tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
-      dueDate:
-          json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
+      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
       date: DateTime.parse(json['date']),
       hasReminder: effectiveHasReminder,
       reminderAt: legacyReminderAt,
-      reminder: reminder,
-      focusLink:
-          FocusLink.fromJson(json['focusLink'] as Map<String, dynamic>?),
+      reminder: effectiveReminder,
+      reminderPlan: reminderPlan,
+      focusLink: FocusLink.fromJson(json['focusLink'] as Map<String, dynamic>?),
       timeTargetSeconds: (json['timeTargetSeconds'] as num?)?.toInt(),
-      postponeHistory: (json['postponeHistory'] as List<dynamic>?)
+      postponeHistory:
+          (json['postponeHistory'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(PostponeRecord.fromJson)
               .toList() ??
           [],
-      subtasks: (json['subtasks'] as List<dynamic>?)
+      subtasks:
+          (json['subtasks'] as List<dynamic>?)
               ?.map((s) => Subtask.fromJson(s))
               .toList() ??
           [],
       autoToggleByChildren: json['autoToggleByChildren'] ?? true,
       sortOrder: json['sortOrder'] ?? 0,
       recurrence: RecurrenceRule.fromJson(
-          json['recurrence'] as Map<String, dynamic>?),
+        json['recurrence'] as Map<String, dynamic>?,
+      ),
       completedAt: json['completedAt'] != null
           ? DateTime.tryParse(json['completedAt'])
           : null,
@@ -293,12 +331,16 @@ class TodoItem {
     TodoPriority? priority,
     Object? listGroupId = _copyWithUnset,
     Object? listGroupName = _copyWithUnset,
+    String? workspaceId,
+    Object? createdBy = _copyWithUnset,
+    Object? updatedBy = _copyWithUnset,
     List<String>? tags,
     Object? dueDate = _copyWithUnset,
     DateTime? date,
     bool? hasReminder,
     Object? reminderAt = _copyWithUnset,
     ReminderConfig? reminder,
+    ReminderPlan? reminderPlan,
     FocusLink? focusLink,
     Object? timeTargetSeconds = _copyWithUnset,
     List<PostponeRecord>? postponeHistory,
@@ -308,55 +350,63 @@ class TodoItem {
     RecurrenceRule? recurrence,
     Object? completedAt = _copyWithUnset,
     bool? isArchivedAfterRollover,
-  }) =>
-      TodoItem(
-        id: id,
-        title: title ?? this.title,
-        notes: notes ?? this.notes,
-        isCompleted: isCompleted ?? this.isCompleted,
-        quadrant: quadrant ?? this.quadrant,
-        priority: priority ?? this.priority,
-        listGroupId: identical(listGroupId, _copyWithUnset)
-            ? this.listGroupId
-            : listGroupId as String?,
-        listGroupName: identical(listGroupName, _copyWithUnset)
-            ? this.listGroupName
-            : listGroupName as String?,
-        tags: tags ?? this.tags,
-        dueDate: identical(dueDate, _copyWithUnset)
-            ? this.dueDate
-            : dueDate as DateTime?,
-        date: date ?? this.date,
-        hasReminder: hasReminder ?? this.hasReminder,
-        reminderAt: identical(reminderAt, _copyWithUnset)
-            ? this.reminderAt
-            : reminderAt as DateTime?,
-        reminder: reminder ?? this.reminder,
-        focusLink: focusLink ?? this.focusLink,
-        timeTargetSeconds: identical(timeTargetSeconds, _copyWithUnset)
-            ? this.timeTargetSeconds
-            : timeTargetSeconds as int?,
-        postponeHistory: postponeHistory ?? this.postponeHistory,
-        subtasks: subtasks ?? this.subtasks,
-        autoToggleByChildren:
-            autoToggleByChildren ?? this.autoToggleByChildren,
-        sortOrder: sortOrder ?? this.sortOrder,
-        recurrence: recurrence ?? this.recurrence,
-        completedAt: identical(completedAt, _copyWithUnset)
-            ? this.completedAt
-            : completedAt as DateTime?,
-        isArchivedAfterRollover:
-            isArchivedAfterRollover ?? this.isArchivedAfterRollover,
-        createdAt: createdAt,
-        updatedAt: DateTime.now(),
-      );
+  }) => TodoItem(
+    id: id,
+    title: title ?? this.title,
+    notes: notes ?? this.notes,
+    isCompleted: isCompleted ?? this.isCompleted,
+    quadrant: quadrant ?? this.quadrant,
+    priority: priority ?? this.priority,
+    listGroupId: identical(listGroupId, _copyWithUnset)
+        ? this.listGroupId
+        : listGroupId as String?,
+    listGroupName: identical(listGroupName, _copyWithUnset)
+        ? this.listGroupName
+        : listGroupName as String?,
+    workspaceId: workspaceId ?? this.workspaceId,
+    createdBy: identical(createdBy, _copyWithUnset)
+        ? this.createdBy
+        : createdBy as String?,
+    updatedBy: identical(updatedBy, _copyWithUnset)
+        ? this.updatedBy
+        : updatedBy as String?,
+    tags: tags ?? this.tags,
+    dueDate: identical(dueDate, _copyWithUnset)
+        ? this.dueDate
+        : dueDate as DateTime?,
+    date: date ?? this.date,
+    hasReminder: hasReminder ?? this.hasReminder,
+    reminderAt: identical(reminderAt, _copyWithUnset)
+        ? this.reminderAt
+        : reminderAt as DateTime?,
+    reminder: reminder ?? this.reminder,
+    reminderPlan:
+        reminderPlan ??
+        (reminder != null
+            ? ReminderPlan.fromLegacy(reminder)
+            : this.reminderPlan),
+    focusLink: focusLink ?? this.focusLink,
+    timeTargetSeconds: identical(timeTargetSeconds, _copyWithUnset)
+        ? this.timeTargetSeconds
+        : timeTargetSeconds as int?,
+    postponeHistory: postponeHistory ?? this.postponeHistory,
+    subtasks: subtasks ?? this.subtasks,
+    autoToggleByChildren: autoToggleByChildren ?? this.autoToggleByChildren,
+    sortOrder: sortOrder ?? this.sortOrder,
+    recurrence: recurrence ?? this.recurrence,
+    completedAt: identical(completedAt, _copyWithUnset)
+        ? this.completedAt
+        : completedAt as DateTime?,
+    isArchivedAfterRollover:
+        isArchivedAfterRollover ?? this.isArchivedAfterRollover,
+    createdAt: createdAt,
+    updatedAt: DateTime.now(),
+  );
 
   double get subtaskProgress => subtasks.isEmpty
       ? 0.0
       : subtasks.where((s) => s.isCompleted).length / subtasks.length;
 
   bool get isOverdue =>
-      !isCompleted &&
-      dueDate != null &&
-      dueDate!.isBefore(DateTime.now());
+      !isCompleted && dueDate != null && dueDate!.isBefore(DateTime.now());
 }

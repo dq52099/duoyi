@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'recurrence.dart';
 
 const _uuid = Uuid();
+const Object _reminderCopyUnset = Object();
 
 /// 目标分类（与推荐目标库一致）。
 ///
@@ -46,10 +47,10 @@ class GoalScheduling {
     List<int>? fixedWeekdays,
     List<int>? fixedMonthDays,
   }) : this(
-          mode: SchedulingMode.fixed,
-          fixedWeekdays: fixedWeekdays,
-          fixedMonthDays: fixedMonthDays,
-        );
+         mode: SchedulingMode.fixed,
+         fixedWeekdays: fixedWeekdays,
+         fixedMonthDays: fixedMonthDays,
+       );
 
   /// 随机模式的便捷构造。
   const GoalScheduling.random({
@@ -57,11 +58,11 @@ class GoalScheduling {
     int? maxPerWeek,
     int? maxPerMonth,
   }) : this(
-          mode: SchedulingMode.random,
-          randomMinGapDays: minGapDays,
-          randomMaxPerWeek: maxPerWeek,
-          randomMaxPerMonth: maxPerMonth,
-        );
+         mode: SchedulingMode.random,
+         randomMinGapDays: minGapDays,
+         randomMaxPerWeek: maxPerWeek,
+         randomMaxPerMonth: maxPerMonth,
+       );
 
   GoalScheduling copyWith({
     SchedulingMode? mode,
@@ -70,29 +71,29 @@ class GoalScheduling {
     int? randomMinGapDays,
     int? randomMaxPerWeek,
     int? randomMaxPerMonth,
-  }) =>
-      GoalScheduling(
-        mode: mode ?? this.mode,
-        fixedWeekdays: fixedWeekdays ?? this.fixedWeekdays,
-        fixedMonthDays: fixedMonthDays ?? this.fixedMonthDays,
-        randomMinGapDays: randomMinGapDays ?? this.randomMinGapDays,
-        randomMaxPerWeek: randomMaxPerWeek ?? this.randomMaxPerWeek,
-        randomMaxPerMonth: randomMaxPerMonth ?? this.randomMaxPerMonth,
-      );
+  }) => GoalScheduling(
+    mode: mode ?? this.mode,
+    fixedWeekdays: fixedWeekdays ?? this.fixedWeekdays,
+    fixedMonthDays: fixedMonthDays ?? this.fixedMonthDays,
+    randomMinGapDays: randomMinGapDays ?? this.randomMinGapDays,
+    randomMaxPerWeek: randomMaxPerWeek ?? this.randomMaxPerWeek,
+    randomMaxPerMonth: randomMaxPerMonth ?? this.randomMaxPerMonth,
+  );
 
   Map<String, dynamic> toJson() => {
-        'mode': mode.index,
-        'fixedWeekdays': fixedWeekdays,
-        'fixedMonthDays': fixedMonthDays,
-        'randomMinGapDays': randomMinGapDays,
-        'randomMaxPerWeek': randomMaxPerWeek,
-        'randomMaxPerMonth': randomMaxPerMonth,
-      };
+    'mode': mode.index,
+    'fixedWeekdays': fixedWeekdays,
+    'fixedMonthDays': fixedMonthDays,
+    'randomMinGapDays': randomMinGapDays,
+    'randomMaxPerWeek': randomMaxPerWeek,
+    'randomMaxPerMonth': randomMaxPerMonth,
+  };
 
   factory GoalScheduling.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const GoalScheduling.fixed();
     final rawMode = json['mode'];
-    final mode = _enumFromIndex(
+    final mode =
+        _enumFromIndex(
           SchedulingMode.values,
           rawMode is num ? rawMode.toInt() : null,
         ) ??
@@ -148,31 +149,31 @@ class ReminderConfig {
     int? daysBefore,
     bool? vibrate,
     bool? fullScreen,
-  }) =>
-      ReminderConfig(
-        enabled: enabled ?? this.enabled,
-        kind: kind ?? this.kind,
-        hour: hour ?? this.hour,
-        minute: minute ?? this.minute,
-        daysBefore: daysBefore ?? this.daysBefore,
-        vibrate: vibrate ?? this.vibrate,
-        fullScreen: fullScreen ?? this.fullScreen,
-      );
+  }) => ReminderConfig(
+    enabled: enabled ?? this.enabled,
+    kind: kind ?? this.kind,
+    hour: hour ?? this.hour,
+    minute: minute ?? this.minute,
+    daysBefore: daysBefore ?? this.daysBefore,
+    vibrate: vibrate ?? this.vibrate,
+    fullScreen: fullScreen ?? this.fullScreen,
+  );
 
   Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'kind': kind.index,
-        'hour': hour,
-        'minute': minute,
-        'daysBefore': daysBefore,
-        'vibrate': vibrate,
-        'fullScreen': fullScreen,
-      };
+    'enabled': enabled,
+    'kind': kind.index,
+    'hour': hour,
+    'minute': minute,
+    'daysBefore': daysBefore,
+    'vibrate': vibrate,
+    'fullScreen': fullScreen,
+  };
 
   factory ReminderConfig.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const ReminderConfig.disabled();
     final rawKind = json['kind'];
-    final kind = _enumFromIndex(
+    final kind =
+        _enumFromIndex(
           ReminderKind.values,
           rawKind is num ? rawKind.toInt() : null,
         ) ??
@@ -187,6 +188,226 @@ class ReminderConfig {
       fullScreen: json['fullScreen'] ?? true,
     );
   }
+}
+
+enum ReminderRuleType { absolute, relativeToDue, dailyTime, weeklyTime }
+
+class ReminderRule {
+  final String id;
+  final bool enabled;
+  final ReminderRuleType type;
+  final ReminderKind kind;
+  final int? hour;
+  final int? minute;
+  final int? offsetMinutes;
+  final List<int> weekdays;
+  final bool vibrate;
+  final bool fullScreen;
+  final int snoozeMinutes;
+  final int repeatCount;
+
+  ReminderRule({
+    String? id,
+    this.enabled = true,
+    this.type = ReminderRuleType.absolute,
+    this.kind = ReminderKind.alarm,
+    this.hour,
+    this.minute,
+    this.offsetMinutes,
+    List<int>? weekdays,
+    this.vibrate = true,
+    this.fullScreen = true,
+    this.snoozeMinutes = 0,
+    this.repeatCount = 0,
+  }) : id = id ?? _uuid.v4(),
+       weekdays = List<int>.unmodifiable(weekdays ?? const <int>[]);
+
+  ReminderRule copyWith({
+    Object? id = _reminderCopyUnset,
+    bool? enabled,
+    ReminderRuleType? type,
+    ReminderKind? kind,
+    Object? hour = _reminderCopyUnset,
+    Object? minute = _reminderCopyUnset,
+    Object? offsetMinutes = _reminderCopyUnset,
+    Object? weekdays = _reminderCopyUnset,
+    bool? vibrate,
+    bool? fullScreen,
+    int? snoozeMinutes,
+    int? repeatCount,
+  }) {
+    return ReminderRule(
+      id: identical(id, _reminderCopyUnset) ? this.id : id as String?,
+      enabled: enabled ?? this.enabled,
+      type: type ?? this.type,
+      kind: kind ?? this.kind,
+      hour: identical(hour, _reminderCopyUnset) ? this.hour : hour as int?,
+      minute: identical(minute, _reminderCopyUnset)
+          ? this.minute
+          : minute as int?,
+      offsetMinutes: identical(offsetMinutes, _reminderCopyUnset)
+          ? this.offsetMinutes
+          : offsetMinutes as int?,
+      weekdays: identical(weekdays, _reminderCopyUnset)
+          ? this.weekdays
+          : List<int>.unmodifiable((weekdays as List).cast<int>()),
+      vibrate: vibrate ?? this.vibrate,
+      fullScreen: fullScreen ?? this.fullScreen,
+      snoozeMinutes: snoozeMinutes ?? this.snoozeMinutes,
+      repeatCount: repeatCount ?? this.repeatCount,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'enabled': enabled,
+    'type': type.index,
+    'kind': kind.index,
+    'hour': hour,
+    'minute': minute,
+    'offsetMinutes': offsetMinutes,
+    'weekdays': weekdays,
+    'vibrate': vibrate,
+    'fullScreen': fullScreen,
+    'snoozeMinutes': snoozeMinutes,
+    'repeatCount': repeatCount,
+  };
+
+  factory ReminderRule.fromJson(Map<String, dynamic> json) {
+    final type =
+        _enumFromIndex(
+          ReminderRuleType.values,
+          (json['type'] as num?)?.toInt(),
+        ) ??
+        ReminderRuleType.absolute;
+    final kind =
+        _enumFromIndex(ReminderKind.values, (json['kind'] as num?)?.toInt()) ??
+        ReminderKind.alarm;
+    return ReminderRule(
+      id: json['id']?.toString(),
+      enabled: json['enabled'] != false,
+      type: type,
+      kind: kind,
+      hour: (json['hour'] as num?)?.toInt(),
+      minute: (json['minute'] as num?)?.toInt(),
+      offsetMinutes: (json['offsetMinutes'] as num?)?.toInt(),
+      weekdays:
+          (json['weekdays'] as List?)
+              ?.whereType<num>()
+              .map((e) => e.toInt())
+              .toList() ??
+          const <int>[],
+      vibrate: json['vibrate'] ?? true,
+      fullScreen: json['fullScreen'] ?? true,
+      snoozeMinutes: (json['snoozeMinutes'] as num?)?.toInt() ?? 0,
+      repeatCount: (json['repeatCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class ReminderPlan {
+  final bool enabled;
+  final List<ReminderRule> rules;
+
+  ReminderPlan({this.enabled = false, List<ReminderRule>? rules})
+    : rules = List<ReminderRule>.unmodifiable(rules ?? const <ReminderRule>[]);
+
+  const ReminderPlan.disabled()
+    : enabled = false,
+      rules = const <ReminderRule>[];
+
+  bool get isEmpty => rules.isEmpty;
+
+  ReminderRule? get primaryRule {
+    for (final rule in rules) {
+      if (rule.enabled) return rule;
+    }
+    return rules.isEmpty ? null : rules.first;
+  }
+
+  ReminderPlan copyWith({bool? enabled, List<ReminderRule>? rules}) {
+    return ReminderPlan(
+      enabled: enabled ?? this.enabled,
+      rules: rules ?? this.rules,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'rules': rules.map((r) => r.toJson()).toList(),
+  };
+
+  factory ReminderPlan.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return const ReminderPlan.disabled();
+    return ReminderPlan(
+      enabled: json['enabled'] == true,
+      rules:
+          (json['rules'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (raw) => ReminderRule.fromJson(Map<String, dynamic>.from(raw)),
+              )
+              .toList() ??
+          const <ReminderRule>[],
+    );
+  }
+
+  factory ReminderPlan.fromLegacy(ReminderConfig old) {
+    if (!old.enabled) return const ReminderPlan.disabled();
+    final type = old.daysBefore > 0
+        ? ReminderRuleType.relativeToDue
+        : ReminderRuleType.absolute;
+    return ReminderPlan(
+      enabled: true,
+      rules: [
+        ReminderRule(
+          id: _legacyRuleId(old),
+          enabled: true,
+          type: type,
+          kind: old.kind,
+          hour: old.hour,
+          minute: old.minute,
+          offsetMinutes: old.daysBefore > 0 ? -old.daysBefore * 24 * 60 : null,
+          vibrate: old.vibrate,
+          fullScreen: old.fullScreen,
+        ),
+      ],
+    );
+  }
+
+  ReminderConfig toLegacyReminderConfig({ReminderConfig? fallback}) {
+    final rule = primaryRule;
+    if (rule == null) return fallback ?? const ReminderConfig.disabled();
+    final daysBefore =
+        rule.type == ReminderRuleType.relativeToDue &&
+            rule.offsetMinutes != null &&
+            rule.offsetMinutes! < 0
+        ? (-rule.offsetMinutes!) ~/ (24 * 60)
+        : 0;
+    return ReminderConfig(
+      enabled: enabled && rule.enabled,
+      kind: rule.kind,
+      hour: rule.hour ?? fallback?.hour,
+      minute: rule.minute ?? fallback?.minute,
+      daysBefore: daysBefore,
+      vibrate: rule.vibrate,
+      fullScreen: rule.fullScreen,
+    );
+  }
+}
+
+String _legacyRuleId(ReminderConfig old) {
+  final hour = old.hour?.toString() ?? 'x';
+  final minute = old.minute?.toString() ?? 'x';
+  return [
+    'legacy',
+    old.kind.index.toString(),
+    hour,
+    minute,
+    old.daysBefore.toString(),
+    old.vibrate ? 'v1' : 'v0',
+    old.fullScreen ? 'f1' : 'f0',
+  ].join('-');
 }
 
 /// 专注（番茄钟）联动配置。
@@ -211,20 +432,19 @@ class FocusLink {
     String? presetId,
     int? focusSeconds,
     String? whiteNoise,
-  }) =>
-      FocusLink(
-        enabled: enabled ?? this.enabled,
-        presetId: presetId ?? this.presetId,
-        focusSeconds: focusSeconds ?? this.focusSeconds,
-        whiteNoise: whiteNoise ?? this.whiteNoise,
-      );
+  }) => FocusLink(
+    enabled: enabled ?? this.enabled,
+    presetId: presetId ?? this.presetId,
+    focusSeconds: focusSeconds ?? this.focusSeconds,
+    whiteNoise: whiteNoise ?? this.whiteNoise,
+  );
 
   Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'presetId': presetId,
-        'focusSeconds': focusSeconds,
-        'whiteNoise': whiteNoise,
-      };
+    'enabled': enabled,
+    'presetId': presetId,
+    'focusSeconds': focusSeconds,
+    'whiteNoise': whiteNoise,
+  };
 
   factory FocusLink.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const FocusLink.disabled();
@@ -252,20 +472,20 @@ class GoalMilestone {
   }) : id = id ?? _uuid.v4();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'isCompleted': isCompleted,
-        'completedAt': completedAt?.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'isCompleted': isCompleted,
+    'completedAt': completedAt?.toIso8601String(),
+  };
 
   factory GoalMilestone.fromJson(Map<String, dynamic> json) => GoalMilestone(
-        id: json['id'],
-        title: json['title'] ?? '',
-        isCompleted: json['isCompleted'] ?? false,
-        completedAt: json['completedAt'] != null
-            ? DateTime.parse(json['completedAt'])
-            : null,
-      );
+    id: json['id'],
+    title: json['title'] ?? '',
+    isCompleted: json['isCompleted'] ?? false,
+    completedAt: json['completedAt'] != null
+        ? DateTime.parse(json['completedAt'])
+        : null,
+  );
 }
 
 enum GoalStatus { active, paused, achieved, abandoned }
@@ -289,6 +509,7 @@ class GoalItem {
   bool skipHolidays;
   FocusLink focusLink;
   ReminderConfig reminder;
+  ReminderPlan reminderPlan;
   int? timeTargetSeconds;
   int? dailyTargetCount;
   int sortOrder;
@@ -313,19 +534,26 @@ class GoalItem {
     this.skipHolidays = false,
     FocusLink? focusLink,
     ReminderConfig? reminder,
+    ReminderPlan? reminderPlan,
     this.timeTargetSeconds,
     this.dailyTargetCount,
     this.sortOrder = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? _uuid.v4(),
-        milestones = milestones ?? [],
-        recurrence = recurrence ?? const RecurrenceRule(),
-        scheduling = scheduling ?? const GoalScheduling.fixed(),
-        focusLink = focusLink ?? const FocusLink.disabled(),
-        reminder = reminder ?? const ReminderConfig.disabled(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? _uuid.v4(),
+       milestones = milestones ?? [],
+       recurrence = recurrence ?? const RecurrenceRule(),
+       scheduling = scheduling ?? const GoalScheduling.fixed(),
+       focusLink = focusLink ?? const FocusLink.disabled(),
+       reminder =
+           reminder ??
+           reminderPlan?.toLegacyReminderConfig() ??
+           const ReminderConfig.disabled(),
+       reminderPlan =
+           reminderPlan ??
+           ReminderPlan.fromLegacy(reminder ?? const ReminderConfig.disabled()),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   double get computedProgress {
     if (!autoProgress) return progress;
@@ -343,32 +571,43 @@ class GoalItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'description': description,
-        'icon': icon,
-        'colorValue': colorValue,
-        'startDate': startDate?.toIso8601String(),
-        'targetDate': targetDate?.toIso8601String(),
-        'status': status.index,
-        'progress': progress,
-        'autoProgress': autoProgress,
-        'milestones': milestones.map((m) => m.toJson()).toList(),
-        'category': category.name,
-        'recurrence': recurrence.toJson(),
-        'scheduling': scheduling.toJson(),
-        'skipHolidays': skipHolidays,
-        'focusLink': focusLink.toJson(),
-        'reminder': reminder.toJson(),
-        'timeTargetSeconds': timeTargetSeconds,
-        'dailyTargetCount': dailyTargetCount,
-        'sortOrder': sortOrder,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'description': description,
+    'icon': icon,
+    'colorValue': colorValue,
+    'startDate': startDate?.toIso8601String(),
+    'targetDate': targetDate?.toIso8601String(),
+    'status': status.index,
+    'progress': progress,
+    'autoProgress': autoProgress,
+    'milestones': milestones.map((m) => m.toJson()).toList(),
+    'category': category.name,
+    'recurrence': recurrence.toJson(),
+    'scheduling': scheduling.toJson(),
+    'skipHolidays': skipHolidays,
+    'focusLink': focusLink.toJson(),
+    'reminder': reminderPlan
+        .toLegacyReminderConfig(fallback: reminder)
+        .toJson(),
+    'reminderPlan': reminderPlan.toJson(),
+    'timeTargetSeconds': timeTargetSeconds,
+    'dailyTargetCount': dailyTargetCount,
+    'sortOrder': sortOrder,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory GoalItem.fromJson(Map<String, dynamic> json) {
     final now = DateTime.now();
+    final legacyReminder = ReminderConfig.fromJson(
+      json['reminder'] as Map<String, dynamic>?,
+    );
+    final reminderPlan = json['reminderPlan'] is Map
+        ? ReminderPlan.fromJson(
+            Map<String, dynamic>.from(json['reminderPlan'] as Map),
+          )
+        : ReminderPlan.fromLegacy(legacyReminder);
     return GoalItem(
       id: json['id'],
       title: json['title'] ?? '',
@@ -381,14 +620,16 @@ class GoalItem {
       targetDate: json['targetDate'] != null
           ? DateTime.tryParse(json['targetDate'].toString())
           : null,
-      status: _enumFromIndex(
+      status:
+          _enumFromIndex(
             GoalStatus.values,
             (json['status'] as num?)?.toInt(),
           ) ??
           GoalStatus.active,
       progress: (json['progress'] as num?)?.toDouble() ?? 0,
       autoProgress: json['autoProgress'] ?? true,
-      milestones: (json['milestones'] as List<dynamic>?)
+      milestones:
+          (json['milestones'] as List<dynamic>?)
               ?.map((m) => GoalMilestone.fromJson(m))
               .toList() ??
           [],
@@ -400,12 +641,9 @@ class GoalItem {
         json['scheduling'] as Map<String, dynamic>?,
       ),
       skipHolidays: json['skipHolidays'] == true,
-      focusLink: FocusLink.fromJson(
-        json['focusLink'] as Map<String, dynamic>?,
-      ),
-      reminder: ReminderConfig.fromJson(
-        json['reminder'] as Map<String, dynamic>?,
-      ),
+      focusLink: FocusLink.fromJson(json['focusLink'] as Map<String, dynamic>?),
+      reminder: reminderPlan.toLegacyReminderConfig(fallback: legacyReminder),
+      reminderPlan: reminderPlan,
       timeTargetSeconds: (json['timeTargetSeconds'] as num?)?.toInt(),
       dailyTargetCount: (json['dailyTargetCount'] as num?)?.toInt(),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
@@ -435,8 +673,7 @@ GoalCategory _parseGoalCategory(dynamic raw) {
     if (s.isEmpty) return GoalCategory.custom;
     final asInt = int.tryParse(s);
     if (asInt != null) {
-      return _enumFromIndex(GoalCategory.values, asInt) ??
-          GoalCategory.custom;
+      return _enumFromIndex(GoalCategory.values, asInt) ?? GoalCategory.custom;
     }
     final lower = s.toLowerCase();
     for (final c in GoalCategory.values) {

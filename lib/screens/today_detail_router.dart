@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
 import '../providers/anniversary_provider.dart';
-import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
@@ -19,14 +18,7 @@ import 'todo_detail_screen.dart';
 import 'todo_screen.dart';
 
 /// 今日页 / 其他聚合页调用的"详情跳转"所属 section 类型（Requirement 6.2）。
-enum TodaySectionKind {
-  todos,
-  courses,
-  anniversaries,
-  goals,
-  habits,
-  diary,
-}
+enum TodaySectionKind { todos, courses, anniversaries, goals, habits, diary }
 
 /// 今日页 / 聚合页"查看"按钮的统一路由入口（Requirement 6）。
 ///
@@ -75,24 +67,20 @@ class TodayDetailRouter {
         if (id == null) {
           return MaterialPageRoute(builder: (_) => const TodoScreen());
         }
-        final exists = context
-            .read<TodoProvider>()
-            .todos
-            .any((t) => t.id == id);
-        if (!exists) return _emptyRoute(kind, '这个待办不存在或已被删除');
-        return MaterialPageRoute(
-          builder: (_) => TodoDetailScreen(todoId: id),
+        final exists = context.read<TodoProvider>().todos.any(
+          (t) => t.id == id,
         );
+        if (!exists) return _emptyRoute(kind, '这个待办不存在或已被删除');
+        return MaterialPageRoute(builder: (_) => TodoDetailScreen(todoId: id));
 
       case TodaySectionKind.courses:
-        return MaterialPageRoute(
-          builder: (_) => const CourseScheduleScreen(),
-        );
+        return MaterialPageRoute(builder: (_) => const CourseScheduleScreen());
 
       case TodaySectionKind.anniversaries:
         if (id != null) {
-          final exists =
-              context.read<AnniversaryProvider>().items.any((a) => a.id == id);
+          final exists = context.read<AnniversaryProvider>().items.any(
+            (a) => a.id == id,
+          );
           if (!exists) return _emptyRoute(kind, '这个纪念日不存在或已被删除');
         }
         return MaterialPageRoute(builder: (_) => const AnniversaryScreen());
@@ -105,16 +93,15 @@ class TodayDetailRouter {
         final idx = goals.indexWhere((g) => g.id == id);
         if (idx < 0) return _emptyRoute(kind, '这个目标不存在或已被删除');
         final goal = goals[idx];
-        return MaterialPageRoute(
-          builder: (_) => GoalEditScreen(goal: goal),
-        );
+        return MaterialPageRoute(builder: (_) => GoalEditScreen(goal: goal));
 
       case TodaySectionKind.habits:
         if (id == null) {
           return MaterialPageRoute(builder: (_) => const HabitScreen());
         }
-        final exists =
-            context.read<HabitProvider>().habits.any((h) => h.id == id);
+        final exists = context.read<HabitProvider>().habits.any(
+          (h) => h.id == id,
+        );
         if (!exists) return _emptyRoute(kind, '这个习惯不存在或已被删除');
         return MaterialPageRoute(
           builder: (_) => HabitDetailScreen(habitId: id),
@@ -193,10 +180,9 @@ class _DetailFallback extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeBase,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.75),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.75),
                 ),
               ),
               const SizedBox(height: DesignTokens.spaceLg),

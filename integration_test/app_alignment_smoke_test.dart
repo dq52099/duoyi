@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:duoyi/core/completion_visibility_policy.dart';
 import 'package:duoyi/core/local_timezone_resolver.dart';
 import 'package:duoyi/core/recommended_goals.dart';
-import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/course_provider.dart';
@@ -49,8 +48,9 @@ void main() {
     expect(LocalTimezoneResolver.isInitialized, isTrue);
   });
 
-  testWidgets('T1 - RecommendedGoalsLibrary.applyRecommended + open router',
-      (tester) async {
+  testWidgets('T1 - RecommendedGoalsLibrary.applyRecommended + open router', (
+    tester,
+  ) async {
     final goalProvider = GoalProvider();
     await goalProvider.loadFromStorage();
 
@@ -59,8 +59,7 @@ void main() {
     expect(goalProvider.goals.any((g) => g.id == goal.id), isTrue);
   });
 
-  testWidgets('T2 - TodayDetailRouter 遇空数据跳 EmptyState 而非黑屏',
-      (tester) async {
+  testWidgets('T2 - TodayDetailRouter 遇空数据跳 EmptyState 而非黑屏', (tester) async {
     final goalProvider = GoalProvider();
     await tester.pumpWidget(
       MultiProvider(
@@ -68,12 +67,14 @@ void main() {
           ChangeNotifierProvider<TodoProvider>.value(value: TodoProvider()),
           ChangeNotifierProvider<HabitProvider>.value(value: HabitProvider()),
           ChangeNotifierProvider<AnniversaryProvider>.value(
-              value: AnniversaryProvider()),
+            value: AnniversaryProvider(),
+          ),
           ChangeNotifierProvider<GoalProvider>.value(value: goalProvider),
           ChangeNotifierProvider<DiaryProvider>.value(value: DiaryProvider()),
           ChangeNotifierProvider<CourseProvider>.value(value: CourseProvider()),
           ChangeNotifierProvider<PomodoroProvider>.value(
-              value: PomodoroProvider()),
+            value: PomodoroProvider(),
+          ),
           ChangeNotifierProvider<UserProvider>.value(value: UserProvider()),
           ChangeNotifierProvider<ThemeProvider>.value(value: ThemeProvider()),
         ],
@@ -109,8 +110,7 @@ void main() {
     await todoProvider.toggleTodo(t.id);
     final updated = todoProvider.todos.firstWhere((x) => x.id == t.id);
     expect(updated.isCompleted, isTrue);
-    expect(
-        CompletionVisibilityPolicy.shouldShowInToday(updated, now), isTrue);
+    expect(CompletionVisibilityPolicy.shouldShowInToday(updated, now), isTrue);
     expect(
       CompletionVisibilityPolicy.visualState(updated, now: now),
       TodoVisualState.completed,
@@ -146,12 +146,14 @@ void main() {
           ChangeNotifierProvider<TodoProvider>.value(value: TodoProvider()),
           ChangeNotifierProvider<HabitProvider>.value(value: HabitProvider()),
           ChangeNotifierProvider<AnniversaryProvider>.value(
-              value: AnniversaryProvider()),
+            value: AnniversaryProvider(),
+          ),
           ChangeNotifierProvider<GoalProvider>.value(value: GoalProvider()),
           ChangeNotifierProvider<DiaryProvider>.value(value: DiaryProvider()),
           ChangeNotifierProvider<CourseProvider>.value(value: CourseProvider()),
           ChangeNotifierProvider<PomodoroProvider>.value(
-              value: PomodoroProvider()),
+            value: PomodoroProvider(),
+          ),
           ChangeNotifierProvider<UserProvider>.value(value: UserProvider()),
           ChangeNotifierProvider<ThemeProvider>.value(value: ThemeProvider()),
         ],

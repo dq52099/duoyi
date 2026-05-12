@@ -144,4 +144,15 @@
             android:textSize="12sp"
             android:background="@drawable/widget_btn_secondary" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_today_event"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="今日日程"
+        android:textColor="#666666"
+        android:textSize="10sp" />
 </LinearLayout>

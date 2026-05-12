@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/goal_icons.dart';
 import '../core/lunar_calendar.dart';
 import '../core/quotes.dart';
+import '../models/todo.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
@@ -11,6 +13,7 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/surface_components.dart';
 import 'diary_screen.dart';
 import 'habit_screen.dart';
 import 'pomodoro_screen.dart';
@@ -42,24 +45,32 @@ class TodayScreen extends StatelessWidget {
         LunarCalendar.solarFestival(now) ?? LunarCalendar.lunarFestival(lunar);
 
     final todayKey = DateTime(now.year, now.month, now.day);
-    final todayTodos = todoP.todos.where((t) {
-      final d = DateTime(t.date.year, t.date.month, t.date.day);
-      return d == todayKey && !t.isCompleted;
-    }).toList()
-      ..sort((a, b) => a.quadrant.index.compareTo(b.quadrant.index));
-    final todayTodoCompleted = todoP.todos.where((t) {
-      final d = DateTime(t.date.year, t.date.month, t.date.day);
-      return d == todayKey && t.isCompleted;
-    }).length;
+    var todayTodosCount = 0;
+    final todayTodos = <TodoItem>[];
+    var todayTodoCompleted = 0;
+    for (final todo in todoP.todos) {
+      final d = DateTime(todo.date.year, todo.date.month, todo.date.day);
+      if (d != todayKey) continue;
+      todayTodosCount++;
+      if (todo.isCompleted) {
+        todayTodoCompleted++;
+      } else {
+        todayTodos.add(todo);
+      }
+    }
+    todayTodos.sort((a, b) => a.quadrant.index.compareTo(b.quadrant.index));
 
-    final todayCourses = courseP.todayCourses..sort((a, b) => a.startSection.compareTo(b.startSection));
+    final todayCourses = courseP.todayCourses
+      ..sort((a, b) => a.startSection.compareTo(b.startSection));
     final todayHabitProgress = habitP.todayCompletionRate;
 
     // 最近的 3 个纪念日
     final upcomingAnni = [...anniP.items]
       ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
-    final soon =
-        upcomingAnni.where((a) => a.daysRemaining >= 0).take(3).toList();
+    final soon = upcomingAnni
+        .where((a) => a.daysRemaining >= 0)
+        .take(3)
+        .toList();
 
     final activeGoals = goalP.activeGoals.take(2).toList();
 
@@ -73,19 +84,22 @@ class TodayScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
           // 日期卡
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  cs.primary.withValues(alpha: 0.85),
-                  cs.primary.withValues(alpha: 0.55),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.primary.withValues(alpha: 0.92),
+                Color.lerp(
+                  cs.primary,
+                  cs.secondary,
+                  0.28,
+                )!.withValues(alpha: 0.78),
+              ],
             ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
             child: Row(
               children: [
                 Expanded(
@@ -97,22 +111,25 @@ class TodayScreen extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         '农历 ${lunar.chineseText}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          if (term != null) _chip(term, Colors.lightGreenAccent),
+                          if (term != null)
+                            _chip(term, Colors.lightGreenAccent),
                           if (festival != null)
                             _chip(festival, Colors.amberAccent),
                         ],
@@ -120,13 +137,25 @@ class TodayScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                Text(
-                  '${now.day}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 46,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
+                Container(
+                  width: 66,
+                  height: 66,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${now.day}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
                   ),
                 ),
               ],
@@ -139,41 +168,52 @@ class TodayScreen extends StatelessWidget {
 
           const SizedBox(height: 10),
           // 四个小指标
-          Row(
-            children: [
-              _Metric(
-                title: s.navTodo,
-                value: '${todayTodos.length}',
-                unit: '待办',
-                icon: Icons.check_circle_outline,
-                color: cs.primary,
-                onTap: () => _go(context, const TodoScreen()),
-              ),
-              _Metric(
-                title: s.navHabit,
-                value: '${(todayHabitProgress * 100).round()}',
-                unit: '%',
-                icon: Icons.repeat,
-                color: cs.tertiary,
-                onTap: () => _go(context, const HabitScreen()),
-              ),
-              _Metric(
-                title: s.navFocus,
-                value: '${pomoP.sessionCountToday}',
-                unit: '次',
-                icon: Icons.timer,
-                color: Colors.redAccent,
-                onTap: () => _go(context, const PomodoroScreen()),
-              ),
-              _Metric(
-                title: '日记',
-                value: diaryP.entryForDate(now) == null ? '未写' : '已写',
-                unit: '',
-                icon: Icons.book_outlined,
-                color: const Color(0xFF26A69A),
-                onTap: () => _go(context, const DiaryScreen()),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth < 420 ? 2 : 4;
+              final aspectRatio = constraints.maxWidth < 420 ? 1.25 : 1.42;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: aspectRatio,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                children: [
+                  AppMetricCard(
+                    title: s.navTodo,
+                    value: '${todayTodos.length}',
+                    unit: '待办',
+                    icon: Icons.check_circle_outline,
+                    color: cs.primary,
+                    onTap: () => _go(context, const TodoScreen()),
+                  ),
+                  AppMetricCard(
+                    title: s.navHabit,
+                    value: '${(todayHabitProgress * 100).round()}',
+                    unit: '%',
+                    icon: Icons.repeat,
+                    color: cs.tertiary,
+                    onTap: () => _go(context, const HabitScreen()),
+                  ),
+                  AppMetricCard(
+                    title: s.navFocus,
+                    value: '${pomoP.sessionCountToday}',
+                    unit: '次',
+                    icon: Icons.timer,
+                    color: Colors.redAccent,
+                    onTap: () => _go(context, const PomodoroScreen()),
+                  ),
+                  AppMetricCard(
+                    title: '日记',
+                    value: diaryP.entryForDate(now) == null ? '未写' : '已写',
+                    icon: Icons.book_outlined,
+                    color: const Color(0xFF26A69A),
+                    onTap: () => _go(context, const DiaryScreen()),
+                  ),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 14),
@@ -181,14 +221,9 @@ class TodayScreen extends StatelessWidget {
           // 今日待办
           if (todayTodos.isNotEmpty || todayTodoCompleted > 0)
             _section(
-              '今日待办 · ${todoP.todos.where((t) {
-                    final d = DateTime(t.date.year, t.date.month, t.date.day);
-                    return d == todayKey;
-                  }).length} 项 (已完成 $todayTodoCompleted)',
-              onMore: () => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.todos,
-              ),
+              '今日待办 · $todayTodosCount 项 (已完成 $todayTodoCompleted)',
+              onMore: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.todos),
               child: Column(
                 children: todayTodos.take(5).map((t) {
                   return ListTile(
@@ -199,12 +234,17 @@ class TodayScreen extends StatelessWidget {
                       onChanged: (_) =>
                           context.read<TodoProvider>().toggleTodo(t.id),
                     ),
-                    title: Text(t.title,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      t.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: t.listGroupName == null
                         ? null
-                        : Text(t.listGroupName!,
-                            style: const TextStyle(fontSize: 11)),
+                        : Text(
+                            t.listGroupName!,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                     onTap: () => TodayDetailRouter.open(
                       context,
                       TodaySectionKind.todos,
@@ -219,23 +259,25 @@ class TodayScreen extends StatelessWidget {
           if (todayCourses.isNotEmpty)
             _section(
               '今日课程 · ${todayCourses.length} 节',
-              onMore: () => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.courses,
-              ),
+              onMore: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.courses),
               child: Column(
                 children: todayCourses.map((c) {
                   return ListTile(
                     dense: true,
                     leading: CircleAvatar(
                       radius: 14,
-                      backgroundColor:
-                          Color(c.colorValue).withValues(alpha: 0.2),
-                      child: Text('${c.startSection}',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: Color(c.colorValue),
-                              fontWeight: FontWeight.bold)),
+                      backgroundColor: Color(
+                        c.colorValue,
+                      ).withValues(alpha: 0.2),
+                      child: Text(
+                        '${c.startSection}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(c.colorValue),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     title: Text(c.name),
                     subtitle: Text(
@@ -266,8 +308,9 @@ class TodayScreen extends StatelessWidget {
                     dense: true,
                     leading: CircleAvatar(
                       radius: 14,
-                      backgroundColor:
-                          Color(a.colorValue).withValues(alpha: 0.15),
+                      backgroundColor: Color(
+                        a.colorValue,
+                      ).withValues(alpha: 0.15),
                       child: Text(
                         '$d',
                         style: TextStyle(
@@ -296,17 +339,18 @@ class TodayScreen extends StatelessWidget {
           if (activeGoals.isNotEmpty)
             _section(
               '进行中的目标',
-              onMore: () => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.goals,
-              ),
+              onMore: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.goals),
               child: Column(
                 children: activeGoals.map((g) {
                   final p = g.computedProgress;
                   return ListTile(
                     dense: true,
-                    leading: Icon(Icons.flag,
-                        color: Color(g.colorValue), size: 18),
+                    leading: Icon(
+                      goalIconFromName(g.icon),
+                      color: Color(g.colorValue),
+                      size: 18,
+                    ),
                     title: Text(g.title),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,12 +362,15 @@ class TodayScreen extends StatelessWidget {
                             value: p,
                             minHeight: 5,
                             color: Color(g.colorValue),
-                            backgroundColor:
-                                Color(g.colorValue).withValues(alpha: 0.15),
+                            backgroundColor: Color(
+                              g.colorValue,
+                            ).withValues(alpha: 0.15),
                           ),
                         ),
-                        Text('${(p * 100).toStringAsFixed(0)}%',
-                            style: const TextStyle(fontSize: 11)),
+                        Text(
+                          '${(p * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 11),
+                        ),
                       ],
                     ),
                     onTap: () => TodayDetailRouter.open(
@@ -340,35 +387,20 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _section(String title,
-      {required Widget child, VoidCallback? onMore}) {
+  Widget _section(String title, {required Widget child, VoidCallback? onMore}) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
-      child: Card(
+      child: AppSurfaceCard(
         margin: const EdgeInsets.only(bottom: 10),
-        elevation: 0,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(title,
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                  if (onMore != null)
-                    TextButton(
-                      onPressed: onMore,
-                      child: const Text('查看',
-                          style: TextStyle(fontSize: 12)),
-                    ),
-                ],
-              ),
+            AppSectionHeader(
+              title: title,
+              actionLabel: onMore == null ? null : '查看',
+              onAction: onMore,
             ),
             child,
             const SizedBox(height: 4),
@@ -385,81 +417,17 @@ class TodayScreen extends StatelessWidget {
         color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(text,
-          style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9))),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9)),
+      ),
     );
   }
 
-  String _weekday(int w) =>
-      const ['一', '二', '三', '四', '五', '六', '日'][w - 1];
+  String _weekday(int w) => const ['一', '二', '三', '四', '五', '六', '日'][w - 1];
 
   void _go(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-  }
-}
-
-class _Metric extends StatelessWidget {
-  final String title;
-  final String value;
-  final String unit;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _Metric({
-    required this.title,
-    required this.value,
-    required this.unit,
-    required this.icon,
-    required this.color,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withValues(alpha: 0.15)),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, color: color, size: 18),
-                const SizedBox(height: 4),
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700),
-                    children: [
-                      TextSpan(text: value),
-                      if (unit.isNotEmpty)
-                        TextSpan(
-                          text: unit,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w500),
-                        ),
-                    ],
-                  ),
-                ),
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 10, color: Colors.grey.shade600)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -480,28 +448,33 @@ class _QuoteCardState extends State<_QuoteCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return InkWell(
+    return AppSurfaceCard(
       onTap: () => setState(() => _text = DailyQuotes.random()),
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.1)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.format_quote, color: cs.primary.withValues(alpha: 0.6)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(_text,
-                  style: const TextStyle(fontSize: 13, height: 1.6)),
+      borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            Icon(Icons.refresh,
-                size: 16, color: Colors.grey.shade500),
-          ],
-        ),
+            child: Icon(
+              Icons.format_quote,
+              color: cs.primary.withValues(alpha: 0.7),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _text,
+              style: const TextStyle(fontSize: 13, height: 1.6),
+            ),
+          ),
+          Icon(Icons.refresh, size: 16, color: Colors.grey.shade500),
+        ],
       ),
     );
   }

@@ -9,10 +9,7 @@ class SyncConfig {
   final DateTime lastSync;
   final bool autoSync;
 
-  const SyncConfig({
-    required this.lastSync,
-    this.autoSync = true,
-  });
+  const SyncConfig({required this.lastSync, this.autoSync = true});
 }
 
 /// 云同步：服务器地址与 token 直接复用 AuthProvider(普通用户无需感知)。
@@ -101,6 +98,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'duoyi_anniversaries_v2': 'anniversaries',
     'duoyi_diary': 'diaries',
     'duoyi_goals': 'goals',
+    'duoyi_time_entries': 'time_entries',
     'duoyi_courses': 'courses',
   };
 
@@ -108,6 +106,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'pomodoro_config': 'pomodoro_config',
     'user_profile': 'user_profile',
     'duoyi_course_settings': 'course_settings',
+    'duoyi_achievements_unlocked': 'achievement_states',
   };
 
   Future<void> loadFromStorage() async {
@@ -202,6 +201,8 @@ class CloudSyncProvider extends ChangeNotifier {
         }
       });
 
+      payload['workspace_payloads'] = _buildWorkspacePayloads(payload);
+
       final response = await client.post('/api/sync', payload);
 
       for (final entry in _listPayloads.entries) {
@@ -226,6 +227,11 @@ class CloudSyncProvider extends ChangeNotifier {
         await prefs.setString(localKey, json.encode(value));
       }
 
+      final workspacePayloads = response['workspace_payloads'];
+      if (workspacePayloads is Map) {
+        await _mergeWorkspacePayloads(prefs, workspacePayloads);
+      }
+
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
@@ -240,9 +246,81 @@ class CloudSyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, dynamic> _buildWorkspacePayloads(Map<String, dynamic> payload) {
+    final result = <String, dynamic>{};
+    final todos = payload['todos'];
+    if (todos is List) {
+      for (final item in todos) {
+        if (item is! Map) continue;
+        final workspaceId = item['workspaceId']?.toString();
+        if (workspaceId == null ||
+            workspaceId.isEmpty ||
+            workspaceId == 'private') {
+          continue;
+        }
+        final bucket =
+            result.putIfAbsent(
+                  workspaceId,
+                  () => <String, dynamic>{
+                    'todos': <dynamic>[],
+                    'goals': <dynamic>[],
+                    'courses': <dynamic>[],
+                    'time_entries': <dynamic>[],
+                  },
+                )
+                as Map<String, dynamic>;
+        (bucket['todos'] as List).add(item);
+      }
+    }
+    return result;
+  }
+
+  Future<void> _mergeWorkspacePayloads(
+    SharedPreferences prefs,
+    Map<dynamic, dynamic> payloads,
+  ) async {
+    final remoteTodos = <dynamic>[];
+    for (final payload in payloads.values) {
+      if (payload is! Map) continue;
+      final todos = payload['todos'];
+      if (todos is List) remoteTodos.addAll(todos);
+    }
+    if (remoteTodos.isEmpty) return;
+    final currentRaw = prefs.getString('todos');
+    final current = <dynamic>[];
+    if (currentRaw != null && currentRaw.isNotEmpty) {
+      try {
+        final decoded = json.decode(currentRaw);
+        if (decoded is List) current.addAll(decoded);
+      } catch (_) {}
+    }
+    final merged = <String, dynamic>{};
+    for (final item in current) {
+      if (item is Map && item['id'] != null) {
+        merged[item['id'].toString()] = item;
+      }
+    }
+    for (final item in remoteTodos) {
+      if (item is! Map || item['id'] == null) continue;
+      final id = item['id'].toString();
+      final prior = merged[id];
+      if (prior is Map) {
+        final oldTs = prior['updatedAt']?.toString() ?? '';
+        final newTs = item['updatedAt']?.toString() ?? '';
+        if (newTs.compareTo(oldTs) >= 0) merged[id] = item;
+      } else {
+        merged[id] = item;
+      }
+    }
+    await prefs.setString('todos', json.encode(merged.values.toList()));
+  }
+
   // legacy helper kept for future, but not wired to UI
-  Future<Map<String, dynamic>?> rawPost(String url, Map<String, dynamic> body,
-      {required String token}) async {
+  Future<Map<String, dynamic>?> rawPost(
+    String url,
+    Map<String, dynamic> body, {
+    required String token,
+  }) async {
     final resp = await http.post(
       Uri.parse(url),
       headers: {

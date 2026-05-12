@@ -65,7 +65,7 @@ void main() {
 
   group('RecommendedGoalsLibrary.instantiate', () {
     /// 挑一条稳定存在的模板做代表性断言；找不到时兜底用第一个。
-    RecommendedGoal _pickTemplate() {
+    RecommendedGoal pickTemplate() {
       final all = RecommendedGoalsLibrary.all();
       return all.firstWhere(
         (r) => r.id == 'rec.recommend.drink_water',
@@ -77,12 +77,15 @@ void main() {
       final templates = RecommendedGoalsLibrary.all();
       final templateIds = templates.map((r) => r.id).toSet();
 
-      final r = _pickTemplate();
+      final r = pickTemplate();
       final goal = RecommendedGoalsLibrary.instantiate(r);
 
       expect(goal.id, isNotEmpty);
-      expect(goal.id, isNot(equals(r.id)),
-          reason: 'GoalItem.id 应为新 UUID，不得复用模板 id');
+      expect(
+        goal.id,
+        isNot(equals(r.id)),
+        reason: 'GoalItem.id 应为新 UUID，不得复用模板 id',
+      );
       expect(
         templateIds.contains(goal.id),
         isFalse,
@@ -91,12 +94,11 @@ void main() {
     });
 
     test('连续两次 instantiate 同一模板，生成的 id 不同', () {
-      final r = _pickTemplate();
+      final r = pickTemplate();
       final a = RecommendedGoalsLibrary.instantiate(r);
       final b = RecommendedGoalsLibrary.instantiate(r);
 
-      expect(a.id, isNot(equals(b.id)),
-          reason: '每次 instantiate 都应生成新的 UUID');
+      expect(a.id, isNot(equals(b.id)), reason: '每次 instantiate 都应生成新的 UUID');
     });
 
     test('对库中每条模板 instantiate，产出的 GoalItem.id 彼此不重复，且与模板 id 不重叠', () {
@@ -107,14 +109,17 @@ void main() {
       for (final r in templates) {
         final g = RecommendedGoalsLibrary.instantiate(r);
         expect(templateIds.contains(g.id), isFalse);
-        expect(newIds.add(g.id), isTrue,
-            reason: '第二次出现同一个 GoalItem.id: ${g.id}');
+        expect(
+          newIds.add(g.id),
+          isTrue,
+          reason: '第二次出现同一个 GoalItem.id: ${g.id}',
+        );
       }
       expect(newIds.length, templates.length);
     });
 
     test('instantiate 复制模板的核心字段（title/category/icon/color/recurrence/...）', () {
-      final r = _pickTemplate();
+      final r = pickTemplate();
       final goal = RecommendedGoalsLibrary.instantiate(r);
 
       expect(goal.title, r.title);
@@ -132,7 +137,7 @@ void main() {
     });
 
     test('instantiate 后 GoalItem 处于"新建即运行"状态', () {
-      final r = _pickTemplate();
+      final r = pickTemplate();
       final goal = RecommendedGoalsLibrary.instantiate(r);
 
       expect(goal.status, GoalStatus.active);
@@ -144,7 +149,7 @@ void main() {
     });
 
     test('instantiate().startDate 对齐到今日本地 00:00', () {
-      final r = _pickTemplate();
+      final r = pickTemplate();
       final before = DateTime.now();
       final goal = RecommendedGoalsLibrary.instantiate(r);
       final after = DateTime.now();
@@ -163,7 +168,8 @@ void main() {
       expect(
         start == beforeDay || start == afterDay,
         isTrue,
-        reason: 'startDate=$start 应等于 today 00:00（'
+        reason:
+            'startDate=$start 应等于 today 00:00（'
             'beforeDay=$beforeDay, afterDay=$afterDay）',
       );
     });

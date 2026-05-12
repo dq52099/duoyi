@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -48,6 +49,9 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_todo_item_3,
                 prefs.getString("todo_top3_3", "") ?: ""
             )
+            bindTodoRow(context, views, prefs, 1, R.id.widget_todo_item_1, R.id.widget_todo_done_1)
+            bindTodoRow(context, views, prefs, 2, R.id.widget_todo_item_2, R.id.widget_todo_done_2)
+            bindTodoRow(context, views, prefs, 3, R.id.widget_todo_item_3, R.id.widget_todo_done_3)
 
             // 点击任意区域都打开待办页
             val open = HomeWidgetLaunchIntent.getActivity(
@@ -58,5 +62,37 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
 
             appWidgetManager.updateAppWidget(id, views)
         }
+    }
+
+    private fun bindTodoRow(
+        context: Context,
+        views: RemoteViews,
+        prefs: SharedPreferences,
+        index: Int,
+        itemViewId: Int,
+        doneViewId: Int
+    ) {
+        val todoId = prefs.getString("todo_top3_${index}_id", "") ?: ""
+        if (todoId.isBlank()) {
+            views.setViewVisibility(doneViewId, View.GONE)
+            return
+        }
+        views.setViewVisibility(doneViewId, View.VISIBLE)
+        views.setOnClickPendingIntent(
+            itemViewId,
+            HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java,
+                Uri.parse("duoyi://todo/$todoId")
+            )
+        )
+        views.setOnClickPendingIntent(
+            doneViewId,
+            HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java,
+                Uri.parse("duoyi://action/complete_todo?id=$todoId")
+            )
+        )
     }
 }

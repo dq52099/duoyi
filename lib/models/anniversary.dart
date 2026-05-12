@@ -25,6 +25,8 @@ class Anniversary {
   bool isPinned;
   bool remind;
   int remindDaysBefore; // 提前几天提醒
+  int remindHour;
+  int remindMinute;
   int? lunarYear; // 农历年(仅 lunar 用)
   int? lunarMonth;
   int? lunarDay;
@@ -42,13 +44,15 @@ class Anniversary {
     this.isPinned = false,
     this.remind = false,
     this.remindDaysBefore = 1,
+    this.remindHour = 9,
+    this.remindMinute = 0,
     this.lunarYear,
     this.lunarMonth,
     this.lunarDay,
     this.lunarIsLeap = false,
     DateTime? createdAt,
-  })  : id = id ?? _uuid.v4(),
-        createdAt = createdAt ?? DateTime.now();
+  }) : id = id ?? _uuid.v4(),
+       createdAt = createdAt ?? DateTime.now();
 
   /// 从一个公历日期 + 是否按农历循环 构造
   factory Anniversary.create({
@@ -62,6 +66,8 @@ class Anniversary {
     bool isPinned = false,
     bool remind = false,
     int remindDaysBefore = 1,
+    int remindHour = 9,
+    int remindMinute = 0,
     DateTime? createdAt,
   }) {
     int? ly, lm, ld;
@@ -84,6 +90,8 @@ class Anniversary {
       isPinned: isPinned,
       remind: remind,
       remindDaysBefore: remindDaysBefore,
+      remindHour: remindHour,
+      remindMinute: remindMinute,
       lunarYear: ly,
       lunarMonth: lm,
       lunarDay: ld,
@@ -101,11 +109,13 @@ class Anniversary {
     if (type == AnniversaryType.normal) return originDate;
 
     if (calendarType == AnniversaryCalendarType.solar) {
-      DateTime candidate =
-          DateTime(today.year, originDate.month, originDate.day);
+      DateTime candidate = DateTime(
+        today.year,
+        originDate.month,
+        originDate.day,
+      );
       if (candidate.isBefore(today)) {
-        candidate =
-            DateTime(today.year + 1, originDate.month, originDate.day);
+        candidate = DateTime(today.year + 1, originDate.month, originDate.day);
       }
       return candidate;
     }
@@ -122,8 +132,12 @@ class Anniversary {
     }
     if (solar.isBefore(today)) {
       try {
-        solar = LunarCalendar.toSolar(today.year + 1, lm, ld,
-            isLeap: lunarIsLeap);
+        solar = LunarCalendar.toSolar(
+          today.year + 1,
+          lm,
+          ld,
+          isLeap: lunarIsLeap,
+        );
       } catch (_) {
         solar = DateTime(today.year + 1, originDate.month, originDate.day);
       }
@@ -147,8 +161,7 @@ class Anniversary {
     if (type == AnniversaryType.normal) return null;
     final now = DateTime.now();
     int years = now.year - originDate.year;
-    final thisYearOccur =
-        DateTime(now.year, originDate.month, originDate.day);
+    final thisYearOccur = DateTime(now.year, originDate.month, originDate.day);
     if (thisYearOccur.isAfter(DateTime(now.year, now.month, now.day))) {
       years -= 1;
     }
@@ -156,41 +169,44 @@ class Anniversary {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'description': description,
-        'originDate': originDate.toIso8601String(),
-        'type': type.index,
-        'calendarType': calendarType.index,
-        'colorValue': colorValue,
-        'isPinned': isPinned,
-        'remind': remind,
-        'remindDaysBefore': remindDaysBefore,
-        'lunarYear': lunarYear,
-        'lunarMonth': lunarMonth,
-        'lunarDay': lunarDay,
-        'lunarIsLeap': lunarIsLeap,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'description': description,
+    'originDate': originDate.toIso8601String(),
+    'type': type.index,
+    'calendarType': calendarType.index,
+    'colorValue': colorValue,
+    'isPinned': isPinned,
+    'remind': remind,
+    'remindDaysBefore': remindDaysBefore,
+    'remindHour': remindHour,
+    'remindMinute': remindMinute,
+    'lunarYear': lunarYear,
+    'lunarMonth': lunarMonth,
+    'lunarDay': lunarDay,
+    'lunarIsLeap': lunarIsLeap,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory Anniversary.fromJson(Map<String, dynamic> json) => Anniversary(
-        id: json['id'],
-        title: json['title'] ?? '',
-        description: json['description'],
-        originDate: DateTime.parse(json['originDate']),
-        type: AnniversaryType.values[json['type'] ?? 0],
-        calendarType:
-            AnniversaryCalendarType.values[json['calendarType'] ?? 0],
-        colorValue: json['colorValue'] ?? 0xFFE91E63,
-        isPinned: json['isPinned'] ?? false,
-        remind: json['remind'] ?? false,
-        remindDaysBefore: json['remindDaysBefore'] ?? 1,
-        lunarYear: json['lunarYear'],
-        lunarMonth: json['lunarMonth'],
-        lunarDay: json['lunarDay'],
-        lunarIsLeap: json['lunarIsLeap'] ?? false,
-        createdAt: json['createdAt'] != null
-            ? DateTime.parse(json['createdAt'])
-            : DateTime.now(),
-      );
+    id: json['id'],
+    title: json['title'] ?? '',
+    description: json['description'],
+    originDate: DateTime.parse(json['originDate']),
+    type: AnniversaryType.values[json['type'] ?? 0],
+    calendarType: AnniversaryCalendarType.values[json['calendarType'] ?? 0],
+    colorValue: json['colorValue'] ?? 0xFFE91E63,
+    isPinned: json['isPinned'] ?? false,
+    remind: json['remind'] ?? false,
+    remindDaysBefore: json['remindDaysBefore'] ?? 1,
+    remindHour: (json['remindHour'] as num?)?.toInt() ?? 9,
+    remindMinute: (json['remindMinute'] as num?)?.toInt() ?? 0,
+    lunarYear: json['lunarYear'],
+    lunarMonth: json['lunarMonth'],
+    lunarDay: json['lunarDay'],
+    lunarIsLeap: json['lunarIsLeap'] ?? false,
+    createdAt: json['createdAt'] != null
+        ? DateTime.parse(json['createdAt'])
+        : DateTime.now(),
+  );
 }

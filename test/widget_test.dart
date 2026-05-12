@@ -16,6 +16,9 @@ import 'package:duoyi/providers/note_provider.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/providers/pomodoro_provider.dart';
 import 'package:duoyi/providers/preferences_provider.dart';
+import 'package:duoyi/providers/achievement_provider.dart';
+import 'package:duoyi/providers/share_provider.dart';
+import 'package:duoyi/providers/time_audit_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
@@ -42,6 +45,9 @@ void main() {
           ChangeNotifierProvider(create: (_) => CourseProvider()),
           ChangeNotifierProvider(create: (_) => AppLockProvider()),
           ChangeNotifierProvider(create: (_) => PreferencesProvider()),
+          ChangeNotifierProvider(create: (_) => AchievementProvider()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+          ChangeNotifierProvider(create: (_) => TimeAuditProvider()),
           ChangeNotifierProvider(create: (_) => NotificationService()),
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => AiService()),

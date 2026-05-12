@@ -1,6 +1,6 @@
 /// 统一的异步三态封装。
 ///
-/// Provider 层用 [AsyncState]<T> 暴露状态；UI 层按 `switch` 分支渲染
+/// Provider 层用 `AsyncState<T>` 暴露状态；UI 层按 `switch` 分支渲染
 /// `LoadingState / ErrorState / EmptyState / 正常内容`。
 ///
 /// 这是 `Requirement 10.3` 的实现骨架，[AsyncLoading] / [AsyncData] / [AsyncError]
@@ -19,15 +19,15 @@ sealed class AsyncState<T> {
 
   /// 若 [AsyncData]，返回 data，否则 null。
   T? get dataOrNull => switch (this) {
-        AsyncData<T>(:final data) => data,
-        _ => null,
-      };
+    AsyncData<T>(:final data) => data,
+    _ => null,
+  };
 
   /// 若 [AsyncError]，返回 error，否则 null。
   Object? get errorOrNull => switch (this) {
-        AsyncError<T>(:final error) => error,
-        _ => null,
-      };
+    AsyncError<T>(:final error) => error,
+    _ => null,
+  };
 
   /// 通用映射器：为三态提供统一的分支处理。
   R when<R>({
@@ -65,8 +65,7 @@ final class AsyncData<T> extends AsyncState<T> {
   final T data;
 
   @override
-  bool operator ==(Object other) =>
-      other is AsyncData<T> && other.data == data;
+  bool operator ==(Object other) => other is AsyncData<T> && other.data == data;
 
   @override
   int get hashCode => Object.hash(AsyncData<T>, data);

@@ -56,12 +56,17 @@ class FocusSoundService {
     if (asset == null) {
       return;
     }
-    await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.setPlayerMode(PlayerMode.lowLatency);
-    await _player.setVolume(_volume);
-    await _player.play(AssetSource(asset));
-    _currentSound = sound;
-    _isPlaying = true;
+    try {
+      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player.setPlayerMode(PlayerMode.lowLatency);
+      await _player.setVolume(_volume);
+      await _player.play(AssetSource(asset));
+      _currentSound = sound;
+      _isPlaying = true;
+    } catch (e, st) {
+      debugPrint('[FocusSoundService] failed to play $sound: $e\n$st');
+      await stop();
+    }
   }
 
   /// 停止播放并把状态复位到 `'none'`。

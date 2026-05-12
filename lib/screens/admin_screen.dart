@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../services/admin_api.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
 
 /// 管理员后台 — 仅当 AuthProvider.state.isAdmin == true 时可进入。
 class AdminScreen extends StatefulWidget {
@@ -127,8 +128,7 @@ class _DashboardTabState extends State<_DashboardTab> {
     final fb = _stats!['feedback'] as Map? ?? {};
     final ann = _stats!['announcements'] as Map? ?? {};
     final inv = _stats!['invites'] as Map? ?? {};
-    final series =
-        (_stats!['registration_series'] as List?)?.cast<Map>() ?? [];
+    final series = (_stats!['registration_series'] as List?)?.cast<Map>() ?? [];
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -142,13 +142,15 @@ class _DashboardTabState extends State<_DashboardTab> {
             decoration: BoxDecoration(
               color: Colors.indigo.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: Colors.indigo.withValues(alpha: 0.15)),
+              border: Border.all(color: Colors.indigo.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.verified_outlined,
-                    color: Colors.indigo, size: 18),
+                const Icon(
+                  Icons.verified_outlined,
+                  color: Colors.indigo,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -161,23 +163,55 @@ class _DashboardTabState extends State<_DashboardTab> {
           ),
           _GridCards([
             _Kpi('总用户', '${users['total'] ?? 0}', Icons.people, Colors.blue),
-            _Kpi('管理员', '${users['admin'] ?? 0}', Icons.shield,
-                Colors.deepOrange),
+            _Kpi(
+              '管理员',
+              '${users['admin'] ?? 0}',
+              Icons.shield,
+              Colors.deepOrange,
+            ),
             _Kpi('已禁用', '${users['disabled'] ?? 0}', Icons.block, Colors.red),
-            _Kpi('今日新增', '${users['new_today'] ?? 0}',
-                Icons.person_add_alt, Colors.green),
-            _Kpi('7 日活跃', '${users['active_7d'] ?? 0}',
-                Icons.trending_up, Colors.teal),
-            _Kpi('在线', '${_stats!['tokens_online'] ?? 0}',
-                Icons.wifi_tethering, Colors.cyan),
-            _Kpi('待处理反馈', '${fb['open'] ?? 0}',
-                Icons.chat_bubble_outline, Colors.orange),
-            _Kpi('反馈总数', '${fb['total'] ?? 0}', Icons.forum_outlined,
-                Colors.grey),
-            _Kpi('公告(已发)', '${ann['published'] ?? 0}',
-                Icons.campaign, Colors.indigo),
-            _Kpi('邀请码已用', '${inv['used'] ?? 0} / ${inv['total'] ?? 0}',
-                Icons.vpn_key, Colors.purple),
+            _Kpi(
+              '今日新增',
+              '${users['new_today'] ?? 0}',
+              Icons.person_add_alt,
+              Colors.green,
+            ),
+            _Kpi(
+              '7 日活跃',
+              '${users['active_7d'] ?? 0}',
+              Icons.trending_up,
+              Colors.teal,
+            ),
+            _Kpi(
+              '在线',
+              '${_stats!['tokens_online'] ?? 0}',
+              Icons.wifi_tethering,
+              Colors.cyan,
+            ),
+            _Kpi(
+              '待处理反馈',
+              '${fb['open'] ?? 0}',
+              Icons.chat_bubble_outline,
+              Colors.orange,
+            ),
+            _Kpi(
+              '反馈总数',
+              '${fb['total'] ?? 0}',
+              Icons.forum_outlined,
+              Colors.grey,
+            ),
+            _Kpi(
+              '公告(已发)',
+              '${ann['published'] ?? 0}',
+              Icons.campaign,
+              Colors.indigo,
+            ),
+            _Kpi(
+              '邀请码已用',
+              '${inv['used'] ?? 0} / ${inv['total'] ?? 0}',
+              Icons.vpn_key,
+              Colors.purple,
+            ),
           ]),
           const SizedBox(height: 14),
           Card(
@@ -186,36 +220,47 @@ class _DashboardTabState extends State<_DashboardTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('近 7 天注册',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text(
+                    '近 7 天注册',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 10),
                   if (series.isEmpty)
-                    const Text('暂无注册',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  ...series.map((row) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 90,
-                              child: Text(row['date'].toString(),
-                                  style: const TextStyle(fontSize: 12)),
+                    const Text(
+                      '暂无注册',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ...series.map(
+                    (row) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 90,
+                            child: Text(
+                              row['date'].toString(),
+                              style: const TextStyle(fontSize: 12),
                             ),
-                            Expanded(
-                              child: LinearProgressIndicator(
-                                value: ((row['count'] as num?) ?? 0) / 10,
-                                minHeight: 6,
-                                backgroundColor: Colors.grey.shade200,
-                              ),
+                          ),
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: ((row['count'] as num?) ?? 0) / 10,
+                              minHeight: 6,
+                              backgroundColor: Colors.grey.shade200,
                             ),
-                            const SizedBox(width: 8),
-                            Text('${row['count']}',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      )),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${row['count']}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -248,36 +293,44 @@ class _GridCards extends StatelessWidget {
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
       children: items
-          .map((k) => Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: k.color.withValues(alpha: 0.15)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(k.icon, color: k.color),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(k.title,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade600)),
-                          Text(k.value,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+          .map(
+            (k) => Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: k.color.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                children: [
+                  Icon(k.icon, color: k.color),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          k.title,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          k.value,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ))
+                  ),
+                ],
+              ),
+            ),
+          )
           .toList(),
     );
   }
@@ -340,8 +393,9 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data[key] = value;
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -361,26 +415,20 @@ class _SettingsTabState extends State<_SettingsTab> {
           value: _data['registration_enabled'] == true,
           title: const Text('允许注册'),
           subtitle: const Text('关闭后新用户无法注册，现有用户仍可登录'),
-          onChanged: _saving
-              ? null
-              : (v) => _set('registration_enabled', v),
+          onChanged: _saving ? null : (v) => _set('registration_enabled', v),
         ),
         SwitchListTile(
           value: _data['invite_code_required'] == true,
           title: const Text('注册需要邀请码'),
           subtitle: const Text('只有带邀请码才能注册'),
-          onChanged: _saving
-              ? null
-              : (v) => _set('invite_code_required', v),
+          onChanged: _saving ? null : (v) => _set('invite_code_required', v),
         ),
         _section('维护模式'),
         SwitchListTile(
           value: _data['maintenance_mode'] == true,
           title: const Text('启用维护模式'),
           subtitle: const Text('开启后 /api/sync 拒绝服务；客户端登录页会提示'),
-          onChanged: _saving
-              ? null
-              : (v) => _set('maintenance_mode', v),
+          onChanged: _saving ? null : (v) => _set('maintenance_mode', v),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -403,8 +451,7 @@ class _SettingsTabState extends State<_SettingsTab> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline,
-                  size: 16, color: Colors.amber),
+              const Icon(Icons.info_outline, size: 16, color: Colors.amber),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -421,13 +468,16 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Text(title,
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600)),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    child: Text(
+      title,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade600,
+      ),
+    ),
+  );
 }
 
 // ====================================================================
@@ -482,8 +532,8 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       _keyCtrl.text = (data['ai_api_key'] ?? '').toString();
       _keyMasked = (data['ai_api_key_set'] == true);
       _modelCtrl.text = (data['ai_model'] ?? '').toString();
-      _quotaCtrl.text =
-          (((data['ai_daily_quota'] as num?) ?? 0).toInt()).toString();
+      _quotaCtrl.text = (((data['ai_daily_quota'] as num?) ?? 0).toInt())
+          .toString();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -496,23 +546,27 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     try {
       final newKey = _keyCtrl.text.trim();
       final submitKey = (_keyMasked && newKey.contains('***')) ? null : newKey;
-      await widget.api.client.patch('/api/admin/settings', {
+      final payload = <String, Object?>{
         'ai_enabled': _enabled,
         'ai_base_url': _baseCtrl.text.trim(),
-        if (submitKey != null) 'ai_api_key': submitKey,
         'ai_model': _modelCtrl.text.trim(),
         'ai_daily_quota': int.tryParse(_quotaCtrl.text.trim()) ?? 0,
-      });
+      };
+      if (submitKey != null) {
+        payload['ai_api_key'] = submitKey;
+      }
+      await widget.api.client.patch('/api/admin/settings', payload);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI 配置已保存')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
       }
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -573,9 +627,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
           controller: _keyCtrl,
           decoration: InputDecoration(
             labelText: 'API Key',
-            helperText: _keyMasked
-                ? '已配置（显示为掩码，保持不动即不修改）'
-                : '尚未配置',
+            helperText: _keyMasked ? '已配置（显示为掩码，保持不动即不修改）' : '尚未配置',
           ),
         ),
         const SizedBox(height: 10),
@@ -619,8 +671,10 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
         if (_testResult != null)
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Text(_testResult!,
-                style: TextStyle(color: _testColor, fontSize: 12)),
+            child: Text(
+              _testResult!,
+              style: TextStyle(color: _testColor, fontSize: 12),
+            ),
           ),
         const Divider(height: 32),
         const Text(
@@ -683,8 +737,8 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       _intervalCtrl.text =
           (((data['backup_interval_minutes'] as num?) ?? 30).toInt())
               .toString();
-      _retainCtrl.text =
-          (((data['backup_retain_days'] as num?) ?? 0).toInt()).toString();
+      _retainCtrl.text = (((data['backup_retain_days'] as num?) ?? 0).toInt())
+          .toString();
       _backups = await widget.api.listBackups();
     } catch (e) {
       _error = e.toString();
@@ -698,23 +752,22 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     try {
       await widget.api.client.patch('/api/admin/settings', {
         'backup_enabled': _backupEnabled,
-        'backup_max_size_kb':
-            int.tryParse(_maxSizeCtrl.text.trim()) ?? 2048,
+        'backup_max_size_kb': int.tryParse(_maxSizeCtrl.text.trim()) ?? 2048,
         'backup_interval_minutes':
             int.tryParse(_intervalCtrl.text.trim()) ?? 30,
-        'backup_retain_days':
-            int.tryParse(_retainCtrl.text.trim()) ?? 0,
+        'backup_retain_days': int.tryParse(_retainCtrl.text.trim()) ?? 0,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('云端备份配置已保存')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('云端备份配置已保存')));
       }
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -724,17 +777,19 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   Future<void> _wipe(Map<String, dynamic> row) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('清空 ${row['username']} 的云端备份?'),
         content: const Text('账号保留，但服务器上的同步数据会清零，用户下次同步后本地数据将被覆盖。'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('清空')),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清空'),
+          ),
         ],
       ),
     );
@@ -744,8 +799,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -755,8 +811,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
 
-    final totalKb =
-        _backups.fold<int>(0, (s, e) => s + ((e['size_kb'] as int?) ?? 0));
+    final totalKb = _backups.fold<int>(
+      0,
+      (s, e) => s + ((e['size_kb'] as int?) ?? 0),
+    );
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -806,8 +864,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         ),
         const SizedBox(height: 6),
         if (_backups.isEmpty)
-          const Text('暂无备份',
-              style: TextStyle(color: Colors.grey, fontSize: 12)),
+          const Text(
+            '暂无备份',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
         ..._backups.map((b) {
           return ListTile(
             dense: true,
@@ -881,8 +941,9 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) setState(() {});
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -895,8 +956,9 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) setState(() {});
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -905,7 +967,7 @@ class _UsersTabState extends State<_UsersTab> {
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('重置 ${u['username']} 的密码'),
         content: TextField(
           controller: ctrl,
@@ -914,27 +976,29 @@ class _UsersTabState extends State<_UsersTab> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('提交')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('提交'),
+          ),
         ],
       ),
     );
     if (ok != true || ctrl.text.trim().isEmpty) return;
     try {
-      await widget.api
-          .updateUser(u['user_id'], newPassword: ctrl.text.trim());
+      await widget.api.updateUser(u['user_id'], newPassword: ctrl.text.trim());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('密码已重置，该用户需重新登录')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('密码已重置，该用户需重新登录')));
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -942,17 +1006,19 @@ class _UsersTabState extends State<_UsersTab> {
   Future<void> _delete(Map<String, dynamic> u) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('删除 ${u['username']} ?'),
         content: const Text('会同时删除其所有同步数据与反馈，不可恢复'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('删除')),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -963,8 +1029,9 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) setState(() {});
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -1008,7 +1075,7 @@ class _UsersTabState extends State<_UsersTab> {
             child: ListView.separated(
               padding: const EdgeInsets.all(8),
               itemCount: _users.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              separatorBuilder: (context, _) => const SizedBox(height: 4),
               itemBuilder: (_, i) {
                 final u = _users[i];
                 final isSelf = u['user_id'] == widget.selfId;
@@ -1053,27 +1120,36 @@ class _UsersTabState extends State<_UsersTab> {
                           Container(
                             margin: const EdgeInsets.only(left: 6),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 1),
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.deepOrange.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(3),
                             ),
-                            child: const Text('管理员',
-                                style: TextStyle(
-                                    fontSize: 10, color: Colors.deepOrange)),
+                            child: const Text(
+                              '管理员',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.deepOrange,
+                              ),
+                            ),
                           ),
                         if (disabled)
                           Container(
                             margin: const EdgeInsets.only(left: 6),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 1),
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.red.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(3),
                             ),
-                            child: const Text('已禁用',
-                                style: TextStyle(
-                                    fontSize: 10, color: Colors.red)),
+                            child: const Text(
+                              '已禁用',
+                              style: TextStyle(fontSize: 10, color: Colors.red),
+                            ),
                           ),
                       ],
                     ),
@@ -1098,10 +1174,13 @@ class _UsersTabState extends State<_UsersTab> {
                             break;
                           case 'copy_id':
                             await Clipboard.setData(
-                                ClipboardData(text: u['user_id'].toString()));
+                              ClipboardData(text: u['user_id'].toString()),
+                            );
+                            if (!context.mounted) return;
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('user_id 已复制')));
+                                const SnackBar(content: Text('user_id 已复制')),
+                              );
                             }
                             break;
                         }
@@ -1126,8 +1205,10 @@ class _UsersTabState extends State<_UsersTab> {
                         if (!isSelf)
                           const PopupMenuItem(
                             value: 'delete',
-                            child: Text('删除账号',
-                                style: TextStyle(color: Colors.red)),
+                            child: Text(
+                              '删除账号',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ),
                       ],
                     ),
@@ -1172,9 +1253,11 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 
   Future<void> _openEdit({Map<String, dynamic>? item}) async {
     final titleCtrl = TextEditingController(
-        text: (item?['title'] ?? '').toString());
+      text: (item?['title'] ?? '').toString(),
+    );
     final bodyCtrl = TextEditingController(
-        text: (item?['body'] ?? '').toString());
+      text: (item?['body'] ?? '').toString(),
+    );
     String level = (item?['level'] ?? 'info').toString();
     bool published =
         (item?['published'] ?? 1) == 1 || item?['published'] == true;
@@ -1182,7 +1265,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
+        builder: (ctx, setSt) => AppDialog(
           title: Text(item == null ? '新增公告' : '编辑公告'),
           content: SingleChildScrollView(
             child: Column(
@@ -1199,9 +1282,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                   decoration: const InputDecoration(labelText: '内容'),
                 ),
                 const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
+                AppDropdownField<String>(
                   initialValue: level,
-                  decoration: const InputDecoration(labelText: '级别'),
+                  labelText: '级别',
                   items: const [
                     DropdownMenuItem(value: 'info', child: Text('普通')),
                     DropdownMenuItem(value: 'warning', child: Text('警告')),
@@ -1220,11 +1303,13 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('保存')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存'),
+            ),
           ],
         ),
       ),
@@ -1250,8 +1335,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
       await _load();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -1262,71 +1348,77 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-              ? const EmptyState(
-                  icon: Icons.campaign_outlined, message: '暂无公告')
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _items.length,
-                  itemBuilder: (_, i) {
-                    final a = _items[i];
-                    final published =
-                        a['published'] == 1 || a['published'] == true;
-                    return Card(
-                      child: ListTile(
-                        title: Row(children: [
-                          Expanded(
-                              child: Text((a['title'] ?? '').toString())),
-                          if (!published)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text('草稿',
-                                  style: TextStyle(fontSize: 10)),
+          ? const EmptyState(icon: Icons.campaign_outlined, message: '暂无公告')
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: _items.length,
+              itemBuilder: (_, i) {
+                final a = _items[i];
+                final published = a['published'] == 1 || a['published'] == true;
+                return Card(
+                  child: ListTile(
+                    title: Row(
+                      children: [
+                        Expanded(child: Text((a['title'] ?? '').toString())),
+                        if (!published)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
                             ),
-                        ]),
-                        subtitle: Text(
-                          '${a['level']} · ${a['created_at']}\n${(a['body'] ?? '').toString()}',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        isThreeLine: true,
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (action) async {
-                            if (action == 'edit') _openEdit(item: a);
-                            if (action == 'toggle') {
-                              await widget.api.updateAnnouncement(
-                                (a['id'] as num).toInt(),
-                                published: !published,
-                              );
-                              _load();
-                            }
-                            if (action == 'delete') {
-                              await widget.api.deleteAnnouncement(
-                                  (a['id'] as num).toInt());
-                              _load();
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                                value: 'edit', child: Text('编辑')),
-                            PopupMenuItem(
-                              value: 'toggle',
-                              child: Text(published ? '下架' : '发布'),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                            const PopupMenuItem(
-                                value: 'delete',
-                                child: Text('删除',
-                                    style: TextStyle(color: Colors.red))),
-                          ],
+                            child: const Text(
+                              '草稿',
+                              style: TextStyle(fontSize: 10),
+                            ),
+                          ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      '${a['level']} · ${a['created_at']}\n${(a['body'] ?? '').toString()}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    isThreeLine: true,
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) async {
+                        if (action == 'edit') _openEdit(item: a);
+                        if (action == 'toggle') {
+                          await widget.api.updateAnnouncement(
+                            (a['id'] as num).toInt(),
+                            published: !published,
+                          );
+                          _load();
+                        }
+                        if (action == 'delete') {
+                          await widget.api.deleteAnnouncement(
+                            (a['id'] as num).toInt(),
+                          );
+                          _load();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'edit', child: Text('编辑')),
+                        PopupMenuItem(
+                          value: 'toggle',
+                          child: Text(published ? '下架' : '发布'),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                            '删除',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEdit(),
         icon: const Icon(Icons.add),
@@ -1370,12 +1462,13 @@ class _FeedbackTabState extends State<_FeedbackTab> {
 
   Future<void> _reply(Map<String, dynamic> f) async {
     final ctrl = TextEditingController(
-        text: (f['admin_reply'] ?? '').toString());
+      text: (f['admin_reply'] ?? '').toString(),
+    );
     String status = (f['status'] ?? 'resolved').toString();
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
+        builder: (ctx, setSt) => AppDialog(
           title: const Text('回复反馈'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1388,15 +1481,13 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                 decoration: const InputDecoration(labelText: '回复内容'),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
+              AppDropdownField<String>(
                 initialValue: status,
-                decoration: const InputDecoration(labelText: '处理状态'),
+                labelText: '处理状态',
                 items: const [
                   DropdownMenuItem(value: 'open', child: Text('待处理')),
-                  DropdownMenuItem(
-                      value: 'in_progress', child: Text('处理中')),
-                  DropdownMenuItem(
-                      value: 'resolved', child: Text('已解决')),
+                  DropdownMenuItem(value: 'in_progress', child: Text('处理中')),
+                  DropdownMenuItem(value: 'resolved', child: Text('已解决')),
                   DropdownMenuItem(value: 'closed', child: Text('已关闭')),
                 ],
                 onChanged: (v) => setSt(() => status = v ?? status),
@@ -1405,11 +1496,13 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('提交')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('提交'),
+            ),
           ],
         ),
       ),
@@ -1424,8 +1517,9 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       _load();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -1452,8 +1546,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
             const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_items.isEmpty)
             const Expanded(
-                child: EmptyState(
-                    icon: Icons.inbox_outlined, message: '没有反馈'))
+              child: EmptyState(icon: Icons.inbox_outlined, message: '没有反馈'),
+            )
           else
             Expanded(
               child: ListView.builder(
@@ -1465,7 +1559,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                   return Card(
                     child: ListTile(
                       title: Text(
-                          '${f['username']} · ${f['category']} · $status'),
+                        '${f['username']} · ${f['category']} · $status',
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1476,8 +1571,9 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                               child: Text(
                                 '回复: ${f['admin_reply']}',
                                 style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600),
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
                             ),
                         ],
@@ -1493,7 +1589,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                             icon: const Icon(Icons.delete_outline),
                             onPressed: () async {
                               await widget.api.deleteFeedback(
-                                  (f['id'] as num).toInt());
+                                (f['id'] as num).toInt(),
+                              );
                               _load();
                             },
                           ),
@@ -1560,7 +1657,7 @@ class _InvitesTabState extends State<_InvitesTab> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
+        builder: (ctx, setSt) => AppDialog(
           title: const Text('生成邀请码'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1589,24 +1686,28 @@ class _InvitesTabState extends State<_InvitesTab> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('生成')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('生成'),
+            ),
           ],
         ),
       ),
     );
     if (ok != true) return;
     try {
-      final codes =
-          await widget.api.createInviteCodes(count: count, note: note);
+      final codes = await widget.api.createInviteCodes(
+        count: count,
+        note: note,
+      );
       await _load();
       if (!mounted) return;
       await showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => AppDialog(
           title: Text('已生成 ${codes.length} 个邀请码'),
           content: SizedBox(
             width: 400,
@@ -1627,8 +1728,9 @@ class _InvitesTabState extends State<_InvitesTab> {
       );
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -1639,46 +1741,47 @@ class _InvitesTabState extends State<_InvitesTab> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _codes.isEmpty
-              ? const EmptyState(
-                  icon: Icons.vpn_key_outlined, message: '尚无邀请码')
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _codes.length,
-                  itemBuilder: (_, i) {
-                    final c = _codes[i];
-                    final used = (c['used_by'] ?? '').toString().isNotEmpty;
-                    return Card(
-                      child: ListTile(
-                        leading: Icon(
-                          used ? Icons.check_circle : Icons.key,
-                          color: used ? Colors.grey : Colors.blue,
-                        ),
-                        title: SelectableText(
-                          c['code'].toString(),
-                          style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          used
-                              ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']}'
-                              : '未使用 · 创建 ${c['created_at']}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        trailing: used
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () async {
-                                  await widget.api
-                                      .deleteInviteCode(c['code'].toString());
-                                  _load();
-                                },
-                              ),
+          ? const EmptyState(icon: Icons.vpn_key_outlined, message: '尚无邀请码')
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: _codes.length,
+              itemBuilder: (_, i) {
+                final c = _codes[i];
+                final used = (c['used_by'] ?? '').toString().isNotEmpty;
+                return Card(
+                  child: ListTile(
+                    leading: Icon(
+                      used ? Icons.check_circle : Icons.key,
+                      color: used ? Colors.grey : Colors.blue,
+                    ),
+                    title: SelectableText(
+                      c['code'].toString(),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    subtitle: Text(
+                      used
+                          ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']}'
+                          : '未使用 · 创建 ${c['created_at']}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: used
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              await widget.api.deleteInviteCode(
+                                c['code'].toString(),
+                              );
+                              _load();
+                            },
+                          ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _generate,
         icon: const Icon(Icons.add),

@@ -110,8 +110,7 @@ void main() {
           expect(
             alarm.scheduleFullScreenCalls.length,
             1,
-            reason:
-                'iter=$iter zone=$zoneName H=$H M=$M: 应精确下发一次闹钟调度',
+            reason: 'iter=$iter zone=$zoneName H=$H M=$M: 应精确下发一次闹钟调度',
           );
           final call = alarm.scheduleFullScreenCalls.single;
 
@@ -119,14 +118,12 @@ void main() {
           expect(
             call.when.hour,
             H,
-            reason:
-                'iter=$iter zone=$zoneName H=$H M=$M when=${call.when}',
+            reason: 'iter=$iter zone=$zoneName H=$H M=$M when=${call.when}',
           );
           expect(
             call.when.minute,
             M,
-            reason:
-                'iter=$iter zone=$zoneName H=$H M=$M when=${call.when}',
+            reason: 'iter=$iter zone=$zoneName H=$H M=$M when=${call.when}',
           );
 
           // dateOnly(T) == D：与 `due` 的 year/month/day 对齐。
@@ -194,8 +191,7 @@ void main() {
           expect(
             alarm.scheduleFullScreenCalls.length,
             1,
-            reason:
-                'iter=$iter tz1=$tz1: 初次 sync 应下发一次闹钟',
+            reason: 'iter=$iter tz1=$tz1: 初次 sync 应下发一次闹钟',
           );
           final call1 = alarm.scheduleFullScreenCalls.last;
           expect(call1.when.hour, H);
@@ -210,19 +206,17 @@ void main() {
             goals: const [],
           );
 
-          // resyncAll：先 cancel 已记录的旧调度，再按新数据重新下发。
-          // 因此 scheduleFullScreen 总计应被调用 2 次，cancel 1 次。
+          // resyncAll：先 cancel 已记录的 rule id，再按新数据重新下发。
+          // 升级兼容路径还会清理旧版单提醒 id，因此这里不做严格次数约束。
           expect(
             alarm.scheduleFullScreenCalls.length,
             2,
-            reason:
-                'iter=$iter tz1=$tz1 tz2=$tz2: resyncAll 应重新下发一次',
+            reason: 'iter=$iter tz1=$tz1 tz2=$tz2: resyncAll 应重新下发一次',
           );
           expect(
-            alarm.cancelCalls.length,
-            1,
-            reason:
-                'iter=$iter tz1=$tz1 tz2=$tz2: resyncAll 应先取消旧调度',
+            alarm.cancelCalls,
+            contains(_todoRuleIntId(todo)),
+            reason: 'iter=$iter tz1=$tz1 tz2=$tz2: resyncAll 应先取消旧 rule',
           );
           final call2 = alarm.scheduleFullScreenCalls.last;
 
@@ -280,58 +274,66 @@ void main() {
   });
 
   group('P3 — 无 UTC 泄漏 (Requirements 8.5)', () {
-    test(
-      'tz.local 非 UTC 时，调度的 TZDateTime.location ≠ tz.UTC',
-      () async {
-        final rng = Random(kSeed + 2);
-        for (int iter = 0; iter < kIterations; iter++) {
-          final zoneName = zones[rng.nextInt(zones.length)];
-          tz.setLocalLocation(tz.getLocation(zoneName));
+    test('tz.local 非 UTC 时，调度的 TZDateTime.location ≠ tz.UTC', () async {
+      final rng = Random(kSeed + 2);
+      for (int iter = 0; iter < kIterations; iter++) {
+        final zoneName = zones[rng.nextInt(zones.length)];
+        tz.setLocalLocation(tz.getLocation(zoneName));
 
-          final H = rng.nextInt(24);
-          final M = rng.nextInt(60);
+        final H = rng.nextInt(24);
+        final M = rng.nextInt(60);
 
-          final notif = _RecordingNotificationSink();
-          final alarm = _RecordingAlarmSink();
-          final scheduler = ReminderScheduler(notif, alarm: alarm);
+        final notif = _RecordingNotificationSink();
+        final alarm = _RecordingAlarmSink();
+        final scheduler = ReminderScheduler(notif, alarm: alarm);
 
-          final due = DateTime.now().add(const Duration(days: 2));
-          final todo = TodoItem(
-            title: 'p3-iter-$iter',
-            dueDate: due,
-            reminder: ReminderConfig(
-              enabled: true,
-              kind: ReminderKind.alarm,
-              hour: H,
-              minute: M,
-            ),
-          );
-          await scheduler.syncTodos([todo]);
+        final due = DateTime.now().add(const Duration(days: 2));
+        final todo = TodoItem(
+          title: 'p3-iter-$iter',
+          dueDate: due,
+          reminder: ReminderConfig(
+            enabled: true,
+            kind: ReminderKind.alarm,
+            hour: H,
+            minute: M,
+          ),
+        );
+        await scheduler.syncTodos([todo]);
 
-          final call = alarm.scheduleFullScreenCalls.single;
-          final tzWhen = tz.TZDateTime(
-            tz.local,
-            call.when.year,
-            call.when.month,
-            call.when.day,
-            call.when.hour,
-            call.when.minute,
-          );
+        final call = alarm.scheduleFullScreenCalls.single;
+        final tzWhen = tz.TZDateTime(
+          tz.local,
+          call.when.year,
+          call.when.month,
+          call.when.day,
+          call.when.hour,
+          call.when.minute,
+        );
 
-          expect(
-            tzWhen.location,
-            isNot(equals(tz.UTC)),
-            reason:
-                'iter=$iter zone=$zoneName: tz.TZDateTime.location '
-                '不应为 tz.UTC',
-          );
-          expect(tzWhen.location.name, isNot('UTC'));
-          expect(tzWhen.location.name, zoneName);
-        }
-      },
-    );
+        expect(
+          tzWhen.location,
+          isNot(equals(tz.UTC)),
+          reason:
+              'iter=$iter zone=$zoneName: tz.TZDateTime.location '
+              '不应为 tz.UTC',
+        );
+        expect(tzWhen.location.name, isNot('UTC'));
+        expect(tzWhen.location.name, zoneName);
+      }
+    });
   });
 }
+
+int _idFor(String key) {
+  int h = 0;
+  for (final c in key.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return h;
+}
+
+int _todoRuleIntId(TodoItem todo) =>
+    _idFor('todo:${todo.id}:${todo.reminderPlan.primaryRule!.id}');
 
 // ---------------------------------------------------------------------------
 // Fakes：Recording sinks（与 channel_routing_pbt_test.dart 的实现保持形态
@@ -360,6 +362,7 @@ class _ScheduleFullScreenCall {
   final DateTime when;
   final String? payload;
   final bool requireExactAlarm;
+  final bool fullScreen;
   const _ScheduleFullScreenCall({
     required this.id,
     required this.title,
@@ -367,6 +370,7 @@ class _ScheduleFullScreenCall {
     required this.when,
     required this.payload,
     required this.requireExactAlarm,
+    required this.fullScreen,
   });
 }
 
@@ -381,13 +385,15 @@ class _RecordingNotificationSink implements ReminderNotificationSink {
     required DateTime when,
     String? payload,
   }) async {
-    scheduleOnceCalls.add(_ScheduleOnceCall(
-      id: id,
-      title: title,
-      body: body,
-      when: when,
-      payload: payload,
-    ));
+    scheduleOnceCalls.add(
+      _ScheduleOnceCall(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      ),
+    );
   }
 
   @override
@@ -445,16 +451,33 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     required DateTime when,
     String? payload,
     bool requireExactAlarm = true,
+    bool fullScreen = true,
   }) async {
-    scheduleFullScreenCalls.add(_ScheduleFullScreenCall(
-      id: id,
-      title: title,
-      body: body,
-      when: when,
-      payload: payload,
-      requireExactAlarm: requireExactAlarm,
-    ));
+    scheduleFullScreenCalls.add(
+      _ScheduleFullScreenCall(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        requireExactAlarm: requireExactAlarm,
+        fullScreen: fullScreen,
+      ),
+    );
   }
+
+  @override
+  Future<void> scheduleDailyFullScreen({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+    bool requireExactAlarm = true,
+    bool fullScreen = true,
+  }) async {}
 
   @override
   Future<void> cancel(int id) async {

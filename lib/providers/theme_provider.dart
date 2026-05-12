@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/domain_event_bus.dart';
 import '../core/app_brand.dart';
 
 class ThemeProvider extends ChangeNotifier {
@@ -29,6 +30,13 @@ class ThemeProvider extends ChangeNotifier {
     if (prev != _brand.id) {
       _switchCount++;
       await prefs.setInt(_switchCountKey, _switchCount);
+      DomainEventBus.instance.publish(
+        DomainEvent(
+          type: DomainEventType.themeSwitched,
+          objectId: _brand.id,
+          metadata: {'count': _switchCount},
+        ),
+      );
     }
     notifyListeners();
   }

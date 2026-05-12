@@ -10,10 +10,12 @@ import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/countdown_provider.dart';
 import '../providers/goal_provider.dart';
+import '../providers/time_audit_provider.dart';
 import '../models/todo.dart';
 import '../widgets/calendar_month_grid.dart';
 import '../widgets/calendar_week_strip.dart';
 import '../widgets/calendar_day_agenda.dart';
+import '../widgets/surface_components.dart';
 
 class CalendarScreen extends StatefulWidget {
   final GlobalKey? todoTabKey;
@@ -50,7 +52,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     final titleCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text(
           '${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日',
         ),
@@ -115,6 +117,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     final diaryProvider = context.watch<DiaryProvider>();
     final countdownProvider = context.watch<CountdownProvider>();
     final goalProvider = context.watch<GoalProvider>();
+    final timeAuditProvider = context.watch<TimeAuditProvider>();
     final s = context.watch<ThemeProvider>().brand.strings;
     final cs = Theme.of(context).colorScheme;
 
@@ -130,6 +133,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       diaries: diaryProvider.entries,
       countdowns: countdownProvider.items,
       goals: goalProvider.goals,
+      timeEntries: timeAuditProvider.entries,
     );
 
     final dateTypes = calendarProvider.dateEventTypes;

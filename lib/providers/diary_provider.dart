@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/domain_event_bus.dart';
 import '../models/diary_entry.dart';
 
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
   List<DiaryEntry> _entries = [];
 
-  List<DiaryEntry> get entries => List.unmodifiable(
-        _entries..sort((a, b) => b.date.compareTo(a.date)),
-      );
+  List<DiaryEntry> get entries =>
+      List.unmodifiable(_entries..sort((a, b) => b.date.compareTo(a.date)));
 
   int get totalCount => _entries.length;
 
@@ -83,15 +83,18 @@ class DiaryProvider extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
-        _key, _entries.map((e) => jsonEncode(e.toJson())).toList());
+      _key,
+      _entries.map((e) => jsonEncode(e.toJson())).toList(),
+    );
     notifyListeners();
   }
 
   Future<void> addOrUpdate(DiaryEntry entry) async {
     final idx = _entries.indexWhere((e) => e.id == entry.id);
     // 同一天只保留一条，更新的情况下比对日期
-    final sameDayIdx =
-        _entries.indexWhere((e) => e.dateKey == entry.dateKey && e.id != entry.id);
+    final sameDayIdx = _entries.indexWhere(
+      (e) => e.dateKey == entry.dateKey && e.id != entry.id,
+    );
     if (idx != -1) {
       entry.updatedAt = DateTime.now();
       _entries[idx] = entry;
@@ -107,6 +110,9 @@ class DiaryProvider extends ChangeNotifier {
       existing.updatedAt = DateTime.now();
     } else {
       _entries.add(entry);
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.diaryWritten, objectId: entry.id),
+      );
     }
     await _save();
   }

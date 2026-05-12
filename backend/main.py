@@ -62,9 +62,53 @@ def init_db():
             diaries TEXT DEFAULT '[]',
             goals TEXT DEFAULT '[]',
             courses TEXT DEFAULT '[]',
+            time_entries TEXT DEFAULT '[]',
             course_settings TEXT DEFAULT '{}',
+            achievement_states TEXT DEFAULT '{}',
             updated_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            owner_user_id TEXT NOT NULL,
+            is_private INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workspace_members (
+            workspace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'viewer',
+            joined_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY(workspace_id, user_id),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workspace_invites (
+            id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL DEFAULT 'viewer',
+            created_by TEXT NOT NULL,
+            expires_at TEXT,
+            revoked INTEGER DEFAULT 0,
+            used_by TEXT,
+            used_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(used_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE TABLE IF NOT EXISTS workspace_data (
+            workspace_id TEXT PRIMARY KEY,
+            todos TEXT DEFAULT '[]',
+            goals TEXT DEFAULT '[]',
+            courses TEXT DEFAULT '[]',
+            time_entries TEXT DEFAULT '[]',
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS invite_codes (
             code TEXT PRIMARY KEY,
@@ -126,7 +170,9 @@ def init_db():
         ("sync_data", "diaries", "'[]'"),
         ("sync_data", "goals", "'[]'"),
         ("sync_data", "courses", "'[]'"),
+        ("sync_data", "time_entries", "'[]'"),
         ("sync_data", "course_settings", "'{}'"),
+        ("sync_data", "achievement_states", "'{}'"),
         ("users", "is_disabled", "0"),
         ("users", "last_login_at", "NULL"),
         ("invite_codes", "note", "''"),
@@ -135,9 +181,20 @@ def init_db():
         cur = conn.execute(f"PRAGMA table_info({table})")
         cols = {r["name"] for r in cur.fetchall()}
         if col not in cols:
-            conn.execute(
-                f"ALTER TABLE {table} ADD COLUMN {col} {'INTEGER' if isinstance(default, str) and default.isdigit() else 'TEXT'} DEFAULT {default}"
+            column_type = (
+                "INTEGER"
+                if isinstance(default, str) and default.isdigit()
+                else "TEXT"
             )
+            if default == "datetime('now')":
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {column_type}")
+                conn.execute(
+                    f"UPDATE {table} SET {col}=datetime('now') WHERE {col} IS NULL"
+                )
+            else:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {col} {column_type} DEFAULT {default}"
+                )
 
     # Default settings
     default_settings = {
@@ -176,8 +233,32 @@ def init_db():
             (admin_id, ADMIN_BOOTSTRAP_USER, _hash_password(ADMIN_BOOTSTRAP_PASSWORD)),
         )
         conn.execute("INSERT INTO sync_data(user_id) VALUES(?)", (admin_id,))
+    for row in conn.execute("SELECT id FROM users").fetchall():
+        _ensure_private_workspace(conn, row["id"])
     conn.commit()
     conn.close()
+
+
+def _private_workspace_id(user_id: str) -> str:
+    return f"private:{user_id}"
+
+
+def _ensure_private_workspace(db, user_id: str) -> None:
+    workspace_id = _private_workspace_id(user_id)
+    db.execute(
+        "INSERT OR IGNORE INTO workspaces(id, name, owner_user_id, is_private) "
+        "VALUES(?, '个人空间', ?, 1)",
+        (workspace_id, user_id),
+    )
+    db.execute(
+        "INSERT OR IGNORE INTO workspace_members(workspace_id, user_id, role) "
+        "VALUES(?, ?, 'owner')",
+        (workspace_id, user_id),
+    )
+    db.execute(
+        "INSERT OR IGNORE INTO workspace_data(workspace_id) VALUES(?)",
+        (workspace_id,),
+    )
 
 
 def _hash_password(password: str) -> str:
@@ -271,7 +352,27 @@ class SyncRequest(BaseModel):
     diaries: list = []
     goals: list = []
     courses: list = []
+    time_entries: list = []
     course_settings: dict = {}
+    achievement_states: dict = {}
+    workspace_payloads: dict = {}
+
+
+class WorkspaceCreate(BaseModel):
+    name: str
+
+
+class WorkspaceUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+class WorkspaceInviteCreate(BaseModel):
+    role: str = "viewer"
+    expires_at: Optional[str] = None
+
+
+class WorkspaceMemberUpdate(BaseModel):
+    role: str
 
 
 class FeedbackCreate(BaseModel):
@@ -548,7 +649,8 @@ def admin_backups(_: str = Depends(_require_admin)):
                     + length(sd.pomodoro_config) + length(sd.user_profile)
                     + length(sd.notes) + length(sd.countdowns) + length(sd.anniversaries)
                     + length(sd.diaries) + length(sd.goals) + length(sd.courses)
-                    + length(sd.course_settings)) AS bytes
+                    + length(sd.time_entries) + length(sd.course_settings)
+                    + length(sd.achievement_states)) AS bytes
             FROM users u LEFT JOIN sync_data sd ON sd.user_id = u.id
             ORDER BY sd.updated_at DESC
             """
@@ -575,7 +677,8 @@ def admin_backup_wipe(user_id: str, actor: str = Depends(_require_admin)):
             "UPDATE sync_data SET todos='[]', habits='[]', pomodoro_sessions='[]', "
             "pomodoro_config='{}', user_profile='{}', notes='[]', countdowns='[]', "
             "anniversaries='[]', diaries='[]', goals='[]', courses='[]', "
-            "course_settings='{}', updated_at=datetime('now') WHERE user_id=?",
+            "time_entries='[]', course_settings='{}', achievement_states='{}', "
+            "updated_at=datetime('now') WHERE user_id=?",
             (user_id,),
         )
         _audit(
@@ -620,6 +723,7 @@ def register(req: RegisterRequest):
             raise HTTPException(status_code=409, detail="Username already exists")
 
         db.execute("INSERT INTO sync_data(user_id) VALUES(?)", (user_id,))
+        _ensure_private_workspace(db, user_id)
 
         if _setting_get(db, "invite_code_required", False):
             db.execute(
@@ -729,6 +833,131 @@ def _merge_dict(server: dict, client: dict) -> dict:
     return server or client
 
 
+def _merge_state_dict(server: dict, client: dict) -> dict:
+    result = dict(server or {})
+    for key, value in (client or {}).items():
+        current = result.get(key)
+        if current is None or str(value) > str(current):
+            result[key] = value
+    return result
+
+
+def _require_workspace_member(db, workspace_id: str, user_id: str) -> sqlite3.Row:
+    row = db.execute(
+        """
+        SELECT wm.role, w.name, w.owner_user_id, w.is_private
+        FROM workspace_members wm
+        JOIN workspaces w ON w.id = wm.workspace_id
+        WHERE wm.workspace_id=? AND wm.user_id=?
+        """,
+        (workspace_id, user_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=403, detail="No workspace access")
+    return row
+
+
+def _require_workspace_editor(db, workspace_id: str, user_id: str) -> sqlite3.Row:
+    row = _require_workspace_member(db, workspace_id, user_id)
+    if row["role"] not in {"owner", "editor"}:
+        raise HTTPException(status_code=403, detail="Editor role required")
+    return row
+
+
+def _workspace_to_dict(row: sqlite3.Row, members: list[sqlite3.Row]) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "owner_user_id": row["owner_user_id"],
+        "is_private": bool(row["is_private"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "members": [
+            {
+                "workspace_id": m["workspace_id"],
+                "user_id": m["user_id"],
+                "username": m["username"],
+                "role": m["role"],
+                "joined_at": m["joined_at"],
+            }
+            for m in members
+        ],
+    }
+
+
+def _workspace_data(db, workspace_id: str) -> dict:
+    row = db.execute(
+        "SELECT todos, goals, courses, time_entries FROM workspace_data WHERE workspace_id=?",
+        (workspace_id,),
+    ).fetchone()
+    if row is None:
+        return {
+            "todos": [],
+            "goals": [],
+            "courses": [],
+            "time_entries": [],
+        }
+    return {
+        "todos": json.loads(row["todos"] or "[]"),
+        "goals": json.loads(row["goals"] or "[]"),
+        "courses": json.loads(row["courses"] or "[]"),
+        "time_entries": json.loads(row["time_entries"] or "[]"),
+    }
+
+
+def _visible_workspace_ids(db, user_id: str) -> set[str]:
+    rows = db.execute(
+        "SELECT workspace_id FROM workspace_members WHERE user_id=?",
+        (user_id,),
+    ).fetchall()
+    return {r["workspace_id"] for r in rows}
+
+
+def _merge_workspace_payloads(db, user_id: str, payloads: dict) -> dict:
+    visible = _visible_workspace_ids(db, user_id)
+    merged: dict = {}
+    if not isinstance(payloads, dict):
+        payloads = {}
+    for workspace_id in visible:
+        if workspace_id.startswith("private:"):
+            continue
+        role = _require_workspace_member(db, workspace_id, user_id)["role"]
+        server = _workspace_data(db, workspace_id)
+        client = payloads.get(workspace_id) if isinstance(payloads, dict) else None
+        if not isinstance(client, dict) or role == "viewer":
+            merged_data = server
+        else:
+            merged_data = {
+                "todos": _merge_by_timestamp(server.get("todos", []), client.get("todos", [])),
+                "goals": _merge_by_timestamp(server.get("goals", []), client.get("goals", [])),
+                "courses": _merge_by_timestamp(server.get("courses", []), client.get("courses", [])),
+                "time_entries": _merge_by_timestamp(
+                    server.get("time_entries", []), client.get("time_entries", [])
+                ),
+            }
+            db.execute(
+                """
+                INSERT INTO workspace_data(workspace_id, todos, goals, courses, time_entries, updated_at)
+                VALUES(?,?,?,?,?,datetime('now'))
+                ON CONFLICT(workspace_id) DO UPDATE SET
+                    todos=excluded.todos,
+                    goals=excluded.goals,
+                    courses=excluded.courses,
+                    time_entries=excluded.time_entries,
+                    updated_at=datetime('now')
+                """,
+                (
+                    workspace_id,
+                    json.dumps(merged_data["todos"], ensure_ascii=False),
+                    json.dumps(merged_data["goals"], ensure_ascii=False),
+                    json.dumps(merged_data["courses"], ensure_ascii=False),
+                    json.dumps(merged_data["time_entries"], ensure_ascii=False),
+                ),
+            )
+        merged[workspace_id] = merged_data
+    return merged
+
+
 @app.post("/api/sync")
 def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
     db = get_db()
@@ -750,9 +979,11 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
                     detail=f"同步数据过大 ({payload_size // 1024}KB > {max_kb}KB)",
                 )
 
+        _ensure_private_workspace(db, user_id)
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "
-            "notes, countdowns, anniversaries, diaries, goals, courses, course_settings "
+            "notes, countdowns, anniversaries, diaries, goals, courses, time_entries, "
+            "course_settings, achievement_states "
             "FROM sync_data WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -761,7 +992,8 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
             return json.loads(row[col]) if row and row[col] else []
 
         def _obj(col):
-            return json.loads(row[col]) if row and row[col] else {}
+            value = json.loads(row[col]) if row and row[col] else {}
+            return value if isinstance(value, dict) else {}
 
         server_todos = _list("todos")
         server_habits = _list("habits")
@@ -774,7 +1006,9 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
         server_diaries = _list("diaries")
         server_goals = _list("goals")
         server_courses = _list("courses")
+        server_time_entries = _list("time_entries")
         server_course_settings = _obj("course_settings")
+        server_achievement_states = _obj("achievement_states")
 
         merged_todos = _merge_by_timestamp(server_todos, req.todos)
         merged_habits = _merge_by_timestamp(server_habits, req.habits)
@@ -787,17 +1021,26 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
         merged_diaries = _merge_by_timestamp(server_diaries, req.diaries)
         merged_goals = _merge_by_timestamp(server_goals, req.goals)
         merged_courses = _merge_by_timestamp(server_courses, req.courses)
+        merged_time_entries = _merge_by_timestamp(
+            server_time_entries, req.time_entries
+        )
         merged_course_settings = _merge_dict(
             server_course_settings, req.course_settings
+        )
+        merged_achievement_states = _merge_state_dict(
+            server_achievement_states, req.achievement_states
+        )
+        merged_workspace_payloads = _merge_workspace_payloads(
+            db, user_id, req.workspace_payloads
         )
 
         db.execute(
             """
             INSERT OR REPLACE INTO sync_data
             (user_id, todos, habits, pomodoro_sessions, pomodoro_config, user_profile,
-             notes, countdowns, anniversaries, diaries, goals, courses, course_settings,
-             updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+             notes, countdowns, anniversaries, diaries, goals, courses, time_entries,
+             course_settings, achievement_states, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
             """,
             (
                 user_id,
@@ -812,7 +1055,9 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
                 json.dumps(merged_diaries, ensure_ascii=False),
                 json.dumps(merged_goals, ensure_ascii=False),
                 json.dumps(merged_courses, ensure_ascii=False),
+                json.dumps(merged_time_entries, ensure_ascii=False),
                 json.dumps(merged_course_settings, ensure_ascii=False),
+                json.dumps(merged_achievement_states, ensure_ascii=False),
             ),
         )
         db.commit()
@@ -829,8 +1074,230 @@ def sync(req: SyncRequest, user_id: str = Depends(_verify_token)):
             "diaries": merged_diaries,
             "goals": merged_goals,
             "courses": merged_courses,
+            "time_entries": merged_time_entries,
             "course_settings": merged_course_settings,
+            "achievement_states": merged_achievement_states,
+            "workspace_payloads": merged_workspace_payloads,
         }
+    finally:
+        db.close()
+
+
+# ---- Workspaces ----
+
+
+@app.get("/api/workspaces")
+def list_workspaces(user_id: str = Depends(_verify_token)):
+    db = get_db()
+    try:
+        _ensure_private_workspace(db, user_id)
+        rows = db.execute(
+            """
+            SELECT w.*
+            FROM workspaces w
+            JOIN workspace_members wm ON wm.workspace_id = w.id
+            WHERE wm.user_id=?
+            ORDER BY w.is_private DESC, w.updated_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+        result = []
+        for row in rows:
+            members = db.execute(
+                """
+                SELECT wm.workspace_id, wm.user_id, u.username, wm.role, wm.joined_at
+                FROM workspace_members wm
+                JOIN users u ON u.id = wm.user_id
+                WHERE wm.workspace_id=?
+                ORDER BY wm.role='owner' DESC, wm.joined_at
+                """,
+                (row["id"],),
+            ).fetchall()
+            item = _workspace_to_dict(row, members)
+            item["data"] = _workspace_data(db, row["id"])
+            result.append(item)
+        return result
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces")
+def create_workspace(req: WorkspaceCreate, user_id: str = Depends(_verify_token)):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Workspace name required")
+    db = get_db()
+    try:
+        workspace_id = secrets.token_hex(12)
+        db.execute(
+            "INSERT INTO workspaces(id, name, owner_user_id, is_private) VALUES(?,?,?,0)",
+            (workspace_id, name, user_id),
+        )
+        db.execute(
+            "INSERT INTO workspace_members(workspace_id, user_id, role) VALUES(?,?, 'owner')",
+            (workspace_id, user_id),
+        )
+        db.execute("INSERT INTO workspace_data(workspace_id) VALUES(?)", (workspace_id,))
+        _audit(db, user_id, _get_username(db, user_id), "workspace.create", workspace_id)
+        db.commit()
+        return {"id": workspace_id, "name": name}
+    finally:
+        db.close()
+
+
+@app.patch("/api/workspaces/{workspace_id}")
+def update_workspace(
+    workspace_id: str, req: WorkspaceUpdate, user_id: str = Depends(_verify_token)
+):
+    db = get_db()
+    try:
+        row = _require_workspace_editor(db, workspace_id, user_id)
+        if row["is_private"]:
+            raise HTTPException(status_code=400, detail="Private workspace is immutable")
+        changed = {}
+        if req.name is not None and req.name.strip():
+            db.execute(
+                "UPDATE workspaces SET name=?, updated_at=datetime('now') WHERE id=?",
+                (req.name.strip(), workspace_id),
+            )
+            changed["name"] = req.name.strip()
+        _audit(
+            db,
+            user_id,
+            _get_username(db, user_id),
+            "workspace.update",
+            workspace_id,
+            json.dumps(changed, ensure_ascii=False),
+        )
+        db.commit()
+        return {"status": "ok", "changed": changed}
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces/{workspace_id}/invites")
+def create_workspace_invite(
+    workspace_id: str,
+    req: WorkspaceInviteCreate,
+    user_id: str = Depends(_verify_token),
+):
+    if req.role not in {"editor", "viewer"}:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    db = get_db()
+    try:
+        row = _require_workspace_editor(db, workspace_id, user_id)
+        if row["is_private"]:
+            raise HTTPException(status_code=400, detail="Private workspace cannot invite")
+        invite_id = secrets.token_hex(12)
+        code = secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:10]
+        db.execute(
+            """
+            INSERT INTO workspace_invites(id, workspace_id, code, role, created_by, expires_at)
+            VALUES(?,?,?,?,?,?)
+            """,
+            (invite_id, workspace_id, code, req.role, user_id, req.expires_at),
+        )
+        _audit(db, user_id, _get_username(db, user_id), "workspace.invite", workspace_id)
+        db.commit()
+        return {
+            "id": invite_id,
+            "workspace_id": workspace_id,
+            "code": code,
+            "role": req.role,
+            "expires_at": req.expires_at,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/invites/{code}/accept")
+def accept_workspace_invite(code: str, user_id: str = Depends(_verify_token)):
+    db = get_db()
+    try:
+        row = db.execute(
+            """
+            SELECT wi.*, w.name
+            FROM workspace_invites wi
+            JOIN workspaces w ON w.id = wi.workspace_id
+            WHERE wi.code=?
+            """,
+            (code.strip(),),
+        ).fetchone()
+        if row is None or row["revoked"]:
+            raise HTTPException(status_code=404, detail="Invite not found")
+        if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc).isoformat():
+            raise HTTPException(status_code=400, detail="Invite expired")
+        db.execute(
+            "INSERT INTO workspace_members(workspace_id, user_id, role) VALUES(?,?,?) "
+            "ON CONFLICT(workspace_id, user_id) DO UPDATE SET role=excluded.role",
+            (row["workspace_id"], user_id, row["role"]),
+        )
+        db.execute(
+            "UPDATE workspace_invites SET used_by=?, used_at=datetime('now') WHERE id=?",
+            (user_id, row["id"]),
+        )
+        _audit(
+            db,
+            user_id,
+            _get_username(db, user_id),
+            "workspace.invite.accept",
+            row["workspace_id"],
+        )
+        db.commit()
+        return {
+            "workspace_id": row["workspace_id"],
+            "name": row["name"],
+            "role": row["role"],
+        }
+    finally:
+        db.close()
+
+
+@app.patch("/api/workspaces/{workspace_id}/members/{member_user_id}")
+def update_workspace_member(
+    workspace_id: str,
+    member_user_id: str,
+    req: WorkspaceMemberUpdate,
+    user_id: str = Depends(_verify_token),
+):
+    if req.role not in {"editor", "viewer"}:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    db = get_db()
+    try:
+        owner = _require_workspace_member(db, workspace_id, user_id)
+        if owner["role"] != "owner":
+            raise HTTPException(status_code=403, detail="Owner role required")
+        if member_user_id == owner["owner_user_id"]:
+            raise HTTPException(status_code=400, detail="Owner role cannot change")
+        db.execute(
+            "UPDATE workspace_members SET role=? WHERE workspace_id=? AND user_id=?",
+            (req.role, workspace_id, member_user_id),
+        )
+        db.commit()
+        return {"status": "ok"}
+    finally:
+        db.close()
+
+
+@app.delete("/api/workspaces/{workspace_id}/members/{member_user_id}")
+def remove_workspace_member(
+    workspace_id: str,
+    member_user_id: str,
+    user_id: str = Depends(_verify_token),
+):
+    db = get_db()
+    try:
+        owner = _require_workspace_member(db, workspace_id, user_id)
+        if owner["role"] != "owner" and user_id != member_user_id:
+            raise HTTPException(status_code=403, detail="Owner role required")
+        if member_user_id == owner["owner_user_id"]:
+            raise HTTPException(status_code=400, detail="Owner cannot be removed")
+        db.execute(
+            "DELETE FROM workspace_members WHERE workspace_id=? AND user_id=?",
+            (workspace_id, member_user_id),
+        )
+        db.commit()
+        return {"status": "ok"}
     finally:
         db.close()
 

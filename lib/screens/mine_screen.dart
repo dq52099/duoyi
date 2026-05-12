@@ -13,6 +13,7 @@ import '../providers/auth_provider.dart';
 import '../services/ai_service.dart';
 import '../services/app_update_service.dart';
 import '../widgets/stats_overview_cards.dart';
+import '../widgets/surface_components.dart';
 import 'theme_picker_screen.dart';
 import 'login_screen.dart';
 import 'announcements_screen.dart';
@@ -20,6 +21,7 @@ import 'feedback_screen.dart';
 import 'countdown_screen.dart';
 import 'note_screen.dart';
 import 'statistics_screen.dart';
+import 'time_audit_screen.dart';
 import 'anniversary_screen.dart';
 import 'diary_screen.dart';
 import 'goal_screen.dart';
@@ -33,6 +35,7 @@ import 'export_screen.dart';
 import 'search_screen.dart';
 import 'ai_history_screen.dart';
 import 'preferences_screen.dart';
+import 'share_screen.dart';
 
 class MineScreen extends StatelessWidget {
   const MineScreen({super.key});
@@ -52,12 +55,6 @@ class MineScreen extends StatelessWidget {
     final updater = context.watch<AppUpdateService>();
     final cs = Theme.of(context).colorScheme;
 
-    userProvider.recalc(
-      completedTodos: todoProvider.completedTodos.length,
-      totalFocusMinutes: pomodoroProvider.totalFocusMinutes,
-      currentStreak: habitProvider.longestCurrentStreak,
-      bestStreak: habitProvider.longestBestStreak,
-    );
     final p = userProvider.profile;
     final hour = DateTime.now().hour;
     final greeting = hour < 6
@@ -82,13 +79,11 @@ class MineScreen extends StatelessWidget {
       body: ListView(
         children: [
           // Profile header
-          Container(
+          AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(16),
-            ),
+            color: cs.surface.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(22),
             child: Row(
               children: [
                 CircleAvatar(
@@ -231,7 +226,7 @@ class MineScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _Section(title: '效率与工具'),
           _Tile(
-            icon: Icons.flag_outlined,
+            icon: Icons.flag_circle_outlined,
             label: '目标管理',
             color: Colors.orange,
             onTap: () => Navigator.push(
@@ -258,12 +253,30 @@ class MineScreen extends StatelessWidget {
             ),
           ),
           _Tile(
+            icon: Icons.groups_2_outlined,
+            label: '共享空间',
+            color: Colors.cyan,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShareScreen()),
+            ),
+          ),
+          _Tile(
             icon: Icons.pie_chart_outline,
             label: '时光足迹 (数据报表)',
             color: Colors.indigo,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.access_time,
+            label: '时间足迹',
+            color: Colors.teal,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
             ),
           ),
           _Tile(
@@ -299,8 +312,7 @@ class MineScreen extends StatelessWidget {
             color: Colors.blue,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const CourseScheduleScreen()),
+              MaterialPageRoute(builder: (_) => const CourseScheduleScreen()),
             ),
           ),
           _Tile(
@@ -451,9 +463,13 @@ class MineScreen extends StatelessWidget {
               color: Colors.purple,
               trailing: ai.reviewHistory.isEmpty
                   ? null
-                  : Text('${ai.reviewHistory.length}',
+                  : Text(
+                      '${ai.reviewHistory.length}',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade600)),
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
@@ -463,9 +479,7 @@ class MineScreen extends StatelessWidget {
               (auth.serverConfig['backup_enabled'] != false))
             _Tile(
               icon: Icons.cloud_sync_outlined,
-              label: syncProvider.hasPendingChanges
-                  ? '立即同步 · 有未同步改动'
-                  : '立即同步',
+              label: syncProvider.hasPendingChanges ? '立即同步 · 有未同步改动' : '立即同步',
               color: syncProvider.hasPendingChanges
                   ? Colors.orange
                   : Colors.cyan,
@@ -476,19 +490,22 @@ class MineScreen extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : (syncProvider.hasPendingChanges
-                      ? const Icon(Icons.fiber_manual_record,
-                          color: Colors.orange, size: 12)
-                      : Text(
-                          syncProvider.hasEverSynced
-                              ? _formatTime(syncProvider.config.lastSync)
-                              : '未同步',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: syncProvider.hasEverSynced
-                                ? Colors.green
-                                : Colors.grey,
-                          ),
-                        )),
+                        ? const Icon(
+                            Icons.fiber_manual_record,
+                            color: Colors.orange,
+                            size: 12,
+                          )
+                        : Text(
+                            syncProvider.hasEverSynced
+                                ? _formatTime(syncProvider.config.lastSync)
+                                : '未同步',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: syncProvider.hasEverSynced
+                                  ? Colors.green
+                                  : Colors.grey,
+                            ),
+                          )),
               onTap: syncProvider.isSyncing
                   ? null
                   : () async {
@@ -555,7 +572,7 @@ class MineScreen extends StatelessWidget {
     if (!context.mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('检查更新'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -623,7 +640,7 @@ class MineScreen extends StatelessWidget {
   void _notifDialog(BuildContext context, NotificationService ns) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('通知记录'),
         content: ns.history.isEmpty
             ? const Text('暂无通知记录')
@@ -669,7 +686,7 @@ class MineScreen extends StatelessWidget {
   void _aboutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('多仪'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
@@ -748,59 +765,65 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, color: cs.primary, size: 18),
-                const SizedBox(width: 6),
-                const Text(
-                  'AI 每周回顾',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(14),
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _busy ? null : _run,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('生成'),
-                ),
-              ],
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              )
-            else if (_result != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  _result!,
-                  style: const TextStyle(fontSize: 13, height: 1.6),
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '点击"生成"让 AI 根据本周完成数据写一段总结与建议',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
+                child: Icon(Icons.auto_awesome, color: cs.primary, size: 18),
               ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              const Text(
+                'AI 每周回顾',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _busy ? null : _run,
+                child: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('生成'),
+              ),
+            ],
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            )
+          else if (_result != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _result!,
+                style: const TextStyle(fontSize: 13, height: 1.6),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '点击"生成"让 AI 根据本周完成数据写一段总结与建议',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -812,16 +835,9 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return AppSectionHeader(
+      title: title,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey.shade600,
-        ),
-      ),
     );
   }
 }
@@ -843,18 +859,11 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
-      trailing: trailing ?? const Icon(Icons.chevron_right, size: 18),
+    return AppActionTile(
+      icon: icon,
+      label: label,
+      color: color,
+      trailing: trailing,
       onTap: onTap,
     );
   }

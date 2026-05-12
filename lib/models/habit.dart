@@ -46,66 +46,113 @@ class Habit {
     this.remindHour,
     this.remindMinute,
     DateTime? createdAt,
-  })  : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
-        completions = completions ?? {},
-        tags = tags ?? [],
-        createdAt = createdAt ?? DateTime.now();
+  }) : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
+       completions = completions ?? {},
+       tags = tags ?? [],
+       createdAt = createdAt ?? DateTime.now();
+
+  Habit copyWith({
+    String? name,
+    String? icon,
+    int? colorValue,
+    HabitKind? kind,
+    List<int>? activeWeekdays,
+    int? targetCount,
+    String? unit,
+    int? currentStreak,
+    int? bestStreak,
+    Map<String, int>? completions,
+    String? category,
+    List<String>? tags,
+    int? weeklyTarget,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? sortOrder,
+    bool? remind,
+    int? remindHour,
+    int? remindMinute,
+    DateTime? createdAt,
+  }) {
+    return Habit(
+      id: id,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      colorValue: colorValue ?? this.colorValue,
+      kind: kind ?? this.kind,
+      activeWeekdays: activeWeekdays ?? List<int>.from(this.activeWeekdays),
+      targetCount: targetCount ?? this.targetCount,
+      unit: unit ?? this.unit,
+      currentStreak: currentStreak ?? this.currentStreak,
+      bestStreak: bestStreak ?? this.bestStreak,
+      completions: completions != null
+          ? Map<String, int>.from(completions)
+          : Map<String, int>.from(this.completions),
+      category: category ?? this.category,
+      tags: tags ?? List<String>.from(this.tags),
+      weeklyTarget: weeklyTarget ?? this.weeklyTarget,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      sortOrder: sortOrder ?? this.sortOrder,
+      remind: remind ?? this.remind,
+      remindHour: remindHour ?? this.remindHour,
+      remindMinute: remindMinute ?? this.remindMinute,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'icon': icon,
-        'colorValue': colorValue,
-        'kind': kind.index,
-        'activeWeekdays': activeWeekdays,
-        'targetCount': targetCount,
-        'unit': unit,
-        'currentStreak': currentStreak,
-        'bestStreak': bestStreak,
-        'completions': completions,
-        'category': category,
-        'tags': tags,
-        'weeklyTarget': weeklyTarget,
-        'startDate': startDate?.toIso8601String(),
-        'endDate': endDate?.toIso8601String(),
-        'sortOrder': sortOrder,
-        'remind': remind,
-        'remindHour': remindHour,
-        'remindMinute': remindMinute,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'icon': icon,
+    'colorValue': colorValue,
+    'kind': kind.index,
+    'activeWeekdays': activeWeekdays,
+    'targetCount': targetCount,
+    'unit': unit,
+    'currentStreak': currentStreak,
+    'bestStreak': bestStreak,
+    'completions': completions,
+    'category': category,
+    'tags': tags,
+    'weeklyTarget': weeklyTarget,
+    'startDate': startDate?.toIso8601String(),
+    'endDate': endDate?.toIso8601String(),
+    'sortOrder': sortOrder,
+    'remind': remind,
+    'remindHour': remindHour,
+    'remindMinute': remindMinute,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory Habit.fromJson(Map<String, dynamic> json) => Habit(
-        id: json['id'],
-        name: json['name'],
-        icon: json['icon'] ?? 'star',
-        colorValue: json['colorValue'] ?? 0xFF4CAF50,
-        kind: HabitKind.values[(json['kind'] as num?)?.toInt() ?? 0],
-        activeWeekdays: List<int>.from(
-          json['activeWeekdays'] ?? [0, 1, 2, 3, 4, 5, 6],
-        ),
-        targetCount: json['targetCount'] ?? 1,
-        unit: json['unit'],
-        currentStreak: json['currentStreak'] ?? 0,
-        bestStreak: json['bestStreak'] ?? 0,
-        completions: json['completions'] != null
-            ? Map<String, int>.from(json['completions'])
-            : {},
-        category: json['category'],
-        tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
-        weeklyTarget: json['weeklyTarget'] ?? 7,
-        startDate: json['startDate'] != null
-            ? DateTime.parse(json['startDate'])
-            : null,
-        endDate: json['endDate'] != null
-            ? DateTime.parse(json['endDate'])
-            : null,
-        sortOrder: json['sortOrder'] ?? 0,
-        remind: json['remind'] ?? false,
-        remindHour: (json['remindHour'] as num?)?.toInt(),
-        remindMinute: (json['remindMinute'] as num?)?.toInt(),
-        createdAt: DateTime.parse(json['createdAt']),
-      );
+    id: json['id'],
+    name: json['name'],
+    icon: json['icon'] ?? 'star',
+    colorValue: json['colorValue'] ?? 0xFF4CAF50,
+    kind: HabitKind.values[(json['kind'] as num?)?.toInt() ?? 0],
+    activeWeekdays: List<int>.from(
+      json['activeWeekdays'] ?? [0, 1, 2, 3, 4, 5, 6],
+    ),
+    targetCount: json['targetCount'] ?? 1,
+    unit: json['unit'],
+    currentStreak: json['currentStreak'] ?? 0,
+    bestStreak: json['bestStreak'] ?? 0,
+    completions: json['completions'] != null
+        ? Map<String, int>.from(json['completions'])
+        : {},
+    category: json['category'],
+    tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+    weeklyTarget: json['weeklyTarget'] ?? 7,
+    startDate: json['startDate'] != null
+        ? DateTime.parse(json['startDate'])
+        : null,
+    endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
+    sortOrder: json['sortOrder'] ?? 0,
+    remind: json['remind'] ?? false,
+    remindHour: (json['remindHour'] as num?)?.toInt(),
+    remindMinute: (json['remindMinute'] as num?)?.toInt(),
+    createdAt: DateTime.parse(json['createdAt']),
+  );
 
   int todayCount() => completions[todayKey()] ?? 0;
   double todayProgress() =>

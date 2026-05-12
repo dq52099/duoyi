@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/app_version.dart';
+import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
 import 'core/local_timezone_resolver.dart';
 import 'providers/todo_provider.dart';
@@ -20,7 +21,12 @@ import 'providers/goal_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/preferences_provider.dart';
+import 'providers/time_audit_provider.dart';
+import 'providers/achievement_provider.dart';
+import 'providers/share_provider.dart';
+import 'models/goal.dart' show GoalStatus;
 import 'models/todo.dart' show TodoPriorityX;
+import 'services/alarm_service.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
@@ -35,6 +41,7 @@ import 'screens/pomodoro_screen.dart';
 import 'screens/mine_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
 import 'widgets/quick_capture_fab.dart';
 
@@ -46,6 +53,7 @@ final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 /// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发 `resyncAll`。
 /// 放在顶层是因为 `_DuoyiAppState` 并不持有构造时的闭包引用。
 late ReminderScheduler _reminderScheduler;
+bool _initialExactAlarmGranted = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,6 +79,9 @@ void main() async {
   final courseProvider = CourseProvider();
   final appLockProvider = AppLockProvider();
   final preferencesProvider = PreferencesProvider();
+  final timeAuditProvider = TimeAuditProvider();
+  final achievementProvider = AchievementProvider();
+  final shareProvider = ShareProvider();
   final aiService = AiService();
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
@@ -92,6 +103,8 @@ void main() async {
     courseProvider.loadFromStorage(),
     appLockProvider.loadFromStorage(),
     preferencesProvider.loadFromStorage(),
+    timeAuditProvider.loadFromStorage(),
+    achievementProvider.loadFromStorage(),
     notificationService.init(),
     systemTray.init(),
     HomeWidgetService.init(),
@@ -99,7 +112,17 @@ void main() async {
     aiService.loadFromStorage(),
   ]);
 
+  _initialExactAlarmGranted = await AlarmService.instance
+      .hasExactAlarmPermission();
+
   pomodoroProvider.attachNotifier(notificationService);
+  pomodoroProvider.attachTimeAudit(timeAuditProvider);
+  todoProvider.timeAudit = timeAuditProvider;
+  habitProvider.timeAudit = timeAuditProvider;
+  goalProvider.timeAudit = timeAuditProvider;
+  achievementProvider.attachNotificationService(notificationService);
+  shareProvider.apiClientGetter = () => authProvider.client;
+  shareProvider.userIdGetter = () => authProvider.state.userId;
   // 让 PomodoroProvider 监听 AppLifecycle，以便在 resumed 时恢复白噪音。
   pomodoroProvider.attachLifecycle();
 
@@ -123,12 +146,14 @@ void main() async {
     await reminderScheduler.syncHabits(habitProvider.habits);
     await reminderScheduler.syncAnniversaries(anniversaryProvider.items);
     await reminderScheduler.syncGoals(goalProvider.goals);
+    await reminderScheduler.syncCountdowns(countdownProvider.items);
   }
 
   todoProvider.addListener(resyncReminders);
   habitProvider.addListener(resyncReminders);
   anniversaryProvider.addListener(resyncReminders);
   goalProvider.addListener(resyncReminders);
+  countdownProvider.addListener(resyncReminders);
   // 本地有改动 → 在云同步侧标"有未同步改动"（Req 12.7）。
   void markDirty() => cloudSyncProvider.markPendingLocalChange();
   todoProvider.addListener(markDirty);
@@ -140,8 +165,57 @@ void main() async {
   diaryProvider.addListener(markDirty);
   courseProvider.addListener(markDirty);
   pomodoroProvider.addListener(markDirty);
+  timeAuditProvider.addListener(markDirty);
+
+  void refreshUserStats() {
+    userProvider.recalc(
+      completedTodos: todoProvider.completedTodos.length,
+      totalFocusMinutes: pomodoroProvider.totalFocusMinutes,
+      currentStreak: habitProvider.longestCurrentStreak,
+      bestStreak: habitProvider.longestBestStreak,
+    );
+  }
+
+  todoProvider.addListener(refreshUserStats);
+  habitProvider.addListener(refreshUserStats);
+  pomodoroProvider.addListener(refreshUserStats);
+
+  void refreshAchievements() {
+    achievementProvider.updateContext(
+      AchievementContext(
+        totalTodos: todoProvider.todos.length,
+        completedTodos: todoProvider.completedTodos.length,
+        longestHabitStreak: habitProvider.longestBestStreak,
+        habitCount: habitProvider.habits.length,
+        focusMinutes: pomodoroProvider.totalFocusMinutes,
+        focusSessions: pomodoroProvider.sessions.length,
+        diaryStreak: diaryProvider.currentStreak,
+        diaryCount: diaryProvider.entries.length,
+        goalsTotal: goalProvider.goals.length,
+        goalsAchieved: goalProvider.goals
+            .where((g) => g.status == GoalStatus.achieved)
+            .length,
+        anniversaries: anniversaryProvider.items.length,
+        courses: courseProvider.courses.length,
+        notes: noteProvider.notes.length,
+        themeSwitches: themeProvider.themeSwitchCount,
+      ),
+    );
+  }
+
+  todoProvider.addListener(refreshAchievements);
+  habitProvider.addListener(refreshAchievements);
+  pomodoroProvider.addListener(refreshAchievements);
+  diaryProvider.addListener(refreshAchievements);
+  goalProvider.addListener(refreshAchievements);
+  anniversaryProvider.addListener(refreshAchievements);
+  courseProvider.addListener(refreshAchievements);
+  noteProvider.addListener(refreshAchievements);
+  themeProvider.addListener(refreshAchievements);
   // 初次同步
   await resyncReminders();
+  refreshUserStats();
+  refreshAchievements();
 
   // 通知点击后的深链接(打开对应 Tab)
   LocalNotifications.instance.onTap = (payload) {
@@ -179,16 +253,22 @@ void main() async {
       await goalProvider.loadFromStorage();
       await courseProvider.loadFromStorage();
       await userProvider.loadFromStorage();
+      await timeAuditProvider.loadFromStorage();
+      await shareProvider.load();
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
       await resyncReminders();
     });
   };
 
   authProvider.addListener(() {
+    shareProvider.load();
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
       cloudSyncProvider.syncNow();
     }
   });
+  if (authProvider.state.isLoggedIn) {
+    shareProvider.load();
+  }
   if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
     cloudSyncProvider.syncNow();
   }
@@ -257,6 +337,9 @@ void main() async {
         ChangeNotifierProvider.value(value: courseProvider),
         ChangeNotifierProvider.value(value: appLockProvider),
         ChangeNotifierProvider.value(value: preferencesProvider),
+        ChangeNotifierProvider.value(value: timeAuditProvider),
+        ChangeNotifierProvider.value(value: achievementProvider),
+        ChangeNotifierProvider.value(value: shareProvider),
         ChangeNotifierProvider.value(value: notificationService),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
@@ -275,20 +358,21 @@ Future<void> _pushHomeWidget(
   ThemeProvider tp,
 ) async {
   final today = DateTime.now();
-  final activeToday = t.todos.where((todo) {
-    return !todo.isCompleted &&
-        todo.date.year == today.year &&
-        todo.date.month == today.month &&
-        todo.date.day == today.day;
-  }).toList()
-    ..sort((a, b) {
-      // 按优先级倒序
-      final r = b.priority.rank.compareTo(a.priority.rank);
-      if (r != 0) return r;
-      return a.sortOrder.compareTo(b.sortOrder);
-    });
+  final activeToday =
+      t.todos.where((todo) {
+        return !todo.isCompleted &&
+            todo.date.year == today.year &&
+            todo.date.month == today.month &&
+            todo.date.day == today.day;
+      }).toList()..sort((a, b) {
+        // 按优先级倒序
+        final r = b.priority.rank.compareTo(a.priority.rank);
+        if (r != 0) return r;
+        return a.sortOrder.compareTo(b.sortOrder);
+      });
   final activeTodayTodos = activeToday.length;
   final top3 = activeToday.take(3).map((e) => e.title).toList();
+  final top3Ids = activeToday.take(3).map((e) => e.id).toList();
   final habitPercent = (h.todayCompletionRate * 100).round();
   await HomeWidgetService.push(
     todoCount: activeTodayTodos,
@@ -296,6 +380,8 @@ Future<void> _pushHomeWidget(
     pomodoroToday: p.sessionCountToday,
     strings: tp.brand.strings,
     todoTop3: top3,
+    todoTop3Ids: top3Ids,
+    todayEventSummary: top3.isEmpty ? '今日没有日程' : '今日：${top3.first}',
   );
 }
 
@@ -304,6 +390,7 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   if (uri.scheme != 'duoyi') return;
 
   final state = mainShellKey.currentState;
+  final ctx = mainShellKey.currentContext;
 
   if (uri.host == 'tab') {
     final tab = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
@@ -317,12 +404,40 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       _ => 3,
     };
     state?.navigateTo(idx);
+  } else if (uri.host == 'todo' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) return;
+    // ignore: discarded_futures
+    TodayDetailRouter.open(ctx, TodaySectionKind.todos, id: id);
+  } else if (uri.host == 'goal' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) return;
+    // ignore: discarded_futures
+    TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id);
+  } else if (uri.host == 'countdown') {
+    state?.navigateTo(3);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     if (action == 'start_pomodoro') {
       state?.navigateTo(4);
       if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
+    } else if (action == 'complete_todo' && ctx != null) {
+      final id = uri.queryParameters['id'];
+      if (id == null || id.isEmpty) return;
+      final todos = Provider.of<TodoProvider>(ctx, listen: false);
+      final target = todos.todos.where((todo) => todo.id == id).firstOrNull;
+      if (target == null || target.isCompleted) return;
+      // ignore: discarded_futures
+      todos.toggleTodo(id);
     }
+  }
+}
+
+extension _FirstOrNullMainX<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (iterator.moveNext()) return iterator.current;
+    return null;
   }
 }
 
@@ -344,6 +459,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   /// 之后每次 `AppLifecycleState.resumed` 都会先刷新时区再与此值比较，
   /// 差异即触发 [ReminderScheduler.resyncAll]（Requirements 8.6 / 8.8）。
   String? _lastIana;
+  bool? _lastExactAlarmGranted;
 
   @override
   void initState() {
@@ -352,6 +468,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     final now = DateTime.now();
     _lastLifecycleDay = DateTime(now.year, now.month, now.day);
     _lastIana = LocalTimezoneResolver.currentIana;
+    _lastExactAlarmGranted = _initialExactAlarmGranted;
   }
 
   @override
@@ -371,6 +488,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       // 先处理时区变更（可能影响调度），再做跨日 rollover。
       _maybeResyncOnTimezoneChange();
       _maybeRunDailyRolloverOnResume();
+      _refreshNotificationPermissionsOnResume();
     }
   }
 
@@ -388,6 +506,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     final habits = Provider.of<HabitProvider>(ctx, listen: false);
     final annis = Provider.of<AnniversaryProvider>(ctx, listen: false);
     final goals = Provider.of<GoalProvider>(ctx, listen: false);
+    final countdowns = Provider.of<CountdownProvider>(ctx, listen: false);
 
     final prevIana = _lastIana;
 
@@ -410,9 +529,49 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
           habits: habits.habits,
           annis: annis.items,
           goals: goals.goals,
+          countdowns: countdowns.items,
         );
       } catch (e, st) {
         debugPrint('[DuoyiApp] resyncAll on timezone change failed: $e\n$st');
+      }
+    });
+  }
+
+  /// 从系统设置返回时刷新通知 / 闹钟权限状态。
+  ///
+  /// 若通知权限或精准闹钟权限发生变化，则重放一轮提醒调度，保证
+  /// 现有提醒使用最新的系统授权状态。
+  void _refreshNotificationPermissionsOnResume() {
+    final ctx = mainShellKey.currentContext ?? context;
+    final notif = Provider.of<NotificationService>(ctx, listen: false);
+    final todos = Provider.of<TodoProvider>(ctx, listen: false);
+    final habits = Provider.of<HabitProvider>(ctx, listen: false);
+    final annis = Provider.of<AnniversaryProvider>(ctx, listen: false);
+    final goals = Provider.of<GoalProvider>(ctx, listen: false);
+    final countdowns = Provider.of<CountdownProvider>(ctx, listen: false);
+
+    final prevNotifGranted = notif.permissionGranted;
+    final prevExactGranted = _lastExactAlarmGranted;
+
+    // ignore: discarded_futures
+    Future.microtask(() async {
+      try {
+        final notifGranted = await notif.refreshPermission();
+        final exactGranted = await AlarmService.instance
+            .hasExactAlarmPermission();
+        _lastExactAlarmGranted = exactGranted;
+        final exactChanged =
+            prevExactGranted != null && prevExactGranted != exactGranted;
+        if (prevNotifGranted == notifGranted && !exactChanged) return;
+        await _reminderScheduler.resyncAll(
+          todos: todos.todos,
+          habits: habits.habits,
+          annis: annis.items,
+          goals: goals.goals,
+          countdowns: countdowns.items,
+        );
+      } catch (e, st) {
+        debugPrint('[DuoyiApp] refresh permission/resync failed: $e\n$st');
       }
     });
   }
@@ -553,7 +712,8 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      floatingActionButton: (_currentIndex == 0 || _currentIndex == 5) &&
+      floatingActionButton:
+          (_currentIndex == 0 || _currentIndex == 5) &&
               context.watch<PreferencesProvider>().quickCaptureFab
           ? const QuickCaptureFab()
           : null,

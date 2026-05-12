@@ -31,6 +31,8 @@ class CalendarWeekStrip extends StatelessWidget {
         return Colors.orange;
       case CalendarEventType.goal:
         return const Color(0xFFFFA726);
+      case CalendarEventType.timeEntry:
+        return const Color(0xFF78909C);
     }
   }
 
