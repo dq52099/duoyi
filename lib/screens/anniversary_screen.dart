@@ -128,7 +128,7 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
                           '${a.daysRemaining}',
                           style: TextStyle(
                             color: Color(a.colorValue),
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -261,7 +261,7 @@ class _AnniversaryCard extends StatelessWidget {
                                         item.title,
                                         style: const TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w400,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -372,7 +372,7 @@ class _AnniversaryCard extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: days == 0 ? 22 : 30,
                                       height: 1,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight: FontWeight.w400,
                                       color: color,
                                     ),
                                   ),
@@ -382,7 +382,7 @@ class _AnniversaryCard extends StatelessWidget {
                                       '天',
                                       style: TextStyle(
                                         color: color,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ],
@@ -595,7 +595,7 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               title: Text(
                 _cal == AnniversaryCalendarType.solar
                     ? '公历 ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'
-                    : '农历 ${lunar.toString()}',
+                    : '农历 ${_formatLunarDate(lunar)}',
               ),
               subtitle: Text(
                 _cal == AnniversaryCalendarType.solar
@@ -604,13 +604,20 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _date,
-                  firstDate: DateTime(1900),
-                  lastDate: DateTime(2099, 12, 31),
-                );
-                if (picked != null) setState(() => _date = picked);
+                DateTime? picked;
+                if (_cal == AnniversaryCalendarType.solar) {
+                  picked = await showDatePicker(
+                    context: context,
+                    initialDate: _date,
+                    firstDate: DateTime(1900),
+                    lastDate: DateTime(2099, 12, 31),
+                  );
+                } else {
+                  picked = await _pickLunarDate(context, lunar);
+                }
+                if (!mounted) return;
+                final pickedDate = picked;
+                if (pickedDate != null) setState(() => _date = pickedDate);
               },
             ),
             const SizedBox(height: 8),
@@ -683,6 +690,101 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  String _formatLunarDate(LunarDate lunar) {
+    final ganzhi = LunarCalendar.ganzhiOf(lunar.year);
+    return '$ganzhi年（${lunar.year}）${lunar.chineseText}';
+  }
+
+  Future<DateTime?> _pickLunarDate(
+    BuildContext context,
+    LunarDate initial,
+  ) async {
+    var year = initial.year;
+    var month = initial.month;
+    var day = initial.day;
+    return showAppModalSheet<DateTime>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          final preview = LunarDate(year, month, day);
+          return AppModalSheet(
+            title: '选择农历日期',
+            subtitle: _formatLunarDate(preview),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  ctx,
+                  LunarCalendar.toSolar(year, month, day.clamp(1, 30).toInt()),
+                ),
+                child: const Text('确定'),
+              ),
+            ],
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppDropdownField<int>(
+                        initialValue: year,
+                        labelText: '农历年',
+                        items: [
+                          for (var y = 1900; y <= 2099; y++)
+                            DropdownMenuItem(
+                              value: y,
+                              child: Text('${LunarCalendar.ganzhiOf(y)}年（$y）'),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setSt(() => year = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppDropdownField<int>(
+                        initialValue: month,
+                        labelText: '月份',
+                        items: [
+                          for (var m = 1; m <= 12; m++)
+                            DropdownMenuItem(
+                              value: m,
+                              child: Text(LunarDate(year, m, 1).chineseText),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setSt(() => month = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                AppDropdownField<int>(
+                  initialValue: day,
+                  labelText: '日期',
+                  items: [
+                    for (var d = 1; d <= 30; d++)
+                      DropdownMenuItem(
+                        value: d,
+                        child: Text(LunarDate(year, month, d).dayChineseText),
+                      ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setSt(() => day = v);
+                  },
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

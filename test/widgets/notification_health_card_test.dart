@@ -57,6 +57,8 @@ void main() {
               onOpenSystemSettings: () => openSettingsCount++,
               onSendTest: () => sendTestCount++,
               onSendScheduledTest: () => sendScheduledTestCount++,
+              onSendAlarmTest: () {},
+              onSendScheduledAlarmTest: () {},
               onClearPending: () => clearCount++,
               onRequestNotificationPermission: () {},
               onRequestExactAlarmPermission: () {},

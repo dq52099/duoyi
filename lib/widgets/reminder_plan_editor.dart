@@ -274,7 +274,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   void initState() {
     super.initState();
     final r = widget.initial;
-    final now = TimeOfDay.now();
+    final defaultTime = nextHalfHourTimeOfDay();
     _enabled = r?.enabled ?? true;
     _type =
         r?.type ??
@@ -287,7 +287,10 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
     _kind = widget.allowAlarm
         ? r?.kind ?? widget.defaultKind
         : widget.defaultKind;
-    _time = TimeOfDay(hour: r?.hour ?? now.hour, minute: r?.minute ?? 0);
+    _time = TimeOfDay(
+      hour: r?.hour ?? defaultTime.hour,
+      minute: r?.minute ?? defaultTime.minute,
+    );
     _offsetMinutes = r?.offsetMinutes ?? -30;
     _weekdays = r?.weekdays.isNotEmpty == true
         ? [...r!.weekdays]
@@ -551,6 +554,14 @@ String _formatHm(int? hour, int? minute) {
 
 String _formatTimeOfDay(TimeOfDay time) {
   return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+}
+
+TimeOfDay nextHalfHourTimeOfDay([DateTime? from]) {
+  final now = from ?? DateTime.now();
+  if (now.minute < 30) {
+    return TimeOfDay(hour: now.hour, minute: 30);
+  }
+  return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
 }
 
 String _durationLabel(int minutes) {

@@ -86,6 +86,7 @@ class TodayScreen extends StatelessWidget {
         children: [
           // 日期卡
           AppSurfaceCard(
+            onTap: () => _showCalendarPicker(context, now),
             padding: const EdgeInsets.all(16),
             borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
@@ -112,7 +113,7 @@ class TodayScreen extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -121,7 +122,7 @@ class TodayScreen extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -154,7 +155,7 @@ class TodayScreen extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 34,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                       height: 1,
                     ),
                   ),
@@ -276,7 +277,7 @@ class TodayScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color: Color(c.colorValue),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -316,7 +317,7 @@ class TodayScreen extends StatelessWidget {
                         '$d',
                         style: TextStyle(
                           color: Color(a.colorValue),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           fontSize: 11,
                         ),
                       ),
@@ -431,6 +432,24 @@ class TodayScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => BrandRouteSurface(child: screen)),
+    );
+  }
+
+  Future<void> _showCalendarPicker(BuildContext context, DateTime now) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2099, 12, 31),
+    );
+    if (picked == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '已选择 ${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }

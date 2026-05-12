@@ -100,7 +100,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 56,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w400,
                                 height: 1.0,
                               ),
                             ),
@@ -281,7 +281,7 @@ class _MiniMonth extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -330,7 +330,7 @@ class _MiniMonth extends StatelessWidget {
                             '$d',
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               color: isSelected
                                   ? cs.onPrimary
                                   : (isToday ? cs.primary : null),

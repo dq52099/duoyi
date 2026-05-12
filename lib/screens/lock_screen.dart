@@ -61,7 +61,7 @@ class _LockScreenState extends State<LockScreen> {
             const SizedBox(height: 10),
             Text(
               s.appTitle,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w400),
             ),
             const SizedBox(height: 6),
             const Text('输入 PIN 解锁', style: TextStyle(color: Colors.grey)),
@@ -117,7 +117,7 @@ class _Keypad extends StatelessWidget {
                   v,
                   style: const TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
           ),

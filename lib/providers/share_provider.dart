@@ -27,15 +27,22 @@ class ShareProvider extends ChangeNotifier {
   }
 
   WorkspaceRole roleFor(String workspaceId) {
+    if (workspaceId.isEmpty || workspaceId == 'private') {
+      return WorkspaceRole.owner;
+    }
     final userId = userIdGetter?.call();
     for (final workspace in _workspaces) {
       if (workspace.id == workspaceId) return workspace.roleFor(userId);
     }
-    return WorkspaceRole.viewer;
+    return WorkspaceRole.owner;
   }
 
   bool canEdit(String? workspaceId) {
-    if (workspaceId == null || workspaceId.isEmpty) return true;
+    if (workspaceId == null ||
+        workspaceId.isEmpty ||
+        workspaceId == 'private') {
+      return true;
+    }
     return roleFor(workspaceId).canEdit;
   }
 

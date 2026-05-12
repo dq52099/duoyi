@@ -37,7 +37,7 @@ class HabitWeeklyCard extends StatelessWidget {
               const SizedBox(width: 10),
               const Text(
                 '本周概览',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                style: TextStyle(fontWeight: FontWeight.w400, fontSize: 15),
               ),
             ],
           ),
@@ -69,7 +69,7 @@ class HabitWeeklyCard extends StatelessWidget {
                     labels[i],
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isToday ? FontWeight.w500 : FontWeight.normal,
+                      fontWeight: isToday ? FontWeight.w400 : FontWeight.normal,
                       color: isToday ? primaryColor : Colors.grey.shade600,
                     ),
                   ),
@@ -99,7 +99,7 @@ class HabitWeeklyCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           color: textColor,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),

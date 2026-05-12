@@ -72,7 +72,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   s.todoCreateTitle,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -104,7 +104,7 @@ class _TodoScreenState extends State<TodoScreen> {
                         'AI 智能拆解',
                         style: TextStyle(
                           color: Colors.purple,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       backgroundColor: Colors.purple.shade50,
@@ -182,7 +182,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '清单类型',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -225,7 +225,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -233,6 +233,7 @@ class _TodoScreenState extends State<TodoScreen> {
                 AppDropdownField<EisenhowerQuadrant>(
                   initialValue: quadrant,
                   labelText: '优先级',
+                  onTap: () => FocusScope.of(ctx).unfocus(),
                   items: const [
                     DropdownMenuItem(
                       value: EisenhowerQuadrant.urgentImportant,
@@ -258,7 +259,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级标记',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -330,7 +331,7 @@ class _TodoScreenState extends State<TodoScreen> {
                       '添加任务',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -442,7 +443,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
             ),
             title: Text(
               widget.groupName,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: const TextStyle(fontWeight: FontWeight.w400),
             ),
             subtitle: workspace == null
                 ? null
@@ -474,7 +475,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
                     '${widget.todos.length}',
                     style: TextStyle(
                       color: cs.primary,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),

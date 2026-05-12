@@ -55,9 +55,9 @@ class DesignTokens {
   static const double fontSizeXxl = 28;
 
   static const FontWeight fontWeightRegular = FontWeight.w400;
-  static const FontWeight fontWeightMedium = FontWeight.w500;
-  static const FontWeight fontWeightSemiBold = FontWeight.w500;
-  static const FontWeight fontWeightBold = FontWeight.w500;
+  static const FontWeight fontWeightMedium = FontWeight.w400;
+  static const FontWeight fontWeightSemiBold = FontWeight.w400;
+  static const FontWeight fontWeightBold = FontWeight.w400;
 
   // ----- Elevation / Shadow -----
   static const List<BoxShadow> shadowXs = [

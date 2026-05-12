@@ -93,7 +93,7 @@ class _ProgressHeader extends StatelessWidget {
                   style: TextStyle(
                     color: cs.onPrimary.withValues(alpha: 0.78),
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -102,7 +102,7 @@ class _ProgressHeader extends StatelessWidget {
                   style: TextStyle(
                     color: cs.onPrimary,
                     fontSize: 24,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -171,7 +171,7 @@ class _BadgeCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     fontSize: 13,
                     color: unlocked
                         ? cs.onSurface
@@ -190,7 +190,7 @@ class _BadgeCard extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 10,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),

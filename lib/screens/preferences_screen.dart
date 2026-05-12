@@ -56,7 +56,7 @@ class PreferencesScreen extends StatelessWidget {
                         '本地偏好',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               color: cs.onSurface,
                             ),
                       ),
@@ -407,6 +407,39 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     await _refresh();
   }
 
+  Future<void> _sendAlarmTest() async {
+    await AlarmService.instance.showFullScreenTest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('强提醒测试已发送'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _sendScheduledAlarmTest() async {
+    final when = DateTime.now().add(const Duration(minutes: 1));
+    await AlarmService.instance.scheduleFullScreen(
+      id: 919002,
+      title: '1 分钟强提醒测试',
+      body: '这是强提醒定时调度测试。',
+      when: when,
+      payload: 'duoyi://alarm-test?scheduled=1',
+      requireExactAlarm: true,
+      fullScreen: true,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('已安排 1 分钟后的强提醒测试'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
   Future<void> _clearPending() async {
     await widget.notificationService.cancelAll();
     await AlarmService.instance.cancelAll();
@@ -438,6 +471,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
           onOpenSystemSettings: () => _openAppSettings(context),
           onSendTest: _sendTest,
           onSendScheduledTest: _sendScheduledTest,
+          onSendAlarmTest: _sendAlarmTest,
+          onSendScheduledAlarmTest: _sendScheduledAlarmTest,
           onClearPending: _clearPending,
           onRequestNotificationPermission: _requestNotificationPermission,
           onRequestExactAlarmPermission: _requestExactAlarmPermission,
@@ -529,7 +564,7 @@ class _SliderSetting extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -553,7 +588,7 @@ class _SliderSetting extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),

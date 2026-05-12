@@ -93,7 +93,7 @@ class MineScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       color: cs.onPrimary,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -106,7 +106,7 @@ class MineScreen extends StatelessWidget {
                         '$greeting，$displayName',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -115,7 +115,7 @@ class MineScreen extends StatelessWidget {
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       if (auth.state.isLoggedIn && auth.state.isAdmin) ...[
@@ -447,6 +447,12 @@ class MineScreen extends StatelessWidget {
             onTap: () => _notifDialog(context, notifService),
           ),
           _Tile(
+            icon: Icons.widgets_outlined,
+            label: '桌面小组件',
+            color: Colors.teal,
+            onTap: () => _widgetHelpDialog(context),
+          ),
+          _Tile(
             icon: Icons.lock_outline,
             label: '应用锁',
             color: Colors.red.shade400,
@@ -591,7 +597,7 @@ class MineScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 const Text(
                   '发现新版本',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                  style: TextStyle(fontWeight: FontWeight.w400),
                 ),
                 if ((updater.latestNotes ?? '').isNotEmpty)
                   Padding(
@@ -705,6 +711,32 @@ class MineScreen extends StatelessWidget {
     );
   }
 
+  void _widgetHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('桌面小组件'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('已内置两个 Android 小组件：多仪概览、今日待办。'),
+            SizedBox(height: 8),
+            Text('在系统桌面长按空白处，选择“小组件”，找到“多仪”后拖到桌面。'),
+            SizedBox(height: 8),
+            Text('若列表没有出现，请打开一次多仪并回到桌面刷新。'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _aboutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -806,7 +838,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
               const SizedBox(width: 8),
               const Text(
                 'AI 每周回顾',
-                style: TextStyle(fontWeight: FontWeight.w500),
+                style: TextStyle(fontWeight: FontWeight.w400),
               ),
               const Spacer(),
               TextButton(

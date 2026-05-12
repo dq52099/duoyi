@@ -68,6 +68,13 @@ class TodoProvider extends ChangeNotifier {
 
   List<TodoItem> get activeTodos =>
       _todos.where((t) => !t.isCompleted).toList();
+  List<TodoItem> get visibleListTodos => _todos
+      .where(
+        (t) =>
+            CompletionVisibilityPolicy.visualState(t) !=
+            TodoVisualState.archived,
+      )
+      .toList();
   List<TodoItem> get completedTodos =>
       _todos.where((t) => t.isCompleted).toList();
 
@@ -76,17 +83,17 @@ class TodoProvider extends ChangeNotifier {
   Map<EisenhowerQuadrant, List<TodoItem>> get quadrantGroups {
     final map = <EisenhowerQuadrant, List<TodoItem>>{};
     for (final q in EisenhowerQuadrant.values) {
-      map[q] = activeTodos.where((t) => t.quadrant == q).toList();
+      map[q] = visibleListTodos.where((t) => t.quadrant == q).toList();
     }
     return map;
   }
 
   List<TodoItem> getQuadrantTodos(EisenhowerQuadrant q) =>
-      activeTodos.where((t) => t.quadrant == q).toList();
+      visibleListTodos.where((t) => t.quadrant == q).toList();
 
   Map<String, List<TodoItem>> get listGroupedTodos {
     final map = <String, List<TodoItem>>{};
-    for (final t in activeTodos) {
+    for (final t in visibleListTodos) {
       final key = t.listGroupName ?? '未分组';
       map.putIfAbsent(key, () => []).add(t);
     }
@@ -104,7 +111,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   String? workspaceForListGroup(String groupName) {
-    final group = activeTodos.where(
+    final group = visibleListTodos.where(
       (todo) => (todo.listGroupName ?? '未分组') == groupName,
     );
     for (final todo in group) {

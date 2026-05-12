@@ -77,7 +77,7 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
               child: Text(
                 '${_rangeLabel(_range)}时间线',
                 style: const TextStyle(
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   fontSize: 13,
                 ),
               ),
@@ -232,7 +232,7 @@ class _MetricBlock extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   fontSize: 16,
                 ),
               ),
@@ -346,7 +346,7 @@ class _TimeEntryCard extends StatelessWidget {
                 Text(
                   entry.title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     fontSize: 14,
                   ),
                 ),

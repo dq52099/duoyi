@@ -61,13 +61,13 @@ class PomodoroTimerRing extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              if (progress > 0 && progress < 1.0)
+              if (progress > 0)
                 Text(
-                  '${(progress * 100).toInt()}%',
+                  '${(progress.clamp(0.0, 1.0) * 100).round()}%',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: progress >= 1.0 ? 14 : 16,
                     color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
             ],

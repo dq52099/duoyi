@@ -200,7 +200,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
           ),
           const SizedBox(height: 8),
           child,
@@ -229,7 +229,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       title: v == 0 ? '' : '${((v / total) * 100).toStringAsFixed(0)}%',
       titleStyle: const TextStyle(
         color: Colors.white,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
         fontSize: 11,
       ),
     );
@@ -572,14 +572,14 @@ class _Kpi extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],

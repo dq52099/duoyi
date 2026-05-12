@@ -173,7 +173,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                           monthLabel,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -201,7 +201,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                           weekLabel,
                           style: const TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -219,7 +219,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                     '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
                     style: const TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -232,7 +232,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                   Tab(text: s.calendarTabWeek),
                   Tab(text: s.calendarTabDay),
                 ],
-                labelStyle: const TextStyle(fontWeight: FontWeight.w500),
+                labelStyle: const TextStyle(fontWeight: FontWeight.w400),
                 indicatorSize: TabBarIndicatorSize.label,
               ),
             ],
@@ -251,7 +251,13 @@ class _CalendarScreenState extends State<CalendarScreen>
                 dateEventTypes: dateTypes,
                 onDaySelected: (d) => setState(() => _selectedDay = d),
               ),
-              const Divider(),
+              Divider(
+                height: 1,
+                thickness: 0.5,
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.35),
+              ),
               Expanded(
                 child: CalendarDayAgenda(
                   date: _selectedDay,

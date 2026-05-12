@@ -142,7 +142,7 @@ class _QuadrantCard extends StatelessWidget {
                             child: Text(
                               label,
                               style: TextStyle(
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w400,
                                 color: bg,
                                 fontSize: 14,
                               ),
@@ -164,7 +164,7 @@ class _QuadrantCard extends StatelessWidget {
                                 '${items.length}',
                                 style: TextStyle(
                                   color: bg,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                   fontSize: 12,
                                 ),
                               ),

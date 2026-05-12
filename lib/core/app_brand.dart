@@ -56,7 +56,7 @@ TextTheme _textTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: isDark ? 26 : 25,
       height: 1.2,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -65,7 +65,7 @@ TextTheme _textTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: 22,
       height: 1.24,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -74,7 +74,7 @@ TextTheme _textTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: 18,
       height: 1.28,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -110,7 +110,7 @@ TextTheme _textTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: 14,
       height: 1.2,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: 0,
       color: bodyColor,
     ),
@@ -138,7 +138,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     color: cs.onSurface.withValues(alpha: 0.68),
   );
   final label = theme.textTheme.labelLarge?.copyWith(
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w400,
   );
   OutlineInputBorder fieldBorder(Color color, {double width = 1}) {
     return OutlineInputBorder(
@@ -164,7 +164,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     floatingLabelStyle: theme.textTheme.bodySmall?.copyWith(
       color: cs.primary,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
     ),
     prefixIconColor: WidgetStateColor.resolveWith((states) {
       if (states.contains(WidgetState.disabled)) {
@@ -195,7 +195,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titleTextStyle: theme.textTheme.titleLarge?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       contentTextStyle: body,
       iconColor: cs.primary,
@@ -221,7 +221,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       actionTextColor: cs.primary,
       contentTextStyle: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -353,11 +353,11 @@ ThemeData _withSharedControls(ThemeData theme) {
       checkmarkColor: cs.primary,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       secondaryLabelStyle: theme.textTheme.labelMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       side: BorderSide(color: outline),
@@ -455,7 +455,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       valueIndicatorColor: cs.primary,
       valueIndicatorTextStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onPrimary,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       trackHeight: 4,
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
@@ -488,10 +488,10 @@ ThemeData _withSharedControls(ThemeData theme) {
       labelColor: cs.primary,
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       overlayColor: WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.08)),
     ),
@@ -505,7 +505,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         final selected = states.contains(WidgetState.selected);
         return theme.textTheme.labelSmall?.copyWith(
           color: selected ? cs.primary : cs.onSurfaceVariant,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           letterSpacing: 0,
         );
       }),
@@ -537,14 +537,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       headerForegroundColor: cs.onPrimary,
       headerHeadlineStyle: theme.textTheme.headlineSmall?.copyWith(
         color: cs.onPrimary,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       headerHelpStyle: bodyMuted?.copyWith(
         color: cs.onPrimary.withValues(alpha: 0.84),
       ),
       weekdayStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onSurfaceVariant,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       dayStyle: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface),
       dayForegroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
@@ -629,7 +629,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       hourMinuteTextColor: cs.onSurface,
       helpTextStyle: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurfaceVariant,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: cs.primary,
@@ -723,7 +723,7 @@ ThemeData _lightTheme({
       foregroundColor: const Color(0xFF1E2532),
       titleTextStyle: const TextStyle(
         fontSize: 18,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
         color: Color(0xFF1E2532),
       ),
     ),

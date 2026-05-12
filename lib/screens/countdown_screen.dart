@@ -65,7 +65,7 @@ class CountdownScreen extends StatelessWidget {
                               '倒数日',
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w400,
                                     color: cs.onSurface,
                                   ),
                             ),
@@ -340,7 +340,7 @@ class _SummaryStat extends StatelessWidget {
         Text(
           value,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
             color: cs.onSurface,
           ),
         ),
@@ -349,7 +349,7 @@ class _SummaryStat extends StatelessWidget {
           label,
           style: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.62),
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -451,7 +451,7 @@ class _CountdownCard extends StatelessWidget {
                                         .textTheme
                                         .titleMedium
                                         ?.copyWith(
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w400,
                                           color: cs.onSurface,
                                         ),
                                   ),
@@ -509,7 +509,7 @@ class _CountdownCard extends StatelessWidget {
                                 '$absDays',
                                 style: TextStyle(
                                   fontSize: 32,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                   color: color,
                                   height: 1.0,
                                 ),
@@ -520,7 +520,7 @@ class _CountdownCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: color,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ],
@@ -566,7 +566,7 @@ class _StatusPill extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               color: color,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],

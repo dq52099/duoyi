@@ -56,7 +56,7 @@ class CalendarEventSheet extends StatelessWidget {
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.58),
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -64,7 +64,7 @@ class CalendarEventSheet extends StatelessWidget {
                       _timeText(event),
                       style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],

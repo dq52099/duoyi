@@ -128,7 +128,7 @@ class DiaryScreen extends StatelessWidget {
         Text(
           value,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
             color: cs.onSurface,
           ),
         ),
@@ -137,7 +137,7 @@ class DiaryScreen extends StatelessWidget {
           title,
           style: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.62),
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -280,7 +280,7 @@ class _DiaryCard extends StatelessWidget {
                             '${entry.date.month}/${entry.date.day}',
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               color: accent,
                             ),
                           ),
@@ -330,7 +330,7 @@ class _DiaryCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               color: cs.onSurface,
                             ),
                           ),
@@ -373,7 +373,7 @@ class _DiaryCard extends StatelessWidget {
                               '#$t',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.7),
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ),
@@ -409,7 +409,7 @@ class _DiaryBadge extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: cs.onSurface.withValues(alpha: 0.68),
         ),
       ),
@@ -532,7 +532,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                     '${_date.year}年${_date.month}月${_date.day}日',
                     style: TextStyle(
                       color: cs.primary,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(width: 10),

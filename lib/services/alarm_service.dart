@@ -272,6 +272,22 @@ class AlarmService implements ReminderAlarmSink {
     }
   }
 
+  Future<void> showFullScreenTest({
+    int id = 919001,
+    String title = '强提醒测试',
+    String body = '如果你看到弹屏、听到声音并有震动，强提醒通道正常。',
+    String payload = 'duoyi://alarm-test',
+  }) async {
+    if (!_initialized) await init();
+    await _plugin.show(
+      id,
+      title,
+      body,
+      _notificationDetails(fullScreen: true, payload: payload),
+      payload: payload,
+    );
+  }
+
   @override
   Future<void> scheduleDailyFullScreen({
     required int id,
