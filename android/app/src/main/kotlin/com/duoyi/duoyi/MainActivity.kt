@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.IOException
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -59,25 +60,58 @@ class MainActivity : FlutterActivity() {
                             result.error("invalid_path", "APK 路径为空", null)
                             return@setMethodCallHandler
                         }
-                        val file = File(path)
-                        if (!file.exists()) {
+                        val source = File(path)
+                        if (!source.exists()) {
                             result.error("missing_apk", "APK 文件不存在: $path", null)
                             return@setMethodCallHandler
                         }
-                        val uri = FileProvider.getUriForFile(
-                            this,
-                            "$packageName.fileprovider",
-                            file,
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW)
-                            .setDataAndType(uri, "application/vnd.android.package-archive")
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        result.success(null)
+                        try {
+                            val file = prepareApkForInstall(source)
+                            val uri = FileProvider.getUriForFile(
+                                this,
+                                "$packageName.fileprovider",
+                                file,
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW)
+                                .setDataAndType(uri, "application/vnd.android.package-archive")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(null)
+                        } catch (e: IllegalArgumentException) {
+                            result.error("file_provider_root", "安装包路径无法授权: ${e.message}", null)
+                        } catch (e: IOException) {
+                            result.error("prepare_apk_failed", "准备安装包失败: ${e.message}", null)
+                        } catch (e: Exception) {
+                            result.error("install_failed", "打开安装器失败: ${e.message}", null)
+                        }
                     }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    @Throws(IOException::class)
+    private fun prepareApkForInstall(source: File): File {
+        val updateDir = File(cacheDir, "updates")
+        if (!updateDir.exists() && !updateDir.mkdirs()) {
+            throw IOException("无法创建更新缓存目录")
+        }
+
+        val safeName = source.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            .ifBlank { "duoyi-update.apk" }
+        val target = File(updateDir, safeName)
+        val sourceCanonical = source.canonicalFile
+        val targetCanonical = target.canonicalFile
+        if (sourceCanonical.path == targetCanonical.path) {
+            return targetCanonical
+        }
+
+        sourceCanonical.inputStream().use { input ->
+            targetCanonical.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        return targetCanonical
     }
 }
