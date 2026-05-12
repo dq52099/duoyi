@@ -72,7 +72,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   s.todoCreateTitle,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -104,7 +104,7 @@ class _TodoScreenState extends State<TodoScreen> {
                         'AI 智能拆解',
                         style: TextStyle(
                           color: Colors.purple,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       backgroundColor: Colors.purple.shade50,
@@ -182,7 +182,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '清单类型',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: Colors.grey,
                   ),
                 ),
@@ -225,7 +225,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: Colors.grey,
                   ),
                 ),
@@ -258,7 +258,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级标记',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: Colors.grey,
                   ),
                 ),
@@ -330,7 +330,7 @@ class _TodoScreenState extends State<TodoScreen> {
                       '添加任务',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),

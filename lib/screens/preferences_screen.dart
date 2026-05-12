@@ -320,7 +320,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
   Future<_NotificationHealthSnapshot> _load() async {
     await widget.notificationService.refreshPermission();
     final report = await PermissionHealthService.instance.check();
-    final pending = await widget.notificationService.pendingIds();
+    final pushPending = await widget.notificationService.pendingIds();
+    final alarmPending = await AlarmService.instance.pendingIds();
     DateTime? lastTestAt;
     for (final item in widget.notificationService.history) {
       if (item.type == NotificationType.general && item.title == '测试通知') {
@@ -330,7 +331,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     }
     return _NotificationHealthSnapshot(
       report: report,
-      pendingCount: pending.length,
+      pendingCount: pushPending.length + alarmPending.length,
       lastTestAt: lastTestAt,
     );
   }
@@ -382,6 +383,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
 
   Future<void> _clearPending() async {
     await widget.notificationService.cancelAll();
+    await AlarmService.instance.cancelAll();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

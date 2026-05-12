@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
@@ -33,8 +34,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         '/api/announcements',
       );
       _items = list.cast<Map<String, dynamic>>();
+    } on ApiException catch (e) {
+      _error = e.message;
     } catch (e) {
-      _error = e.toString();
+      _error = '公告加载失败：$e';
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -105,7 +108,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           '公告中心',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: cs.onSurface,
                               ),
                         ),

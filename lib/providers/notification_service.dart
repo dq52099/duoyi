@@ -288,7 +288,7 @@ class NotificationService extends ChangeNotifier
       minute: minute,
       weekdays: weekdays,
       channelId: channelId,
-      payload: 'duoyi://tab/habit',
+      payload: 'duoyi://habit/$habitId?confirm=1',
     );
     _pendingNotifications++;
     notifyListeners();

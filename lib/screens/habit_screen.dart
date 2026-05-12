@@ -88,7 +88,7 @@ class _HabitScreenState extends State<HabitScreen>
                   s.habitCreateTitle,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -98,7 +98,7 @@ class _HabitScreenState extends State<HabitScreen>
                   '推荐目标',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: Colors.grey,
                   ),
                 ),
@@ -332,7 +332,7 @@ class _HabitScreenState extends State<HabitScreen>
                       '开启新习惯',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -404,7 +404,7 @@ class _HabitScreenState extends State<HabitScreen>
                                     '${(provider.todayOverallProgress * 100).toInt()}%',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w600,
                                       color: cs.primary,
                                     ),
                                   ),
@@ -583,7 +583,7 @@ class _HabitCheckinCard extends StatelessWidget {
                       '${habit.currentStreak} 天',
                       style: const TextStyle(
                         color: Colors.orange,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
                     ),
@@ -640,7 +640,7 @@ class _HabitCheckinCard extends StatelessWidget {
                       child: Text(
                         '${habit.todayCount()}/${habit.targetCount}',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           fontSize: 14,
                           color: isDone ? const Color(0xFF4CAF50) : null,
                         ),

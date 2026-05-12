@@ -256,10 +256,39 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<HabitProvider>();
-    final habit = provider.habits.firstWhere(
-      (h) => h.id == widget.habitId,
-      orElse: () => provider.habits.first,
-    );
+    final matches = provider.habits.where((h) => h.id == widget.habitId);
+    if (matches.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('习惯详情')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(DesignTokens.space3xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 56,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: DesignTokens.spaceMd),
+                Text(
+                  '这个习惯不存在或已被删除',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: DesignTokens.spaceLg),
+                FilledButton.tonalIcon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('返回'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    final habit = matches.first;
     final heatmapData = habit.heatmapData(20);
     final cs = Theme.of(context).colorScheme;
     final color = Color(habit.colorValue);
@@ -353,6 +382,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             itemBuilder: (_, i) {
               final d = DateTime.now().subtract(Duration(days: i));
               final count = habit.countForDate(d);
+              final target = habit.targetCount < 1 ? 1 : habit.targetCount;
               return ListTile(
                 dense: true,
                 leading: Text(
@@ -360,7 +390,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                   style: const TextStyle(fontSize: 13),
                 ),
                 title: LinearProgressIndicator(
-                  value: count / habit.targetCount,
+                  value: (count / target).clamp(0.0, 1.0),
                 ),
                 trailing: Text(
                   '$count/${habit.targetCount}',
@@ -397,11 +427,12 @@ ReminderPlan _habitReminderPlan(Habit habit) {
   if (!habit.remind || habit.remindHour == null || habit.remindMinute == null) {
     return const ReminderPlan.disabled();
   }
-  final weekdays = habit.activeWeekdays
-      .where((d) => d >= 0 && d <= 6)
-      .map((d) => d + 1)
-      .toList()
-    ..sort();
+  final weekdays =
+      habit.activeWeekdays
+          .where((d) => d >= 0 && d <= 6)
+          .map((d) => d + 1)
+          .toList()
+        ..sort();
   final fullWeek = weekdays.length == 7;
   return ReminderPlan(
     enabled: true,
@@ -409,7 +440,9 @@ ReminderPlan _habitReminderPlan(Habit habit) {
       ReminderRule(
         id: 'habit-reminder',
         enabled: true,
-        type: fullWeek ? ReminderRuleType.dailyTime : ReminderRuleType.weeklyTime,
+        type: fullWeek
+            ? ReminderRuleType.dailyTime
+            : ReminderRuleType.weeklyTime,
         kind: ReminderKind.push,
         hour: habit.remindHour,
         minute: habit.remindMinute,

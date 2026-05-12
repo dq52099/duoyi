@@ -53,6 +53,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   final _tagCtrl = TextEditingController();
   final _timeTargetCtrl = TextEditingController();
   late TodoItem _todo;
+  bool _missingTodo = false;
 
   /// "保存不返回"状态机当前状态。
   _EditState _state = _EditState.clean;
@@ -92,7 +93,16 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   void _load() {
     final provider = context.read<TodoProvider>();
-    final todo = provider.todos.firstWhere((t) => t.id == widget.todoId);
+    final matches = provider.todos.where((t) => t.id == widget.todoId);
+    if (matches.isEmpty) {
+      _todo = TodoItem(id: widget.todoId, title: '');
+      _baseline = '';
+      _missingTodo = true;
+      _state = _EditState.clean;
+      return;
+    }
+    final todo = matches.first;
+    _missingTodo = false;
     _syncDraftFromProvider(todo);
     _baseline = _snapshot(_todo);
     _state = _EditState.clean;
@@ -164,14 +174,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      setState(() => _state = _EditState.editing);
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('任务名称不能为空'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: cs.error,
+        ),
+      );
+      return;
+    }
 
     try {
       await provider.updateTodo(
         widget.todoId,
-        _todo.copyWith(
-          title: _titleCtrl.text.trim(),
-          notes: _notesCtrl.text.trim(),
-        ),
+        _todo.copyWith(title: title, notes: _notesCtrl.text.trim()),
       );
       if (!mounted) return;
 
@@ -378,6 +397,37 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TodoProvider>();
+    if (_missingTodo || !provider.todos.any((t) => t.id == widget.todoId)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('任务详情')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(DesignTokens.space3xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 56,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: DesignTokens.spaceMd),
+                Text(
+                  '这个任务不存在或已被删除',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: DesignTokens.spaceLg),
+                FilledButton.tonalIcon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('返回'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final providerTodo = provider.todos.firstWhere(
       (t) => t.id == widget.todoId,
       orElse: () => _todo,

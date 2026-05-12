@@ -138,7 +138,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     color: cs.onSurface.withValues(alpha: 0.68),
   );
   final label = theme.textTheme.labelLarge?.copyWith(
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
   );
   OutlineInputBorder fieldBorder(Color color, {double width = 1}) {
     return OutlineInputBorder(
@@ -195,7 +195,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titleTextStyle: theme.textTheme.titleLarge?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
       contentTextStyle: body,
       iconColor: cs.primary,
@@ -301,6 +301,40 @@ ThemeData _withSharedControls(ThemeData theme) {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.selected)) {
+            return cs.primary.withValues(alpha: 0.14);
+          }
+          return fill;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return cs.onSurface.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.selected)) return cs.primary;
+          return cs.onSurfaceVariant;
+        }),
+        side: WidgetStateProperty.resolveWith<BorderSide?>((states) {
+          if (states.contains(WidgetState.selected)) {
+            return BorderSide(color: cs.primary.withValues(alpha: 0.54));
+          }
+          return BorderSide(color: outline);
+        }),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        textStyle: WidgetStatePropertyAll(label),
+        iconColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.selected)) return cs.primary;
+          return cs.onSurfaceVariant;
+        }),
       ),
     ),
     iconButtonTheme: IconButtonThemeData(
@@ -444,6 +478,55 @@ ThemeData _withSharedControls(ThemeData theme) {
       tileColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
+    tabBarTheme: TabBarThemeData(
+      dividerColor: Colors.transparent,
+      indicatorSize: TabBarIndicatorSize.tab,
+      indicator: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      labelColor: cs.primary,
+      unselectedLabelColor: cs.onSurfaceVariant,
+      labelStyle: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      overlayColor: WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.08)),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 64,
+      elevation: 0,
+      backgroundColor: surface.withValues(alpha: isDark ? 0.92 : 0.96),
+      indicatorColor: cs.primary.withValues(alpha: 0.14),
+      surfaceTintColor: Colors.transparent,
+      labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((states) {
+        final selected = states.contains(WidgetState.selected);
+        return theme.textTheme.labelSmall?.copyWith(
+          color: selected ? cs.primary : cs.onSurfaceVariant,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          letterSpacing: 0,
+        );
+      }),
+      iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>((states) {
+        final selected = states.contains(WidgetState.selected);
+        return IconThemeData(
+          color: selected ? cs.primary : cs.onSurfaceVariant,
+          size: 24,
+        );
+      }),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 0,
+      focusElevation: 0,
+      hoverElevation: 0,
+      highlightElevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      extendedTextStyle: label,
+    ),
     datePickerTheme: DatePickerThemeData(
       backgroundColor: surface,
       surfaceTintColor: surfaceTint,
@@ -454,14 +537,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       headerForegroundColor: cs.onPrimary,
       headerHeadlineStyle: theme.textTheme.headlineSmall?.copyWith(
         color: cs.onPrimary,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
       headerHelpStyle: bodyMuted?.copyWith(
         color: cs.onPrimary.withValues(alpha: 0.84),
       ),
       weekdayStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onSurfaceVariant,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
       ),
       dayStyle: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface),
       dayForegroundColor: WidgetStateProperty.resolveWith<Color?>((states) {

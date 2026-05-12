@@ -10,6 +10,7 @@ import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/todo_provider.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'anniversary_screen.dart';
@@ -87,50 +88,66 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => TodoDetailScreen(todoId: h.sourceId),
+            builder: (_) =>
+                BrandRouteSurface(child: TodoDetailScreen(todoId: h.sourceId)),
           ),
         );
         break;
       case SearchKind.habit:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const HabitScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: HabitScreen()),
+          ),
         );
         break;
       case SearchKind.note:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const NoteScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: NoteScreen()),
+          ),
         );
         break;
       case SearchKind.diary:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const DiaryScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: DiaryScreen()),
+          ),
         );
         break;
       case SearchKind.anniversary:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const AnniversaryScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: AnniversaryScreen()),
+          ),
         );
         break;
       case SearchKind.countdown:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CountdownScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: CountdownScreen()),
+          ),
         );
         break;
       case SearchKind.goal:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const GoalScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: GoalScreen()),
+          ),
         );
         break;
       case SearchKind.course:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CourseScheduleScreen()),
+          MaterialPageRoute(
+            builder: (_) =>
+                const BrandRouteSurface(child: CourseScheduleScreen()),
+          ),
         );
         break;
     }

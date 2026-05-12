@@ -63,14 +63,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text(_isRegister ? '注册账号' : '登录'),
+    return BrandBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-      ),
-      body: BrandBackground(
-        child: ListView(
+        appBar: AppBar(
+          title: Text(_isRegister ? '注册账号' : '登录'),
+          backgroundColor: Colors.transparent,
+        ),
+        body: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           children: [
             const SizedBox(height: 12),
@@ -78,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
               s.appTitle,
               style: TextStyle(
                 fontSize: 28,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 color: cs.primary,
               ),
             ),
@@ -97,8 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.build_circle,
-                        color: Colors.orange, size: 18),
+                    const Icon(
+                      Icons.build_circle,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -106,7 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? '服务正在维护中'
                             : auth.maintenanceMessage,
                         style: const TextStyle(
-                            color: Colors.orange, fontSize: 12),
+                          color: Colors.orange,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ],
@@ -144,8 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _busy ||
-                      (_isRegister && !auth.registrationEnabled)
+              onPressed: _busy || (_isRegister && !auth.registrationEnabled)
                   ? null
                   : _submit,
               child: Padding(

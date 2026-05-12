@@ -13,6 +13,7 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import 'diary_screen.dart';
 import 'habit_screen.dart';
@@ -427,7 +428,10 @@ class TodayScreen extends StatelessWidget {
   String _weekday(int w) => const ['一', '二', '三', '四', '五', '六', '日'][w - 1];
 
   void _go(BuildContext context, Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BrandRouteSurface(child: screen)),
+    );
   }
 }
 

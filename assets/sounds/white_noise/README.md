@@ -5,20 +5,12 @@
 
 ## 当前音轨
 
-- `rain.mp3` - OpenGameArt, CC0
-- `forest.mp3` - OpenGameArt, CC0
-- `cafe.mp3` - Wikimedia Commons, public domain
-- `waves.mp3` - OrangeFreeSounds, CC BY 4.0
+- `rain.mp3` - 柔雨：粉噪低通，弱高频，60 秒循环。
+- `forest.mp3` - 林间：棕噪低频铺底，少量高频空气感，60 秒循环。
+- `cafe.mp3` - 低语：极低音量棕噪/粉噪混合，不包含人声采样，60 秒循环。
+- `waves.mp3` - 慢浪：棕噪低通 + 轻微振幅起伏，60 秒循环。
 
-## 源地址
+## 来源与许可
 
-- Rain MP3 pack: https://opengameart.org/content/rain-loopable
-- Forest Ambience: https://opengameart.org/content/forest-ambience
-- Restaurant ambience: https://commons.wikimedia.org/wiki/File:Restaurant_ambience.ogg
-- Waves sound effect: https://orangefreesounds.com/waves-sound-effect/
-
-## 备注
-
-- `rain.mp3` 取自 OGA 的压缩包中的 `3.mp3`。
-- `cafe.mp3` 使用的是餐厅环境声，但在应用里作为咖啡馆白噪音展示。
-- `waves.mp3` 来源站点要求署名，后续发版时要保留来源说明。
+这些文件使用 ffmpeg 的 `anoisesrc` 滤波器在本仓库本地生成，没有引入第三方采样。
+生成目标是“专注背景音”而不是写实环境声：更低音量、更少突发高频、避免咖啡馆人声嘈杂。

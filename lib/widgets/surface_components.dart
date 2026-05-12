@@ -103,7 +103,7 @@ class AppSectionHeader extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: cs.onSurface,
                   ),
                 ),
@@ -133,6 +133,133 @@ class AppSectionHeader extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class AppStatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData? icon;
+  final bool filled;
+  final EdgeInsetsGeometry padding;
+
+  const AppStatusBadge({
+    super.key,
+    required this.label,
+    required this.color,
+    this.icon,
+    this.filled = false,
+    this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = filled ? color : color.withValues(alpha: 0.12);
+    final fg = filled ? Colors.white : color;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusPill),
+        border: filled ? null : Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: fg),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AppInfoBanner extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final Color color;
+  final String? title;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+
+  const AppInfoBanner({
+    super.key,
+    required this.icon,
+    required this.message,
+    required this.color,
+    this.title,
+    this.onTap,
+    this.padding = const EdgeInsets.all(12),
+    this.margin = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AppSurfaceCard(
+      margin: margin,
+      padding: padding,
+      onTap: onTap,
+      color: color.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.16 : 0.08,
+      ),
+      border: Border.all(color: color.withValues(alpha: 0.18)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (title != null && title!.isNotEmpty) ...[
+                  Text(
+                    title!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -192,7 +319,7 @@ class AppMetricCard extends StatelessWidget {
                 TextSpan(
                   text: value,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: cs.onSurface,
                   ),
                 ),
@@ -429,13 +556,59 @@ class AppSettingsTile extends StatelessWidget {
   }
 }
 
+class AppListTileCard extends StatelessWidget {
+  final Widget? leading;
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry margin;
+  final EdgeInsetsGeometry contentPadding;
+  final bool dense;
+  final bool isThreeLine;
+
+  const AppListTileCard({
+    super.key,
+    required this.title,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.margin = EdgeInsets.zero,
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 4,
+    ),
+    this.dense = false,
+    this.isThreeLine = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      margin: margin,
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: ListTile(
+        dense: dense,
+        isThreeLine: isThreeLine,
+        contentPadding: contentPadding,
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        trailing: trailing,
+      ),
+    );
+  }
+}
+
 class AppSwitchTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
   final String? subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
   final EdgeInsetsGeometry padding;
 
   const AppSwitchTile({
@@ -456,7 +629,7 @@ class AppSwitchTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => onChanged(!value),
+        onTap: onChanged == null ? null : () => onChanged!(!value),
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: padding,
@@ -577,12 +750,12 @@ class AppDialog extends StatelessWidget {
               style:
                   theme.textTheme.titleLarge?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ) ??
                   TextStyle(
                     color: cs.onSurface,
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
               child: title,
             ),
@@ -819,7 +992,7 @@ class AppPickerSheet<T> extends StatelessWidget {
                             ? cs.onSurface
                             : cs.onSurface.withValues(alpha: 0.38),
                         fontWeight: selectedValue == option.value
-                            ? FontWeight.w800
+                            ? FontWeight.w700
                             : FontWeight.w600,
                       ),
                     ),

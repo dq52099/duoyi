@@ -1,6 +1,11 @@
 /// 习惯类型：正向=养成；负向=戒除 (记录"今天没做到")。
 enum HabitKind { positive, negative }
 
+int _readInt(Object? value, int fallback) {
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
 class Habit {
   final String id;
   String name;
@@ -124,35 +129,61 @@ class Habit {
     'createdAt': createdAt.toIso8601String(),
   };
 
-  factory Habit.fromJson(Map<String, dynamic> json) => Habit(
-    id: json['id'],
-    name: json['name'],
-    icon: json['icon'] ?? 'star',
-    colorValue: json['colorValue'] ?? 0xFF4CAF50,
-    kind: HabitKind.values[(json['kind'] as num?)?.toInt() ?? 0],
-    activeWeekdays: List<int>.from(
-      json['activeWeekdays'] ?? [0, 1, 2, 3, 4, 5, 6],
-    ),
-    targetCount: json['targetCount'] ?? 1,
-    unit: json['unit'],
-    currentStreak: json['currentStreak'] ?? 0,
-    bestStreak: json['bestStreak'] ?? 0,
-    completions: json['completions'] != null
-        ? Map<String, int>.from(json['completions'])
-        : {},
-    category: json['category'],
-    tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
-    weeklyTarget: json['weeklyTarget'] ?? 7,
-    startDate: json['startDate'] != null
-        ? DateTime.parse(json['startDate'])
-        : null,
-    endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
-    sortOrder: json['sortOrder'] ?? 0,
-    remind: json['remind'] ?? false,
-    remindHour: (json['remindHour'] as num?)?.toInt(),
-    remindMinute: (json['remindMinute'] as num?)?.toInt(),
-    createdAt: DateTime.parse(json['createdAt']),
-  );
+  factory Habit.fromJson(Map<String, dynamic> json) {
+    final kindIndex = _readInt(json['kind'], 0);
+    final weekdaysRaw = json['activeWeekdays'] as List<dynamic>?;
+    final completionsRaw = json['completions'];
+    final createdAtRaw = json['createdAt']?.toString();
+    final target = _readInt(json['targetCount'], 1);
+
+    return Habit(
+      id: (json['id'] ?? DateTime.now().microsecondsSinceEpoch).toString(),
+      name: (json['name'] ?? '未命名习惯').toString(),
+      icon: (json['icon'] ?? 'star').toString(),
+      colorValue: _readInt(json['colorValue'], 0xFF4CAF50),
+      kind: HabitKind
+          .values[kindIndex.clamp(0, HabitKind.values.length - 1).toInt()],
+      activeWeekdays:
+          weekdaysRaw
+              ?.map((e) => e is num ? e.toInt() : int.tryParse(e.toString()))
+              .whereType<int>()
+              .where((e) => e >= 0 && e <= 6)
+              .toList() ??
+          [0, 1, 2, 3, 4, 5, 6],
+      targetCount: target < 1 ? 1 : target,
+      unit: json['unit']?.toString(),
+      currentStreak: _readInt(json['currentStreak'], 0),
+      bestStreak: _readInt(json['bestStreak'], 0),
+      completions: completionsRaw is Map
+          ? completionsRaw.map((key, value) {
+              final count = _readInt(value, 0);
+              return MapEntry(key.toString(), count < 0 ? 0 : count);
+            })
+          : {},
+      category: json['category']?.toString(),
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          [],
+      weeklyTarget: _readInt(json['weeklyTarget'], 7),
+      startDate: json['startDate'] != null
+          ? DateTime.tryParse(json['startDate'].toString())
+          : null,
+      endDate: json['endDate'] != null
+          ? DateTime.tryParse(json['endDate'].toString())
+          : null,
+      sortOrder: _readInt(json['sortOrder'], 0),
+      remind: json['remind'] == true,
+      remindHour: json['remindHour'] == null
+          ? null
+          : _readInt(json['remindHour'], 0).clamp(0, 23).toInt(),
+      remindMinute: json['remindMinute'] == null
+          ? null
+          : _readInt(json['remindMinute'], 0).clamp(0, 59).toInt(),
+      createdAt: createdAtRaw == null
+          ? DateTime.now()
+          : DateTime.tryParse(createdAtRaw) ?? DateTime.now(),
+    );
+  }
 
   int todayCount() => completions[todayKey()] ?? 0;
   double todayProgress() =>
@@ -191,6 +222,7 @@ class Habit {
   Map<String, int> heatmapData(int weeks) {
     final data = <String, int>{};
     final now = DateTime.now();
+    final safeTarget = targetCount < 1 ? 1 : targetCount;
     for (int w = 0; w < weeks; w++) {
       for (int d = 0; d < 7; d++) {
         final date = now.subtract(Duration(days: w * 7 + (6 - d)));
@@ -198,7 +230,7 @@ class Habit {
         final count = completions[key] ?? 0;
         if (kind == HabitKind.positive) {
           if (count > 0) {
-            data[key] = ((count / targetCount) * 5).ceil().clamp(1, 5);
+            data[key] = ((count / safeTarget) * 5).ceil().clamp(1, 5);
           } else {
             data[key] = 0;
           }

@@ -7,6 +7,7 @@ import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/todo_provider.dart';
+import '../widgets/brand_background.dart';
 import 'anniversary_screen.dart';
 import 'course_schedule_screen.dart';
 import 'diary_screen.dart';
@@ -65,16 +66,16 @@ class TodayDetailRouter {
     switch (kind) {
       case TodaySectionKind.todos:
         if (id == null) {
-          return MaterialPageRoute(builder: (_) => const TodoScreen());
+          return _brandRoute(const TodoScreen());
         }
         final exists = context.read<TodoProvider>().todos.any(
           (t) => t.id == id,
         );
         if (!exists) return _emptyRoute(kind, '这个待办不存在或已被删除');
-        return MaterialPageRoute(builder: (_) => TodoDetailScreen(todoId: id));
+        return _brandRoute(TodoDetailScreen(todoId: id));
 
       case TodaySectionKind.courses:
-        return MaterialPageRoute(builder: (_) => const CourseScheduleScreen());
+        return _brandRoute(const CourseScheduleScreen());
 
       case TodaySectionKind.anniversaries:
         if (id != null) {
@@ -83,35 +84,37 @@ class TodayDetailRouter {
           );
           if (!exists) return _emptyRoute(kind, '这个纪念日不存在或已被删除');
         }
-        return MaterialPageRoute(builder: (_) => const AnniversaryScreen());
+        return _brandRoute(const AnniversaryScreen());
 
       case TodaySectionKind.goals:
         if (id == null) {
-          return MaterialPageRoute(builder: (_) => const GoalScreen());
+          return _brandRoute(const GoalScreen());
         }
         final goals = context.read<GoalProvider>().goals;
         final idx = goals.indexWhere((g) => g.id == id);
         if (idx < 0) return _emptyRoute(kind, '这个目标不存在或已被删除');
         final goal = goals[idx];
-        return MaterialPageRoute(builder: (_) => GoalEditScreen(goal: goal));
+        return _brandRoute(GoalEditScreen(goal: goal));
 
       case TodaySectionKind.habits:
         if (id == null) {
-          return MaterialPageRoute(builder: (_) => const HabitScreen());
+          return _brandRoute(const HabitScreen());
         }
         final exists = context.read<HabitProvider>().habits.any(
           (h) => h.id == id,
         );
         if (!exists) return _emptyRoute(kind, '这个习惯不存在或已被删除');
-        return MaterialPageRoute(
-          builder: (_) => HabitDetailScreen(habitId: id),
-        );
+        return _brandRoute(HabitDetailScreen(habitId: id));
 
       case TodaySectionKind.diary:
         // 预读一下 Provider，确保 context 合法；实际入口是按日期维度的日记页。
         context.read<DiaryProvider>();
-        return MaterialPageRoute(builder: (_) => const DiaryScreen());
+        return _brandRoute(const DiaryScreen());
     }
+  }
+
+  static MaterialPageRoute<void> _brandRoute(Widget child) {
+    return MaterialPageRoute(builder: (_) => BrandRouteSurface(child: child));
   }
 
   static Route<void> _emptyRoute(TodaySectionKind kind, String msg) {

@@ -130,9 +130,8 @@ class ReminderScheduler {
 
   /// 按最新的 [habits] 幂等地重新同步习惯提醒。
   ///
-  /// TODO(task-22): 习惯模型当前仍使用遗留的 `remind / remindHour /
-  /// remindMinute` 字段，`ReminderKind` 维度暂由 `NotificationService`
-  /// 统一以 push 通道承载；后续引入 `ReminderConfig` 后再按 kind 分发。
+  /// 习惯提醒默认走强提醒通道：Android 会使用 full-screen intent 唤起应用，
+  /// payload 进入确认打卡弹窗；若精准闹钟权限不足则降级为普通通知。
   Future<void> syncHabits(Iterable<Habit> habits) async {
     final wanted = <String, Habit>{};
     for (final h in habits) {
@@ -142,18 +141,46 @@ class ReminderScheduler {
     }
     for (final id in _scheduledHabitIds.toList()) {
       await notif.cancelHabitReminder(id);
+      await alarm.cancel(_idFor('habit_$id'));
     }
     for (final h in wanted.values) {
       // activeWeekdays 是 0..6(周一=0)，转换到 flutter_local_notifications 的
       // 1..7(周一=1..周日=7)
       final weekdays = h.activeWeekdays.map((w) => w + 1).toList();
-      await notif.scheduleHabitReminder(
-        habitId: h.id,
-        habitName: h.name,
-        hour: h.remindHour!,
-        minute: h.remindMinute!,
-        weekdays: weekdays.isEmpty ? null : weekdays,
-      );
+      try {
+        await alarm.scheduleDailyFullScreen(
+          id: _idFor('habit_${h.id}'),
+          title: '⏰ 习惯打卡',
+          body: '${h.name} 到时间了，点开确认打卡',
+          hour: h.remindHour!,
+          minute: h.remindMinute!,
+          weekdays: weekdays.isEmpty ? null : weekdays,
+          payload: 'duoyi://habit/${h.id}?confirm=1',
+          fullScreen: true,
+        );
+      } on AlarmPermissionDeniedException catch (e) {
+        debugPrint(
+          '[ReminderScheduler] habit alarm permission denied for ${h.id}: $e',
+        );
+        await notif.scheduleHabitReminder(
+          habitId: h.id,
+          habitName: h.name,
+          hour: h.remindHour!,
+          minute: h.remindMinute!,
+          weekdays: weekdays.isEmpty ? null : weekdays,
+        );
+      } catch (e, st) {
+        debugPrint(
+          '[ReminderScheduler] habit alarm dispatch failed for ${h.id}: $e\n$st',
+        );
+        await notif.scheduleHabitReminder(
+          habitId: h.id,
+          habitName: h.name,
+          hour: h.remindHour!,
+          minute: h.remindMinute!,
+          weekdays: weekdays.isEmpty ? null : weekdays,
+        );
+      }
     }
     _scheduledHabitIds
       ..clear()

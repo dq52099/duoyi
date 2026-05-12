@@ -26,6 +26,7 @@ class AiHistoryScreen extends StatelessWidget {
                   context: context,
                   builder: (ctx) => AppDialog(
                     title: const Text('清空全部回顾?'),
+                    icon: const Icon(Icons.delete_sweep_outlined),
                     content: const Text('本地保留的 AI 回顾将被删除，无法恢复'),
                     actions: [
                       TextButton(
@@ -57,13 +58,15 @@ class AiHistoryScreen extends StatelessWidget {
               separatorBuilder: (context, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
                 final e = items[i];
-                return Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                final theme = Theme.of(context);
+                final cs = theme.colorScheme;
+                final createdAt =
+                    '${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')} '
+                    '${e.createdAt.hour.toString().padLeft(2, '0')}:${e.createdAt.minute.toString().padLeft(2, '0')}';
+                return AppSurfaceCard(
+                  padding: const EdgeInsets.all(14),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.zero,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -71,24 +74,26 @@ class AiHistoryScreen extends StatelessWidget {
                           children: [
                             Icon(
                               Icons.auto_awesome,
-                              size: 16,
-                              color: Theme.of(context).colorScheme.primary,
+                              size: 18,
+                              color: cs.primary,
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              '${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')} ${e.createdAt.hour.toString().padLeft(2, '0')}:${e.createdAt.minute.toString().padLeft(2, '0')}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade600,
+                              createdAt,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.62),
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const Spacer(),
                             if (e.model.isNotEmpty)
-                              Text(
-                                e.model,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade500,
+                              AppStatusBadge(
+                                label: e.model,
+                                color: cs.primary,
+                                icon: Icons.memory_outlined,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
                                 ),
                               ),
                             PopupMenuButton<String>(
@@ -124,15 +129,18 @@ class AiHistoryScreen extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           e.summary,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.68),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           e.content,
-                          style: const TextStyle(fontSize: 13, height: 1.6),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface,
+                            height: 1.62,
+                          ),
                         ),
                       ],
                     ),

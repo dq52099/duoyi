@@ -44,6 +44,7 @@ import 'screens/search_screen.dart';
 import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
 import 'widgets/quick_capture_fab.dart';
+import 'widgets/surface_components.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 
@@ -218,11 +219,14 @@ void main() async {
   refreshAchievements();
 
   // 通知点击后的深链接(打开对应 Tab)
-  LocalNotifications.instance.onTap = (payload) {
+  void handleNotificationPayload(String payload) {
     final uri = Uri.tryParse(payload);
     if (uri == null) return;
     _handleWidgetUri(uri, pomodoroProvider);
-  };
+  }
+
+  LocalNotifications.instance.onTap = handleNotificationPayload;
+  AlarmService.instance.onTap = handleNotificationPayload;
 
   // AI / CloudSync 依赖 AuthProvider 的 ApiClient
   aiService.attachClient(authProvider.client);
@@ -414,6 +418,19 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     if (id == null || id.isEmpty) return;
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id);
+  } else if (uri.host == 'habit' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    state?.navigateTo(2);
+    if (id == null || id.isEmpty) return;
+    final confirm = uri.queryParameters['confirm'] == '1';
+    if (confirm) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showHabitCheckInPrompt(ctx, id);
+      });
+    } else {
+      // ignore: discarded_futures
+      TodayDetailRouter.open(ctx, TodaySectionKind.habits, id: id);
+    }
   } else if (uri.host == 'countdown') {
     state?.navigateTo(3);
   } else if (uri.host == 'action') {
@@ -431,6 +448,62 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       todos.toggleTodo(id);
     }
   }
+}
+
+Future<void> _showHabitCheckInPrompt(
+  BuildContext context,
+  String habitId,
+) async {
+  if (!context.mounted) return;
+  final habits = Provider.of<HabitProvider>(context, listen: false);
+  final habit = habits.habits.where((h) => h.id == habitId).firstOrNull;
+  final messenger = ScaffoldMessenger.of(context);
+  if (habit == null) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('这个习惯不存在或已被删除'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+  if (habit.isCompletedToday()) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('“${habit.name}”今天已经完成'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => AppDialog(
+      icon: const Icon(Icons.check_circle_outline),
+      title: const Text('确认打卡'),
+      content: Text('现在完成“${habit.name}”吗？'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(false),
+          child: const Text('稍后'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(true),
+          child: const Text('完成打卡'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  await habits.incrementHabit(habitId);
+  if (!context.mounted) return;
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text('已打卡：${habit.name}'),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 }
 
 extension _FirstOrNullMainX<T> on Iterable<T> {
@@ -733,46 +806,11 @@ class MainShellState extends State<MainShell> {
               ],
             )
           : null,
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          height: 64,
-          elevation: 0,
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.surface.withValues(alpha: 0.95),
-          indicatorColor: Theme.of(
-            context,
-          ).colorScheme.primary.withValues(alpha: 0.15),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.primary,
-              );
-            }
-            return const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey,
-            );
-          }),
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return IconThemeData(
-                color: Theme.of(context).colorScheme.primary,
-                size: 24,
-              );
-            }
-            return const IconThemeData(color: Colors.grey, size: 24);
-          }),
-        ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() => _currentIndex = i),
-          destinations: destinations,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        destinations: destinations,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
     );
   }
