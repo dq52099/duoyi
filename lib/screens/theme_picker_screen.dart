@@ -86,7 +86,7 @@ class ThemePickerScreen extends StatelessWidget {
                         currentBrand.name,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                               color: cs.onSurface,
                             ),
                       ),
@@ -147,7 +147,7 @@ class ThemePickerScreen extends StatelessWidget {
                           brand.name,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                         ),

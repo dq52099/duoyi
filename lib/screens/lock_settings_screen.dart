@@ -124,7 +124,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                         '本机 PIN 锁',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                               color: cs.onSurface,
                             ),
                       ),

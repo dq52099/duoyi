@@ -78,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
               s.appTitle,
               style: TextStyle(
                 fontSize: 28,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: cs.primary,
               ),
             ),

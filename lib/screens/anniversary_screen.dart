@@ -128,7 +128,7 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
                           '${a.daysRemaining}',
                           style: TextStyle(
                             color: Color(a.colorValue),
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -261,7 +261,7 @@ class _AnniversaryCard extends StatelessWidget {
                                         item.title,
                                         style: const TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -372,7 +372,7 @@ class _AnniversaryCard extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: days == 0 ? 22 : 30,
                                       height: 1,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w500,
                                       color: color,
                                     ),
                                   ),
@@ -382,7 +382,7 @@ class _AnniversaryCard extends StatelessWidget {
                                       '天',
                                       style: TextStyle(
                                         color: color,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],

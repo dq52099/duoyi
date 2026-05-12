@@ -194,7 +194,7 @@ class _BackupScreenState extends State<BackupScreen> {
                         '备份与恢复',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                               color: cs.onSurface,
                             ),
                       ),
@@ -315,7 +315,7 @@ class _BackupScreenState extends State<BackupScreen> {
                           _exportedTitle ?? '导出内容',
                           style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                         ),

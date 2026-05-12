@@ -157,7 +157,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                           '反馈与许愿',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                         ),
@@ -262,7 +262,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                               category,
                               style: TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: cs.primary,
                               ),
                             ),
@@ -282,7 +282,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                               style: TextStyle(
                                 color: statusColor,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -313,7 +313,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                                 style: Theme.of(context).textTheme.labelMedium
                                     ?.copyWith(
                                       color: cs.primary,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w500,
                                     ),
                               ),
                               const SizedBox(height: 4),

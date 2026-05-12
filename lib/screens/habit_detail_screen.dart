@@ -326,7 +326,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     habit.name,
                     style: const TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -356,7 +356,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             child: Text(
               '打卡热力图',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 fontSize: 15,
                 color: cs.onSurface,
               ),
@@ -369,7 +369,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             child: Text(
               '最近打卡记录',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 fontSize: 15,
                 color: cs.onSurface,
               ),
@@ -471,7 +471,7 @@ class _StatChip extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
         ),
         Text(
           label,

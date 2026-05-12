@@ -171,7 +171,7 @@ class _SearchScreenState extends State<SearchScreen> {
             text: text.substring(idx, end),
             style: TextStyle(
               color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w500,
             ),
           ),
           TextSpan(text: text.substring(end)),
@@ -218,7 +218,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         h.kindLabel,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.primary,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                           fontSize: 11,
                         ),
                       ),
@@ -229,7 +229,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         '${h.when!.month}/${h.when!.day}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.52),
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                   ],
@@ -237,7 +237,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 const SizedBox(height: 8),
                 DefaultTextStyle(
                   style: theme.textTheme.titleSmall!.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     color: cs.onSurface,
                   ),
                   child: _highlight(h.title, _query),
@@ -317,7 +317,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             Text(
                               '搜索结果',
                               style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                             ),

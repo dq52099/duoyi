@@ -104,7 +104,7 @@ class _ExportScreenState extends State<ExportScreen> {
                         '日历导出',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                               color: cs.onSurface,
                             ),
                       ),
@@ -167,7 +167,7 @@ class _ExportScreenState extends State<ExportScreen> {
                           '导出内容',
                           style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                         ),

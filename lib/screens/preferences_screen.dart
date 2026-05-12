@@ -56,7 +56,7 @@ class PreferencesScreen extends StatelessWidget {
                         '本地偏好',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                               color: cs.onSurface,
                             ),
                       ),
@@ -514,7 +514,7 @@ class _SliderSetting extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -538,7 +538,7 @@ class _SliderSetting extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),

@@ -210,7 +210,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                     '近 7 天注册',
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurface,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -233,7 +233,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                               row['date'].toString(),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.68),
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -252,7 +252,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                             '${row['count']}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: cs.onSurface,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -321,7 +321,7 @@ class _GridCards extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.62),
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
@@ -330,7 +330,7 @@ class _GridCards extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: cs.onSurface,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -709,7 +709,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                         _testResult!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.74),
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -1173,7 +1173,7 @@ class _UsersTabState extends State<_UsersTab> {
                           u['username'].toString(),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurface,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                             decoration: disabled
                                 ? TextDecoration.lineThrough
                                 : null,
@@ -1425,7 +1425,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                             color: cs.onSurface,
                           ),
                         ),
@@ -1639,7 +1639,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: cs.onSurface,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -1687,7 +1687,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                                             color: cs.onSurface.withValues(
                                               alpha: 0.68,
                                             ),
-                                            fontWeight: FontWeight.w600,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                     ),
                                   ),
@@ -1896,7 +1896,7 @@ class _InvitesTabState extends State<_InvitesTab> {
                           c['code'].toString(),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontFamily: 'monospace',
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                             color: cs.onSurface,
                           ),
                         ),

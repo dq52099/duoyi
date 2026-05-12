@@ -88,7 +88,7 @@ class CalendarWeekStrip extends StatelessWidget {
                         '${d.day}',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: isSelected ? cs.onPrimary : null,
                         ),
                       ),
@@ -145,7 +145,7 @@ class CalendarWeekStrip extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),

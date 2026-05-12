@@ -45,7 +45,7 @@ class CalendarMonthGrid extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -69,10 +69,12 @@ class CalendarMonthGrid extends StatelessWidget {
                 final key =
                     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                 final types = dateEventTypes[key] ?? [];
-                final isSelected = date.year == selectedDay.year &&
+                final isSelected =
+                    date.year == selectedDay.year &&
                     date.month == selectedDay.month &&
                     date.day == selectedDay.day;
-                final isToday = date.year == DateTime.now().year &&
+                final isToday =
+                    date.year == DateTime.now().year &&
                     date.month == DateTime.now().month &&
                     date.day == DateTime.now().day;
 
@@ -105,13 +107,15 @@ class CalendarMonthGrid extends StatelessWidget {
                     child: Container(
                       height: cellHeight,
                       margin: const EdgeInsets.symmetric(
-                          horizontal: 2, vertical: 2),
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? cs.primary
                             : (isToday
-                                ? cs.primary.withValues(alpha: 0.1)
-                                : Colors.transparent),
+                                  ? cs.primary.withValues(alpha: 0.1)
+                                  : Colors.transparent),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
@@ -122,7 +126,7 @@ class CalendarMonthGrid extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: isToday || isSelected
-                                  ? FontWeight.bold
+                                  ? FontWeight.w500
                                   : FontWeight.w500,
                               color: isSelected
                                   ? cs.onPrimary
@@ -150,37 +154,48 @@ class CalendarMonthGrid extends StatelessWidget {
                                 children: [
                                   if (types.contains(CalendarEventType.todo))
                                     _dot(
-                                        isSelected
-                                            ? Colors.white
-                                            : cs.primary),
+                                      isSelected ? Colors.white : cs.primary,
+                                    ),
                                   if (types.contains(CalendarEventType.habit))
-                                    _dot(isSelected
-                                        ? Colors.white70
-                                        : cs.tertiary),
+                                    _dot(
+                                      isSelected ? Colors.white70 : cs.tertiary,
+                                    ),
                                   if (types.contains(
-                                      CalendarEventType.pomodoro))
-                                    _dot(isSelected
-                                        ? Colors.white54
-                                        : Colors.red.shade400),
+                                    CalendarEventType.pomodoro,
+                                  ))
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white54
+                                          : Colors.red.shade400,
+                                    ),
                                   if (types.contains(
-                                      CalendarEventType.anniversary))
-                                    _dot(isSelected
-                                        ? Colors.white70
-                                        : const Color(0xFFE91E63)),
-                                  if (types
-                                      .contains(CalendarEventType.course))
-                                    _dot(isSelected
-                                        ? Colors.white60
-                                        : const Color(0xFF42A5F5)),
+                                    CalendarEventType.anniversary,
+                                  ))
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white70
+                                          : const Color(0xFFE91E63),
+                                    ),
+                                  if (types.contains(CalendarEventType.course))
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white60
+                                          : const Color(0xFF42A5F5),
+                                    ),
                                   if (types.contains(CalendarEventType.diary))
-                                    _dot(isSelected
-                                        ? Colors.white60
-                                        : const Color(0xFF26A69A)),
-                                  if (types
-                                      .contains(CalendarEventType.timeEntry))
-                                    _dot(isSelected
-                                        ? Colors.white54
-                                        : const Color(0xFF78909C)),
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white60
+                                          : const Color(0xFF26A69A),
+                                    ),
+                                  if (types.contains(
+                                    CalendarEventType.timeEntry,
+                                  ))
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white54
+                                          : const Color(0xFF78909C),
+                                    ),
                                 ],
                               ),
                             ),
@@ -198,9 +213,9 @@ class CalendarMonthGrid extends StatelessWidget {
   }
 
   Widget _dot(Color color) => Container(
-        width: 4,
-        height: 4,
-        margin: const EdgeInsets.only(left: 1),
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: 4,
+    height: 4,
+    margin: const EdgeInsets.only(left: 1),
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

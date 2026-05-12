@@ -93,7 +93,7 @@ class _ShareScreenState extends State<ShareScreen> {
                         Text(
                           '共享空间',
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -266,7 +266,7 @@ class _WorkspaceCard extends StatelessWidget {
                     Text(
                       workspace.name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -371,7 +371,7 @@ class _WorkspaceCard extends StatelessWidget {
         title: const Text('邀请码已复制'),
         content: SelectableText(
           '${invite.code}\n\n角色：${invite.role.label}',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
         ),
         actions: [
           FilledButton(
@@ -413,7 +413,7 @@ class _MemberChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             member.username.isEmpty ? member.userId : member.username,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
           const SizedBox(width: 5),
           Text(

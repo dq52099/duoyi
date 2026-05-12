@@ -121,7 +121,7 @@ class CalendarDayAgenda extends StatelessWidget {
                         Text(
                           c.name,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             fontSize: 13,
                           ),
                         ),
@@ -193,7 +193,7 @@ class CalendarDayAgenda extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               color: cs.primary,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(width: 8),
@@ -249,7 +249,7 @@ class CalendarDayAgenda extends StatelessWidget {
       style: TextStyle(
         fontSize: 12,
         color: Colors.grey.shade600,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
       ),
     ),
   );
@@ -315,7 +315,7 @@ class CalendarDayAgenda extends StatelessWidget {
                                 e.title,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   color: e.isCompleted ? Colors.grey : null,
                                   decoration: e.isCompleted
                                       ? TextDecoration.lineThrough
@@ -422,7 +422,7 @@ class _DiaryQuickEntry extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   color: hasEntry ? cs.primary : Colors.grey.shade600,
-                  fontWeight: hasEntry ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: hasEntry ? FontWeight.w500 : FontWeight.normal,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -470,7 +470,7 @@ class _AnniversaryTile extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     fontSize: 13,
                   ),
                 ),

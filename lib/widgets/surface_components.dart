@@ -103,7 +103,7 @@ class AppSectionHeader extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: cs.onSurface,
                   ),
                 ),
@@ -180,7 +180,7 @@ class AppStatusBadge extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.labelSmall?.copyWith(
               color: fg,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               height: 1.1,
             ),
           ),
@@ -245,7 +245,7 @@ class AppInfoBanner extends StatelessWidget {
                     title!,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: cs.onSurface,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -319,7 +319,7 @@ class AppMetricCard extends StatelessWidget {
                 TextSpan(
                   text: value,
                   style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     color: cs.onSurface,
                   ),
                 ),
@@ -327,7 +327,7 @@ class AppMetricCard extends StatelessWidget {
                   TextSpan(
                     text: unit!,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       color: cs.onSurface.withValues(alpha: 0.65),
                     ),
                   ),
@@ -343,7 +343,7 @@ class AppMetricCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.62),
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -403,7 +403,7 @@ class AppActionTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: cs.onSurface,
                       ),
                     ),
@@ -524,7 +524,7 @@ class AppSettingsTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: cs.onSurface,
                       ),
                     ),
@@ -654,7 +654,7 @@ class AppSwitchTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: cs.onSurface,
                       ),
                     ),
@@ -750,12 +750,12 @@ class AppDialog extends StatelessWidget {
               style:
                   theme.textTheme.titleLarge?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ) ??
                   TextStyle(
                     color: cs.onSurface,
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
               child: title,
             ),
@@ -992,8 +992,8 @@ class AppPickerSheet<T> extends StatelessWidget {
                             ? cs.onSurface
                             : cs.onSurface.withValues(alpha: 0.38),
                         fontWeight: selectedValue == option.value
-                            ? FontWeight.w700
-                            : FontWeight.w600,
+                            ? FontWeight.w500
+                            : FontWeight.w500,
                       ),
                     ),
                     subtitle: option.subtitle == null
@@ -1067,7 +1067,7 @@ class AppCompactDropdown<T> extends StatelessWidget {
             dropdownColor: cs.surface,
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurface,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
             items: items,
             onChanged: onChanged,
@@ -1155,7 +1155,7 @@ class AppDropdownField<T> extends StatelessWidget {
           iconDisabledColor ?? cs.onSurface.withValues(alpha: 0.38),
       style: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

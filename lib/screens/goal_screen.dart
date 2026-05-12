@@ -129,7 +129,7 @@ class _GoalCard extends StatelessWidget {
                       goal.title,
                       style: const TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (goal.description.isNotEmpty)
@@ -156,7 +156,7 @@ class _GoalCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: _statusColor(),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -179,7 +179,7 @@ class _GoalCard extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                style: TextStyle(color: color, fontWeight: FontWeight.w500),
               ),
             ],
           ),

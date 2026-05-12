@@ -121,7 +121,7 @@ class TodayScreen extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -154,7 +154,7 @@ class TodayScreen extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 34,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                       height: 1,
                     ),
                   ),
@@ -276,7 +276,7 @@ class TodayScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color: Color(c.colorValue),
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -316,7 +316,7 @@ class TodayScreen extends StatelessWidget {
                         '$d',
                         style: TextStyle(
                           color: Color(a.colorValue),
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                           fontSize: 11,
                         ),
                       ),

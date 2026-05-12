@@ -79,8 +79,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left,
-                          color: Colors.white),
+                      icon: const Icon(Icons.chevron_left, color: Colors.white),
                       onPressed: () => _shift(-1),
                     ),
                     Expanded(
@@ -101,7 +100,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 56,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w500,
                                 height: 1.0,
                               ),
                             ),
@@ -118,8 +117,10 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right,
-                          color: Colors.white),
+                      icon: const Icon(
+                        Icons.chevron_right,
+                        color: Colors.white,
+                      ),
                       onPressed: () => _shift(1),
                     ),
                   ],
@@ -163,10 +164,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
           ),
           const SizedBox(height: 16),
           // 小月历
-          _MiniMonth(
-            date: _date,
-            onPick: (d) => setState(() => _date = d),
-          ),
+          _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
           const SizedBox(height: 16),
           // 说明
           Container(
@@ -177,14 +175,12 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline,
-                    size: 16, color: Colors.orange),
+                const Icon(Icons.info_outline, size: 16, color: Colors.orange),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     '农历/节气基于通用压缩算法，覆盖 1900-2099 年；宜忌仅供娱乐参考。',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey.shade700),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
               ],
@@ -209,8 +205,11 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     );
   }
 
-  Widget _yijiCard(
-      {required String title, required String body, required Color color}) {
+  Widget _yijiCard({
+    required String title,
+    required String body,
+    required Color color,
+  }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -225,10 +224,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             child: Text(
               title,
               style: const TextStyle(
@@ -285,7 +281,7 @@ class _MiniMonth extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -301,14 +297,15 @@ class _MiniMonth extends StatelessWidget {
                 if (d < 1 || d > last.day) {
                   return const Expanded(child: SizedBox(height: 42));
                 }
-                final day =
-                    DateTime(date.year, date.month, d);
+                final day = DateTime(date.year, date.month, d);
                 final lunar = LunarCalendar.fromSolar(day);
-                final isSelected = day.year == date.year &&
+                final isSelected =
+                    day.year == date.year &&
                     day.month == date.month &&
                     day.day == date.day;
                 final today = DateTime.now();
-                final isToday = day.year == today.year &&
+                final isToday =
+                    day.year == today.year &&
                     day.month == today.month &&
                     day.day == today.day;
 
@@ -322,8 +319,8 @@ class _MiniMonth extends StatelessWidget {
                         color: isSelected
                             ? cs.primary
                             : (isToday
-                                ? cs.primary.withValues(alpha: 0.1)
-                                : null),
+                                  ? cs.primary.withValues(alpha: 0.1)
+                                  : null),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -333,7 +330,7 @@ class _MiniMonth extends StatelessWidget {
                             '$d',
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                               color: isSelected
                                   ? cs.onPrimary
                                   : (isToday ? cs.primary : null),

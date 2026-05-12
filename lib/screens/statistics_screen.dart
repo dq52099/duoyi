@@ -163,10 +163,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          _chartCard(
-            '时间线',
-            _buildAuditTimeline(auditEntries, cs),
-          ),
+          _chartCard('时间线', _buildAuditTimeline(auditEntries, cs)),
           const SizedBox(height: 10),
           _chartCard(
             _range == _Range.year ? '每月专注分钟数' : '每日专注分钟数',
@@ -203,7 +200,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
           ),
           const SizedBox(height: 8),
           child,
@@ -232,7 +229,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       title: v == 0 ? '' : '${((v / total) * 100).toStringAsFixed(0)}%',
       titleStyle: const TextStyle(
         color: Colors.white,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
         fontSize: 11,
       ),
     );
@@ -283,8 +280,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
               radius: 16,
-              backgroundColor: _auditColor(entry.category, cs)
-                  .withValues(alpha: 0.12),
+              backgroundColor: _auditColor(
+                entry.category,
+                cs,
+              ).withValues(alpha: 0.12),
               child: Icon(
                 _auditIcon(entry.category),
                 color: _auditColor(entry.category, cs),
@@ -573,14 +572,14 @@ class _Kpi extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

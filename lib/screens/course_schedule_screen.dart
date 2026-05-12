@@ -169,7 +169,7 @@ class _ScheduleGrid extends StatelessWidget {
                             fontSize: 12,
                             color: isToday ? cs.primary : null,
                             fontWeight: isToday
-                                ? FontWeight.w700
+                                ? FontWeight.w500
                                 : FontWeight.w500,
                           ),
                         ),
@@ -215,7 +215,7 @@ class _ScheduleGrid extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey.shade500,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -312,7 +312,7 @@ class _CourseBlock extends StatelessWidget {
               course.name,
               style: const TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: Colors.white,
               ),
               maxLines: 2,
@@ -835,7 +835,7 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
                 '$value',
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 8),

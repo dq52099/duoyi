@@ -108,7 +108,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           '公告中心',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: cs.onSurface,
                               ),
                         ),
@@ -170,7 +170,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               _levelLabel(level),
                               style: TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: levelColor,
                               ),
                             ),
@@ -181,7 +181,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               (a['title'] ?? '').toString(),
                               style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w500,
                                     color: cs.onSurface,
                                   ),
                             ),

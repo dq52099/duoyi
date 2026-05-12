@@ -125,7 +125,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                                       color: Theme.of(
                                         context,
                                       ).colorScheme.onSurface,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w500,
                                     ),
                               ),
                               const SizedBox(height: 4),
@@ -155,7 +155,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                             state.isRunning ? '进行中' : '已暂停',
                             style: TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                               color: color,
                             ),
                           ),
@@ -232,7 +232,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                                               .onSurface
                                               .withValues(alpha: 0.72),
                                           fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ),
@@ -605,7 +605,7 @@ class _HistoryTab extends StatelessWidget {
                   e.key,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withValues(alpha: 0.62),
@@ -667,7 +667,7 @@ class _MiniStat extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w500,
             fontSize: 18,
             color: cs.onSurface,
           ),
@@ -677,7 +677,7 @@ class _MiniStat extends StatelessWidget {
           style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.62),
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

@@ -59,12 +59,12 @@ class _LockScreenState extends State<LockScreen> {
             const Spacer(),
             Icon(Icons.lock, size: 48, color: cs.primary),
             const SizedBox(height: 10),
-            Text(s.appTitle,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(
+              s.appTitle,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 6),
-            const Text('输入 PIN 解锁',
-                style: TextStyle(color: Colors.grey)),
+            const Text('输入 PIN 解锁', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 22),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -84,8 +84,7 @@ class _LockScreenState extends State<LockScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
-                child: Text(_error!,
-                    style: const TextStyle(color: Colors.red)),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             const Spacer(),
             _Keypad(onTap: _press),
@@ -104,22 +103,27 @@ class _Keypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget btn(String v, {Widget? child}) => Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: InkResponse(
-              onTap: () => onTap(v),
-              radius: 40,
-              child: Container(
-                height: 56,
-                alignment: Alignment.center,
-                child: child ??
-                    Text(v,
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w500)),
-              ),
-            ),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: InkResponse(
+          onTap: () => onTap(v),
+          radius: 40,
+          child: Container(
+            height: 56,
+            alignment: Alignment.center,
+            child:
+                child ??
+                Text(
+                  v,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
           ),
-        );
+        ),
+      ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 36),
@@ -128,11 +132,13 @@ class _Keypad extends StatelessWidget {
           Row(children: [btn('1'), btn('2'), btn('3')]),
           Row(children: [btn('4'), btn('5'), btn('6')]),
           Row(children: [btn('7'), btn('8'), btn('9')]),
-          Row(children: [
-            const Expanded(child: SizedBox()),
-            btn('0'),
-            btn('del', child: const Icon(Icons.backspace_outlined)),
-          ]),
+          Row(
+            children: [
+              const Expanded(child: SizedBox()),
+              btn('0'),
+              btn('del', child: const Icon(Icons.backspace_outlined)),
+            ],
+          ),
         ],
       ),
     );

@@ -93,7 +93,7 @@ class MineScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       color: cs.onPrimary,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -106,7 +106,7 @@ class MineScreen extends StatelessWidget {
                         '$greeting，$displayName',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -115,7 +115,7 @@ class MineScreen extends StatelessWidget {
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       if (auth.state.isLoggedIn && auth.state.isAdmin) ...[
@@ -591,7 +591,7 @@ class MineScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 const Text(
                   '发现新版本',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w500),
                 ),
                 if ((updater.latestNotes ?? '').isNotEmpty)
                   Padding(
@@ -806,7 +806,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
               const SizedBox(width: 8),
               const Text(
                 'AI 每周回顾',
-                style: TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
               const Spacer(),
               TextButton(

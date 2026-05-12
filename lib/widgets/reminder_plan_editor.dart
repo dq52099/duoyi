@@ -271,13 +271,17 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
     final r = widget.initial;
     final now = TimeOfDay.now();
     _enabled = r?.enabled ?? true;
-    _type = r?.type ?? (widget.hasAnchorDate
-        ? ReminderRuleType.absolute
-        : ReminderRuleType.dailyTime);
+    _type =
+        r?.type ??
+        (widget.hasAnchorDate
+            ? ReminderRuleType.absolute
+            : ReminderRuleType.dailyTime);
     if (!_availableTypes.contains(_type)) {
       _type = _availableTypes.first;
     }
-    _kind = widget.allowAlarm ? r?.kind ?? ReminderKind.push : ReminderKind.push;
+    _kind = widget.allowAlarm
+        ? r?.kind ?? ReminderKind.push
+        : ReminderKind.push;
     _time = TimeOfDay(hour: r?.hour ?? now.hour, minute: r?.minute ?? 0);
     _offsetMinutes = r?.offsetMinutes ?? -30;
     _weekdays = r?.weekdays.isNotEmpty == true
@@ -298,10 +302,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('保存'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('保存')),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,21 +341,22 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             Wrap(
               spacing: DesignTokens.spaceXs,
               runSpacing: DesignTokens.spaceXs,
-              children: const [
-                (-10, '10 分钟'),
-                (-30, '30 分钟'),
-                (-60, '1 小时'),
-                (-1440, '1 天'),
-                (-2880, '2 天'),
-                (-4320, '3 天'),
-              ].map((preset) {
-                return ChoiceChip(
-                  label: Text(preset.$2),
-                  selected: _offsetMinutes == preset.$1,
-                  onSelected: (_) =>
-                      setState(() => _offsetMinutes = preset.$1),
-                );
-              }).toList(),
+              children:
+                  const [
+                    (-10, '10 分钟'),
+                    (-30, '30 分钟'),
+                    (-60, '1 小时'),
+                    (-1440, '1 天'),
+                    (-2880, '2 天'),
+                    (-4320, '3 天'),
+                  ].map((preset) {
+                    return ChoiceChip(
+                      label: Text(preset.$2),
+                      selected: _offsetMinutes == preset.$1,
+                      onSelected: (_) =>
+                          setState(() => _offsetMinutes = preset.$1),
+                    );
+                  }).toList(),
             ),
           ],
           if (_type == ReminderRuleType.weeklyTime) ...[
@@ -427,20 +429,21 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             Wrap(
               spacing: DesignTokens.spaceXs,
               runSpacing: DesignTokens.spaceXs,
-              children: const [
-                (0, '关闭'),
-                (5, '5 分钟'),
-                (10, '10 分钟'),
-                (15, '15 分钟'),
-                (30, '30 分钟'),
-              ].map((preset) {
-                return ChoiceChip(
-                  label: Text(preset.$2),
-                  selected: _snoozeMinutes == preset.$1,
-                  onSelected: (_) =>
-                      setState(() => _snoozeMinutes = preset.$1),
-                );
-              }).toList(),
+              children:
+                  const [
+                    (0, '关闭'),
+                    (5, '5 分钟'),
+                    (10, '10 分钟'),
+                    (15, '15 分钟'),
+                    (30, '30 分钟'),
+                  ].map((preset) {
+                    return ChoiceChip(
+                      label: Text(preset.$2),
+                      selected: _snoozeMinutes == preset.$1,
+                      onSelected: (_) =>
+                          setState(() => _snoozeMinutes = preset.$1),
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: DesignTokens.spaceSm),
             Text('重复次数', style: _labelStyle(context)),
@@ -475,8 +478,9 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       kind: widget.allowAlarm ? _kind : ReminderKind.push,
       hour: _time.hour,
       minute: _time.minute,
-      offsetMinutes:
-          type == ReminderRuleType.relativeToDue ? _offsetMinutes : null,
+      offsetMinutes: type == ReminderRuleType.relativeToDue
+          ? _offsetMinutes
+          : null,
       weekdays: type == ReminderRuleType.weeklyTime ? _weekdays : const <int>[],
       vibrate: _vibrate,
       fullScreen: _kind == ReminderKind.alarm && _fullScreen,
