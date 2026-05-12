@@ -5,6 +5,7 @@ import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
 import '../services/alarm_service.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
 import '../widgets/reminder_plan_editor.dart';
@@ -225,9 +226,11 @@ class _HabitScreenState extends State<HabitScreen>
                           return;
                         }
                         if (remindTime == null) {
-                          final t = await showTimePicker(
-                            context: ctx,
+                          final t = await AppTimePicker.show(
+                            ctx,
                             initialTime: remindTime ?? nextHalfHourTimeOfDay(),
+                            title: '每日提醒时间',
+                            minuteStep: 5,
                           );
                           if (t != null) setSt(() => remindTime = t);
                         }
@@ -245,13 +248,15 @@ class _HabitScreenState extends State<HabitScreen>
                     label: Text(
                       remindTime == null
                           ? '选择时间'
-                          : '${remindTime!.hour.toString().padLeft(2, '0')}:${remindTime!.minute.toString().padLeft(2, '0')}',
+                          : AppTimePicker.format(remindTime!),
                     ),
                     onPressed: () async {
-                      final t = await showTimePicker(
-                        context: ctx,
+                      final t = await AppTimePicker.show(
+                        ctx,
                         initialTime:
                             remindTime ?? const TimeOfDay(hour: 20, minute: 0),
+                        title: '每日提醒时间',
+                        minuteStep: 5,
                       );
                       if (t != null) setSt(() => remindTime = t);
                     },

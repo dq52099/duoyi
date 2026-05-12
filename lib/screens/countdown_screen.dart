@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/countdown_provider.dart';
 import '../models/countdown.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
@@ -293,9 +294,11 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
               subtitle: Text(timeText),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
+                final picked = await AppTimePicker.show(
+                  context,
                   initialTime: _remindTime,
+                  title: '提醒时间',
+                  minuteStep: 5,
                 );
                 if (picked != null) {
                   setState(() => _remindTime = picked);

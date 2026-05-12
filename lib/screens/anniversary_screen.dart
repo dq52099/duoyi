@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/anniversary.dart';
 import '../providers/anniversary_provider.dart';
 import '../core/lunar_calendar.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
@@ -680,9 +681,11 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
                 subtitle: Text(remindTimeText),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
-                  final picked = await showTimePicker(
-                    context: context,
+                  final picked = await AppTimePicker.show(
+                    context,
                     initialTime: _remindTime,
+                    title: '提醒时间',
+                    minuteStep: 5,
                   );
                   if (picked != null) setState(() => _remindTime = picked);
                 },

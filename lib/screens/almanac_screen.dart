@@ -230,7 +230,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

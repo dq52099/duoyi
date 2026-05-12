@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/course_schedule.dart';
 import '../providers/course_provider.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
@@ -467,9 +468,12 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
             ),
             trailing: const Icon(Icons.schedule),
             onTap: () async {
-              final picked = await showTimePicker(
-                context: context,
+              final picked = await AppTimePicker.show(
+                context,
                 initialTime: _firstSessionTime,
+                title: '第一节开始时间',
+                subtitle: '课程表将按这个时间推算后续节次',
+                minuteStep: 5,
               );
               if (picked != null) {
                 setState(() => _firstSessionTime = picked);

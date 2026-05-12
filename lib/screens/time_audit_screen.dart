@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../models/time_entry.dart';
 import '../providers/time_audit_provider.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/surface_components.dart';
 
 enum _AuditRange { today, week, month, all }
@@ -510,9 +511,11 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
     );
     if (date == null) return;
     if (!mounted) return;
-    final time = await showTimePicker(
-      context: context,
+    final time = await AppTimePicker.show(
+      context,
       initialTime: TimeOfDay.fromDateTime(_startAt),
+      title: '开始时间',
+      minuteStep: 5,
     );
     if (time == null) return;
     if (!mounted) return;
@@ -538,9 +541,11 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
     );
     if (date == null) return;
     if (!mounted) return;
-    final time = await showTimePicker(
-      context: context,
+    final time = await AppTimePicker.show(
+      context,
       initialTime: TimeOfDay.fromDateTime(_endAt),
+      title: '结束时间',
+      minuteStep: 5,
     );
     if (time == null) return;
     if (!mounted) return;

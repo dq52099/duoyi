@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
 import '../models/goal.dart';
+import 'app_time_picker.dart';
 import 'surface_components.dart';
 
 class ReminderPlanEditor extends StatelessWidget {
@@ -473,7 +474,13 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _time);
+    final picked = await AppTimePicker.show(
+      context,
+      initialTime: _time,
+      title: '提醒时间',
+      subtitle: '上下滚动选择，或用快捷按钮调整半小时',
+      minuteStep: 5,
+    );
     if (picked != null) setState(() => _time = picked);
   }
 
