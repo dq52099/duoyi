@@ -26,6 +26,13 @@ class AppUpdateService extends ChangeNotifier {
   String? get latestUrl => _latestUrl;
   String? get latestAssetName => _latestAssetName;
   String? get latestNotes => _latestNotes;
+  String get latestNotesForDisplay {
+    final notes = _formatReleaseNotes(_latestNotes);
+    if (notes.isNotEmpty) return notes;
+    if (_latestVersion != null) return '此版本没有填写更新说明。';
+    return '';
+  }
+
   bool get checking => _checking;
   bool get downloading => _downloading;
   bool get installing => _installing;
@@ -48,6 +55,7 @@ class AppUpdateService extends ChangeNotifier {
     _error = null;
     _latestUrl = null;
     _latestAssetName = null;
+    _latestNotes = null;
     _downloadedFilePath = null;
     notifyListeners();
     try {
@@ -179,5 +187,20 @@ class AppUpdateService extends ChangeNotifier {
     if (name.contains('armeabi-v7a')) return 60;
     if (name.contains('x86_64')) return 50;
     return 10;
+  }
+
+  String _formatReleaseNotes(String? notes) {
+    final raw = notes?.trim();
+    if (raw == null || raw.isEmpty) return '';
+    return raw
+        .replaceAll('\r\n', '\n')
+        .replaceAll(RegExp(r'<!--[\s\S]*?-->'), '')
+        .replaceAllMapped(
+          RegExp(r'\[([^\]]+)\]\([^)]+\)'),
+          (match) => match.group(1) ?? '',
+        )
+        .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 }

@@ -591,43 +591,61 @@ class MineScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => Consumer<AppUpdateService>(
-        builder: (context, updater, _) => AppDialog(
-          title: const Text('检查更新'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('当前版本: ${updater.currentVersion}'),
-              Text('远端版本: ${updater.latestVersion ?? '—'}'),
-              if (updater.error != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  updater.error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              ],
-              if (updater.hasUpdate) ...[
-                const SizedBox(height: 12),
-                const Text(
-                  '发现新版本',
-                  style: TextStyle(fontWeight: FontWeight.w400),
-                ),
-                if ((updater.latestNotes ?? '').isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      updater.latestNotes!,
-                      style: const TextStyle(fontSize: 12),
+        builder: (context, updater, _) {
+          final notes = updater.latestNotesForDisplay;
+          return AppDialog(
+            title: const Text('检查更新'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('当前版本: ${updater.currentVersion}'),
+                Text('远端版本: ${updater.latestVersion ?? '—'}'),
+                if (updater.error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    updater.error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ],
+                if (updater.hasUpdate) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '发现新版本',
+                    style: TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                ] else if (updater.error == null && !updater.checking) ...[
+                  const SizedBox(height: 12),
+                  const Text('已是最新版本'),
+                ],
+                if (notes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '更新内容',
+                    style: TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          notes,
+                          style: const TextStyle(fontSize: 12, height: 1.45),
+                        ),
+                      ),
                     ),
                   ),
-                if (updater.latestAssetName != null) ...[
+                ],
+                if (updater.hasUpdate && updater.latestAssetName != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     '安装包：${updater.latestAssetName}',
                     style: const TextStyle(fontSize: 12),
                   ),
                 ],
-                if (updater.downloading) ...[
+                if (updater.hasUpdate && updater.downloading) ...[
                   const SizedBox(height: 12),
                   LinearProgressIndicator(value: updater.downloadProgress),
                   const SizedBox(height: 6),
@@ -637,43 +655,40 @@ class MineScreen extends StatelessWidget {
                         : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
                     style: const TextStyle(fontSize: 12),
                   ),
-                ] else if (updater.installing) ...[
+                ] else if (updater.hasUpdate && updater.installing) ...[
                   const SizedBox(height: 12),
                   const LinearProgressIndicator(),
                   const SizedBox(height: 6),
                   const Text('正在打开安装器', style: TextStyle(fontSize: 12)),
                 ],
-              ] else if (updater.error == null && !updater.checking) ...[
-                const SizedBox(height: 12),
-                const Text('已是最新版本'),
               ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: updater.busy ? null : () => Navigator.pop(ctx),
-              child: const Text('关闭'),
             ),
-            if (updater.hasUpdate && updater.latestUrl != null)
-              FilledButton.icon(
-                onPressed: updater.busy
-                    ? null
-                    : () async {
-                        await updater.downloadAndInstallLatest();
-                        if (!context.mounted) return;
-                        if (updater.error != null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(updater.error!)),
-                          );
-                        }
-                      },
-                icon: const Icon(Icons.download_for_offline_outlined),
-                label: Text(
-                  updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
-                ),
+            actions: [
+              TextButton(
+                onPressed: updater.busy ? null : () => Navigator.pop(ctx),
+                child: const Text('关闭'),
               ),
-          ],
-        ),
+              if (updater.hasUpdate && updater.latestUrl != null)
+                FilledButton.icon(
+                  onPressed: updater.busy
+                      ? null
+                      : () async {
+                          await updater.downloadAndInstallLatest();
+                          if (!context.mounted) return;
+                          if (updater.error != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(updater.error!)),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  label: Text(
+                    updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
