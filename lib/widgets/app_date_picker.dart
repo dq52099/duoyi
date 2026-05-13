@@ -23,7 +23,9 @@ class AppDatePickerResult {
 
   String get lunarText {
     final lunar = LunarCalendar.fromSolar(date);
-    return '${LunarCalendar.ganzhiOf(lunar.year)}年（${date.year}）${lunar.chineseText}';
+    return '${LunarCalendar.ganzhiOf(lunar.year)}年（${date.year}）'
+        '${LunarCalendar.monthName(lunar.month, isLeap: lunar.isLeapMonth)} '
+        '${LunarCalendar.dayName(lunar.day)}';
   }
 }
 
@@ -159,6 +161,11 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
       title: widget.title,
       subtitle: widget.subtitle,
       actions: [
+        TextButton.icon(
+          onPressed: () => _setSolar(DateTime.now()),
+          icon: const Icon(Icons.today_outlined, size: 18),
+          label: const Text('今天'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
@@ -188,23 +195,54 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
             onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           const SizedBox(height: 12),
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.32),
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
               borderRadius: DesignTokens.borderRadiusLg,
-              border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+              border: Border.all(color: cs.outline.withValues(alpha: 0.12)),
             ),
             child: Row(
               children: [
-                Icon(Icons.event_available_outlined, color: cs.primary),
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.12),
+                    borderRadius: DesignTokens.borderRadiusMd,
+                  ),
+                  child: Icon(
+                    _mode == AppDatePickerMode.solar
+                        ? Icons.calendar_month_outlined
+                        : Icons.brightness_2_outlined,
+                    color: cs.primary,
+                    size: 20,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    '${result.solarText}  ·  ${result.lunarText}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurface,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        result.solarText,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        result.lunarText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -258,40 +296,57 @@ class _SolarCalendar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return TableCalendar<void>(
-      locale: 'zh_CN',
-      firstDay: firstDay,
-      lastDay: lastDay,
-      focusedDay: focusedDay,
-      selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-      rowHeight: 42,
-      daysOfWeekHeight: 26,
-      calendarFormat: CalendarFormat.month,
-      availableCalendarFormats: const {CalendarFormat.month: '月'},
-      headerStyle: HeaderStyle(
-        titleCentered: true,
-        formatButtonVisible: false,
-        leftChevronIcon: const Icon(Icons.chevron_left_rounded),
-        rightChevronIcon: const Icon(Icons.chevron_right_rounded),
-        titleTextStyle:
-            Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w400) ??
-            const TextStyle(fontSize: 16),
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: DesignTokens.borderRadiusLg,
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.42)),
       ),
-      calendarStyle: CalendarStyle(
-        todayDecoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.16),
-          shape: BoxShape.circle,
+      child: TableCalendar<void>(
+        locale: 'zh_CN',
+        firstDay: firstDay,
+        lastDay: lastDay,
+        focusedDay: focusedDay,
+        selectedDayPredicate: (day) => isSameDay(day, selectedDay),
+        rowHeight: 44,
+        daysOfWeekHeight: 28,
+        calendarFormat: CalendarFormat.month,
+        availableCalendarFormats: const {CalendarFormat.month: '月'},
+        headerStyle: HeaderStyle(
+          titleCentered: true,
+          formatButtonVisible: false,
+          leftChevronIcon: const Icon(Icons.chevron_left_rounded),
+          rightChevronIcon: const Icon(Icons.chevron_right_rounded),
+          titleTextStyle:
+              theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w400,
+              ) ??
+              const TextStyle(fontSize: 16),
         ),
-        todayTextStyle: TextStyle(color: cs.primary),
-        selectedDecoration: BoxDecoration(
-          color: cs.primary,
-          shape: BoxShape.circle,
+        daysOfWeekStyle: DaysOfWeekStyle(
+          weekdayStyle: theme.textTheme.bodySmall!.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+          weekendStyle: theme.textTheme.bodySmall!.copyWith(color: cs.tertiary),
         ),
+        calendarStyle: CalendarStyle(
+          outsideDaysVisible: false,
+          cellMargin: const EdgeInsets.all(4),
+          todayDecoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          todayTextStyle: TextStyle(color: cs.primary),
+          selectedDecoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          weekendTextStyle: TextStyle(color: cs.tertiary),
+        ),
+        onDaySelected: (selected, _) => onDaySelected(selected),
+        onPageChanged: onPageChanged,
       ),
-      onDaySelected: (selected, _) => onDaySelected(selected),
-      onPageChanged: onPageChanged,
     );
   }
 }

@@ -351,7 +351,7 @@ class ReminderScheduler {
             title: payload.title,
             body: payload.body,
             when: payload.when,
-            payload: payload.payload,
+            payload: _fallbackPayload(payload.payload),
           );
           return true;
         }
@@ -395,7 +395,7 @@ class ReminderScheduler {
             hour: rule.hour!,
             minute: rule.minute!,
             weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
-            payload: rule.payload,
+            payload: _fallbackPayload(rule.payload),
           );
           return true;
         }
@@ -583,9 +583,9 @@ class ReminderScheduler {
   }
 
   _ResolvedRule? _resolveTodoRule(TodoItem t, ReminderRule rule, DateTime now) {
-    final payload = 'duoyi://todo/${t.id}';
     switch (rule.type) {
       case ReminderRuleType.absolute:
+        final payload = _todoPayload(t.id, rule.kind);
         final anchor = t.dueDate ?? t.reminderAt;
         if (anchor == null) return null;
         final when = _dateAtTime(
@@ -604,6 +604,7 @@ class ReminderScheduler {
           when: when,
         );
       case ReminderRuleType.relativeToDue:
+        final payload = _todoPayload(t.id, rule.kind);
         final anchor = t.dueDate ?? t.reminderAt;
         if (anchor == null) return null;
         final base = _dateAtTime(
@@ -623,6 +624,7 @@ class ReminderScheduler {
           when: when,
         );
       case ReminderRuleType.dailyTime:
+        final payload = _todoPayload(t.id, rule.kind);
         if (rule.hour == null || rule.minute == null) return null;
         return _buildRepeatingRule(
           objectType: 'todo',
@@ -636,6 +638,7 @@ class ReminderScheduler {
           weekdays: const <int>[],
         );
       case ReminderRuleType.weeklyTime:
+        final payload = _todoPayload(t.id, rule.kind);
         if (rule.hour == null || rule.minute == null || rule.weekdays.isEmpty) {
           return null;
         }
@@ -891,6 +894,20 @@ class ReminderScheduler {
       ReminderRuleType.dailyTime => '$prefix 每日$subject提醒',
       ReminderRuleType.weeklyTime => '$prefix 每周$subject提醒',
     };
+  }
+
+  String _todoPayload(String id, ReminderKind kind) {
+    if (kind == ReminderKind.alarm) return 'duoyi://todo/$id?confirm=1';
+    return 'duoyi://todo/$id';
+  }
+
+  String? _fallbackPayload(String? payload) {
+    if (payload == null) return null;
+    final uri = Uri.tryParse(payload);
+    if (uri == null || uri.host != 'todo') return payload;
+    final id = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    if (id.isEmpty) return payload;
+    return 'duoyi://todo/$id';
   }
 
   /// 目标锚定日：优先用今日；若 `startDate` 在未来，用 `startDate`。

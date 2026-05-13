@@ -447,7 +447,7 @@ class TodayScreen extends StatelessWidget {
   }
 
   Future<void> _showCalendarPicker(BuildContext context, DateTime now) async {
-    final picked = await AppDatePicker.pickSolar(
+    final result = await AppDatePicker.show(
       context,
       initialDate: now,
       firstDate: DateTime(1900),
@@ -455,13 +455,48 @@ class TodayScreen extends StatelessWidget {
       title: '万年历',
       subtitle: '选择公历日期，查看对应农历与节日',
     );
-    if (picked == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '已选择 ${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
+    if (result == null || !context.mounted) return;
+    final picked = result.date;
+    final lunar = LunarCalendar.fromSolar(picked);
+    final term = LunarCalendar.solarTerm(picked);
+    final festival =
+        LunarCalendar.solarFestival(picked) ??
+        LunarCalendar.lunarFestival(lunar);
+    showDialog(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('万年历'),
+        icon: const Icon(Icons.calendar_month_outlined),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${picked.year}年${picked.month}月${picked.day}日 · 星期${_weekday(picked.weekday)}',
+            ),
+            const SizedBox(height: 8),
+            Text(result.lunarText),
+            if (term != null || festival != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (term != null)
+                    _chip(term, Theme.of(ctx).colorScheme.primary),
+                  if (festival != null)
+                    _chip(festival, Theme.of(ctx).colorScheme.tertiary),
+                ],
+              ),
+            ],
+          ],
         ),
-        behavior: SnackBarBehavior.floating,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
       ),
     );
   }

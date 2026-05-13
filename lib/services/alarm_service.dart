@@ -89,6 +89,21 @@ class AlarmService implements ReminderAlarmSink {
           cancelNotification: true,
         ),
       ];
+  static const List<AndroidNotificationAction> _todoActions =
+      <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'todo_complete',
+          '完成任务',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'todo_open',
+          '打开',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ];
 
   /// 初始化插件与通道；幂等。
   Future<void> init() async {
@@ -512,8 +527,10 @@ class AlarmService implements ReminderAlarmSink {
   int _subId(int base, int weekday) => base * 10 + weekday;
 
   List<AndroidNotificationAction>? _actionsForPayload(String? payload) {
-    if (payload == null || !payload.startsWith('duoyi://habit/')) return null;
-    return _habitActions;
+    if (payload == null) return null;
+    if (payload.startsWith('duoyi://habit/')) return _habitActions;
+    if (payload.startsWith('duoyi://todo/')) return _todoActions;
+    return null;
   }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {

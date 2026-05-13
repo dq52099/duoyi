@@ -29,6 +29,12 @@ class AppTimePicker {
     final m = time.minute.toString().padLeft(2, '0');
     return '$h:$m';
   }
+
+  static TimeOfDay nextHalfHour([DateTime? from]) {
+    final now = from ?? DateTime.now();
+    if (now.minute < 30) return TimeOfDay(hour: now.hour, minute: 30);
+    return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
+  }
 }
 
 class _AppTimePickerSheet extends StatefulWidget {
@@ -83,7 +89,9 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
 
   TimeOfDay _roundedTime(TimeOfDay time) {
     final step = _normalizedStep(widget.minuteStep);
-    final rounded = ((time.minute / step).round() * step).clamp(0, 60).toInt();
+    final rounded = ((time.minute + step - 1) ~/ step * step)
+        .clamp(0, 60)
+        .toInt();
     if (rounded == 60) {
       return TimeOfDay(hour: (time.hour + 1) % 24, minute: 0);
     }
@@ -160,16 +168,16 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _shiftMinutes(-30),
-                  icon: const Icon(Icons.remove),
-                  label: const Text('30 分'),
+                  icon: const Icon(Icons.keyboard_arrow_left_rounded),
+                  label: const Text('提前 30 分'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _shiftMinutes(30),
-                  icon: const Icon(Icons.add),
-                  label: const Text('30 分'),
+                  icon: const Icon(Icons.keyboard_arrow_right_rounded),
+                  label: const Text('延后 30 分'),
                 ),
               ),
             ],
@@ -192,6 +200,10 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
                 onTap: () => _setValue(const TimeOfDay(hour: 20, minute: 0)),
               ),
               _PresetChip(label: '现在', onTap: () => _setValue(TimeOfDay.now())),
+              _PresetChip(
+                label: '下一提醒点',
+                onTap: () => _setValue(AppTimePicker.nextHalfHour()),
+              ),
             ],
           ),
           const SizedBox(height: 18),

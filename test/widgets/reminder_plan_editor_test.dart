@@ -31,4 +31,15 @@ void main() {
     expect(plan.rules.single.type, ReminderRuleType.dailyTime);
     expect(plan.rules.single.kind, ReminderKind.push);
   });
+
+  test('nextHalfHourTimeOfDay 使用向后最近半小时点', () {
+    expect(
+      nextHalfHourTimeOfDay(DateTime(2026, 5, 13, 17, 28)),
+      const TimeOfDay(hour: 17, minute: 30),
+    );
+    expect(
+      nextHalfHourTimeOfDay(DateTime(2026, 5, 13, 17, 35)),
+      const TimeOfDay(hour: 18, minute: 0),
+    );
+  });
 }

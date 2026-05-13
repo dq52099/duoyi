@@ -28,7 +28,7 @@ const List<int> _presetColors = <int>[
 
 const List<String> _weekdayNames = <String>['一', '二', '三', '四', '五', '六', '日'];
 
-const List<int> _focusMinutePresets = <int>[15, 25, 45, 60];
+const List<int> _focusMinutePresets = <int>[15, 25, 30, 45, 60, 90];
 
 const List<(String, String)> _whiteNoiseOptions = <(String, String)>[
   ('none', '无'),
@@ -36,6 +36,11 @@ const List<(String, String)> _whiteNoiseOptions = <(String, String)>[
   ('forest', '森林'),
   ('cafe', '咖啡馆'),
   ('waves', '海浪'),
+  ('brown_noise', '低频棕噪'),
+  ('night_rain', '静夜细雨'),
+  ('fan', '柔和风扇'),
+  ('pink_noise', '平稳粉噪'),
+  ('deep_stream', '低频溪流'),
 ];
 
 class GoalEditScreen extends StatefulWidget {
@@ -416,6 +421,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                 allowRelativeToDue: true,
                 allowWeekly: true,
                 hasAnchorDate: _targetDate != null,
+                defaultKind: ReminderKind.alarm,
                 onChanged: (plan) => setState(() {
                   _reminderPlan = plan;
                   _reminder = plan.toLegacyReminderConfig(fallback: _reminder);
@@ -592,7 +598,7 @@ class _BasicSection extends StatelessWidget {
           children: [
             Expanded(
               child: _DateField(
-                label: '开始日期',
+                label: '开始',
                 date: startDate,
                 onPick: onPickStart,
               ),
@@ -600,7 +606,7 @@ class _BasicSection extends StatelessWidget {
             const SizedBox(width: DesignTokens.spaceSm),
             Expanded(
               child: _DateField(
-                label: '目标日期',
+                label: '目标',
                 date: targetDate,
                 onPick: onPickTarget,
               ),
@@ -1657,22 +1663,16 @@ class _DateField extends StatelessWidget {
         if (picked != null) onPick(picked);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: DesignTokens.spaceMd,
-          vertical: DesignTokens.spaceSm,
-        ),
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
         decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: DesignTokens.borderRadiusSm,
-          border: Border.all(color: cs.outline.withValues(alpha: 0.3)),
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
+          borderRadius: DesignTokens.borderRadiusMd,
+          border: Border.all(color: cs.outline.withValues(alpha: 0.16)),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.calendar_today,
-              size: 14,
-              color: cs.onSurface.withValues(alpha: 0.6),
-            ),
+            Icon(Icons.calendar_today_outlined, size: 18, color: cs.primary),
             const SizedBox(width: DesignTokens.spaceXs),
             Expanded(
               child: Column(
@@ -1689,7 +1689,10 @@ class _DateField extends StatelessWidget {
                     date == null ? '未设置' : _formatDate(date!),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: DesignTokens.fontSizeSm),
+                    style: const TextStyle(
+                      fontSize: DesignTokens.fontSizeSm,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ],
               ),

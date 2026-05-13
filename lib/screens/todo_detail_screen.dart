@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/design_tokens.dart';
-import '../models/goal.dart' show ReminderPlan;
+import '../models/goal.dart' show ReminderKind, ReminderPlan;
 import '../models/todo.dart';
 import '../services/alarm_service.dart';
 import '../providers/notification_service.dart';
@@ -579,6 +579,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               allowRelativeToDue: true,
               allowWeekly: true,
               hasAnchorDate: _todo.dueDate != null,
+              defaultKind: ReminderKind.alarm,
             ),
             const SizedBox(height: DesignTokens.spaceSm),
             Builder(

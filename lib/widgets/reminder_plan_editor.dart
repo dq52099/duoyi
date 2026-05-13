@@ -107,16 +107,15 @@ class ReminderPlanEditor extends StatelessWidget {
   }
 
   ReminderRule _defaultRule() {
-    final seed = DateTime.now().add(const Duration(hours: 1));
-    final minute = (seed.minute ~/ 5 * 5).clamp(0, 55).toInt();
+    final defaultTime = nextHalfHourTimeOfDay();
     final type = hasAnchorDate && allowRelativeToDue
         ? ReminderRuleType.absolute
         : ReminderRuleType.dailyTime;
     return ReminderRule(
       type: type,
-      kind: defaultKind,
-      hour: seed.hour,
-      minute: minute,
+      kind: allowAlarm ? defaultKind : ReminderKind.push,
+      hour: defaultTime.hour,
+      minute: defaultTime.minute,
       weekdays: type == ReminderRuleType.weeklyTime
           ? [DateTime.now().weekday]
           : const <int>[],
@@ -565,7 +564,7 @@ String _formatTimeOfDay(TimeOfDay time) {
 
 TimeOfDay nextHalfHourTimeOfDay([DateTime? from]) {
   final now = from ?? DateTime.now();
-  if (now.minute < 30) {
+  if (now.minute == 0 || now.minute < 30) {
     return TimeOfDay(hour: now.hour, minute: 30);
   }
   return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);

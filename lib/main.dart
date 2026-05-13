@@ -548,8 +548,15 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   } else if (uri.host == 'todo' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) return;
-    // ignore: discarded_futures
-    TodayDetailRouter.open(ctx, TodaySectionKind.todos, id: id);
+    final confirm = uri.queryParameters['confirm'] == '1';
+    if (confirm) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showTodoCompletePrompt(ctx, id);
+      });
+    } else {
+      // ignore: discarded_futures
+      TodayDetailRouter.open(ctx, TodaySectionKind.todos, id: id);
+    }
   } else if (uri.host == 'goal' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) return;
@@ -585,6 +592,62 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       todos.toggleTodo(id);
     }
   }
+}
+
+Future<void> _showTodoCompletePrompt(
+  BuildContext context,
+  String todoId,
+) async {
+  if (!context.mounted) return;
+  final todos = Provider.of<TodoProvider>(context, listen: false);
+  final todo = todos.todos.where((t) => t.id == todoId).firstOrNull;
+  final messenger = ScaffoldMessenger.of(context);
+  if (todo == null) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('这个任务不存在或已被删除'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+  if (todo.isCompleted) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('“${todo.title}”已经完成'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => AppDialog(
+      icon: const Icon(Icons.task_alt_outlined),
+      title: const Text('确认完成任务'),
+      content: Text('现在完成“${todo.title}”吗？'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(false),
+          child: const Text('稍后'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(true),
+          child: const Text('完成'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  await todos.toggleTodo(todoId);
+  if (!context.mounted) return;
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text('已完成：${todo.title}'),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 }
 
 Future<void> _showHabitCheckInPrompt(

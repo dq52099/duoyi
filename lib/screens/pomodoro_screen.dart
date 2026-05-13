@@ -411,6 +411,10 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return '夜雨';
       case 'fan':
         return '风扇';
+      case 'pink_noise':
+        return '粉噪';
+      case 'deep_stream':
+        return '深溪流';
       default:
         return '无白噪音';
     }
@@ -432,6 +436,10 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return Icons.nights_stay_outlined;
       case 'fan':
         return Icons.air;
+      case 'pink_noise':
+        return Icons.blur_on;
+      case 'deep_stream':
+        return Icons.water;
       default:
         return Icons.music_off;
     }
@@ -451,6 +459,8 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       {'id': 'brown_noise', 'label': '低频棕噪', 'icon': Icons.graphic_eq},
       {'id': 'night_rain', 'label': '静夜细雨', 'icon': Icons.nights_stay_outlined},
       {'id': 'fan', 'label': '柔和风扇', 'icon': Icons.air},
+      {'id': 'pink_noise', 'label': '平稳粉噪', 'icon': Icons.blur_on},
+      {'id': 'deep_stream', 'label': '低频溪流', 'icon': Icons.water},
     ];
 
     showAppModalSheet(
