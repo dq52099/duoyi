@@ -473,30 +473,47 @@ Future<void> _syncDailyDigestReminder(
   NotificationService notification,
   TodoProvider todos,
 ) async {
-  const id = 880017;
-  await notification.cancel(id);
-  if (!prefs.dailyReminderEnabled) return;
+  const baseId = 880017;
+  for (var i = 0; i < 3; i++) {
+    await notification.cancel(baseId + i);
+  }
 
   final now = DateTime.now();
-  var target = DateTime(
-    now.year,
-    now.month,
-    now.day,
-    prefs.dailyReminderHour,
-    prefs.dailyReminderMinute,
-  );
+  for (var i = 0; i < prefs.dailyReminderSlots.length; i++) {
+    final slot = prefs.dailyReminderSlots[i];
+    if (!slot.enabled) continue;
+    final target = _nextDailyReminderTime(now, slot);
+    final body = _dailyDigestBody(now, todos, slot);
+
+    await notification.scheduleOnce(
+      id: baseId + i,
+      title: '每日提醒${['一', '二', '三'][i]}',
+      body: body,
+      when: target,
+      payload: 'duoyi://tab/today',
+    );
+  }
+}
+
+DateTime _nextDailyReminderTime(DateTime now, DailyReminderSlot slot) {
+  var target = DateTime(now.year, now.month, now.day, slot.hour, slot.minute);
   if (!target.isAfter(now)) target = target.add(const Duration(days: 1));
 
   for (var i = 0; i < 14; i++) {
-    final weekdayAllowed = prefs.dailyReminderRepeatDays.contains(
-      target.weekday,
-    );
+    final weekdayAllowed = slot.repeatDays.contains(target.weekday);
     final holidayPaused =
-        prefs.dailyReminderPauseHolidays && HolidayCalendar.isHoliday(target);
+        slot.pauseHolidays && HolidayCalendar.isHoliday(target);
     if (weekdayAllowed && !holidayPaused) break;
     target = target.add(const Duration(days: 1));
   }
+  return target;
+}
 
+String _dailyDigestBody(
+  DateTime now,
+  TodoProvider todos,
+  DailyReminderSlot slot,
+) {
   final today = DateTime(now.year, now.month, now.day);
   final tomorrow = today.add(const Duration(days: 1));
   final todayCount = todos.todos.where((t) {
@@ -510,20 +527,10 @@ Future<void> _syncDailyDigestReminder(
   final overdueCount = todos.todos.where((t) => t.isOverdue).length;
 
   final pieces = <String>[];
-  if (prefs.dailyReminderIncludeTodayTasks) pieces.add('今日 $todayCount 项');
-  if (prefs.dailyReminderIncludeTomorrowPlan) {
-    pieces.add('明日 $tomorrowCount 项');
-  }
-  if (prefs.dailyReminderIncludeOverdue) pieces.add('逾期 $overdueCount 项');
-  final body = pieces.isEmpty ? '打开多仪整理任务与计划' : pieces.join(' · ');
-
-  await notification.scheduleOnce(
-    id: id,
-    title: '每日提醒',
-    body: body,
-    when: target,
-    payload: 'duoyi://tab/today',
-  );
+  if (slot.includeTodayTasks) pieces.add('今日 $todayCount 项');
+  if (slot.includeTomorrowPlan) pieces.add('明日 $tomorrowCount 项');
+  if (slot.includeOverdue) pieces.add('逾期 $overdueCount 项');
+  return pieces.isEmpty ? '打开多仪整理任务与计划' : pieces.join(' · ');
 }
 
 void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
@@ -940,7 +947,14 @@ class MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
-    final destinations = [
+    final prefs = context.watch<PreferencesProvider>();
+    final visibleTabs = prefs.enabledBottomNavTabs;
+    if (!visibleTabs.contains(_currentIndex)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _currentIndex = visibleTabs.first);
+      });
+    }
+    final allDestinations = [
       const NavigationDestination(
         icon: Icon(Icons.today_outlined),
         selectedIcon: Icon(Icons.today),
@@ -972,6 +986,8 @@ class MainShellState extends State<MainShell> {
         label: s.navMine,
       ),
     ];
+    final destinations = visibleTabs.map((i) => allDestinations[i]).toList();
+    final selectedNavIndex = visibleTabs.indexOf(_currentIndex);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -988,9 +1004,7 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      floatingActionButton:
-          (_currentIndex == 0 || _currentIndex == 5) &&
-              context.watch<PreferencesProvider>().quickCaptureFab
+      floatingActionButton: _currentIndex == 0 && prefs.quickCaptureFab
           ? const QuickCaptureFab()
           : null,
       appBar: _currentIndex == 0
@@ -1010,8 +1024,9 @@ class MainShellState extends State<MainShell> {
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
+        onDestinationSelected: (i) =>
+            setState(() => _currentIndex = visibleTabs[i]),
         destinations: destinations,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),

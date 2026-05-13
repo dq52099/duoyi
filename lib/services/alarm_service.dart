@@ -61,10 +61,12 @@ class AlarmService implements ReminderAlarmSink {
   /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
   /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
   /// 继续吞掉习惯提醒。
-  static const String channelId = 'duoyi_alarm_fullscreen_v2';
+  static const String channelId = 'duoyi_alarm_fullscreen_v3';
   static const String legacyChannelId = 'duoyi_alarm';
   static const String _channelName = '多仪 · 强提醒';
   static const String _channelDesc = '到点响铃、震动并弹出确认界面的提醒';
+  static const RawResourceAndroidNotificationSound _alarmSound =
+      RawResourceAndroidNotificationSound('duoyi_alarm');
 
   /// 震动模式：静 0 → 震 500 → 静 500 → 震 500（毫秒）。
   /// `Int64List` 无法 const 化，使用 late final 缓存。
@@ -171,6 +173,7 @@ class AlarmService implements ReminderAlarmSink {
             enableVibration: true,
             vibrationPattern: _vibrationPattern,
             playSound: true,
+            sound: _alarmSound,
             audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         );
@@ -224,6 +227,7 @@ class AlarmService implements ReminderAlarmSink {
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: fullScreen,
       playSound: true,
+      sound: _alarmSound,
       enableVibration: true,
       vibrationPattern: _vibrationPattern,
       audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -502,6 +506,7 @@ class AlarmService implements ReminderAlarmSink {
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: fullScreen,
       playSound: true,
+      sound: _alarmSound,
       enableVibration: true,
       vibrationPattern: _vibrationPattern,
       audioAttributesUsage: AudioAttributesUsage.alarm,

@@ -17,7 +17,6 @@ import '../widgets/calendar_week_strip.dart';
 import '../widgets/calendar_day_agenda.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/surface_components.dart';
-import 'search_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   final GlobalKey? todoTabKey;
@@ -168,13 +167,34 @@ class _CalendarScreenState extends State<CalendarScreen>
       appBar: AppBar(
         toolbarHeight: 96,
         actions: [
-          IconButton(
-            tooltip: '搜索',
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SearchScreen()),
-            ),
+          PopupMenuButton<String>(
+            tooltip: '日历菜单',
+            icon: const Icon(Icons.more_horiz),
+            onSelected: (value) {
+              if (value == 'today') {
+                final now = DateTime.now();
+                setState(() {
+                  _selectedDay = now;
+                  _focusedMonth = DateTime(now.year, now.month);
+                });
+              } else if (value == 'pick') {
+                _pickDate();
+              } else if (value == 'month') {
+                _tabController.animateTo(0);
+              } else if (value == 'week') {
+                _tabController.animateTo(1);
+              } else if (value == 'day') {
+                _tabController.animateTo(2);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'today', child: Text('回到今天')),
+              PopupMenuItem(value: 'pick', child: Text('选择日期')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'month', child: Text('月视图')),
+              PopupMenuItem(value: 'week', child: Text('周视图')),
+              PopupMenuItem(value: 'day', child: Text('日视图')),
+            ],
           ),
         ],
         titleSpacing: 0,
@@ -254,13 +274,21 @@ class _CalendarScreenState extends State<CalendarScreen>
               // Tab bar
               TabBar(
                 controller: _tabController,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 tabs: [
                   Tab(text: s.calendarTabMonth),
                   Tab(text: s.calendarTabWeek),
                   Tab(text: s.calendarTabDay),
                 ],
                 labelStyle: const TextStyle(fontWeight: FontWeight.w400),
-                indicatorSize: TabBarIndicatorSize.label,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                labelColor: cs.onPrimaryContainer,
+                unselectedLabelColor: cs.onSurfaceVariant,
               ),
             ],
           ),

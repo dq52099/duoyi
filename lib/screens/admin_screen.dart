@@ -49,15 +49,50 @@ class _AdminScreenState extends State<AdminScreen>
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          indicator: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          labelColor: Theme.of(context).colorScheme.onPrimaryContainer,
+          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
           tabs: const [
-            Tab(icon: Icon(Icons.dashboard_outlined), text: '概览'),
-            Tab(icon: Icon(Icons.tune), text: '全站设置'),
-            Tab(icon: Icon(Icons.auto_awesome), text: 'AI 配置'),
-            Tab(icon: Icon(Icons.cloud_outlined), text: '云端备份'),
-            Tab(icon: Icon(Icons.people_outline), text: '用户'),
-            Tab(icon: Icon(Icons.campaign_outlined), text: '公告'),
-            Tab(icon: Icon(Icons.feedback_outlined), text: '反馈'),
-            Tab(icon: Icon(Icons.vpn_key_outlined), text: '邀请码'),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.dashboard_outlined, text: '概览'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.campaign_outlined, text: '公告'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.feedback_outlined, text: '反馈'),
+            ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(icon: Icons.vpn_key_outlined, text: '邀请码'),
+            ),
           ],
         ),
       ),
@@ -72,6 +107,30 @@ class _AdminScreenState extends State<AdminScreen>
           _AnnouncementsTab(api: api),
           _FeedbackTab(api: api),
           _InvitesTab(api: api),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminTabLabel extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _AdminTabLabel({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 92,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
         ],
       ),
     );

@@ -299,53 +299,70 @@ class _SolarCalendar extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: cs.surfaceContainerLowest,
         borderRadius: DesignTokens.borderRadiusLg,
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.42)),
       ),
-      child: TableCalendar<void>(
-        locale: 'zh_CN',
-        firstDay: firstDay,
-        lastDay: lastDay,
-        focusedDay: focusedDay,
-        selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-        rowHeight: 44,
-        daysOfWeekHeight: 28,
-        calendarFormat: CalendarFormat.month,
-        availableCalendarFormats: const {CalendarFormat.month: '月'},
-        headerStyle: HeaderStyle(
-          titleCentered: true,
-          formatButtonVisible: false,
-          leftChevronIcon: const Icon(Icons.chevron_left_rounded),
-          rightChevronIcon: const Icon(Icons.chevron_right_rounded),
-          titleTextStyle:
-              theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w400,
-              ) ??
-              const TextStyle(fontSize: 16),
-        ),
-        daysOfWeekStyle: DaysOfWeekStyle(
-          weekdayStyle: theme.textTheme.bodySmall!.copyWith(
-            color: cs.onSurfaceVariant,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+        child: TableCalendar<void>(
+          locale: 'zh_CN',
+          firstDay: firstDay,
+          lastDay: lastDay,
+          focusedDay: focusedDay,
+          selectedDayPredicate: (day) => isSameDay(day, selectedDay),
+          rowHeight: 44,
+          daysOfWeekHeight: 28,
+          calendarFormat: CalendarFormat.month,
+          availableCalendarFormats: const {CalendarFormat.month: '月'},
+          headerStyle: HeaderStyle(
+            titleCentered: true,
+            formatButtonVisible: false,
+            leftChevronIcon: Icon(
+              Icons.chevron_left_rounded,
+              color: cs.onSurface,
+            ),
+            rightChevronIcon: Icon(
+              Icons.chevron_right_rounded,
+              color: cs.onSurface,
+            ),
+            titleTextStyle:
+                theme.textTheme.titleMedium?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w400,
+                ) ??
+                TextStyle(fontSize: 16, color: cs.onSurface),
           ),
-          weekendStyle: theme.textTheme.bodySmall!.copyWith(color: cs.tertiary),
-        ),
-        calendarStyle: CalendarStyle(
-          outsideDaysVisible: false,
-          cellMargin: const EdgeInsets.all(4),
-          todayDecoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
+          daysOfWeekStyle: DaysOfWeekStyle(
+            weekdayStyle: theme.textTheme.bodySmall!.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+            weekendStyle: theme.textTheme.bodySmall!.copyWith(
+              color: cs.tertiary,
+            ),
           ),
-          todayTextStyle: TextStyle(color: cs.primary),
-          selectedDecoration: BoxDecoration(
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(12),
+          calendarStyle: CalendarStyle(
+            outsideDaysVisible: false,
+            cellMargin: const EdgeInsets.all(4),
+            defaultTextStyle: TextStyle(color: cs.onSurface),
+            disabledTextStyle: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.28),
+            ),
+            todayDecoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            todayTextStyle: TextStyle(color: cs.primary),
+            selectedDecoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            selectedTextStyle: TextStyle(color: cs.onPrimary),
+            weekendTextStyle: TextStyle(color: cs.tertiary),
           ),
-          weekendTextStyle: TextStyle(color: cs.tertiary),
+          onDaySelected: (selected, _) => onDaySelected(selected),
+          onPageChanged: onPageChanged,
         ),
-        onDaySelected: (selected, _) => onDaySelected(selected),
-        onPageChanged: onPageChanged,
       ),
     );
   }

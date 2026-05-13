@@ -7,8 +7,8 @@ class HabitHeatmap extends StatelessWidget {
   const HabitHeatmap({super.key, required this.heatmapData, this.weeks = 12});
 
   Color _cellColor(int intensity, Color primary) {
-    if (intensity == 0) return primary.withValues(alpha: 0.08);
-    final opacities = [0.0, 0.22, 0.36, 0.52, 0.68, 0.9];
+    if (intensity == 0) return primary.withValues(alpha: 0.06);
+    final opacities = [0.0, 0.20, 0.34, 0.50, 0.68, 0.88];
     return primary.withValues(alpha: opacities[intensity.clamp(0, 5)]);
   }
 
@@ -26,9 +26,9 @@ class HabitHeatmap extends StatelessWidget {
         final available = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : 360.0;
-        final cell = ((available - 32 - columns * 2) / columns).clamp(
-          11.0,
-          18.0,
+        final cell = ((available - 40 - columns * 3) / columns).clamp(
+          12.0,
+          20.0,
         );
         final grid = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,7 +39,7 @@ class HabitHeatmap extends StatelessWidget {
                 ...List.generate(columns, (c) {
                   final w = startDate.add(Duration(days: c * 7));
                   return SizedBox(
-                    width: cell + 2,
+                    width: cell + 3,
                     child: c % 4 == 0
                         ? Text(
                             '${w.month}月',
@@ -90,12 +90,14 @@ class HabitHeatmap extends StatelessWidget {
                         child: Container(
                           width: cell,
                           height: cell,
-                          margin: const EdgeInsets.all(1),
+                          margin: const EdgeInsets.all(1.5),
                           decoration: BoxDecoration(
                             color: _cellColor(intensity, primary),
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: cs.outlineVariant.withValues(alpha: 0.28),
+                              color: intensity == 0
+                                  ? cs.outlineVariant.withValues(alpha: 0.22)
+                                  : primary.withValues(alpha: 0.22),
                               width: 0.5,
                             ),
                           ),
@@ -110,7 +112,7 @@ class HabitHeatmap extends StatelessWidget {
         );
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: grid,
         );
       },

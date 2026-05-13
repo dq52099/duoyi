@@ -24,41 +24,44 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: AppSurfaceCard(
-          padding: const EdgeInsets.all(24),
-          borderRadius: BorderRadius.circular(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 280, maxWidth: 520),
+          child: AppSurfaceCard(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+            borderRadius: BorderRadius.circular(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: iconWidget ?? Icon(icon, size: 36, color: cs.primary),
                 ),
-                child: iconWidget ?? Icon(icon, size: 36, color: cs.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.72),
-                  fontSize: 15,
-                  height: 1.55,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: 20),
-                FilledButton.tonalIcon(
-                  onPressed: onAction,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(actionLabel!),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontSize: 15,
+                    height: 1.55,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 20),
+                  FilledButton.tonalIcon(
+                    onPressed: onAction,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(actionLabel!),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

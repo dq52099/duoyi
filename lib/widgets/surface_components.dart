@@ -723,6 +723,8 @@ class AppDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      constraints: BoxConstraints(minWidth: 320, maxWidth: maxWidth),
       titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
       contentPadding:
           contentPadding ?? const EdgeInsets.fromLTRB(24, 16, 24, 8),
@@ -804,13 +806,14 @@ class AppModalSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final viewInsets = MediaQuery.of(context).viewInsets;
+    final media = MediaQuery.of(context);
+    final viewInsets = media.viewInsets;
     final resolvedPadding = padding.resolve(Directionality.of(context));
     final sheetPadding = EdgeInsets.fromLTRB(
       resolvedPadding.left,
       resolvedPadding.top,
       resolvedPadding.right,
-      resolvedPadding.bottom + viewInsets.bottom,
+      resolvedPadding.bottom,
     );
 
     final children = <Widget>[
@@ -879,21 +882,29 @@ class AppModalSheet extends StatelessWidget {
 
     return SafeArea(
       top: false,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: SizedBox(
-            width: double.infinity,
-            child: Material(
-              color: cs.surface,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              clipBehavior: Clip.antiAlias,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: maxWidth,
+              maxHeight: media.size.height * 0.88,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: Material(
+                color: cs.surface,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                clipBehavior: Clip.antiAlias,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: body,
               ),
-              child: body,
             ),
           ),
         ),

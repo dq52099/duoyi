@@ -18,6 +18,8 @@ class LocalNotifications {
   bool _granted = false;
   String? _launchPayload;
   bool get permissionGranted => _granted;
+  static const RawResourceAndroidNotificationSound _alarmSound =
+      RawResourceAndroidNotificationSound('duoyi_alarm');
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
@@ -84,11 +86,12 @@ class LocalNotifications {
         );
         await android?.createNotificationChannel(
           AndroidNotificationChannel(
-            'duoyi_alarm_fullscreen_v2',
+            'duoyi_alarm_fullscreen_v3',
             '多仪 · 强提醒',
             description: '重要提醒会响铃、震动并弹出确认界面',
             importance: Importance.max,
             playSound: true,
+            sound: _alarmSound,
             enableVibration: true,
             audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
@@ -183,7 +186,7 @@ class LocalNotifications {
   }
 
   NotificationDetails _details({String channelId = 'duoyi_general_alerts_v2'}) {
-    final isAlarm = channelId == 'duoyi_alarm_fullscreen_v2';
+    final isAlarm = channelId == 'duoyi_alarm_fullscreen_v3';
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
@@ -192,6 +195,7 @@ class LocalNotifications {
         importance: isAlarm ? Importance.max : Importance.high,
         priority: isAlarm ? Priority.max : Priority.high,
         playSound: true,
+        sound: isAlarm ? _alarmSound : null,
         enableVibration: true,
         audioAttributesUsage: isAlarm
             ? AudioAttributesUsage.alarm

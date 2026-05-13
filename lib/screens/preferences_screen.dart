@@ -161,7 +161,7 @@ class PreferencesScreen extends StatelessWidget {
                 color: cs.primary,
                 value: p.quickCaptureFab,
                 title: '显示快速捕获按钮',
-                subtitle: '今日 / 我的 页右下角的 + 按钮',
+                subtitle: '今日页右下角的快捷创建按钮',
                 onChanged: (v) =>
                     context.read<PreferencesProvider>().setQuickCaptureFab(v),
               ),
@@ -189,6 +189,23 @@ class PreferencesScreen extends StatelessWidget {
                     .read<PreferencesProvider>()
                     .setDefaultPomodoroMinutes(v.toInt()),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppSettingsSection(
+            title: '底部导航栏',
+            subtitle: '配置显示菜单和顺序，至少保留两个入口',
+            children: [
+              for (final tab in p.bottomNavOrder)
+                _NavConfigTile(
+                  tab: tab,
+                  label: _tabLabel(tab),
+                  visible: p.bottomNavVisible.contains(tab),
+                  canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
+                  canMoveDown:
+                      p.bottomNavOrder.indexOf(tab) <
+                      p.bottomNavOrder.length - 1,
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -235,112 +252,17 @@ class PreferencesScreen extends StatelessWidget {
           const SizedBox(height: 12),
           AppSettingsSection(
             title: '每日提醒',
-            subtitle: '汇总今日任务、明日计划和逾期日程',
+            subtitle: '最多三组提醒：时间、任务范围、重复周期、节假日暂停',
             children: [
-              AppSwitchTile(
-                icon: Icons.notifications_active_outlined,
-                color: Colors.orange,
-                value: p.dailyReminderEnabled,
-                title: '开启每日提醒',
-                subtitle:
-                    '${p.dailyReminderHour.toString().padLeft(2, '0')}:${p.dailyReminderMinute.toString().padLeft(2, '0')} · ${_repeatDaysLabel(p.dailyReminderRepeatDays)}',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDailyReminderEnabled(v),
-              ),
-              AppSettingsTile(
-                icon: Icons.schedule,
-                color: Colors.deepOrange,
-                title: '提醒时间',
-                subtitle: '到点发送带声音和震动的提醒',
-                trailing: TextButton(
-                  onPressed: () async {
-                    final picked = await AppTimePicker.show(
-                      context,
-                      initialTime: TimeOfDay(
-                        hour: p.dailyReminderHour,
-                        minute: p.dailyReminderMinute,
-                      ),
-                      title: '每日提醒时间',
-                      subtitle: '推荐设置在晚间复盘或早间计划时间',
-                    );
-                    if (picked == null || !context.mounted) return;
-                    await context
-                        .read<PreferencesProvider>()
-                        .setDailyReminderTime(picked.hour, picked.minute);
-                  },
-                  child: Text(
-                    '${p.dailyReminderHour.toString().padLeft(2, '0')}:${p.dailyReminderMinute.toString().padLeft(2, '0')}',
+              for (var i = 0; i < p.dailyReminderSlots.length; i++)
+                _DailyReminderSlotTile(
+                  index: i,
+                  slot: p.dailyReminderSlots[i],
+                  repeatLabel: _repeatDaysLabel(
+                    p.dailyReminderSlots[i].repeatDays,
                   ),
+                  weekdayLabel: _weekdayLabel,
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: List.generate(7, (i) {
-                    final day = i + 1;
-                    final selected = p.dailyReminderRepeatDays.contains(day);
-                    return FilterChip(
-                      label: Text(_weekdayLabel(day)),
-                      selected: selected,
-                      showCheckmark: false,
-                      onSelected: (_) {
-                        final next = [...p.dailyReminderRepeatDays];
-                        if (selected) {
-                          next.remove(day);
-                        } else {
-                          next.add(day);
-                        }
-                        context
-                            .read<PreferencesProvider>()
-                            .setDailyReminderRepeatDays(next);
-                      },
-                    );
-                  }),
-                ),
-              ),
-              AppSwitchTile(
-                icon: Icons.today_outlined,
-                color: Colors.blue,
-                value: p.dailyReminderIncludeTodayTasks,
-                title: '任务：今日任务',
-                subtitle: '提醒中包含今日未完成任务数量',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDailyReminderIncludeTodayTasks(v),
-              ),
-              AppSwitchTile(
-                icon: Icons.next_plan_outlined,
-                color: Colors.teal,
-                value: p.dailyReminderIncludeTomorrowPlan,
-                title: '任务：明日计划',
-                subtitle: '提醒中包含明日已安排任务数量',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDailyReminderIncludeTomorrowPlan(v),
-              ),
-              AppSwitchTile(
-                icon: Icons.warning_amber_outlined,
-                color: Colors.red,
-                value: p.dailyReminderIncludeOverdue,
-                title: '任务：逾期日程',
-                subtitle: '提醒中包含已过期未完成任务',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDailyReminderIncludeOverdue(v),
-              ),
-              AppSwitchTile(
-                icon: Icons.beach_access_outlined,
-                color: Colors.green,
-                value: p.dailyReminderPauseHolidays,
-                title: '法定节假日暂停提醒',
-                subtitle: '遇到内置节假日时顺延到下一个提醒日',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDailyReminderPauseHolidays(v),
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -546,10 +468,10 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
   }
 
   Future<void> _sendScheduledAlarmTest() async {
-    final when = DateTime.now().add(const Duration(minutes: 1));
+    final when = DateTime.now().add(const Duration(seconds: 30));
     await AlarmService.instance.scheduleFullScreen(
       id: 919002,
-      title: '1 分钟强提醒测试',
+      title: '30 秒强提醒测试',
       body: '这是强提醒定时调度测试。',
       when: when,
       payload: 'duoyi://alarm-test?scheduled=1',
@@ -559,7 +481,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('已安排 1 分钟后的强提醒测试'),
+        content: Text('已安排 30 秒后的强提醒测试'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -606,6 +528,215 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
               _requestFullScreenIntentPermission,
         );
       },
+    );
+  }
+}
+
+class _DailyReminderSlotTile extends StatelessWidget {
+  final int index;
+  final DailyReminderSlot slot;
+  final String repeatLabel;
+  final String Function(int day) weekdayLabel;
+
+  const _DailyReminderSlotTile({
+    required this.index,
+    required this.slot,
+    required this.repeatLabel,
+    required this.weekdayLabel,
+  });
+
+  String get _title => '提醒${['一', '二', '三'][index]}';
+  String get _time =>
+      '${slot.hour.toString().padLeft(2, '0')}:${slot.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _save(BuildContext context, DailyReminderSlot next) {
+    return context.read<PreferencesProvider>().setDailyReminderSlot(
+      index,
+      next,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: index == 0,
+        leading: Icon(Icons.notifications_active_outlined, color: cs.primary),
+        title: Text(_title),
+        subtitle: Text(
+          slot.enabled
+              ? '$_time · $repeatLabel · ${_taskScopeText(slot)}'
+              : '已关闭 · $_time',
+        ),
+        trailing: Switch(
+          value: slot.enabled,
+          onChanged: (v) => _save(context, slot.copyWith(enabled: v)),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        children: [
+          AppSettingsTile(
+            icon: Icons.schedule,
+            color: Colors.deepOrange,
+            title: '提醒时间',
+            subtitle: '到点发送带声音和震动的提醒',
+            trailing: TextButton(
+              onPressed: () async {
+                final picked = await AppTimePicker.show(
+                  context,
+                  initialTime: TimeOfDay(hour: slot.hour, minute: slot.minute),
+                  title: '$_title时间',
+                  subtitle: '设置提醒触发时间',
+                );
+                if (picked == null || !context.mounted) return;
+                await _save(
+                  context,
+                  slot.copyWith(hour: picked.hour, minute: picked.minute),
+                );
+              },
+              child: Text(_time),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(7, (i) {
+                final day = i + 1;
+                final selected = slot.repeatDays.contains(day);
+                return FilterChip(
+                  label: Text(weekdayLabel(day)),
+                  selected: selected,
+                  showCheckmark: false,
+                  onSelected: (_) {
+                    final next = [...slot.repeatDays];
+                    if (selected) {
+                      next.remove(day);
+                    } else {
+                      next.add(day);
+                    }
+                    _save(context, slot.copyWith(repeatDays: next));
+                  },
+                );
+              }),
+            ),
+          ),
+          AppSwitchTile(
+            icon: Icons.today_outlined,
+            color: Colors.blue,
+            value: slot.includeTodayTasks,
+            title: '任务：今日任务',
+            subtitle: '提醒中包含今日未完成任务数量',
+            onChanged: (v) =>
+                _save(context, slot.copyWith(includeTodayTasks: v)),
+          ),
+          AppSwitchTile(
+            icon: Icons.next_plan_outlined,
+            color: Colors.teal,
+            value: slot.includeTomorrowPlan,
+            title: '任务：明日计划',
+            subtitle: '提醒中包含明日已安排任务数量',
+            onChanged: (v) =>
+                _save(context, slot.copyWith(includeTomorrowPlan: v)),
+          ),
+          AppSwitchTile(
+            icon: Icons.warning_amber_outlined,
+            color: Colors.red,
+            value: slot.includeOverdue,
+            title: '任务：逾期任务',
+            subtitle: '提醒中包含已过期未完成任务',
+            onChanged: (v) => _save(context, slot.copyWith(includeOverdue: v)),
+          ),
+          AppSwitchTile(
+            icon: Icons.beach_access_outlined,
+            color: Colors.green,
+            value: slot.pauseHolidays,
+            title: '法定节假日暂停提醒',
+            subtitle: '遇到内置节假日时顺延到下一个提醒日',
+            onChanged: (v) => _save(context, slot.copyWith(pauseHolidays: v)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _taskScopeText(DailyReminderSlot slot) {
+    final parts = <String>[];
+    if (slot.includeTodayTasks) parts.add('今日');
+    if (slot.includeOverdue) parts.add('逾期');
+    if (slot.includeTomorrowPlan) parts.add('明日');
+    return parts.isEmpty ? '无任务范围' : parts.join('/');
+  }
+}
+
+class _NavConfigTile extends StatelessWidget {
+  final int tab;
+  final String label;
+  final bool visible;
+  final bool canMoveUp;
+  final bool canMoveDown;
+
+  const _NavConfigTile({
+    required this.tab,
+    required this.label,
+    required this.visible,
+    required this.canMoveUp,
+    required this.canMoveDown,
+  });
+
+  IconData get _icon => switch (tab) {
+    0 => Icons.today_outlined,
+    1 => Icons.checklist,
+    2 => Icons.repeat,
+    3 => Icons.calendar_month_outlined,
+    4 => Icons.timer_outlined,
+    _ => Icons.person_outline,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSettingsTile(
+      icon: _icon,
+      color: Theme.of(context).colorScheme.primary,
+      title: label,
+      subtitle: visible ? '已显示' : '已隐藏',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '上移',
+            onPressed: canMoveUp
+                ? () => context.read<PreferencesProvider>().moveBottomNavTab(
+                    tab,
+                    -1,
+                  )
+                : null,
+            icon: const Icon(Icons.keyboard_arrow_up_rounded),
+          ),
+          IconButton(
+            tooltip: '下移',
+            onPressed: canMoveDown
+                ? () => context.read<PreferencesProvider>().moveBottomNavTab(
+                    tab,
+                    1,
+                  )
+                : null,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          ),
+          Switch(
+            value: visible,
+            onChanged: (v) =>
+                context.read<PreferencesProvider>().setBottomNavVisible(tab, v),
+          ),
+        ],
+      ),
     );
   }
 }

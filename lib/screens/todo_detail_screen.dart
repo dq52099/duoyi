@@ -18,11 +18,10 @@ import '../widgets/surface_components.dart';
 
 /// Todo 详情页 / 编辑页。
 ///
-/// Task 9：引入"保存不返回"状态机。
+/// Todo 详情页 / 编辑页状态机。
 ///
 /// - `_EditState` 四档：`clean / editing / saving / confirmDiscard`；
-/// - AppBar 的 check 按钮**只持久化不 pop**，成功时用 floating snackbar
-///   展示"已保存"反馈，失败时保留 `editing` 并弹错误提示；
+/// - AppBar 的 check 按钮保存成功后返回上一页；
 /// - 返回键在 `editing` 下会弹"放弃修改"对话框；
 /// - 用 `PopScope` + `onPopInvoked` 统一拦截路由 pop，`Clean` 状态直接放行。
 ///
@@ -139,13 +138,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   /// 保存当前编辑结果。
   ///
-  /// - `clean`：不触发任何写入，仅提示"无未保存改动"；
+  /// - `clean`：不触发任何写入，直接返回上一页；
   /// - 其他状态：`_state = saving` → `updateTodo` → 成功回到 `clean`
-  ///   并刷新基线、展示 "已保存" inline snackbar；失败回到 `editing`
+  ///   并刷新基线后返回上一页；失败回到 `editing`
   ///   并展示错误 snackbar。
   ///
-  /// 关键约束（P18）：本方法**绝不调用 `Navigator.pop`**，路由栈顶必须
-  /// 在调用前后保持同一路由实例。
   Future<void> _save() async {
     if (_state == _EditState.saving) return;
     if (!(context.read<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true)) {
@@ -160,13 +157,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
     // 同步基线检查：用户点了 check 但什么也没改 → 轻量反馈、不打扰。
     if (_state == _EditState.clean) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('无未保存改动'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1000),
-        ),
-      );
+      Navigator.of(context).maybePop();
       return;
     }
 
@@ -203,21 +194,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       _baseline = _snapshot(_todo);
       setState(() => _state = _EditState.clean);
 
-      // inline banner：floating + checkmark icon + 1200ms。
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.check_circle, size: 18, color: Colors.white),
-              SizedBox(width: DesignTokens.spaceSm),
-              Text('已保存'),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1200),
-        ),
-      );
+      Navigator.of(context).maybePop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _state = _EditState.editing);

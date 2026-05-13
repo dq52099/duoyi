@@ -112,7 +112,7 @@ class NotificationHealthCard extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.alarm_on_outlined,
             color: Colors.deepOrange,
-            title: '1 分钟后强提醒',
+            title: '30 秒后强提醒',
             subtitle: '验证习惯/闹钟同一条强提醒链路',
             onTap: onSendScheduledAlarmTest,
           ),

@@ -14,10 +14,11 @@ import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/brand_background.dart';
-import '../widgets/app_date_picker.dart';
 import '../widgets/surface_components.dart';
 import 'diary_screen.dart';
 import 'habit_screen.dart';
+import 'almanac_screen.dart';
+import 'goal_edit_screen.dart';
 import 'pomodoro_screen.dart';
 import 'today_detail_router.dart';
 import 'todo_screen.dart';
@@ -89,7 +90,7 @@ class TodayScreen extends StatelessWidget {
         children: [
           // 日期卡
           AppSurfaceCard(
-            onTap: () => _showCalendarPicker(context, now),
+            onTap: () => _go(context, AlmanacScreen(initialDate: now)),
             padding: const EdgeInsets.all(16),
             borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
@@ -112,7 +113,7 @@ class TodayScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${now.month}月${now.day}日 · 星期${_weekday(now.weekday)}',
+                        '打卡万年历 · ${now.month}月${now.day}日 · 星期${_weekday(now.weekday)}',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
@@ -349,58 +350,77 @@ class TodayScreen extends StatelessWidget {
             ),
 
           // 目标进度
-          if (activeGoals.isNotEmpty)
-            _section(
-              '进行中的目标',
-              onMore: () =>
-                  TodayDetailRouter.open(context, TodaySectionKind.goals),
-              child: Column(
-                children: activeGoals.map((g) {
-                  final p = g.computedProgress;
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(
-                      goalIconFromName(g.icon),
-                      color: Color(g.colorValue),
-                      size: 18,
-                    ),
-                    title: Text(g.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: p,
-                            minHeight: 5,
-                            color: Color(g.colorValue),
-                            backgroundColor: Color(
-                              g.colorValue,
-                            ).withValues(alpha: 0.15),
-                          ),
-                        ),
-                        Text(
-                          '${(p * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                    onTap: () => TodayDetailRouter.open(
+          _section(
+            activeGoals.isEmpty ? '目标' : '进行中的目标',
+            actionLabel: activeGoals.isEmpty ? '新建' : '查看',
+            onMore: () => activeGoals.isEmpty
+                ? Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GoalEditScreen()),
+                  )
+                : TodayDetailRouter.open(context, TodaySectionKind.goals),
+            child: activeGoals.isEmpty
+                ? ListTile(
+                    leading: const Icon(Icons.flag_circle_outlined),
+                    title: const Text('新建目标'),
+                    subtitle: const Text('从今日页直接创建，不必进入目标管理'),
+                    onTap: () => Navigator.push(
                       context,
-                      TodaySectionKind.goals,
-                      id: g.id,
+                      MaterialPageRoute(builder: (_) => const GoalEditScreen()),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
+                  )
+                : Column(
+                    children: activeGoals.map((g) {
+                      final p = g.computedProgress;
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          goalIconFromName(g.icon),
+                          color: Color(g.colorValue),
+                          size: 18,
+                        ),
+                        title: Text(g.title),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: p,
+                                minHeight: 5,
+                                color: Color(g.colorValue),
+                                backgroundColor: Color(
+                                  g.colorValue,
+                                ).withValues(alpha: 0.15),
+                              ),
+                            ),
+                            Text(
+                              '${(p * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                        onTap: () => TodayDetailRouter.open(
+                          context,
+                          TodaySectionKind.goals,
+                          id: g.id,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _section(String title, {required Widget child, VoidCallback? onMore}) {
+  Widget _section(
+    String title, {
+    required Widget child,
+    VoidCallback? onMore,
+    String? actionLabel,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: AppSurfaceCard(
@@ -412,7 +432,7 @@ class TodayScreen extends StatelessWidget {
           children: [
             AppSectionHeader(
               title: title,
-              actionLabel: onMore == null ? null : '查看',
+              actionLabel: onMore == null ? null : actionLabel ?? '查看',
               onAction: onMore,
             ),
             child,
@@ -443,61 +463,6 @@ class TodayScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => BrandRouteSurface(child: screen)),
-    );
-  }
-
-  Future<void> _showCalendarPicker(BuildContext context, DateTime now) async {
-    final result = await AppDatePicker.show(
-      context,
-      initialDate: now,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2099, 12, 31),
-      title: '万年历',
-      subtitle: '选择公历日期，查看对应农历与节日',
-    );
-    if (result == null || !context.mounted) return;
-    final picked = result.date;
-    final lunar = LunarCalendar.fromSolar(picked);
-    final term = LunarCalendar.solarTerm(picked);
-    final festival =
-        LunarCalendar.solarFestival(picked) ??
-        LunarCalendar.lunarFestival(lunar);
-    showDialog(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('万年历'),
-        icon: const Icon(Icons.calendar_month_outlined),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${picked.year}年${picked.month}月${picked.day}日 · 星期${_weekday(picked.weekday)}',
-            ),
-            const SizedBox(height: 8),
-            Text(result.lunarText),
-            if (term != null || festival != null) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (term != null)
-                    _chip(term, Theme.of(ctx).colorScheme.primary),
-                  if (festival != null)
-                    _chip(festival, Theme.of(ctx).colorScheme.tertiary),
-                ],
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
     );
   }
 }

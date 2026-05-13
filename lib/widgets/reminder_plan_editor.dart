@@ -564,7 +564,7 @@ String _formatTimeOfDay(TimeOfDay time) {
 
 TimeOfDay nextHalfHourTimeOfDay([DateTime? from]) {
   final now = from ?? DateTime.now();
-  if (now.minute == 0 || now.minute < 30) {
+  if (now.minute < 30) {
     return TimeOfDay(hour: now.hour, minute: 30);
   }
   return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);

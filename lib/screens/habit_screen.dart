@@ -432,14 +432,14 @@ class _HabitScreenState extends State<HabitScreen>
                         child: Row(
                           children: [
                             SizedBox(
-                              width: 56,
-                              height: 56,
+                              width: 68,
+                              height: 68,
                               child: Stack(
                                 alignment: Alignment.center,
                                 children: [
                                   CircularProgressIndicator(
                                     value: provider.todayOverallProgress,
-                                    strokeWidth: 5,
+                                    strokeWidth: 4,
                                     backgroundColor: cs.primary.withValues(
                                       alpha: 0.12,
                                     ),
@@ -447,7 +447,7 @@ class _HabitScreenState extends State<HabitScreen>
                                   Text(
                                     '${(provider.todayOverallProgress * 100).toInt()}%',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w400,
                                       color: cs.primary,
                                     ),

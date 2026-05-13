@@ -350,12 +350,30 @@ class _TodoScreenState extends State<TodoScreen> {
     final s = context.watch<ThemeProvider>().brand.strings;
     final quadrantGroups = todoProvider.quadrantGroups;
     final listGroups = todoProvider.listGroupedTodos;
+    final overdueCount = todoProvider.overdueTodos.length;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(s.todoTitle),
         actions: [
+          if (overdueCount > 0)
+            TextButton.icon(
+              onPressed: () async {
+                await context.read<TodoProvider>().postponeOverdue(
+                  DateTime.now(),
+                );
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('已顺延 $overdueCount 个逾期任务'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.update_outlined, size: 18),
+              label: const Text('顺延'),
+            ),
           IconButton(
             icon: Icon(_isMatrixView ? Icons.list : Icons.grid_view),
             onPressed: () => setState(() => _isMatrixView = !_isMatrixView),

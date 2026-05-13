@@ -1619,17 +1619,6 @@ class _SectionCard extends StatelessWidget {
                 ),
           children: [
             ...children,
-            if (onSave != null) ...[
-              const SizedBox(height: DesignTokens.spaceMd),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonalIcon(
-                  onPressed: onSave,
-                  icon: const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('保存'),
-                ),
-              ),
-            ],
           ],
         ),
       ),

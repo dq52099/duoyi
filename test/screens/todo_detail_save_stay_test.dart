@@ -7,20 +7,17 @@ import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/todo_detail_screen.dart';
 
-/// TodoDetailScreen "保存不返回" 路由快照测试（Task 9）。
+/// TodoDetailScreen 保存返回路由测试。
 ///
 /// Feature: app-alignment-overhaul
-/// Property 18 (P18): ∀ TodoDetailScreen.save() 调用：Navigator 栈顶路由在
-///                    调用前后保持同一路由实例（`ModalRoute.of(context).isCurrent`
-///                    与 `settings.name` 均不变）。
+/// Property 18 (P18): 保存成功或无改动点击保存时，详情页返回上一页。
 ///
 /// Validates: Requirements 2.3, 2.4, 2.5
 ///
 /// 用例形态：
 /// - 在一个 `Navigator` 下从 `/home` push 一个 detail route；
 /// - 在详情页中编辑标题并点 AppBar 的保存按钮；
-/// - 断言：detail route 仍在栈顶、是 `isCurrent = true`、"已保存" snackbar 可见、
-///   "home" 页面的入口 Text 不可见（说明没有 pop 回去）。
+/// - 断言：保存后回到 home，provider 已持久化修改。
 /// - 再覆盖几个关键状态转移：脏 → 返回 → 确认弹窗 → 取消/放弃。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,8 +65,8 @@ void main() {
     );
   }
 
-  group('P18 - save does not pop the route', () {
-    testWidgets('编辑标题 → 点 AppBar check：detail 路由仍在栈顶，显示已保存', (tester) async {
+  group('P18 - save returns to previous route', () {
+    testWidgets('编辑标题 → 点 AppBar check：保存并返回 home', (tester) async {
       final (provider, item) = await buildProviderWithOne();
 
       await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
@@ -84,15 +81,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(TodoDetailScreen), findsOneWidget);
 
-      // 快照保存前的栈顶路由信息。
-      final BuildContext detailCtx = tester.element(
-        find.byType(TodoDetailScreen),
-      );
-      final ModalRoute<Object?>? beforeRoute = ModalRoute.of(detailCtx);
-      expect(beforeRoute, isNotNull);
-      expect(beforeRoute!.isCurrent, isTrue);
-      expect(beforeRoute.settings.name, '/todo-detail');
-
       // 编辑标题，让页面进入 editing 状态。
       final titleField = find.widgetWithText(TextField, '任务名称');
       expect(titleField, findsOneWidget);
@@ -103,51 +91,17 @@ void main() {
       final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
       expect(checkBtn, findsOneWidget);
       await tester.tap(checkBtn);
-      // 等 updateTodo 的 Future、snackbar 弹出与可能的过渡动画。
-      // 不用 pumpAndSettle，否则会一直等到 snackbar 1200ms 自行消失。
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
-      // 核心断言：detail 仍是当前路由，没有 pop。
-      expect(
-        find.byType(TodoDetailScreen),
-        findsOneWidget,
-        reason: 'save 不应触发 Navigator.pop，详情页必须仍在栈顶',
-      );
-      final BuildContext detailCtxAfter = tester.element(
-        find.byType(TodoDetailScreen),
-      );
-      final ModalRoute<Object?>? afterRoute = ModalRoute.of(detailCtxAfter);
-      expect(afterRoute, isNotNull);
-      expect(afterRoute!.isCurrent, isTrue, reason: 'save 之后栈顶路由仍应是 detail');
-      expect(
-        afterRoute.settings.name,
-        beforeRoute.settings.name,
-        reason: 'save 前后路由 name 不变',
-      );
-      expect(
-        identical(afterRoute, beforeRoute),
-        isTrue,
-        reason: 'save 不应替换路由实例',
-      );
-
-      // home-root 不可见（证明没有退回到上一路由）。
-      expect(find.text('home-root'), findsNothing);
-
-      // inline banner "已保存" 可见。
-      expect(
-        find.text('已保存'),
-        findsOneWidget,
-        reason: 'save 成功后应以 SnackBar 展示"已保存"反馈',
-      );
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(find.text('home-root'), findsOneWidget);
 
       // Provider 真的被写入了新标题。
       final stored = provider.todos.firstWhere((t) => t.id == item.id);
       expect(stored.title, '修改后的标题');
     });
 
-    testWidgets('clean 状态点保存：路由也保持不变，仅提示"无未保存改动"', (tester) async {
+    testWidgets('clean 状态点保存：直接返回 home', (tester) async {
       final (provider, item) = await buildProviderWithOne();
 
       await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
@@ -155,24 +109,14 @@ void main() {
       await tester.tap(find.text('open-detail'));
       await tester.pumpAndSettle();
 
-      final BuildContext detailCtx = tester.element(
-        find.byType(TodoDetailScreen),
-      );
-      final ModalRoute<Object?>? before = ModalRoute.of(detailCtx);
-
       // 不做任何编辑，直接点 check。
       final checkBtn = find.widgetWithIcon(IconButton, Icons.check);
       expect(checkBtn, findsOneWidget);
       await tester.tap(checkBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
-      expect(find.byType(TodoDetailScreen), findsOneWidget);
-      final BuildContext after = tester.element(find.byType(TodoDetailScreen));
-      expect(ModalRoute.of(after)!.isCurrent, isTrue);
-      expect(identical(ModalRoute.of(after), before), isTrue);
-      expect(find.text('无未保存改动'), findsOneWidget);
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(find.text('home-root'), findsOneWidget);
     });
 
     testWidgets('设置重复与到期提醒后保存：provider 持久化新值', (tester) async {
