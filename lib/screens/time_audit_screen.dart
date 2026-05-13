@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../models/time_entry.dart';
 import '../providers/time_audit_provider.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/surface_components.dart';
 
@@ -503,11 +504,12 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   }
 
   Future<void> _pickStart() async {
-    final date = await showDatePicker(
-      context: context,
+    final date = await AppDatePicker.pickSolar(
+      context,
       initialDate: _startAt,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      title: '开始日期',
     );
     if (date == null) return;
     if (!mounted) return;
@@ -533,11 +535,12 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   }
 
   Future<void> _pickEnd() async {
-    final date = await showDatePicker(
-      context: context,
+    final date = await AppDatePicker.pickSolar(
+      context,
       initialDate: _endAt,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      title: '结束日期',
     );
     if (date == null) return;
     if (!mounted) return;

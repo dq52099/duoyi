@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/lunar_calendar.dart';
+import '../widgets/app_date_picker.dart';
 
 /// 黄历 / 万年历
 class AlmanacScreen extends StatefulWidget {
@@ -24,11 +25,12 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await AppDatePicker.pickSolar(
+      context,
       initialDate: _date,
       firstDate: DateTime(1900),
       lastDate: DateTime(2099, 12, 31),
+      title: '万年历',
     );
     if (picked != null) setState(() => _date = picked);
   }

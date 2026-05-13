@@ -14,6 +14,7 @@ import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/brand_background.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/surface_components.dart';
 import 'diary_screen.dart';
 import 'habit_screen.dart';
@@ -55,11 +56,13 @@ class TodayScreen extends StatelessWidget {
       todayTodosCount++;
       if (todo.isCompleted) {
         todayTodoCompleted++;
-      } else {
-        todayTodos.add(todo);
       }
+      todayTodos.add(todo);
     }
-    todayTodos.sort((a, b) => a.quadrant.index.compareTo(b.quadrant.index));
+    todayTodos.sort((a, b) {
+      if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
+      return a.quadrant.index.compareTo(b.quadrant.index);
+    });
 
     final todayCourses = courseP.todayCourses
       ..sort((a, b) => a.startSection.compareTo(b.startSection));
@@ -227,11 +230,11 @@ class TodayScreen extends StatelessWidget {
               onMore: () =>
                   TodayDetailRouter.open(context, TodaySectionKind.todos),
               child: Column(
-                children: todayTodos.take(5).map((t) {
+                children: todayTodos.take(6).map((t) {
                   return ListTile(
                     dense: true,
                     leading: Checkbox(
-                      value: false,
+                      value: t.isCompleted,
                       shape: const CircleBorder(),
                       onChanged: (_) =>
                           context.read<TodoProvider>().toggleTodo(t.id),
@@ -240,6 +243,14 @@ class TodayScreen extends StatelessWidget {
                       t.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        decoration: t.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                        color: t.isCompleted
+                            ? cs.onSurface.withValues(alpha: 0.52)
+                            : null,
+                      ),
                     ),
                     subtitle: t.listGroupName == null
                         ? null
@@ -436,11 +447,13 @@ class TodayScreen extends StatelessWidget {
   }
 
   Future<void> _showCalendarPicker(BuildContext context, DateTime now) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await AppDatePicker.pickSolar(
+      context,
       initialDate: now,
       firstDate: DateTime(1900),
       lastDate: DateTime(2099, 12, 31),
+      title: '万年历',
+      subtitle: '选择公历日期，查看对应农历与节日',
     );
     if (picked == null || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

@@ -105,6 +105,18 @@ class LunarCalendar {
     return (_lunarInfo[year - _baseYear] & (0x10000 >> month)) != 0 ? 30 : 29;
   }
 
+  static int daysInMonth(int year, int month, {bool isLeap = false}) {
+    if (year < _baseYear || year >= _baseYear + _lunarInfo.length) return 29;
+    if (month < 1 || month > 12) return 29;
+    if (isLeap && _leapMonth(year) == month) return _leapDays(year);
+    return _monthDays(year, month);
+  }
+
+  static String monthName(int month, {bool isLeap = false}) =>
+      _monthName(month, isLeap);
+
+  static String dayName(int day) => _dayName(day);
+
   /// 公历 → 农历
   static LunarDate fromSolar(DateTime date) {
     int offset = date.difference(_baseDate).inDays;

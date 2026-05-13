@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/recurrence.dart';
+import 'app_date_picker.dart';
 import 'surface_components.dart';
 
 /// 重复规则编辑弹出层。
@@ -184,12 +185,13 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                       onPressed: () => setState(() => _endDate = null),
                     ),
               onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
+                final picked = await AppDatePicker.pickSolar(
+                  context,
                   initialDate:
                       _endDate ?? DateTime.now().add(const Duration(days: 90)),
                   firstDate: DateTime.now(),
                   lastDate: DateTime(2099, 12, 31),
+                  title: '结束日期',
                 );
                 if (picked != null) setState(() => _endDate = picked);
               },

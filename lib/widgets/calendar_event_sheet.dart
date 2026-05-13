@@ -13,6 +13,7 @@ import '../providers/todo_provider.dart';
 import '../screens/countdown_screen.dart';
 import '../screens/time_audit_screen.dart';
 import '../screens/today_detail_router.dart';
+import 'app_date_picker.dart';
 import 'surface_components.dart';
 
 Future<void> showCalendarEventSheet(BuildContext context, CalendarEvent event) {
@@ -203,11 +204,12 @@ class CalendarEventSheet extends StatelessWidget {
   Future<void> _reschedule(BuildContext context) async {
     final sourceId = event.sourceId;
     if (sourceId == null) return;
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await AppDatePicker.pickSolar(
+      context,
       initialDate: event.date,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      title: '调整日期',
     );
     if (picked == null || !context.mounted) return;
 

@@ -5,6 +5,7 @@ import '../services/alarm_service.dart';
 import '../providers/notification_service.dart';
 import '../services/permission_health_service.dart';
 import '../providers/preferences_provider.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/notification_health_card.dart';
 import '../widgets/surface_components.dart';
 
@@ -232,6 +233,117 @@ class PreferencesScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          AppSettingsSection(
+            title: '每日提醒',
+            subtitle: '汇总今日任务、明日计划和逾期日程',
+            children: [
+              AppSwitchTile(
+                icon: Icons.notifications_active_outlined,
+                color: Colors.orange,
+                value: p.dailyReminderEnabled,
+                title: '开启每日提醒',
+                subtitle:
+                    '${p.dailyReminderHour.toString().padLeft(2, '0')}:${p.dailyReminderMinute.toString().padLeft(2, '0')} · ${_repeatDaysLabel(p.dailyReminderRepeatDays)}',
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setDailyReminderEnabled(v),
+              ),
+              AppSettingsTile(
+                icon: Icons.schedule,
+                color: Colors.deepOrange,
+                title: '提醒时间',
+                subtitle: '到点发送带声音和震动的提醒',
+                trailing: TextButton(
+                  onPressed: () async {
+                    final picked = await AppTimePicker.show(
+                      context,
+                      initialTime: TimeOfDay(
+                        hour: p.dailyReminderHour,
+                        minute: p.dailyReminderMinute,
+                      ),
+                      title: '每日提醒时间',
+                      subtitle: '推荐设置在晚间复盘或早间计划时间',
+                    );
+                    if (picked == null || !context.mounted) return;
+                    await context
+                        .read<PreferencesProvider>()
+                        .setDailyReminderTime(picked.hour, picked.minute);
+                  },
+                  child: Text(
+                    '${p.dailyReminderHour.toString().padLeft(2, '0')}:${p.dailyReminderMinute.toString().padLeft(2, '0')}',
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: List.generate(7, (i) {
+                    final day = i + 1;
+                    final selected = p.dailyReminderRepeatDays.contains(day);
+                    return FilterChip(
+                      label: Text(_weekdayLabel(day)),
+                      selected: selected,
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        final next = [...p.dailyReminderRepeatDays];
+                        if (selected) {
+                          next.remove(day);
+                        } else {
+                          next.add(day);
+                        }
+                        context
+                            .read<PreferencesProvider>()
+                            .setDailyReminderRepeatDays(next);
+                      },
+                    );
+                  }),
+                ),
+              ),
+              AppSwitchTile(
+                icon: Icons.today_outlined,
+                color: Colors.blue,
+                value: p.dailyReminderIncludeTodayTasks,
+                title: '任务：今日任务',
+                subtitle: '提醒中包含今日未完成任务数量',
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setDailyReminderIncludeTodayTasks(v),
+              ),
+              AppSwitchTile(
+                icon: Icons.next_plan_outlined,
+                color: Colors.teal,
+                value: p.dailyReminderIncludeTomorrowPlan,
+                title: '任务：明日计划',
+                subtitle: '提醒中包含明日已安排任务数量',
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setDailyReminderIncludeTomorrowPlan(v),
+              ),
+              AppSwitchTile(
+                icon: Icons.warning_amber_outlined,
+                color: Colors.red,
+                value: p.dailyReminderIncludeOverdue,
+                title: '任务：逾期日程',
+                subtitle: '提醒中包含已过期未完成任务',
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setDailyReminderIncludeOverdue(v),
+              ),
+              AppSwitchTile(
+                icon: Icons.beach_access_outlined,
+                color: Colors.green,
+                value: p.dailyReminderPauseHolidays,
+                title: '法定节假日暂停提醒',
+                subtitle: '遇到内置节假日时顺延到下一个提醒日',
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setDailyReminderPauseHolidays(v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Consumer<NotificationService>(
             builder: (context, notif, child) =>
                 _NotificationHealthSection(notificationService: notif),
@@ -272,6 +384,20 @@ class PreferencesScreen extends StatelessWidget {
       default:
         return '今日';
     }
+  }
+
+  String _repeatDaysLabel(List<int> days) {
+    if (days.length == 7) return '每天';
+    if (days.length == 5 && days.every((d) => d >= 1 && d <= 5)) {
+      return '工作日';
+    }
+    return days.map(_weekdayLabel).join('/');
+  }
+
+  String _weekdayLabel(int day) {
+    const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    if (day < 1 || day > 7) return '周?';
+    return names[day - 1];
   }
 }
 

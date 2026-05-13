@@ -15,7 +15,9 @@ import '../models/todo.dart';
 import '../widgets/calendar_month_grid.dart';
 import '../widgets/calendar_week_strip.dart';
 import '../widgets/calendar_day_agenda.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/surface_components.dart';
+import 'search_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   final GlobalKey? todoTabKey;
@@ -106,6 +108,22 @@ class _CalendarScreenState extends State<CalendarScreen>
     setState(() => _selectedDay = _selectedDay.add(const Duration(days: 7)));
   }
 
+  Future<void> _pickDate() async {
+    final picked = await AppDatePicker.pickSolar(
+      context,
+      initialDate: _selectedDay,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2099, 12, 31),
+      title: '选择日期',
+      subtitle: '手动跳转到指定日期',
+    );
+    if (picked == null) return;
+    setState(() {
+      _selectedDay = picked;
+      _focusedMonth = DateTime(picked.year, picked.month);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final todoProvider = context.watch<TodoProvider>();
@@ -149,6 +167,16 @@ class _CalendarScreenState extends State<CalendarScreen>
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         toolbarHeight: 96,
+        actions: [
+          IconButton(
+            tooltip: '搜索',
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+          ),
+        ],
         titleSpacing: 0,
         flexibleSpace: SafeArea(
           child: Column(
@@ -165,10 +193,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                         onPressed: _previousMonth,
                       ),
                       GestureDetector(
-                        onTap: () => setState(() {
-                          _selectedDay = DateTime.now();
-                          _focusedMonth = DateTime.now();
-                        }),
+                        onTap: _pickDate,
                         child: Text(
                           monthLabel,
                           style: const TextStyle(
@@ -195,8 +220,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                         onPressed: _previousWeek,
                       ),
                       GestureDetector(
-                        onTap: () =>
-                            setState(() => _selectedDay = DateTime.now()),
+                        onTap: _pickDate,
                         child: Text(
                           weekLabel,
                           style: const TextStyle(
@@ -215,11 +239,14 @@ class _CalendarScreenState extends State<CalendarScreen>
               if (_tabController.index == 2)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w400,
+                  child: GestureDetector(
+                    onTap: _pickDate,
+                    child: Text(
+                      '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),

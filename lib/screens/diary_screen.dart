@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/diary_entry.dart';
 import '../providers/diary_provider.dart';
 import '../core/lunar_calendar.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/mood_heatmap.dart';
 import '../widgets/surface_components.dart';
@@ -510,11 +511,12 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
           // 日期/农历
           GestureDetector(
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
+              final picked = await AppDatePicker.pickSolar(
+                context,
                 initialDate: _date,
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2099, 12, 31),
+                title: '日记日期',
               );
               if (picked != null) setState(() => _date = picked);
             },

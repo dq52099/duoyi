@@ -12,6 +12,7 @@ import '../providers/share_provider.dart';
 import '../providers/todo_provider.dart';
 import '../widgets/recurrence_picker.dart';
 import '../widgets/reminder_health_hint.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/reminder_plan_editor.dart';
 import '../widgets/surface_components.dart';
 
@@ -312,11 +313,13 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   }
 
   Future<void> _pickDueDate() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await AppDatePicker.pickSolar(
+      context,
       initialDate: _todo.dueDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2099, 12, 31),
+      title: '截止日期',
+      subtitle: '使用统一日历选择任务日期',
     );
     if (picked != null) {
       setState(() => _todo = _todo.copyWith(dueDate: picked));
@@ -487,7 +490,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               decoration: const InputDecoration(labelText: '任务名称'),
               style: const TextStyle(
                 fontSize: DesignTokens.fontSizeLg,
-                fontWeight: DesignTokens.fontWeightSemiBold,
+                fontWeight: FontWeight.w400,
               ),
               onChanged: (_) => _markEditing(),
             ),
@@ -633,7 +636,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 const Text(
                   '子任务',
                   style: TextStyle(
-                    fontWeight: DesignTokens.fontWeightSemiBold,
+                    fontWeight: FontWeight.w400,
                     fontSize: DesignTokens.fontSizeMd,
                   ),
                 ),
@@ -642,7 +645,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   '${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
                   style: TextStyle(
                     color: cs.primary,
-                    fontWeight: DesignTokens.fontWeightSemiBold,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
@@ -690,8 +693,21 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                       value: s.isCompleted,
                       onChanged: canEdit
                           ? (_) {
-                              provider.toggleSubtask(widget.todoId, s.id);
-                              setState(() {});
+                              provider.toggleSubtask(widget.todoId, s.id).then((
+                                _,
+                              ) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _todo = context
+                                      .read<TodoProvider>()
+                                      .todos
+                                      .firstWhere(
+                                        (t) => t.id == widget.todoId,
+                                        orElse: () => _todo,
+                                      );
+                                  _baseline = _snapshot(_todo);
+                                });
+                              });
                             }
                           : null,
                     ),
@@ -708,8 +724,21 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                       icon: const Icon(Icons.close, size: 16),
                       onPressed: canEdit
                           ? () {
-                              provider.deleteSubtask(widget.todoId, s.id);
-                              setState(() {});
+                              provider.deleteSubtask(widget.todoId, s.id).then((
+                                _,
+                              ) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _todo = context
+                                      .read<TodoProvider>()
+                                      .todos
+                                      .firstWhere(
+                                        (t) => t.id == widget.todoId,
+                                        orElse: () => _todo,
+                                      );
+                                  _baseline = _snapshot(_todo);
+                                });
+                              });
                             }
                           : null,
                     ),

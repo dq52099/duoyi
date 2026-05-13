@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/course_schedule.dart';
 import '../providers/course_provider.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -437,11 +438,12 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
+              final picked = await AppDatePicker.pickSolar(
+                context,
                 initialDate: _termStart,
                 firstDate: DateTime(2020),
                 lastDate: DateTime(2099, 12, 31),
+                title: '开学日期',
               );
               if (picked != null) {
                 final monday = picked.subtract(

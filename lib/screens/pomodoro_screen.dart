@@ -261,7 +261,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: [25, 45, 60]
+                      children: [15, 25, 30, 45, 60, 90]
                           .map(
                             (min) => ChoiceChip(
                               label: Text('$min 分钟'),
@@ -276,6 +276,16 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                           .toList(),
                     ),
                     const SizedBox(height: 12),
+                    AppActionTile(
+                      icon: Icons.assignment_outlined,
+                      label: '专注任务',
+                      subtitle: state.taskName?.isNotEmpty == true
+                          ? state.taskName!
+                          : '选择或输入本轮专注内容',
+                      color: color,
+                      onTap: () => _showTaskPresetPicker(context, provider),
+                    ),
+                    const SizedBox(height: 10),
                     AppActionTile(
                       icon: _soundIcon(state.whiteNoiseSound),
                       label: '白噪音',
@@ -395,6 +405,12 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return '咖啡馆';
       case 'waves':
         return '海浪';
+      case 'brown_noise':
+        return '低频棕噪';
+      case 'night_rain':
+        return '夜雨';
+      case 'fan':
+        return '风扇';
       default:
         return '无白噪音';
     }
@@ -410,6 +426,12 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return Icons.local_cafe;
       case 'waves':
         return Icons.waves;
+      case 'brown_noise':
+        return Icons.graphic_eq;
+      case 'night_rain':
+        return Icons.nights_stay_outlined;
+      case 'fan':
+        return Icons.air;
       default:
         return Icons.music_off;
     }
@@ -426,6 +448,9 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       {'id': 'forest', 'label': '宁静森林', 'icon': Icons.park},
       {'id': 'cafe', 'label': '午后咖啡馆', 'icon': Icons.local_cafe},
       {'id': 'waves', 'label': '海浪拍岸', 'icon': Icons.waves},
+      {'id': 'brown_noise', 'label': '低频棕噪', 'icon': Icons.graphic_eq},
+      {'id': 'night_rain', 'label': '静夜细雨', 'icon': Icons.nights_stay_outlined},
+      {'id': 'fan', 'label': '柔和风扇', 'icon': Icons.air},
     ];
 
     showAppModalSheet(
@@ -444,6 +469,49 @@ class _PomodoroScreenState extends State<PomodoroScreen>
             )
             .toList(),
         onSelected: provider.setWhiteNoiseSound,
+      ),
+    );
+  }
+
+  void _showTaskPresetPicker(BuildContext context, PomodoroProvider provider) {
+    final presets = const ['深度工作', '阅读', '写作', '复盘', '运动', '学习'];
+    showAppModalSheet(
+      context: context,
+      builder: (ctx) => AppModalSheet(
+        title: '专注任务',
+        subtitle: '选择预设或手动输入',
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _editTaskName(context, provider, provider.state.taskName ?? '');
+            },
+            child: const Text('手动输入'),
+          ),
+          if (provider.state.taskName?.isNotEmpty == true)
+            TextButton(
+              onPressed: () {
+                provider.setTaskName(null);
+                Navigator.pop(ctx);
+              },
+              child: const Text('清除'),
+            ),
+        ],
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final preset in presets)
+              ActionChip(
+                avatar: const Icon(Icons.assignment_outlined, size: 16),
+                label: Text(preset),
+                onPressed: () {
+                  provider.setTaskName(preset);
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -211,16 +211,29 @@ class MineScreen extends StatelessWidget {
             ),
           ),
 
-          // AI weekly review
-          if (ai.enabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: _AiWeeklyReviewCard(
-                todoProvider: todoProvider,
-                pomodoroProvider: pomodoroProvider,
-                habitProvider: habitProvider,
-              ),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: ai.enabled
+                ? _AiWeeklyReviewCard(
+                    todoProvider: todoProvider,
+                    pomodoroProvider: pomodoroProvider,
+                    habitProvider: habitProvider,
+                  )
+                : AppInfoBanner(
+                    icon: Icons.auto_awesome,
+                    title: 'AI 助手',
+                    message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
+                    color: Colors.purple,
+                    onTap: auth.state.isAdmin
+                        ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AdminScreen(),
+                            ),
+                          )
+                        : null,
+                  ),
+          ),
 
           const SizedBox(height: 8),
           _Section(title: '效率与工具'),
@@ -448,7 +461,7 @@ class MineScreen extends StatelessWidget {
           ),
           _Tile(
             icon: Icons.widgets_outlined,
-            label: '桌面小组件',
+            label: '小部件菜单',
             color: Colors.teal,
             onTap: () => _widgetHelpDialog(context),
           ),
@@ -715,16 +728,31 @@ class MineScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AppDialog(
-        title: const Text('桌面小组件'),
-        content: const Column(
+        title: const Text('小部件菜单'),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('已内置两个 Android 小组件：多仪概览、今日待办。'),
-            SizedBox(height: 8),
-            Text('在系统桌面长按空白处，选择“小组件”，找到“多仪”后拖到桌面。'),
-            SizedBox(height: 8),
-            Text('若列表没有出现，请打开一次多仪并回到桌面刷新。'),
+            _WidgetCatalogTile(
+              icon: Icons.dashboard_customize_outlined,
+              title: '多仪概览',
+              subtitle: '今日待办数、习惯完成率、今日专注和日程摘要',
+              color: Colors.teal,
+            ),
+            _WidgetCatalogTile(
+              icon: Icons.checklist_rtl_outlined,
+              title: '今日待办',
+              subtitle: '展示前三个今日任务，可从桌面直接进入任务',
+              color: Colors.blue,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '在系统桌面长按空白处，选择“小组件”，找到“多仪”后拖到桌面。',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -759,6 +787,33 @@ class MineScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WidgetCatalogTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+
+  const _WidgetCatalogTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: 0.14),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
     );
   }
 }

@@ -42,6 +42,9 @@ class FocusSoundService {
     'forest': 'sounds/white_noise/forest.mp3',
     'cafe': 'sounds/white_noise/cafe.mp3',
     'waves': 'sounds/white_noise/waves.mp3',
+    'brown_noise': 'sounds/white_noise/brown_noise.mp3',
+    'night_rain': 'sounds/white_noise/night_rain.mp3',
+    'fan': 'sounds/white_noise/fan.mp3',
   };
 
   /// 切换音轨；传入 `'none'` 等价于 [stop]。
@@ -58,7 +61,7 @@ class FocusSoundService {
     }
     try {
       await _player.setReleaseMode(ReleaseMode.loop);
-      await _player.setPlayerMode(PlayerMode.lowLatency);
+      await _player.setPlayerMode(PlayerMode.mediaPlayer);
       await _player.setVolume(_volume);
       await _player.play(AssetSource(asset));
       _currentSound = sound;

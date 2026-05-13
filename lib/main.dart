@@ -31,6 +31,7 @@ import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
+import 'services/holiday_calendar.dart';
 import 'services/local_notifications.dart';
 import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
@@ -258,6 +259,14 @@ void main() async {
   themeProvider.addListener(refreshAchievements);
   // 初次同步
   await _startupGuard('initial reminder resync', resyncReminders);
+  Future<void> syncDailyDigestReminder() => _syncDailyDigestReminder(
+    preferencesProvider,
+    notificationService,
+    todoProvider,
+  );
+  preferencesProvider.addListener(syncDailyDigestReminder);
+  todoProvider.addListener(syncDailyDigestReminder);
+  await _startupGuard('daily digest reminder', syncDailyDigestReminder);
   refreshUserStats();
   refreshAchievements();
 
@@ -456,6 +465,64 @@ Future<void> _pushHomeWidget(
     todoTop3: top3,
     todoTop3Ids: top3Ids,
     todayEventSummary: top3.isEmpty ? '今日没有日程' : '今日：${top3.first}',
+  );
+}
+
+Future<void> _syncDailyDigestReminder(
+  PreferencesProvider prefs,
+  NotificationService notification,
+  TodoProvider todos,
+) async {
+  const id = 880017;
+  await notification.cancel(id);
+  if (!prefs.dailyReminderEnabled) return;
+
+  final now = DateTime.now();
+  var target = DateTime(
+    now.year,
+    now.month,
+    now.day,
+    prefs.dailyReminderHour,
+    prefs.dailyReminderMinute,
+  );
+  if (!target.isAfter(now)) target = target.add(const Duration(days: 1));
+
+  for (var i = 0; i < 14; i++) {
+    final weekdayAllowed = prefs.dailyReminderRepeatDays.contains(
+      target.weekday,
+    );
+    final holidayPaused =
+        prefs.dailyReminderPauseHolidays && HolidayCalendar.isHoliday(target);
+    if (weekdayAllowed && !holidayPaused) break;
+    target = target.add(const Duration(days: 1));
+  }
+
+  final today = DateTime(now.year, now.month, now.day);
+  final tomorrow = today.add(const Duration(days: 1));
+  final todayCount = todos.todos.where((t) {
+    final d = DateTime(t.date.year, t.date.month, t.date.day);
+    return d.isAtSameMomentAs(today) && !t.isCompleted;
+  }).length;
+  final tomorrowCount = todos.todos.where((t) {
+    final d = DateTime(t.date.year, t.date.month, t.date.day);
+    return d.isAtSameMomentAs(tomorrow) && !t.isCompleted;
+  }).length;
+  final overdueCount = todos.todos.where((t) => t.isOverdue).length;
+
+  final pieces = <String>[];
+  if (prefs.dailyReminderIncludeTodayTasks) pieces.add('今日 $todayCount 项');
+  if (prefs.dailyReminderIncludeTomorrowPlan) {
+    pieces.add('明日 $tomorrowCount 项');
+  }
+  if (prefs.dailyReminderIncludeOverdue) pieces.add('逾期 $overdueCount 项');
+  final body = pieces.isEmpty ? '打开多仪整理任务与计划' : pieces.join(' · ');
+
+  await notification.scheduleOnce(
+    id: id,
+    title: '每日提醒',
+    body: body,
+    when: target,
+    payload: 'duoyi://tab/today',
   );
 }
 
@@ -740,6 +807,8 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     final ctx = mainShellKey.currentContext ?? context;
     final provider = Provider.of<TodoProvider>(ctx, listen: false);
     final goalProv = Provider.of<GoalProvider>(ctx, listen: false);
+    final prefs = Provider.of<PreferencesProvider>(ctx, listen: false);
+    final notif = Provider.of<NotificationService>(ctx, listen: false);
 
     // 异步触发，不阻塞 lifecycle 回调。
     // ignore: discarded_futures
@@ -749,6 +818,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
         now,
         goalProvider: goalProv,
       );
+      await _syncDailyDigestReminder(prefs, notif, provider);
     });
   }
 

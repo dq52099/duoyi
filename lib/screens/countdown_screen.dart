@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/countdown_provider.dart';
 import '../models/countdown.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -249,11 +250,12 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             subtitle: Text(targetText),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
+              final picked = await AppDatePicker.pickSolar(
+                context,
                 initialDate: _targetDate,
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
+                title: '目标日期',
               );
               if (picked != null) {
                 setState(() => _targetDate = picked);

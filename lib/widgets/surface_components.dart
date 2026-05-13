@@ -1138,7 +1138,10 @@ class AppDropdownField<T> extends StatelessWidget {
       initialValue: initialValue,
       decoration: inputDecoration,
       items: items,
-      onTap: onTap,
+      onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
+        onTap?.call();
+      },
       onChanged: enabled ? onChanged : null,
       validator: validator,
       onSaved: onSaved,

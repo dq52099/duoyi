@@ -11,6 +11,7 @@ import '../models/recurrence.dart';
 import '../providers/goal_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/alarm_service.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/recurrence_picker.dart';
 import '../widgets/reminder_health_hint.dart';
 import '../widgets/reminder_plan_editor.dart';
@@ -1598,7 +1599,7 @@ class _SectionCard extends StatelessWidget {
             title,
             style: const TextStyle(
               fontSize: DesignTokens.fontSizeMd,
-              fontWeight: DesignTokens.fontWeightSemiBold,
+              fontWeight: FontWeight.w400,
             ),
           ),
           subtitle: subtitle == null
@@ -1619,7 +1620,7 @@ class _SectionCard extends StatelessWidget {
                 child: FilledButton.tonalIcon(
                   onPressed: onSave,
                   icon: const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('保存本模块'),
+                  label: const Text('保存'),
                 ),
               ),
             ],
@@ -1646,11 +1647,12 @@ class _DateField extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
+        final picked = await AppDatePicker.pickSolar(
+          context,
           initialDate: date ?? DateTime.now(),
           firstDate: DateTime(2000),
           lastDate: DateTime(2099, 12, 31),
+          title: label,
         );
         if (picked != null) onPick(picked);
       },
@@ -1685,7 +1687,9 @@ class _DateField extends StatelessWidget {
                   ),
                   Text(
                     date == null ? '未设置' : _formatDate(date!),
-                    style: const TextStyle(fontSize: DesignTokens.fontSizeBase),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: DesignTokens.fontSizeSm),
                   ),
                 ],
               ),
