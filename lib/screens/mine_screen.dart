@@ -34,6 +34,7 @@ import 'export_screen.dart';
 import 'search_screen.dart';
 import 'ai_history_screen.dart';
 import 'preferences_screen.dart';
+import 'integrations_screen.dart';
 import 'share_screen.dart';
 
 class MineScreen extends StatelessWidget {
@@ -447,6 +448,15 @@ class MineScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PreferencesScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.extension_outlined,
+            label: '扩展集成',
+            color: Colors.deepPurple,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const IntegrationsScreen()),
             ),
           ),
           _Tile(

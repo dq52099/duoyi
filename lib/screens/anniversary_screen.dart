@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../models/anniversary.dart';
 import '../providers/anniversary_provider.dart';
@@ -98,7 +99,7 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(context),
         icon: const Icon(Icons.add),
-        label: const Text('添加'),
+        label: Text(I18n.tr('action.add')),
         backgroundColor: cs.primary,
       ),
     );
@@ -187,11 +188,11 @@ class _AnniversaryCard extends StatelessWidget {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('取消'),
+                    child: Text(I18n.tr('action.cancel')),
                   ),
                   FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('删除'),
+                    child: Text(I18n.tr('action.delete')),
                   ),
                 ],
               ),
@@ -512,13 +513,13 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
                     Navigator.pop(context);
                   },
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('删除'),
+                  child: Text(I18n.tr('action.delete')),
                 ),
               ],
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
             onPressed: _save,

@@ -64,6 +64,7 @@ class PomodoroSession {
   final PomodoroType type;
   final String? taskName;
   final String whiteNoiseSound;
+  final String? tag;
 
   PomodoroSession({
     required this.id,
@@ -73,6 +74,7 @@ class PomodoroSession {
     required this.type,
     this.taskName,
     this.whiteNoiseSound = 'none',
+    this.tag,
   });
 
   Map<String, dynamic> toJson() => {
@@ -83,6 +85,7 @@ class PomodoroSession {
     'type': type.index,
     'taskName': taskName,
     'whiteNoiseSound': whiteNoiseSound,
+    'tag': tag,
   };
 
   factory PomodoroSession.fromJson(Map<String, dynamic> json) {
@@ -101,6 +104,7 @@ class PomodoroSession {
       type: PomodoroType.values[json['type']],
       taskName: json['taskName'],
       whiteNoiseSound: sound,
+      tag: json['tag']?.toString(),
     );
   }
 }
@@ -113,6 +117,7 @@ class PomodoroState {
   final int completedSessions;
   final String? taskName;
   final String whiteNoiseSound;
+  final String? tag;
 
   const PomodoroState({
     required this.remainingSeconds,
@@ -122,6 +127,7 @@ class PomodoroState {
     required this.completedSessions,
     this.taskName,
     this.whiteNoiseSound = 'none',
+    this.tag,
   });
 
   double get progress =>
@@ -135,7 +141,9 @@ class PomodoroState {
     int? completedSessions,
     String? taskName,
     String? whiteNoiseSound,
+    String? tag,
     bool clearTaskName = false,
+    bool clearTag = false,
   }) => PomodoroState(
     remainingSeconds: remainingSeconds ?? this.remainingSeconds,
     totalSeconds: totalSeconds ?? this.totalSeconds,
@@ -144,5 +152,6 @@ class PomodoroState {
     completedSessions: completedSessions ?? this.completedSessions,
     taskName: clearTaskName ? null : (taskName ?? this.taskName),
     whiteNoiseSound: whiteNoiseSound ?? this.whiteNoiseSound,
+    tag: clearTag ? null : (tag ?? this.tag),
   );
 }

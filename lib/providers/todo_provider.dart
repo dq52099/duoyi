@@ -17,9 +17,6 @@ class TodoProvider extends ChangeNotifier {
   /// 只有在 [postponeOverdue] 这种显式 hook 里才会尝试转发给调度器，做一次
   /// 额外的重同步。常规写路径依然由 `main.dart` 的 `addListener(resyncReminders)`
   /// 覆盖。
-  ///
-  /// TODO(task-14): 调度器 API 稳定后把 dynamic 兜底调用替换为直接
-  /// `_scheduler!.syncTodos(_todos)` 调用（参见 GoalProvider 4.3 的相同模式）。
   ReminderScheduler? _scheduler;
   TimeAuditProvider? _timeAudit;
 
@@ -527,18 +524,11 @@ class TodoProvider extends ChangeNotifier {
     await _saveToStorage();
     _notify();
 
-    // TODO(task-14): ReminderScheduler.syncTodos 签名稳定后改为直接调用。
+    // 顺延后重新同步提醒调度队列。
     final scheduler = _scheduler;
     if (scheduler != null) {
       try {
-        // ignore: avoid_dynamic_calls
-        final result = (scheduler as dynamic).syncTodos(List.of(_todos));
-        if (result is Future) await result;
-      } on NoSuchMethodError {
-        debugPrint(
-          '[TodoProvider] postponeOverdue: scheduler.syncTodos not yet '
-          'implemented; falling back to no-op. TODO(task-14)',
-        );
+        await scheduler.syncTodos(List.of(_todos));
       } catch (e, st) {
         debugPrint(
           '[TodoProvider] postponeOverdue scheduler sync failed: $e\n$st',

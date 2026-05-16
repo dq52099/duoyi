@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/todo_provider.dart';
@@ -11,6 +12,8 @@ import '../providers/diary_provider.dart';
 import '../providers/countdown_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/time_audit_provider.dart';
+import '../models/calendar_event.dart';
+import '../models/time_entry.dart';
 import '../models/todo.dart';
 import '../widgets/calendar_month_grid.dart';
 import '../widgets/calendar_week_strip.dart';
@@ -32,6 +35,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   late TabController _tabController;
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedMonth = DateTime.now();
+  Set<CalendarEventType>? _activeTypes;
 
   @override
   void initState() {
@@ -65,7 +69,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
+            child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
             onPressed: () {
@@ -76,7 +80,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                 Navigator.pop(ctx);
               }
             },
-            child: const Text('添加'),
+            child: Text(I18n.tr('action.add')),
           ),
         ],
       ),
@@ -153,7 +157,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       timeEntries: timeAuditProvider.entries,
     );
 
-    final dateTypes = calendarProvider.dateEventTypes;
+    final dateTypes = calendarProvider.filteredDateEventTypes(_activeTypes);
     final monthLabel = '${_focusedMonth.year}年${_focusedMonth.month}月';
     final weekStart = _selectedDay.subtract(
       Duration(days: _selectedDay.weekday - 1),
@@ -294,49 +298,186 @@ class _CalendarScreenState extends State<CalendarScreen>
           ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          // Month
-          Column(
-            children: [
-              CalendarMonthGrid(
-                focusedMonth: _focusedMonth,
-                selectedDay: _selectedDay,
-                dateEventTypes: dateTypes,
-                onDaySelected: (d) => setState(() => _selectedDay = d),
-              ),
-              Divider(
-                height: 1,
-                thickness: 0.5,
-                color: Theme.of(
-                  context,
-                ).colorScheme.outlineVariant.withValues(alpha: 0.35),
-              ),
-              Expanded(
-                child: CalendarDayAgenda(
+          // Type filter chips
+          SizedBox(
+            height: 42,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: const Text('全部'),
+                    selected: _activeTypes == null,
+                    onSelected: (_) => setState(() => _activeTypes = null),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                for (final type in CalendarEventType.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(type.label),
+                      selected: _activeTypes?.contains(type) ?? false,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (_activeTypes == null) {
+                            _activeTypes = {type};
+                          } else if (selected) {
+                            _activeTypes = {..._activeTypes!, type};
+                          } else {
+                            final next = {..._activeTypes!}..remove(type);
+                            _activeTypes = next.isEmpty ? null : next;
+                          }
+                        });
+                      },
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Month
+                Column(
+                  children: [
+                    CalendarMonthGrid(
+                      focusedMonth: _focusedMonth,
+                      selectedDay: _selectedDay,
+                      dateEventTypes: dateTypes,
+                      onDaySelected: (d) => setState(() => _selectedDay = d),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                    Expanded(
+                      child: CalendarDayAgenda(
+                        date: _selectedDay,
+                        calendarProvider: calendarProvider,
+                        activeTypes: _activeTypes,
+                      ),
+                    ),
+                  ],
+                ),
+                // Week
+                CalendarWeekStrip(
+                  selectedDay: _selectedDay,
+                  dateEventTypes: dateTypes,
+                  onDaySelected: (d) => setState(() => _selectedDay = d),
+                  activeTypes: _activeTypes,
+                ),
+                // Day
+                CalendarDayAgenda(
                   date: _selectedDay,
                   calendarProvider: calendarProvider,
+                  activeTypes: _activeTypes,
                 ),
-              ),
-            ],
-          ),
-          // Week
-          CalendarWeekStrip(
-            selectedDay: _selectedDay,
-            dateEventTypes: dateTypes,
-            onDaySelected: (d) => setState(() => _selectedDay = d),
-          ),
-          // Day
-          CalendarDayAgenda(
-            date: _selectedDay,
-            calendarProvider: calendarProvider,
+              ],
+            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showQuickAddTodo,
+        onPressed: () => _showQuickAddMenu(context),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _showQuickAddMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: const Text('新建待办'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showQuickAddTodo();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.timelapse_outlined),
+              title: const Text('记录一段时间'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showQuickAddTimeEntry();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showQuickAddTimeEntry() async {
+    final titleCtrl = TextEditingController();
+    final durationCtrl = TextEditingController(text: '30');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: Text('记录时间 - ${_selectedDay.month}月${_selectedDay.day}日'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(labelText: '事项'),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: durationCtrl,
+              decoration: const InputDecoration(labelText: '时长（分钟）'),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('记录'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final title = titleCtrl.text.trim();
+    final minutes = int.tryParse(durationCtrl.text.trim()) ?? 0;
+    if (title.isEmpty || minutes <= 0) return;
+    if (!mounted) return;
+    final start = DateTime(
+      _selectedDay.year,
+      _selectedDay.month,
+      _selectedDay.day,
+      DateTime.now().hour,
+      DateTime.now().minute,
+    );
+    final end = start.add(Duration(minutes: minutes));
+    await context.read<TimeAuditProvider>().add(
+      TimeEntry(
+        title: title,
+        startAt: start,
+        endAt: end,
+        category: TimeEntryCategory.other,
+        source: TimeEntrySource.manual,
       ),
     );
   }

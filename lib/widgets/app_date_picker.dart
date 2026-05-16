@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
 
 import '../core/design_tokens.dart';
 import '../core/lunar_calendar.dart';
@@ -297,75 +296,219 @@ class _SolarCalendar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final month = DateTime(focusedDay.year, focusedDay.month);
+    final firstMonth = DateTime(firstDay.year, firstDay.month);
+    final lastMonth = DateTime(lastDay.year, lastDay.month);
+    final canGoPrevious = month.isAfter(firstMonth);
+    final canGoNext = month.isBefore(lastMonth);
+    final firstOfMonth = DateTime(month.year, month.month, 1);
+    final lastOfMonth = DateTime(month.year, month.month + 1, 0);
+    final leadingBlankCount = firstOfMonth.weekday - 1;
+    final totalCells = leadingBlankCount + lastOfMonth.day;
+    final rows = (totalCells / 7).ceil();
+
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
+        color: cs.surface,
         borderRadius: DesignTokens.borderRadiusLg,
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.42)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.52)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
-        child: TableCalendar<void>(
-          locale: 'zh_CN',
-          firstDay: firstDay,
-          lastDay: lastDay,
-          focusedDay: focusedDay,
-          selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-          rowHeight: 44,
-          daysOfWeekHeight: 28,
-          calendarFormat: CalendarFormat.month,
-          availableCalendarFormats: const {CalendarFormat.month: '月'},
-          headerStyle: HeaderStyle(
-            titleCentered: true,
-            formatButtonVisible: false,
-            leftChevronIcon: Icon(
-              Icons.chevron_left_rounded,
-              color: cs.onSurface,
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  tooltip: '上个月',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: canGoPrevious
+                      ? () =>
+                            onPageChanged(DateTime(month.year, month.month - 1))
+                      : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '${month.year}年${month.month}月',
+                      style:
+                          theme.textTheme.titleMedium?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                          TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '下个月',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: canGoNext
+                      ? () =>
+                            onPageChanged(DateTime(month.year, month.month + 1))
+                      : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
             ),
-            rightChevronIcon: Icon(
-              Icons.chevron_right_rounded,
-              color: cs.onSurface,
+            const SizedBox(height: 2),
+            Row(
+              children: const ['一', '二', '三', '四', '五', '六', '日']
+                  .map(
+                    (label) => Expanded(
+                      child: Center(child: _WeekdayLabel(label: label)),
+                    ),
+                  )
+                  .toList(),
             ),
-            titleTextStyle:
-                theme.textTheme.titleMedium?.copyWith(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w400,
-                ) ??
-                TextStyle(fontSize: 16, color: cs.onSurface),
-          ),
-          daysOfWeekStyle: DaysOfWeekStyle(
-            weekdayStyle: theme.textTheme.bodySmall!.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
-            weekendStyle: theme.textTheme.bodySmall!.copyWith(
-              color: cs.tertiary,
-            ),
-          ),
-          calendarStyle: CalendarStyle(
-            outsideDaysVisible: false,
-            cellMargin: const EdgeInsets.all(4),
-            defaultTextStyle: TextStyle(color: cs.onSurface),
-            disabledTextStyle: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.28),
-            ),
-            todayDecoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            todayTextStyle: TextStyle(color: cs.primary),
-            selectedDecoration: BoxDecoration(
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            selectedTextStyle: TextStyle(color: cs.onPrimary),
-            weekendTextStyle: TextStyle(color: cs.tertiary),
-          ),
-          onDaySelected: (selected, _) => onDaySelected(selected),
-          onPageChanged: onPageChanged,
+            const SizedBox(height: 4),
+            for (var row = 0; row < rows; row++)
+              Row(
+                children: [
+                  for (var col = 0; col < 7; col++)
+                    Expanded(
+                      child: _SolarDayCell(
+                        date: _dateForCell(
+                          month: month,
+                          index: row * 7 + col,
+                          leadingBlankCount: leadingBlankCount,
+                          lastDayOfMonth: lastOfMonth.day,
+                        ),
+                        selectedDay: selectedDay,
+                        firstDay: firstDay,
+                        lastDay: lastDay,
+                        onSelected: onDaySelected,
+                      ),
+                    ),
+                ],
+              ),
+          ],
         ),
       ),
     );
   }
+
+  static DateTime? _dateForCell({
+    required DateTime month,
+    required int index,
+    required int leadingBlankCount,
+    required int lastDayOfMonth,
+  }) {
+    final day = index - leadingBlankCount + 1;
+    if (day < 1 || day > lastDayOfMonth) return null;
+    return DateTime(month.year, month.month, day);
+  }
+}
+
+class _WeekdayLabel extends StatelessWidget {
+  final String label;
+
+  const _WeekdayLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _SolarDayCell extends StatelessWidget {
+  final DateTime? date;
+  final DateTime selectedDay;
+  final DateTime firstDay;
+  final DateTime lastDay;
+  final ValueChanged<DateTime> onSelected;
+
+  const _SolarDayCell({
+    required this.date,
+    required this.selectedDay,
+    required this.firstDay,
+    required this.lastDay,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    if (date == null) {
+      return const SizedBox(height: 44);
+    }
+
+    final day = DateTime(date!.year, date!.month, date!.day);
+    final today = DateTime.now();
+    final isToday = _sameDate(day, today);
+    final isSelected = _sameDate(day, selectedDay);
+    final disabled =
+        day.isBefore(_dateOnly(firstDay)) || day.isAfter(_dateOnly(lastDay));
+    final background = isSelected
+        ? cs.primary
+        : isToday
+        ? cs.primary.withValues(alpha: 0.12)
+        : Colors.transparent;
+    final foreground = disabled
+        ? cs.onSurface.withValues(alpha: 0.30)
+        : isSelected
+        ? cs.onPrimary
+        : isToday
+        ? cs.primary
+        : cs.onSurface;
+    final border = isToday && !isSelected
+        ? Border.all(color: cs.primary.withValues(alpha: 0.55), width: 1.2)
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.all(3),
+      child: Material(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: disabled ? null : () => onSelected(day),
+          child: Container(
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: border,
+            ),
+            child: Text(
+              '${day.day}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: foreground,
+                fontWeight: isSelected || isToday
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  static bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _LunarPicker extends StatelessWidget {

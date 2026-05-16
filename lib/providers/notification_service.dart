@@ -66,7 +66,11 @@ class NotificationService extends ChangeNotifier
   static const _kHistoryKey = 'duoyi_notif_history';
 
   /// 本服务使用的唯一通道 id。
-  static const String channelId = 'duoyi_general_alerts_v2';
+  ///
+  /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
+  /// 用户手机上的旧渠道。v3 明确绑定 `duoyi_alarm.wav`，避免旧 v2 渠道静音。
+  static const String channelId = 'duoyi_general_alerts_v3';
+  static const String legacyChannelId = 'duoyi_general_alerts_v2';
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;
@@ -167,7 +171,49 @@ class NotificationService extends ChangeNotifier
     );
   }
 
-  /// 调度一次性 push 通知（`when` 为本地墙钟时间）。
+  /// 稍后提醒（Snooze, Task T-12）。
+  ///
+  /// 取消现有 [id] 上的调度，并在 [delay] 之后重新调度同一条提醒。
+  /// 上层（深链处理或通知 action）应当传入原 payload 以保留跳转上下文。
+  Future<void> snooze({
+    required int id,
+    required String title,
+    required String body,
+    required Duration delay,
+    String? payload,
+  }) async {
+    await LocalNotifications.instance.cancel(id);
+    final when = DateTime.now().add(delay);
+    await LocalNotifications.instance.scheduleOnce(
+      id: id,
+      title: title,
+      body: body,
+      when: when,
+      channelId: channelId,
+      payload: payload,
+    );
+  }
+
+  /// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。
+  Future<void> handleSnoozeDeepLink(Uri uri) async {
+    if (uri.host != 'snooze') return;
+    final idStr = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    final id = int.tryParse(idStr ?? '');
+    if (id == null) return;
+    final minutes = int.tryParse(uri.queryParameters['delay'] ?? '5') ?? 5;
+    final title = uri.queryParameters['title'] ?? '稍后提醒';
+    final body = uri.queryParameters['body'] ?? '';
+    final payload = uri.queryParameters['payload'];
+    await snooze(
+      id: id,
+      title: title,
+      body: body,
+      delay: Duration(minutes: minutes),
+      payload: payload,
+    );
+  }
+
+  /// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。
   ///
   /// 这是对齐 Task 12 描述的通用 `scheduleOnce(id, title, body, when, payload)`
   /// 接口，专供 `ReminderScheduler` 路由 `kind = push` 的提醒使用。
@@ -297,9 +343,9 @@ class NotificationService extends ChangeNotifier
 
   /// 纪念日/生日到达前 N 天提醒（push 语义）。
   ///
-  /// TODO(task-13): 用户若把某个纪念日标为「强提醒」（kind=alarm），
-  /// 应由 `AlarmService.scheduleFullScreen` 承担；本方法保留 push 语义作为
-  /// 默认回退，直到 Task 14 `ReminderScheduler` 按 `ReminderConfig.kind` 完成分发。
+  /// alarm kind 路由已由 `ReminderScheduler.syncAnniversaries` 完成：
+  /// 当 `Anniversary.reminderKind == alarm` 时调用 `AlarmService`；
+  /// 本方法仅处理 push 回退路径。
   @override
   Future<void> scheduleAnniversary({
     required String annId,

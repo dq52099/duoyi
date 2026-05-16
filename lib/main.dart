@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
+import 'core/i18n.dart';
 import 'core/local_timezone_resolver.dart';
 import 'providers/todo_provider.dart';
 import 'providers/habit_provider.dart';
@@ -24,9 +25,11 @@ import 'providers/preferences_provider.dart';
 import 'providers/time_audit_provider.dart';
 import 'providers/achievement_provider.dart';
 import 'providers/share_provider.dart';
+import 'providers/location_reminder_provider.dart';
 import 'models/goal.dart' show GoalStatus;
 import 'models/todo.dart' show TodoPriorityX;
 import 'services/alarm_service.dart';
+import 'services/calendar_sync_service.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
@@ -101,6 +104,9 @@ void main() async {
   final timeAuditProvider = TimeAuditProvider();
   final achievementProvider = AchievementProvider();
   final shareProvider = ShareProvider();
+  final localeProvider = LocaleProvider();
+  final locationReminderProvider = LocationReminderProvider();
+  final calendarSyncProvider = CalendarSyncProvider();
   final aiService = AiService();
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
@@ -147,6 +153,15 @@ void main() async {
     _startupGuard('home widget', () => HomeWidgetService.init()),
     _startupGuard('auth storage', () => authProvider.loadFromStorage()),
     _startupGuard('ai storage', () => aiService.loadFromStorage()),
+    _startupGuard('locale storage', () => localeProvider.loadFromStorage()),
+    _startupGuard(
+      'location reminders storage',
+      () => locationReminderProvider.loadFromStorage(),
+    ),
+    _startupGuard(
+      'calendar subscriptions storage',
+      () => calendarSyncProvider.loadFromStorage(),
+    ),
   ]);
 
   try {
@@ -187,11 +202,20 @@ void main() async {
   todoProvider.scheduler = reminderScheduler;
   goalProvider.scheduler = reminderScheduler;
   Future<void> resyncReminders() async {
-    await reminderScheduler.syncTodos(todoProvider.todos);
-    await reminderScheduler.syncHabits(habitProvider.habits);
-    await reminderScheduler.syncAnniversaries(anniversaryProvider.items);
-    await reminderScheduler.syncGoals(goalProvider.goals);
-    await reminderScheduler.syncCountdowns(countdownProvider.items);
+    // 单条 sync 失败不应中断整轮调度（R2.8 / T-14）。
+    Future<void> guarded(String label, Future<void> Function() task) async {
+      try {
+        await task();
+      } catch (e, st) {
+        debugPrint('[resyncReminders] $label failed: $e\n$st');
+      }
+    }
+
+    await guarded('syncTodos', () => reminderScheduler.syncTodos(todoProvider.todos));
+    await guarded('syncHabits', () => reminderScheduler.syncHabits(habitProvider.habits));
+    await guarded('syncAnniversaries', () => reminderScheduler.syncAnniversaries(anniversaryProvider.items));
+    await guarded('syncGoals', () => reminderScheduler.syncGoals(goalProvider.goals));
+    await guarded('syncCountdowns', () => reminderScheduler.syncCountdowns(countdownProvider.items));
   }
 
   todoProvider.addListener(resyncReminders);
@@ -258,7 +282,21 @@ void main() async {
   noteProvider.addListener(refreshAchievements);
   themeProvider.addListener(refreshAchievements);
   // 初次同步
-  await _startupGuard('initial reminder resync', resyncReminders);
+  await _startupGuard(
+    'initial reminder resync',
+    resyncReminders,
+  );
+
+  // 启动后异步刷新订阅日历（不阻塞冷启动）。
+  // ignore: discarded_futures
+  Future.microtask(() => calendarSyncProvider.syncAll());
+
+  // 订阅日历变化 → 写入 CalendarProvider 的外部事件，下次 rebuild 合并显示。
+  void onCalendarSyncChange() {
+    calendarProvider.setExternalEvents(calendarSyncProvider.allEvents());
+  }
+  calendarSyncProvider.addListener(onCalendarSyncChange);
+  onCalendarSyncChange();
   Future<void> syncDailyDigestReminder() => _syncDailyDigestReminder(
     preferencesProvider,
     notificationService,
@@ -415,6 +453,9 @@ void main() async {
         ChangeNotifierProvider.value(value: timeAuditProvider),
         ChangeNotifierProvider.value(value: achievementProvider),
         ChangeNotifierProvider.value(value: shareProvider),
+        ChangeNotifierProvider.value(value: localeProvider),
+        ChangeNotifierProvider.value(value: locationReminderProvider),
+        ChangeNotifierProvider.value(value: calendarSyncProvider),
         ChangeNotifierProvider.value(value: notificationService),
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
@@ -584,6 +625,15 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     }
   } else if (uri.host == 'countdown') {
     state?.navigateTo(3);
+  } else if (uri.host == 'anniversary' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    // ignore: discarded_futures
+    TodayDetailRouter.open(ctx, TodaySectionKind.anniversaries, id: id);
+  } else if (uri.host == 'snooze' && ctx != null) {
+    // 稍后提醒深链：duoyi://snooze/<id>?delay=<minutes>&title=...&body=...&payload=...
+    final ns = Provider.of<NotificationService>(ctx, listen: false);
+    // ignore: discarded_futures
+    ns.handleSnoozeDeepLink(uri);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     if (action == 'start_pomodoro') {
@@ -896,6 +946,8 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final brand = context.watch<ThemeProvider>().brand;
     final lock = context.watch<AppLockProvider>();
+    // watch LocaleProvider 以便切换语言时整树 rebuild
+    context.watch<LocaleProvider>();
     return MaterialApp(
       title: brand.strings.appTitle,
       debugShowCheckedModeBanner: false,

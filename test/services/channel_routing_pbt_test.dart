@@ -15,7 +15,7 @@ import 'package:duoyi/services/reminder_sinks.dart';
 /// Feature: app-alignment-overhaul
 /// Property 14 (P14): ∀ `ReminderConfig r`,
 ///   `r.kind = push  ⟹ 调度最终落到 ReminderNotificationSink.scheduleOnce`
-///                     (NotificationService，channel = `duoyi_general_alerts_v2`)；
+///                     (NotificationService，channel = `duoyi_general_alerts_v3`)；
 ///   `r.kind = alarm ⟹ 调度最终落到 ReminderAlarmSink.scheduleFullScreen`
 ///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v3`)。
 ///
@@ -40,7 +40,7 @@ void main() {
   test('channel id 常量与设计 §2.4 / §3.6 保持一致', () {
     // P14 的其中一半约束是"用对通道 id"：由 NotificationService / AlarmService
     // 的类级常量承载，Scheduler 不重复传递。这里显式断言，防止后续被误改。
-    expect(NotificationService.channelId, 'duoyi_general_alerts_v2');
+    expect(NotificationService.channelId, 'duoyi_general_alerts_v3');
     expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v3');
   });
 

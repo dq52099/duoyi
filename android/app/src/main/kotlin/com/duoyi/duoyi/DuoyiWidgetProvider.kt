@@ -40,9 +40,14 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
             val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
+            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
             val tabFocus = prefs.getString("nav_focus", "番茄") ?: "番茄"
             views.setTextViewText(R.id.widget_quick_pomodoro, "开始$tabFocus")
             views.setTextViewText(R.id.widget_quick_open, "打开 App")
+            views.setTextViewText(R.id.widget_nav_todo, tabTodo)
+            views.setTextViewText(R.id.widget_nav_habit, tabHabit)
+            views.setTextViewText(R.id.widget_nav_calendar, tabCalendar)
+            views.setTextViewText(R.id.widget_nav_focus, tabFocus)
 
             // Tap title/stats area opens the app on the calendar tab
             val openAppIntent: PendingIntent = HomeWidgetLaunchIntent.getActivity(
@@ -54,13 +59,25 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_date, openAppIntent)
             views.setOnClickPendingIntent(R.id.widget_quick_open, openAppIntent)
             views.setOnClickPendingIntent(R.id.widget_today_event, openAppIntent)
+            views.setOnClickPendingIntent(R.id.widget_nav_calendar, openAppIntent)
 
             // Tap todo number opens todo tab
+            val openTodoIntent = HomeWidgetLaunchIntent.getActivity(
+                context, MainActivity::class.java,
+                Uri.parse("duoyi://tab/todo")
+            )
+            views.setOnClickPendingIntent(R.id.widget_todo_count, openTodoIntent)
+            views.setOnClickPendingIntent(R.id.widget_nav_todo, openTodoIntent)
             views.setOnClickPendingIntent(
-                R.id.widget_todo_count,
+                R.id.widget_nav_habit,
                 HomeWidgetLaunchIntent.getActivity(
-                    context, MainActivity::class.java,
-                    Uri.parse("duoyi://tab/todo")
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
+                )
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_nav_focus,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
                 )
             )
             views.setOnClickPendingIntent(

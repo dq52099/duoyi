@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../providers/countdown_provider.dart';
 import '../models/countdown.dart';
@@ -106,7 +107,7 @@ class CountdownScreen extends StatelessWidget {
                       FilledButton.tonalIcon(
                         onPressed: () => _showEditor(context),
                         icon: const Icon(Icons.add),
-                        label: const Text('添加'),
+                        label: Text(I18n.tr('action.add')),
                       ),
                     ],
                   ),
@@ -219,15 +220,15 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
                   Navigator.pop(context);
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('删除'),
+                child: Text(I18n.tr('action.delete')),
               ),
             ],
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(I18n.tr('action.cancel')),
         ),
-        FilledButton(onPressed: _save, child: const Text('保存')),
+        FilledButton(onPressed: _save, child: Text(I18n.tr('action.save'))),
       ],
       child: Column(
         mainAxisSize: MainAxisSize.min,

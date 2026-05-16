@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../models/course_schedule.dart';
 import '../providers/course_provider.dart';
@@ -423,7 +424,7 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
             );
             Navigator.pop(context);
           },
-          child: const Text('保存'),
+          child: Text(I18n.tr('action.save')),
         ),
       ],
       child: Column(
@@ -616,13 +617,13 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
                   Navigator.pop(context);
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('删除'),
+                child: Text(I18n.tr('action.delete')),
               ),
             ],
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(I18n.tr('action.cancel')),
         ),
         FilledButton(
           onPressed: () {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -132,9 +133,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(sheetCtx).pop(),
-                child: const Text('取消'),
+                child: Text(I18n.tr('action.cancel')),
               ),
-              FilledButton(onPressed: save, child: const Text('保存')),
+              FilledButton(onPressed: save, child: Text(I18n.tr('action.save'))),
             ],
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

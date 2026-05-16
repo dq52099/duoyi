@@ -363,13 +363,27 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   ) {
     final s = context.read<ThemeProvider>().brand.strings;
     final ctrl = TextEditingController(text: current);
+    final tagCtrl = TextEditingController(text: provider.state.tag ?? '');
     showDialog(
       context: context,
       builder: (ctx) => AppDialog(
         title: Text(s.focusTaskLinkLabel),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(hintText: '输入名称'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(hintText: '任务名称'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: tagCtrl,
+              decoration: const InputDecoration(
+                hintText: '标签（用于专注统计分类，可选）',
+                prefixIcon: Icon(Icons.label_outline),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -379,6 +393,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           TextButton(
             onPressed: () {
               provider.setTaskName(null);
+              provider.setTag(null);
               Navigator.pop(ctx);
             },
             child: const Text('清除'),
@@ -386,6 +401,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           FilledButton(
             onPressed: () {
               provider.setTaskName(ctrl.text);
+              provider.setTag(tagCtrl.text);
               Navigator.pop(ctx);
             },
             child: const Text('确定'),

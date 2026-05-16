@@ -5,12 +5,14 @@ class CalendarWeekStrip extends StatelessWidget {
   final DateTime selectedDay;
   final Map<String, List<CalendarEventType>> dateEventTypes;
   final void Function(DateTime) onDaySelected;
+  final Set<CalendarEventType>? activeTypes;
 
   const CalendarWeekStrip({
     super.key,
     required this.selectedDay,
     required this.dateEventTypes,
     required this.onDaySelected,
+    this.activeTypes,
   });
 
   static Color _colorFor(CalendarEventType t, ColorScheme cs) {

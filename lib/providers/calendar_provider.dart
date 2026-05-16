@@ -14,9 +14,17 @@ import '../models/time_entry.dart';
 
 class CalendarProvider extends ChangeNotifier {
   final List<CalendarEvent> _events = [];
+  List<CalendarEvent> _externalEvents = const <CalendarEvent>[];
   Object? _lastRebuildSignature;
 
   List<CalendarEvent> get events => _events;
+
+  /// 设置外部订阅事件（来自 ICS 订阅）。会触发下次 rebuild 时合并。
+  // ignore: use_setters_to_change_properties
+  void setExternalEvents(List<CalendarEvent> events) {
+    _externalEvents = List<CalendarEvent>.unmodifiable(events);
+    _lastRebuildSignature = null;
+  }
 
   /// 重建所有事件索引。
   /// 新增的 anniversaries/courses/diaries/countdowns/goals 均以可选参数传入，保证调用方兼容。
@@ -64,7 +72,8 @@ class CalendarProvider extends ChangeNotifier {
     );
     _events
       ..clear()
-      ..addAll(nextEvents);
+      ..addAll(nextEvents)
+      ..addAll(_externalEvents);
 
     if (!_eventsEqual(previousEvents, _events)) {
       _lastRebuildSignature = signature;
@@ -305,10 +314,17 @@ class CalendarProvider extends ChangeNotifier {
     return a.hour == b.hour && a.minute == b.minute;
   }
 
-  List<CalendarEvent> getEventsForDate(DateTime date) {
+  List<CalendarEvent> getEventsForDate(
+    DateTime date, {
+    Set<CalendarEventType>? activeTypes,
+  }) {
     final key =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    return _events.where((e) => e.dateKey == key).toList();
+    return _events.where((e) {
+      if (e.dateKey != key) return false;
+      if (activeTypes != null && !activeTypes.contains(e.type)) return false;
+      return true;
+    }).toList();
   }
 
   Set<DateTime> get datesWithEvents {
@@ -322,6 +338,19 @@ class CalendarProvider extends ChangeNotifier {
   Map<String, List<CalendarEventType>> get dateEventTypes {
     final map = <String, Set<CalendarEventType>>{};
     for (final e in _events) {
+      map.putIfAbsent(e.dateKey, () => {}).add(e.type);
+    }
+    return map.map((k, v) => MapEntry(k, v.toList()));
+  }
+
+  /// Filtered variant: only include event types in [activeTypes].
+  Map<String, List<CalendarEventType>> filteredDateEventTypes(
+    Set<CalendarEventType>? activeTypes,
+  ) {
+    if (activeTypes == null) return dateEventTypes;
+    final map = <String, Set<CalendarEventType>>{};
+    for (final e in _events) {
+      if (!activeTypes.contains(e.type)) continue;
       map.putIfAbsent(e.dateKey, () => {}).add(e.type);
     }
     return map.map((k, v) => MapEntry(k, v.toList()));

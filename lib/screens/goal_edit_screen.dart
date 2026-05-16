@@ -11,6 +11,7 @@ import '../models/recurrence.dart';
 import '../providers/goal_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/alarm_service.dart';
+import '../services/recurrence_engine.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/recurrence_picker.dart';
 import '../widgets/reminder_health_hint.dart';
@@ -525,10 +526,13 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     final anchor = (_startDate != null && _startDate!.isAfter(today))
         ? _startDate!
         : today;
-    // TODO(task-22): 切到 RecurrenceEngine.nextOccurrence(rule, scheduling,
-    //  skipHolidays, anchor)。当前阶段 RecurrenceEngine 尚未实现,先退化为
-    //  基于 RecurrenceRule.nextAfter(anchor) 的临时计算。
-    final next = _recurrence.nextAfter(anchor);
+    final next = RecurrenceEngine.nextOccurrence(
+      rule: _recurrence,
+      scheduling: _scheduling,
+      skipHolidays: _skipHolidays,
+      anchor: anchor,
+      goalId: _editingId,
+    );
     if (next == null) return '无（已到终止日）';
     return _formatDate(next);
   }

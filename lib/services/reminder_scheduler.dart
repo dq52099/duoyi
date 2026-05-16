@@ -189,8 +189,8 @@ class ReminderScheduler {
 
   /// 按最新的纪念日 [items] 幂等地重新同步提醒。
   ///
-  /// TODO(task-22): 纪念日模型暂无 `ReminderConfig.kind` 概念，按设计
-  /// §2.4 默认走 push；若后续补上 kind 再接入 `_dispatch`。
+  /// 纪念日 `reminderKind` 为 `alarm` 时走全屏闹钟通道；精准闹钟权限不足
+  /// 时自动降级为 push。
   Future<void> syncAnniversaries(Iterable<Anniversary> items) async {
     final wanted = <String, Anniversary>{};
     for (final a in items) {
@@ -203,16 +203,66 @@ class ReminderScheduler {
     }
     for (final id in _scheduledAnniIds.difference(wanted.keys.toSet())) {
       await notif.cancelAnniversary(id);
+      await alarm.cancel(_idFor('anni_alarm_$id'));
     }
     for (final a in wanted.values) {
-      await notif.scheduleAnniversary(
-        annId: a.id,
-        title: a.title,
-        whenDate: a.nextOccurrence,
-        daysBefore: a.remindDaysBefore,
-        hour: a.remindHour,
-        minute: a.remindMinute,
-      );
+      final remindAt = DateTime(
+        a.nextOccurrence.year,
+        a.nextOccurrence.month,
+        a.nextOccurrence.day,
+        a.remindHour,
+        a.remindMinute,
+      ).subtract(Duration(days: a.remindDaysBefore));
+      if (!remindAt.isAfter(DateTime.now())) {
+        continue;
+      }
+
+      if (a.reminderKind == ReminderKind.alarm) {
+        try {
+          await alarm.scheduleFullScreen(
+            id: _idFor('anni_alarm_${a.id}'),
+            title: '⏰ 纪念日提醒',
+            body: a.remindDaysBefore == 0
+                ? '今天是 ${a.title}'
+                : '${a.remindDaysBefore} 天后是 ${a.title}',
+            when: remindAt,
+            payload: 'duoyi://anniversary/${a.id}',
+          );
+        } on AlarmPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] anniversary alarm permission denied for ${a.id}: $e',
+          );
+          await notif.scheduleAnniversary(
+            annId: a.id,
+            title: a.title,
+            whenDate: a.nextOccurrence,
+            daysBefore: a.remindDaysBefore,
+            hour: a.remindHour,
+            minute: a.remindMinute,
+          );
+        } catch (e, st) {
+          debugPrint(
+            '[ReminderScheduler] anniversary alarm dispatch failed for ${a.id}: $e\n$st',
+          );
+          await notif.scheduleAnniversary(
+            annId: a.id,
+            title: a.title,
+            whenDate: a.nextOccurrence,
+            daysBefore: a.remindDaysBefore,
+            hour: a.remindHour,
+            minute: a.remindMinute,
+          );
+        }
+      } else {
+        await notif.scheduleAnniversary(
+          annId: a.id,
+          title: a.title,
+          whenDate: a.nextOccurrence,
+          daysBefore: a.remindDaysBefore,
+          hour: a.remindHour,
+          minute: a.remindMinute,
+        );
+      }
     }
     _scheduledAnniIds
       ..clear()

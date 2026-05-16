@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -435,9 +436,9 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(I18n.tr('action.cancel')),
         ),
-        FilledButton(onPressed: _save, child: const Text('保存')),
+        FilledButton(onPressed: _save, child: Text(I18n.tr('action.save'))),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

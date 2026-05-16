@@ -89,6 +89,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           .length,
     ];
 
+    // Weekly time audit data (always computed, independent of selected range)
+    final now = DateTime.now();
+    final weekMonday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    final weekEnd = weekMonday.add(const Duration(days: 7));
+    final weekSourceSeconds =
+        timeAuditProv.secondsBySource(weekMonday, weekEnd);
+    final weekTotalSeconds =
+        timeAuditProv.totalSecondsInRange(weekMonday, weekEnd);
+    final weekDaySeconds =
+        timeAuditProv.secondsByDay(weekMonday, weekEnd);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('时光足迹'),
@@ -152,6 +167,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ],
           ),
           const SizedBox(height: 14),
+          _WeeklyTimeOverview(
+            weekTotalSeconds: weekTotalSeconds,
+            sourceSeconds: weekSourceSeconds,
+            daySeconds: weekDaySeconds,
+            weekMonday: weekMonday,
+            cs: cs,
+          ),
+          const SizedBox(height: 10),
           _chartCard(
             '时间投入分布',
             SizedBox(
@@ -589,4 +612,264 @@ class _Kpi extends StatelessWidget {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Weekly Time Overview card  (M4 Time Audit integration)
+// ---------------------------------------------------------------------------
+
+class _WeeklyTimeOverview extends StatelessWidget {
+  final int weekTotalSeconds;
+  final Map<String, int> sourceSeconds;
+  final Map<String, int> daySeconds;
+  final DateTime weekMonday;
+  final ColorScheme cs;
+
+  const _WeeklyTimeOverview({
+    required this.weekTotalSeconds,
+    required this.sourceSeconds,
+    required this.daySeconds,
+    required this.weekMonday,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '本周时间概览',
+            style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          // Headline total
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.access_time_filled_outlined,
+                  color: cs.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatDuration(weekTotalSeconds),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  Text(
+                    '本周累计投入',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Source breakdown pie
+          if (weekTotalSeconds > 0) ...[
+            SizedBox(
+              height: 160,
+              child: _buildSourcePie(context),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // Daily bar trend
+          SizedBox(
+            height: 120,
+            child: _buildDailyBars(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSourcePie(BuildContext context) {
+    final nonZero =
+        sourceSeconds.entries.where((e) => e.value > 0).toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+    if (nonZero.isEmpty) {
+      return const Center(
+        child: Text('暂无数据', style: TextStyle(color: Colors.grey)),
+      );
+    }
+    final total = nonZero.fold<int>(0, (s, e) => s + e.value);
+
+    return Row(
+      children: [
+        Expanded(
+          child: PieChart(
+            PieChartData(
+              centerSpaceRadius: 28,
+              sectionsSpace: 2,
+              sections: [
+                for (final entry in nonZero)
+                  PieChartSectionData(
+                    value: entry.value.toDouble(),
+                    color: _sourceColor(entry.key),
+                    radius: 40,
+                    title: total == 0
+                        ? ''
+                        : '${((entry.value / total) * 100).toStringAsFixed(0)}%',
+                    titleStyle: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 100,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final entry in nonZero.take(5))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: _sourceColor(entry.key),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDailyBars(BuildContext context) {
+    const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    final buckets = <String, int>{};
+    for (int i = 0; i < 7; i++) {
+      final d = weekMonday.add(Duration(days: i));
+      final key =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      buckets[dayLabels[i]] = daySeconds[key] ?? 0;
+    }
+
+    final maxV = buckets.values.fold<int>(0, (a, b) => a > b ? a : b);
+    if (maxV == 0) {
+      return const Center(
+        child: Text('暂无本周数据', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    final entries = buckets.entries.toList();
+    return BarChart(
+      BarChartData(
+        gridData: const FlGridData(show: false),
+        alignment: BarChartAlignment.spaceAround,
+        maxY: (maxV / 60 * 1.2).clamp(1, double.infinity),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              getTitlesWidget: (v, _) => Text(
+                v.toInt().toString(),
+                style: const TextStyle(fontSize: 9),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: 1,
+              getTitlesWidget: (v, _) {
+                final i = v.toInt();
+                if (i < 0 || i >= entries.length) return const SizedBox();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    entries[i].key,
+                    style: const TextStyle(fontSize: 9),
+                  ),
+                );
+              },
+            ),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: [
+          for (int i = 0; i < entries.length; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: entries[i].value / 60,
+                  color: cs.primary,
+                  width: 12,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatDuration(int seconds) {
+    if (seconds >= 3600) {
+      final h = seconds / 3600;
+      return '${h.toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} 小时';
+    }
+    final m = seconds / 60;
+    return '${m.toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} 分钟';
+  }
+
+  static Color _sourceColor(String label) => switch (label) {
+    '番茄钟' => Colors.redAccent,
+    '待办' => const Color(0xFF42A5F5),
+    '习惯' => const Color(0xFF66BB6A),
+    '目标' => const Color(0xFFAB47BC),
+    '手动' => const Color(0xFF78909C),
+    _ => const Color(0xFF78909C),
+  };
 }

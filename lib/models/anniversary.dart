@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 import '../core/lunar_calendar.dart';
+import 'goal.dart' show ReminderKind;
 
 const _uuid = Uuid();
 
@@ -27,6 +28,7 @@ class Anniversary {
   int remindDaysBefore; // 提前几天提醒
   int remindHour;
   int remindMinute;
+  ReminderKind reminderKind;
   int? lunarYear; // 农历年(仅 lunar 用)
   int? lunarMonth;
   int? lunarDay;
@@ -46,6 +48,7 @@ class Anniversary {
     this.remindDaysBefore = 1,
     this.remindHour = 9,
     this.remindMinute = 0,
+    this.reminderKind = ReminderKind.push,
     this.lunarYear,
     this.lunarMonth,
     this.lunarDay,
@@ -68,6 +71,7 @@ class Anniversary {
     int remindDaysBefore = 1,
     int remindHour = 9,
     int remindMinute = 0,
+    ReminderKind reminderKind = ReminderKind.push,
     DateTime? createdAt,
   }) {
     int? ly, lm, ld;
@@ -92,6 +96,7 @@ class Anniversary {
       remindDaysBefore: remindDaysBefore,
       remindHour: remindHour,
       remindMinute: remindMinute,
+      reminderKind: reminderKind,
       lunarYear: ly,
       lunarMonth: lm,
       lunarDay: ld,
@@ -181,6 +186,7 @@ class Anniversary {
     'remindDaysBefore': remindDaysBefore,
     'remindHour': remindHour,
     'remindMinute': remindMinute,
+    'reminderKind': reminderKind.index,
     'lunarYear': lunarYear,
     'lunarMonth': lunarMonth,
     'lunarDay': lunarDay,
@@ -201,6 +207,9 @@ class Anniversary {
     remindDaysBefore: json['remindDaysBefore'] ?? 1,
     remindHour: (json['remindHour'] as num?)?.toInt() ?? 9,
     remindMinute: (json['remindMinute'] as num?)?.toInt() ?? 0,
+    reminderKind: json['reminderKind'] != null
+        ? ReminderKind.values[(json['reminderKind'] as num).toInt()]
+        : ReminderKind.push,
     lunarYear: json['lunarYear'],
     lunarMonth: json['lunarMonth'],
     lunarDay: json['lunarDay'],

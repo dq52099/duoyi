@@ -20,6 +20,10 @@ class LocalNotifications {
   bool get permissionGranted => _granted;
   static const RawResourceAndroidNotificationSound _alarmSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
+  static const RawResourceAndroidNotificationSound _defaultSound =
+      RawResourceAndroidNotificationSound('duoyi_alarm');
+  static const String _defaultChannelId = 'duoyi_general_alerts_v3';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v3';
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
@@ -50,6 +54,25 @@ class LocalNotifications {
         linux: linuxInit,
       ),
       onDidReceiveNotificationResponse: (resp) {
+        final actionId = resp.actionId;
+        // 把 todo 的 action 按钮映射成深链 payload
+        if (actionId != null && actionId.isNotEmpty) {
+          if (actionId.startsWith('todo_complete_')) {
+            final id = actionId.substring('todo_complete_'.length);
+            if (onTap != null) onTap!('duoyi://action/complete_todo?id=$id');
+            return;
+          }
+          if (actionId.startsWith('todo_snooze_')) {
+            final id = actionId.substring('todo_snooze_'.length);
+            if (onTap != null) {
+              onTap!(
+                'duoyi://snooze/${resp.id ?? 0}'
+                '?delay=5&payload=duoyi://todo/$id',
+              );
+            }
+            return;
+          }
+        }
         final payload = resp.payload;
         if (payload != null && onTap != null) onTap!(payload);
       },
@@ -76,17 +99,19 @@ class LocalNotifications {
             >();
         await android?.createNotificationChannel(
           const AndroidNotificationChannel(
-            'duoyi_general_alerts_v2',
+            _defaultChannelId,
             '多仪 · 通知提醒',
             description: '日常提醒会发声并弹出横幅',
             importance: Importance.high,
             playSound: true,
+            sound: _defaultSound,
             enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.notification,
           ),
         );
         await android?.createNotificationChannel(
           AndroidNotificationChannel(
-            'duoyi_alarm_fullscreen_v3',
+            _alarmChannelId,
             '多仪 · 强提醒',
             description: '重要提醒会响铃、震动并弹出确认界面',
             importance: Importance.max,
@@ -185,8 +210,11 @@ class LocalNotifications {
     return _granted;
   }
 
-  NotificationDetails _details({String channelId = 'duoyi_general_alerts_v2'}) {
-    final isAlarm = channelId == 'duoyi_alarm_fullscreen_v3';
+  NotificationDetails _details({
+    String channelId = _defaultChannelId,
+    List<AndroidNotificationAction>? androidActions,
+  }) {
+    final isAlarm = channelId == _alarmChannelId;
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
@@ -195,13 +223,14 @@ class LocalNotifications {
         importance: isAlarm ? Importance.max : Importance.high,
         priority: isAlarm ? Priority.max : Priority.high,
         playSound: true,
-        sound: isAlarm ? _alarmSound : null,
+        sound: isAlarm ? _alarmSound : _defaultSound,
         enableVibration: true,
         audioAttributesUsage: isAlarm
             ? AudioAttributesUsage.alarm
             : AudioAttributesUsage.notification,
         visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
+        actions: androidActions,
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
@@ -217,6 +246,33 @@ class LocalNotifications {
     );
   }
 
+  /// 为待办提醒构建 "完成 / 稍后" 两个 action 按钮。
+  ///
+  /// payload 形如 `duoyi://todo/{id}`。每个 action 用 input ID 绑定深链方案。
+  List<AndroidNotificationAction>? _todoActionsFor(String? payload) {
+    if (payload == null) return null;
+    if (!payload.startsWith('duoyi://todo/')) return null;
+    final id = payload
+        .substring('duoyi://todo/'.length)
+        .split('?')
+        .first;
+    if (id.isEmpty) return null;
+    return [
+      AndroidNotificationAction(
+        'todo_complete_$id',
+        '完成',
+        showsUserInterface: true,
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'todo_snooze_$id',
+        '5 分钟后',
+        showsUserInterface: true,
+        cancelNotification: true,
+      ),
+    ];
+  }
+
   Future<void> show({
     required int id,
     required String title,
@@ -229,7 +285,10 @@ class LocalNotifications {
       id,
       title,
       body,
-      _details(channelId: channelId ?? 'duoyi_general_alerts_v2'),
+      _details(
+        channelId: channelId ?? _defaultChannelId,
+        androidActions: _todoActionsFor(payload),
+      ),
       payload: payload,
     );
   }
@@ -249,7 +308,10 @@ class LocalNotifications {
       title,
       body,
       tz.TZDateTime.from(when, tz.local),
-      _details(channelId: channelId ?? 'duoyi_general_alerts_v2'),
+      _details(
+        channelId: channelId ?? _defaultChannelId,
+        androidActions: _todoActionsFor(payload),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -270,7 +332,7 @@ class LocalNotifications {
     List<int>? weekdays,
   }) async {
     if (!_initialized) await init();
-    final details = _details(channelId: channelId ?? 'duoyi_general_alerts_v2');
+    final details = _details(channelId: channelId ?? _defaultChannelId);
 
     if (weekdays == null || weekdays.isEmpty) {
       // 每天

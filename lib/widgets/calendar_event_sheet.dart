@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/calendar_event.dart';
-import '../models/goal.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/countdown_provider.dart';
 import '../providers/course_provider.dart';
@@ -11,8 +10,10 @@ import '../providers/habit_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../screens/countdown_screen.dart';
+import '../screens/pomodoro_screen.dart';
 import '../screens/time_audit_screen.dart';
 import '../screens/today_detail_router.dart';
+import '../widgets/brand_background.dart';
 import 'app_date_picker.dart';
 import 'surface_components.dart';
 
@@ -36,6 +37,7 @@ class CalendarEventSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row: icon + type tag + time + conflict warning
           Row(
             children: [
               Container(
@@ -52,15 +54,11 @@ class CalendarEventSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      event.type.label,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    AppStatusBadge(
+                      label: event.type.label,
+                      color: event.color,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       _timeText(event),
                       style: const TextStyle(
@@ -93,44 +91,201 @@ class CalendarEventSheet extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
+          // Type-specific action buttons
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: event.canOpen ? () => _open(context) : null,
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('打开'),
-              ),
-              if (_canComplete(event))
-                FilledButton.tonalIcon(
-                  onPressed: () => _complete(context),
-                  icon: const Icon(Icons.done),
-                  label: const Text('完成'),
-                ),
-              if (_canReschedule(event))
-                FilledButton.tonalIcon(
-                  onPressed: () => _reschedule(context),
-                  icon: const Icon(Icons.event_repeat),
-                  label: const Text('改期'),
-                ),
-              if (_canDelete(event))
-                FilledButton.tonalIcon(
-                  onPressed: () => _delete(context),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('删除'),
-                ),
-            ],
+            children: _buildActions(context),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _open(BuildContext context) async {
+  /// Build action buttons based on event type.
+  List<Widget> _buildActions(BuildContext context) {
+    switch (event.type) {
+      case CalendarEventType.todo:
+        return [
+          if (!event.isCompleted)
+            _actionButton(
+              context,
+              icon: Icons.done,
+              label: '完成',
+              onPressed: () => _completeTodo(context),
+            ),
+          _actionButton(
+            context,
+            icon: Icons.event_repeat,
+            label: '改期',
+            onPressed: () => _reschedule(context),
+            tonal: true,
+          ),
+          _actionButton(
+            context,
+            icon: Icons.edit_outlined,
+            label: '编辑',
+            onPressed: () => _openDetail(context),
+            tonal: true,
+          ),
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            tonal: true,
+          ),
+          _actionButton(
+            context,
+            icon: Icons.delete_outline,
+            label: '删除',
+            onPressed: () => _delete(context),
+            tonal: true,
+          ),
+        ];
+      case CalendarEventType.habit:
+        return [
+          if (!event.isCompleted)
+            _actionButton(
+              context,
+              icon: Icons.check,
+              label: '打卡',
+              onPressed: () => _checkInHabit(context),
+            ),
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            tonal: true,
+          ),
+        ];
+      case CalendarEventType.pomodoro:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.play_arrow,
+            label: '开始专注',
+            onPressed: () => _startFocus(context),
+          ),
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            tonal: true,
+          ),
+        ];
+      case CalendarEventType.goal:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+      case CalendarEventType.course:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+      case CalendarEventType.anniversary:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+      case CalendarEventType.countdown:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+      case CalendarEventType.diary:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+      case CalendarEventType.timeEntry:
+        return [
+          _actionButton(
+            context,
+            icon: Icons.open_in_new,
+            label: '跳转详情',
+            onPressed: event.canOpen ? () => _openDetail(context) : null,
+          ),
+        ];
+    }
+  }
+
+  Widget _actionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    VoidCallback? onPressed,
+    bool tonal = false,
+  }) {
+    if (tonal) {
+      return FilledButton.tonalIcon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
+    );
+  }
+
+  // ---- CalendarActionRouter: dispatches actions back to source providers ----
+
+  Future<void> _completeTodo(BuildContext context) async {
+    final sourceId = event.sourceId;
+    if (sourceId == null) return;
+    await context.read<TodoProvider>().toggleTodo(sourceId);
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  Future<void> _checkInHabit(BuildContext context) async {
+    final sourceId = event.sourceId;
+    if (sourceId == null) return;
+    await context.read<HabitProvider>().incrementHabit(sourceId);
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  Future<void> _startFocus(BuildContext context) async {
+    Navigator.pop(context);
+    if (!context.mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const BrandRouteSurface(child: PomodoroScreen()),
+      ),
+    );
+  }
+
+  Future<void> _openDetail(BuildContext context) async {
     final sourceId = event.sourceId;
     if (sourceId == null) return;
     Navigator.pop(context);
+    if (!context.mounted) return;
     switch (event.type) {
       case CalendarEventType.todo:
         await TodayDetailRouter.open(
@@ -180,25 +335,6 @@ class CalendarEventSheet extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
         );
     }
-  }
-
-  Future<void> _complete(BuildContext context) async {
-    final sourceId = event.sourceId;
-    if (sourceId == null) return;
-    switch (event.type) {
-      case CalendarEventType.todo:
-        await context.read<TodoProvider>().toggleTodo(sourceId);
-      case CalendarEventType.habit:
-        await context.read<HabitProvider>().incrementHabit(sourceId);
-      case CalendarEventType.goal:
-        await context.read<GoalProvider>().setStatus(
-          sourceId,
-          GoalStatus.achieved,
-        );
-      default:
-        break;
-    }
-    if (context.mounted) Navigator.pop(context);
   }
 
   Future<void> _reschedule(BuildContext context) async {
@@ -288,37 +424,6 @@ class CalendarEventSheet extends StatelessWidget {
         break;
     }
     if (context.mounted) Navigator.pop(context);
-  }
-
-  bool _canComplete(CalendarEvent event) {
-    return !event.isCompleted &&
-        {
-          CalendarEventType.todo,
-          CalendarEventType.habit,
-          CalendarEventType.goal,
-        }.contains(event.type);
-  }
-
-  bool _canReschedule(CalendarEvent event) {
-    return {
-      CalendarEventType.todo,
-      CalendarEventType.goal,
-      CalendarEventType.anniversary,
-      CalendarEventType.countdown,
-      CalendarEventType.timeEntry,
-    }.contains(event.type);
-  }
-
-  bool _canDelete(CalendarEvent event) {
-    return {
-      CalendarEventType.todo,
-      CalendarEventType.habit,
-      CalendarEventType.goal,
-      CalendarEventType.anniversary,
-      CalendarEventType.countdown,
-      CalendarEventType.course,
-      CalendarEventType.timeEntry,
-    }.contains(event.type);
   }
 
   DateTime _sameTime(DateTime date, DateTime time) {

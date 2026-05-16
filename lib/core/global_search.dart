@@ -8,6 +8,7 @@ import '../models/anniversary.dart';
 import '../models/goal.dart';
 import '../models/course_schedule.dart';
 import '../models/countdown.dart';
+import '../models/time_entry.dart';
 
 enum SearchKind {
   todo,
@@ -18,6 +19,7 @@ enum SearchKind {
   countdown,
   goal,
   course,
+  timeEntry,
 }
 
 class SearchHit {
@@ -46,6 +48,7 @@ class SearchHit {
     SearchKind.countdown => Icons.hourglass_bottom,
     SearchKind.goal => iconOverride ?? Icons.flag_circle_outlined,
     SearchKind.course => Icons.class_outlined,
+    SearchKind.timeEntry => Icons.timelapse_outlined,
   };
 
   String get kindLabel => switch (kind) {
@@ -57,6 +60,7 @@ class SearchHit {
     SearchKind.countdown => '倒数',
     SearchKind.goal => '目标',
     SearchKind.course => '课程',
+    SearchKind.timeEntry => '时间足迹',
   };
 }
 
@@ -72,6 +76,7 @@ class GlobalSearch {
     required List<CountdownItem> countdowns,
     required List<GoalItem> goals,
     required List<CourseItem> courses,
+    List<TimeEntry> timeEntries = const [],
     int maxPerKind = 10,
   }) {
     final q = query.trim().toLowerCase();
@@ -199,6 +204,21 @@ class GlobalSearch {
               subtitle:
                   '${c.teacher.isEmpty ? '' : '${c.teacher} · '}${c.location}',
               sourceId: c.id,
+            ),
+          ),
+    );
+
+    hits.addAll(
+      timeEntries
+          .where((e) => hit(e.title) || hit(e.note))
+          .take(maxPerKind)
+          .map(
+            (e) => SearchHit(
+              kind: SearchKind.timeEntry,
+              title: e.title,
+              subtitle: e.note,
+              sourceId: e.id,
+              when: e.startAt,
             ),
           ),
     );

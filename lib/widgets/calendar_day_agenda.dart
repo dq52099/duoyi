@@ -14,11 +14,13 @@ import 'calendar_event_sheet.dart';
 class CalendarDayAgenda extends StatelessWidget {
   final DateTime date;
   final CalendarProvider calendarProvider;
+  final Set<CalendarEventType>? activeTypes;
 
   const CalendarDayAgenda({
     super.key,
     required this.date,
     required this.calendarProvider,
+    this.activeTypes,
   });
 
   IconData _icon(CalendarEventType t) {
@@ -50,7 +52,10 @@ class CalendarDayAgenda extends StatelessWidget {
     final anniversaries = context.watch<AnniversaryProvider>();
     final courses = context.watch<CourseProvider>();
     final diary = context.watch<DiaryProvider>();
-    final events = calendarProvider.getEventsForDate(date);
+    final events = calendarProvider.getEventsForDate(
+      date,
+      activeTypes: activeTypes,
+    );
     events.sort((a, b) => (a.time?.hour ?? 0).compareTo(b.time?.hour ?? 0));
 
     final lunar = LunarCalendar.fromSolar(date);

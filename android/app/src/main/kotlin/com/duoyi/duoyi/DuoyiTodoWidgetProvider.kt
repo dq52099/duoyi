@@ -37,6 +37,14 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_todo_count,
                 prefs.getInt("todo_top3_count", 0).toString()
             )
+            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
+            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
+            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
+            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            views.setTextViewText(R.id.widget_todo_nav_todo, tabTodo)
+            views.setTextViewText(R.id.widget_todo_nav_habit, tabHabit)
+            views.setTextViewText(R.id.widget_todo_nav_calendar, tabCalendar)
+            views.setTextViewText(R.id.widget_todo_nav_focus, tabFocus)
             views.setTextViewText(
                 R.id.widget_todo_item_1,
                 prefs.getString("todo_top3_1", "") ?: ""
@@ -59,6 +67,25 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 Uri.parse("duoyi://tab/todo")
             )
             views.setOnClickPendingIntent(R.id.widget_todo_root, open)
+            views.setOnClickPendingIntent(R.id.widget_todo_nav_todo, open)
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_habit,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
+                )
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_calendar,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
+                )
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_focus,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
+                )
+            )
 
             appWidgetManager.updateAppWidget(id, views)
         }

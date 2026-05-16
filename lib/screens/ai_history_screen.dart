@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/ai_service.dart';
@@ -31,7 +32,7 @@ class AiHistoryScreen extends StatelessWidget {
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('取消'),
+                        child: Text(I18n.tr('action.cancel')),
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),

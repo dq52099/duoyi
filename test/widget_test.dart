@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:duoyi/main.dart';
 import 'package:duoyi/core/app_version.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/app_lock_provider.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/auth_provider.dart';
@@ -12,6 +13,7 @@ import 'package:duoyi/providers/course_provider.dart';
 import 'package:duoyi/providers/diary_provider.dart';
 import 'package:duoyi/providers/goal_provider.dart';
 import 'package:duoyi/providers/habit_provider.dart';
+import 'package:duoyi/providers/location_reminder_provider.dart';
 import 'package:duoyi/providers/note_provider.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/providers/pomodoro_provider.dart';
@@ -24,6 +26,7 @@ import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
+import 'package:duoyi/services/calendar_sync_service.dart';
 
 void main() {
   testWidgets('App renders 5 tabs', (WidgetTester tester) async {
@@ -51,6 +54,9 @@ void main() {
           ChangeNotifierProvider(create: (_) => NotificationService()),
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => AiService()),
+          ChangeNotifierProvider(create: (_) => LocaleProvider()),
+          ChangeNotifierProvider(create: (_) => LocationReminderProvider()),
+          ChangeNotifierProvider(create: (_) => CalendarSyncProvider()),
           ChangeNotifierProvider(
             create: (_) => AppUpdateService(
               repo: 'dq52099/duoyi',

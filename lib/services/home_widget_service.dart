@@ -40,6 +40,7 @@ class HomeWidgetService {
         HomeWidget.saveWidgetData<String>('brand_app_title', strings.appTitle),
         HomeWidget.saveWidgetData<String>('nav_todo', strings.navTodo),
         HomeWidget.saveWidgetData<String>('nav_habit', strings.navHabit),
+        HomeWidget.saveWidgetData<String>('nav_calendar', strings.navCalendar),
         HomeWidget.saveWidgetData<String>('nav_focus', strings.navFocus),
         // 今日待办 Top 3
         HomeWidget.saveWidgetData<int>('todo_top3_count', todoCount),

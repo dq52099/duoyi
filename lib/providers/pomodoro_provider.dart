@@ -203,6 +203,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       type: _state.type,
       taskName: _state.taskName,
       whiteNoiseSound: _state.whiteNoiseSound,
+      tag: _state.tag,
     );
     _sessions.add(session);
     _saveSessions();
@@ -329,6 +330,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void setTaskName(String? name) {
     _state = _state.copyWith(taskName: name, clearTaskName: name == null);
+    notifyListeners();
+  }
+
+  void setTag(String? tag) {
+    final clean = tag?.trim();
+    _state = _state.copyWith(
+      tag: clean,
+      clearTag: clean == null || clean.isEmpty,
+    );
     notifyListeners();
   }
 

@@ -104,7 +104,7 @@
                 android:resource="@xml/duoyi_widget_info" />
             <meta-data
                 android:name="miui.appwidget.previewImage"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/widget_preview" />
         </receiver>
 
         <!-- 今日待办 小组件 -->
@@ -122,7 +122,7 @@
                 android:resource="@xml/duoyi_todo_widget_info" />
             <meta-data
                 android:name="miui.appwidget.previewImage"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/widget_todo_preview" />
         </receiver>
 
         <activity

@@ -9,6 +9,7 @@ import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/note_provider.dart';
+import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/empty_state.dart';
@@ -20,6 +21,7 @@ import 'diary_screen.dart';
 import 'goal_screen.dart';
 import 'habit_screen.dart';
 import 'note_screen.dart';
+import 'time_audit_screen.dart';
 import 'todo_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -74,6 +76,7 @@ class _SearchScreenState extends State<SearchScreen> {
         countdowns: context.read<CountdownProvider>().items,
         goals: context.read<GoalProvider>().goals,
         courses: context.read<CourseProvider>().courses,
+        timeEntries: context.read<TimeAuditProvider>().entries,
       );
       setState(() {
         _hits = hits;
@@ -147,6 +150,14 @@ class _SearchScreenState extends State<SearchScreen> {
           MaterialPageRoute(
             builder: (_) =>
                 const BrandRouteSurface(child: CourseScheduleScreen()),
+          ),
+        );
+        break;
+      case SearchKind.timeEntry:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: TimeAuditScreen()),
           ),
         );
         break;

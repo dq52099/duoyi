@@ -105,6 +105,7 @@ class TodoItem {
   String workspaceId;
   String? createdBy;
   String? updatedBy;
+  String? assigneeId;
   List<String> tags;
   DateTime? dueDate;
   DateTime date;
@@ -170,6 +171,7 @@ class TodoItem {
     this.workspaceId = 'private',
     this.createdBy,
     this.updatedBy,
+    this.assigneeId,
     List<String>? tags,
     this.dueDate,
     DateTime? date,
@@ -221,6 +223,7 @@ class TodoItem {
     'workspaceId': workspaceId,
     'createdBy': createdBy,
     'updatedBy': updatedBy,
+    'assigneeId': assigneeId,
     'tags': tags,
     'dueDate': dueDate?.toIso8601String(),
     'date': date.toIso8601String(),
@@ -289,6 +292,7 @@ class TodoItem {
       workspaceId: json['workspaceId']?.toString() ?? 'private',
       createdBy: json['createdBy']?.toString(),
       updatedBy: json['updatedBy']?.toString(),
+      assigneeId: json['assigneeId']?.toString(),
       tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
       dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
       date: DateTime.parse(json['date']),
@@ -334,6 +338,7 @@ class TodoItem {
     String? workspaceId,
     Object? createdBy = _copyWithUnset,
     Object? updatedBy = _copyWithUnset,
+    Object? assigneeId = _copyWithUnset,
     List<String>? tags,
     Object? dueDate = _copyWithUnset,
     DateTime? date,
@@ -370,6 +375,9 @@ class TodoItem {
     updatedBy: identical(updatedBy, _copyWithUnset)
         ? this.updatedBy
         : updatedBy as String?,
+    assigneeId: identical(assigneeId, _copyWithUnset)
+        ? this.assigneeId
+        : assigneeId as String?,
     tags: tags ?? this.tags,
     dueDate: identical(dueDate, _copyWithUnset)
         ? this.dueDate
