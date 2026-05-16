@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/pomodoro.dart';
+import 'surface_components.dart';
 
 class PomodoroSessionCard extends StatelessWidget {
   final PomodoroSession session;
@@ -25,65 +26,86 @@ class PomodoroSessionCard extends StatelessWidget {
     final isFocus = session.type == PomodoroType.focus;
     final color = isFocus ? const Color(0xFFE53935) : const Color(0xFF4CAF50);
 
-    return Container(
+    return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(_icon(session.type), color: color, size: 20),
-        ),
-        title: Text(
-          session.taskName ?? '$dur分钟${isFocus ? "专注" : "休息"}',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Row(
-            children: [
-              Icon(Icons.access_time, size: 12, color: Colors.grey.shade500),
-              const SizedBox(width: 4),
-              Text(
-                time,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              Icon(
-                Icons.hourglass_bottom,
-                size: 12,
-                color: Colors.grey.shade500,
+              child: Icon(_icon(session.type), color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    session.taskName ?? '$dur分钟${isFocus ? "专注" : "休息"}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        time,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.hourglass_bottom,
+                        size: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$dur 分钟',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Text(
-                '$dur 分钟',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-        ),
-        trailing: session.whiteNoiseSound != 'none'
-            ? Container(
+            ),
+            if (session.whiteNoiseSound != 'none')
+              Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   _soundIcon(session.whiteNoiseSound),
                   size: 14,
                   color: Colors.grey,
                 ),
-              )
-            : null,
+              ),
+          ],
+        ),
       ),
     );
   }

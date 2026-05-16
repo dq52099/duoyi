@@ -23,7 +23,8 @@ class FocusSoundService {
 
   String _currentSound = 'none';
   bool _isPlaying = false;
-  double _volume = 0.6;
+  double _volume = 1.0;
+  bool _completionHookAttached = false;
 
   /// 当前正在播放的音轨 id（`'none'` 表示未播）。
   String get currentSound => _currentSound;
@@ -42,6 +43,11 @@ class FocusSoundService {
     'forest': 'sounds/white_noise/forest.mp3',
     'cafe': 'sounds/white_noise/cafe.mp3',
     'waves': 'sounds/white_noise/waves.mp3',
+    'brown_noise': 'sounds/white_noise/brown_noise.mp3',
+    'night_rain': 'sounds/white_noise/night_rain.mp3',
+    'fan': 'sounds/white_noise/fan.mp3',
+    'pink_noise': 'sounds/white_noise/pink_noise.mp3',
+    'deep_stream': 'sounds/white_noise/deep_stream.mp3',
   };
 
   /// 切换音轨；传入 `'none'` 等价于 [stop]。
@@ -56,12 +62,18 @@ class FocusSoundService {
     if (asset == null) {
       return;
     }
-    await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.setPlayerMode(PlayerMode.lowLatency);
-    await _player.setVolume(_volume);
-    await _player.play(AssetSource(asset));
-    _currentSound = sound;
-    _isPlaying = true;
+    try {
+      _attachCompletionHook();
+      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player.setPlayerMode(PlayerMode.mediaPlayer);
+      await _player.setVolume(_volume);
+      await _player.play(AssetSource(asset));
+      _currentSound = sound;
+      _isPlaying = true;
+    } catch (e, st) {
+      debugPrint('[FocusSoundService] failed to play $sound: $e\n$st');
+      await stop();
+    }
   }
 
   /// 停止播放并把状态复位到 `'none'`。
@@ -78,6 +90,20 @@ class FocusSoundService {
   Future<void> setVolume(double v) async {
     _volume = v.clamp(0.0, 1.0).toDouble();
     await _player.setVolume(_volume);
+  }
+
+  void _attachCompletionHook() {
+    if (_completionHookAttached) return;
+    _completionHookAttached = true;
+    _player.onPlayerComplete.listen((_) {
+      final sound = _currentSound;
+      if (!_isPlaying || sound == 'none') return;
+      final asset = _assetMap[sound];
+      if (asset == null) return;
+      // 某些 Android 设备在长 MP3 loop 边界会短暂停止，手动补播。
+      // ignore: discarded_futures
+      _player.play(AssetSource(asset));
+    });
   }
 
   /// 淡入：从 0 线性升至当前 [volume]。仅在正在播放时生效。

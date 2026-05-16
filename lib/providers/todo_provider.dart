@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/domain_event_bus.dart';
+import '../models/time_entry.dart';
 import '../models/todo.dart';
 import '../services/reminder_scheduler.dart';
+import 'time_audit_provider.dart';
 
 class TodoProvider extends ChangeNotifier {
   List<TodoItem> _todos = [];
@@ -14,15 +17,18 @@ class TodoProvider extends ChangeNotifier {
   /// 只有在 [postponeOverdue] 这种显式 hook 里才会尝试转发给调度器，做一次
   /// 额外的重同步。常规写路径依然由 `main.dart` 的 `addListener(resyncReminders)`
   /// 覆盖。
-  ///
-  /// TODO(task-14): 调度器 API 稳定后把 dynamic 兜底调用替换为直接
-  /// `_scheduler!.syncTodos(_todos)` 调用（参见 GoalProvider 4.3 的相同模式）。
   ReminderScheduler? _scheduler;
+  TimeAuditProvider? _timeAudit;
 
   /// 注入或解绑调度器；传 `null` 即解绑。
   // ignore: use_setters_to_change_properties
   set scheduler(ReminderScheduler? s) {
     _scheduler = s;
+  }
+
+  // ignore: use_setters_to_change_properties
+  set timeAudit(TimeAuditProvider? provider) {
+    _timeAudit = provider;
   }
 
   List<TodoItem> get todos => _todos;
@@ -53,33 +59,38 @@ class TodoProvider extends ChangeNotifier {
   /// `CompletionVisibilityPolicy.shouldShowInToday`，只返回
   /// `t.date` 在今日、且未被跨日归档的条目。
   /// 供 Today 列表 / Today Widget 复用，避免各处重复判断。
-  List<TodoItem> visibleTodayTodos(DateTime now) =>
-      _todos
-          .where((t) => CompletionVisibilityPolicy.shouldShowInToday(t, now))
-          .toList();
+  List<TodoItem> visibleTodayTodos(DateTime now) => _todos
+      .where((t) => CompletionVisibilityPolicy.shouldShowInToday(t, now))
+      .toList();
 
   List<TodoItem> get activeTodos =>
       _todos.where((t) => !t.isCompleted).toList();
+  List<TodoItem> get visibleListTodos => _todos
+      .where(
+        (t) =>
+            CompletionVisibilityPolicy.visualState(t) !=
+            TodoVisualState.archived,
+      )
+      .toList();
   List<TodoItem> get completedTodos =>
       _todos.where((t) => t.isCompleted).toList();
 
-  List<TodoItem> get overdueTodos =>
-      _todos.where((t) => t.isOverdue).toList();
+  List<TodoItem> get overdueTodos => _todos.where((t) => t.isOverdue).toList();
 
   Map<EisenhowerQuadrant, List<TodoItem>> get quadrantGroups {
     final map = <EisenhowerQuadrant, List<TodoItem>>{};
     for (final q in EisenhowerQuadrant.values) {
-      map[q] = activeTodos.where((t) => t.quadrant == q).toList();
+      map[q] = visibleListTodos.where((t) => t.quadrant == q).toList();
     }
     return map;
   }
 
   List<TodoItem> getQuadrantTodos(EisenhowerQuadrant q) =>
-      activeTodos.where((t) => t.quadrant == q).toList();
+      visibleListTodos.where((t) => t.quadrant == q).toList();
 
   Map<String, List<TodoItem>> get listGroupedTodos {
     final map = <String, List<TodoItem>>{};
-    for (final t in activeTodos) {
+    for (final t in visibleListTodos) {
       final key = t.listGroupName ?? '未分组';
       map.putIfAbsent(key, () => []).add(t);
     }
@@ -94,6 +105,18 @@ class TodoProvider extends ChangeNotifier {
       }
     }
     return names;
+  }
+
+  String? workspaceForListGroup(String groupName) {
+    final group = visibleListTodos.where(
+      (todo) => (todo.listGroupName ?? '未分组') == groupName,
+    );
+    for (final todo in group) {
+      if (todo.workspaceId != 'private' && todo.workspaceId.isNotEmpty) {
+        return todo.workspaceId;
+      }
+    }
+    return null;
   }
 
   Set<String> get allTags {
@@ -129,6 +152,9 @@ class TodoProvider extends ChangeNotifier {
 
   Future<void> addTodo(TodoItem todo) async {
     _todos.add(todo);
+    DomainEventBus.instance.publish(
+      DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
+    );
     _notify();
     await _saveToStorage();
   }
@@ -136,9 +162,29 @@ class TodoProvider extends ChangeNotifier {
   Future<void> updateTodo(String id, TodoItem updated) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
-      _todos[idx] = updated;
+      final prev = _todos[idx];
+      final next = updated.isCompleted && updated.completedAt == null
+          ? updated.copyWith(completedAt: DateTime.now())
+          : updated;
+      _todos[idx] = next;
+      if (!prev.isCompleted && next.isCompleted) {
+        DomainEventBus.instance.publish(
+          DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
+        );
+      }
       _notify();
       await _saveToStorage();
+      if (next.isCompleted) {
+        await _timeAudit?.recordTodoCompletion(
+          next,
+          completedAt: next.completedAt,
+        );
+      } else if (prev.isCompleted && !next.isCompleted) {
+        await _timeAudit?.removeTodoCompletion(
+          prev,
+          completedAt: prev.completedAt,
+        );
+      }
     }
   }
 
@@ -152,14 +198,42 @@ class TodoProvider extends ChangeNotifier {
       isCompleted: nowCompleted,
       completedAt: nowCompleted ? DateTime.now() : null,
     );
+    if (nowCompleted) {
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.todoCompleted, objectId: prev.id),
+      );
+    }
 
     if (nowCompleted && prev.recurrence.isActive) {
-      final anchor = prev.dueDate ?? prev.date;
-      final next = prev.recurrence.nextAfter(anchor);
+      final next = prev.recurrence.nextAfter(prev.date);
       if (next != null) {
         final delta = prev.dueDate == null
             ? Duration.zero
             : prev.dueDate!.difference(prev.date);
+        final nextDue = prev.dueDate == null ? null : next.add(delta);
+        DateTime? nextReminderAt;
+        // ignore: deprecated_member_use_from_same_package
+        final reminderEnabled = prev.reminder.enabled || prev.hasReminder;
+        if (reminderEnabled) {
+          final hour = prev.reminder.enabled
+              ? prev.reminder.hour
+              // ignore: deprecated_member_use_from_same_package
+              : prev.reminderAt?.hour;
+          final minute = prev.reminder.enabled
+              ? prev.reminder.minute
+              // ignore: deprecated_member_use_from_same_package
+              : prev.reminderAt?.minute;
+          if (hour != null && minute != null) {
+            final reminderAnchor = nextDue ?? next;
+            nextReminderAt = DateTime(
+              reminderAnchor.year,
+              reminderAnchor.month,
+              reminderAnchor.day,
+              hour,
+              minute,
+            );
+          }
+        }
         _todos.add(
           TodoItem(
             title: prev.title,
@@ -169,13 +243,18 @@ class TodoProvider extends ChangeNotifier {
             listGroupId: prev.listGroupId,
             listGroupName: prev.listGroupName,
             tags: [...prev.tags],
-            dueDate: prev.dueDate == null ? null : next.add(delta),
+            dueDate: nextDue,
             date: next,
-            hasReminder: prev.hasReminder,
-            reminderAt: null,
+            hasReminder: reminderEnabled,
+            reminderAt: nextReminderAt,
+            reminder: prev.reminder,
+            reminderPlan: prev.reminderPlan,
+            focusLink: prev.focusLink,
+            timeTargetSeconds: prev.timeTargetSeconds,
             subtasks: prev.subtasks
                 .map((s) => Subtask(title: s.title, sortOrder: s.sortOrder))
                 .toList(),
+            autoToggleByChildren: prev.autoToggleByChildren,
             recurrence: prev.recurrence,
             sortOrder: prev.sortOrder,
           ),
@@ -185,9 +264,24 @@ class TodoProvider extends ChangeNotifier {
 
     _notify();
     await _saveToStorage();
+    if (nowCompleted) {
+      await _timeAudit?.recordTodoCompletion(
+        _todos[idx],
+        completedAt: _todos[idx].completedAt,
+      );
+    } else {
+      await _timeAudit?.removeTodoCompletion(
+        prev,
+        completedAt: prev.completedAt,
+      );
+    }
   }
 
   Future<void> deleteTodo(String id) async {
+    final idx = _todos.indexWhere((t) => t.id == id);
+    if (idx != -1) {
+      await _timeAudit?.deleteBySource(TimeEntrySource.todo, id);
+    }
     _todos.removeWhere((t) => t.id == id);
     _notify();
     await _saveToStorage();
@@ -205,6 +299,27 @@ class TodoProvider extends ChangeNotifier {
     }
     newList.addAll(map.values);
     _todos = newList;
+    _notify();
+    await _saveToStorage();
+  }
+
+  Future<void> updateListGroupWorkspace(
+    String groupName,
+    String workspaceId, {
+    String? userId,
+  }) async {
+    var mutated = false;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if ((todo.listGroupName ?? '未分组') != groupName) continue;
+      _todos[i] = todo.copyWith(
+        workspaceId: workspaceId,
+        updatedBy: userId,
+        createdBy: todo.createdBy ?? userId,
+      );
+      mutated = true;
+    }
+    if (!mutated) return;
     _notify();
     await _saveToStorage();
   }
@@ -245,12 +360,16 @@ class TodoProvider extends ChangeNotifier {
     final t = _todos[idx];
     if (t.subtasks.isEmpty) return;
 
+    TodoItem? completedTodo;
+    DateTime? removedCompletedAt;
     if (t.autoToggleByChildren) {
       final allDone = t.subtasks.every((s) => s.isCompleted);
       if (allDone && !t.isCompleted) {
         t.isCompleted = true;
         t.completedAt = DateTime.now();
+        completedTodo = t;
       } else if (!allDone && t.isCompleted) {
+        removedCompletedAt = t.completedAt;
         t.isCompleted = false;
         t.completedAt = null;
       }
@@ -258,6 +377,17 @@ class TodoProvider extends ChangeNotifier {
 
     _notify();
     await _saveToStorage();
+    if (completedTodo != null) {
+      await _timeAudit?.recordTodoCompletion(
+        completedTodo,
+        completedAt: completedTodo.completedAt,
+      );
+    } else if (removedCompletedAt != null) {
+      await _timeAudit?.removeTodoCompletion(
+        t,
+        completedAt: removedCompletedAt,
+      );
+    }
   }
 
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
@@ -312,8 +442,11 @@ class TodoProvider extends ChangeNotifier {
       final completedAt = t.completedAt;
       if (completedAt == null) continue;
 
-      final completedDay =
-          DateTime(completedAt.year, completedAt.month, completedAt.day);
+      final completedDay = DateTime(
+        completedAt.year,
+        completedAt.month,
+        completedAt.day,
+      );
       if (!completedDay.isBefore(todayStart)) continue;
 
       t.isArchivedAfterRollover = true;
@@ -391,20 +524,15 @@ class TodoProvider extends ChangeNotifier {
     await _saveToStorage();
     _notify();
 
-    // TODO(task-14): ReminderScheduler.syncTodos 签名稳定后改为直接调用。
+    // 顺延后重新同步提醒调度队列。
     final scheduler = _scheduler;
     if (scheduler != null) {
       try {
-        // ignore: avoid_dynamic_calls
-        final result = (scheduler as dynamic).syncTodos(List.of(_todos));
-        if (result is Future) await result;
-      } on NoSuchMethodError {
-        debugPrint(
-          '[TodoProvider] postponeOverdue: scheduler.syncTodos not yet '
-          'implemented; falling back to no-op. TODO(task-14)',
-        );
+        await scheduler.syncTodos(List.of(_todos));
       } catch (e, st) {
-        debugPrint('[TodoProvider] postponeOverdue scheduler sync failed: $e\n$st');
+        debugPrint(
+          '[TodoProvider] postponeOverdue scheduler sync failed: $e\n$st',
+        );
       }
     }
   }

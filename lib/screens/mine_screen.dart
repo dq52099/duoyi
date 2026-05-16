@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/app_version.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
@@ -13,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../services/ai_service.dart';
 import '../services/app_update_service.dart';
 import '../widgets/stats_overview_cards.dart';
+import '../widgets/surface_components.dart';
 import 'theme_picker_screen.dart';
 import 'login_screen.dart';
 import 'announcements_screen.dart';
@@ -20,6 +20,7 @@ import 'feedback_screen.dart';
 import 'countdown_screen.dart';
 import 'note_screen.dart';
 import 'statistics_screen.dart';
+import 'time_audit_screen.dart';
 import 'anniversary_screen.dart';
 import 'diary_screen.dart';
 import 'goal_screen.dart';
@@ -33,6 +34,8 @@ import 'export_screen.dart';
 import 'search_screen.dart';
 import 'ai_history_screen.dart';
 import 'preferences_screen.dart';
+import 'integrations_screen.dart';
+import 'share_screen.dart';
 
 class MineScreen extends StatelessWidget {
   const MineScreen({super.key});
@@ -52,12 +55,6 @@ class MineScreen extends StatelessWidget {
     final updater = context.watch<AppUpdateService>();
     final cs = Theme.of(context).colorScheme;
 
-    userProvider.recalc(
-      completedTodos: todoProvider.completedTodos.length,
-      totalFocusMinutes: pomodoroProvider.totalFocusMinutes,
-      currentStreak: habitProvider.longestCurrentStreak,
-      bestStreak: habitProvider.longestBestStreak,
-    );
     final p = userProvider.profile;
     final hour = DateTime.now().hour;
     final greeting = hour < 6
@@ -82,13 +79,11 @@ class MineScreen extends StatelessWidget {
       body: ListView(
         children: [
           // Profile header
-          Container(
+          AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(16),
-            ),
+            color: cs.surface.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(22),
             child: Row(
               children: [
                 CircleAvatar(
@@ -99,7 +94,7 @@ class MineScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       color: cs.onPrimary,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -112,7 +107,7 @@ class MineScreen extends StatelessWidget {
                         '$greeting，$displayName',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -121,7 +116,7 @@ class MineScreen extends StatelessWidget {
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       if (auth.state.isLoggedIn && auth.state.isAdmin) ...[
@@ -217,21 +212,34 @@ class MineScreen extends StatelessWidget {
             ),
           ),
 
-          // AI weekly review
-          if (ai.enabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: _AiWeeklyReviewCard(
-                todoProvider: todoProvider,
-                pomodoroProvider: pomodoroProvider,
-                habitProvider: habitProvider,
-              ),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: ai.enabled
+                ? _AiWeeklyReviewCard(
+                    todoProvider: todoProvider,
+                    pomodoroProvider: pomodoroProvider,
+                    habitProvider: habitProvider,
+                  )
+                : AppInfoBanner(
+                    icon: Icons.auto_awesome,
+                    title: 'AI 助手',
+                    message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
+                    color: Colors.purple,
+                    onTap: auth.state.isAdmin
+                        ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AdminScreen(),
+                            ),
+                          )
+                        : null,
+                  ),
+          ),
 
           const SizedBox(height: 8),
           _Section(title: '效率与工具'),
           _Tile(
-            icon: Icons.flag_outlined,
+            icon: Icons.flag_circle_outlined,
             label: '目标管理',
             color: Colors.orange,
             onTap: () => Navigator.push(
@@ -258,12 +266,30 @@ class MineScreen extends StatelessWidget {
             ),
           ),
           _Tile(
+            icon: Icons.groups_2_outlined,
+            label: '共享空间',
+            color: Colors.cyan,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShareScreen()),
+            ),
+          ),
+          _Tile(
             icon: Icons.pie_chart_outline,
             label: '时光足迹 (数据报表)',
             color: Colors.indigo,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+            ),
+          ),
+          _Tile(
+            icon: Icons.access_time,
+            label: '时间足迹',
+            color: Colors.teal,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
             ),
           ),
           _Tile(
@@ -299,8 +325,7 @@ class MineScreen extends StatelessWidget {
             color: Colors.blue,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const CourseScheduleScreen()),
+              MaterialPageRoute(builder: (_) => const CourseScheduleScreen()),
             ),
           ),
           _Tile(
@@ -426,6 +451,15 @@ class MineScreen extends StatelessWidget {
             ),
           ),
           _Tile(
+            icon: Icons.extension_outlined,
+            label: '扩展集成',
+            color: Colors.deepPurple,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const IntegrationsScreen()),
+            ),
+          ),
+          _Tile(
             icon: Icons.notifications_outlined,
             label: s.mineNotificationsLabel,
             color: Colors.orange,
@@ -434,6 +468,12 @@ class MineScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 13),
             ),
             onTap: () => _notifDialog(context, notifService),
+          ),
+          _Tile(
+            icon: Icons.widgets_outlined,
+            label: '小部件菜单',
+            color: Colors.teal,
+            onTap: () => _widgetHelpDialog(context),
           ),
           _Tile(
             icon: Icons.lock_outline,
@@ -451,9 +491,13 @@ class MineScreen extends StatelessWidget {
               color: Colors.purple,
               trailing: ai.reviewHistory.isEmpty
                   ? null
-                  : Text('${ai.reviewHistory.length}',
+                  : Text(
+                      '${ai.reviewHistory.length}',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade600)),
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
@@ -463,9 +507,7 @@ class MineScreen extends StatelessWidget {
               (auth.serverConfig['backup_enabled'] != false))
             _Tile(
               icon: Icons.cloud_sync_outlined,
-              label: syncProvider.hasPendingChanges
-                  ? '立即同步 · 有未同步改动'
-                  : '立即同步',
+              label: syncProvider.hasPendingChanges ? '立即同步 · 有未同步改动' : '立即同步',
               color: syncProvider.hasPendingChanges
                   ? Colors.orange
                   : Colors.cyan,
@@ -476,19 +518,22 @@ class MineScreen extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : (syncProvider.hasPendingChanges
-                      ? const Icon(Icons.fiber_manual_record,
-                          color: Colors.orange, size: 12)
-                      : Text(
-                          syncProvider.hasEverSynced
-                              ? _formatTime(syncProvider.config.lastSync)
-                              : '未同步',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: syncProvider.hasEverSynced
-                                ? Colors.green
-                                : Colors.grey,
-                          ),
-                        )),
+                        ? const Icon(
+                            Icons.fiber_manual_record,
+                            color: Colors.orange,
+                            size: 12,
+                          )
+                        : Text(
+                            syncProvider.hasEverSynced
+                                ? _formatTime(syncProvider.config.lastSync)
+                                : '未同步',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: syncProvider.hasEverSynced
+                                  ? Colors.green
+                                  : Colors.grey,
+                            ),
+                          )),
               onTap: syncProvider.isSyncing
                   ? null
                   : () async {
@@ -555,67 +600,105 @@ class MineScreen extends StatelessWidget {
     if (!context.mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('检查更新'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('当前版本: ${u.currentVersion}'),
-            Text('远端版本: ${u.latestVersion ?? '—'}'),
-            if (u.error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                u.error!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ],
-            if (u.hasUpdate) ...[
-              const SizedBox(height: 12),
-              const Text(
-                '发现新版本',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              if ((u.latestNotes ?? '').isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    u.latestNotes!,
+      builder: (ctx) => Consumer<AppUpdateService>(
+        builder: (context, updater, _) {
+          final notes = updater.latestNotesForDisplay;
+          return AppDialog(
+            title: const Text('检查更新'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('当前版本: ${updater.currentVersion}'),
+                Text('远端版本: ${updater.latestVersion ?? '—'}'),
+                if (updater.error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    updater.error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ],
+                if (updater.hasUpdate) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '发现新版本',
+                    style: TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                ] else if (updater.error == null && !updater.checking) ...[
+                  const SizedBox(height: 12),
+                  const Text('已是最新版本'),
+                ],
+                if (notes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '更新内容',
+                    style: TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          notes,
+                          style: const TextStyle(fontSize: 12, height: 1.45),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (updater.hasUpdate && updater.latestAssetName != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '安装包：${updater.latestAssetName}',
                     style: const TextStyle(fontSize: 12),
                   ),
-                ),
-              if (u.latestUrl != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '下载地址：${u.latestUrl}',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
+                ],
+                if (updater.hasUpdate && updater.downloading) ...[
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: updater.downloadProgress),
+                  const SizedBox(height: 6),
+                  Text(
+                    updater.downloadProgress == null
+                        ? '正在下载更新包'
+                        : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ] else if (updater.hasUpdate && updater.installing) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 6),
+                  const Text('正在打开安装器', style: TextStyle(fontSize: 12)),
+                ],
               ],
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-          if (u.hasUpdate && u.latestUrl != null)
-            FilledButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final opened = await launchUrl(
-                  Uri.parse(u.latestUrl!),
-                  mode: LaunchMode.externalApplication,
-                );
-                if (!opened && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('无法打开下载地址: ${u.latestUrl}')),
-                  );
-                }
-              },
-              child: const Text('前往下载'),
             ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: updater.busy ? null : () => Navigator.pop(ctx),
+                child: const Text('关闭'),
+              ),
+              if (updater.hasUpdate && updater.latestUrl != null)
+                FilledButton.icon(
+                  onPressed: updater.busy
+                      ? null
+                      : () async {
+                          await updater.downloadAndInstallLatest();
+                          if (!context.mounted) return;
+                          if (updater.error != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(updater.error!)),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  label: Text(
+                    updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -623,7 +706,7 @@ class MineScreen extends StatelessWidget {
   void _notifDialog(BuildContext context, NotificationService ns) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('通知记录'),
         content: ns.history.isEmpty
             ? const Text('暂无通知记录')
@@ -666,10 +749,51 @@ class MineScreen extends StatelessWidget {
     );
   }
 
+  void _widgetHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('小部件菜单'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _WidgetCatalogTile(
+              icon: Icons.dashboard_customize_outlined,
+              title: '多仪概览',
+              subtitle: '今日待办数、习惯完成率、今日专注和日程摘要',
+              color: Colors.teal,
+            ),
+            _WidgetCatalogTile(
+              icon: Icons.checklist_rtl_outlined,
+              title: '今日待办',
+              subtitle: '展示前三个今日任务，可从桌面直接进入任务',
+              color: Colors.blue,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '在系统桌面长按空白处，选择“小组件”，找到“多仪”后拖到桌面。',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _aboutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('多仪'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
@@ -688,6 +812,33 @@ class MineScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WidgetCatalogTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+
+  const _WidgetCatalogTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: 0.14),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
     );
   }
 }
@@ -748,59 +899,65 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, color: cs.primary, size: 18),
-                const SizedBox(width: 6),
-                const Text(
-                  'AI 每周回顾',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(14),
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _busy ? null : _run,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('生成'),
-                ),
-              ],
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              )
-            else if (_result != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  _result!,
-                  style: const TextStyle(fontSize: 13, height: 1.6),
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '点击"生成"让 AI 根据本周完成数据写一段总结与建议',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
+                child: Icon(Icons.auto_awesome, color: cs.primary, size: 18),
               ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              const Text(
+                'AI 每周回顾',
+                style: TextStyle(fontWeight: FontWeight.w400),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _busy ? null : _run,
+                child: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('生成'),
+              ),
+            ],
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            )
+          else if (_result != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _result!,
+                style: const TextStyle(fontSize: 13, height: 1.6),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '点击"生成"让 AI 根据本周完成数据写一段总结与建议',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -812,16 +969,9 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return AppSectionHeader(
+      title: title,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey.shade600,
-        ),
-      ),
     );
   }
 }
@@ -843,18 +993,11 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
-      trailing: trailing ?? const Icon(Icons.chevron_right, size: 18),
+    return AppActionTile(
+      icon: icon,
+      label: label,
+      color: color,
+      trailing: trailing,
       onTap: onTap,
     );
   }

@@ -32,14 +32,18 @@ class DesignTokens {
   static const double radiusPill = 999;
 
   // Convenience shapes
-  static const BorderRadius borderRadiusSm =
-      BorderRadius.all(Radius.circular(radiusSm));
-  static const BorderRadius borderRadiusMd =
-      BorderRadius.all(Radius.circular(radiusMd));
-  static const BorderRadius borderRadiusLg =
-      BorderRadius.all(Radius.circular(radiusLg));
-  static const BorderRadius borderRadiusXl =
-      BorderRadius.all(Radius.circular(radiusXl));
+  static const BorderRadius borderRadiusSm = BorderRadius.all(
+    Radius.circular(radiusSm),
+  );
+  static const BorderRadius borderRadiusMd = BorderRadius.all(
+    Radius.circular(radiusMd),
+  );
+  static const BorderRadius borderRadiusLg = BorderRadius.all(
+    Radius.circular(radiusLg),
+  );
+  static const BorderRadius borderRadiusXl = BorderRadius.all(
+    Radius.circular(radiusXl),
+  );
 
   // ----- Typography scale（与 ThemeData TextTheme 协同，提供字号常量） -----
   static const double fontSizeXs = 11;
@@ -51,9 +55,9 @@ class DesignTokens {
   static const double fontSizeXxl = 28;
 
   static const FontWeight fontWeightRegular = FontWeight.w400;
-  static const FontWeight fontWeightMedium = FontWeight.w500;
-  static const FontWeight fontWeightSemiBold = FontWeight.w600;
-  static const FontWeight fontWeightBold = FontWeight.w700;
+  static const FontWeight fontWeightMedium = FontWeight.w400;
+  static const FontWeight fontWeightSemiBold = FontWeight.w400;
+  static const FontWeight fontWeightBold = FontWeight.w400;
 
   // ----- Elevation / Shadow -----
   static const List<BoxShadow> shadowXs = [
@@ -118,9 +122,17 @@ class DesignTokens {
   static const Color priorityNone = Color(0xFFB0BEC5); // blueGrey 200
 
   // ----- Dialog / 二次确认 统一样式 token -----
-  static const EdgeInsets dialogContentPadding =
-      EdgeInsets.fromLTRB(spaceXxl, spaceLg, spaceXxl, spaceSm);
-  static const EdgeInsets dialogActionsPadding =
-      EdgeInsets.fromLTRB(spaceMd, 0, spaceMd, spaceSm);
+  static const EdgeInsets dialogContentPadding = EdgeInsets.fromLTRB(
+    spaceXxl,
+    spaceLg,
+    spaceXxl,
+    spaceSm,
+  );
+  static const EdgeInsets dialogActionsPadding = EdgeInsets.fromLTRB(
+    spaceMd,
+    0,
+    spaceMd,
+    spaceSm,
+  );
   static const BorderRadius dialogBorderRadius = borderRadiusLg;
 }

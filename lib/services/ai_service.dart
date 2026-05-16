@@ -112,14 +112,33 @@ class AiService extends ChangeNotifier {
   }) async {
     final summary =
         '本周数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
+    return _runReview(summary, '本周');
+  }
+
+  /// 基于 ReportEngine 的 PeriodReport 生成自然语言周/月报。
+  Future<String> reviewFromReport({
+    required int completedTodos,
+    required int totalTodos,
+    required int focusMinutes,
+    required int habitStreak,
+    required int habitCheckIns,
+    required int timeEntryMinutes,
+    required String periodLabel,
+  }) async {
+    final summary = '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，'
+        '专注 $focusMinutes 分钟，习惯打卡 $habitCheckIns 次（最长连续 $habitStreak 天），'
+        '记录时间 $timeEntryMinutes 分钟。';
+    return _runReview(summary, periodLabel);
+  }
+
+  Future<String> _runReview(String summary, String periodLabel) async {
     final out = await _chat(
-      '你是一个温柔且实用的效率教练。基于本周完成情况写一段 80-150 字的中文回顾，'
+      '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
       '语气积极不空洞，先肯定 1-2 点亮点，再提 1-2 个具体可执行的下周建议。',
       summary,
       temperature: 0.6,
       maxTokens: 400,
     );
-    // 存入历史
     final entry = AiReviewEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       createdAt: DateTime.now(),
@@ -128,7 +147,6 @@ class AiService extends ChangeNotifier {
       model: _model,
     );
     _reviewHistory.insert(0, entry);
-    // 最多保留 50 条
     if (_reviewHistory.length > 50) {
       _reviewHistory = _reviewHistory.sublist(0, 50);
     }

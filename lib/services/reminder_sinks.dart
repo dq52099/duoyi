@@ -80,6 +80,20 @@ abstract class ReminderAlarmSink {
     required DateTime when,
     String? payload,
     bool requireExactAlarm = true,
+    bool fullScreen = true,
+  });
+
+  /// 全屏闹钟的重复调度（每日 / 每周）。
+  Future<void> scheduleDailyFullScreen({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+    bool requireExactAlarm = true,
+    bool fullScreen = true,
   });
 
   /// 按 id 取消一条闹钟。

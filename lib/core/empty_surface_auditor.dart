@@ -30,7 +30,7 @@ class EmptySurfaceEntry {
 
   @override
   String toString() =>
-      '${file}: ${reason}${fixTicketId == null ? '' : ' [${fixTicketId}]'}';
+      '$file: $reason${fixTicketId == null ? '' : ' [$fixTicketId]'}';
 }
 
 /// 空架子扫描器。
@@ -54,22 +54,23 @@ class EmptySurfaceAuditor {
     ),
     EmptySurfaceEntry(
       file: 'lib/services/recurrence_engine.dart',
-      reason: 'RecurrenceEngine 尚未实现，编辑页"下一派发日"使用 RecurrenceRule.nextAfter 临时回退',
-      fixTicketId: '22.1',
+      reason:
+          'RecurrenceEngine 已实现，编辑页"下一派发日"已切到 RecurrenceEngine.nextOccurrence',
+      fixTicketId: '22.1', // M0 修复：goal_edit_screen 已集成 RecurrenceEngine
     ),
     EmptySurfaceEntry(
       file: 'lib/services/holiday_calendar.dart',
-      reason: 'HolidayCalendar 服务尚未落地，"跳过节假日"仅在模型上有开关',
-      fixTicketId: '21',
+      reason: 'HolidayCalendar 内置数据已覆盖 2024-2026；后续年份通过 updateFrom 注入',
+      fixTicketId: '21', // M0 修复：补齐 2026 节假日数据
     ),
     EmptySurfaceEntry(
       file: 'lib/widgets/result_states.dart',
-      reason: 'EmptyState / LoadingState / ErrorState 三件套尚未拆出',
-      fixTicketId: '20',
+      reason: 'EmptyState / LoadingState / ErrorState 三件套已实现',
+      fixTicketId: '20', // result_states.dart 已提供完整三件套
     ),
     EmptySurfaceEntry(
       file: 'backend/main.py',
-      reason: '后端 cloud_sync_v2 接口字段与新 Goal/Todo 结构未对齐',
+      reason: '后端 cloud_sync_v2 接口字段与新 Goal/Todo 结构对齐工作进行中',
       fixTicketId: '23.3',
     ),
   ];

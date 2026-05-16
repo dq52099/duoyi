@@ -35,6 +35,16 @@ class BrandBackground extends StatelessWidget {
   }
 }
 
+/// Keeps route-pushed transparent pages from falling through to the Navigator's
+/// black backing surface.
+class BrandRouteSurface extends StatelessWidget {
+  final Widget child;
+  const BrandRouteSurface({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) => BrandBackground(child: child);
+}
+
 /// A scaffold that shows transparent surfaces on top of the brand background.
 /// Use this in screens so they don't paint a solid scaffold color over the
 /// brand image.

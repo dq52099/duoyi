@@ -57,22 +57,7 @@ void main() {
     final hour = rng.nextInt(24);
     final minute = rng.nextInt(60);
     final date = DateTime(now.year, now.month, now.day, hour, minute);
-    return TodoItem(
-      title: 'today-$index',
-      date: date,
-    );
-  }
-
-  /// 生成一个 [0, n) 的随机排列（Fisher–Yates, 用指定 rng）。
-  List<int> shuffledIndices(int n, Random rng) {
-    final list = List<int>.generate(n, (i) => i);
-    for (int i = n - 1; i > 0; i--) {
-      final j = rng.nextInt(i + 1);
-      final tmp = list[i];
-      list[i] = list[j];
-      list[j] = tmp;
-    }
-    return list;
+    return TodoItem(title: 'today-$index', date: date);
   }
 
   group('P4 - 当日完成不销毁', () {
@@ -103,8 +88,10 @@ void main() {
           final pickId = ids[pickIdx];
 
           final before = provider.todos.firstWhere((t) => t.id == pickId);
-          assert(before.isCompleted == false,
-              'precondition: newly-created todo should be !isCompleted');
+          assert(
+            before.isCompleted == false,
+            'precondition: newly-created todo should be !isCompleted',
+          );
 
           final tBefore = DateTime.now();
           await provider.toggleTodo(pickId);
@@ -148,8 +135,7 @@ void main() {
           expect(
             CompletionVisibilityPolicy.shouldShowInToday(updated, now),
             isTrue,
-            reason:
-                'iter=$iter n=$n — 当日完成的 todo 必须仍被 shouldShowInToday 认可',
+            reason: 'iter=$iter n=$n — 当日完成的 todo 必须仍被 shouldShowInToday 认可',
           );
 
           // P4 断言：可视状态 = completed。
@@ -162,179 +148,167 @@ void main() {
       },
     );
 
-    test(
-      'reverse: 对已完成 todo 再次 toggle 后 '
-      '回到非 completed 可视状态；completedAt=null；仍在 provider.todos 且可见',
-      () async {
-        final rng = Random(kSeed);
+    test('reverse: 对已完成 todo 再次 toggle 后 '
+        '回到非 completed 可视状态；completedAt=null；仍在 provider.todos 且可见', () async {
+      final rng = Random(kSeed);
 
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
+      for (int iter = 0; iter < kIterations; iter++) {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final provider = TodoProvider();
 
-          final now = DateTime.now();
-          final n = 1 + rng.nextInt(8);
+        final now = DateTime.now();
+        final n = 1 + rng.nextInt(8);
 
-          final ids = <String>[];
-          for (int i = 0; i < n; i++) {
-            final todo = buildTodayTodo(now: now, index: i, rng: rng);
-            await provider.addTodo(todo);
-            ids.add(todo.id);
-          }
-
-          final pickIdx = rng.nextInt(n);
-          final pickId = ids[pickIdx];
-
-          // 先完成，再 un-complete。
-          await provider.toggleTodo(pickId);
-          final completed =
-              provider.todos.firstWhere((t) => t.id == pickId);
-          assert(completed.isCompleted);
-          assert(completed.completedAt != null);
-
-          await provider.toggleTodo(pickId);
-
-          // 仍在 provider.todos 中（绝不物理删除）。
-          expect(
-            provider.todos.any((t) => t.id == pickId),
-            isTrue,
-            reason: 'iter=$iter — un-complete 不应物理删除 todo',
-          );
-
-          final after = provider.todos.firstWhere((t) => t.id == pickId);
-          expect(
-            after.isCompleted,
-            isFalse,
-            reason: 'iter=$iter — un-complete 后 isCompleted 应为 false',
-          );
-          expect(
-            after.completedAt,
-            isNull,
-            reason: 'iter=$iter — un-complete 后 completedAt 应被清空',
-          );
-
-          // visualState 离开 completed 档位。
-          final vs = CompletionVisibilityPolicy.visualState(after, now: now);
-          expect(
-            vs == TodoVisualState.completed,
-            isFalse,
-            reason: 'iter=$iter — un-complete 后 visualState 不应再是 completed '
-                '(actual=$vs)',
-          );
-          // buildTodayTodo 不设置 dueDate，因此此时必定是 normal。
-          expect(
-            vs,
-            TodoVisualState.normal,
-            reason: 'iter=$iter — 未设置 dueDate 的当日 todo 应为 normal',
-          );
-
-          // 仍然今日可见。
-          expect(
-            CompletionVisibilityPolicy.shouldShowInToday(after, now),
-            isTrue,
-            reason: 'iter=$iter — un-complete 后仍应在今日视图可见',
-          );
+        final ids = <String>[];
+        for (int i = 0; i < n; i++) {
+          final todo = buildTodayTodo(now: now, index: i, rng: rng);
+          await provider.addTodo(todo);
+          ids.add(todo.id);
         }
-      },
-    );
+
+        final pickIdx = rng.nextInt(n);
+        final pickId = ids[pickIdx];
+
+        // 先完成，再 un-complete。
+        await provider.toggleTodo(pickId);
+        final completed = provider.todos.firstWhere((t) => t.id == pickId);
+        assert(completed.isCompleted);
+        assert(completed.completedAt != null);
+
+        await provider.toggleTodo(pickId);
+
+        // 仍在 provider.todos 中（绝不物理删除）。
+        expect(
+          provider.todos.any((t) => t.id == pickId),
+          isTrue,
+          reason: 'iter=$iter — un-complete 不应物理删除 todo',
+        );
+
+        final after = provider.todos.firstWhere((t) => t.id == pickId);
+        expect(
+          after.isCompleted,
+          isFalse,
+          reason: 'iter=$iter — un-complete 后 isCompleted 应为 false',
+        );
+        expect(
+          after.completedAt,
+          isNull,
+          reason: 'iter=$iter — un-complete 后 completedAt 应被清空',
+        );
+
+        // visualState 离开 completed 档位。
+        final vs = CompletionVisibilityPolicy.visualState(after, now: now);
+        expect(
+          vs == TodoVisualState.completed,
+          isFalse,
+          reason:
+              'iter=$iter — un-complete 后 visualState 不应再是 completed '
+              '(actual=$vs)',
+        );
+        // buildTodayTodo 不设置 dueDate，因此此时必定是 normal。
+        expect(
+          vs,
+          TodoVisualState.normal,
+          reason: 'iter=$iter — 未设置 dueDate 的当日 todo 应为 normal',
+        );
+
+        // 仍然今日可见。
+        expect(
+          CompletionVisibilityPolicy.shouldShowInToday(after, now),
+          isTrue,
+          reason: 'iter=$iter — un-complete 后仍应在今日视图可见',
+        );
+      }
+    });
   });
 
   group('shouldShowInToday - 日期边界', () {
-    test(
-      '明日日期的 todo → shouldShowInToday = false；'
-      '昨日日期的 todo → shouldShowInToday = false',
-      () {
-        final rng = Random(kSeed);
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
+    test('明日日期的 todo → shouldShowInToday = false；'
+        '昨日日期的 todo → shouldShowInToday = false', () {
+      final rng = Random(kSeed);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-        for (int iter = 0; iter < kIterations; iter++) {
-          // 随机向前/向后偏移 1..7 天。
-          final offsetDays = 1 + rng.nextInt(7);
-          final hour = rng.nextInt(24);
-          final minute = rng.nextInt(60);
+      for (int iter = 0; iter < kIterations; iter++) {
+        // 随机向前/向后偏移 1..7 天。
+        final offsetDays = 1 + rng.nextInt(7);
+        final hour = rng.nextInt(24);
+        final minute = rng.nextInt(60);
 
-          final tomorrow = today.add(Duration(days: offsetDays));
-          final tomorrowTodo = TodoItem(
-            title: 'tomorrow-$iter',
-            date: DateTime(
-              tomorrow.year,
-              tomorrow.month,
-              tomorrow.day,
-              hour,
-              minute,
-            ),
-          );
-          expect(
-            CompletionVisibilityPolicy.shouldShowInToday(tomorrowTodo, now),
-            isFalse,
-            reason:
-                'iter=$iter offset=+$offsetDays — 未来日期不应出现在今日视图',
-          );
+        final tomorrow = today.add(Duration(days: offsetDays));
+        final tomorrowTodo = TodoItem(
+          title: 'tomorrow-$iter',
+          date: DateTime(
+            tomorrow.year,
+            tomorrow.month,
+            tomorrow.day,
+            hour,
+            minute,
+          ),
+        );
+        expect(
+          CompletionVisibilityPolicy.shouldShowInToday(tomorrowTodo, now),
+          isFalse,
+          reason: 'iter=$iter offset=+$offsetDays — 未来日期不应出现在今日视图',
+        );
 
-          final yesterday = today.subtract(Duration(days: offsetDays));
-          final yesterdayTodo = TodoItem(
-            title: 'yesterday-$iter',
-            date: DateTime(
-              yesterday.year,
-              yesterday.month,
-              yesterday.day,
-              hour,
-              minute,
-            ),
-          );
-          expect(
-            CompletionVisibilityPolicy.shouldShowInToday(yesterdayTodo, now),
-            isFalse,
-            reason:
-                'iter=$iter offset=-$offsetDays — 过去日期不应出现在今日视图',
-          );
-        }
-      },
-    );
+        final yesterday = today.subtract(Duration(days: offsetDays));
+        final yesterdayTodo = TodoItem(
+          title: 'yesterday-$iter',
+          date: DateTime(
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            hour,
+            minute,
+          ),
+        );
+        expect(
+          CompletionVisibilityPolicy.shouldShowInToday(yesterdayTodo, now),
+          isFalse,
+          reason: 'iter=$iter offset=-$offsetDays — 过去日期不应出现在今日视图',
+        );
+      }
+    });
   });
 
   group('shouldShowInToday - archived 旁路', () {
-    test(
-      'isArchivedAfterRollover=true 的 todo → shouldShowInToday = false '
-      '（不论 date 是否在今日）',
-      () {
-        final rng = Random(kSeed);
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
+    test('isArchivedAfterRollover=true 的 todo → shouldShowInToday = false '
+        '（不论 date 是否在今日）', () {
+      final rng = Random(kSeed);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-        for (int iter = 0; iter < kIterations; iter++) {
-          // 一半测试样本落在今日，一半落在过去 1..30 天，确保 archived 短路
-          // 在所有 date 情况下都生效。
-          final useToday = rng.nextBool();
-          final hour = rng.nextInt(24);
-          final minute = rng.nextInt(60);
+      for (int iter = 0; iter < kIterations; iter++) {
+        // 一半测试样本落在今日，一半落在过去 1..30 天，确保 archived 短路
+        // 在所有 date 情况下都生效。
+        final useToday = rng.nextBool();
+        final hour = rng.nextInt(24);
+        final minute = rng.nextInt(60);
 
-          late DateTime d;
-          if (useToday) {
-            d = DateTime(today.year, today.month, today.day, hour, minute);
-          } else {
-            final pastOffset = 1 + rng.nextInt(30);
-            final past = today.subtract(Duration(days: pastOffset));
-            d = DateTime(past.year, past.month, past.day, hour, minute);
-          }
-
-          final archived = TodoItem(
-            title: 'archived-$iter',
-            date: d,
-            isCompleted: true,
-            completedAt: now.subtract(const Duration(days: 1)),
-            isArchivedAfterRollover: true,
-          );
-
-          expect(
-            CompletionVisibilityPolicy.shouldShowInToday(archived, now),
-            isFalse,
-            reason:
-                'iter=$iter useToday=$useToday — archived 的 todo 应短路为不可见',
-          );
+        late DateTime d;
+        if (useToday) {
+          d = DateTime(today.year, today.month, today.day, hour, minute);
+        } else {
+          final pastOffset = 1 + rng.nextInt(30);
+          final past = today.subtract(Duration(days: pastOffset));
+          d = DateTime(past.year, past.month, past.day, hour, minute);
         }
-      },
-    );
+
+        final archived = TodoItem(
+          title: 'archived-$iter',
+          date: d,
+          isCompleted: true,
+          completedAt: now.subtract(const Duration(days: 1)),
+          isArchivedAfterRollover: true,
+        );
+
+        expect(
+          CompletionVisibilityPolicy.shouldShowInToday(archived, now),
+          isFalse,
+          reason: 'iter=$iter useToday=$useToday — archived 的 todo 应短路为不可见',
+        );
+      }
+    });
   });
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../core/app_brand.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/surface_components.dart';
 
 class ThemePickerScreen extends StatelessWidget {
   const ThemePickerScreen({super.key});
@@ -31,47 +33,159 @@ class ThemePickerScreen extends StatelessWidget {
     }
   }
 
+  Widget _swatch(Color color) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final currentBrand = themeProvider.brand;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('主题风格')),
-      body: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: themeProvider.brands.length,
-        separatorBuilder: (context, index) => const Divider(indent: 72),
-        itemBuilder: (_, i) {
-          final brand = themeProvider.brands[i];
-          final isActive = brand.style == currentBrand.style;
-          final accent = _accentColor(brand);
-
-          return ListTile(
-            leading: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: isActive ? Border.all(color: accent, width: 2) : null,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            gradient: LinearGradient(
+              colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.palette_outlined,
+                    color: cs.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentBrand.name,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _styleDescription(currentBrand.style),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.66),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppSectionHeader(
+            title: '可选风格',
+            subtitle: '切换后会同步全局主题',
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 8),
+          ...themeProvider.brands.map((brand) {
+            final isActive = brand.style == currentBrand.style;
+            final accent = _accentColor(brand);
+            return AppSurfaceCard(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              color: isActive ? accent.withValues(alpha: 0.08) : null,
+              border: Border.all(
+                color: isActive
+                    ? accent.withValues(alpha: 0.4)
+                    : cs.outlineVariant.withValues(alpha: 0.35),
               ),
-              child: Icon(Icons.palette, color: accent),
-            ),
-            title: Text(
-              brand.name,
-              style: TextStyle(fontWeight: FontWeight.w600, color: accent),
-            ),
-            subtitle: Text(
-              _styleDescription(brand.style),
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            trailing: isActive
-                ? Icon(Icons.check_circle, color: accent)
-                : const Icon(Icons.circle_outlined, color: Colors.grey),
-            onTap: () => themeProvider.setBrand(brand.id),
-          );
-        },
+              onTap: () => themeProvider.setBrand(brand.id),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.palette_outlined,
+                      color: accent,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          brand.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _styleDescription(brand.style),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.66),
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _swatch(brand.theme.colorScheme.primary),
+                            _swatch(brand.theme.colorScheme.secondary),
+                            _swatch(brand.theme.colorScheme.tertiary),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    isActive
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: isActive
+                        ? accent
+                        : cs.onSurface.withValues(alpha: 0.36),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

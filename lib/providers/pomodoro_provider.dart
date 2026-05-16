@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/domain_event_bus.dart';
 import '../models/pomodoro.dart';
 import '../services/focus_sound_service.dart';
 import 'notification_service.dart';
+import 'time_audit_provider.dart';
 
 class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   PomodoroState _state = PomodoroState(
@@ -22,6 +23,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _sessionCountToday = 0;
   String? _lastDate;
   NotificationService? _notifier;
+  TimeAuditProvider? _timeAudit;
 
   /// 真实白噪音服务。Task 16 接入：番茄钟状态 ↔ 音频播放。
   final FocusSoundService _sound = FocusSoundService.instance;
@@ -36,6 +38,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void attachNotifier(NotificationService n) {
     _notifier = n;
+  }
+
+  void attachTimeAudit(TimeAuditProvider provider) {
+    _timeAudit = provider;
   }
 
   /// 由 `main.dart` 在 runApp 之前调用。幂等。
@@ -56,9 +62,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // 回到前台：若番茄钟正在跑 + 已选择白噪音，但服务静音了，补上。
       final expected = _state.whiteNoiseSound;
-      if (_state.isRunning &&
-          expected != 'none' &&
-          !_sound.isPlaying) {
+      if (_state.isRunning && expected != 'none' && !_sound.isPlaying) {
         _sound.play(expected);
       }
     }
@@ -170,7 +174,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 调用点：`_startTimer` 与 `_completeSession` 的相位切换后。
   void _syncSoundToState() {
     final sound = _state.whiteNoiseSound;
-    final shouldPlay = _state.isRunning &&
+    final shouldPlay =
+        _state.isRunning &&
         sound != 'none' &&
         (_state.type == PomodoroType.focus || _config.playSoundInBreak);
     if (shouldPlay) {
@@ -198,9 +203,32 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       type: _state.type,
       taskName: _state.taskName,
       whiteNoiseSound: _state.whiteNoiseSound,
+      tag: _state.tag,
     );
     _sessions.add(session);
     _saveSessions();
+
+    if (_state.type == PomodoroType.focus) {
+      DomainEventBus.instance.publish(
+        DomainEvent(
+          type: DomainEventType.pomodoroCompleted,
+          objectId: session.id,
+          metadata: {'durationSeconds': session.durationSeconds},
+        ),
+      );
+      // ignore: discarded_futures
+      _timeAudit?.recordPomodoroSession(
+        sessionId: session.id,
+        title: session.taskName?.isNotEmpty == true
+            ? session.taskName!
+            : '番茄专注',
+        startAt: session.startTime,
+        endAt: session.endTime,
+        note: session.whiteNoiseSound == 'none'
+            ? ''
+            : '白噪音：${session.whiteNoiseSound}',
+      );
+    }
 
     // Fire desktop notification
     if (_state.type == PomodoroType.focus) {
@@ -302,6 +330,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void setTaskName(String? name) {
     _state = _state.copyWith(taskName: name, clearTaskName: name == null);
+    notifyListeners();
+  }
+
+  void setTag(String? tag) {
+    final clean = tag?.trim();
+    _state = _state.copyWith(
+      tag: clean,
+      clearTag: clean == null || clean.isEmpty,
+    );
     notifyListeners();
   }
 

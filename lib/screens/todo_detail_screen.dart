@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/design_tokens.dart';
-import '../models/goal.dart' show ReminderConfig, ReminderKind;
+import '../models/goal.dart' show ReminderKind, ReminderPlan;
 import '../models/todo.dart';
+import '../services/alarm_service.dart';
+import '../providers/notification_service.dart';
+import '../providers/share_provider.dart';
 import '../providers/todo_provider.dart';
 import '../widgets/recurrence_picker.dart';
+import '../widgets/reminder_health_hint.dart';
+import '../widgets/app_date_picker.dart';
+import '../widgets/reminder_plan_editor.dart';
+import '../widgets/surface_components.dart';
 
 /// Todo 详情页 / 编辑页。
 ///
-/// Task 9：引入"保存不返回"状态机。
+/// Todo 详情页 / 编辑页状态机。
 ///
 /// - `_EditState` 四档：`clean / editing / saving / confirmDiscard`；
-/// - AppBar 的 check 按钮**只持久化不 pop**，成功时用 floating snackbar
-///   展示"已保存"反馈，失败时保留 `editing` 并弹错误提示；
+/// - AppBar 的 check 按钮保存成功后返回上一页；
 /// - 返回键在 `editing` 下会弹"放弃修改"对话框；
 /// - 用 `PopScope` + `onPopInvoked` 统一拦截路由 pop，`Clean` 状态直接放行。
 ///
@@ -46,6 +53,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   final _tagCtrl = TextEditingController();
   final _timeTargetCtrl = TextEditingController();
   late TodoItem _todo;
+  bool _missingTodo = false;
 
   /// "保存不返回"状态机当前状态。
   _EditState _state = _EditState.clean;
@@ -75,7 +83,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       'listGroupId': t.listGroupId,
       'tags': tags,
       'dueDate': t.dueDate?.toIso8601String(),
-      'reminder': t.reminder.toJson(),
+      'reminderPlan': t.reminderPlan.toJson(),
       'focusLink': t.focusLink.toJson(),
       'timeTargetSeconds': t.timeTargetSeconds,
       'recurrence': t.recurrence.toJson(),
@@ -85,16 +93,34 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   void _load() {
     final provider = context.read<TodoProvider>();
-    final todo = provider.todos.firstWhere((t) => t.id == widget.todoId);
-    _todo = todo;
-    _titleCtrl.text = todo.title;
-    _notesCtrl.text = todo.notes;
-    final sec = todo.timeTargetSeconds;
-    if (sec != null && sec > 0) {
-      _timeTargetCtrl.text = (sec ~/ 60).toString();
+    final matches = provider.todos.where((t) => t.id == widget.todoId);
+    if (matches.isEmpty) {
+      _todo = TodoItem(id: widget.todoId, title: '');
+      _baseline = '';
+      _missingTodo = true;
+      _state = _EditState.clean;
+      return;
     }
+    final todo = matches.first;
+    _missingTodo = false;
+    _syncDraftFromProvider(todo);
     _baseline = _snapshot(_todo);
     _state = _EditState.clean;
+  }
+
+  void _syncDraftFromProvider(TodoItem todo) {
+    _todo = todo;
+    if (_titleCtrl.text != todo.title) {
+      _titleCtrl.text = todo.title;
+    }
+    if (_notesCtrl.text != todo.notes) {
+      _notesCtrl.text = todo.notes;
+    }
+    final sec = todo.timeTargetSeconds;
+    final minutesText = sec != null && sec > 0 ? (sec ~/ 60).toString() : '';
+    if (_timeTargetCtrl.text != minutesText) {
+      _timeTargetCtrl.text = minutesText;
+    }
   }
 
   /// 任一可编辑字段变动时调用；根据是否偏离基线切换状态。
@@ -112,25 +138,26 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   /// 保存当前编辑结果。
   ///
-  /// - `clean`：不触发任何写入，仅提示"无未保存改动"；
+  /// - `clean`：不触发任何写入，直接返回上一页；
   /// - 其他状态：`_state = saving` → `updateTodo` → 成功回到 `clean`
-  ///   并刷新基线、展示 "已保存" inline snackbar；失败回到 `editing`
+  ///   并刷新基线后返回上一页；失败回到 `editing`
   ///   并展示错误 snackbar。
   ///
-  /// 关键约束（P18）：本方法**绝不调用 `Navigator.pop`**，路由栈顶必须
-  /// 在调用前后保持同一路由实例。
   Future<void> _save() async {
     if (_state == _EditState.saving) return;
+    if (!(context.read<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('你在这个共享空间中只有查看权限'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     // 同步基线检查：用户点了 check 但什么也没改 → 轻量反馈、不打扰。
     if (_state == _EditState.clean) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('无未保存改动'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1000),
-        ),
-      );
+      Navigator.of(context).maybePop();
       return;
     }
 
@@ -139,14 +166,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      setState(() => _state = _EditState.editing);
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('任务名称不能为空'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: cs.error,
+        ),
+      );
+      return;
+    }
 
     try {
       await provider.updateTodo(
         widget.todoId,
-        _todo.copyWith(
-          title: _titleCtrl.text.trim(),
-          notes: _notesCtrl.text.trim(),
-        ),
+        _todo.copyWith(title: title, notes: _notesCtrl.text.trim()),
       );
       if (!mounted) return;
 
@@ -158,21 +194,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       _baseline = _snapshot(_todo);
       setState(() => _state = _EditState.clean);
 
-      // inline banner：floating + checkmark icon + 1200ms。
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.check_circle, size: 18, color: Colors.white),
-              SizedBox(width: DesignTokens.spaceSm),
-              Text('已保存'),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1200),
-        ),
-      );
+      Navigator.of(context).maybePop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _state = _EditState.editing);
@@ -205,12 +227,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     setState(() => _state = _EditState.confirmDiscard);
     final discard = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: const RoundedRectangleBorder(
-          borderRadius: DesignTokens.dialogBorderRadius,
-        ),
-        contentPadding: DesignTokens.dialogContentPadding,
-        actionsPadding: DesignTokens.dialogActionsPadding,
+      builder: (dialogCtx) => AppDialog(
         title: const Text('放弃未保存的修改？'),
         content: const Text('当前修改尚未保存，返回将丢弃这些改动。'),
         actions: [
@@ -236,16 +253,19 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   }
 
   void _addSubtask() {
+    if (!(context.read<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true)) {
+      return;
+    }
     if (_subtaskCtrl.text.trim().isEmpty) return;
     context.read<TodoProvider>().addSubtask(
-          widget.todoId,
-          _subtaskCtrl.text.trim(),
-        );
+      widget.todoId,
+      _subtaskCtrl.text.trim(),
+    );
     _subtaskCtrl.clear();
     setState(() {
       _todo = context.read<TodoProvider>().todos.firstWhere(
-            (t) => t.id == widget.todoId,
-          );
+        (t) => t.id == widget.todoId,
+      );
     });
     // 子任务列表由 provider 直接维护，基线也需跟着刷新，避免它们被误判为脏。
     _baseline = _snapshot(_todo);
@@ -264,19 +284,19 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   void _removeTag(String tag) {
     setState(() {
-      _todo = _todo.copyWith(
-        tags: _todo.tags.where((x) => x != tag).toList(),
-      );
+      _todo = _todo.copyWith(tags: _todo.tags.where((x) => x != tag).toList());
     });
     _markEditing();
   }
 
   Future<void> _pickDueDate() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await AppDatePicker.pickSolar(
+      context,
       initialDate: _todo.dueDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2099, 12, 31),
+      title: '截止日期',
+      subtitle: '使用统一日历选择任务日期',
     );
     if (picked != null) {
       setState(() => _todo = _todo.copyWith(dueDate: picked));
@@ -301,62 +321,34 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   // ---- Reminder ----------------------------------------------------------
 
-  /// 同步新 `reminder` 与旧 `hasReminder / reminderAt` 两套字段。
-  ///
-  /// 保持向后兼容：旧代码读 `hasReminder` / `reminderAt` 也能得到最新值。
-  void _applyReminder(ReminderConfig r) {
+  /// 同步新 `reminderPlan` 与旧 `reminder / hasReminder / reminderAt` 镜像。
+  void _applyReminderPlan(ReminderPlan plan) {
+    final legacy = plan.toLegacyReminderConfig(fallback: _todo.reminder);
     final nowForMirror = DateTime.now();
     DateTime? mirroredAt;
-    if (r.enabled && r.hour != null && r.minute != null) {
-      final base = _todo.dueDate ?? nowForMirror;
-      mirroredAt = DateTime(base.year, base.month, base.day, r.hour!, r.minute!);
+    if (legacy.enabled && legacy.hour != null && legacy.minute != null) {
+      final base = _todo.dueDate ?? _todo.reminderAt ?? nowForMirror;
+      mirroredAt = DateTime(
+        base.year,
+        base.month,
+        base.day,
+        legacy.hour!,
+        legacy.minute!,
+      );
+      if (_todo.dueDate == null && !mirroredAt.isAfter(nowForMirror)) {
+        mirroredAt = mirroredAt.add(const Duration(days: 1));
+      }
     }
     setState(() {
       // ignore: deprecated_member_use_from_same_package
       _todo = _todo.copyWith(
-        reminder: r,
-        hasReminder: r.enabled,
+        reminder: legacy,
+        reminderPlan: plan,
+        hasReminder: legacy.enabled,
         reminderAt: mirroredAt,
       );
     });
     _markEditing();
-  }
-
-  void _toggleReminderEnabled(bool v) {
-    final current = _todo.reminder;
-    // 开启时若没有 hour/minute,用"现在+1 小时"作为默认起点
-    int? hour = current.hour;
-    int? minute = current.minute;
-    if (v && (hour == null || minute == null)) {
-      final seed = _todo.reminderAt ??
-          _todo.dueDate ??
-          DateTime.now().add(const Duration(hours: 1));
-      hour = seed.hour;
-      minute = seed.minute;
-    }
-    _applyReminder(current.copyWith(
-      enabled: v,
-      hour: hour,
-      minute: minute,
-    ));
-  }
-
-  Future<void> _pickReminderTime() async {
-    final current = _todo.reminder;
-    final initial = TimeOfDay(
-      hour: current.hour ?? 9,
-      minute: current.minute ?? 0,
-    );
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-    );
-    if (picked == null) return;
-    _applyReminder(current.copyWith(
-      enabled: true,
-      hour: picked.hour,
-      minute: picked.minute,
-    ));
   }
 
   // ---- Time target -------------------------------------------------------
@@ -365,8 +357,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final seconds = (minutes == null || minutes <= 0) ? null : minutes * 60;
     setState(() {
       _todo = _todo.copyWith(timeTargetSeconds: seconds);
-      _timeTargetCtrl.text =
-          (seconds == null) ? '' : (seconds ~/ 60).toString();
+      _timeTargetCtrl.text = (seconds == null)
+          ? ''
+          : (seconds ~/ 60).toString();
     });
     _markEditing();
   }
@@ -384,10 +377,46 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TodoProvider>();
-    _todo = provider.todos.firstWhere(
+    if (_missingTodo || !provider.todos.any((t) => t.id == widget.todoId)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('任务详情')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(DesignTokens.space3xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 56,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: DesignTokens.spaceMd),
+                Text(
+                  '这个任务不存在或已被删除',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: DesignTokens.spaceLg),
+                FilledButton.tonalIcon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('返回'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    final providerTodo = provider.todos.firstWhere(
       (t) => t.id == widget.todoId,
       orElse: () => _todo,
     );
+    if (_state == _EditState.clean) {
+      _syncDraftFromProvider(providerTodo);
+    }
+    final canEdit =
+        context.watch<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true;
     final cs = Theme.of(context).colorScheme;
 
     // canPop 反映当前状态机是否允许直接 pop：
@@ -426,7 +455,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     )
                   : const Icon(Icons.check),
               tooltip: '保存',
-              onPressed: _state == _EditState.saving ? null : _save,
+              onPressed: _state == _EditState.saving || !canEdit ? null : _save,
             ),
           ],
         ),
@@ -438,7 +467,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               decoration: const InputDecoration(labelText: '任务名称'),
               style: const TextStyle(
                 fontSize: DesignTokens.fontSizeLg,
-                fontWeight: DesignTokens.fontWeightSemiBold,
+                fontWeight: FontWeight.w400,
               ),
               onChanged: (_) => _markEditing(),
             ),
@@ -452,9 +481,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
             // ---- 四象限 --------------------------------------------------
             const SizedBox(height: DesignTokens.spaceLg),
-            DropdownButtonFormField<EisenhowerQuadrant>(
+            AppDropdownField<EisenhowerQuadrant>(
               initialValue: _todo.quadrant,
-              decoration: const InputDecoration(labelText: '四象限'),
+              labelText: '四象限',
               items: const [
                 DropdownMenuItem(
                   value: EisenhowerQuadrant.urgentImportant,
@@ -495,9 +524,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               leading: const Icon(Icons.event_outlined),
               title: const Text('截止日期'),
               subtitle: Text(
-                _todo.dueDate == null
-                    ? '未设置'
-                    : _formatYmd(_todo.dueDate!),
+                _todo.dueDate == null ? '未设置' : _formatYmd(_todo.dueDate!),
               ),
               trailing: _todo.dueDate == null
                   ? const Icon(Icons.chevron_right)
@@ -521,16 +548,40 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
             // ---- 提醒 ----------------------------------------------------
             const SizedBox(height: DesignTokens.spaceSm),
-            _ReminderEditor(
-              reminder: _todo.reminder,
-              onToggle: _toggleReminderEnabled,
-              onPickTime: _pickReminderTime,
-              onKindChange: (k) =>
-                  _applyReminder(_todo.reminder.copyWith(kind: k)),
-              onVibrateChange: (v) =>
-                  _applyReminder(_todo.reminder.copyWith(vibrate: v)),
-              onFullScreenChange: (v) =>
-                  _applyReminder(_todo.reminder.copyWith(fullScreen: v)),
+            ReminderPlanEditor(
+              plan: _todo.reminderPlan,
+              onChanged: _applyReminderPlan,
+              title: '提醒',
+              allowAlarm: true,
+              allowRelativeToDue: true,
+              allowWeekly: true,
+              hasAnchorDate: _todo.dueDate != null,
+              defaultKind: ReminderKind.alarm,
+            ),
+            const SizedBox(height: DesignTokens.spaceSm),
+            Builder(
+              builder: (context) {
+                final notif = context.watch<NotificationService?>();
+                if (notif == null) return const SizedBox.shrink();
+                final kind =
+                    _todo.reminderPlan.primaryRule?.kind ?? _todo.reminder.kind;
+                return ReminderHealthHint(
+                  reminderKind: kind,
+                  onOpenSystemSettings: () => _openSystemSettings(context),
+                  onRequestNotificationPermission: () async {
+                    await context
+                        .read<NotificationService>()
+                        .requestPermission();
+                  },
+                  onRequestExactAlarmPermission: () async {
+                    await AlarmService.instance.requestExactAlarmPermission();
+                  },
+                  onRequestFullScreenIntentPermission: () async {
+                    await AlarmService.instance
+                        .requestFullScreenIntentPermission();
+                  },
+                );
+              },
             ),
 
             // ---- 目标时长 ------------------------------------------------
@@ -541,8 +592,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   ? null
                   : (_todo.timeTargetSeconds! ~/ 60),
               onPreset: _applyTimeTargetMinutes,
-              onChanged: (s) =>
-                  _applyTimeTargetMinutes(int.tryParse(s.trim())),
+              onChanged: (s) => _applyTimeTargetMinutes(int.tryParse(s.trim())),
               onClear: () => _applyTimeTargetMinutes(null),
             ),
 
@@ -564,7 +614,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 const Text(
                   '子任务',
                   style: TextStyle(
-                    fontWeight: DesignTokens.fontWeightSemiBold,
+                    fontWeight: FontWeight.w400,
                     fontSize: DesignTokens.fontSizeMd,
                   ),
                 ),
@@ -573,7 +623,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   '${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
                   style: TextStyle(
                     color: cs.primary,
-                    fontWeight: DesignTokens.fontWeightSemiBold,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
@@ -584,6 +634,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _subtaskCtrl,
+                    enabled: canEdit,
                     decoration: const InputDecoration(
                       labelText: '新增子任务',
                       isDense: true,
@@ -592,7 +643,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   ),
                 ),
                 IconButton(
-                  onPressed: _addSubtask,
+                  onPressed: canEdit ? _addSubtask : null,
                   icon: Icon(Icons.add_circle, color: cs.primary),
                 ),
               ],
@@ -601,13 +652,15 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               onReorder: (oldI, newI) {
+                if (!canEdit) return;
                 final ids = _todo.subtasks.map((e) => e.id).toList();
                 if (newI > oldI) newI -= 1;
                 final id = ids.removeAt(oldI);
                 ids.insert(newI, id);
-                context
-                    .read<TodoProvider>()
-                    .reorderSubtasks(widget.todoId, ids);
+                context.read<TodoProvider>().reorderSubtasks(
+                  widget.todoId,
+                  ids,
+                );
               },
               children: [
                 for (final s in _todo.subtasks)
@@ -616,10 +669,25 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     dense: true,
                     leading: Checkbox(
                       value: s.isCompleted,
-                      onChanged: (_) {
-                        provider.toggleSubtask(widget.todoId, s.id);
-                        setState(() {});
-                      },
+                      onChanged: canEdit
+                          ? (_) {
+                              provider.toggleSubtask(widget.todoId, s.id).then((
+                                _,
+                              ) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _todo = context
+                                      .read<TodoProvider>()
+                                      .todos
+                                      .firstWhere(
+                                        (t) => t.id == widget.todoId,
+                                        orElse: () => _todo,
+                                      );
+                                  _baseline = _snapshot(_todo);
+                                });
+                              });
+                            }
+                          : null,
                     ),
                     title: Text(
                       s.title,
@@ -632,16 +700,44 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.close, size: 16),
-                      onPressed: () {
-                        provider.deleteSubtask(widget.todoId, s.id);
-                        setState(() {});
-                      },
+                      onPressed: canEdit
+                          ? () {
+                              provider.deleteSubtask(widget.todoId, s.id).then((
+                                _,
+                              ) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _todo = context
+                                      .read<TodoProvider>()
+                                      .todos
+                                      .firstWhere(
+                                        (t) => t.id == widget.todoId,
+                                        orElse: () => _todo,
+                                      );
+                                  _baseline = _snapshot(_todo);
+                                });
+                              });
+                            }
+                          : null,
                     ),
                   ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+Future<void> _openSystemSettings(BuildContext context) async {
+  final opened = await openAppSettings();
+  if (!context.mounted) return;
+  if (!opened) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('无法打开系统设置'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -675,10 +771,7 @@ class _PriorityChipRow extends StatelessWidget {
   final TodoPriority selected;
   final ValueChanged<TodoPriority> onSelected;
 
-  const _PriorityChipRow({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _PriorityChipRow({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -695,111 +788,6 @@ class _PriorityChipRow extends StatelessWidget {
             selected: selected == p,
             onSelected: (_) => onSelected(p),
           ),
-      ],
-    );
-  }
-}
-
-/// 提醒编辑器：总开关 + HH:MM + push/alarm 分段 + 震动 + 全屏（仅 alarm）。
-class _ReminderEditor extends StatelessWidget {
-  final ReminderConfig reminder;
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onPickTime;
-  final ValueChanged<ReminderKind> onKindChange;
-  final ValueChanged<bool> onVibrateChange;
-  final ValueChanged<bool> onFullScreenChange;
-
-  const _ReminderEditor({
-    required this.reminder,
-    required this.onToggle,
-    required this.onPickTime,
-    required this.onKindChange,
-    required this.onVibrateChange,
-    required this.onFullScreenChange,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final timeLabel = _formatHm(reminder.hour, reminder.minute) ?? '选择时间';
-    final kindLabel =
-        reminder.kind == ReminderKind.alarm ? '闹钟' : '推送';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: reminder.enabled,
-          title: const Text('到期提醒'),
-          subtitle: Text(
-            reminder.enabled ? '$kindLabel · $timeLabel' : '已关闭',
-          ),
-          onChanged: onToggle,
-        ),
-        if (reminder.enabled) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: DesignTokens.spaceXs),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    borderRadius: DesignTokens.borderRadiusSm,
-                    onTap: onPickTime,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: DesignTokens.spaceSm,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.schedule, size: 18),
-                          const SizedBox(width: DesignTokens.spaceSm),
-                          Text(
-                            timeLabel,
-                            style: const TextStyle(
-                              fontSize: DesignTokens.fontSizeMd,
-                              fontWeight: DesignTokens.fontWeightSemiBold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: DesignTokens.spaceSm),
-                SegmentedButton<ReminderKind>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ReminderKind.push,
-                      label: Text('推送'),
-                      icon: Icon(Icons.notifications),
-                    ),
-                    ButtonSegment(
-                      value: ReminderKind.alarm,
-                      label: Text('闹钟'),
-                      icon: Icon(Icons.alarm),
-                    ),
-                  ],
-                  selected: {reminder.kind},
-                  onSelectionChanged: (s) => onKindChange(s.first),
-                ),
-              ],
-            ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: reminder.vibrate,
-            title: const Text('震动'),
-            onChanged: onVibrateChange,
-          ),
-          if (reminder.kind == ReminderKind.alarm)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: reminder.fullScreen,
-              title: const Text('全屏提醒'),
-              subtitle: const Text('到点全屏弹出（需系统权限）'),
-              onChanged: onFullScreenChange,
-            ),
-        ],
       ],
     );
   }
@@ -891,19 +879,13 @@ class _TagsEditor extends StatelessWidget {
       runSpacing: DesignTokens.spaceXs,
       children: [
         ...tags.map(
-          (t) => Chip(
-            label: Text('#$t'),
-            onDeleted: () => onRemove(t),
-          ),
+          (t) => Chip(label: Text('#$t'), onDeleted: () => onRemove(t)),
         ),
         SizedBox(
           width: 140,
           child: TextField(
             controller: controller,
-            decoration: const InputDecoration(
-              isDense: true,
-              hintText: '+ 新标签',
-            ),
+            decoration: const InputDecoration(isDense: true, hintText: '+ 新标签'),
             onSubmitted: onAdd,
           ),
         ),
@@ -952,13 +934,6 @@ Color priorityColor(TodoPriority p) {
     case TodoPriority.none:
       return DesignTokens.priorityNone;
   }
-}
-
-String? _formatHm(int? hour, int? minute) {
-  if (hour == null || minute == null) return null;
-  final hh = hour.toString().padLeft(2, '0');
-  final mm = minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
 }
 
 String _formatYmd(DateTime d) =>

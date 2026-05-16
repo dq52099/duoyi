@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
+import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
+import '../services/alarm_service.dart';
+import '../widgets/app_time_picker.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
+import '../widgets/reminder_plan_editor.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
 import '../core/habit_templates.dart';
 import 'habit_detail_screen.dart';
 
@@ -32,6 +37,27 @@ class _HabitScreenState extends State<HabitScreen>
     super.dispose();
   }
 
+  Future<bool> _ensureHabitReminderReady() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final notificationService = context.read<NotificationService?>();
+    final granted =
+        notificationService == null ||
+        await notificationService.requestPermission();
+    if (notificationService != null) {
+      await AlarmService.instance.requestExactAlarmPermission();
+      await AlarmService.instance.requestFullScreenIntentPermission();
+    }
+    if (!granted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('系统通知未授权，习惯提醒不会响铃或弹出'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return granted;
+  }
+
   void _showAddDialog() {
     final s = context.read<ThemeProvider>().brand.strings;
     final nameCtrl = TextEditingController();
@@ -39,7 +65,7 @@ class _HabitScreenState extends State<HabitScreen>
     var selectedColor = 0xFF4CAF50;
     var selectedKind = HabitKind.positive;
     var remindEnabled = false;
-    TimeOfDay? remindTime;
+    TimeOfDay? remindTime = nextHalfHourTimeOfDay();
     final templatesByCategory = HabitTemplates.byCategory;
 
     final colors = [
@@ -53,22 +79,18 @@ class _HabitScreenState extends State<HabitScreen>
       0xFF607D8B,
     ];
 
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
+        builder: (ctx, setSt) => AppSurfaceCard(
+          margin: EdgeInsets.zero,
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             left: 20,
             right: 20,
             top: 24,
           ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -79,7 +101,9 @@ class _HabitScreenState extends State<HabitScreen>
                     width: 40,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -89,7 +113,7 @@ class _HabitScreenState extends State<HabitScreen>
                   s.habitCreateTitle,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -99,7 +123,7 @@ class _HabitScreenState extends State<HabitScreen>
                   '推荐目标',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -170,8 +194,8 @@ class _HabitScreenState extends State<HabitScreen>
                       child: ChoiceChip(
                         label: const Text('✅ 正向养成'),
                         selected: selectedKind == HabitKind.positive,
-                        onSelected: (_) => setSt(
-                            () => selectedKind = HabitKind.positive),
+                        onSelected: (_) =>
+                            setSt(() => selectedKind = HabitKind.positive),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -179,8 +203,8 @@ class _HabitScreenState extends State<HabitScreen>
                       child: ChoiceChip(
                         label: const Text('🚫 反向戒除'),
                         selected: selectedKind == HabitKind.negative,
-                        onSelected: (_) => setSt(
-                            () => selectedKind = HabitKind.negative),
+                        onSelected: (_) =>
+                            setSt(() => selectedKind = HabitKind.negative),
                       ),
                     ),
                   ],
@@ -197,14 +221,23 @@ class _HabitScreenState extends State<HabitScreen>
                     Switch(
                       value: remindEnabled,
                       onChanged: (v) async {
-                        setSt(() => remindEnabled = v);
-                        if (v && remindTime == null) {
-                          final t = await showTimePicker(
-                            context: ctx,
-                            initialTime: const TimeOfDay(hour: 20, minute: 0),
+                        if (!v) {
+                          setSt(() => remindEnabled = false);
+                          return;
+                        }
+                        if (remindTime == null) {
+                          final t = await AppTimePicker.show(
+                            ctx,
+                            initialTime: remindTime ?? nextHalfHourTimeOfDay(),
+                            title: '每日提醒时间',
+                            minuteStep: 5,
                           );
                           if (t != null) setSt(() => remindTime = t);
                         }
+                        if (remindTime == null) return;
+                        final ready = await _ensureHabitReminderReady();
+                        if (!mounted) return;
+                        setSt(() => remindEnabled = ready);
                       },
                     ),
                   ],
@@ -215,13 +248,15 @@ class _HabitScreenState extends State<HabitScreen>
                     label: Text(
                       remindTime == null
                           ? '选择时间'
-                          : '${remindTime!.hour.toString().padLeft(2, '0')}:${remindTime!.minute.toString().padLeft(2, '0')}',
+                          : AppTimePicker.format(remindTime!),
                     ),
                     onPressed: () async {
-                      final t = await showTimePicker(
-                        context: ctx,
+                      final t = await AppTimePicker.show(
+                        ctx,
                         initialTime:
                             remindTime ?? const TimeOfDay(hour: 20, minute: 0),
+                        title: '每日提醒时间',
+                        minuteStep: 5,
                       );
                       if (t != null) setSt(() => remindTime = t);
                     },
@@ -231,16 +266,10 @@ class _HabitScreenState extends State<HabitScreen>
                 // --- Manual Entry ---
                 TextField(
                   controller: nameCtrl,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: '习惯名称',
                     hintText: '输入或从上方选择',
-                    prefixIcon: const Icon(Icons.edit, size: 20),
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    prefixIcon: Icon(Icons.edit, size: 20),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -249,26 +278,17 @@ class _HabitScreenState extends State<HabitScreen>
                     Expanded(
                       child: TextField(
                         controller: targetCtrl,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: '每日目标次数',
-                          prefixIcon: const Icon(Icons.track_changes, size: 20),
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
+                          prefixIcon: Icon(Icons.track_changes, size: 20),
                         ),
                         keyboardType: TextInputType.number,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                    AppSurfaceCard(
+                      padding: const EdgeInsets.all(6),
+                      borderRadius: BorderRadius.circular(16),
                       child: Row(
                         children: colors
                             .take(4)
@@ -318,9 +338,17 @@ class _HabitScreenState extends State<HabitScreen>
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (nameCtrl.text.trim().isNotEmpty) {
-                        context.read<HabitProvider>().addHabit(
+                        final habitProvider = context.read<HabitProvider>();
+                        final navigator = Navigator.of(ctx);
+                        final shouldRemind =
+                            remindEnabled && remindTime != null;
+                        final reminderReady = shouldRemind
+                            ? await _ensureHabitReminderReady()
+                            : false;
+                        if (!mounted || !ctx.mounted) return;
+                        await habitProvider.addHabit(
                           Habit(
                             id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
@@ -328,12 +356,12 @@ class _HabitScreenState extends State<HabitScreen>
                             colorValue: selectedColor,
                             kind: selectedKind,
                             targetCount: int.tryParse(targetCtrl.text) ?? 1,
-                            remind: remindEnabled && remindTime != null,
+                            remind: shouldRemind && reminderReady,
                             remindHour: remindTime?.hour,
                             remindMinute: remindTime?.minute,
                           ),
                         );
-                        Navigator.pop(ctx);
+                        navigator.pop();
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -348,7 +376,7 @@ class _HabitScreenState extends State<HabitScreen>
                       '开启新习惯',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -398,43 +426,44 @@ class _HabitScreenState extends State<HabitScreen>
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 56,
-                                height: 56,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      value: provider.todayOverallProgress,
-                                      strokeWidth: 5,
-                                      backgroundColor: cs.primary.withValues(
-                                        alpha: 0.12,
-                                      ),
+                      child: AppSurfaceCard(
+                        padding: const EdgeInsets.all(16),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 68,
+                              height: 68,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: provider.todayOverallProgress,
+                                    strokeWidth: 4,
+                                    backgroundColor: cs.primary.withValues(
+                                      alpha: 0.12,
                                     ),
-                                    Text(
-                                      '${(provider.todayOverallProgress * 100).toInt()}%',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.primary,
-                                      ),
+                                  ),
+                                  Text(
+                                    '${(provider.todayOverallProgress * 100).toInt()}%',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                      color: cs.primary,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 16),
-                              Column(
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     '${activeHabits.where((h) => h.isCompletedToday()).length} / ${activeHabits.length} ${s.habitTodayDone}',
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -447,8 +476,8 @@ class _HabitScreenState extends State<HabitScreen>
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -465,7 +494,7 @@ class _HabitScreenState extends State<HabitScreen>
                 child: Text(
                   s.habitHeatmapHeading,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     fontSize: 15,
                   ),
                 ),
@@ -524,170 +553,174 @@ class _HabitCheckinCard extends StatelessWidget {
     final progress = habit.todayProgress();
     final isDone = progress >= 1.0;
 
-    return Container(
+    return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: isDone
-            ? Border.all(
-                color: Color(habit.colorValue).withValues(alpha: 0.3),
-                width: 1.5,
-              )
-            : Border.all(color: Colors.transparent, width: 1.5),
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(
+        color: isDone
+            ? Color(habit.colorValue).withValues(alpha: 0.3)
+            : Colors.transparent,
+        width: 1.5,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Color(habit.colorValue).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    isDone ? Icons.star : Icons.star_border,
-                    color: Color(habit.colorValue),
-                    size: 26,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Color(habit.colorValue).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        habit.name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          decoration: isDone
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isDone ? Colors.grey : null,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '目标: ${habit.targetCount} 次/天',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  isDone ? Icons.star : Icons.star_border,
+                  color: Color(habit.colorValue),
+                  size: 26,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.local_fire_department,
-                        size: 14,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      habit.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w400,
+                        fontSize: 16,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                        color: isDone ? Colors.grey : null,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '目标: ${habit.targetCount} 次/天',
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.local_fire_department,
+                      size: 14,
+                      color: Colors.orange,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${habit.currentStreak} 天',
+                      style: const TextStyle(
                         color: Colors.orange,
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${habit.currentStreak} 天',
-                        style: const TextStyle(
-                          color: Colors.orange,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        height: 8,
-                        width:
-                            (MediaQuery.of(context).size.width - 150) *
-                            progress,
-                        decoration: BoxDecoration(
-                          color: isDone
-                              ? const Color(0xFF4CAF50)
-                              : Color(habit.colorValue),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+                    ),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: 8,
+                      width:
+                          (MediaQuery.of(context).size.width - 150) * progress,
+                      decoration: BoxDecoration(
+                        color: isDone
+                            ? const Color(0xFF4CAF50)
+                            : Color(habit.colorValue),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.remove, size: 20),
-                        onPressed: () => provider.decrementHabit(habit.id),
-                        color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 112,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: isDone
+                          ? null
+                          : () => provider.incrementHabit(habit.id),
+                      icon: Icon(isDone ? Icons.check : Icons.check_circle),
+                      label: Text(isDone ? '已完成' : '打卡'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Color(habit.colorValue),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade200,
+                        disabledForegroundColor: Colors.grey.shade600,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
                           '${habit.todayCount()}/${habit.targetCount}',
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: isDone ? const Color(0xFF4CAF50) : null,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 12,
+                            color: isDone
+                                ? const Color(0xFF4CAF50)
+                                : Colors.grey.shade700,
                           ),
                         ),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.add, size: 20),
-                        onPressed: () => provider.incrementHabit(habit.id),
-                        color: isDone ? Colors.grey : Color(habit.colorValue),
-                      ),
-                    ],
-                  ),
+                        if (habit.todayCount() > 0) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => provider.decrementHabit(habit.id),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.undo,
+                                size: 15,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

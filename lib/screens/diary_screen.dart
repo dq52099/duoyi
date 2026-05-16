@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../models/diary_entry.dart';
 import '../providers/diary_provider.dart';
 import '../core/lunar_calendar.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/mood_heatmap.dart';
+import '../widgets/surface_components.dart';
 
 class DiaryScreen extends StatelessWidget {
   const DiaryScreen({super.key});
@@ -33,56 +35,65 @@ class DiaryScreen extends StatelessWidget {
               actionLabel: '写日记',
               onAction: () => _openEdit(context),
             )
-          : Column(
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
               children: [
-                // 头部统计条
-                Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: cs.surface.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      AppSectionHeader(
+                        title: '记录概览',
+                        subtitle: '累计、本月和连续写作状态',
+                        padding: EdgeInsets.zero,
+                      ),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(
-                            child: _stat('累计', '${provider.totalCount} 篇',
-                                Icons.book_outlined, cs.primary),
+                            child: _stat(
+                              context,
+                              '累计',
+                              '${provider.totalCount} 篇',
+                              Icons.book_outlined,
+                              cs.primary,
+                            ),
                           ),
-                          Container(
-                              width: 1,
-                              height: 30,
-                              color: Colors.grey.shade300),
+                          _metricDivider(cs),
                           Expanded(
-                            child: _stat('本月', '${provider.thisMonthCount} 篇',
-                                Icons.calendar_month, Colors.green),
+                            child: _stat(
+                              context,
+                              '本月',
+                              '${provider.thisMonthCount} 篇',
+                              Icons.calendar_month,
+                              Colors.green,
+                            ),
                           ),
-                          Container(
-                              width: 1,
-                              height: 30,
-                              color: Colors.grey.shade300),
+                          _metricDivider(cs),
                           Expanded(
-                            child: _stat('连续',
-                                '${provider.currentStreak} 天',
-                                Icons.bolt,
-                                Colors.orange),
+                            child: _stat(
+                              context,
+                              '连续',
+                              '${provider.currentStreak} 天',
+                              Icons.bolt,
+                              Colors.orange,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       MoodHeatmap(entriesByDate: provider.entriesByDate),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: entries.length,
-                    itemBuilder: (_, i) => _DiaryCard(entry: entries[i]),
-                  ),
+                const SizedBox(height: 12),
+                AppSectionHeader(
+                  title: '最近日记',
+                  subtitle: '${entries.length} 篇记录',
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
                 ),
+                ...entries.map((entry) => _DiaryCard(entry: entry)),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -93,17 +104,53 @@ class DiaryScreen extends StatelessWidget {
     );
   }
 
-  Widget _stat(String title, String value, IconData icon, Color color) {
+  Widget _stat(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold)),
-        Text(title,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, color: color, size: 17),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w400,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          title,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.62),
+            fontWeight: FontWeight.w400,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _metricDivider(ColorScheme cs) {
+    return Container(
+      width: 1,
+      height: 42,
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      color: cs.outlineVariant.withValues(alpha: 0.55),
     );
   }
 
@@ -119,63 +166,61 @@ class DiaryScreen extends StatelessWidget {
   void _showMoodStats(BuildContext context, DiaryProvider p) {
     final dist = p.moodDistribution(days: 30);
     final total = dist.values.fold(0, (s, v) => s + v);
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('近 30 天心情分布',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              if (total == 0)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: Text('暂无数据')),
-                )
-              else
-                ...Mood.values.map((m) {
-                  final c = dist[m] ?? 0;
-                  final pct = total == 0 ? 0.0 : c / total;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 52,
-                          child: Text(
-                              '${m.emoji} ${m.label}',
-                              style: const TextStyle(fontSize: 13)),
+      builder: (_) => AppModalSheet(
+        title: '近 30 天心情分布',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (total == 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('暂无数据')),
+              )
+            else
+              ...Mood.values.map((m) {
+                final c = dist[m] ?? 0;
+                final pct = total == 0 ? 0.0 : c / total;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 52,
+                        child: Text(
+                          '${m.emoji} ${m.label}',
+                          style: const TextStyle(fontSize: 13),
                         ),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: pct,
-                              minHeight: 10,
-                              backgroundColor: Colors.grey.shade200,
-                            ),
+                      ),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: pct,
+                            minHeight: 10,
+                            backgroundColor: Colors.grey.shade200,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 40,
-                          child: Text('$c 篇',
-                              textAlign: TextAlign.end,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600)),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 40,
+                        child: Text(
+                          '$c 篇',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
-                      ],
-                    ),
-                  );
-                }),
-            ],
-          ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
         ),
       ),
     );
@@ -188,119 +233,205 @@ class _DiaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final lunar = LunarCalendar.fromSolar(entry.date);
+    final accent = _moodColor(entry.mood, cs);
 
-    return GestureDetector(
+    return AppSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => DiaryEditScreen(entry: entry),
-        ),
+        MaterialPageRoute(builder: (_) => DiaryEditScreen(entry: entry)),
       ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 98,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(999),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${entry.date.month}/${entry.date.day}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: cs.primary,
-                        ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
                       ),
-                      Text(
-                        lunar.dayChineseText,
-                        style: const TextStyle(fontSize: 10),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    ],
-                  ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${entry.date.month}/${entry.date.day}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                              color: accent,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            lunar.dayChineseText,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: accent.withValues(alpha: 0.82),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (entry.mood != null)
+                                _DiaryBadge(
+                                  label: entry.mood!.emoji,
+                                  color: accent,
+                                ),
+                              if (entry.weather != null) ...[
+                                const SizedBox(width: 6),
+                                _DiaryBadge(
+                                  label: entry.weather!.emoji,
+                                  color: cs.primary,
+                                ),
+                              ],
+                              const Spacer(),
+                              Text(
+                                '${entry.updatedAt.hour.toString().padLeft(2, '0')}:${entry.updatedAt.minute.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: cs.onSurface.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            entry.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                if (entry.mood != null)
-                  Text(entry.mood!.emoji,
-                      style: const TextStyle(fontSize: 20)),
-                if (entry.weather != null) ...[
-                  const SizedBox(width: 4),
-                  Text(entry.weather!.emoji,
-                      style: const TextStyle(fontSize: 18)),
+                if (entry.preview.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    entry.preview,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.72),
+                      height: 1.55,
+                    ),
+                  ),
                 ],
-                const Spacer(),
-                Text(
-                  '${entry.updatedAt.hour.toString().padLeft(2, '0')}:${entry.updatedAt.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.grey.shade500),
-                ),
+                if (entry.tags.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: entry.tags
+                        .map(
+                          (t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest.withValues(
+                                alpha: 0.75,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '#$t',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.7),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              entry.title,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (entry.preview.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                entry.preview,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                    height: 1.5),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            if (entry.tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                children: entry.tags
-                    .map((t) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('#$t',
-                              style: const TextStyle(fontSize: 11)),
-                        ))
-                    .toList(),
-              ),
-            ],
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiaryBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _DiaryBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          color: cs.onSurface.withValues(alpha: 0.68),
         ),
       ),
     );
+  }
+}
+
+Color _moodColor(Mood? mood, ColorScheme cs) {
+  switch (mood) {
+    case Mood.awesome:
+      return const Color(0xFF43A047);
+    case Mood.good:
+      return cs.primary;
+    case Mood.okay:
+      return const Color(0xFF78909C);
+    case Mood.bad:
+      return const Color(0xFFFB8C00);
+    case Mood.terrible:
+      return cs.error;
+    case null:
+      return cs.primary;
   }
 }
 
@@ -372,9 +503,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('日记'),
-        actions: [
-          IconButton(icon: const Icon(Icons.check), onPressed: _save),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.check), onPressed: _save)],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -382,17 +511,17 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
           // 日期/农历
           GestureDetector(
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
+              final picked = await AppDatePicker.pickSolar(
+                context,
                 initialDate: _date,
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2099, 12, 31),
+                title: '日记日期',
               );
               if (picked != null) setState(() => _date = picked);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: cs.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
@@ -404,30 +533,35 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                   Text(
                     '${_date.year}年${_date.month}月${_date.day}日',
                     style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600),
+                      color: cs.primary,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                   const SizedBox(width: 10),
-                  Text(lunar.chineseText,
-                      style: TextStyle(
-                          color: cs.primary.withValues(alpha: 0.7),
-                          fontSize: 12)),
+                  Text(
+                    lunar.chineseText,
+                    style: TextStyle(
+                      color: cs.primary.withValues(alpha: 0.7),
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
           // 心情
-          const Text('今天心情如何？',
-              style: TextStyle(fontSize: 13, color: Colors.grey)),
+          const Text(
+            '今天心情如何？',
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: Mood.values.map((m) {
               final selected = _mood == m;
               return GestureDetector(
-                onTap: () => setState(
-                    () => _mood = selected ? null : m),
+                onTap: () => setState(() => _mood = selected ? null : m),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.all(10),
@@ -437,18 +571,14 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: selected
-                          ? cs.primary
-                          : Colors.grey.shade300,
+                      color: selected ? cs.primary : Colors.grey.shade300,
                     ),
                   ),
                   child: Column(
                     children: [
-                      Text(m.emoji,
-                          style: const TextStyle(fontSize: 24)),
+                      Text(m.emoji, style: const TextStyle(fontSize: 24)),
                       const SizedBox(height: 2),
-                      Text(m.label,
-                          style: const TextStyle(fontSize: 11)),
+                      Text(m.label, style: const TextStyle(fontSize: 11)),
                     ],
                   ),
                 ),
@@ -457,8 +587,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
           ),
           const SizedBox(height: 16),
           // 天气
-          const Text('天气',
-              style: TextStyle(fontSize: 13, color: Colors.grey)),
+          const Text('天气', style: TextStyle(fontSize: 13, color: Colors.grey)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
@@ -505,8 +634,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                   .map(
                     (t) => Chip(
                       label: Text(t),
-                      onDeleted: () =>
-                          setState(() => _tags.remove(t)),
+                      onDeleted: () => setState(() => _tags.remove(t)),
                     ),
                   )
                   .toList(),

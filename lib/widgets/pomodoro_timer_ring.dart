@@ -15,8 +15,8 @@ class PomodoroTimerRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
-      height: 260,
+      width: 220,
+      height: 220,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Theme.of(context).colorScheme.surface,
@@ -37,11 +37,11 @@ class PomodoroTimerRing extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 240,
-            height: 240,
+            width: 202,
+            height: 202,
             child: CircularProgressIndicator(
               value: progress,
-              strokeWidth: 8,
+              strokeWidth: 6,
               strokeCap: StrokeCap.round,
               backgroundColor: Colors.grey.withValues(alpha: 0.1),
               valueColor: AlwaysStoppedAnimation(color),
@@ -53,21 +53,21 @@ class PomodoroTimerRing extends StatelessWidget {
               Text(
                 timeText,
                 style: TextStyle(
-                  fontSize: 64,
+                  fontSize: 48,
                   fontWeight: FontWeight.w300,
                   fontFamily: 'monospace',
-                  letterSpacing: 2,
+                  letterSpacing: 0,
                   color: Theme.of(context).textTheme.headlineSmall?.color,
                 ),
               ),
               const SizedBox(height: 8),
-              if (progress > 0 && progress < 1.0)
+              if (progress > 0)
                 Text(
-                  '${(progress * 100).toInt()}%',
+                  '${(progress.clamp(0.0, 1.0) * 100).round()}%',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: progress >= 1.0 ? 14 : 16,
                     color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
             ],

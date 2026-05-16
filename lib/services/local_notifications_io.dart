@@ -16,7 +16,14 @@ class LocalNotifications {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   bool _granted = false;
+  String? _launchPayload;
   bool get permissionGranted => _granted;
+  static const RawResourceAndroidNotificationSound _alarmSound =
+      RawResourceAndroidNotificationSound('duoyi_alarm');
+  static const RawResourceAndroidNotificationSound _defaultSound =
+      RawResourceAndroidNotificationSound('duoyi_alarm');
+  static const String _defaultChannelId = 'duoyi_general_alerts_v3';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v3';
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
@@ -36,8 +43,7 @@ class LocalNotifications {
       }
     }
 
-    const androidInit =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings();
     const linuxInit = LinuxInitializationSettings(defaultActionName: 'Open');
     await _plugin.initialize(
@@ -48,27 +54,76 @@ class LocalNotifications {
         linux: linuxInit,
       ),
       onDidReceiveNotificationResponse: (resp) {
+        final actionId = resp.actionId;
+        // 把 todo 的 action 按钮映射成深链 payload
+        if (actionId != null && actionId.isNotEmpty) {
+          if (actionId.startsWith('todo_complete_')) {
+            final id = actionId.substring('todo_complete_'.length);
+            if (onTap != null) onTap!('duoyi://action/complete_todo?id=$id');
+            return;
+          }
+          if (actionId.startsWith('todo_snooze_')) {
+            final id = actionId.substring('todo_snooze_'.length);
+            if (onTap != null) {
+              onTap!(
+                'duoyi://snooze/${resp.id ?? 0}'
+                '?delay=5&payload=duoyi://todo/$id',
+              );
+            }
+            return;
+          }
+        }
         final payload = resp.payload;
         if (payload != null && onTap != null) onTap!(payload);
       },
     );
 
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      final launchPayload = launchDetails?.notificationResponse?.payload;
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchPayload != null &&
+          launchPayload.isNotEmpty) {
+        _launchPayload = launchPayload;
+      }
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] launch payload probe failed: $e\n$st');
+    }
+
     // 建立默认渠道
     if (_isAndroid) {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await android?.createNotificationChannel(const AndroidNotificationChannel(
-        'duoyi_general',
-        '多仪 · 常规',
-        description: '日常提醒(到期/打卡/番茄)',
-        importance: Importance.high,
-      ));
-      await android?.createNotificationChannel(const AndroidNotificationChannel(
-        'duoyi_alarm',
-        '多仪 · 闹钟',
-        description: '重要提醒会发声',
-        importance: Importance.max,
-      ));
+      try {
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        await android?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _defaultChannelId,
+            '多仪 · 通知提醒',
+            description: '日常提醒会发声并弹出横幅',
+            importance: Importance.high,
+            playSound: true,
+            sound: _defaultSound,
+            enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.notification,
+          ),
+        );
+        await android?.createNotificationChannel(
+          AndroidNotificationChannel(
+            _alarmChannelId,
+            '多仪 · 强提醒',
+            description: '重要提醒会响铃、震动并弹出确认界面',
+            importance: Importance.max,
+            playSound: true,
+            sound: _alarmSound,
+            enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('[LocalNotifications] channel setup failed: $e\n$st');
+      }
     }
 
     _initialized = true;
@@ -95,21 +150,37 @@ class LocalNotifications {
   }
 
   Future<bool> requestPermission() async {
-    if (!_initialized) await init();
+    try {
+      if (!_initialized) await init();
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] init before permission failed: $e\n$st');
+      return false;
+    }
     if (_isAndroid) {
-      final status = await Permission.notification.request();
-      _granted = status.isGranted;
-      // 精准闹钟 (Android 12+) 需另外申请
       try {
-        await Permission.scheduleExactAlarm.request();
-      } catch (_) {}
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        _granted =
+            await android?.requestNotificationsPermission() ??
+            await Permission.notification.request().isGranted;
+      } catch (_) {
+        final status = await Permission.notification.request();
+        _granted = status.isGranted;
+      }
       return _granted;
     }
     if (_isIOS) {
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-      final granted = await ios?.requestPermissions(
-            alert: true, badge: true, sound: true,
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+      final granted =
+          await ios?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
           ) ??
           false;
       _granted = granted;
@@ -121,28 +192,85 @@ class LocalNotifications {
   }
 
   Future<void> _probePermission() async {
-    if (_isAndroid) {
-      _granted = await Permission.notification.isGranted;
+    if (_isAndroid || _isIOS) {
+      try {
+        _granted = await Permission.notification.status.isGranted;
+      } catch (_) {
+        _granted = true;
+      }
     } else {
       _granted = true;
     }
   }
 
-  NotificationDetails _details({String channelId = 'duoyi_general'}) {
+  /// 重新探测当前通知权限状态，不弹系统对话框。
+  Future<bool> refreshPermission() async {
+    if (!_initialized) await init();
+    await _probePermission();
+    return _granted;
+  }
+
+  NotificationDetails _details({
+    String channelId = _defaultChannelId,
+    List<AndroidNotificationAction>? androidActions,
+  }) {
+    final isAlarm = channelId == _alarmChannelId;
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
-        channelId == 'duoyi_alarm' ? '多仪 · 闹钟' : '多仪 · 常规',
-        channelDescription:
-            channelId == 'duoyi_alarm' ? '重要提醒会发声' : '日常提醒(到期/打卡/番茄)',
-        importance: channelId == 'duoyi_alarm' ? Importance.max : Importance.high,
-        priority: Priority.high,
+        isAlarm ? '多仪 · 强提醒' : '多仪 · 通知提醒',
+        channelDescription: isAlarm ? '重要提醒会响铃、震动并弹出确认界面' : '日常提醒会发声并弹出横幅',
+        importance: isAlarm ? Importance.max : Importance.high,
+        priority: isAlarm ? Priority.max : Priority.high,
+        playSound: true,
+        sound: isAlarm ? _alarmSound : _defaultSound,
+        enableVibration: true,
+        audioAttributesUsage: isAlarm
+            ? AudioAttributesUsage.alarm
+            : AudioAttributesUsage.notification,
+        visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
+        actions: androidActions,
       ),
-      iOS: const DarwinNotificationDetails(),
-      macOS: const DarwinNotificationDetails(),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      ),
+      macOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      ),
       linux: const LinuxNotificationDetails(),
     );
+  }
+
+  /// 为待办提醒构建 "完成 / 稍后" 两个 action 按钮。
+  ///
+  /// payload 形如 `duoyi://todo/{id}`。每个 action 用 input ID 绑定深链方案。
+  List<AndroidNotificationAction>? _todoActionsFor(String? payload) {
+    if (payload == null) return null;
+    if (!payload.startsWith('duoyi://todo/')) return null;
+    final id = payload
+        .substring('duoyi://todo/'.length)
+        .split('?')
+        .first;
+    if (id.isEmpty) return null;
+    return [
+      AndroidNotificationAction(
+        'todo_complete_$id',
+        '完成',
+        showsUserInterface: true,
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'todo_snooze_$id',
+        '5 分钟后',
+        showsUserInterface: true,
+        cancelNotification: true,
+      ),
+    ];
   }
 
   Future<void> show({
@@ -153,9 +281,16 @@ class LocalNotifications {
     String? channelId,
   }) async {
     if (!_initialized) await init();
-    await _plugin.show(id, title, body,
-        _details(channelId: channelId ?? 'duoyi_general'),
-        payload: payload);
+    await _plugin.show(
+      id,
+      title,
+      body,
+      _details(
+        channelId: channelId ?? _defaultChannelId,
+        androidActions: _todoActionsFor(payload),
+      ),
+      payload: payload,
+    );
   }
 
   Future<void> scheduleOnce({
@@ -173,7 +308,10 @@ class LocalNotifications {
       title,
       body,
       tz.TZDateTime.from(when, tz.local),
-      _details(channelId: channelId ?? 'duoyi_general'),
+      _details(
+        channelId: channelId ?? _defaultChannelId,
+        androidActions: _todoActionsFor(payload),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -194,7 +332,7 @@ class LocalNotifications {
     List<int>? weekdays,
   }) async {
     if (!_initialized) await init();
-    final details = _details(channelId: channelId ?? 'duoyi_general');
+    final details = _details(channelId: channelId ?? _defaultChannelId);
 
     if (weekdays == null || weekdays.isEmpty) {
       // 每天
@@ -234,16 +372,21 @@ class LocalNotifications {
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (!scheduled.isAfter(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
     return scheduled;
   }
 
-  tz.TZDateTime _nextInstanceOfWeekdayTime(
-      int weekday, int hour, int minute) {
+  tz.TZDateTime _nextInstanceOfWeekdayTime(int weekday, int hour, int minute) {
     var scheduled = _nextInstanceOfTime(hour, minute);
     while (scheduled.weekday != weekday) {
       scheduled = scheduled.add(const Duration(days: 1));
@@ -269,5 +412,27 @@ class LocalNotifications {
     if (!_initialized) return const [];
     final pending = await _plugin.pendingNotificationRequests();
     return pending.map((e) => e.id).toList();
+  }
+
+  String? takeLaunchPayload() {
+    final payload = _launchPayload;
+    _launchPayload = null;
+    return payload;
+  }
+
+  Future<Set<String>?> notificationChannelIds() async {
+    if (!_isAndroid) return const <String>{};
+    if (!_initialized) await init();
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final channels = await android?.getNotificationChannels();
+      if (channels == null) return null;
+      return channels.map((c) => c.id).toSet();
+    } catch (_) {
+      return null;
+    }
   }
 }

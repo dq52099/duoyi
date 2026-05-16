@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 白噪音前台服务（锁屏不被杀） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -26,6 +27,8 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
@@ -48,6 +51,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
 
         <!-- flutter_local_notifications: 开机恢复已调度闹钟 -->
         <receiver
@@ -91,7 +104,7 @@
                 android:resource="@xml/duoyi_widget_info" />
             <meta-data
                 android:name="miui.appwidget.previewImage"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/widget_preview" />
         </receiver>
 
         <!-- 今日待办 小组件 -->
@@ -109,7 +122,7 @@
                 android:resource="@xml/duoyi_todo_widget_info" />
             <meta-data
                 android:name="miui.appwidget.previewImage"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/widget_todo_preview" />
         </receiver>
 
         <activity

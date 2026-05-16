@@ -1,0 +1,348 @@
+import 'package:flutter/material.dart';
+
+import '../models/anniversary.dart';
+import '../models/calendar_event.dart';
+import '../models/countdown.dart';
+import '../models/course_schedule.dart';
+import '../models/diary_entry.dart';
+import '../models/goal.dart';
+import '../models/habit.dart';
+import '../models/pomodoro.dart';
+import '../models/time_entry.dart';
+import '../models/todo.dart';
+
+class CalendarAggregator {
+  CalendarAggregator._();
+
+  static List<CalendarEvent> buildEvents({
+    required List<TodoItem> todos,
+    required List<Habit> habits,
+    required List<PomodoroSession> pomodoroSessions,
+    required ColorScheme colorScheme,
+    List<Anniversary>? anniversaries,
+    List<CourseItem>? courses,
+    ScheduleSettings? courseSettings,
+    List<DiaryEntry>? diaries,
+    List<CountdownItem>? countdowns,
+    List<GoalItem>? goals,
+    List<TimeEntry>? timeEntries,
+  }) {
+    final events = <CalendarEvent>[
+      ..._todoEvents(todos, colorScheme),
+      ..._habitEvents(habits),
+      ..._pomodoroEvents(pomodoroSessions),
+      ..._timeEntryEvents(timeEntries ?? const <TimeEntry>[]),
+      ..._anniversaryEvents(anniversaries ?? const <Anniversary>[]),
+      ..._countdownEvents(countdowns ?? const <CountdownItem>[]),
+      ..._courseEvents(courses ?? const <CourseItem>[], courseSettings),
+      ..._diaryEvents(diaries ?? const <DiaryEntry>[]),
+      ..._goalEvents(goals ?? const <GoalItem>[]),
+    ];
+    events.sort(_compareEvents);
+    return _markConflicts(events);
+  }
+
+  static List<CalendarEvent> _todoEvents(
+    List<TodoItem> todos,
+    ColorScheme colorScheme,
+  ) {
+    return [
+      for (final t in todos)
+        CalendarEvent(
+          id: 'todo_${t.id}',
+          title: t.title,
+          subtitle: t.dueDate == null
+              ? null
+              : '截止 ${_formatDateTime(t.dueDate!)}',
+          date: t.date,
+          endDate: t.dueDate,
+          type: CalendarEventType.todo,
+          color: colorScheme.primary,
+          isCompleted: t.isCompleted,
+          sourceId: t.id,
+          time: t.dueDate == null ? null : TimeOfDay.fromDateTime(t.dueDate!),
+        ),
+    ];
+  }
+
+  static List<CalendarEvent> _habitEvents(List<Habit> habits) {
+    final events = <CalendarEvent>[];
+    for (final h in habits) {
+      for (final entry in h.completions.entries) {
+        final date = _parseDateKey(entry.key);
+        if (date == null) continue;
+        events.add(
+          CalendarEvent(
+            id: 'habit_${h.id}_${entry.key}',
+            title: h.name,
+            subtitle: '${entry.value}/${h.targetCount} ${h.unit ?? '次'}',
+            date: date,
+            type: CalendarEventType.habit,
+            color: Color(h.colorValue),
+            isCompleted: entry.value >= h.targetCount,
+            sourceId: h.id,
+          ),
+        );
+      }
+    }
+    return events;
+  }
+
+  static List<CalendarEvent> _pomodoroEvents(List<PomodoroSession> sessions) {
+    return [
+      for (final s in sessions)
+        if (s.type == PomodoroType.focus)
+          CalendarEvent(
+            id: 'pomodoro_${s.id}',
+            title: s.taskName ?? '专注 ${s.durationSeconds ~/ 60} 分钟',
+            subtitle: _formatDuration(s.durationSeconds),
+            date: s.startTime,
+            endDate: s.endTime,
+            type: CalendarEventType.pomodoro,
+            color: const Color(0xFFE53935),
+            isCompleted: true,
+            sourceId: s.id,
+            time: TimeOfDay.fromDateTime(s.startTime),
+          ),
+    ];
+  }
+
+  static List<CalendarEvent> _timeEntryEvents(List<TimeEntry> entries) {
+    return [
+      for (final entry in entries)
+        CalendarEvent(
+          id: 'time_${entry.id}',
+          title: entry.title,
+          subtitle:
+              '${entry.category.label} · ${_formatDuration(entry.durationSeconds)}',
+          date: entry.startAt,
+          endDate: entry.endAt,
+          type: CalendarEventType.timeEntry,
+          color: _timeEntryColor(entry.category),
+          sourceId: entry.id,
+          time: TimeOfDay.fromDateTime(entry.startAt),
+        ),
+    ];
+  }
+
+  static List<CalendarEvent> _anniversaryEvents(
+    List<Anniversary> anniversaries,
+  ) {
+    return [
+      for (final a in anniversaries)
+        CalendarEvent(
+          id: 'anniversary_${a.id}',
+          title: a.title,
+          subtitle: a.yearsPassed == null
+              ? '还有 ${a.daysRemaining} 天'
+              : '第 ${a.yearsPassed! + 1} 次',
+          date: a.nextOccurrence,
+          type: CalendarEventType.anniversary,
+          color: Color(a.colorValue),
+          sourceId: a.id,
+        ),
+    ];
+  }
+
+  static List<CalendarEvent> _countdownEvents(List<CountdownItem> countdowns) {
+    return [
+      for (final c in countdowns)
+        CalendarEvent(
+          id: 'countdown_${c.id}',
+          title: c.title,
+          subtitle: c.daysRemaining >= 0
+              ? '还有 ${c.daysRemaining} 天'
+              : '已过 ${-c.daysRemaining} 天',
+          date: c.targetDate,
+          type: CalendarEventType.countdown,
+          color: const Color(0xFFE91E63),
+          isCompleted: c.daysRemaining < 0,
+          sourceId: c.id,
+        ),
+    ];
+  }
+
+  static List<CalendarEvent> _courseEvents(
+    List<CourseItem> courses,
+    ScheduleSettings? settings,
+  ) {
+    if (settings == null) return const <CalendarEvent>[];
+    final events = <CalendarEvent>[];
+    for (final course in courses) {
+      for (final week in course.weeks) {
+        final dayOffset = (week - 1) * 7 + (course.weekday - 1);
+        final date = settings.termStart.add(Duration(days: dayOffset));
+        final start = settings.sectionStart(date, course.startSection);
+        final end = settings.sectionEnd(
+          date,
+          course.startSection,
+          course.sectionCount,
+        );
+        events.add(
+          CalendarEvent(
+            id: 'course_${course.id}_${week}_${course.weekday}',
+            title: course.name,
+            subtitle: _courseSubtitle(course, week, settings),
+            date: start,
+            endDate: end,
+            type: CalendarEventType.course,
+            color: Color(course.colorValue),
+            sourceId: course.id,
+            time: TimeOfDay.fromDateTime(start),
+          ),
+        );
+      }
+    }
+    return events;
+  }
+
+  static List<CalendarEvent> _diaryEvents(List<DiaryEntry> diaries) {
+    return [
+      for (final d in diaries)
+        CalendarEvent(
+          id: 'diary_${d.id}',
+          title: d.title,
+          subtitle: d.mood?.label,
+          date: d.date,
+          type: CalendarEventType.diary,
+          color: const Color(0xFF26A69A),
+          sourceId: d.id,
+        ),
+    ];
+  }
+
+  static List<CalendarEvent> _goalEvents(List<GoalItem> goals) {
+    return [
+      for (final g in goals)
+        if (g.targetDate != null)
+          CalendarEvent(
+            id: 'goal_${g.id}',
+            title: g.title,
+            subtitle: g.status == GoalStatus.achieved
+                ? '已达成'
+                : '进度 ${(g.computedProgress * 100).round()}%',
+            date: g.targetDate!,
+            type: CalendarEventType.goal,
+            color: Color(g.colorValue),
+            isCompleted: g.status == GoalStatus.achieved,
+            sourceId: g.id,
+          ),
+    ];
+  }
+
+  static List<CalendarEvent> _markConflicts(List<CalendarEvent> events) {
+    final conflicts = <String, int>{};
+    for (var i = 0; i < events.length; i++) {
+      for (var j = i + 1; j < events.length; j++) {
+        final a = events[i];
+        final b = events[j];
+        if (a.dateKey != b.dateKey) continue;
+        if (!_canConflict(a) || !_canConflict(b)) continue;
+        if (!_overlaps(a, b)) continue;
+        conflicts[a.id] = (conflicts[a.id] ?? 0) + 1;
+        conflicts[b.id] = (conflicts[b.id] ?? 0) + 1;
+      }
+    }
+    if (conflicts.isEmpty) return events;
+    return [
+      for (final event in events)
+        if (conflicts.containsKey(event.id))
+          event.copyWith(hasConflict: true, conflictCount: conflicts[event.id])
+        else
+          event,
+    ];
+  }
+
+  static bool _canConflict(CalendarEvent event) {
+    return event.time != null ||
+        event.endDate != null ||
+        event.type == CalendarEventType.course ||
+        event.type == CalendarEventType.timeEntry ||
+        event.type == CalendarEventType.pomodoro;
+  }
+
+  static bool _overlaps(CalendarEvent a, CalendarEvent b) {
+    final aStart = _startOf(a);
+    final bStart = _startOf(b);
+    final aEnd = _endOf(a);
+    final bEnd = _endOf(b);
+    return aStart.isBefore(bEnd) && aEnd.isAfter(bStart);
+  }
+
+  static DateTime _startOf(CalendarEvent event) {
+    final time = event.time;
+    if (time == null) return event.date;
+    return DateTime(
+      event.date.year,
+      event.date.month,
+      event.date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  static DateTime _endOf(CalendarEvent event) {
+    if (event.endDate != null && event.endDate!.isAfter(_startOf(event))) {
+      return event.endDate!;
+    }
+    return _startOf(event).add(const Duration(minutes: 30));
+  }
+
+  static int _compareEvents(CalendarEvent a, CalendarEvent b) {
+    final dateCompare = _startOf(a).compareTo(_startOf(b));
+    if (dateCompare != 0) return dateCompare;
+    return a.type.index.compareTo(b.type.index);
+  }
+
+  static DateTime? _parseDateKey(String key) {
+    final parts = key.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  static Color _timeEntryColor(TimeEntryCategory category) =>
+      switch (category) {
+        TimeEntryCategory.focus => const Color(0xFFE53935),
+        TimeEntryCategory.todo => const Color(0xFF42A5F5),
+        TimeEntryCategory.habit => const Color(0xFF66BB6A),
+        TimeEntryCategory.goal => const Color(0xFFAB47BC),
+        TimeEntryCategory.study => const Color(0xFF26A69A),
+        TimeEntryCategory.work => const Color(0xFFFF9800),
+        TimeEntryCategory.life => const Color(0xFF8D6E63),
+        TimeEntryCategory.other => const Color(0xFF78909C),
+      };
+
+  static String _courseSubtitle(
+    CourseItem course,
+    int week,
+    ScheduleSettings settings,
+  ) {
+    final parts = <String>[
+      '第 $week 周',
+      '第${course.startSection}-${course.endSection}节',
+      settings.sectionTimeRangeLabel(course.startSection, course.sectionCount),
+    ];
+    if (course.location.isNotEmpty) parts.add(course.location);
+    if (course.teacher.isNotEmpty) parts.add(course.teacher);
+    return parts.join(' · ');
+  }
+
+  static String _formatDateTime(DateTime date) {
+    final h = date.hour.toString().padLeft(2, '0');
+    final m = date.minute.toString().padLeft(2, '0');
+    return '${date.month}/${date.day} $h:$m';
+  }
+
+  static String _formatDuration(int seconds) {
+    if (seconds >= 3600) {
+      final hours = seconds / 3600;
+      return '${hours.toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)}小时';
+    }
+    final minutes = seconds / 60;
+    return '${minutes.toStringAsFixed(seconds % 60 == 0 ? 0 : 1)}分钟';
+  }
+}

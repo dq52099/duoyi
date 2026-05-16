@@ -55,10 +55,7 @@ class RecurrenceEngine {
       final lower = anchorDay.add(Duration(days: minGap));
       upperBound = _randomUpperBound(rule, anchorDay);
       if (upperBound.isBefore(lower)) return null;
-      final seed = _stableSeed(
-        goalId ?? '',
-        _yearWeek(lower),
-      );
+      final seed = _stableSeed(goalId ?? '', _yearWeek(lower));
       candidate = _uniformRandomDayIn(lower, upperBound, seed);
     }
 
@@ -70,8 +67,7 @@ class RecurrenceEngine {
         if (upper != null && next.isAfter(upper)) {
           // 回落：从 upper 往前找第一个非节假日
           DateTime cur = upper;
-          while (cur.isAfter(anchorDay) &&
-              HolidayCalendar.isHoliday(cur)) {
+          while (cur.isAfter(anchorDay) && HolidayCalendar.isHoliday(cur)) {
             cur = cur.subtract(const Duration(days: 1));
           }
           if (HolidayCalendar.isHoliday(cur)) return null; // 全窗口节假日
@@ -82,8 +78,7 @@ class RecurrenceEngine {
       }
     }
 
-    if (rule.endDate != null &&
-        candidate!.isAfter(_dateOnly(rule.endDate!))) {
+    if (rule.endDate != null && candidate.isAfter(_dateOnly(rule.endDate!))) {
       return null;
     }
     return candidate;
@@ -196,7 +191,11 @@ class RecurrenceEngine {
   }
 
   /// 在 `[lower, upper]` 闭区间内用 LCG 选一天。
-  static DateTime _uniformRandomDayIn(DateTime lower, DateTime upper, int seed) {
+  static DateTime _uniformRandomDayIn(
+    DateTime lower,
+    DateTime upper,
+    int seed,
+  ) {
     final span = upper.difference(lower).inDays;
     if (span <= 0) return lower;
     // 简化版 LCG：ax + c mod 2^31

@@ -22,26 +22,20 @@ import 'package:duoyi/models/recurrence.dart';
 /// Requirements: 1.2
 void main() {
   group('GoalItem JSON backward compatibility', () {
-    test(
-      '1. minimal legacy {id, title} parses with safe defaults',
-      () {
-        final goal = GoalItem.fromJson({
-          'id': 'legacy-goal-1',
-          'title': '旧版目标',
-        });
+    test('1. minimal legacy {id, title} parses with safe defaults', () {
+      final goal = GoalItem.fromJson({'id': 'legacy-goal-1', 'title': '旧版目标'});
 
-        expect(goal.id, 'legacy-goal-1');
-        expect(goal.title, '旧版目标');
-        expect(goal.category, GoalCategory.custom);
-        expect(goal.recurrence.frequency, RecurrenceFrequency.none);
-        expect(goal.scheduling.mode, SchedulingMode.fixed);
-        expect(goal.skipHolidays, isFalse);
-        expect(goal.focusLink.enabled, isFalse);
-        expect(goal.reminder.enabled, isFalse);
-        expect(goal.timeTargetSeconds, isNull);
-        expect(goal.dailyTargetCount, isNull);
-      },
-    );
+      expect(goal.id, 'legacy-goal-1');
+      expect(goal.title, '旧版目标');
+      expect(goal.category, GoalCategory.custom);
+      expect(goal.recurrence.frequency, RecurrenceFrequency.none);
+      expect(goal.scheduling.mode, SchedulingMode.fixed);
+      expect(goal.skipHolidays, isFalse);
+      expect(goal.focusLink.enabled, isFalse);
+      expect(goal.reminder.enabled, isFalse);
+      expect(goal.timeTargetSeconds, isNull);
+      expect(goal.dailyTargetCount, isNull);
+    });
 
     test('2. legacy category "health" maps to GoalCategory.health', () {
       final goal = GoalItem.fromJson({
@@ -79,11 +73,7 @@ void main() {
     );
 
     test('6. numeric integer category still works', () {
-      final goal = GoalItem.fromJson({
-        'id': 'a',
-        'title': 't',
-        'category': 2,
-      });
+      final goal = GoalItem.fromJson({'id': 'a', 'title': 't', 'category': 2});
       expect(goal.category, GoalCategory.values[2]);
     });
 
@@ -124,83 +114,82 @@ void main() {
       expect(goal.focusLink.whiteNoise, 'none');
     });
 
-    test('9. full GoalItem toJson → fromJson → toJson is structurally equal',
-        () {
-      final original = GoalItem(
-        id: 'roundtrip-goal-1',
-        title: '阅读 30 分钟',
-        description: '每天晚上读书 30 分钟，保持大脑活跃。',
-        icon: 'book',
-        colorValue: 0xFF1234FF,
-        startDate: DateTime(2025, 1, 1, 8, 30),
-        targetDate: DateTime(2025, 12, 31, 23, 59),
-        status: GoalStatus.active,
-        progress: 0.25,
-        autoProgress: false,
-        milestones: [
-          GoalMilestone(
-            id: 'ms-1',
-            title: '读完第一章',
-            isCompleted: true,
-            completedAt: DateTime(2025, 1, 5, 10, 0),
+    test(
+      '9. full GoalItem toJson → fromJson → toJson is structurally equal',
+      () {
+        final original = GoalItem(
+          id: 'roundtrip-goal-1',
+          title: '阅读 30 分钟',
+          description: '每天晚上读书 30 分钟，保持大脑活跃。',
+          icon: 'book',
+          colorValue: 0xFF1234FF,
+          startDate: DateTime(2025, 1, 1, 8, 30),
+          targetDate: DateTime(2025, 12, 31, 23, 59),
+          status: GoalStatus.active,
+          progress: 0.25,
+          autoProgress: false,
+          milestones: [
+            GoalMilestone(
+              id: 'ms-1',
+              title: '读完第一章',
+              isCompleted: true,
+              completedAt: DateTime(2025, 1, 5, 10, 0),
+            ),
+            GoalMilestone(id: 'ms-2', title: '读完第二章'),
+          ],
+          category: GoalCategory.study,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+            interval: 1,
+            byWeekdays: [0, 2, 4],
           ),
-          GoalMilestone(
-            id: 'ms-2',
-            title: '读完第二章',
+          scheduling: const GoalScheduling(
+            mode: SchedulingMode.random,
+            randomMinGapDays: 2,
+            randomMaxPerWeek: 3,
+            randomMaxPerMonth: 10,
           ),
-        ],
-        category: GoalCategory.study,
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.weekly,
-          interval: 1,
-          byWeekdays: [0, 2, 4],
-        ),
-        scheduling: const GoalScheduling(
-          mode: SchedulingMode.random,
-          randomMinGapDays: 2,
-          randomMaxPerWeek: 3,
-          randomMaxPerMonth: 10,
-        ),
-        skipHolidays: true,
-        focusLink: const FocusLink(
-          enabled: true,
-          presetId: 'pomodoro-25',
-          focusSeconds: 1500,
-          whiteNoise: 'rain',
-        ),
-        reminder: const ReminderConfig(
-          enabled: true,
-          kind: ReminderKind.alarm,
-          hour: 20,
-          minute: 30,
-          daysBefore: 0,
-          vibrate: true,
-          fullScreen: true,
-        ),
-        timeTargetSeconds: 1800,
-        dailyTargetCount: 1,
-        sortOrder: 3,
-        createdAt: DateTime(2024, 12, 25, 9, 0),
-        updatedAt: DateTime(2025, 1, 6, 18, 0),
-      );
+          skipHolidays: true,
+          focusLink: const FocusLink(
+            enabled: true,
+            presetId: 'pomodoro-25',
+            focusSeconds: 1500,
+            whiteNoise: 'rain',
+          ),
+          reminder: const ReminderConfig(
+            enabled: true,
+            kind: ReminderKind.alarm,
+            hour: 20,
+            minute: 30,
+            daysBefore: 0,
+            vibrate: true,
+            fullScreen: true,
+          ),
+          timeTargetSeconds: 1800,
+          dailyTargetCount: 1,
+          sortOrder: 3,
+          createdAt: DateTime(2024, 12, 25, 9, 0),
+          updatedAt: DateTime(2025, 1, 6, 18, 0),
+        );
 
-      final firstJson = original.toJson();
+        final firstJson = original.toJson();
 
-      // 经过一次真实的 JSON 编解码，确保类型经过字符串化也能正确还原。
-      final decoded = GoalItem.fromJson(
-        jsonDecode(jsonEncode(firstJson)) as Map<String, dynamic>,
-      );
-      final secondJson = decoded.toJson();
+        // 经过一次真实的 JSON 编解码，确保类型经过字符串化也能正确还原。
+        final decoded = GoalItem.fromJson(
+          jsonDecode(jsonEncode(firstJson)) as Map<String, dynamic>,
+        );
+        final secondJson = decoded.toJson();
 
-      // 显式键集一致，避免意外新增 / 丢失字段。
-      expect(
-        secondJson.keys.toSet(),
-        firstJson.keys.toSet(),
-        reason: 'toJson key set must be stable across round-trip',
-      );
+        // 显式键集一致，避免意外新增 / 丢失字段。
+        expect(
+          secondJson.keys.toSet(),
+          firstJson.keys.toSet(),
+          reason: 'toJson key set must be stable across round-trip',
+        );
 
-      // 深度相等校验：列表、嵌套 map、null 值都应一致。
-      expect(secondJson, equals(firstJson));
-    });
+        // 深度相等校验：列表、嵌套 map、null 值都应一致。
+        expect(secondJson, equals(firstJson));
+      },
+    );
   });
 }

@@ -14,8 +14,10 @@ class BackupService {
     'duoyi_anniversaries_v2',
     'duoyi_diary',
     'duoyi_goals',
+    'duoyi_time_entries',
     'duoyi_courses',
     'duoyi_course_settings',
+    'duoyi_achievements_unlocked',
   ];
 
   static const int schemaVersion = 1;

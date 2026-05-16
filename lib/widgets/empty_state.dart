@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'surface_components.dart';
+
 class EmptyState extends StatelessWidget {
   final IconData icon;
+  final Widget? iconWidget;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
@@ -9,6 +12,7 @@ class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
     required this.icon,
+    this.iconWidget,
     required this.message,
     this.actionLabel,
     this.onAction,
@@ -18,51 +22,48 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              size: 64,
-              color: cs.primary.withValues(alpha: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 280, maxWidth: 520),
+          child: AppSurfaceCard(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+            borderRadius: BorderRadius.circular(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: iconWidget ?? Icon(icon, size: 36, color: cs.primary),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontSize: 15,
+                    height: 1.55,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 20),
+                  FilledButton.tonalIcon(
+                    onPressed: onAction,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(actionLabel!),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            message,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.add, size: 18),
-              label: Text(actionLabel!),
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

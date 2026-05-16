@@ -34,6 +34,13 @@ class CountdownProvider extends ChangeNotifier {
     _save();
   }
 
+  void updateItem(CountdownItem item) {
+    final idx = _items.indexWhere((e) => e.id == item.id);
+    if (idx == -1) return;
+    _items[idx] = item;
+    _save();
+  }
+
   void deleteItem(String id) {
     _items.removeWhere((e) => e.id == id);
     _save();
@@ -43,12 +50,7 @@ class CountdownProvider extends ChangeNotifier {
     final idx = _items.indexWhere((e) => e.id == id);
     if (idx != -1) {
       final old = _items[idx];
-      _items[idx] = CountdownItem(
-        id: old.id,
-        title: old.title,
-        targetDate: old.targetDate,
-        isPinned: !old.isPinned,
-      );
+      _items[idx] = old.copyWith(isPinned: !old.isPinned);
       _save();
     }
   }

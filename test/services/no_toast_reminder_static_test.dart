@@ -44,9 +44,7 @@ void main() {
         for (final entity in dir.listSync(recursive: true)) {
           if (entity is! File) continue;
           if (!entity.path.toLowerCase().endsWith('.dart')) continue;
-          final relPath = _toPosix(
-            entity.path.substring(Directory.current.path.length + 1),
-          );
+          final relPath = _relativePosixPath(entity);
           final source = entity.readAsStringSync();
           final stripped = _stripDartComments(source);
           final lines = stripped.split('\n');
@@ -89,9 +87,7 @@ void main() {
         for (final entity in dir.listSync(recursive: true)) {
           if (entity is! File) continue;
           if (!entity.path.toLowerCase().endsWith('.dart')) continue;
-          final relPath = _toPosix(
-            entity.path.substring(Directory.current.path.length + 1),
-          );
+          final relPath = _relativePosixPath(entity);
           final source = entity.readAsStringSync();
           final stripped = _stripDartComments(source);
           final lines = stripped.split('\n');
@@ -200,6 +196,16 @@ String _formatViolations(List<_Violation> v, {String kind = 'SnackBar'}) {
     buf.writeln('  - $x');
   }
   return buf.toString();
+}
+
+String _relativePosixPath(File file) {
+  final current = _toPosix(Directory.current.absolute.path);
+  final path = _toPosix(file.absolute.path);
+  final prefix = current.endsWith('/') ? current : '$current/';
+  if (path.startsWith(prefix)) {
+    return path.substring(prefix.length);
+  }
+  return _toPosix(file.path);
 }
 
 // ---------------------------------------------------------------------------

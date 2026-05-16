@@ -1,0 +1,338 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/goal.dart';
+import '../models/habit.dart';
+import '../models/time_entry.dart';
+import '../models/todo.dart';
+
+class TimeAuditProvider extends ChangeNotifier {
+  static const storageKey = 'duoyi_time_entries';
+
+  List<TimeEntry> _entries = [];
+
+  List<TimeEntry> get entries {
+    final sorted = [..._entries]..sort((a, b) => b.startAt.compareTo(a.startAt));
+    return List.unmodifiable(sorted);
+  }
+
+  Future<void> loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(storageKey) ?? const <String>[];
+    _entries = raw
+        .map((e) {
+          try {
+            return TimeEntry.fromJson(jsonDecode(e) as Map<String, dynamic>);
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<TimeEntry>()
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      storageKey,
+      _entries.map((e) => jsonEncode(e.toJson())).toList(),
+    );
+  }
+
+  Future<void> add(TimeEntry entry) async {
+    _entries.add(entry);
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> upsertAuto(TimeEntry entry) async {
+    final key = entry.dedupeKey;
+    if (key != null && key.isNotEmpty) {
+      final idx = _entries.indexWhere((e) => e.dedupeKey == key);
+      if (idx >= 0) {
+        _entries[idx] = entry.copyWith();
+        notifyListeners();
+        await _save();
+        return;
+      }
+    }
+    await add(entry);
+  }
+
+  Future<void> deleteByDedupeKey(String dedupeKey) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.dedupeKey == dedupeKey);
+    if (_entries.length == before) return;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
+    final before = _entries.length;
+    _entries.removeWhere(test);
+    if (_entries.length == before) return;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> deleteBySource(
+    TimeEntrySource source,
+    String sourceId,
+  ) async {
+    await deleteWhere((entry) =>
+        entry.source == source && entry.sourceId == sourceId);
+  }
+
+  Future<void> deleteGoalEntries(String goalId) async {
+    await deleteWhere((entry) {
+      if (entry.source != TimeEntrySource.goal) return false;
+      final sourceId = entry.sourceId;
+      if (sourceId == null) return false;
+      return sourceId == goalId || sourceId.startsWith('$goalId:');
+    });
+  }
+
+  Future<void> update(TimeEntry entry) async {
+    final idx = _entries.indexWhere((e) => e.id == entry.id);
+    if (idx < 0) return;
+    _entries[idx] = entry;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> delete(String id) async {
+    _entries.removeWhere((e) => e.id == id);
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> recordPomodoroSession({
+    required String sessionId,
+    required String title,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? note,
+  }) async {
+    await upsertAuto(
+      TimeEntry(
+        title: title,
+        startAt: startAt,
+        endAt: endAt,
+        category: TimeEntryCategory.focus,
+        source: TimeEntrySource.pomodoro,
+        sourceId: sessionId,
+        dedupeKey: pomodoroDedupeKey(sessionId),
+        note: note ?? '',
+      ),
+    );
+  }
+
+  Future<void> recordTodoCompletion(
+    TodoItem todo, {
+    DateTime? completedAt,
+  }) async {
+    final durationSeconds = _todoDurationSeconds(todo);
+    if (durationSeconds == null || durationSeconds <= 0) return;
+    final endAt = completedAt ?? todo.completedAt ?? DateTime.now();
+    await upsertAuto(
+      TimeEntry(
+        title: todo.title,
+        startAt: endAt.subtract(Duration(seconds: durationSeconds)),
+        endAt: endAt,
+        category: TimeEntryCategory.todo,
+        source: TimeEntrySource.todo,
+        sourceId: todo.id,
+        dedupeKey: todoCompletionDedupeKey(todo.id, endAt),
+        note: todo.dueDate == null ? '' : '截止：${todo.dueDate}',
+      ),
+    );
+  }
+
+  Future<void> removeTodoCompletion(
+    TodoItem todo, {
+    DateTime? completedAt,
+  }) async {
+    final at = completedAt ?? todo.completedAt;
+    if (at == null) return;
+    await deleteByDedupeKey(todoCompletionDedupeKey(todo.id, at));
+  }
+
+  Future<void> recordHabitCheckIn(
+    Habit habit, {
+    required int cumulativeCount,
+    int amount = 1,
+    DateTime? at,
+  }) async {
+    final seconds = _habitDurationSeconds(habit, amount);
+    if (seconds == null || seconds <= 0) return;
+    final endAt = at ?? DateTime.now();
+    final dayKey = _dateKey(endAt);
+    await upsertAuto(
+      TimeEntry(
+        title: habit.name,
+        startAt: endAt.subtract(Duration(seconds: seconds)),
+        endAt: endAt,
+        category: TimeEntryCategory.habit,
+        source: TimeEntrySource.habit,
+        sourceId: habit.id,
+        dedupeKey: habitCheckInDedupeKey(habit.id, dayKey, cumulativeCount),
+        note: habit.unit == null ? '' : '单位：${habit.unit}',
+      ),
+    );
+  }
+
+  Future<void> removeHabitCheckIn(
+    Habit habit, {
+    required int count,
+    DateTime? at,
+  }) async {
+    final endAt = at ?? DateTime.now();
+    await deleteByDedupeKey(
+      habitCheckInDedupeKey(habit.id, _dateKey(endAt), count),
+    );
+  }
+
+  Future<void> recordGoalMilestone(
+    GoalItem goal,
+    GoalMilestone milestone, {
+    DateTime? completedAt,
+  }) async {
+    final durationSeconds = _goalDurationSeconds(goal);
+    if (durationSeconds == null || durationSeconds <= 0) return;
+    final endAt = completedAt ?? milestone.completedAt ?? DateTime.now();
+    await upsertAuto(
+      TimeEntry(
+        title: '${goal.title} · ${milestone.title}',
+        startAt: endAt.subtract(Duration(seconds: durationSeconds)),
+        endAt: endAt,
+        category: TimeEntryCategory.goal,
+        source: TimeEntrySource.goal,
+        sourceId: '${goal.id}:${milestone.id}',
+        dedupeKey: goalMilestoneDedupeKey(goal.id, milestone.id),
+        note: goal.timeTargetSeconds != null
+            ? '目标时长：${goal.timeTargetSeconds! ~/ 60} 分钟'
+            : '',
+      ),
+    );
+  }
+
+  Future<void> removeGoalMilestone(
+    GoalItem goal,
+    GoalMilestone milestone,
+  ) async {
+    await deleteByDedupeKey(goalMilestoneDedupeKey(goal.id, milestone.id));
+  }
+
+  List<TimeEntry> entriesInRange(DateTime start, DateTime end) {
+    return entries.where((e) => e.overlaps(start, end)).toList();
+  }
+
+  List<TimeEntry> entriesForDate(DateTime date) {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    return entriesInRange(start, end);
+  }
+
+  int totalSecondsInRange(DateTime start, DateTime end) {
+    return entriesInRange(start, end).fold<int>(
+      0,
+      (sum, entry) => sum + _durationWithin(entry, start, end),
+    );
+  }
+
+  Map<TimeEntryCategory, int> secondsByCategory(DateTime start, DateTime end) {
+    final result = <TimeEntryCategory, int>{
+      for (final c in TimeEntryCategory.values) c: 0,
+    };
+    for (final entry in entriesInRange(start, end)) {
+      result[entry.category] =
+          (result[entry.category] ?? 0) + _durationWithin(entry, start, end);
+    }
+    return result;
+  }
+
+  Map<String, int> secondsByDay(DateTime start, DateTime end) {
+    final result = <String, int>{};
+    for (final entry in entriesInRange(start, end)) {
+      result[entry.dayKey] =
+          (result[entry.dayKey] ?? 0) + _durationWithin(entry, start, end);
+    }
+    return result;
+  }
+
+  Map<String, int> secondsBySource(DateTime start, DateTime end) {
+    final result = <String, int>{};
+    for (final entry in entriesInRange(start, end)) {
+      final key = entry.source.label;
+      result[key] = (result[key] ?? 0) + _durationWithin(entry, start, end);
+    }
+    return result;
+  }
+
+  static String pomodoroDedupeKey(String sessionId) => 'pomodoro:$sessionId';
+
+  static String todoCompletionDedupeKey(String todoId, DateTime completedAt) =>
+      'todo:$todoId:${completedAt.millisecondsSinceEpoch}';
+
+  static String habitCheckInDedupeKey(
+    String habitId,
+    String dateKey,
+    int count,
+  ) => 'habit:$habitId:$dateKey:$count';
+
+  static String goalMilestoneDedupeKey(String goalId, String milestoneId) =>
+      'goal:$goalId:milestone:$milestoneId';
+
+  int? _todoDurationSeconds(TodoItem todo) {
+    if (todo.timeTargetSeconds != null && todo.timeTargetSeconds! > 0) {
+      return todo.timeTargetSeconds;
+    }
+    if (todo.focusLink.enabled &&
+        todo.focusLink.focusSeconds != null &&
+        todo.focusLink.focusSeconds! > 0) {
+      return todo.focusLink.focusSeconds;
+    }
+    return null;
+  }
+
+  int? _habitDurationSeconds(Habit habit, int count) {
+    final unit = habit.unit?.trim();
+    if (unit == null || unit.isEmpty) return null;
+    final lower = unit.toLowerCase();
+    if (unit.contains('小时') || lower.contains('hour') || lower == 'h') {
+      return count * 3600;
+    }
+    if (unit.contains('分钟') ||
+        unit.contains('分') ||
+        lower.contains('min') ||
+        lower == 'm') {
+      return count * 60;
+    }
+    return null;
+  }
+
+  int? _goalDurationSeconds(GoalItem goal) {
+    if (goal.timeTargetSeconds != null && goal.timeTargetSeconds! > 0) {
+      return goal.timeTargetSeconds;
+    }
+    if (goal.focusLink.enabled &&
+        goal.focusLink.focusSeconds != null &&
+        goal.focusLink.focusSeconds! > 0) {
+      return goal.focusLink.focusSeconds;
+    }
+    return null;
+  }
+
+  int _durationWithin(TimeEntry entry, DateTime start, DateTime end) {
+    final clippedStart = entry.startAt.isBefore(start) ? start : entry.startAt;
+    final clippedEnd = entry.endAt.isAfter(end) ? end : entry.endAt;
+    return math.max(0, clippedEnd.difference(clippedStart).inSeconds);
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}

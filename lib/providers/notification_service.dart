@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/achievements.dart';
 import '../core/brand_strings.dart';
 import '../services/desktop_notification.dart';
 import '../services/local_notifications.dart';
@@ -25,22 +26,22 @@ class NotificationItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'body': body,
-        'scheduledTime': scheduledTime.toIso8601String(),
-        'type': type.index,
-        'relatedId': relatedId,
-      };
+    'id': id,
+    'title': title,
+    'body': body,
+    'scheduledTime': scheduledTime.toIso8601String(),
+    'type': type.index,
+    'relatedId': relatedId,
+  };
 
   factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
-        id: j['id'].toString(),
-        title: (j['title'] ?? '').toString(),
-        body: (j['body'] ?? '').toString(),
-        scheduledTime: DateTime.parse(j['scheduledTime']),
-        type: NotificationType.values[(j['type'] as num?)?.toInt() ?? 0],
-        relatedId: j['relatedId']?.toString(),
-      );
+    id: j['id'].toString(),
+    title: (j['title'] ?? '').toString(),
+    body: (j['body'] ?? '').toString(),
+    scheduledTime: DateTime.parse(j['scheduledTime']),
+    type: NotificationType.values[(j['type'] as num?)?.toInt() ?? 0],
+    relatedId: j['relatedId']?.toString(),
+  );
 }
 
 enum NotificationType { todo, habit, pomodoro, anniversary, general }
@@ -65,7 +66,11 @@ class NotificationService extends ChangeNotifier
   static const _kHistoryKey = 'duoyi_notif_history';
 
   /// 本服务使用的唯一通道 id。
-  static const String channelId = 'duoyi_general';
+  ///
+  /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
+  /// 用户手机上的旧渠道。v3 明确绑定 `duoyi_alarm.wav`，避免旧 v2 渠道静音。
+  static const String channelId = 'duoyi_general_alerts_v3';
+  static const String legacyChannelId = 'duoyi_general_alerts_v2';
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;
@@ -77,8 +82,7 @@ class NotificationService extends ChangeNotifier
   int get pendingCount => _pendingNotifications;
   List<NotificationItem> get history => List.unmodifiable(_history);
   bool get desktopReady => _desktopReady;
-  bool get permissionGranted =>
-      LocalNotifications.instance.permissionGranted;
+  bool get permissionGranted => LocalNotifications.instance.permissionGranted;
 
   void setStrings(BrandStrings s) {
     _strings = s;
@@ -91,14 +95,20 @@ class NotificationService extends ChangeNotifier
     // （Importance.high）与 duoyi_alarm 渠道（由 AlarmService 使用）。
     await LocalNotifications.instance.init();
     await _loadHistory();
-    // 首次使用时尝试一次(用户可在偏好页再次申请)
-    if (!LocalNotifications.instance.permissionGranted) {
-      await LocalNotifications.instance.requestPermission();
-    }
   }
 
   Future<bool> requestPermission() =>
       LocalNotifications.instance.requestPermission();
+
+  /// 重新读取系统通知权限状态，并在状态变化时通知订阅者刷新 UI。
+  Future<bool> refreshPermission() async {
+    final before = permissionGranted;
+    final granted = await LocalNotifications.instance.refreshPermission();
+    if (before != granted) {
+      notifyListeners();
+    }
+    return granted;
+  }
 
   Future<void> _saveHistory() async {
     final p = await SharedPreferences.getInstance();
@@ -114,15 +124,13 @@ class NotificationService extends ChangeNotifier
     _history
       ..clear()
       ..addAll(
-        raw
-            .map((e) {
-              try {
-                return NotificationItem.fromJson(jsonDecode(e));
-              } catch (_) {
-                return null;
-              }
-            })
-            .whereType<NotificationItem>(),
+        raw.map((e) {
+          try {
+            return NotificationItem.fromJson(jsonDecode(e));
+          } catch (_) {
+            return null;
+          }
+        }).whereType<NotificationItem>(),
       );
     notifyListeners();
   }
@@ -163,10 +171,53 @@ class NotificationService extends ChangeNotifier
     );
   }
 
-  /// 调度一次性 push 通知（`when` 为本地墙钟时间）。
+  /// 稍后提醒（Snooze, Task T-12）。
+  ///
+  /// 取消现有 [id] 上的调度，并在 [delay] 之后重新调度同一条提醒。
+  /// 上层（深链处理或通知 action）应当传入原 payload 以保留跳转上下文。
+  Future<void> snooze({
+    required int id,
+    required String title,
+    required String body,
+    required Duration delay,
+    String? payload,
+  }) async {
+    await LocalNotifications.instance.cancel(id);
+    final when = DateTime.now().add(delay);
+    await LocalNotifications.instance.scheduleOnce(
+      id: id,
+      title: title,
+      body: body,
+      when: when,
+      channelId: channelId,
+      payload: payload,
+    );
+  }
+
+  /// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。
+  Future<void> handleSnoozeDeepLink(Uri uri) async {
+    if (uri.host != 'snooze') return;
+    final idStr = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    final id = int.tryParse(idStr ?? '');
+    if (id == null) return;
+    final minutes = int.tryParse(uri.queryParameters['delay'] ?? '5') ?? 5;
+    final title = uri.queryParameters['title'] ?? '稍后提醒';
+    final body = uri.queryParameters['body'] ?? '';
+    final payload = uri.queryParameters['payload'];
+    await snooze(
+      id: id,
+      title: title,
+      body: body,
+      delay: Duration(minutes: minutes),
+      payload: payload,
+    );
+  }
+
+  /// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。
   ///
   /// 这是对齐 Task 12 描述的通用 `scheduleOnce(id, title, body, when, payload)`
   /// 接口，专供 `ReminderScheduler` 路由 `kind = push` 的提醒使用。
+  @override
   Future<void> scheduleOnce({
     required int id,
     required String title,
@@ -188,6 +239,7 @@ class NotificationService extends ChangeNotifier
   }
 
   /// 每日固定时间的 push 通知；可选 `weekdays`（1=Mon..7=Sun）限定。
+  @override
   Future<void> scheduleDaily({
     required int id,
     required String title,
@@ -212,6 +264,7 @@ class NotificationService extends ChangeNotifier
   }
 
   /// 取消某个已调度的通知。
+  @override
   Future<void> cancel(int id) async {
     await LocalNotifications.instance.cancel(id);
   }
@@ -224,8 +277,7 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
-  Future<List<int>> pendingIds() =>
-      LocalNotifications.instance.pendingIds();
+  Future<List<int>> pendingIds() => LocalNotifications.instance.pendingIds();
 
   // ——————————————————————————————————————————————
   // 便捷语义 API（语义化包装，全部走 push 通道）
@@ -253,6 +305,7 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
+  @override
   Future<void> cancelTodoReminder(String todoId) async {
     await LocalNotifications.instance.cancel(_idFor('todo_$todoId'));
   }
@@ -261,6 +314,7 @@ class NotificationService extends ChangeNotifier
   ///
   /// 注：按 R4.5，`ReminderConfig.kind = alarm` 的习惯闹钟应改走 `AlarmService`，
   /// 相关路由在 Task 14 `ReminderScheduler._dispatch` 中统一处理。
+  @override
   Future<void> scheduleHabitReminder({
     required String habitId,
     required String habitName,
@@ -276,21 +330,23 @@ class NotificationService extends ChangeNotifier
       minute: minute,
       weekdays: weekdays,
       channelId: channelId,
-      payload: 'duoyi://tab/habit',
+      payload: 'duoyi://habit/$habitId?confirm=1',
     );
     _pendingNotifications++;
     notifyListeners();
   }
 
+  @override
   Future<void> cancelHabitReminder(String habitId) async {
     await LocalNotifications.instance.cancel(_idFor('habit_$habitId'));
   }
 
   /// 纪念日/生日到达前 N 天提醒（push 语义）。
   ///
-  /// TODO(task-13): 用户若把某个纪念日标为「强提醒」（kind=alarm），
-  /// 应由 `AlarmService.scheduleFullScreen` 承担；本方法保留 push 语义作为
-  /// 默认回退，直到 Task 14 `ReminderScheduler` 按 `ReminderConfig.kind` 完成分发。
+  /// alarm kind 路由已由 `ReminderScheduler.syncAnniversaries` 完成：
+  /// 当 `Anniversary.reminderKind == alarm` 时调用 `AlarmService`；
+  /// 本方法仅处理 push 回退路径。
+  @override
   Future<void> scheduleAnniversary({
     required String annId,
     required String title,
@@ -319,6 +375,7 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
+  @override
   Future<void> cancelAnniversary(String annId) async {
     await LocalNotifications.instance.cancel(_idFor('anni_$annId'));
   }
@@ -389,6 +446,57 @@ class NotificationService extends ChangeNotifier
       ),
     );
     await _saveHistory();
+    notifyListeners();
+  }
+
+  Future<void> sendScheduledTest({
+    Duration delay = const Duration(minutes: 1),
+  }) async {
+    final when = DateTime.now().add(delay);
+    await LocalNotifications.instance.scheduleOnce(
+      id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+      title: '多仪 · 定时测试',
+      body: '如果你看到这条，定时提醒调度已经正常工作。',
+      when: when,
+      channelId: channelId,
+      payload: 'duoyi://tab/mine',
+    );
+    _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: '定时测试通知',
+        body:
+            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发',
+        scheduledTime: when,
+        type: NotificationType.general,
+      ),
+    );
+    await _saveHistory();
+    notifyListeners();
+  }
+
+  void notifyAchievementUnlocked(Achievement achievement) {
+    final title = '成就解锁：${achievement.title}';
+    final body = achievement.description;
+    _desktopShow(title, body);
+    LocalNotifications.instance.show(
+      id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+      title: title,
+      body: body,
+      channelId: channelId,
+      payload: 'duoyi://tab/mine',
+    );
+    _addToHistory(
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        body: body,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.general,
+        relatedId: achievement.id,
+      ),
+    );
     notifyListeners();
   }
 

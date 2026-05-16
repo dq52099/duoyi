@@ -5,12 +5,14 @@ class CalendarWeekStrip extends StatelessWidget {
   final DateTime selectedDay;
   final Map<String, List<CalendarEventType>> dateEventTypes;
   final void Function(DateTime) onDaySelected;
+  final Set<CalendarEventType>? activeTypes;
 
   const CalendarWeekStrip({
     super.key,
     required this.selectedDay,
     required this.dateEventTypes,
     required this.onDaySelected,
+    this.activeTypes,
   });
 
   static Color _colorFor(CalendarEventType t, ColorScheme cs) {
@@ -31,6 +33,8 @@ class CalendarWeekStrip extends StatelessWidget {
         return Colors.orange;
       case CalendarEventType.goal:
         return const Color(0xFFFFA726);
+      case CalendarEventType.timeEntry:
+        return const Color(0xFF78909C);
     }
   }
 
@@ -86,7 +90,7 @@ class CalendarWeekStrip extends StatelessWidget {
                         '${d.day}',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                           color: isSelected ? cs.onPrimary : null,
                         ),
                       ),
@@ -143,7 +147,7 @@ class CalendarWeekStrip extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),

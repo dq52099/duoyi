@@ -20,11 +20,7 @@ class LoadingState extends StatefulWidget {
   /// 占位条的数量。
   final int lines;
 
-  const LoadingState({
-    super.key,
-    this.message,
-    this.lines = 3,
-  });
+  const LoadingState({super.key, this.message, this.lines = 3});
 
   @override
   State<LoadingState> createState() => _LoadingStateState();
@@ -70,10 +66,9 @@ class _LoadingStateState extends State<LoadingState>
                 widget.message!,
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeSm,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -113,9 +108,7 @@ class _ShimmerBar extends StatelessWidget {
                   ],
                 ).createShader(rect);
               },
-              child: Container(
-                color: DesignTokens.resultLoadingShimmerBase,
-              ),
+              child: Container(color: DesignTokens.resultLoadingShimmerBase),
             ),
           ),
         );
@@ -171,10 +164,9 @@ class ErrorState extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: DesignTokens.fontSizeSm,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
             if (onRetry != null) ...[

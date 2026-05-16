@@ -4,12 +4,17 @@ import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
 import '../models/goal.dart' show ReminderKind;
 import '../models/todo.dart';
+import '../models/workspace.dart';
+import '../providers/auth_provider.dart';
+import '../providers/share_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/ai_service.dart';
 import '../core/todo_templates.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/surface_components.dart';
+import 'share_screen.dart';
 import 'todo_detail_screen.dart' show TodoDetailScreen, priorityColor;
 
 class TodoScreen extends StatefulWidget {
@@ -33,22 +38,18 @@ class _TodoScreenState extends State<TodoScreen> {
     List<String> aiSubtasks = [];
     String? aiError;
 
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
+        builder: (ctx, setSt) => AppSurfaceCard(
+          margin: EdgeInsets.zero,
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             left: 20,
             right: 20,
             top: 24,
           ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -59,7 +60,9 @@ class _TodoScreenState extends State<TodoScreen> {
                     width: 40,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -69,23 +72,14 @@ class _TodoScreenState extends State<TodoScreen> {
                   s.todoCreateTitle,
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 20),
 
                 TextField(
                   controller: titleCtrl,
-                  decoration: InputDecoration(
-                    hintText: '准备做什么？',
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.all(18),
-                  ),
+                  decoration: const InputDecoration(hintText: '准备做什么？'),
                   autofocus: true,
                 ),
                 const SizedBox(height: 12),
@@ -110,7 +104,7 @@ class _TodoScreenState extends State<TodoScreen> {
                         'AI 智能拆解',
                         style: TextStyle(
                           color: Colors.purple,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       backgroundColor: Colors.purple.shade50,
@@ -151,7 +145,9 @@ class _TodoScreenState extends State<TodoScreen> {
                     margin: const EdgeInsets.only(top: 12),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.surface.withValues(alpha: 0.55),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -186,7 +182,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '清单类型',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -229,21 +225,15 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<EisenhowerQuadrant>(
+                AppDropdownField<EisenhowerQuadrant>(
                   initialValue: quadrant,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+                  labelText: '优先级',
+                  onTap: () => FocusScope.of(ctx).unfocus(),
                   items: const [
                     DropdownMenuItem(
                       value: EisenhowerQuadrant.urgentImportant,
@@ -269,7 +259,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   '优先级标记',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w400,
                     color: Colors.grey,
                   ),
                 ),
@@ -296,12 +286,35 @@ class _TodoScreenState extends State<TodoScreen> {
                         final sub = aiSubtasks
                             .map((t) => Subtask(title: t))
                             .toList();
+                        final workspaceId = groupName.isEmpty
+                            ? 'private'
+                            : context
+                                      .read<TodoProvider>()
+                                      .workspaceForListGroup(groupName) ??
+                                  'private';
+                        if (!context.read<ShareProvider>().canEdit(
+                          workspaceId,
+                        )) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('你在这个共享空间中只有查看权限')),
+                          );
+                          return;
+                        }
                         context.read<TodoProvider>().addTodo(
                           TodoItem(
                             title: titleCtrl.text.trim(),
                             quadrant: quadrant,
                             priority: priority,
                             listGroupName: groupName.isEmpty ? null : groupName,
+                            workspaceId: workspaceId,
+                            createdBy: context
+                                .read<AuthProvider>()
+                                .state
+                                .userId,
+                            updatedBy: context
+                                .read<AuthProvider>()
+                                .state
+                                .userId,
                             subtasks: sub,
                           ),
                         );
@@ -318,7 +331,7 @@ class _TodoScreenState extends State<TodoScreen> {
                       '添加任务',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -337,12 +350,30 @@ class _TodoScreenState extends State<TodoScreen> {
     final s = context.watch<ThemeProvider>().brand.strings;
     final quadrantGroups = todoProvider.quadrantGroups;
     final listGroups = todoProvider.listGroupedTodos;
+    final overdueCount = todoProvider.overdueTodos.length;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(s.todoTitle),
         actions: [
+          if (overdueCount > 0)
+            TextButton.icon(
+              onPressed: () async {
+                await context.read<TodoProvider>().postponeOverdue(
+                  DateTime.now(),
+                );
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('已顺延 $overdueCount 个逾期任务'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.update_outlined, size: 18),
+              label: const Text('顺延'),
+            ),
           IconButton(
             icon: Icon(_isMatrixView ? Icons.list : Icons.grid_view),
             onPressed: () => setState(() => _isMatrixView = !_isMatrixView),
@@ -401,19 +432,72 @@ class _ListGroupTileState extends State<_ListGroupTile> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Card(
+    final todoProvider = context.watch<TodoProvider>();
+    final shareProvider = context.watch<ShareProvider>();
+    final workspaceId = todoProvider.workspaceForListGroup(widget.groupName);
+    final workspace = workspaceId == null
+        ? null
+        : shareProvider.workspaces
+              .where((workspace) => workspace.id == workspaceId)
+              .firstOrNull;
+    return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(18),
       child: Column(
         children: [
           ListTile(
-            leading: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _expanded ? Icons.expand_less : Icons.expand_more,
+                color: cs.primary,
+              ),
+            ),
             title: Text(
               widget.groupName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w400),
             ),
-            trailing: Text(
-              '${widget.todos.length}',
-              style: TextStyle(color: cs.primary),
+            subtitle: workspace == null
+                ? null
+                : Text(
+                    '共享：${workspace.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (workspace != null)
+                  Icon(Icons.groups_2_outlined, size: 18, color: cs.primary),
+                IconButton(
+                  tooltip: '共享清单',
+                  onPressed: () => _shareGroup(context),
+                  icon: const Icon(Icons.ios_share_outlined),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${widget.todos.length}',
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
             ),
             onTap: () => setState(() => _expanded = !_expanded),
           ),
@@ -421,6 +505,79 @@ class _ListGroupTileState extends State<_ListGroupTile> {
         ],
       ),
     );
+  }
+
+  Future<void> _shareGroup(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.state.isLoggedIn) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ShareScreen()),
+      );
+      return;
+    }
+
+    final share = context.read<ShareProvider>();
+    if (share.workspaces.isEmpty) await share.load();
+    if (!context.mounted) return;
+    final workspaces = share.workspaces.where((w) => !w.isPrivate).toList();
+    if (workspaces.isEmpty) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ShareScreen()),
+      );
+      return;
+    }
+
+    final picked = await showAppModalSheet<String>(
+      context: context,
+      builder: (_) => AppModalSheet(
+        title: '共享清单',
+        subtitle: '把「${widget.groupName}」标记到共享空间',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('仅自己可见'),
+              onTap: () => Navigator.pop(context, 'private'),
+            ),
+            for (final workspace in workspaces)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.groups_2_outlined),
+                title: Text(workspace.name),
+                subtitle: Text(
+                  '${workspace.members.length} 位成员 · ${workspace.roleFor(auth.state.userId).label}',
+                ),
+                enabled: workspace.roleFor(auth.state.userId).canEdit,
+                onTap: workspace.roleFor(auth.state.userId).canEdit
+                    ? () => Navigator.pop(context, workspace.id)
+                    : null,
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !context.mounted) return;
+    await context.read<TodoProvider>().updateListGroupWorkspace(
+      widget.groupName,
+      picked,
+      userId: auth.state.userId,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('共享状态已更新')));
+  }
+}
+
+extension _FirstOrNullX<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (iterator.moveNext()) return iterator.current;
+    return null;
   }
 }
 
@@ -450,12 +607,13 @@ class _TodoTile extends StatelessWidget {
     }
 
     final provider = context.read<TodoProvider>();
+    final canEdit = context.watch<ShareProvider>().canEdit(todo.workspaceId);
     final cs = Theme.of(context).colorScheme;
     final qColor = _quadrantColor(todo.quadrant);
 
     return Dismissible(
       key: ValueKey(todo.id),
-      direction: DismissDirection.endToStart,
+      direction: canEdit ? DismissDirection.endToStart : DismissDirection.none,
       background: Container(
         margin: const EdgeInsets.symmetric(
           horizontal: DesignTokens.spaceMd,
@@ -516,7 +674,9 @@ class _TodoTile extends StatelessWidget {
                                 value: todo.isCompleted,
                                 shape: const CircleBorder(),
                                 activeColor: qColor,
-                                onChanged: (_) => provider.toggleTodo(todo.id),
+                                onChanged: canEdit
+                                    ? (_) => provider.toggleTodo(todo.id)
+                                    : null,
                               ),
                             ),
                           ),
@@ -584,8 +744,7 @@ class _TitleRow extends StatelessWidget {
             style: TextStyle(
               fontSize: DesignTokens.fontSizeBase,
               color: titleColor,
-              decoration:
-                  isCompleted ? TextDecoration.lineThrough : null,
+              decoration: isCompleted ? TextDecoration.lineThrough : null,
             ),
           ),
         ),
@@ -612,112 +771,114 @@ class _MetaRow extends StatelessWidget {
 
     if (todo.priority != TodoPriority.none) {
       final c = priorityColor(todo.priority);
-      chips.add(_MetaPill(
-        color: c,
-        child: Text(
-          todo.priority.label,
-          style: TextStyle(
-            fontSize: DesignTokens.fontSizeXs,
-            color: c,
-            fontWeight: DesignTokens.fontWeightSemiBold,
+      chips.add(
+        _MetaPill(
+          color: c,
+          child: Text(
+            todo.priority.label,
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeXs,
+              color: c,
+              fontWeight: DesignTokens.fontWeightSemiBold,
+            ),
           ),
         ),
-      ));
+      );
     }
 
     if (todo.recurrence.isActive) {
-      chips.add(Icon(
-        Icons.repeat,
-        size: 12,
-        color: Colors.grey.shade500,
-      ));
+      chips.add(Icon(Icons.repeat, size: 12, color: Colors.grey.shade500));
     }
 
     // 已完成：绿色 "已完成" 徽章。
     if (visual == TodoVisualState.completed) {
       final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.completed);
-      chips.add(_MetaPill(
-        color: c,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle, size: 11, color: c),
-            const SizedBox(width: 2),
-            Text(
-              '已完成',
-              style: TextStyle(
-                fontSize: DesignTokens.fontSizeXs,
-                color: c,
-                fontWeight: DesignTokens.fontWeightSemiBold,
+      chips.add(
+        _MetaPill(
+          color: c,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, size: 11, color: c),
+              const SizedBox(width: 2),
+              Text(
+                '已完成',
+                style: TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: c,
+                  fontWeight: DesignTokens.fontWeightSemiBold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     // 临期：橙色 "临期" 胶囊 + 闪烁 alarm icon。
     if (visual == TodoVisualState.dueSoon) {
       final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.dueSoon);
-      chips.add(_MetaPill(
-        color: c,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BlinkingIcon(
-              icon: Icons.alarm,
-              color: c,
-              size: 11,
-            ),
-            const SizedBox(width: 2),
-            Text(
-              '临期',
-              style: TextStyle(
-                fontSize: DesignTokens.fontSizeXs,
-                color: c,
-                fontWeight: DesignTokens.fontWeightSemiBold,
+      chips.add(
+        _MetaPill(
+          color: c,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BlinkingIcon(icon: Icons.alarm, color: c, size: 11),
+              const SizedBox(width: 2),
+              Text(
+                '临期',
+                style: TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: c,
+                  fontWeight: DesignTokens.fontWeightSemiBold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     // 已过期：红色 "过期" 胶囊。沿用已有视觉语义，统一 token 色。
     if (visual == TodoVisualState.overdue) {
       final c = CompletionVisibilityPolicy.colorFor(TodoVisualState.overdue);
-      chips.add(_MetaPill(
-        color: c,
-        child: Text(
-          '过期',
-          style: TextStyle(
-            fontSize: DesignTokens.fontSizeXs,
-            color: c,
-            fontWeight: DesignTokens.fontWeightSemiBold,
+      chips.add(
+        _MetaPill(
+          color: c,
+          child: Text(
+            '过期',
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeXs,
+              color: c,
+              fontWeight: DesignTokens.fontWeightSemiBold,
+            ),
           ),
         ),
-      ));
+      );
     }
 
     if (todo.subtasks.isNotEmpty) {
-      chips.add(Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.account_tree_outlined,
-            size: 12,
-            color: Colors.grey.shade500,
-          ),
-          const SizedBox(width: 2),
-          Text(
-            '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length}',
-            style: TextStyle(
-              fontSize: DesignTokens.fontSizeSm,
+      chips.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.account_tree_outlined,
+              size: 12,
               color: Colors.grey.shade500,
             ),
-          ),
-        ],
-      ));
+            const SizedBox(width: 2),
+            Text(
+              '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length}',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeSm,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     // 标签：最多展示前 3 个，多出部分以 "+N" 汇总。
@@ -725,52 +886,58 @@ class _MetaRow extends StatelessWidget {
       const maxShown = 3;
       final shown = todo.tags.take(maxShown).toList();
       for (final t in shown) {
-        chips.add(_MetaPill(
-          color: Theme.of(context).colorScheme.primary,
-          child: Text(
-            '#$t',
-            style: TextStyle(
-              fontSize: DesignTokens.fontSizeXs,
-              color: Theme.of(context).colorScheme.primary,
+        chips.add(
+          _MetaPill(
+            color: Theme.of(context).colorScheme.primary,
+            child: Text(
+              '#$t',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
-        ));
+        );
       }
       final overflow = todo.tags.length - shown.length;
       if (overflow > 0) {
-        chips.add(_MetaPill(
-          color: Colors.grey.shade600,
-          child: Text(
-            '+$overflow',
-            style: TextStyle(
-              fontSize: DesignTokens.fontSizeXs,
-              color: Colors.grey.shade700,
+        chips.add(
+          _MetaPill(
+            color: Colors.grey.shade600,
+            child: Text(
+              '+$overflow',
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: Colors.grey.shade700,
+              ),
             ),
           ),
-        ));
+        );
       }
     }
 
     // 目标时长
     final tSec = todo.timeTargetSeconds;
     if (tSec != null && tSec > 0) {
-      chips.add(_MetaPill(
-        color: Colors.teal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.hourglass_bottom, size: 11, color: Colors.teal),
-            const SizedBox(width: 2),
-            Text(
-              '目标 ${tSec ~/ 60}m',
-              style: const TextStyle(
-                fontSize: DesignTokens.fontSizeXs,
-                color: Colors.teal,
+      chips.add(
+        _MetaPill(
+          color: Colors.teal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.hourglass_bottom, size: 11, color: Colors.teal),
+              const SizedBox(width: 2),
+              Text(
+                '目标 ${tSec ~/ 60}m',
+                style: const TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: Colors.teal,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     // 下一次提醒。临期状态下把 alarm icon 也闪烁一下，强化提示。
@@ -778,51 +945,82 @@ class _MetaRow extends StatelessWidget {
     if (r.enabled && r.hour != null && r.minute != null) {
       final hh = r.hour!.toString().padLeft(2, '0');
       final mm = r.minute!.toString().padLeft(2, '0');
-      final icon =
-          r.kind == ReminderKind.alarm ? Icons.alarm : Icons.notifications;
+      final icon = r.kind == ReminderKind.alarm
+          ? Icons.alarm
+          : Icons.notifications;
       final reminderColor = visual == TodoVisualState.dueSoon
           ? CompletionVisibilityPolicy.colorFor(TodoVisualState.dueSoon)
           : Colors.indigo;
       final iconWidget = visual == TodoVisualState.dueSoon
           ? _BlinkingIcon(icon: icon, color: reminderColor, size: 11)
           : Icon(icon, size: 11, color: reminderColor);
-      chips.add(_MetaPill(
-        color: reminderColor,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            iconWidget,
-            const SizedBox(width: 2),
-            Text(
-              '下次 $hh:$mm',
-              style: TextStyle(
-                fontSize: DesignTokens.fontSizeXs,
-                color: reminderColor,
+      chips.add(
+        _MetaPill(
+          color: reminderColor,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              iconWidget,
+              const SizedBox(width: 2),
+              Text(
+                '下次 $hh:$mm',
+                style: TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: reminderColor,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     if (todo.dueDate != null) {
-      chips.add(_MetaPill(
-        color: quadrantColor,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.calendar_today, size: 10, color: quadrantColor),
-            const SizedBox(width: 4),
-            Text(
-              '${todo.dueDate!.month}/${todo.dueDate!.day}',
-              style: TextStyle(
-                fontSize: DesignTokens.fontSizeXs,
-                color: quadrantColor,
+      chips.add(
+        _MetaPill(
+          color: quadrantColor,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calendar_today, size: 10, color: quadrantColor),
+              const SizedBox(width: 4),
+              Text(
+                '${todo.dueDate!.month}/${todo.dueDate!.day}',
+                style: TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: quadrantColor,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      );
+    }
+
+    if (todo.workspaceId != 'private') {
+      chips.add(
+        _MetaPill(
+          color: Theme.of(context).colorScheme.primary,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.groups_2_outlined,
+                size: 11,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '共享',
+                style: TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (chips.isEmpty) return const SizedBox.shrink();
@@ -866,9 +1064,10 @@ class _BlinkingIconState extends State<_BlinkingIcon>
       vsync: this,
       duration: const Duration(seconds: 1),
     );
-    _opacity = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _opacity = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     _controller.repeat(reverse: true);
   }
 

@@ -9,15 +9,18 @@ import '../models/calendar_event.dart';
 import '../models/diary_entry.dart';
 import '../core/lunar_calendar.dart';
 import '../screens/diary_screen.dart';
+import 'calendar_event_sheet.dart';
 
 class CalendarDayAgenda extends StatelessWidget {
   final DateTime date;
   final CalendarProvider calendarProvider;
+  final Set<CalendarEventType>? activeTypes;
 
   const CalendarDayAgenda({
     super.key,
     required this.date,
     required this.calendarProvider,
+    this.activeTypes,
   });
 
   IconData _icon(CalendarEventType t) {
@@ -37,7 +40,9 @@ class CalendarDayAgenda extends StatelessWidget {
       case CalendarEventType.countdown:
         return Icons.hourglass_bottom;
       case CalendarEventType.goal:
-        return Icons.flag_outlined;
+        return Icons.flag_circle_outlined;
+      case CalendarEventType.timeEntry:
+        return Icons.timelapse_outlined;
     }
   }
 
@@ -47,7 +52,10 @@ class CalendarDayAgenda extends StatelessWidget {
     final anniversaries = context.watch<AnniversaryProvider>();
     final courses = context.watch<CourseProvider>();
     final diary = context.watch<DiaryProvider>();
-    final events = calendarProvider.getEventsForDate(date);
+    final events = calendarProvider.getEventsForDate(
+      date,
+      activeTypes: activeTypes,
+    );
     events.sort((a, b) => (a.time?.hour ?? 0).compareTo(b.time?.hour ?? 0));
 
     final lunar = LunarCalendar.fromSolar(date);
@@ -78,44 +86,64 @@ class CalendarDayAgenda extends StatelessWidget {
         if (hitAnniversaries.isNotEmpty) ...[
           const SizedBox(height: 8),
           _sectionTitle('🎉 今日纪念'),
-          ...hitAnniversaries.map((a) => _AnniversaryTile(title: a.title, color: Color(a.colorValue), subtitle: a.yearsPassed != null ? '第 ${a.yearsPassed! + 1} 次' : null)),
+          ...hitAnniversaries.map(
+            (a) => _AnniversaryTile(
+              title: a.title,
+              color: Color(a.colorValue),
+              subtitle: a.yearsPassed != null
+                  ? '第 ${a.yearsPassed! + 1} 次'
+                  : null,
+            ),
+          ),
         ],
 
         if (todayCourses.isNotEmpty) ...[
           const SizedBox(height: 12),
           _sectionTitle('📚 今日课程'),
-          ...todayCourses.map((c) => Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Color(c.colorValue).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Color(c.colorValue).withValues(alpha: 0.2),
+          ...todayCourses.map(
+            (c) => Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Color(c.colorValue).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Color(c.colorValue).withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.class_outlined,
+                    color: Color(c.colorValue),
+                    size: 16,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.class_outlined, color: Color(c.colorValue), size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(c.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13)),
-                          Text(
-                            '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
+                        ),
+                        Text(
+                          '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
 
         if (events.isNotEmpty) ...[
@@ -124,22 +152,18 @@ class CalendarDayAgenda extends StatelessWidget {
           ..._buildTimeline(context, events),
         ],
 
-        if (events.isEmpty &&
-            hitAnniversaries.isEmpty &&
-            todayCourses.isEmpty)
+        if (events.isEmpty && hitAnniversaries.isEmpty && todayCourses.isEmpty)
           Padding(
             padding: const EdgeInsets.all(32),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.event_busy,
-                      size: 48, color: Colors.grey.shade300),
+                  Icon(Icons.event_busy, size: 48, color: Colors.grey.shade300),
                   const SizedBox(height: 16),
                   Text(
                     s.calendarEmpty,
-                    style:
-                        TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                   ),
                 ],
               ),
@@ -151,11 +175,12 @@ class CalendarDayAgenda extends StatelessWidget {
   }
 
   Widget _dayHeader(
-      BuildContext context,
-      LunarDate lunar,
-      String? term,
-      String? solarFes,
-      String? lunarFes) {
+    BuildContext context,
+    LunarDate lunar,
+    String? term,
+    String? solarFes,
+    String? lunarFes,
+  ) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 10),
@@ -171,9 +196,10 @@ class CalendarDayAgenda extends StatelessWidget {
           Text(
             '农历 ${lunar.chineseText}',
             style: TextStyle(
-                fontSize: 13,
-                color: cs.primary,
-                fontWeight: FontWeight.w600),
+              fontSize: 13,
+              color: cs.primary,
+              fontWeight: FontWeight.w400,
+            ),
           ),
           const SizedBox(width: 8),
           if (term != null)
@@ -183,9 +209,10 @@ class CalendarDayAgenda extends StatelessWidget {
                 color: Colors.green.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(term,
-                  style:
-                      const TextStyle(fontSize: 11, color: Colors.green)),
+              child: Text(
+                term,
+                style: const TextStyle(fontSize: 11, color: Colors.green),
+              ),
             ),
           if (solarFes != null) ...[
             const SizedBox(width: 4),
@@ -195,8 +222,10 @@ class CalendarDayAgenda extends StatelessWidget {
                 color: Colors.red.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(solarFes,
-                  style: const TextStyle(fontSize: 11, color: Colors.red)),
+              child: Text(
+                solarFes,
+                style: const TextStyle(fontSize: 11, color: Colors.red),
+              ),
             ),
           ],
           if (lunarFes != null) ...[
@@ -207,9 +236,10 @@ class CalendarDayAgenda extends StatelessWidget {
                 color: Colors.deepOrange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(lunarFes,
-                  style:
-                      const TextStyle(fontSize: 11, color: Colors.deepOrange)),
+              child: Text(
+                lunarFes,
+                style: const TextStyle(fontSize: 11, color: Colors.deepOrange),
+              ),
             ),
           ],
         ],
@@ -218,19 +248,21 @@ class CalendarDayAgenda extends StatelessWidget {
   }
 
   Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.grey.shade600,
+        fontWeight: FontWeight.w400,
+      ),
+    ),
+  );
 
   List<Widget> _buildTimeline(
-      BuildContext context, List<CalendarEvent> events) {
+    BuildContext context,
+    List<CalendarEvent> events,
+  ) {
     return List.generate(events.length, (index) {
       final e = events[index];
       final isLast = index == events.length - 1;
@@ -253,8 +285,7 @@ class CalendarDayAgenda extends StatelessWidget {
                   ),
                   if (!isLast)
                     Expanded(
-                      child:
-                          Container(width: 2, color: Colors.grey.shade200),
+                      child: Container(width: 2, color: Colors.grey.shade200),
                     ),
                 ],
               ),
@@ -263,39 +294,85 @@ class CalendarDayAgenda extends StatelessWidget {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: Colors.grey.withValues(alpha: 0.1)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        e.title,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: e.isCompleted ? Colors.grey : null,
-                          decoration: e.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => showCalendarEventSheet(context, e),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: e.hasConflict
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.error.withValues(alpha: 0.36)
+                            : Colors.grey.withValues(alpha: 0.1),
                       ),
-                      if (e.time != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Text(
-                            '${e.time!.hour.toString().padLeft(2, '0')}:${e.time!.minute.toString().padLeft(2, '0')}',
-                            style: TextStyle(
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                e.title,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: e.isCompleted ? Colors.grey : null,
+                                  decoration: e.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            if (e.hasConflict)
+                              Tooltip(
+                                message: '时间冲突',
+                                child: Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (e.subtitle != null && e.subtitle!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              e.subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.grey.shade500),
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        if (e.time != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              '${e.time!.hour.toString().padLeft(2, '0')}:${e.time!.minute.toString().padLeft(2, '0')}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: Colors.grey.shade500,
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -350,18 +427,15 @@ class _DiaryQuickEntry extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   color: hasEntry ? cs.primary : Colors.grey.shade600,
-                  fontWeight:
-                      hasEntry ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: hasEntry ? FontWeight.w400 : FontWeight.normal,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             if (hasEntry && entry!.mood != null)
-              Text(entry!.mood!.emoji,
-                  style: const TextStyle(fontSize: 16)),
-            Icon(Icons.chevron_right,
-                size: 16, color: Colors.grey.shade400),
+              Text(entry!.mood!.emoji, style: const TextStyle(fontSize: 16)),
+            Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade400),
           ],
         ),
       ),
@@ -374,8 +448,11 @@ class _AnniversaryTile extends StatelessWidget {
   final Color color;
   final String? subtitle;
 
-  const _AnniversaryTile(
-      {required this.title, required this.color, this.subtitle});
+  const _AnniversaryTile({
+    required this.title,
+    required this.color,
+    this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -395,13 +472,18 @@ class _AnniversaryTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 13,
+                  ),
+                ),
                 if (subtitle != null)
-                  Text(subtitle!,
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade600)),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
               ],
             ),
           ),

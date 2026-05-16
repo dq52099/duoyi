@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -36,6 +37,14 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_todo_count,
                 prefs.getInt("todo_top3_count", 0).toString()
             )
+            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
+            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
+            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
+            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            views.setTextViewText(R.id.widget_todo_nav_todo, tabTodo)
+            views.setTextViewText(R.id.widget_todo_nav_habit, tabHabit)
+            views.setTextViewText(R.id.widget_todo_nav_calendar, tabCalendar)
+            views.setTextViewText(R.id.widget_todo_nav_focus, tabFocus)
             views.setTextViewText(
                 R.id.widget_todo_item_1,
                 prefs.getString("todo_top3_1", "") ?: ""
@@ -48,6 +57,9 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_todo_item_3,
                 prefs.getString("todo_top3_3", "") ?: ""
             )
+            bindTodoRow(context, views, prefs, 1, R.id.widget_todo_item_1, R.id.widget_todo_done_1)
+            bindTodoRow(context, views, prefs, 2, R.id.widget_todo_item_2, R.id.widget_todo_done_2)
+            bindTodoRow(context, views, prefs, 3, R.id.widget_todo_item_3, R.id.widget_todo_done_3)
 
             // 点击任意区域都打开待办页
             val open = HomeWidgetLaunchIntent.getActivity(
@@ -55,8 +67,59 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 Uri.parse("duoyi://tab/todo")
             )
             views.setOnClickPendingIntent(R.id.widget_todo_root, open)
+            views.setOnClickPendingIntent(R.id.widget_todo_nav_todo, open)
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_habit,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
+                )
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_calendar,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
+                )
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_todo_nav_focus,
+                HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
+                )
+            )
 
             appWidgetManager.updateAppWidget(id, views)
         }
+    }
+
+    private fun bindTodoRow(
+        context: Context,
+        views: RemoteViews,
+        prefs: SharedPreferences,
+        index: Int,
+        itemViewId: Int,
+        doneViewId: Int
+    ) {
+        val todoId = prefs.getString("todo_top3_${index}_id", "") ?: ""
+        if (todoId.isBlank()) {
+            views.setViewVisibility(doneViewId, View.GONE)
+            return
+        }
+        views.setViewVisibility(doneViewId, View.VISIBLE)
+        views.setOnClickPendingIntent(
+            itemViewId,
+            HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java,
+                Uri.parse("duoyi://todo/$todoId")
+            )
+        )
+        views.setOnClickPendingIntent(
+            doneViewId,
+            HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java,
+                Uri.parse("duoyi://action/complete_todo?id=$todoId")
+            )
+        )
     }
 }

@@ -1,6 +1,56 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class DailyReminderSlot {
+  final bool enabled;
+  final int hour;
+  final int minute;
+  final bool includeTodayTasks;
+  final bool includeTomorrowPlan;
+  final bool includeOverdue;
+  final List<int> repeatDays;
+  final bool pauseHolidays;
+
+  const DailyReminderSlot({
+    this.enabled = false,
+    this.hour = 20,
+    this.minute = 0,
+    this.includeTodayTasks = true,
+    this.includeTomorrowPlan = true,
+    this.includeOverdue = true,
+    this.repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    this.pauseHolidays = false,
+  });
+
+  DailyReminderSlot copyWith({
+    bool? enabled,
+    int? hour,
+    int? minute,
+    bool? includeTodayTasks,
+    bool? includeTomorrowPlan,
+    bool? includeOverdue,
+    List<int>? repeatDays,
+    bool? pauseHolidays,
+  }) {
+    return DailyReminderSlot(
+      enabled: enabled ?? this.enabled,
+      hour: (hour ?? this.hour).clamp(0, 23),
+      minute: (minute ?? this.minute).clamp(0, 59),
+      includeTodayTasks: includeTodayTasks ?? this.includeTodayTasks,
+      includeTomorrowPlan: includeTomorrowPlan ?? this.includeTomorrowPlan,
+      includeOverdue: includeOverdue ?? this.includeOverdue,
+      repeatDays: _normalizeDays(repeatDays ?? this.repeatDays),
+      pauseHolidays: pauseHolidays ?? this.pauseHolidays,
+    );
+  }
+
+  static List<int> _normalizeDays(List<int> days) {
+    final normalized = days.where((d) => d >= 1 && d <= 7).toSet().toList()
+      ..sort();
+    return normalized.isEmpty ? const [1, 2, 3, 4, 5, 6, 7] : normalized;
+  }
+}
+
 /// 用户个性化偏好(本地)。不涉及服务器配置，每个设备独立。
 class PreferencesProvider extends ChangeNotifier {
   static const _kFirstDayOfWeek = 'pref_first_day_of_week';
@@ -11,8 +61,21 @@ class PreferencesProvider extends ChangeNotifier {
   static const _kShowCompletedTodos = 'pref_show_completed_todos';
   static const _kDefaultPomodoroMinutes = 'pref_default_pomodoro_minutes';
   static const _kQuickCaptureFab = 'pref_quick_capture_fab';
-  static const _kAutoArchiveCompletedDays =
-      'pref_auto_archive_completed_days';
+  static const _kAutoArchiveCompletedDays = 'pref_auto_archive_completed_days';
+  static const _kDailyReminderEnabled = 'pref_daily_reminder_enabled';
+  static const _kDailyReminderHour = 'pref_daily_reminder_hour';
+  static const _kDailyReminderMinute = 'pref_daily_reminder_minute';
+  static const _kDailyReminderIncludeTodayTasks =
+      'pref_daily_reminder_today_tasks';
+  static const _kDailyReminderIncludeTomorrowPlan =
+      'pref_daily_reminder_tomorrow_plan';
+  static const _kDailyReminderIncludeOverdue = 'pref_daily_reminder_overdue';
+  static const _kDailyReminderRepeatDays = 'pref_daily_reminder_repeat_days';
+  static const _kDailyReminderPauseHolidays =
+      'pref_daily_reminder_pause_holidays';
+  static const _kDailyReminderSlotPrefix = 'pref_daily_reminder_slot';
+  static const _kBottomNavOrder = 'pref_bottom_nav_order';
+  static const _kBottomNavVisible = 'pref_bottom_nav_visible';
 
   int _firstDayOfWeek = 1; // 1=周一, 7=周日
   String _dateFormat = 'yyyy-MM-dd';
@@ -23,6 +86,21 @@ class PreferencesProvider extends ChangeNotifier {
   int _defaultPomodoroMinutes = 25;
   bool _quickCaptureFab = true;
   int _autoArchiveCompletedDays = 0; // 0=不归档
+  bool _dailyReminderEnabled = false;
+  int _dailyReminderHour = 20;
+  int _dailyReminderMinute = 0;
+  bool _dailyReminderIncludeTodayTasks = true;
+  bool _dailyReminderIncludeTomorrowPlan = true;
+  bool _dailyReminderIncludeOverdue = true;
+  List<int> _dailyReminderRepeatDays = const [1, 2, 3, 4, 5, 6, 7];
+  bool _dailyReminderPauseHolidays = false;
+  List<DailyReminderSlot> _dailyReminderSlots = const [
+    DailyReminderSlot(),
+    DailyReminderSlot(hour: 8, enabled: false),
+    DailyReminderSlot(hour: 22, enabled: false),
+  ];
+  List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5];
+  Set<int> _bottomNavVisible = const {0, 1, 2, 3, 4, 5};
 
   int get firstDayOfWeek => _firstDayOfWeek;
   String get dateFormat => _dateFormat;
@@ -33,6 +111,23 @@ class PreferencesProvider extends ChangeNotifier {
   int get defaultPomodoroMinutes => _defaultPomodoroMinutes;
   bool get quickCaptureFab => _quickCaptureFab;
   int get autoArchiveCompletedDays => _autoArchiveCompletedDays;
+  bool get dailyReminderEnabled => _dailyReminderEnabled;
+  int get dailyReminderHour => _dailyReminderHour;
+  int get dailyReminderMinute => _dailyReminderMinute;
+  bool get dailyReminderIncludeTodayTasks => _dailyReminderIncludeTodayTasks;
+  bool get dailyReminderIncludeTomorrowPlan =>
+      _dailyReminderIncludeTomorrowPlan;
+  bool get dailyReminderIncludeOverdue => _dailyReminderIncludeOverdue;
+  List<int> get dailyReminderRepeatDays =>
+      List.unmodifiable(_dailyReminderRepeatDays);
+  bool get dailyReminderPauseHolidays => _dailyReminderPauseHolidays;
+  List<DailyReminderSlot> get dailyReminderSlots =>
+      List.unmodifiable(_dailyReminderSlots);
+  List<int> get bottomNavOrder => List.unmodifiable(_bottomNavOrder);
+  Set<int> get bottomNavVisible => Set.unmodifiable(_bottomNavVisible);
+  List<int> get enabledBottomNavTabs => _bottomNavOrder
+      .where((tab) => _bottomNavVisible.contains(tab))
+      .toList(growable: false);
 
   String formatDate(DateTime d) {
     final y = d.year.toString();
@@ -62,6 +157,65 @@ class PreferencesProvider extends ChangeNotifier {
     _defaultPomodoroMinutes = p.getInt(_kDefaultPomodoroMinutes) ?? 25;
     _quickCaptureFab = p.getBool(_kQuickCaptureFab) ?? true;
     _autoArchiveCompletedDays = p.getInt(_kAutoArchiveCompletedDays) ?? 0;
+    _dailyReminderEnabled = p.getBool(_kDailyReminderEnabled) ?? false;
+    _dailyReminderHour = p.getInt(_kDailyReminderHour) ?? 20;
+    _dailyReminderMinute = p.getInt(_kDailyReminderMinute) ?? 0;
+    _dailyReminderIncludeTodayTasks =
+        p.getBool(_kDailyReminderIncludeTodayTasks) ?? true;
+    _dailyReminderIncludeTomorrowPlan =
+        p.getBool(_kDailyReminderIncludeTomorrowPlan) ?? true;
+    _dailyReminderIncludeOverdue =
+        p.getBool(_kDailyReminderIncludeOverdue) ?? true;
+    _dailyReminderRepeatDays =
+        p
+            .getStringList(_kDailyReminderRepeatDays)
+            ?.map(int.tryParse)
+            .whereType<int>()
+            .where((d) => d >= 1 && d <= 7)
+            .toList() ??
+        const [1, 2, 3, 4, 5, 6, 7];
+    if (_dailyReminderRepeatDays.isEmpty) {
+      _dailyReminderRepeatDays = const [1, 2, 3, 4, 5, 6, 7];
+    }
+    _dailyReminderPauseHolidays =
+        p.getBool(_kDailyReminderPauseHolidays) ?? false;
+    _dailyReminderSlots = List.generate(3, (i) {
+      if (i == 0) {
+        return DailyReminderSlot(
+          enabled: _dailyReminderEnabled,
+          hour: _dailyReminderHour,
+          minute: _dailyReminderMinute,
+          includeTodayTasks: _dailyReminderIncludeTodayTasks,
+          includeTomorrowPlan: _dailyReminderIncludeTomorrowPlan,
+          includeOverdue: _dailyReminderIncludeOverdue,
+          repeatDays: _dailyReminderRepeatDays,
+          pauseHolidays: _dailyReminderPauseHolidays,
+        );
+      }
+      final prefix = '$_kDailyReminderSlotPrefix${i + 1}';
+      return DailyReminderSlot(
+        enabled: p.getBool('${prefix}_enabled') ?? false,
+        hour: p.getInt('${prefix}_hour') ?? (i == 1 ? 8 : 22),
+        minute: p.getInt('${prefix}_minute') ?? 0,
+        includeTodayTasks: p.getBool('${prefix}_today') ?? true,
+        includeTomorrowPlan: p.getBool('${prefix}_tomorrow') ?? true,
+        includeOverdue: p.getBool('${prefix}_overdue') ?? true,
+        repeatDays:
+            p
+                .getStringList('${prefix}_repeat_days')
+                ?.map(int.tryParse)
+                .whereType<int>()
+                .toList() ??
+            const [1, 2, 3, 4, 5, 6, 7],
+        pauseHolidays: p.getBool('${prefix}_pause_holidays') ?? false,
+      );
+    });
+    _bottomNavOrder = _normalizeNavOrder(
+      p.getStringList(_kBottomNavOrder)?.map(int.tryParse).whereType<int>(),
+    );
+    _bottomNavVisible = _normalizeNavVisible(
+      p.getStringList(_kBottomNavVisible)?.map(int.tryParse).whereType<int>(),
+    );
     notifyListeners();
   }
 
@@ -70,6 +224,116 @@ class PreferencesProvider extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kFirstDayOfWeek, _firstDayOfWeek);
     notifyListeners();
+  }
+
+  Future<void> setDailyReminderSlot(int index, DailyReminderSlot slot) async {
+    if (index < 0 || index >= 3) return;
+    final next = [..._dailyReminderSlots];
+    next[index] = slot;
+    _dailyReminderSlots = List.unmodifiable(next);
+
+    if (index == 0) {
+      _dailyReminderEnabled = slot.enabled;
+      _dailyReminderHour = slot.hour;
+      _dailyReminderMinute = slot.minute;
+      _dailyReminderIncludeTodayTasks = slot.includeTodayTasks;
+      _dailyReminderIncludeTomorrowPlan = slot.includeTomorrowPlan;
+      _dailyReminderIncludeOverdue = slot.includeOverdue;
+      _dailyReminderRepeatDays = DailyReminderSlot._normalizeDays(
+        slot.repeatDays,
+      );
+      _dailyReminderPauseHolidays = slot.pauseHolidays;
+    }
+
+    final p = await SharedPreferences.getInstance();
+    final prefix = index == 0 ? null : '$_kDailyReminderSlotPrefix${index + 1}';
+    if (index == 0) {
+      await p.setBool(_kDailyReminderEnabled, slot.enabled);
+      await p.setInt(_kDailyReminderHour, slot.hour);
+      await p.setInt(_kDailyReminderMinute, slot.minute);
+      await p.setBool(_kDailyReminderIncludeTodayTasks, slot.includeTodayTasks);
+      await p.setBool(
+        _kDailyReminderIncludeTomorrowPlan,
+        slot.includeTomorrowPlan,
+      );
+      await p.setBool(_kDailyReminderIncludeOverdue, slot.includeOverdue);
+      await p.setStringList(
+        _kDailyReminderRepeatDays,
+        DailyReminderSlot._normalizeDays(
+          slot.repeatDays,
+        ).map((d) => d.toString()).toList(),
+      );
+      await p.setBool(_kDailyReminderPauseHolidays, slot.pauseHolidays);
+    } else {
+      await p.setBool('${prefix}_enabled', slot.enabled);
+      await p.setInt('${prefix}_hour', slot.hour);
+      await p.setInt('${prefix}_minute', slot.minute);
+      await p.setBool('${prefix}_today', slot.includeTodayTasks);
+      await p.setBool('${prefix}_tomorrow', slot.includeTomorrowPlan);
+      await p.setBool('${prefix}_overdue', slot.includeOverdue);
+      await p.setStringList(
+        '${prefix}_repeat_days',
+        DailyReminderSlot._normalizeDays(
+          slot.repeatDays,
+        ).map((d) => d.toString()).toList(),
+      );
+      await p.setBool('${prefix}_pause_holidays', slot.pauseHolidays);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setBottomNavVisible(int tab, bool visible) async {
+    if (tab < 0 || tab > 5) return;
+    final next = {..._bottomNavVisible};
+    if (visible) {
+      next.add(tab);
+    } else if (next.length > 2) {
+      next.remove(tab);
+    }
+    _bottomNavVisible = _normalizeNavVisible(next);
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kBottomNavVisible,
+      _bottomNavVisible.map((v) => v.toString()).toList(),
+    );
+    notifyListeners();
+  }
+
+  Future<void> moveBottomNavTab(int tab, int delta) async {
+    final list = [..._bottomNavOrder];
+    final index = list.indexOf(tab);
+    if (index < 0) return;
+    final nextIndex = (index + delta).clamp(0, list.length - 1);
+    if (nextIndex == index) return;
+    list.removeAt(index);
+    list.insert(nextIndex, tab);
+    _bottomNavOrder = _normalizeNavOrder(list);
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kBottomNavOrder,
+      _bottomNavOrder.map((v) => v.toString()).toList(),
+    );
+    notifyListeners();
+  }
+
+  static List<int> _normalizeNavOrder(Iterable<int>? source) {
+    final result = <int>[];
+    for (final tab in source ?? const <int>[]) {
+      if (tab >= 0 && tab <= 5 && !result.contains(tab)) result.add(tab);
+    }
+    for (var i = 0; i < 6; i++) {
+      if (!result.contains(i)) result.add(i);
+    }
+    return List.unmodifiable(result);
+  }
+
+  static Set<int> _normalizeNavVisible(Iterable<int>? source) {
+    final result = <int>{};
+    for (final tab in source ?? const <int>[]) {
+      if (tab >= 0 && tab <= 5) result.add(tab);
+    }
+    if (result.length < 2) return const {0, 1, 2, 3, 4, 5};
+    return Set.unmodifiable(result);
   }
 
   Future<void> setDateFormat(String format) async {
@@ -126,5 +390,100 @@ class PreferencesProvider extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kAutoArchiveCompletedDays, _autoArchiveCompletedDays);
     notifyListeners();
+  }
+
+  Future<void> setDailyReminderEnabled(bool value) async {
+    _dailyReminderEnabled = value;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(enabled: value),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReminderEnabled, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderTime(int hour, int minute) async {
+    _dailyReminderHour = hour.clamp(0, 23);
+    _dailyReminderMinute = minute.clamp(0, 59);
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(
+        hour: _dailyReminderHour,
+        minute: _dailyReminderMinute,
+      ),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kDailyReminderHour, _dailyReminderHour);
+    await p.setInt(_kDailyReminderMinute, _dailyReminderMinute);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderIncludeTodayTasks(bool value) async {
+    _dailyReminderIncludeTodayTasks = value;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(includeTodayTasks: value),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReminderIncludeTodayTasks, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderIncludeTomorrowPlan(bool value) async {
+    _dailyReminderIncludeTomorrowPlan = value;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(includeTomorrowPlan: value),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReminderIncludeTomorrowPlan, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderIncludeOverdue(bool value) async {
+    _dailyReminderIncludeOverdue = value;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(includeOverdue: value),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReminderIncludeOverdue, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderRepeatDays(List<int> days) async {
+    final normalized = days.where((d) => d >= 1 && d <= 7).toSet().toList()
+      ..sort();
+    _dailyReminderRepeatDays = normalized.isEmpty
+        ? const [1, 2, 3, 4, 5, 6, 7]
+        : normalized;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(repeatDays: _dailyReminderRepeatDays),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kDailyReminderRepeatDays,
+      _dailyReminderRepeatDays.map((d) => d.toString()).toList(),
+    );
+    notifyListeners();
+  }
+
+  Future<void> setDailyReminderPauseHolidays(bool value) async {
+    _dailyReminderPauseHolidays = value;
+    _dailyReminderSlots = _replaceSlot(
+      0,
+      _dailyReminderSlots[0].copyWith(pauseHolidays: value),
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReminderPauseHolidays, value);
+    notifyListeners();
+  }
+
+  List<DailyReminderSlot> _replaceSlot(int index, DailyReminderSlot slot) {
+    final next = [..._dailyReminderSlots];
+    next[index] = slot;
+    return List.unmodifiable(next);
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/anniversary_provider.dart';
@@ -11,8 +12,12 @@ import '../providers/note_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/time_audit_provider.dart';
+import '../providers/achievement_provider.dart';
+import '../providers/share_provider.dart';
 import '../services/backup_service.dart';
 import '../services/ics_exporter.dart';
+import '../widgets/surface_components.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -38,9 +43,9 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导出失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
     }
   }
 
@@ -55,32 +60,31 @@ class _BackupScreenState extends State<BackupScreen> {
     if (_exported == null) return;
     await Clipboard.setData(ClipboardData(text: _exported!));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制到剪贴板')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
   }
 
   Future<void> _import({bool merge = false}) async {
     final ctrl = TextEditingController();
     final raw = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text(merge ? '合并导入' : '覆盖导入'),
         content: TextField(
           controller: ctrl,
           maxLines: 10,
-          decoration: const InputDecoration(
-            hintText: '把之前导出的备份 JSON 粘贴进来',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(hintText: '把之前导出的备份 JSON 粘贴进来'),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(I18n.tr('action.cancel')),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('确认导入')),
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('确认导入'),
+          ),
         ],
       ),
     );
@@ -99,26 +103,28 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导入失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
     }
   }
 
   Future<void> _wipe() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('清空全部数据?'),
         content: const Text('将删除本机所有待办/习惯/笔记/日记等，登录账号不会删除。'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('清空')),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清空'),
+          ),
         ],
       ),
     );
@@ -127,9 +133,9 @@ class _BackupScreenState extends State<BackupScreen> {
     if (!mounted) return;
     await _reloadAll();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已清空本地数据')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已清空本地数据')));
   }
 
   Future<void> _reloadAll() async {
@@ -144,6 +150,9 @@ class _BackupScreenState extends State<BackupScreen> {
       context.read<GoalProvider>().loadFromStorage(),
       context.read<CourseProvider>().loadFromStorage(),
       context.read<UserProvider>().loadFromStorage(),
+      context.read<TimeAuditProvider>().loadFromStorage(),
+      context.read<AchievementProvider>().loadFromStorage(),
+      context.read<ShareProvider>().load(),
     ]);
   }
 
@@ -153,148 +162,212 @@ class _BackupScreenState extends State<BackupScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('备份 · 恢复 · 导出')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         children: [
-          Text('全量备份 / 恢复',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: cs.primary)),
-          const SizedBox(height: 6),
-          Text(
-            '把本机所有数据打包成一段 JSON 文本，可以复制、发给自己、粘到其它设备。',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _exportAll,
-                  icon: const Icon(Icons.download_outlined, size: 18),
-                  label: const Text('生成 JSON'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _import(merge: true),
-                  icon: const Icon(Icons.merge, size: 18),
-                  label: const Text('合并'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _import(merge: false),
-                  icon: const Icon(Icons.upload, size: 18),
-                  label: const Text('覆盖'),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 32),
-          Text('单模块导出 (CSV / Markdown)',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: cs.primary)),
-          const SizedBox(height: 6),
-          Text(
-            '导出为人类可读格式，适合备份到笔记/发给朋友。',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _chip('待办 · CSV', () {
-                final todos = context.read<TodoProvider>().todos;
-                _showExport('待办 CSV',
-                    ModuleExporter.todosCsv(todos));
-              }),
-              _chip('待办 · Markdown', () {
-                final todos = context.read<TodoProvider>().todos;
-                _showExport('待办 Markdown',
-                    ModuleExporter.todosMarkdown(todos));
-              }),
-              _chip('习惯 · CSV', () {
-                final hs = context.read<HabitProvider>().habits;
-                _showExport(
-                    '习惯 CSV', ModuleExporter.habitsCsv(hs));
-              }),
-              _chip('笔记 · Markdown', () {
-                final ns = context.read<NoteProvider>().notes;
-                _showExport(
-                    '笔记 Markdown', ModuleExporter.notesMarkdown(ns));
-              }),
-              _chip('日记 · Markdown', () {
-                final ds = context.read<DiaryProvider>().entries;
-                _showExport(
-                    '日记 Markdown', ModuleExporter.diaryMarkdown(ds));
-              }),
-              _chip('纪念日 · Markdown', () {
-                final list = context.read<AnniversaryProvider>().items;
-                _showExport('纪念日 Markdown',
-                    ModuleExporter.anniversariesMarkdown(list));
-              }),
-              _chip('目标 · Markdown', () {
-                final list = context.read<GoalProvider>().goals;
-                _showExport(
-                    '目标 Markdown', ModuleExporter.goalsMarkdown(list));
-              }),
-            ],
-          ),
-          if (_exported != null) ...[
-            const SizedBox(height: 10),
-            Row(
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            gradient: LinearGradient(
+              colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    _exportedTitle ?? '导出内容',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 12),
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.backup_outlined,
+                    color: cs.primary,
+                    size: 28,
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _copy,
-                  icon: const Icon(Icons.copy, size: 14),
-                  label: const Text('复制'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '备份与恢复',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '把本机所有数据打包成一段 JSON 文本，可以复制、发给自己，或者粘到另一台设备。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.66),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 10),
+          AppSettingsSection(
+            title: '全量备份 / 恢复',
+            subtitle: 'JSON 文本可跨设备搬运',
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : _exportAll,
+                      icon: const Icon(Icons.download_outlined, size: 18),
+                      label: const Text('生成 JSON'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _import(merge: true),
+                      icon: const Icon(Icons.merge, size: 18),
+                      label: const Text('合并'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _import(merge: false),
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text('覆盖'),
+                    ),
+                  ),
+                ],
               ),
-              height: 200,
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  _exported!,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 11),
-                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppSettingsSection(
+            title: '单模块导出',
+            subtitle: 'CSV / Markdown 格式',
+            children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _chip('待办 · CSV', () {
+                    final todos = context.read<TodoProvider>().todos;
+                    _showExport('待办 CSV', ModuleExporter.todosCsv(todos));
+                  }),
+                  _chip('待办 · Markdown', () {
+                    final todos = context.read<TodoProvider>().todos;
+                    _showExport(
+                      '待办 Markdown',
+                      ModuleExporter.todosMarkdown(todos),
+                    );
+                  }),
+                  _chip('习惯 · CSV', () {
+                    final hs = context.read<HabitProvider>().habits;
+                    _showExport('习惯 CSV', ModuleExporter.habitsCsv(hs));
+                  }),
+                  _chip('笔记 · Markdown', () {
+                    final ns = context.read<NoteProvider>().notes;
+                    _showExport(
+                      '笔记 Markdown',
+                      ModuleExporter.notesMarkdown(ns),
+                    );
+                  }),
+                  _chip('日记 · Markdown', () {
+                    final ds = context.read<DiaryProvider>().entries;
+                    _showExport(
+                      '日记 Markdown',
+                      ModuleExporter.diaryMarkdown(ds),
+                    );
+                  }),
+                  _chip('纪念日 · Markdown', () {
+                    final list = context.read<AnniversaryProvider>().items;
+                    _showExport(
+                      '纪念日 Markdown',
+                      ModuleExporter.anniversariesMarkdown(list),
+                    );
+                  }),
+                  _chip('目标 · Markdown', () {
+                    final list = context.read<GoalProvider>().goals;
+                    _showExport(
+                      '目标 Markdown',
+                      ModuleExporter.goalsMarkdown(list),
+                    );
+                  }),
+                ],
+              ),
+            ],
+          ),
+          if (_exported != null) ...[
+            const SizedBox(height: 12),
+            AppSurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _exportedTitle ?? '导出内容',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _copy,
+                        icon: const Icon(Icons.copy, size: 14),
+                        label: const Text('复制'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    height: 200,
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        _exported!,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
-          const Divider(height: 32),
-          Text('危险操作',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red.shade700)),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _wipe,
-            icon: const Icon(Icons.delete_forever, color: Colors.red),
-            label: const Text('清空本机数据',
-                style: TextStyle(color: Colors.red)),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: Colors.red.shade300),
-            ),
+          const SizedBox(height: 12),
+          AppSettingsSection(
+            title: '危险操作',
+            subtitle: '清空本机数据会删除本地内容',
+            children: [
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _wipe,
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                label: const Text(
+                  '清空本机数据',
+                  style: TextStyle(color: Colors.red),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.red.shade300),
+                ),
+              ),
+            ],
           ),
         ],
       ),

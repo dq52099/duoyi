@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/anniversary_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/countdown_provider.dart';
@@ -11,6 +12,7 @@ import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ics_exporter.dart';
+import '../widgets/surface_components.dart';
 
 /// iCalendar 导出：生成 .ics 文本供复制或订阅。
 class ExportScreen extends StatefulWidget {
@@ -53,62 +55,151 @@ class _ExportScreenState extends State<ExportScreen> {
     setState(() => _ics = sb.toString());
   }
 
+  Future<void> _copy() async {
+    if (_ics == null) return;
+    await Clipboard.setData(ClipboardData(text: _ics!));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制 .ics 内容')));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(title: const Text('导出为日历 (.ics)')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         children: [
-          const Text(
-            '生成一份 iCalendar 文件，可粘贴到系统日历 / Google Calendar / Outlook 订阅。',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            gradient: LinearGradient(
+              colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.event_note_outlined,
+                    color: cs.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '日历导出',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '生成一份 iCalendar 文件，可粘贴到系统日历、Google Calendar 或 Outlook。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.66),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
-          SwitchListTile(
-            value: _includeAnniversaries,
-            title: const Text('包含纪念日 & 生日 (YEARLY 循环)'),
-            onChanged: (v) => setState(() => _includeAnniversaries = v),
-          ),
-          SwitchListTile(
-            value: _includeCalendar,
-            title: const Text('包含其他日程(待办/习惯/课程/日记/目标)'),
-            onChanged: (v) => setState(() => _includeCalendar = v),
-          ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: _generate,
-            icon: const Icon(Icons.event_note_outlined),
-            label: const Text('生成 .ics'),
-          ),
-          if (_ics != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              height: 220,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
+          AppSettingsSection(
+            title: '导出范围',
+            subtitle: '选择要包含的内容',
+            children: [
+              AppSwitchTile(
+                icon: Icons.cake_outlined,
+                color: Colors.pink,
+                title: '包含纪念日与生日',
+                subtitle: 'YEARLY 循环事件',
+                value: _includeAnniversaries,
+                onChanged: (v) => setState(() => _includeAnniversaries = v),
               ),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  _ics!,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 11),
+              AppSwitchTile(
+                icon: Icons.calendar_month_outlined,
+                color: Colors.blue,
+                title: '包含日程总表',
+                subtitle: '待办、习惯、课程、日记和目标',
+                value: _includeCalendar,
+                onChanged: (v) => setState(() => _includeCalendar = v),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _generate,
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('生成 .ics'),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: _ics!));
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已复制 .ics 内容')),
-                );
-              },
-              icon: const Icon(Icons.copy),
-              label: const Text('复制到剪贴板'),
+            ],
+          ),
+          if (_ics != null) ...[
+            const SizedBox(height: 12),
+            AppSurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '导出内容',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _copy,
+                        icon: const Icon(Icons.copy, size: 14),
+                        label: const Text('复制'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 220,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        _ics!,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],

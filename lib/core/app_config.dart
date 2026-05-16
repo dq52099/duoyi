@@ -20,7 +20,7 @@
 class AppConfig {
   /// 源码默认值 —— 发布前按需改动；
   /// 留空字符串表示"走相对路径"(前后端同源部署)。
-  static const String defaultServerUrl = 'https://duoyi.example.com';
+  static const String defaultServerUrl = 'http://6688667.xyz';
 
   static const String buildTimeServerUrl = String.fromEnvironment(
     'DUOYI_SERVER_URL',
