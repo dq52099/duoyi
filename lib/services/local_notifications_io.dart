@@ -23,8 +23,17 @@ class LocalNotifications {
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const RawResourceAndroidNotificationSound _defaultSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
-  static const String _defaultChannelId = 'duoyi_general_alerts_v5';
-  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v4';
+  static const String _defaultChannelId = 'duoyi_general_alerts_v6';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v5';
+  static const Set<String> _legacyChannelIds = <String>{
+    'duoyi_general_alerts_v2',
+    'duoyi_general_alerts_v3',
+    'duoyi_general_alerts_v4',
+    'duoyi_general_alerts_v5',
+    'duoyi_alarm',
+    'duoyi_alarm_fullscreen_v3',
+    'duoyi_alarm_fullscreen_v4',
+  };
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
@@ -122,6 +131,9 @@ class LocalNotifications {
             audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         );
+        for (final channelId in _legacyChannelIds) {
+          await android?.deleteNotificationChannel(channelId);
+        }
       } catch (e, st) {
         debugPrint('[LocalNotifications] channel setup failed: $e\n$st');
       }

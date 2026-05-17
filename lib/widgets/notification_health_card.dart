@@ -12,8 +12,6 @@ class NotificationHealthCard extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onOpenSystemSettings;
   final VoidCallback onSendTest;
-  final VoidCallback onSendScheduledTest;
-  final VoidCallback onSendAlarmTest;
   final VoidCallback onSendScheduledAlarmTest;
   final VoidCallback onClearPending;
   final VoidCallback onRequestNotificationPermission;
@@ -25,8 +23,6 @@ class NotificationHealthCard extends StatelessWidget {
     required this.onRefresh,
     required this.onOpenSystemSettings,
     required this.onSendTest,
-    required this.onSendScheduledTest,
-    required this.onSendAlarmTest,
     required this.onSendScheduledAlarmTest,
     required this.onClearPending,
     required this.onRequestNotificationPermission,
@@ -89,25 +85,11 @@ class NotificationHealthCard extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.notifications_active_outlined,
             color: cs.primary,
-            title: '立即有声测试',
+            title: '立即响铃弹屏测试',
             subtitle: lastTestAt == null
-                ? '验证声音、震动和横幅；这一步最能判断系统渠道是否静音'
+                ? '直接验证强提醒声音、震动和弹屏'
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
-          ),
-          AppSettingsTile(
-            icon: Icons.alarm_add_outlined,
-            color: Colors.deepOrange,
-            title: '1 分钟后测试提醒',
-            subtitle: '验证系统定时调度，不只是立即通知',
-            onTap: onSendScheduledTest,
-          ),
-          AppSettingsTile(
-            icon: Icons.notification_important_outlined,
-            color: Colors.redAccent,
-            title: '发送强提醒测试',
-            subtitle: '验证有声、震动和弹屏通道',
-            onTap: onSendAlarmTest,
           ),
           AppSettingsTile(
             icon: Icons.alarm_on_outlined,

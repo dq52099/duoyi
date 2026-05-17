@@ -290,7 +290,7 @@ class PermissionHealthService {
                 id: 'legacy_notification_channels',
                 title: '旧通知渠道',
                 subtitle:
-                    '检测到旧渠道 ${stale.join('、')}。新版本已改用新渠道；若仍无声，只需在系统通知设置里检查“多仪 · 通知提醒”和“多仪 · 强提醒”',
+                    '检测到旧渠道 ${stale.join('、')}。新版本会改用新渠道并尝试清理旧渠道；若仍无声，请检查“多仪 · 通知提醒”和“多仪 · 强提醒”的声音、横幅和锁屏权限',
                 status: PermissionHealthStatus.warning,
                 action: PermissionHealthAction.none,
                 manual: true,

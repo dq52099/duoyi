@@ -21,6 +21,13 @@ import java.util.Locale
  * Pulls counters that the Flutter side wrote via HomeWidget.saveWidgetData.
  */
 class DuoyiWidgetProvider : AppWidgetProvider() {
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            requestUpdate(context)
+        }
+    }
+
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
 

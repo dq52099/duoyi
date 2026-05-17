@@ -108,6 +108,46 @@ void main() {
       expect(todoProvider, contains('R.id.widget_todo_nav_calendar'));
       expect(todoProvider, contains('R.id.widget_todo_nav_focus'));
     });
+
+    test('升级后刷新已有小组件，避免旧布局继续留在桌面', () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final mainProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt',
+      ).readAsStringSync();
+      final todoProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiTodoWidgetProvider.kt',
+      ).readAsStringSync();
+
+      expect(
+        RegExp(
+          r'android:name="\.DuoyiWidgetProvider"[\s\S]*?android\.intent\.action\.MY_PACKAGE_REPLACED',
+        ).hasMatch(manifest),
+        isTrue,
+      );
+      expect(
+        RegExp(
+          r'android:name="\.DuoyiTodoWidgetProvider"[\s\S]*?android\.intent\.action\.MY_PACKAGE_REPLACED',
+        ).hasMatch(manifest),
+        isTrue,
+      );
+      expect(mainProvider, contains('Intent.ACTION_MY_PACKAGE_REPLACED'));
+      expect(mainProvider, contains('requestUpdate(context)'));
+      expect(todoProvider, contains('Intent.ACTION_MY_PACKAGE_REPLACED'));
+      expect(todoProvider, contains('fun requestUpdate(context: Context)'));
+      expect(todoProvider, contains('DuoyiTodoWidgetProvider::class.java'));
+    });
+
+    test('应用内小部件菜单展示预览和底部导航', () {
+      final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+
+      expect(mine, contains('_WidgetPreviewCard'));
+      expect(mine, contains('_WidgetPreviewNav'));
+      expect(mine, contains('多仪概览预览'));
+      expect(mine, contains('今日待办预览'));
+      expect(mine, contains("'待办', '习惯', '日历', '专注'"));
+    });
   });
 }
 

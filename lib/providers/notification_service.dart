@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
 import '../core/brand_strings.dart';
 import '../services/desktop_notification.dart';
+import '../services/alarm_service.dart';
 import '../services/local_notifications.dart';
 import '../services/reminder_sinks.dart';
 
@@ -46,7 +47,7 @@ class NotificationItem {
 
 enum NotificationType { todo, habit, pomodoro, anniversary, general }
 
-/// NotificationService —— 推送通道（`duoyi_general`，`Importance.high`）。
+/// NotificationService —— 推送通道（`duoyi_general_alerts_v6`，`Importance.max`）。
 ///
 /// 本服务**只**处理「系统通知」语义的发送：番茄钟结束、休息结束、纪念日提醒、
 /// 成就解锁等轻提示；对应设计文档 §2.4 的 push 通道（R4.1 / R4.2）。
@@ -56,11 +57,11 @@ enum NotificationType { todo, habit, pomodoro, anniversary, general }
 /// 按 `ReminderConfig.kind` 分发到本服务或 `AlarmService`（Task 14）。
 ///
 /// 设计目的是在模型上把「消息」与「闹钟」两条路径彻底分离：
-///   * `duoyi_general` → 轻推、可被系统折叠、不唤屏；
-///   * `duoyi_alarm`   → 强提醒、全屏 intent、震动序列、`Importance.max`。
+///   * `duoyi_general_alerts_v6` → 普通提醒，发声、震动并尽量弹出横幅；
+///   * `duoyi_alarm_fullscreen_v5` → 强提醒，全屏 intent、震动序列、`Importance.max`。
 ///
-/// 所以本文件中所有对 `LocalNotifications` 的调用都**必须且仅能**使用
-/// `channelId: 'duoyi_general'`；任何涉及 `duoyi_alarm` 的调度都应经 `AlarmService`。
+/// 所以本文件中普通提醒对 `LocalNotifications` 的调用都固定使用 [channelId]；
+/// 任何涉及强提醒的调度都应经 `AlarmService`。
 class NotificationService extends ChangeNotifier
     implements ReminderNotificationSink {
   static const _kHistoryKey = 'duoyi_notif_history';
@@ -68,12 +69,13 @@ class NotificationService extends ChangeNotifier
   /// 本服务使用的唯一通道 id。
   ///
   /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
-  /// 用户手机上的旧渠道。v4 使用更高响度的 `duoyi_alarm.wav`，并强制新建渠道。
-  static const String channelId = 'duoyi_general_alerts_v5';
+  /// 用户手机上的旧渠道。v6 使用明确的响铃资源和最高优先级，并强制新建渠道。
+  static const String channelId = 'duoyi_general_alerts_v6';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
     'duoyi_general_alerts_v4',
+    'duoyi_general_alerts_v5',
   };
 
   Timer? _pomodoroNotificationTimer;
@@ -96,8 +98,7 @@ class NotificationService extends ChangeNotifier
   Future<void> init() async {
     await _desktop.init();
     _desktopReady = _desktop.isAvailable;
-    // 初始化底层 plugin，其 init 会创建 Android 端的 duoyi_general 渠道
-    // （Importance.high）与 duoyi_alarm 渠道（由 AlarmService 使用）。
+    // 初始化底层 plugin，其 init 会创建 Android 端的普通提醒渠道与强提醒渠道。
     await LocalNotifications.instance.init();
     await _loadHistory();
   }
@@ -179,12 +180,12 @@ class NotificationService extends ChangeNotifier
   }
 
   // ——————————————————————————————————————————————
-  // Public API — 所有路径统一使用 duoyi_general（Importance.high）。
+  // Public API — 普通提醒路径统一使用 channelId。
   // ——————————————————————————————————————————————
 
   /// 立即推送一条自定义消息（push 通道）。
   ///
-  /// 薄封装 `LocalNotifications.show`，固定 `duoyi_general` 渠道，便于
+  /// 薄封装 `LocalNotifications.show`，固定普通提醒渠道，便于
   /// `ReminderScheduler._dispatch(r.kind = push)` 等上游直接调用。
   Future<void> show({
     required int id,
@@ -456,20 +457,22 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
-  /// 发送一条自定义通知（测试用；走 push 通道）。
+  /// 发送一条测试提醒。
+  ///
+  /// 偏好设置里的测试必须验证用户最关心的"响铃/弹屏"链路，因此这里优先
+  /// 走强提醒通道，而不是只发一条可能被系统收进通知栏的普通通知。
   Future<void> sendTest() async {
-    await LocalNotifications.instance.show(
+    await AlarmService.instance.showFullScreenTest(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
-      title: '多仪 · 有声测试通知',
-      body: '如果这条没有声音或横幅，请检查系统里“多仪 · 通知提醒”渠道是否被静音。',
-      channelId: channelId,
+      title: '多仪 · 响铃弹屏测试',
+      body: '如果这条仍然没有声音或弹屏，请在通知健康检查里开启通知、强提醒和弹出屏幕权限。',
       payload: 'duoyi://tab/mine',
     );
     _addToHistory(
       NotificationItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: '测试通知',
-        body: '如果这条没有声音或横幅，请检查系统里“多仪 · 通知提醒”渠道是否被静音。',
+        body: '已发送响铃弹屏测试。',
         scheduledTime: DateTime.now(),
         type: NotificationType.general,
       ),

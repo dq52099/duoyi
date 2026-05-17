@@ -2,7 +2,9 @@ package com.duoyi.duoyi
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.view.View
@@ -19,6 +21,13 @@ import es.antonborri.home_widget.HomeWidgetPlugin
  *   brand_app_title                       ：品牌标题
  */
 class DuoyiTodoWidgetProvider : AppWidgetProvider() {
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            requestUpdate(context)
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -121,5 +130,20 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 Uri.parse("duoyi://action/complete_todo?id=$todoId")
             )
         )
+    }
+
+    companion object {
+        /** Trigger update from Flutter via HomeWidget.updateWidget or package upgrade. */
+        fun requestUpdate(context: Context) {
+            val mgr = AppWidgetManager.getInstance(context)
+            val ids = mgr.getAppWidgetIds(ComponentName(context, DuoyiTodoWidgetProvider::class.java))
+            if (ids.isNotEmpty()) {
+                val intent = Intent(context, DuoyiTodoWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                }
+                context.sendBroadcast(intent)
+            }
+        }
     }
 }

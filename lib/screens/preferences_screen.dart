@@ -436,31 +436,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('测试通知已发送'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    await _refresh();
-  }
-
-  Future<void> _sendScheduledTest() async {
-    await widget.notificationService.sendScheduledTest();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已安排 1 分钟后的测试提醒'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    await _refresh();
-  }
-
-  Future<void> _sendAlarmTest() async {
-    await AlarmService.instance.showFullScreenTest();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('强提醒测试已发送'),
+        content: Text('响铃弹屏测试已发送'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -518,8 +494,6 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
           onRefresh: _refresh,
           onOpenSystemSettings: () => _openAppSettings(context),
           onSendTest: _sendTest,
-          onSendScheduledTest: _sendScheduledTest,
-          onSendAlarmTest: _sendAlarmTest,
           onSendScheduledAlarmTest: _sendScheduledAlarmTest,
           onClearPending: _clearPending,
           onRequestNotificationPermission: _requestNotificationPermission,
