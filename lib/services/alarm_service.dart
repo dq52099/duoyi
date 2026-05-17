@@ -8,6 +8,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../core/local_timezone_resolver.dart';
 import '../core/platform_info.dart';
+import 'local_notifications.dart';
+import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
 
 /// 精准闹钟权限缺失异常。
@@ -61,8 +63,11 @@ class AlarmService implements ReminderAlarmSink {
   /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
   /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
   /// 继续吞掉习惯提醒。
-  static const String channelId = 'duoyi_alarm_fullscreen_v3';
-  static const String legacyChannelId = 'duoyi_alarm';
+  static const String channelId = 'duoyi_alarm_fullscreen_v4';
+  static const Set<String> legacyChannelIds = <String>{
+    'duoyi_alarm',
+    'duoyi_alarm_fullscreen_v3',
+  };
   static const String _channelName = '多仪 · 强提醒';
   static const String _channelDesc = '到点响铃、震动并弹出确认界面的提醒';
   static const RawResourceAndroidNotificationSound _alarmSound =
@@ -217,6 +222,7 @@ class AlarmService implements ReminderAlarmSink {
   }) async {
     if (!_initialized) await init();
     if (when.isBefore(DateTime.now())) return;
+    await _ensureNotificationPermission('scheduleFullScreen');
 
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -298,6 +304,7 @@ class AlarmService implements ReminderAlarmSink {
     String payload = 'duoyi://alarm-test',
   }) async {
     if (!_initialized) await init();
+    await _ensureNotificationPermission('showFullScreenTest');
     await _plugin.show(
       id,
       title,
@@ -320,6 +327,7 @@ class AlarmService implements ReminderAlarmSink {
     bool fullScreen = true,
   }) async {
     if (!_initialized) await init();
+    await _ensureNotificationPermission('scheduleDailyFullScreen');
 
     final details = _notificationDetails(
       fullScreen: fullScreen,
@@ -460,6 +468,23 @@ class AlarmService implements ReminderAlarmSink {
         '[AlarmService] full screen intent permission failed: $e\n$st',
       );
       return hasFullScreenIntentPermission();
+    }
+  }
+
+  Future<void> _ensureNotificationPermission(String operation) async {
+    try {
+      final granted = await LocalNotifications.instance.ensurePermission();
+      if (granted) return;
+      debugPrint(
+        '[AlarmService] $operation skipped: notification permission denied',
+      );
+      throw const NotificationPermissionDeniedException();
+    } catch (e, st) {
+      if (e is NotificationPermissionDeniedException) rethrow;
+      debugPrint(
+        '[AlarmService] $operation permission request failed: $e\n$st',
+      );
+      throw const NotificationPermissionDeniedException();
     }
   }
 

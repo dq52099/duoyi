@@ -115,6 +115,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     return '${n.year}-${n.month}-${n.day}';
   }
 
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   Future<void> _saveMeta() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('pomodoro_count_today', _sessionCountToday);
@@ -132,6 +135,31 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       'pomodoro_sessions',
       json.encode(_sessions.map((e) => e.toJson()).toList()),
     );
+  }
+
+  Future<bool> deleteSession(String id) async {
+    final idx = _sessions.indexWhere((s) => s.id == id);
+    if (idx < 0) return false;
+
+    final removed = _sessions.removeAt(idx);
+    if (removed.type == PomodoroType.focus &&
+        _isSameDay(removed.startTime, DateTime.now())) {
+      final now = DateTime.now();
+      _sessionCountToday = _sessions
+          .where(
+            (s) => s.type == PomodoroType.focus && _isSameDay(s.startTime, now),
+          )
+          .length;
+      _lastDate = _todayKey();
+      await _saveMeta();
+    }
+
+    await _timeAudit?.deleteByDedupeKey(
+      TimeAuditProvider.pomodoroDedupeKey(id),
+    );
+    await _saveSessions();
+    notifyListeners();
+    return true;
   }
 
   // --- Timer controls ---

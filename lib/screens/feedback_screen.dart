@@ -15,6 +15,7 @@ class FeedbackScreen extends StatefulWidget {
 
 class _FeedbackScreenState extends State<FeedbackScreen> {
   bool _loading = true;
+  bool _submitting = false;
   List<Map<String, dynamic>> _items = [];
   String? _error;
   String _category = 'feature';
@@ -37,6 +38,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     if (!auth.state.isLoggedIn) {
       setState(() {
         _loading = false;
+        _items = const [];
         _error = '登录后可查看反馈记录';
       });
       return;
@@ -49,6 +51,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       final list = await auth.client.getList('/api/feedback/me');
       _items = list.cast<Map<String, dynamic>>();
     } catch (e) {
+      _items = const [];
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -56,11 +59,31 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   }
 
   Future<void> _submit() async {
-    final text = _contentCtrl.text.trim();
-    if (text.isEmpty) return;
+    if (_submitting) return;
+    final auth = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
+    if (!auth.state.isLoggedIn) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('请先登录后再提交反馈'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final text = _contentCtrl.text.trim();
+    if (text.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('反馈内容不能为空'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
     try {
-      await context.read<AuthProvider>().client.post('/api/feedback', {
+      await auth.client.post('/api/feedback', {
         'category': _category,
         'content': text,
       });
@@ -71,6 +94,16 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -117,6 +150,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
+    final isLoggedIn = auth.state.isLoggedIn;
 
     return Scaffold(
       appBar: AppBar(title: const Text('反馈与许愿')),
@@ -179,12 +213,15 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             ),
             const SizedBox(height: 12),
             AppSettingsSection(
-              title: '提交新反馈',
-              subtitle: '功能建议、问题反馈或许愿都可以写在这里',
+              title: isLoggedIn ? '提交新反馈' : '登录后提交反馈',
+              subtitle: isLoggedIn
+                  ? '功能建议、问题反馈或许愿都可以写在这里'
+                  : '当前未登录，无法提交或查看反馈处理记录',
               children: [
                 AppDropdownField<String>(
                   initialValue: _category,
                   labelText: '分类',
+                  enabled: isLoggedIn && !_submitting,
                   items: const [
                     DropdownMenuItem(value: 'feature', child: Text('功能建议')),
                     DropdownMenuItem(value: 'bug', child: Text('问题反馈')),
@@ -196,6 +233,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _contentCtrl,
+                  enabled: isLoggedIn && !_submitting,
                   minLines: 3,
                   maxLines: 6,
                   decoration: const InputDecoration(
@@ -206,9 +244,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
-                    onPressed: _submit,
-                    icon: const Icon(Icons.send_outlined),
-                    label: const Text('提交反馈'),
+                    onPressed: isLoggedIn && !_submitting ? _submit : null,
+                    icon: _submitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: Text(_submitting ? '提交中' : '提交反馈'),
                   ),
                 ),
               ],

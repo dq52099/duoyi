@@ -6,6 +6,7 @@ import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/todo.dart';
 import 'alarm_service.dart';
+import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
 
 /// 推送 / 闹钟路由分发用的统一载荷。
@@ -169,6 +170,10 @@ class ReminderScheduler {
           minute: h.remindMinute!,
           weekdays: weekdays.isEmpty ? null : weekdays,
         );
+      } on NotificationPermissionDeniedException catch (e) {
+        debugPrint(
+          '[ReminderScheduler] habit notification permission denied for ${h.id}: $e',
+        );
       } catch (e, st) {
         debugPrint(
           '[ReminderScheduler] habit alarm dispatch failed for ${h.id}: $e\n$st',
@@ -240,6 +245,10 @@ class ReminderScheduler {
             hour: a.remindHour,
             minute: a.remindMinute,
           );
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] anniversary notification permission denied for ${a.id}: $e',
+          );
         } catch (e, st) {
           debugPrint(
             '[ReminderScheduler] anniversary alarm dispatch failed for ${a.id}: $e\n$st',
@@ -254,14 +263,20 @@ class ReminderScheduler {
           );
         }
       } else {
-        await notif.scheduleAnniversary(
-          annId: a.id,
-          title: a.title,
-          whenDate: a.nextOccurrence,
-          daysBefore: a.remindDaysBefore,
-          hour: a.remindHour,
-          minute: a.remindMinute,
-        );
+        try {
+          await notif.scheduleAnniversary(
+            annId: a.id,
+            title: a.title,
+            whenDate: a.nextOccurrence,
+            daysBefore: a.remindDaysBefore,
+            hour: a.remindHour,
+            minute: a.remindMinute,
+          );
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] anniversary push permission denied for ${a.id}: $e',
+          );
+        }
       }
     }
     _scheduledAnniIds
@@ -404,6 +419,11 @@ class ReminderScheduler {
             payload: _fallbackPayload(payload.payload),
           );
           return true;
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] alarm notification permission denied for ${payload.id}: $e',
+          );
+          return false;
         }
     }
   }
@@ -448,6 +468,11 @@ class ReminderScheduler {
             payload: _fallbackPayload(rule.payload),
           );
           return true;
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] alarm notification permission denied for ${rule.key}: $e',
+          );
+          return false;
         }
     }
   }

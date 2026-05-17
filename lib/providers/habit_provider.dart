@@ -73,40 +73,68 @@ class HabitProvider extends ChangeNotifier {
   }
 
   Future<void> incrementHabit(String id) async {
+    await incrementHabitForDate(id, DateTime.now());
+  }
+
+  Future<void> incrementHabitForDate(String id, DateTime date) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx != -1) {
-      _habits[idx].completions[_habits[idx].todayKey()] =
-          (_habits[idx].completions[_habits[idx].todayKey()] ?? 0) + 1;
+      final key = _habits[idx].dateKey(date);
+      _habits[idx].completions[key] = (_habits[idx].completions[key] ?? 0) + 1;
       _recalcStreak(idx);
       DomainEventBus.instance.publish(
         DomainEvent(
           type: DomainEventType.habitCheckedIn,
           objectId: _habits[idx].id,
-          metadata: {'count': _habits[idx].todayCount()},
+          metadata: {'count': _habits[idx].completions[key] ?? 0, 'date': key},
         ),
       );
       notifyListeners();
       await _save();
       await _timeAudit?.recordHabitCheckIn(
         _habits[idx],
-        cumulativeCount: _habits[idx].todayCount(),
+        cumulativeCount: _habits[idx].completions[key] ?? 0,
+        at: _timeForHabitRecord(date),
       );
     }
   }
 
   Future<void> decrementHabit(String id) async {
+    await decrementHabitForDate(id, DateTime.now());
+  }
+
+  Future<void> decrementHabitForDate(String id, DateTime date) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx != -1) {
-      final key = _habits[idx].todayKey();
+      final key = _habits[idx].dateKey(date);
       final v = _habits[idx].completions[key] ?? 0;
       if (v > 0) {
-        _habits[idx].completions[key] = v - 1;
+        final next = v - 1;
+        if (next == 0) {
+          _habits[idx].completions.remove(key);
+        } else {
+          _habits[idx].completions[key] = next;
+        }
         _recalcStreak(idx);
         notifyListeners();
         await _save();
-        await _timeAudit?.removeHabitCheckIn(_habits[idx], count: v);
+        await _timeAudit?.removeHabitCheckIn(
+          _habits[idx],
+          count: v,
+          at: _timeForHabitRecord(date),
+        );
       }
     }
+  }
+
+  DateTime _timeForHabitRecord(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
+      return now;
+    }
+    return DateTime(date.year, date.month, date.day, 23, 59);
   }
 
   void _recalcStreak(int idx) {
@@ -154,13 +182,19 @@ class HabitProvider extends ChangeNotifier {
         final date = now.subtract(Duration(days: w * 7 + (6 - d)));
         final key =
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-        int total = 0;
-        int max = 0;
-        for (final h in _habits) {
-          total += h.completions[key] ?? 0;
-          max += h.targetCount;
+        final active = _habits
+            .where((h) => h.activeWeekdays.contains(date.weekday - 1))
+            .toList();
+        if (active.isEmpty) {
+          data[key] = 0;
+          continue;
         }
-        data[key] = max > 0 ? ((total / max) * 5).ceil().clamp(1, 5) : 0;
+        final progress =
+            active.fold(0.0, (sum, h) => sum + h.progressForDate(date)) /
+            active.length;
+        data[key] = progress <= 0
+            ? 0
+            : ((progress * 5).ceil().clamp(1, 5)).toInt();
       }
     }
     return data;

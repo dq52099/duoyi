@@ -20,4 +20,22 @@ void main() {
       expect(() => habit.heatmapData(1), returnsNormally);
     },
   );
+
+  test('negative habit treats zero occurrences as complete progress', () {
+    final habit = Habit(
+      id: 'negative-habit',
+      name: '少刷短视频',
+      kind: HabitKind.negative,
+      targetCount: 1,
+    );
+
+    expect(habit.todayCount(), 0);
+    expect(habit.todayProgress(), 1.0);
+    expect(habit.isCompletedToday(), isTrue);
+
+    habit.completions[habit.todayKey()] = 1;
+
+    expect(habit.todayProgress(), 0.0);
+    expect(habit.isCompletedToday(), isFalse);
+  });
 }

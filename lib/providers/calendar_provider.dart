@@ -142,6 +142,7 @@ class CalendarProvider extends ChangeNotifier {
           h.colorValue,
           h.kind.index,
           h.targetCount,
+          h.unit,
           Object.hashAll(h.activeWeekdays),
           h.weeklyTarget,
           h.startDate?.millisecondsSinceEpoch,

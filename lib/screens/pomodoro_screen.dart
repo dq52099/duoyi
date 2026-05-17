@@ -706,7 +706,12 @@ class _HistoryTab extends StatelessWidget {
                   ),
                 ),
               ),
-              ...e.value.map((s) => PomodoroSessionCard(session: s)),
+              ...e.value.map(
+                (s) => PomodoroSessionCard(
+                  session: s,
+                  onDelete: () => provider.deleteSession(s.id),
+                ),
+              ),
             ],
           ),
         ),

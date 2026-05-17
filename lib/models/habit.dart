@@ -77,6 +77,7 @@ class Habit {
     int? remindHour,
     int? remindMinute,
     DateTime? createdAt,
+    bool clearUnit = false,
   }) {
     return Habit(
       id: id,
@@ -86,7 +87,7 @@ class Habit {
       kind: kind ?? this.kind,
       activeWeekdays: activeWeekdays ?? List<int>.from(this.activeWeekdays),
       targetCount: targetCount ?? this.targetCount,
-      unit: unit ?? this.unit,
+      unit: clearUnit ? null : unit ?? this.unit,
       currentStreak: currentStreak ?? this.currentStreak,
       bestStreak: bestStreak ?? this.bestStreak,
       completions: completions != null
@@ -186,8 +187,14 @@ class Habit {
   }
 
   int todayCount() => completions[todayKey()] ?? 0;
-  double todayProgress() =>
-      targetCount > 0 ? (todayCount() / targetCount).clamp(0.0, 1.0) : 0.0;
+  double progressForCount(int count) {
+    if (kind == HabitKind.negative) {
+      return count == 0 ? 1.0 : 0.0;
+    }
+    return targetCount > 0 ? (count / targetCount).clamp(0.0, 1.0) : 0.0;
+  }
+
+  double todayProgress() => progressForCount(todayCount());
 
   String dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -195,8 +202,7 @@ class Habit {
   String todayKey() => dateKey(DateTime.now());
 
   int countForDate(DateTime d) => completions[dateKey(d)] ?? 0;
-  double progressForDate(DateTime d) =>
-      targetCount > 0 ? (countForDate(d) / targetCount).clamp(0.0, 1.0) : 0.0;
+  double progressForDate(DateTime d) => progressForCount(countForDate(d));
 
   /// 正向习惯：今日完成 >= 目标即"达标"；
   /// 负向习惯：今日为零即"戒除成功"。
@@ -214,9 +220,7 @@ class Habit {
   String formatCountForDate(DateTime d) {
     final c = countForDate(d);
     final u = unit ?? '次';
-    return kind == HabitKind.positive
-        ? '$c $u / $targetCount $u'
-        : '$c $u'; // 负向只显示实际次数
+    return kind == HabitKind.positive ? '$c $u / $targetCount $u' : '已记录 $c $u';
   }
 
   Map<String, int> heatmapData(int weeks) {

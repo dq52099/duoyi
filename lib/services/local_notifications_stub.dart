@@ -10,6 +10,7 @@ class LocalNotifications {
 
   Future<bool> requestPermission() async => false;
   Future<bool> refreshPermission() async => _granted;
+  Future<bool> ensurePermission() async => _granted;
 
   Future<void> show({
     required int id,

@@ -68,9 +68,12 @@ class NotificationService extends ChangeNotifier
   /// 本服务使用的唯一通道 id。
   ///
   /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
-  /// 用户手机上的旧渠道。v3 明确绑定 `duoyi_alarm.wav`，避免旧 v2 渠道静音。
-  static const String channelId = 'duoyi_general_alerts_v3';
-  static const String legacyChannelId = 'duoyi_general_alerts_v2';
+  /// 用户手机上的旧渠道。v4 使用更高响度的 `duoyi_alarm.wav`，并强制新建渠道。
+  static const String channelId = 'duoyi_general_alerts_v4';
+  static const Set<String> legacyChannelIds = <String>{
+    'duoyi_general_alerts_v2',
+    'duoyi_general_alerts_v3',
+  };
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;
@@ -80,6 +83,7 @@ class NotificationService extends ChangeNotifier
   BrandStrings _strings = BrandStrings.defaultBrand;
 
   int get pendingCount => _pendingNotifications;
+  int get historyCount => _history.length;
   List<NotificationItem> get history => List.unmodifiable(_history);
   bool get desktopReady => _desktopReady;
   bool get permissionGranted => LocalNotifications.instance.permissionGranted;
@@ -135,6 +139,9 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
+  @visibleForTesting
+  Future<void> loadHistoryForTest() => _loadHistory();
+
   int _idFor(String key) {
     // 从字符串 id 生成稳定 int(用于 flutter_local_notifications)
     int h = 0;
@@ -146,6 +153,28 @@ class NotificationService extends ChangeNotifier
 
   void _desktopShow(String title, String body) {
     if (_desktopReady) _desktop.notify(summary: title, body: body);
+  }
+
+  void _showImmediate({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) {
+    // ignore: discarded_futures
+    LocalNotifications.instance
+        .show(
+          id: id,
+          title: title,
+          body: body,
+          channelId: channelId,
+          payload: payload,
+        )
+        .catchError((Object e, StackTrace st) {
+          debugPrint(
+            '[NotificationService] immediate notification failed: $e\n$st',
+          );
+        });
   }
 
   // ——————————————————————————————————————————————
@@ -387,11 +416,10 @@ class NotificationService extends ChangeNotifier
         ? '"$taskName" — ${_strings.notifPomodoroDoneBody}'
         : _strings.notifPomodoroDoneBody;
     _desktopShow(_strings.notifPomodoroDoneTitle, body);
-    LocalNotifications.instance.show(
+    _showImmediate(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: _strings.notifPomodoroDoneTitle,
       body: body,
-      channelId: channelId,
     );
     _addToHistory(
       NotificationItem(
@@ -410,11 +438,10 @@ class NotificationService extends ChangeNotifier
     final body = _strings.notifBreakDoneBody;
     final title = _strings.notifBreakDoneTitle;
     _desktopShow(title, body);
-    LocalNotifications.instance.show(
+    _showImmediate(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: title,
       body: body,
-      channelId: channelId,
     );
     _addToHistory(
       NotificationItem(
@@ -480,11 +507,10 @@ class NotificationService extends ChangeNotifier
     final title = '成就解锁：${achievement.title}';
     final body = achievement.description;
     _desktopShow(title, body);
-    LocalNotifications.instance.show(
+    _showImmediate(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: title,
       body: body,
-      channelId: channelId,
       payload: 'duoyi://tab/mine',
     );
     _addToHistory(

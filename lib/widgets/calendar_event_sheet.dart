@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/calendar_event.dart';
+import '../models/habit.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/countdown_provider.dart';
 import '../providers/course_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
+import '../providers/pomodoro_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../screens/countdown_screen.dart';
@@ -54,10 +56,7 @@ class CalendarEventSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppStatusBadge(
-                      label: event.type.label,
-                      color: event.color,
-                    ),
+                    AppStatusBadge(label: event.type.label, color: event.color),
                     const SizedBox(height: 4),
                     Text(
                       _timeText(event),
@@ -92,11 +91,7 @@ class CalendarEventSheet extends StatelessWidget {
           ],
           const SizedBox(height: 16),
           // Type-specific action buttons
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _buildActions(context),
-          ),
+          Wrap(spacing: 8, runSpacing: 8, children: _buildActions(context)),
         ],
       ),
     );
@@ -144,12 +139,20 @@ class CalendarEventSheet extends StatelessWidget {
           ),
         ];
       case CalendarEventType.habit:
+        final habit = event.sourceId == null
+            ? null
+            : context
+                  .read<HabitProvider>()
+                  .habits
+                  .where((h) => h.id == event.sourceId)
+                  .firstOrNull;
+        final isNegative = habit?.kind == HabitKind.negative;
         return [
           if (!event.isCompleted)
             _actionButton(
               context,
-              icon: Icons.check,
-              label: '打卡',
+              icon: isNegative ? Icons.add_circle_outline : Icons.check,
+              label: isNegative ? '记录一次' : '打卡',
               onPressed: () => _checkInHabit(context),
             ),
           _actionButton(
@@ -173,6 +176,13 @@ class CalendarEventSheet extends StatelessWidget {
             icon: Icons.open_in_new,
             label: '跳转详情',
             onPressed: event.canOpen ? () => _openDetail(context) : null,
+            tonal: true,
+          ),
+          _actionButton(
+            context,
+            icon: Icons.delete_outline,
+            label: '删除',
+            onPressed: () => _delete(context),
             tonal: true,
           ),
         ];
@@ -266,7 +276,10 @@ class CalendarEventSheet extends StatelessWidget {
   Future<void> _checkInHabit(BuildContext context) async {
     final sourceId = event.sourceId;
     if (sourceId == null) return;
-    await context.read<HabitProvider>().incrementHabit(sourceId);
+    await context.read<HabitProvider>().incrementHabitForDate(
+      sourceId,
+      event.date,
+    );
     if (context.mounted) Navigator.pop(context);
   }
 
@@ -420,6 +433,8 @@ class CalendarEventSheet extends StatelessWidget {
         await context.read<CourseProvider>().delete(sourceId);
       case CalendarEventType.timeEntry:
         await context.read<TimeAuditProvider>().delete(sourceId);
+      case CalendarEventType.pomodoro:
+        await context.read<PomodoroProvider>().deleteSession(sourceId);
       default:
         break;
     }

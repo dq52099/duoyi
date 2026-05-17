@@ -340,6 +340,19 @@ def _verify_token(authorization: Optional[str] = Header(None)) -> str:
     user_id = next((uid for uid, t in TOKENS.items() if t == token), None)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT is_disabled FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if row is None:
+            TOKENS.pop(user_id, None)
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        if row["is_disabled"]:
+            TOKENS.pop(user_id, None)
+            raise HTTPException(status_code=403, detail="Account disabled")
+    finally:
+        db.close()
     return user_id
 
 
@@ -425,6 +438,33 @@ class FeedbackReply(BaseModel):
     feedback_id: int
     reply: str
     status: str = "resolved"
+
+
+FEEDBACK_CATEGORIES = {"feature", "bug", "wish", "other"}
+FEEDBACK_STATUSES = {"open", "in_progress", "resolved", "closed"}
+
+
+def _clean_feedback_category(value: str) -> str:
+    category = (value or "feature").strip()
+    if category not in FEEDBACK_CATEGORIES:
+        raise HTTPException(status_code=400, detail="无效的反馈分类")
+    return category
+
+
+def _clean_feedback_content(value: str) -> str:
+    content = (value or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="反馈内容不能为空")
+    if len(content) > 2000:
+        raise HTTPException(status_code=400, detail="反馈内容不能超过 2000 字")
+    return content
+
+
+def _clean_feedback_status(value: str) -> str:
+    status = (value or "resolved").strip()
+    if status not in FEEDBACK_STATUSES:
+        raise HTTPException(status_code=400, detail="无效的反馈状态")
+    return status
 
 
 class AnnouncementCreate(BaseModel):
@@ -1632,11 +1672,13 @@ def list_announcements(limit: int = Query(20, ge=1, le=100)):
 
 @app.post("/api/feedback")
 def create_feedback(req: FeedbackCreate, user_id: str = Depends(_verify_token)):
+    category = _clean_feedback_category(req.category)
+    content = _clean_feedback_content(req.content)
     db = get_db()
     try:
         cur = db.execute(
             "INSERT INTO feedback(user_id, category, content) VALUES(?,?,?)",
-            (user_id, req.category, req.content),
+            (user_id, category, content),
         )
         db.commit()
         return {"id": cur.lastrowid, "status": "open"}
@@ -2028,15 +2070,19 @@ def list_all_feedback(_: str = Depends(_require_admin), status: Optional[str] = 
 
 @app.post("/api/admin/feedback/reply")
 def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
+    reply = _clean_feedback_content(req.reply)
+    status = _clean_feedback_status(req.status)
     db = get_db()
     try:
-        db.execute(
+        cur = db.execute(
             "UPDATE feedback SET admin_reply=?, status=?, updated_at=datetime('now') WHERE id=?",
-            (req.reply, req.status, req.feedback_id),
+            (reply, status, req.feedback_id),
         )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="反馈不存在")
         _audit(
             db, actor, _get_username(db, actor),
-            "feedback.reply", target=str(req.feedback_id), detail=req.status
+            "feedback.reply", target=str(req.feedback_id), detail=status
         )
         db.commit()
         return {"status": "ok"}
@@ -2048,7 +2094,9 @@ def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
 def delete_feedback(fb_id: int, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
-        db.execute("DELETE FROM feedback WHERE id=?", (fb_id,))
+        cur = db.execute("DELETE FROM feedback WHERE id=?", (fb_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="反馈不存在")
         _audit(
             db, actor, _get_username(db, actor),
             "feedback.delete", target=str(fb_id)

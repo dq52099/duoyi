@@ -42,6 +42,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     final targetCtrl = TextEditingController(
       text: habit.targetCount.toString(),
     );
+    final unitCtrl = TextEditingController(text: habit.unit ?? '次');
     var selectedColor = habit.colorValue;
     var selectedKind = habit.kind;
     var reminderPlan = _habitReminderPlan(habit);
@@ -107,6 +108,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             final updated = habit.copyWith(
               name: name,
               targetCount: target,
+              unit: unitCtrl.text.trim().isEmpty ? null : unitCtrl.text.trim(),
+              clearUnit: unitCtrl.text.trim().isEmpty,
               colorValue: selectedColor,
               kind: selectedKind,
               activeWeekdays: nextActiveWeekdays,
@@ -135,7 +138,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 onPressed: () => Navigator.of(sheetCtx).pop(),
                 child: Text(I18n.tr('action.cancel')),
               ),
-              FilledButton(onPressed: save, child: Text(I18n.tr('action.save'))),
+              FilledButton(
+                onPressed: save,
+                child: Text(I18n.tr('action.save')),
+              ),
             ],
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,6 +157,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 Row(
                   children: [
                     Expanded(
+                      flex: 2,
                       child: TextField(
                         controller: targetCtrl,
                         keyboardType: TextInputType.number,
@@ -161,6 +168,14 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                           labelText: '每日目标次数',
                           prefixIcon: Icon(Icons.track_changes, size: 20),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: DesignTokens.spaceSm),
+                    SizedBox(
+                      width: 96,
+                      child: TextField(
+                        controller: unitCtrl,
+                        decoration: const InputDecoration(labelText: '单位'),
                       ),
                     ),
                   ],
@@ -318,6 +333,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     final heatmapData = habit.heatmapData(20);
     final cs = Theme.of(context).colorScheme;
     final color = Color(habit.colorValue);
+    final todayLabel = habit.kind == HabitKind.negative
+        ? '已记录 ${habit.todayCount()} ${habit.unit ?? '次'}'
+        : '${habit.todayCount()}/${habit.targetCount}';
 
     return Scaffold(
       appBar: AppBar(
@@ -366,10 +384,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       const SizedBox(width: 16),
                       _StatChip(label: '最佳纪录', value: '${habit.bestStreak}天'),
                       const SizedBox(width: 16),
-                      _StatChip(
-                        label: '今日',
-                        value: '${habit.todayCount()}/${habit.targetCount}',
-                      ),
+                      _StatChip(label: '今日', value: todayLabel),
                     ],
                   ),
                 ],
@@ -393,7 +408,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              '最近打卡记录',
+              '最近记录 / 补卡',
               style: TextStyle(
                 fontWeight: FontWeight.w400,
                 fontSize: 15,
@@ -408,7 +423,11 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             itemBuilder: (_, i) {
               final d = DateTime.now().subtract(Duration(days: i));
               final count = habit.countForDate(d);
-              final target = habit.targetCount < 1 ? 1 : habit.targetCount;
+              final progress = habit.progressForDate(d);
+              final completed = habit.isCompletedForDate(d);
+              final countLabel = habit.kind == HabitKind.negative
+                  ? '已记录 $count ${habit.unit ?? '次'}'
+                  : '$count/${habit.targetCount}';
               return ListTile(
                 dense: true,
                 leading: Text(
@@ -416,16 +435,43 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                   style: const TextStyle(fontSize: 13),
                 ),
                 title: LinearProgressIndicator(
-                  value: (count / target).clamp(0.0, 1.0),
+                  value: progress,
+                  color: completed ? Colors.green : cs.error,
                 ),
-                trailing: Text(
-                  '$count/${habit.targetCount}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: count >= habit.targetCount
-                        ? Colors.green
-                        : Colors.grey,
-                  ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      countLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: completed ? Colors.green : Colors.grey,
+                      ),
+                    ),
+                    if (count > 0)
+                      Tooltip(
+                        message: '撤回一次',
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18,
+                          onPressed: () =>
+                              provider.decrementHabitForDate(habit.id, d),
+                          icon: const Icon(Icons.undo),
+                        ),
+                      ),
+                    Tooltip(
+                      message: habit.kind == HabitKind.negative
+                          ? '记录一次'
+                          : '补一次',
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        onPressed: () =>
+                            provider.incrementHabitForDate(habit.id, d),
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ),
+                  ],
                 ),
               );
             },

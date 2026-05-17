@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/local_timezone_resolver.dart';
+import 'notification_permission_exception.dart';
 
 /// 本地通知 / 每日闹钟(Android + iOS + Linux 实现)。
 class LocalNotifications {
@@ -22,8 +23,8 @@ class LocalNotifications {
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const RawResourceAndroidNotificationSound _defaultSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
-  static const String _defaultChannelId = 'duoyi_general_alerts_v3';
-  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v3';
+  static const String _defaultChannelId = 'duoyi_general_alerts_v4';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v4';
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
@@ -210,6 +211,22 @@ class LocalNotifications {
     return _granted;
   }
 
+  Future<bool> ensurePermission() async {
+    if (!_initialized) await init();
+    await _probePermission();
+    if (_granted) return true;
+    return requestPermission();
+  }
+
+  Future<void> _ensureDeliveryPermission(String operation) async {
+    final granted = await ensurePermission();
+    if (granted) return;
+    debugPrint(
+      '[LocalNotifications] $operation skipped: notification permission denied',
+    );
+    throw const NotificationPermissionDeniedException();
+  }
+
   NotificationDetails _details({
     String channelId = _defaultChannelId,
     List<AndroidNotificationAction>? androidActions,
@@ -252,10 +269,7 @@ class LocalNotifications {
   List<AndroidNotificationAction>? _todoActionsFor(String? payload) {
     if (payload == null) return null;
     if (!payload.startsWith('duoyi://todo/')) return null;
-    final id = payload
-        .substring('duoyi://todo/'.length)
-        .split('?')
-        .first;
+    final id = payload.substring('duoyi://todo/'.length).split('?').first;
     if (id.isEmpty) return null;
     return [
       AndroidNotificationAction(
@@ -281,6 +295,7 @@ class LocalNotifications {
     String? channelId,
   }) async {
     if (!_initialized) await init();
+    await _ensureDeliveryPermission('show');
     await _plugin.show(
       id,
       title,
@@ -303,6 +318,7 @@ class LocalNotifications {
   }) async {
     if (!_initialized) await init();
     if (when.isBefore(DateTime.now())) return;
+    await _ensureDeliveryPermission('scheduleOnce');
     await _plugin.zonedSchedule(
       id,
       title,
@@ -332,6 +348,7 @@ class LocalNotifications {
     List<int>? weekdays,
   }) async {
     if (!_initialized) await init();
+    await _ensureDeliveryPermission('scheduleDaily');
     final details = _details(channelId: channelId ?? _defaultChannelId);
 
     if (weekdays == null || weekdays.isEmpty) {

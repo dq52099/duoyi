@@ -115,6 +115,110 @@ class WorkspaceApiTest(unittest.TestCase):
             "owner value",
         )
 
+    def test_verify_token_rejects_disabled_user_and_clears_token(self):
+        user_id = self._register("disabled-user")
+        token = api.TOKENS[user_id]
+
+        db = api.get_db()
+        try:
+            db.execute("UPDATE users SET is_disabled=1 WHERE id=?", (user_id,))
+            db.commit()
+        finally:
+            db.close()
+
+        with self.assertRaises(HTTPException) as denied:
+            api._verify_token(f"Bearer {token}")
+
+        self.assertEqual(denied.exception.status_code, 403)
+        self.assertNotIn(user_id, api.TOKENS)
+
+    def test_verify_token_rejects_deleted_user_and_clears_token(self):
+        user_id = self._register("deleted-user")
+        token = api.TOKENS[user_id]
+
+        db = api.get_db()
+        try:
+            db.execute("DELETE FROM users WHERE id=?", (user_id,))
+            db.commit()
+        finally:
+            db.close()
+
+        with self.assertRaises(HTTPException) as denied:
+            api._verify_token(f"Bearer {token}")
+
+        self.assertEqual(denied.exception.status_code, 401)
+        self.assertNotIn(user_id, api.TOKENS)
+
+    def test_feedback_create_validates_content_and_category(self):
+        user_id = self._register("feedback-user")
+
+        with self.assertRaises(HTTPException) as empty:
+            api.create_feedback(
+                api.FeedbackCreate(category="bug", content="   "),
+                user_id=user_id,
+            )
+        self.assertEqual(empty.exception.status_code, 400)
+
+        with self.assertRaises(HTTPException) as bad_category:
+            api.create_feedback(
+                api.FeedbackCreate(category="invalid", content="按钮没有反应"),
+                user_id=user_id,
+            )
+        self.assertEqual(bad_category.exception.status_code, 400)
+
+        created = api.create_feedback(
+            api.FeedbackCreate(category="bug", content="  通知没有声音  "),
+            user_id=user_id,
+        )
+        self.assertEqual(created["status"], "open")
+
+        items = api.my_feedback(user_id=user_id)
+        self.assertEqual(items[0]["category"], "bug")
+        self.assertEqual(items[0]["content"], "通知没有声音")
+
+    def test_admin_feedback_reply_and_delete_validate_targets(self):
+        admin_id = self._register("feedback-admin")
+        user_id = self._register("feedback-owner")
+        db = api.get_db()
+        try:
+            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.commit()
+        finally:
+            db.close()
+
+        created = api.create_feedback(
+            api.FeedbackCreate(category="feature", content="希望有小组件预览"),
+            user_id=user_id,
+        )
+        fb_id = created["id"]
+
+        replied = api.reply_feedback(
+            api.FeedbackReply(
+                feedback_id=fb_id,
+                reply=" 已加入排查 ",
+                status="in_progress",
+            ),
+            actor=admin_id,
+        )
+        self.assertEqual(replied["status"], "ok")
+        self.assertEqual(api.my_feedback(user_id=user_id)[0]["admin_reply"], "已加入排查")
+
+        with self.assertRaises(HTTPException) as bad_status:
+            api.reply_feedback(
+                api.FeedbackReply(
+                    feedback_id=fb_id,
+                    reply="done",
+                    status="invalid",
+                ),
+                actor=admin_id,
+            )
+        self.assertEqual(bad_status.exception.status_code, 400)
+
+        api.delete_feedback(fb_id, actor=admin_id)
+        with self.assertRaises(HTTPException) as missing:
+            api.delete_feedback(fb_id, actor=admin_id)
+        self.assertEqual(missing.exception.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -133,4 +133,36 @@ void main() {
       PermissionHealthAction.requestFullScreenIntentPermission,
     );
   });
+
+  test('检测到旧通知渠道时提示用户检查声音渠道', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        'duoyi_general_alerts_v3',
+        'duoyi_alarm',
+      },
+    );
+
+    final report = await service.check();
+
+    final legacy = report.checks.firstWhere(
+      (check) => check.id == 'legacy_notification_channels',
+    );
+    expect(legacy.status, PermissionHealthStatus.warning);
+    expect(legacy.manual, isTrue);
+    expect(legacy.subtitle, contains('duoyi_general_alerts_v3'));
+    expect(legacy.subtitle, contains('duoyi_alarm'));
+  });
 }

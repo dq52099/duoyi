@@ -4,8 +4,9 @@ import 'surface_components.dart';
 
 class PomodoroSessionCard extends StatelessWidget {
   final PomodoroSession session;
+  final VoidCallback? onDelete;
 
-  const PomodoroSessionCard({super.key, required this.session});
+  const PomodoroSessionCard({super.key, required this.session, this.onDelete});
 
   IconData _icon(PomodoroType t) {
     switch (t) {
@@ -104,6 +105,19 @@ class PomodoroSessionCard extends StatelessWidget {
                   color: Colors.grey,
                 ),
               ),
+            if (onDelete != null) ...[
+              const SizedBox(width: 4),
+              Tooltip(
+                message: '删除记录',
+                child: IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -62,6 +62,7 @@ class _HabitScreenState extends State<HabitScreen>
     final s = context.read<ThemeProvider>().brand.strings;
     final nameCtrl = TextEditingController();
     final targetCtrl = TextEditingController(text: '1');
+    final unitCtrl = TextEditingController(text: '次');
     var selectedColor = 0xFF4CAF50;
     var selectedKind = HabitKind.positive;
     var remindEnabled = false;
@@ -173,6 +174,7 @@ class _HabitScreenState extends State<HabitScreen>
                                 setSt(() {
                                   nameCtrl.text = t.name;
                                   targetCtrl.text = t.targetCount.toString();
+                                  unitCtrl.text = '次';
                                   selectedColor = t.colorValue;
                                 });
                               },
@@ -276,13 +278,22 @@ class _HabitScreenState extends State<HabitScreen>
                 Row(
                   children: [
                     Expanded(
+                      flex: 2,
                       child: TextField(
                         controller: targetCtrl,
                         decoration: const InputDecoration(
-                          labelText: '每日目标次数',
+                          labelText: '每日目标',
                           prefixIcon: Icon(Icons.track_changes, size: 20),
                         ),
                         keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 82,
+                      child: TextField(
+                        controller: unitCtrl,
+                        decoration: const InputDecoration(labelText: '单位'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -355,7 +366,12 @@ class _HabitScreenState extends State<HabitScreen>
                             name: nameCtrl.text.trim(),
                             colorValue: selectedColor,
                             kind: selectedKind,
-                            targetCount: int.tryParse(targetCtrl.text) ?? 1,
+                            targetCount: (int.tryParse(targetCtrl.text) ?? 1)
+                                .clamp(1, 9999)
+                                .toInt(),
+                            unit: unitCtrl.text.trim().isEmpty
+                                ? null
+                                : unitCtrl.text.trim(),
                             remind: shouldRemind && reminderReady,
                             remindHour: remindTime?.hour,
                             remindMinute: remindTime?.minute,
@@ -550,16 +566,29 @@ class _HabitCheckinCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.read<HabitProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final isNegative = habit.kind == HabitKind.negative;
+    final todayCount = habit.todayCount();
     final progress = habit.todayProgress();
-    final isDone = progress >= 1.0;
+    final isDone = habit.isCompletedToday();
+    final hasNegativeOccurrence = isNegative && todayCount > 0;
+    final habitColor = hasNegativeOccurrence
+        ? cs.error
+        : Color(habit.colorValue);
+    final targetText = isNegative
+        ? '目标: 不发生'
+        : '目标: ${habit.targetCount} ${habit.unit ?? '次'}/天';
+    final countText = isNegative
+        ? '$todayCount ${habit.unit ?? '次'}'
+        : '$todayCount/${habit.targetCount}';
 
     return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(16),
       borderRadius: BorderRadius.circular(18),
       border: Border.all(
-        color: isDone
-            ? Color(habit.colorValue).withValues(alpha: 0.3)
+        color: isDone || hasNegativeOccurrence
+            ? habitColor.withValues(alpha: 0.3)
             : Colors.transparent,
         width: 1.5,
       ),
@@ -572,12 +601,16 @@ class _HabitCheckinCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Color(habit.colorValue).withValues(alpha: 0.15),
+                  color: habitColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  isDone ? Icons.star : Icons.star_border,
-                  color: Color(habit.colorValue),
+                  isNegative
+                      ? (hasNegativeOccurrence
+                            ? Icons.warning_amber_rounded
+                            : Icons.shield_outlined)
+                      : (isDone ? Icons.star : Icons.star_border),
+                  color: habitColor,
                   size: 26,
                 ),
               ),
@@ -591,13 +624,17 @@ class _HabitCheckinCard extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.w400,
                         fontSize: 16,
-                        decoration: isDone ? TextDecoration.lineThrough : null,
-                        color: isDone ? Colors.grey : null,
+                        decoration: isDone && !isNegative
+                            ? TextDecoration.lineThrough
+                            : null,
+                        color: hasNegativeOccurrence
+                            ? cs.error
+                            : (isDone && !isNegative ? Colors.grey : null),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '目标: ${habit.targetCount} 次/天',
+                      targetText,
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 12,
@@ -640,28 +677,31 @@ class _HabitCheckinCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      height: 8,
-                      width:
-                          (MediaQuery.of(context).size.width - 150) * progress,
-                      decoration: BoxDecoration(
-                        color: isDone
-                            ? const Color(0xFF4CAF50)
-                            : Color(habit.colorValue),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      children: [
+                        Container(
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          height: 8,
+                          width: constraints.maxWidth * progress,
+                          decoration: BoxDecoration(
+                            color: isDone && !hasNegativeOccurrence
+                                ? const Color(0xFF4CAF50)
+                                : habitColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 16),
@@ -671,13 +711,19 @@ class _HabitCheckinCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FilledButton.icon(
-                      onPressed: isDone
-                          ? null
-                          : () => provider.incrementHabit(habit.id),
-                      icon: Icon(isDone ? Icons.check : Icons.check_circle),
-                      label: Text(isDone ? '已完成' : '打卡'),
+                      onPressed: isNegative || !isDone
+                          ? () => provider.incrementHabit(habit.id)
+                          : null,
+                      icon: Icon(
+                        isNegative
+                            ? Icons.add_circle_outline
+                            : (isDone ? Icons.check : Icons.check_circle),
+                      ),
+                      label: Text(
+                        isNegative ? '记录一次' : (isDone ? '已完成' : '打卡'),
+                      ),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Color(habit.colorValue),
+                        backgroundColor: habitColor,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.shade200,
                         disabledForegroundColor: Colors.grey.shade600,
@@ -689,16 +735,18 @@ class _HabitCheckinCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          '${habit.todayCount()}/${habit.targetCount}',
+                          countText,
                           style: TextStyle(
                             fontWeight: FontWeight.w400,
                             fontSize: 12,
-                            color: isDone
-                                ? const Color(0xFF4CAF50)
-                                : Colors.grey.shade700,
+                            color: hasNegativeOccurrence
+                                ? cs.error
+                                : (isDone
+                                      ? const Color(0xFF4CAF50)
+                                      : Colors.grey.shade700),
                           ),
                         ),
-                        if (habit.todayCount() > 0) ...[
+                        if (todayCount > 0) ...[
                           const SizedBox(width: 4),
                           InkWell(
                             borderRadius: BorderRadius.circular(12),
@@ -708,7 +756,9 @@ class _HabitCheckinCard extends StatelessWidget {
                               child: Icon(
                                 Icons.undo,
                                 size: 15,
-                                color: Colors.grey.shade600,
+                                color: hasNegativeOccurrence
+                                    ? cs.error
+                                    : Colors.grey.shade600,
                               ),
                             ),
                           ),

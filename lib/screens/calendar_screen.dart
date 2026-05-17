@@ -88,27 +88,41 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   void _previousMonth() {
-    setState(
-      () =>
-          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1),
-    );
+    setState(() {
+      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+      _selectedDay = _clampSelectedDayToFocusedMonth();
+    });
   }
 
   void _nextMonth() {
-    setState(
-      () =>
-          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1),
-    );
+    setState(() {
+      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+      _selectedDay = _clampSelectedDayToFocusedMonth();
+    });
   }
 
   void _previousWeek() {
-    setState(
-      () => _selectedDay = _selectedDay.subtract(const Duration(days: 7)),
-    );
+    setState(() {
+      _selectedDay = _selectedDay.subtract(const Duration(days: 7));
+      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+    });
   }
 
   void _nextWeek() {
-    setState(() => _selectedDay = _selectedDay.add(const Duration(days: 7)));
+    setState(() {
+      _selectedDay = _selectedDay.add(const Duration(days: 7));
+      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+    });
+  }
+
+  DateTime _clampSelectedDayToFocusedMonth() {
+    final lastDay = DateTime(
+      _focusedMonth.year,
+      _focusedMonth.month + 1,
+      0,
+    ).day;
+    final day = _selectedDay.day.clamp(1, lastDay);
+    return DateTime(_focusedMonth.year, _focusedMonth.month, day);
   }
 
   Future<void> _pickDate() async {
@@ -169,7 +183,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        toolbarHeight: 96,
+        title: const Text('日历'),
         actions: [
           PopupMenuButton<String>(
             tooltip: '日历菜单',
@@ -201,105 +215,42 @@ class _CalendarScreenState extends State<CalendarScreen>
             ],
           ),
         ],
-        titleSpacing: 0,
-        flexibleSpace: SafeArea(
-          child: Column(
-            children: [
-              // View-specific header
-              if (_tabController.index == 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _previousMonth,
-                      ),
-                      GestureDetector(
-                        onTap: _pickDate,
-                        child: Text(
-                          monthLabel,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: _nextMonth,
-                      ),
-                    ],
-                  ),
-                ),
-              if (_tabController.index == 1)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _previousWeek,
-                      ),
-                      GestureDetector(
-                        onTap: _pickDate,
-                        child: Text(
-                          weekLabel,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: _nextWeek,
-                      ),
-                    ],
-                  ),
-                ),
-              if (_tabController.index == 2)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: GestureDetector(
-                    onTap: _pickDate,
-                    child: Text(
-                      '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 4),
-              // Tab bar
-              TabBar(
-                controller: _tabController,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                tabs: [
-                  Tab(text: s.calendarTabMonth),
-                  Tab(text: s.calendarTabWeek),
-                  Tab(text: s.calendarTabDay),
-                ],
-                labelStyle: const TextStyle(fontWeight: FontWeight.w400),
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                labelColor: cs.onPrimaryContainer,
-                unselectedLabelColor: cs.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
       ),
       body: Column(
         children: [
+          _CalendarNavigationHeader(
+            tabIndex: _tabController.index,
+            monthLabel: monthLabel,
+            weekLabel: weekLabel,
+            dayLabel:
+                '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
+            onPreviousMonth: _previousMonth,
+            onNextMonth: _nextMonth,
+            onPreviousWeek: _previousWeek,
+            onNextWeek: _nextWeek,
+            onPickDate: _pickDate,
+          ),
+          Material(
+            color: cs.surface,
+            child: TabBar(
+              controller: _tabController,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              tabs: [
+                Tab(text: s.calendarTabMonth),
+                Tab(text: s.calendarTabWeek),
+                Tab(text: s.calendarTabDay),
+              ],
+              labelStyle: const TextStyle(fontWeight: FontWeight.w400),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              labelColor: cs.onPrimaryContainer,
+              unselectedLabelColor: cs.onSurfaceVariant,
+            ),
+          ),
           // Type filter chips
           SizedBox(
             height: 42,
@@ -351,7 +302,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                       focusedMonth: _focusedMonth,
                       selectedDay: _selectedDay,
                       dateEventTypes: dateTypes,
-                      onDaySelected: (d) => setState(() => _selectedDay = d),
+                      onDaySelected: (d) => setState(() {
+                        _selectedDay = d;
+                        _focusedMonth = DateTime(d.year, d.month);
+                      }),
                     ),
                     Divider(
                       height: 1,
@@ -373,7 +327,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                 CalendarWeekStrip(
                   selectedDay: _selectedDay,
                   dateEventTypes: dateTypes,
-                  onDaySelected: (d) => setState(() => _selectedDay = d),
+                  onDaySelected: (d) => setState(() {
+                    _selectedDay = d;
+                    _focusedMonth = DateTime(d.year, d.month);
+                  }),
                   activeTypes: _activeTypes,
                 ),
                 // Day
@@ -478,6 +435,116 @@ class _CalendarScreenState extends State<CalendarScreen>
         endAt: end,
         category: TimeEntryCategory.other,
         source: TimeEntrySource.manual,
+      ),
+    );
+  }
+}
+
+class _CalendarNavigationHeader extends StatelessWidget {
+  final int tabIndex;
+  final String monthLabel;
+  final String weekLabel;
+  final String dayLabel;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+  final VoidCallback onPreviousWeek;
+  final VoidCallback onNextWeek;
+  final VoidCallback onPickDate;
+
+  const _CalendarNavigationHeader({
+    required this.tabIndex,
+    required this.monthLabel,
+    required this.weekLabel,
+    required this.dayLabel,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+    required this.onPreviousWeek,
+    required this.onNextWeek,
+    required this.onPickDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = switch (tabIndex) {
+      0 => monthLabel,
+      1 => weekLabel,
+      _ => dayLabel,
+    };
+    final previous = switch (tabIndex) {
+      0 => onPreviousMonth,
+      1 => onPreviousWeek,
+      _ => null,
+    };
+    final next = switch (tabIndex) {
+      0 => onNextMonth,
+      1 => onNextWeek,
+      _ => null,
+    };
+
+    return Material(
+      color: cs.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              _NavIconButton(
+                icon: Icons.chevron_left,
+                onPressed: previous,
+                tooltip: '上一段',
+              ),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: onPickDate,
+                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  label: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: cs.onSurface,
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ),
+              _NavIconButton(
+                icon: Icons.chevron_right,
+                onPressed: next,
+                tooltip: '下一段',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String tooltip;
+
+  const _NavIconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 44,
+      child: IconButton(
+        tooltip: tooltip,
+        icon: Icon(icon),
+        onPressed: onPressed,
       ),
     );
   }

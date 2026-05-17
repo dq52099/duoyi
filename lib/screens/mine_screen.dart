@@ -464,7 +464,7 @@ class MineScreen extends StatelessWidget {
             label: s.mineNotificationsLabel,
             color: Colors.orange,
             trailing: Text(
-              '${notifService.pendingCount} 条',
+              '${notifService.historyCount} 条',
               style: const TextStyle(fontSize: 13),
             ),
             onTap: () => _notifDialog(context, notifService),
@@ -734,8 +734,9 @@ class MineScreen extends StatelessWidget {
               ),
         actions: [
           TextButton(
-            onPressed: () {
-              ns.clearHistory();
+            onPressed: () async {
+              await ns.clearHistory();
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
             },
             child: const Text('清空历史'),

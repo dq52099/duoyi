@@ -302,10 +302,8 @@ class _SolarCalendar extends StatelessWidget {
     final canGoPrevious = month.isAfter(firstMonth);
     final canGoNext = month.isBefore(lastMonth);
     final firstOfMonth = DateTime(month.year, month.month, 1);
-    final lastOfMonth = DateTime(month.year, month.month + 1, 0);
     final leadingBlankCount = firstOfMonth.weekday - 1;
-    final totalCells = leadingBlankCount + lastOfMonth.day;
-    final rows = (totalCells / 7).ceil();
+    const rows = 6;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -374,11 +372,10 @@ class _SolarCalendar extends StatelessWidget {
                   for (var col = 0; col < 7; col++)
                     Expanded(
                       child: _SolarDayCell(
-                        date: _dateForCell(
+                        cell: _dateForCell(
                           month: month,
                           index: row * 7 + col,
                           leadingBlankCount: leadingBlankCount,
-                          lastDayOfMonth: lastOfMonth.day,
                         ),
                         selectedDay: selectedDay,
                         firstDay: firstDay,
@@ -394,16 +391,25 @@ class _SolarCalendar extends StatelessWidget {
     );
   }
 
-  static DateTime? _dateForCell({
+  static _SolarCalendarCell _dateForCell({
     required DateTime month,
     required int index,
     required int leadingBlankCount,
-    required int lastDayOfMonth,
   }) {
     final day = index - leadingBlankCount + 1;
-    if (day < 1 || day > lastDayOfMonth) return null;
-    return DateTime(month.year, month.month, day);
+    final date = DateTime(month.year, month.month, day);
+    return _SolarCalendarCell(
+      date: date,
+      inCurrentMonth: date.year == month.year && date.month == month.month,
+    );
   }
+}
+
+class _SolarCalendarCell {
+  final DateTime date;
+  final bool inCurrentMonth;
+
+  const _SolarCalendarCell({required this.date, required this.inCurrentMonth});
 }
 
 class _WeekdayLabel extends StatelessWidget {
@@ -429,14 +435,14 @@ class _WeekdayLabel extends StatelessWidget {
 }
 
 class _SolarDayCell extends StatelessWidget {
-  final DateTime? date;
+  final _SolarCalendarCell cell;
   final DateTime selectedDay;
   final DateTime firstDay;
   final DateTime lastDay;
   final ValueChanged<DateTime> onSelected;
 
   const _SolarDayCell({
-    required this.date,
+    required this.cell,
     required this.selectedDay,
     required this.firstDay,
     required this.lastDay,
@@ -448,11 +454,7 @@ class _SolarDayCell extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
-    if (date == null) {
-      return const SizedBox(height: 44);
-    }
-
-    final day = DateTime(date!.year, date!.month, date!.day);
+    final day = DateTime(cell.date.year, cell.date.month, cell.date.day);
     final today = DateTime.now();
     final isToday = _sameDate(day, today);
     final isSelected = _sameDate(day, selectedDay);
@@ -469,7 +471,9 @@ class _SolarDayCell extends StatelessWidget {
         ? cs.onPrimary
         : isToday
         ? cs.primary
-        : cs.onSurface;
+        : cell.inCurrentMonth
+        ? cs.onSurface
+        : cs.onSurfaceVariant.withValues(alpha: 0.52);
     final border = isToday && !isSelected
         ? Border.all(color: cs.primary.withValues(alpha: 0.55), width: 1.2)
         : null;

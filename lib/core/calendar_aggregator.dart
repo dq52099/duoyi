@@ -75,11 +75,11 @@ class CalendarAggregator {
           CalendarEvent(
             id: 'habit_${h.id}_${entry.key}',
             title: h.name,
-            subtitle: '${entry.value}/${h.targetCount} ${h.unit ?? '次'}',
+            subtitle: h.formatCountForDate(date),
             date: date,
             type: CalendarEventType.habit,
             color: Color(h.colorValue),
-            isCompleted: entry.value >= h.targetCount,
+            isCompleted: h.isCompletedForDate(date),
             sourceId: h.id,
           ),
         );

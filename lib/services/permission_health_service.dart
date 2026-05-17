@@ -255,6 +255,10 @@ class PermissionHealthService {
           NotificationService.channelId,
           AlarmService.channelId,
         };
+        final legacy = <String>{
+          ...NotificationService.legacyChannelIds,
+          ...AlarmService.legacyChannelIds,
+        };
         if (channelIds == null) {
           checks.add(
             const PermissionHealthCheck(
@@ -266,6 +270,7 @@ class PermissionHealthService {
           );
         } else {
           final missing = required.difference(channelIds);
+          final stale = channelIds.intersection(legacy);
           checks.add(
             PermissionHealthCheck(
               id: 'notification_channels',
@@ -282,6 +287,19 @@ class PermissionHealthService {
               actionLabel: missing.isEmpty ? null : '去设置',
             ),
           );
+          if (stale.isNotEmpty) {
+            checks.add(
+              PermissionHealthCheck(
+                id: 'legacy_notification_channels',
+                title: '旧通知渠道',
+                subtitle: '检测到旧渠道 ${stale.join('、')}，旧渠道的声音设置无法被新版本覆盖',
+                status: PermissionHealthStatus.warning,
+                action: PermissionHealthAction.openAppSettings,
+                actionLabel: '去设置',
+                manual: true,
+              ),
+            );
+          }
         }
       }
 

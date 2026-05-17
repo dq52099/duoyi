@@ -36,6 +36,7 @@ import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
 import 'services/holiday_calendar.dart';
 import 'services/local_notifications.dart';
+import 'services/notification_permission_exception.dart';
 import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
 import 'screens/todo_screen.dart';
@@ -211,11 +212,26 @@ void main() async {
       }
     }
 
-    await guarded('syncTodos', () => reminderScheduler.syncTodos(todoProvider.todos));
-    await guarded('syncHabits', () => reminderScheduler.syncHabits(habitProvider.habits));
-    await guarded('syncAnniversaries', () => reminderScheduler.syncAnniversaries(anniversaryProvider.items));
-    await guarded('syncGoals', () => reminderScheduler.syncGoals(goalProvider.goals));
-    await guarded('syncCountdowns', () => reminderScheduler.syncCountdowns(countdownProvider.items));
+    await guarded(
+      'syncTodos',
+      () => reminderScheduler.syncTodos(todoProvider.todos),
+    );
+    await guarded(
+      'syncHabits',
+      () => reminderScheduler.syncHabits(habitProvider.habits),
+    );
+    await guarded(
+      'syncAnniversaries',
+      () => reminderScheduler.syncAnniversaries(anniversaryProvider.items),
+    );
+    await guarded(
+      'syncGoals',
+      () => reminderScheduler.syncGoals(goalProvider.goals),
+    );
+    await guarded(
+      'syncCountdowns',
+      () => reminderScheduler.syncCountdowns(countdownProvider.items),
+    );
   }
 
   todoProvider.addListener(resyncReminders);
@@ -282,10 +298,7 @@ void main() async {
   noteProvider.addListener(refreshAchievements);
   themeProvider.addListener(refreshAchievements);
   // 初次同步
-  await _startupGuard(
-    'initial reminder resync',
-    resyncReminders,
-  );
+  await _startupGuard('initial reminder resync', resyncReminders);
 
   // 启动后异步刷新订阅日历（不阻塞冷启动）。
   // ignore: discarded_futures
@@ -295,6 +308,7 @@ void main() async {
   void onCalendarSyncChange() {
     calendarProvider.setExternalEvents(calendarSyncProvider.allEvents());
   }
+
   calendarSyncProvider.addListener(onCalendarSyncChange);
   onCalendarSyncChange();
   Future<void> syncDailyDigestReminder() => _syncDailyDigestReminder(
@@ -526,13 +540,19 @@ Future<void> _syncDailyDigestReminder(
     final target = _nextDailyReminderTime(now, slot);
     final body = _dailyDigestBody(now, todos, slot);
 
-    await notification.scheduleOnce(
-      id: baseId + i,
-      title: '每日提醒${['一', '二', '三'][i]}',
-      body: body,
-      when: target,
-      payload: 'duoyi://tab/today',
-    );
+    try {
+      await notification.scheduleOnce(
+        id: baseId + i,
+        title: '每日提醒${['一', '二', '三'][i]}',
+        body: body,
+        when: target,
+        payload: 'duoyi://tab/today',
+      );
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[DailyDigest] notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[DailyDigest] schedule failed: $e\n$st');
+    }
   }
 }
 
