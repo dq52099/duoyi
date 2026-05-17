@@ -12,6 +12,8 @@ import '../widgets/surface_components.dart';
 
 enum _AuditRange { today, week, month, all }
 
+enum _AuditView { timeline, category, calendar }
+
 class TimeAuditScreen extends StatefulWidget {
   const TimeAuditScreen({super.key});
 
@@ -21,6 +23,7 @@ class TimeAuditScreen extends StatefulWidget {
 
 class _TimeAuditScreenState extends State<TimeAuditScreen> {
   _AuditRange _range = _AuditRange.today;
+  _AuditView _view = _AuditView.timeline;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +59,28 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
             selected: {_range},
             onSelectionChanged: (value) => setState(() => _range = value.first),
           ),
+          const SizedBox(height: 10),
+          SegmentedButton<_AuditView>(
+            segments: const [
+              ButtonSegment(
+                value: _AuditView.timeline,
+                icon: Icon(Icons.view_agenda_outlined),
+                label: Text('时间线'),
+              ),
+              ButtonSegment(
+                value: _AuditView.category,
+                icon: Icon(Icons.donut_small_outlined),
+                label: Text('分类'),
+              ),
+              ButtonSegment(
+                value: _AuditView.calendar,
+                icon: Icon(Icons.calendar_month_outlined),
+                label: Text('日历'),
+              ),
+            ],
+            selected: {_view},
+            onSelectionChanged: (value) => setState(() => _view = value.first),
+          ),
           const SizedBox(height: 12),
           if (entries.isEmpty)
             AppSurfaceCard(
@@ -74,28 +99,31 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
                 ],
               ),
             )
-          else ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
-              child: Text(
-                '${_rangeLabel(_range)}时间线',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w400,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            for (final entry in entries) ...[
-              _TimeEntryCard(
-                entry: entry,
-                onTap: () => _showEditor(context, entry: entry),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ],
+          else
+            _buildActiveView(context, entries),
         ],
       ),
     );
+  }
+
+  Widget _buildActiveView(BuildContext context, List<TimeEntry> entries) {
+    return switch (_view) {
+      _AuditView.timeline => _TimelineView(
+        rangeLabel: _rangeLabel(_range),
+        entries: entries,
+        onEdit: (entry) => _showEditor(context, entry: entry),
+      ),
+      _AuditView.category => _CategoryView(
+        entries: entries,
+        onCategoryTap: (category) {
+          setState(() => _view = _AuditView.timeline);
+        },
+      ),
+      _AuditView.calendar => _CalendarAuditView(
+        entries: entries,
+        onEdit: (entry) => _showEditor(context, entry: entry),
+      ),
+    };
   }
 
   void _showEditor(BuildContext context, {TimeEntry? entry}) {
@@ -133,6 +161,364 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
     _AuditRange.month => '本月',
     _AuditRange.all => '全部',
   };
+}
+
+class _TimelineView extends StatelessWidget {
+  final String rangeLabel;
+  final List<TimeEntry> entries;
+  final ValueChanged<TimeEntry> onEdit;
+
+  const _TimelineView({
+    required this.rangeLabel,
+    required this.entries,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+          child: Text(
+            '$rangeLabel时间线',
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+          ),
+        ),
+        for (final entry in entries) ...[
+          _TimeEntryCard(entry: entry, onTap: () => onEdit(entry)),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _CategoryView extends StatelessWidget {
+  final List<TimeEntry> entries;
+  final ValueChanged<TimeEntryCategory> onCategoryTap;
+
+  const _CategoryView({required this.entries, required this.onCategoryTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.durationSeconds,
+    );
+    final byCategory = <TimeEntryCategory, int>{};
+    final bySource = <TimeEntrySource, int>{};
+    for (final entry in entries) {
+      byCategory[entry.category] =
+          (byCategory[entry.category] ?? 0) + entry.durationSeconds;
+      bySource[entry.source] =
+          (bySource[entry.source] ?? 0) + entry.durationSeconds;
+    }
+    final categories = byCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final sources = bySource.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+          child: Text(
+            '分类视图',
+            style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+          ),
+        ),
+        AppSurfaceCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              for (final item in categories)
+                _CategoryBreakdownTile(
+                  category: item.key,
+                  seconds: item.value,
+                  totalSeconds: total,
+                  onTap: () => onCategoryTap(item.key),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        AppSurfaceCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '来源分布',
+                style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              for (final item in sources)
+                _SourceBreakdownRow(
+                  source: item.key,
+                  seconds: item.value,
+                  totalSeconds: total,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryBreakdownTile extends StatelessWidget {
+  final TimeEntryCategory category;
+  final int seconds;
+  final int totalSeconds;
+  final VoidCallback onTap;
+
+  const _CategoryBreakdownTile({
+    required this.category,
+    required this.seconds,
+    required this.totalSeconds,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(category);
+    final ratio = totalSeconds <= 0 ? 0.0 : seconds / totalSeconds;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(_iconFor(category), color: color, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: Text(category.label)),
+                      Text(_formatDuration(seconds)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 7,
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceBreakdownRow extends StatelessWidget {
+  final TimeEntrySource source;
+  final int seconds;
+  final int totalSeconds;
+
+  const _SourceBreakdownRow({
+    required this.source,
+    required this.seconds,
+    required this.totalSeconds,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final ratio = totalSeconds <= 0 ? 0.0 : seconds / totalSeconds;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(width: 54, child: Text(source.label)),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 7,
+                color: cs.primary,
+                backgroundColor: cs.primary.withValues(alpha: 0.12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 60,
+            child: Text(
+              _formatDuration(seconds),
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarAuditView extends StatelessWidget {
+  final List<TimeEntry> entries;
+  final ValueChanged<TimeEntry> onEdit;
+
+  const _CalendarAuditView({required this.entries, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <DateTime, List<TimeEntry>>{};
+    for (final entry in entries) {
+      final day = DateTime(
+        entry.startAt.year,
+        entry.startAt.month,
+        entry.startAt.day,
+      );
+      grouped.putIfAbsent(day, () => <TimeEntry>[]).add(entry);
+    }
+    final days = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+          child: Text(
+            '日历视图',
+            style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+          ),
+        ),
+        for (final day in days) ...[
+          _DayGroupCard(day: day, entries: grouped[day]!, onEdit: onEdit),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _DayGroupCard extends StatelessWidget {
+  final DateTime day;
+  final List<TimeEntry> entries;
+  final ValueChanged<TimeEntry> onEdit;
+
+  const _DayGroupCard({
+    required this.day,
+    required this.entries,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.durationSeconds,
+    );
+    final sorted = [...entries]..sort((a, b) => a.startAt.compareTo(b.startAt));
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${day.month}月${day.day}日',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(_formatDuration(total)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final entry in sorted)
+            _CompactEntryRow(entry: entry, onTap: () => onEdit(entry)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactEntryRow extends StatelessWidget {
+  final TimeEntry entry;
+  final VoidCallback onTap;
+
+  const _CompactEntryRow({required this.entry, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(entry.category);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 7,
+              height: 30,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_clock(entry.startAt)}-${_clock(entry.endAt)} · ${entry.category.label}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.62),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _formatDuration(entry.durationSeconds),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -611,6 +997,9 @@ class _Chip extends StatelessWidget {
 
 String _formatDateTime(DateTime d) =>
     '${d.month}/${d.day} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+String _clock(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
 String _formatDuration(int seconds) {
   if (seconds >= 3600) {

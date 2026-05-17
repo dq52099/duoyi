@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/models/time_entry.dart';
 import 'package:duoyi/providers/time_audit_provider.dart';
 import 'package:duoyi/screens/time_audit_screen.dart';
 
@@ -51,5 +52,53 @@ void main() {
 
     expect(provider.entries, isEmpty);
     expect(find.text('今日暂无时间记录'), findsOneWidget);
+  });
+
+  testWidgets('TimeAuditScreen exposes timeline category and calendar views', (
+    tester,
+  ) async {
+    final provider = TimeAuditProvider();
+    final now = DateTime.now();
+    await provider.add(
+      TimeEntry(
+        title: '深度工作',
+        startAt: DateTime(now.year, now.month, now.day, 9),
+        endAt: DateTime(now.year, now.month, now.day, 10),
+        category: TimeEntryCategory.work,
+        source: TimeEntrySource.manual,
+      ),
+    );
+    await provider.add(
+      TimeEntry(
+        title: '阅读',
+        startAt: DateTime(now.year, now.month, now.day, 11),
+        endAt: DateTime(now.year, now.month, now.day, 11, 30),
+        category: TimeEntryCategory.study,
+        source: TimeEntrySource.todo,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TimeAuditProvider>.value(
+        value: provider,
+        child: const MaterialApp(home: TimeAuditScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日时间线'), findsOneWidget);
+    expect(find.text('深度工作'), findsOneWidget);
+
+    await tester.tap(find.text('分类'));
+    await tester.pumpAndSettle();
+    expect(find.text('分类视图'), findsOneWidget);
+    expect(find.text('来源分布'), findsOneWidget);
+    expect(find.text('工作'), findsWidgets);
+    expect(find.text('学习'), findsWidgets);
+
+    await tester.tap(find.text('日历'));
+    await tester.pumpAndSettle();
+    expect(find.text('日历视图'), findsOneWidget);
+    expect(find.text('${now.month}月${now.day}日'), findsOneWidget);
   });
 }

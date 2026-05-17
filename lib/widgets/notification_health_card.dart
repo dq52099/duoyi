@@ -89,9 +89,9 @@ class NotificationHealthCard extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.notifications_active_outlined,
             color: cs.primary,
-            title: '发送测试通知',
+            title: '立即有声测试',
             subtitle: lastTestAt == null
-                ? '触发一条测试通知，并写入通知历史'
+                ? '验证声音、震动和横幅；这一步最能判断系统渠道是否静音'
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
           ),
@@ -115,13 +115,6 @@ class NotificationHealthCard extends StatelessWidget {
             title: '30 秒后强提醒',
             subtitle: '验证习惯/闹钟同一条强提醒链路',
             onTap: onSendScheduledAlarmTest,
-          ),
-          AppSettingsTile(
-            icon: Icons.settings_outlined,
-            color: Colors.blueGrey,
-            title: '系统应用设置',
-            subtitle: '检查通知、锁屏、后台和电池限制',
-            onTap: onOpenSystemSettings,
           ),
           AppSettingsTile(
             icon: Icons.schedule,
@@ -239,6 +232,7 @@ class _HealthCheckTile extends StatelessWidget {
       PermissionHealthAction.requestFullScreenIntentPermission =>
         onRequestFullScreenIntentPermission,
       PermissionHealthAction.openAppSettings => onOpenSystemSettings,
+      PermissionHealthAction.none => null,
       null => null,
     };
 

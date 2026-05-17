@@ -121,22 +121,16 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
           } else if (report.hasWarnings) {
             status = PermissionHealthStatus.warning;
             subtitle = isXiaomi
-                ? '小米/MIUI 还要检查自启动、后台、锁屏和电池优化'
+                ? '小米/MIUI 需人工确认后台、锁屏和电池策略'
                 : 'Android 设备还要检查后台和电池限制';
-            action = widget.onOpenSystemSettings;
-            actionLabel = '去设置';
             icon = Icons.tips_and_updates_outlined;
           } else if (report.hasUnknown) {
             status = PermissionHealthStatus.unknown;
             subtitle = '部分系统状态无法自动读取';
-            action = widget.onOpenSystemSettings;
-            actionLabel = '去设置';
             icon = Icons.help_outline;
           } else {
             status = PermissionHealthStatus.ok;
             subtitle = alarmKind ? '系统通知、精准闹钟和弹屏权限均已就绪' : '系统通知已授权，提醒可正常进入通知中心';
-            action = widget.onOpenSystemSettings;
-            actionLabel = '系统设置';
             icon = Icons.notifications_active_outlined;
           }
         }

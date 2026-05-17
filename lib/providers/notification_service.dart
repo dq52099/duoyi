@@ -69,10 +69,11 @@ class NotificationService extends ChangeNotifier
   ///
   /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
   /// 用户手机上的旧渠道。v4 使用更高响度的 `duoyi_alarm.wav`，并强制新建渠道。
-  static const String channelId = 'duoyi_general_alerts_v4';
+  static const String channelId = 'duoyi_general_alerts_v5';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
+    'duoyi_general_alerts_v4',
   };
 
   Timer? _pomodoroNotificationTimer;
@@ -459,15 +460,16 @@ class NotificationService extends ChangeNotifier
   Future<void> sendTest() async {
     await LocalNotifications.instance.show(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
-      title: '多仪 · 测试通知',
-      body: '如果你看到这条，通知已经正常工作。',
+      title: '多仪 · 有声测试通知',
+      body: '如果这条没有声音或横幅，请检查系统里“多仪 · 通知提醒”渠道是否被静音。',
       channelId: channelId,
+      payload: 'duoyi://tab/mine',
     );
     _addToHistory(
       NotificationItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: '测试通知',
-        body: '如果你看到这条，通知已经正常工作。',
+        body: '如果这条没有声音或横幅，请检查系统里“多仪 · 通知提醒”渠道是否被静音。',
         scheduledTime: DateTime.now(),
         type: NotificationType.general,
       ),

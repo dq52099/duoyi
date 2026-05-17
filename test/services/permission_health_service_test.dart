@@ -65,7 +65,7 @@ void main() {
     expect(channels.status, PermissionHealthStatus.warning);
   });
 
-  test('Xiaomi-like 设备会输出人工检查项', () async {
+  test('Xiaomi-like 设备会输出单条人工检查项，避免重复无效跳转', () async {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => true,
       exactAlarmGrantedReader: () async => true,
@@ -88,18 +88,10 @@ void main() {
 
     expect(report.isXiaomiLike, isTrue);
     expect(report.summaryStatus, PermissionHealthStatus.warning);
-    final manualIds = report.checks
-        .where((check) => check.manual)
-        .map((e) => e.id);
-    expect(
-      manualIds,
-      containsAll(<String>[
-        'xiaomi_autostart',
-        'xiaomi_background',
-        'xiaomi_lockscreen',
-        'xiaomi_battery',
-      ]),
-    );
+    final manualChecks = report.checks.where((check) => check.manual).toList();
+    expect(manualChecks, hasLength(1));
+    expect(manualChecks.single.id, 'xiaomi_notification_policy');
+    expect(manualChecks.single.action, PermissionHealthAction.none);
   });
 
   test('弹出屏幕权限缺失时标为阻断状态', () async {
@@ -162,6 +154,7 @@ void main() {
     );
     expect(legacy.status, PermissionHealthStatus.warning);
     expect(legacy.manual, isTrue);
+    expect(legacy.action, PermissionHealthAction.none);
     expect(legacy.subtitle, contains('duoyi_general_alerts_v3'));
     expect(legacy.subtitle, contains('duoyi_alarm'));
   });

@@ -23,7 +23,7 @@ class LocalNotifications {
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const RawResourceAndroidNotificationSound _defaultSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
-  static const String _defaultChannelId = 'duoyi_general_alerts_v4';
+  static const String _defaultChannelId = 'duoyi_general_alerts_v5';
   static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v4';
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
@@ -102,12 +102,12 @@ class LocalNotifications {
           const AndroidNotificationChannel(
             _defaultChannelId,
             '多仪 · 通知提醒',
-            description: '日常提醒会发声并弹出横幅',
-            importance: Importance.high,
+            description: '日常提醒会发声、震动并尽量弹出横幅',
+            importance: Importance.max,
             playSound: true,
             sound: _defaultSound,
             enableVibration: true,
-            audioAttributesUsage: AudioAttributesUsage.notification,
+            audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
           ),
         );
         await android?.createNotificationChannel(
@@ -236,17 +236,21 @@ class LocalNotifications {
       android: AndroidNotificationDetails(
         channelId,
         isAlarm ? '多仪 · 强提醒' : '多仪 · 通知提醒',
-        channelDescription: isAlarm ? '重要提醒会响铃、震动并弹出确认界面' : '日常提醒会发声并弹出横幅',
-        importance: isAlarm ? Importance.max : Importance.high,
-        priority: isAlarm ? Priority.max : Priority.high,
+        channelDescription: isAlarm ? '重要提醒会响铃、震动并弹出确认界面' : '日常提醒会发声、震动并尽量弹出横幅',
+        importance: Importance.max,
+        priority: Priority.max,
+        category: isAlarm
+            ? AndroidNotificationCategory.alarm
+            : AndroidNotificationCategory.reminder,
         playSound: true,
         sound: isAlarm ? _alarmSound : _defaultSound,
         enableVibration: true,
         audioAttributesUsage: isAlarm
             ? AudioAttributesUsage.alarm
-            : AudioAttributesUsage.notification,
+            : AudioAttributesUsage.notificationRingtone,
         visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
+        ticker: '多仪提醒',
         actions: androidActions,
       ),
       iOS: const DarwinNotificationDetails(

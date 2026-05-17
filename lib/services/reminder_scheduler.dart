@@ -308,15 +308,21 @@ class ReminderScheduler {
     for (final item in wanted.values) {
       final scope = scopes[item.id]!;
       if (_scheduledCountdownScopes[item.id] == scope) continue;
-      await notif.scheduleOnce(
-        id: _idFor('countdown:${item.id}:due'),
-        title: '🔔 倒数日提醒',
-        body:
-            '${item.title} · ${item.daysRemaining >= 0 ? '还有 ${item.daysRemaining} 天' : '已过 ${-item.daysRemaining} 天'}',
-        when: _countdownReminderAt(item),
-        payload: 'duoyi://countdown/${item.id}',
-      );
-      _scheduledCountdownScopes[item.id] = scope;
+      try {
+        await notif.scheduleOnce(
+          id: _idFor('countdown:${item.id}:due'),
+          title: '🔔 倒数日提醒',
+          body:
+              '${item.title} · ${item.daysRemaining >= 0 ? '还有 ${item.daysRemaining} 天' : '已过 ${-item.daysRemaining} 天'}',
+          when: _countdownReminderAt(item),
+          payload: 'duoyi://countdown/${item.id}',
+        );
+        _scheduledCountdownScopes[item.id] = scope;
+      } on NotificationPermissionDeniedException catch (e) {
+        debugPrint(
+          '[ReminderScheduler] countdown notification permission denied for ${item.id}: $e',
+        );
+      }
     }
   }
 
@@ -380,22 +386,29 @@ class ReminderScheduler {
   // 内部：通道路由
   // -------------------------------------------------------------------------
 
-  /// 按 [kind] 路由到 push 或 alarm。抛错一律向上冒泡（例如
-  /// [AlarmPermissionDeniedException]），由调用方捕获后引导用户。
+  /// 按 [kind] 路由到 push 或 alarm。权限不足时记录并返回 false，避免
+  /// ChangeNotifier 监听回调里出现未处理异步异常。
   Future<bool> _dispatch({
     required ReminderKind kind,
     required _DispatchPayload payload,
   }) async {
     switch (kind) {
       case ReminderKind.push:
-        await notif.scheduleOnce(
-          id: payload.id,
-          title: payload.title,
-          body: payload.body,
-          when: payload.when,
-          payload: payload.payload,
-        );
-        return true;
+        try {
+          await notif.scheduleOnce(
+            id: payload.id,
+            title: payload.title,
+            body: payload.body,
+            when: payload.when,
+            payload: payload.payload,
+          );
+          return true;
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] push notification permission denied for ${payload.id}: $e',
+          );
+          return false;
+        }
       case ReminderKind.alarm:
         try {
           await alarm.scheduleFullScreen(
@@ -411,14 +424,21 @@ class ReminderScheduler {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${payload.id}: $e',
           );
-          await notif.scheduleOnce(
-            id: payload.id,
-            title: payload.title,
-            body: payload.body,
-            when: payload.when,
-            payload: _fallbackPayload(payload.payload),
-          );
-          return true;
+          try {
+            await notif.scheduleOnce(
+              id: payload.id,
+              title: payload.title,
+              body: payload.body,
+              when: payload.when,
+              payload: _fallbackPayload(payload.payload),
+            );
+            return true;
+          } on NotificationPermissionDeniedException catch (fallbackError) {
+            debugPrint(
+              '[ReminderScheduler] alarm fallback notification permission denied for ${payload.id}: $fallbackError',
+            );
+            return false;
+          }
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] alarm notification permission denied for ${payload.id}: $e',
@@ -431,16 +451,23 @@ class ReminderScheduler {
   Future<bool> _dispatchRepeating(_ResolvedRule rule) async {
     switch (rule.kind) {
       case ReminderKind.push:
-        await notif.scheduleDaily(
-          id: _idFor(rule.key),
-          title: rule.title,
-          body: rule.body,
-          hour: rule.hour!,
-          minute: rule.minute!,
-          weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
-          payload: rule.payload,
-        );
-        return true;
+        try {
+          await notif.scheduleDaily(
+            id: _idFor(rule.key),
+            title: rule.title,
+            body: rule.body,
+            hour: rule.hour!,
+            minute: rule.minute!,
+            weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
+            payload: rule.payload,
+          );
+          return true;
+        } on NotificationPermissionDeniedException catch (e) {
+          debugPrint(
+            '[ReminderScheduler] repeating push permission denied for ${rule.key}: $e',
+          );
+          return false;
+        }
       case ReminderKind.alarm:
         try {
           await alarm.scheduleDailyFullScreen(
@@ -458,16 +485,23 @@ class ReminderScheduler {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${rule.key}: $e',
           );
-          await notif.scheduleDaily(
-            id: _idFor(rule.key),
-            title: rule.title,
-            body: rule.body,
-            hour: rule.hour!,
-            minute: rule.minute!,
-            weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
-            payload: _fallbackPayload(rule.payload),
-          );
-          return true;
+          try {
+            await notif.scheduleDaily(
+              id: _idFor(rule.key),
+              title: rule.title,
+              body: rule.body,
+              hour: rule.hour!,
+              minute: rule.minute!,
+              weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
+              payload: _fallbackPayload(rule.payload),
+            );
+            return true;
+          } on NotificationPermissionDeniedException catch (fallbackError) {
+            debugPrint(
+              '[ReminderScheduler] repeating alarm fallback permission denied for ${rule.key}: $fallbackError',
+            );
+            return false;
+          }
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] alarm notification permission denied for ${rule.key}: $e',

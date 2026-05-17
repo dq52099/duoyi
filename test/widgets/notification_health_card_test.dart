@@ -71,10 +71,10 @@ void main() {
 
     expect(find.text('通知健康检查'), findsOneWidget);
     expect(find.textContaining('小米/MIUI'), findsOneWidget);
-    expect(find.textContaining('自启动、后台、锁屏和电池优化'), findsWidgets);
-    expect(find.text('发送测试通知'), findsOneWidget);
+    expect(find.textContaining('后台、锁屏和电池策略'), findsWidgets);
+    expect(find.text('立即有声测试'), findsOneWidget);
     expect(find.text('1 分钟后测试提醒'), findsOneWidget);
-    expect(find.text('系统应用设置'), findsOneWidget);
+    expect(find.text('系统应用设置'), findsNothing);
     expect(find.text('3 条待触发'), findsOneWidget);
     expect(find.text('去设置'), findsOneWidget);
 
@@ -83,8 +83,8 @@ void main() {
     await tester.ensureVisible(find.text('去设置'));
     await tester.tap(find.text('去设置'));
     await tester.pump();
-    await tester.ensureVisible(find.text('发送测试通知'));
-    await tester.tap(find.text('发送测试通知'));
+    await tester.ensureVisible(find.text('立即有声测试'));
+    await tester.tap(find.text('立即有声测试'));
     await tester.pump();
     await tester.ensureVisible(find.text('1 分钟后测试提醒'));
     await tester.tap(find.text('1 分钟后测试提醒'));

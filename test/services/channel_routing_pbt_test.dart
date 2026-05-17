@@ -7,6 +7,7 @@ import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/services/alarm_service.dart';
+import 'package:duoyi/services/notification_permission_exception.dart';
 import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/services/reminder_sinks.dart';
 
@@ -15,7 +16,7 @@ import 'package:duoyi/services/reminder_sinks.dart';
 /// Feature: app-alignment-overhaul
 /// Property 14 (P14): ∀ `ReminderConfig r`,
 ///   `r.kind = push  ⟹ 调度最终落到 ReminderNotificationSink.scheduleOnce`
-///                     (NotificationService，channel = `duoyi_general_alerts_v4`)；
+///                     (NotificationService，channel = `duoyi_general_alerts_v5`)；
 ///   `r.kind = alarm ⟹ 调度最终落到 ReminderAlarmSink.scheduleFullScreen`
 ///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v4`)。
 ///
@@ -40,7 +41,7 @@ void main() {
   test('channel id 常量与设计 §2.4 / §3.6 保持一致', () {
     // P14 的其中一半约束是"用对通道 id"：由 NotificationService / AlarmService
     // 的类级常量承载，Scheduler 不重复传递。这里显式断言，防止后续被误改。
-    expect(NotificationService.channelId, 'duoyi_general_alerts_v4');
+    expect(NotificationService.channelId, 'duoyi_general_alerts_v5');
     expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v4');
   });
 
@@ -339,6 +340,59 @@ void main() {
       );
       expect(notif.scheduleOnceCalls.single.payload, 'duoyi://todo/${todo.id}');
     });
+
+    test('通知权限失败时不会抛出未处理异常，也不会记录为已调度', () async {
+      final notif = _RecordingNotificationSink()
+        ..denyScheduleOnce = true
+        ..denyScheduleDaily = true;
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(days: 2));
+      final todo = TodoItem(
+        id: 'permission-denied',
+        title: '通知权限失败',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'once',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+            ReminderRule(
+              id: 'daily',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.push,
+              hour: 9,
+              minute: 0,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(notif.scheduleOnceCalls, isEmpty);
+      expect(notif.scheduleDailyCalls, isEmpty);
+
+      notif
+        ..denyScheduleOnce = false
+        ..denyScheduleDaily = false;
+      await scheduler.syncTodos([todo]);
+
+      expect(
+        notif.scheduleOnceCalls.map((c) => c.id),
+        contains(_ruleIntId('todo', todo.id, 'once')),
+      );
+      expect(
+        notif.scheduleDailyCalls.map((c) => c.id),
+        contains(_ruleIntId('todo', todo.id, 'daily')),
+      );
+    });
   });
 
   group('P14 - 通道路由（Goal）', () {
@@ -584,6 +638,8 @@ class _RecordingNotificationSink implements ReminderNotificationSink {
   final List<String> scheduleHabitReminderCalls = [];
   final List<String> scheduleAnniversaryCalls = [];
   final Set<int> failScheduleOnceIds = {};
+  bool denyScheduleOnce = false;
+  bool denyScheduleDaily = false;
 
   @override
   Future<void> scheduleOnce({
@@ -593,6 +649,9 @@ class _RecordingNotificationSink implements ReminderNotificationSink {
     required DateTime when,
     String? payload,
   }) async {
+    if (denyScheduleOnce) {
+      throw const NotificationPermissionDeniedException();
+    }
     if (failScheduleOnceIds.remove(id)) {
       throw StateError('forced scheduleOnce failure: $id');
     }
@@ -617,6 +676,9 @@ class _RecordingNotificationSink implements ReminderNotificationSink {
     List<int>? weekdays,
     String? payload,
   }) async {
+    if (denyScheduleDaily) {
+      throw const NotificationPermissionDeniedException();
+    }
     scheduleDailyCalls.add(
       _ScheduleDailyCall(
         id: id,

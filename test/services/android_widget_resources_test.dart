@@ -24,9 +24,14 @@ void main() {
         provider,
         contains('android:previewLayout="@layout/duoyi_widget"'),
       );
+      expect(
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+        contains('android:resource="@drawable/widget_preview"'),
+      );
       expect(preview.existsSync(), isTrue);
       expect(preview.lengthSync(), greaterThan(1024));
       expect(_pngSize(preview), const _PngSize(720, 480));
+      expect(_pngContainsTextLikeContent(preview), isTrue);
       expect(layout, contains('@+id/widget_bottom_nav'));
       expect(layout, contains('@+id/widget_nav_todo'));
       expect(layout, contains('@+id/widget_nav_habit'));
@@ -59,9 +64,14 @@ void main() {
         provider,
         contains('android:previewLayout="@layout/duoyi_todo_widget"'),
       );
+      expect(
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+        contains('android:resource="@drawable/widget_todo_preview"'),
+      );
       expect(preview.existsSync(), isTrue);
       expect(preview.lengthSync(), greaterThan(1024));
       expect(_pngSize(preview), const _PngSize(720, 480));
+      expect(_pngContainsTextLikeContent(preview), isTrue);
       expect(layout, contains('@+id/widget_todo_bottom_nav'));
       expect(layout, contains('@+id/widget_todo_nav_todo'));
       expect(layout, contains('@+id/widget_todo_nav_habit'));
@@ -99,6 +109,25 @@ void main() {
       expect(todoProvider, contains('R.id.widget_todo_nav_focus'));
     });
   });
+}
+
+bool _pngContainsTextLikeContent(File file) {
+  final bytes = file.readAsBytesSync();
+  final data = ByteData.sublistView(Uint8List.fromList(bytes));
+  final width = data.getUint32(16);
+  final height = data.getUint32(20);
+  // The real preview is a rendered screenshot-style PNG with many colors and
+  // dark text pixels. A blank/abstract placeholder typically lacks this range.
+  final unique = <int>{};
+  var darkPixels = 0;
+  for (var i = 0; i < bytes.length - 2; i += 97) {
+    final r = bytes[i];
+    final g = bytes[i + 1];
+    final b = bytes[i + 2];
+    unique.add((r << 16) | (g << 8) | b);
+    if (r < 80 && g < 80 && b < 80) darkPixels++;
+  }
+  return width == 720 && height == 480 && unique.length > 24 && darkPixels > 5;
 }
 
 _PngSize _pngSize(File file) {
