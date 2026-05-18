@@ -14,7 +14,7 @@ import smtplib
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -39,6 +39,39 @@ ADMIN_BOOTSTRAP_USER = os.getenv("ADMIN_BOOTSTRAP_USER", "admin")
 ADMIN_BOOTSTRAP_PASSWORD = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "admin123")
 
 TOKENS: dict[str, str] = {}  # user_id -> token
+TOKEN_LAST_ACTIVE: dict[str, datetime] = {}
+SESSION_ONLINE_SECONDS = int(os.getenv("SESSION_ONLINE_SECONDS", "300"))
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _format_utc(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z"
+    )
+
+
+def _touch_session(user_id: str) -> None:
+    TOKEN_LAST_ACTIVE[user_id] = _utc_now()
+
+
+def _drop_session(user_id: str) -> None:
+    TOKENS.pop(user_id, None)
+    TOKEN_LAST_ACTIVE.pop(user_id, None)
+
+
+def _online_user_ids() -> set[str]:
+    cutoff = _utc_now() - timedelta(seconds=SESSION_ONLINE_SECONDS)
+    return {
+        user_id
+        for user_id in TOKENS.keys()
+        if TOKEN_LAST_ACTIVE.get(user_id) is not None
+        and TOKEN_LAST_ACTIVE[user_id] >= cutoff
+    }
 
 
 def get_db():
@@ -346,13 +379,14 @@ def _verify_token(authorization: Optional[str] = Header(None)) -> str:
             "SELECT is_disabled FROM users WHERE id=?", (user_id,)
         ).fetchone()
         if row is None:
-            TOKENS.pop(user_id, None)
+            _drop_session(user_id)
             raise HTTPException(status_code=401, detail="Invalid or expired token")
         if row["is_disabled"]:
-            TOKENS.pop(user_id, None)
+            _drop_session(user_id)
             raise HTTPException(status_code=403, detail="Account disabled")
     finally:
         db.close()
+    _touch_session(user_id)
     return user_id
 
 
@@ -1064,7 +1098,8 @@ def register(req: RegisterRequest):
         user_id = secrets.token_hex(16)
         try:
             db.execute(
-                "INSERT INTO users(id, username, password_hash) VALUES(?,?,?)",
+                "INSERT INTO users(id, username, password_hash, last_login_at) "
+                "VALUES(?,?,?,datetime('now'))",
                 (user_id, req.username, _hash_password(req.password)),
             )
         except sqlite3.IntegrityError:
@@ -1083,6 +1118,7 @@ def register(req: RegisterRequest):
         db.commit()
         token = secrets.token_hex(32)
         TOKENS[user_id] = token
+        _touch_session(user_id)
         return {
             "user_id": user_id,
             "token": token,
@@ -1107,6 +1143,7 @@ def login(req: LoginRequest):
             raise HTTPException(status_code=403, detail="Account disabled")
         token = secrets.token_hex(32)
         TOKENS[row["id"]] = token
+        _touch_session(row["id"])
         db.execute(
             "UPDATE users SET last_login_at=datetime('now') WHERE id=?", (row["id"],)
         )
@@ -1148,7 +1185,7 @@ def me(user_id: str = Depends(_verify_token)):
 
 @app.post("/api/auth/logout")
 def logout(user_id: str = Depends(_verify_token)):
-    TOKENS.pop(user_id, None)
+    _drop_session(user_id)
     return {"status": "ok"}
 
 
@@ -1765,7 +1802,7 @@ def admin_stats(_: str = Depends(_require_admin)):
             "announcements": {"total": ann_total, "published": ann_published},
             "invites": {"total": invite_total, "used": invite_used},
             "registration_series": reg_series,
-            "tokens_online": len(TOKENS),
+            "tokens_online": len(_online_user_ids()),
         }
     finally:
         db.close()
@@ -1851,6 +1888,7 @@ def admin_list_users(
                 "FROM users u ORDER BY u.created_at DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
+        online_user_ids = _online_user_ids()
         return [
             {
                 "user_id": r["id"],
@@ -1859,8 +1897,9 @@ def admin_list_users(
                 "is_disabled": bool(r["is_disabled"]),
                 "created_at": r["created_at"],
                 "last_login_at": r["last_login_at"],
+                "last_active_at": _format_utc(TOKEN_LAST_ACTIVE.get(r["id"])),
                 "feedback_count": r["fb_count"],
-                "online": any(uid == r["id"] for uid in TOKENS.keys()),
+                "online": r["id"] in online_user_ids,
             }
             for r in rows
         ]
@@ -1909,13 +1948,13 @@ def admin_update_user(
                 (1 if req.is_disabled else 0, user_id),
             )
             if req.is_disabled:
-                TOKENS.pop(user_id, None)
+                _drop_session(user_id)
         if req.new_password:
             db.execute(
                 "UPDATE users SET password_hash=? WHERE id=?",
                 (_hash_password(req.new_password), user_id),
             )
-            TOKENS.pop(user_id, None)  # force re-login
+            _drop_session(user_id)  # force re-login
 
         _audit(
             db,
@@ -1951,7 +1990,7 @@ def admin_delete_user(user_id: str, actor: str = Depends(_require_admin)):
                     status_code=400, detail="Cannot delete the last admin"
                 )
         db.execute("DELETE FROM users WHERE id=?", (user_id,))
-        TOKENS.pop(user_id, None)
+        _drop_session(user_id)
         _audit(
             db, actor, _get_username(db, actor),
             "user.delete", target=user_id, detail=row["username"]

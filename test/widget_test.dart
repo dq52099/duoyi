@@ -29,7 +29,9 @@ import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
 
 void main() {
-  testWidgets('App renders 5 tabs', (WidgetTester tester) async {
+  testWidgets('App renders bottom tabs including widgets', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -71,6 +73,7 @@ void main() {
     expect(find.text('习惯'), findsWidgets);
     expect(find.text('日历'), findsWidgets);
     expect(find.text('专注'), findsWidgets);
+    expect(find.text('小组件'), findsWidgets);
     expect(find.text('我的'), findsWidgets);
   });
 }

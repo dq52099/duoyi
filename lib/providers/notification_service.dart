@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
 import '../core/brand_strings.dart';
@@ -47,7 +48,7 @@ class NotificationItem {
 
 enum NotificationType { todo, habit, pomodoro, anniversary, general }
 
-/// NotificationService —— 推送通道（`duoyi_general_alerts_v6`，`Importance.max`）。
+/// NotificationService —— 推送通道（`duoyi_general_alerts_v7`，`Importance.max`）。
 ///
 /// 本服务**只**处理「系统通知」语义的发送：番茄钟结束、休息结束、纪念日提醒、
 /// 成就解锁等轻提示；对应设计文档 §2.4 的 push 通道（R4.1 / R4.2）。
@@ -57,8 +58,8 @@ enum NotificationType { todo, habit, pomodoro, anniversary, general }
 /// 按 `ReminderConfig.kind` 分发到本服务或 `AlarmService`（Task 14）。
 ///
 /// 设计目的是在模型上把「消息」与「闹钟」两条路径彻底分离：
-///   * `duoyi_general_alerts_v6` → 普通提醒，发声、震动并尽量弹出横幅；
-///   * `duoyi_alarm_fullscreen_v5` → 强提醒，全屏 intent、震动序列、`Importance.max`。
+///   * `duoyi_general_alerts_v7` → 普通提醒，发声、震动并尽量弹出横幅；
+///   * `duoyi_alarm_fullscreen_v6` → 强提醒，全屏 intent、震动序列、`Importance.max`。
 ///
 /// 所以本文件中普通提醒对 `LocalNotifications` 的调用都固定使用 [channelId]；
 /// 任何涉及强提醒的调度都应经 `AlarmService`。
@@ -69,13 +70,14 @@ class NotificationService extends ChangeNotifier
   /// 本服务使用的唯一通道 id。
   ///
   /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
-  /// 用户手机上的旧渠道。v6 使用明确的响铃资源和最高优先级，并强制新建渠道。
-  static const String channelId = 'duoyi_general_alerts_v6';
+  /// 用户手机上的旧渠道。v7 使用明确的响铃资源和最高优先级，并强制新建渠道。
+  static const String channelId = 'duoyi_general_alerts_v7';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
     'duoyi_general_alerts_v4',
     'duoyi_general_alerts_v5',
+    'duoyi_general_alerts_v6',
   };
 
   Timer? _pomodoroNotificationTimer;
@@ -462,10 +464,12 @@ class NotificationService extends ChangeNotifier
   /// 偏好设置里的测试必须验证用户最关心的"响铃/弹屏"链路，因此这里优先
   /// 走强提醒通道，而不是只发一条可能被系统收进通知栏的普通通知。
   Future<void> sendTest() async {
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.vibrate();
     await AlarmService.instance.showFullScreenTest(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: '多仪 · 响铃弹屏测试',
-      body: '如果这条仍然没有声音或弹屏，请在通知健康检查里开启通知、强提醒和弹出屏幕权限。',
+      body: '如果这条仍然没有声音或弹屏，请打开系统通知设置，确认“强提醒”渠道允许声音、振动和弹窗。',
       payload: 'duoyi://tab/mine',
     );
     _addToHistory(

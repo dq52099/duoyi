@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/app_version.dart';
@@ -43,6 +44,7 @@ import 'screens/todo_screen.dart';
 import 'screens/habit_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/pomodoro_screen.dart';
+import 'screens/widget_screen.dart';
 import 'screens/mine_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/search_screen.dart';
@@ -239,8 +241,12 @@ void main() async {
   anniversaryProvider.addListener(resyncReminders);
   goalProvider.addListener(resyncReminders);
   countdownProvider.addListener(resyncReminders);
-  // 本地有改动 → 在云同步侧标"有未同步改动"（Req 12.7）。
-  void markDirty() => cloudSyncProvider.markPendingLocalChange();
+  preferencesProvider.onAppTimeZoneChanged = resyncReminders;
+  // 本地有改动 → 交给云同步侧排队自动同步。
+  void markDirty() {
+    cloudSyncProvider.markPendingLocalChange();
+  }
+
   todoProvider.addListener(markDirty);
   habitProvider.addListener(markDirty);
   anniversaryProvider.addListener(markDirty);
@@ -380,14 +386,16 @@ void main() async {
   authProvider.addListener(() {
     shareProvider.load();
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
-      cloudSyncProvider.syncNow();
+      // ignore: discarded_futures
+      unawaited(cloudSyncProvider.syncNow());
     }
   });
   if (authProvider.state.isLoggedIn) {
     shareProvider.load();
   }
   if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
-    cloudSyncProvider.syncNow();
+    // ignore: discarded_futures
+    unawaited(cloudSyncProvider.syncNow());
   }
 
   notificationService.setStrings(themeProvider.brand.strings);
@@ -609,7 +617,8 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       'habit' => 2,
       'calendar' => 3,
       'focus' => 4,
-      'mine' => 5,
+      'widget' => 5,
+      'mine' => 6,
       _ => 3,
     };
     state?.navigateTo(idx);
@@ -998,6 +1007,7 @@ class MainShellState extends State<MainShell> {
   static final GlobalKey habitKey = GlobalKey();
   static final GlobalKey calendarKey = GlobalKey();
   static final GlobalKey pomodoroKey = GlobalKey();
+  static final GlobalKey widgetKey = GlobalKey();
   static final GlobalKey mineKey = GlobalKey();
 
   void navigateTo(int index) => setState(() => _currentIndex = index);
@@ -1010,7 +1020,7 @@ class MainShellState extends State<MainShell> {
       final prefs = context.read<PreferencesProvider>();
       if (prefs.defaultTab != _currentIndex &&
           prefs.defaultTab >= 0 &&
-          prefs.defaultTab < 6) {
+          prefs.defaultTab < 7) {
         setState(() => _currentIndex = prefs.defaultTab);
       }
     });
@@ -1052,6 +1062,11 @@ class MainShellState extends State<MainShell> {
         selectedIcon: const Icon(Icons.timer),
         label: s.navFocus,
       ),
+      const NavigationDestination(
+        icon: Icon(Icons.widgets_outlined),
+        selectedIcon: Icon(Icons.widgets_rounded),
+        label: '小组件',
+      ),
       NavigationDestination(
         icon: const Icon(Icons.person_outline),
         selectedIcon: const Icon(Icons.person),
@@ -1072,6 +1087,7 @@ class MainShellState extends State<MainShell> {
             HabitScreen(key: habitKey),
             CalendarScreen(key: calendarKey),
             PomodoroScreen(key: pomodoroKey),
+            WidgetScreen(key: widgetKey),
             MineScreen(key: mineKey),
           ],
         ),

@@ -7,8 +7,10 @@ import 'package:http/http.dart' as http;
 class ApiClient {
   String baseUrl;
   String? token;
+  final http.Client _httpClient;
 
-  ApiClient({this.baseUrl = '', this.token});
+  ApiClient({this.baseUrl = '', this.token, http.Client? httpClient})
+    : _httpClient = httpClient ?? http.Client();
 
   Future<Map<String, dynamic>> get(String path) => _send('GET', path);
   Future<Map<String, dynamic>> post(String path, [Object? body]) =>
@@ -52,22 +54,22 @@ class ApiClient {
     try {
       switch (method) {
         case 'GET':
-          resp = await http
+          resp = await _httpClient
               .get(uri, headers: headers)
               .timeout(const Duration(seconds: 12));
           break;
         case 'POST':
-          resp = await http
+          resp = await _httpClient
               .post(uri, headers: headers, body: encoded)
               .timeout(const Duration(seconds: 12));
           break;
         case 'PATCH':
-          resp = await http
+          resp = await _httpClient
               .patch(uri, headers: headers, body: encoded)
               .timeout(const Duration(seconds: 12));
           break;
         case 'DELETE':
-          resp = await http
+          resp = await _httpClient
               .delete(uri, headers: headers, body: encoded)
               .timeout(const Duration(seconds: 12));
           break;

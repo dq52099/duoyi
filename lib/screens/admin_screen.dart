@@ -1505,6 +1505,21 @@ class _UsersTabState extends State<_UsersTab> {
     }
   }
 
+  String _formatServerTime(dynamic raw) {
+    final text = raw?.toString() ?? '';
+    if (text.isEmpty || text == 'null') return '-';
+    final normalized = text.contains('T') ? text : '${text}Z';
+    final parsed = DateTime.tryParse(normalized);
+    if (parsed == null) return text;
+    final local = parsed.toLocal();
+    final y = local.year.toString();
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1553,6 +1568,9 @@ class _UsersTabState extends State<_UsersTab> {
                 final disabled = u['is_disabled'] == true;
                 final admin = u['is_admin'] == true;
                 final online = u['online'] == true;
+                final registeredAt = _formatServerTime(u['created_at']);
+                final lastLoginAt = _formatServerTime(u['last_login_at']);
+                final lastActiveAt = _formatServerTime(u['last_active_at']);
                 return AppListTileCard(
                   leading: CircleAvatar(
                     backgroundColor: admin
@@ -1605,7 +1623,7 @@ class _UsersTabState extends State<_UsersTab> {
                     ],
                   ),
                   subtitle: Text(
-                    '注册: ${u['created_at'] ?? '-'} · 最近: ${u['last_login_at'] ?? '-'} · 反馈: ${u['feedback_count'] ?? 0}',
+                    '注册: $registeredAt · 登录: $lastLoginAt · 活跃: $lastActiveAt · 反馈: ${u['feedback_count'] ?? 0}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.62),
                     ),

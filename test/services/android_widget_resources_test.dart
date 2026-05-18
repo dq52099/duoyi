@@ -139,14 +139,19 @@ void main() {
       expect(todoProvider, contains('DuoyiTodoWidgetProvider::class.java'));
     });
 
-    test('应用内小部件菜单展示预览和底部导航', () {
-      final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+    test('应用内小组件页展示预览并接入底部导航', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      final widgetScreen = File(
+        'lib/screens/widget_screen.dart',
+      ).readAsStringSync();
 
-      expect(mine, contains('_WidgetPreviewCard'));
-      expect(mine, contains('_WidgetPreviewNav'));
-      expect(mine, contains('多仪概览预览'));
-      expect(mine, contains('今日待办预览'));
-      expect(mine, contains("'待办', '习惯', '日历', '专注'"));
+      expect(main, contains('WidgetScreen(key: widgetKey)'));
+      expect(main, contains("label: '小组件'"));
+      expect(widgetScreen, contains('WidgetPreviewCard'));
+      expect(widgetScreen, contains('_WidgetPreviewNav'));
+      expect(widgetScreen, contains('多仪概览预览'));
+      expect(widgetScreen, contains('今日待办预览'));
+      expect(widgetScreen, contains("'待办', '习惯', '日历', '专注'"));
     });
   });
 }

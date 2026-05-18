@@ -23,16 +23,18 @@ class LocalNotifications {
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const RawResourceAndroidNotificationSound _defaultSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
-  static const String _defaultChannelId = 'duoyi_general_alerts_v6';
-  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v5';
+  static const String _defaultChannelId = 'duoyi_general_alerts_v7';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v6';
   static const Set<String> _legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
     'duoyi_general_alerts_v4',
     'duoyi_general_alerts_v5',
+    'duoyi_general_alerts_v6',
     'duoyi_alarm',
     'duoyi_alarm_fullscreen_v3',
     'duoyi_alarm_fullscreen_v4',
+    'duoyi_alarm_fullscreen_v5',
   };
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
@@ -41,16 +43,8 @@ class LocalNotifications {
   Future<void> init() async {
     if (_initialized) return;
     tzdata.initializeTimeZones();
-    // 若主入口已经通过 LocalTimezoneResolver.init() 设置过 tz.local，则直接沿用；
-    // 否则按原有回退策略（系统 timeZoneName → UTC）临时设置，等主入口
-    // 下次 resolver 刷新时再覆盖。
     if (!LocalTimezoneResolver.isInitialized) {
-      try {
-        tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
-      } catch (_) {
-        // 某些设备 timeZoneName 不是 IANA；回退到 UTC，仍可工作。
-        tz.setLocalLocation(tz.UTC);
-      }
+      await LocalTimezoneResolver.init();
     }
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');

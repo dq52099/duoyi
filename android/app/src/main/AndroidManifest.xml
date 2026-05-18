@@ -78,6 +78,14 @@
             android:enabled="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="MissingClass" />
+        <service
+            android:name=".ReminderRingtoneService"
+            android:exported="false"
+            android:enabled="true"
+            android:foregroundServiceType="mediaPlayback" />
+        <receiver
+            android:name=".ReminderRingtoneReceiver"
+            android:exported="false" />
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="false">

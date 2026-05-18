@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/local_timezone_resolver.dart';
+
 class DailyReminderSlot {
   final bool enabled;
   final int hour;
@@ -76,6 +78,10 @@ class PreferencesProvider extends ChangeNotifier {
   static const _kDailyReminderSlotPrefix = 'pref_daily_reminder_slot';
   static const _kBottomNavOrder = 'pref_bottom_nav_order';
   static const _kBottomNavVisible = 'pref_bottom_nav_visible';
+  static const _kAppTimeZone = LocalTimezoneResolver.preferenceKey;
+  static const _kAppTimeZoneMode = LocalTimezoneResolver.modePreferenceKey;
+
+  Future<void> Function()? onAppTimeZoneChanged;
 
   int _firstDayOfWeek = 1; // 1=周一, 7=周日
   String _dateFormat = 'yyyy-MM-dd';
@@ -99,8 +105,10 @@ class PreferencesProvider extends ChangeNotifier {
     DailyReminderSlot(hour: 8, enabled: false),
     DailyReminderSlot(hour: 22, enabled: false),
   ];
-  List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5];
-  Set<int> _bottomNavVisible = const {0, 1, 2, 3, 4, 5};
+  List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
+  Set<int> _bottomNavVisible = const {0, 1, 2, 3, 4, 5, 6};
+  String _appTimeZone = LocalTimezoneResolver.defaultIana;
+  bool _followSystemTimeZone = true;
 
   int get firstDayOfWeek => _firstDayOfWeek;
   String get dateFormat => _dateFormat;
@@ -125,6 +133,11 @@ class PreferencesProvider extends ChangeNotifier {
       List.unmodifiable(_dailyReminderSlots);
   List<int> get bottomNavOrder => List.unmodifiable(_bottomNavOrder);
   Set<int> get bottomNavVisible => Set.unmodifiable(_bottomNavVisible);
+  String get appTimeZone => _appTimeZone;
+  bool get followSystemTimeZone => _followSystemTimeZone;
+  String get appTimeZoneSelection => _followSystemTimeZone
+      ? LocalTimezoneResolver.followSystemValue
+      : _appTimeZone;
   List<int> get enabledBottomNavTabs => _bottomNavOrder
       .where((tab) => _bottomNavVisible.contains(tab))
       .toList(growable: false);
@@ -150,7 +163,25 @@ class PreferencesProvider extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     _firstDayOfWeek = p.getInt(_kFirstDayOfWeek) ?? 1;
     _dateFormat = p.getString(_kDateFormat) ?? 'yyyy-MM-dd';
-    _defaultTab = p.getInt(_kDefaultTab) ?? 0;
+    _followSystemTimeZone =
+        (p.getString(_kAppTimeZoneMode) ??
+            LocalTimezoneResolver.followSystemValue) !=
+        LocalTimezoneResolver.fixedValue;
+    await LocalTimezoneResolver.setApplicationTimeZone(
+      _followSystemTimeZone
+          ? LocalTimezoneResolver.followSystemValue
+          : (p.getString(_kAppTimeZone) ?? LocalTimezoneResolver.defaultIana),
+    );
+    _appTimeZone = LocalTimezoneResolver.currentIana;
+    final storedOrder = p.getStringList(_kBottomNavOrder);
+    final storedVisible = p.getStringList(_kBottomNavVisible);
+    final isOldBottomNavConfig =
+        (storedOrder == null || !storedOrder.contains('6')) &&
+        (storedVisible == null || !storedVisible.contains('6'));
+    final storedDefaultTab = p.getInt(_kDefaultTab) ?? 0;
+    _defaultTab = isOldBottomNavConfig && storedDefaultTab == 5
+        ? 6
+        : storedDefaultTab.clamp(0, 6);
     _haptic = p.getBool(_kHapticFeedback) ?? true;
     _showLunar = p.getBool(_kShowLunar) ?? true;
     _showCompletedTodos = p.getBool(_kShowCompletedTodos) ?? false;
@@ -211,11 +242,15 @@ class PreferencesProvider extends ChangeNotifier {
       );
     });
     _bottomNavOrder = _normalizeNavOrder(
-      p.getStringList(_kBottomNavOrder)?.map(int.tryParse).whereType<int>(),
+      storedOrder?.map(int.tryParse).whereType<int>(),
     );
     _bottomNavVisible = _normalizeNavVisible(
-      p.getStringList(_kBottomNavVisible)?.map(int.tryParse).whereType<int>(),
+      storedVisible?.map(int.tryParse).whereType<int>(),
     );
+    if (isOldBottomNavConfig &&
+        (storedVisible == null || storedVisible.contains('5'))) {
+      _bottomNavVisible = Set.unmodifiable({..._bottomNavVisible, 6});
+    }
     notifyListeners();
   }
 
@@ -223,6 +258,19 @@ class PreferencesProvider extends ChangeNotifier {
     _firstDayOfWeek = value.clamp(1, 7);
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kFirstDayOfWeek, _firstDayOfWeek);
+    notifyListeners();
+  }
+
+  Future<void> setAppTimeZone(String value) async {
+    final next = value == LocalTimezoneResolver.followSystemValue
+        ? LocalTimezoneResolver.followSystemValue
+        : value == 'UTC' || value.isEmpty
+        ? LocalTimezoneResolver.defaultIana
+        : value;
+    _followSystemTimeZone = next == LocalTimezoneResolver.followSystemValue;
+    await LocalTimezoneResolver.setApplicationTimeZone(next);
+    _appTimeZone = LocalTimezoneResolver.currentIana;
+    await onAppTimeZoneChanged?.call();
     notifyListeners();
   }
 
@@ -283,7 +331,7 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setBottomNavVisible(int tab, bool visible) async {
-    if (tab < 0 || tab > 5) return;
+    if (tab < 0 || tab > 6) return;
     final next = {..._bottomNavVisible};
     if (visible) {
       next.add(tab);
@@ -319,9 +367,9 @@ class PreferencesProvider extends ChangeNotifier {
   static List<int> _normalizeNavOrder(Iterable<int>? source) {
     final result = <int>[];
     for (final tab in source ?? const <int>[]) {
-      if (tab >= 0 && tab <= 5 && !result.contains(tab)) result.add(tab);
+      if (tab >= 0 && tab <= 6 && !result.contains(tab)) result.add(tab);
     }
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 7; i++) {
       if (!result.contains(i)) result.add(i);
     }
     return List.unmodifiable(result);
@@ -330,9 +378,10 @@ class PreferencesProvider extends ChangeNotifier {
   static Set<int> _normalizeNavVisible(Iterable<int>? source) {
     final result = <int>{};
     for (final tab in source ?? const <int>[]) {
-      if (tab >= 0 && tab <= 5) result.add(tab);
+      if (tab >= 0 && tab <= 6) result.add(tab);
     }
-    if (result.length < 2) return const {0, 1, 2, 3, 4, 5};
+    if (result.length < 2) return const {0, 1, 2, 3, 4, 5, 6};
+    result.add(5);
     return Set.unmodifiable(result);
   }
 

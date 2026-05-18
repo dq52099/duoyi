@@ -12,7 +12,6 @@ class NotificationHealthCard extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onOpenSystemSettings;
   final VoidCallback onSendTest;
-  final VoidCallback onSendScheduledAlarmTest;
   final VoidCallback onClearPending;
   final VoidCallback onRequestNotificationPermission;
   final VoidCallback onRequestExactAlarmPermission;
@@ -23,7 +22,6 @@ class NotificationHealthCard extends StatelessWidget {
     required this.onRefresh,
     required this.onOpenSystemSettings,
     required this.onSendTest,
-    required this.onSendScheduledAlarmTest,
     required this.onClearPending,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
@@ -92,11 +90,11 @@ class NotificationHealthCard extends StatelessWidget {
             onTap: onSendTest,
           ),
           AppSettingsTile(
-            icon: Icons.alarm_on_outlined,
+            icon: Icons.settings_outlined,
             color: Colors.deepOrange,
-            title: '30 秒后强提醒',
-            subtitle: '验证习惯/闹钟同一条强提醒链路',
-            onTap: onSendScheduledAlarmTest,
+            title: '系统通知设置',
+            subtitle: '检查强提醒渠道的声音、振动、横幅和锁屏显示',
+            onTap: onOpenSystemSettings,
           ),
           AppSettingsTile(
             icon: Icons.schedule,

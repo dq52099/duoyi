@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/alarm_service.dart';
 import '../providers/notification_service.dart';
+import '../services/notification_permission_exception.dart';
+import '../services/notification_settings.dart';
 import '../services/permission_health_service.dart';
 import '../providers/preferences_provider.dart';
 import '../widgets/app_time_picker.dart';
@@ -18,6 +20,20 @@ class PreferencesScreen extends StatelessWidget {
     ['MM/dd/yyyy', '05/07/2026'],
     ['dd/MM/yyyy', '07/05/2026'],
     ['yyyy年M月d日', '2026年5月7日'],
+  ];
+  static const _timeZones = [
+    ['system', '跟随手机'],
+    ['Asia/Shanghai', '中国标准时间'],
+    ['America/Mexico_City', '墨西哥城时间'],
+    ['America/Tijuana', '蒂华纳时间'],
+    ['Asia/Tokyo', '日本时间'],
+    ['Asia/Hong_Kong', '香港时间'],
+    ['Asia/Singapore', '新加坡时间'],
+    ['America/New_York', '纽约时间'],
+    ['America/Los_Angeles', '洛杉矶时间'],
+    ['Europe/London', '伦敦时间'],
+    ['Europe/Paris', '巴黎时间'],
+    ['Australia/Sydney', '悉尼时间'],
   ];
 
   @override
@@ -120,6 +136,28 @@ class PreferencesScreen extends StatelessWidget {
                       : context.read<PreferencesProvider>().setDateFormat(v),
                 ),
               ),
+              AppSettingsTile(
+                icon: Icons.public_outlined,
+                color: Colors.deepOrange,
+                title: '应用时区',
+                subtitle: p.followSystemTimeZone
+                    ? '跟随手机：${p.appTimeZone}'
+                    : p.appTimeZone,
+                trailing: _compactDropdown<String>(
+                  width: 156,
+                  value: p.appTimeZoneSelection,
+                  items: [
+                    for (final z in _timeZones)
+                      DropdownMenuItem(
+                        value: z[0],
+                        child: Text(z[1], style: const TextStyle(fontSize: 13)),
+                      ),
+                  ],
+                  onChanged: (v) => v == null
+                      ? null
+                      : context.read<PreferencesProvider>().setAppTimeZone(v),
+                ),
+              ),
               AppSwitchTile(
                 icon: Icons.brightness_2_outlined,
                 color: Colors.indigo,
@@ -149,7 +187,8 @@ class PreferencesScreen extends StatelessWidget {
                     DropdownMenuItem(value: 2, child: Text('习惯')),
                     DropdownMenuItem(value: 3, child: Text('日历')),
                     DropdownMenuItem(value: 4, child: Text('专注')),
-                    DropdownMenuItem(value: 5, child: Text('我的')),
+                    DropdownMenuItem(value: 5, child: Text('小组件')),
+                    DropdownMenuItem(value: 6, child: Text('我的')),
                   ],
                   onChanged: (v) => v == null
                       ? null
@@ -302,6 +341,8 @@ class PreferencesScreen extends StatelessWidget {
       case 4:
         return '专注';
       case 5:
+        return '小组件';
+      case 6:
         return '我的';
       default:
         return '今日';
@@ -432,32 +473,33 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
   }
 
   Future<void> _sendTest() async {
-    await widget.notificationService.sendTest();
+    try {
+      await widget.notificationService.sendTest();
+    } on NotificationPermissionDeniedException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('系统通知权限未授权，无法发送响铃测试'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('响铃测试发送失败：$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('响铃弹屏测试已发送'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    await _refresh();
-  }
-
-  Future<void> _sendScheduledAlarmTest() async {
-    final when = DateTime.now().add(const Duration(seconds: 30));
-    await AlarmService.instance.scheduleFullScreen(
-      id: 919002,
-      title: '30 秒强提醒测试',
-      body: '这是强提醒定时调度测试。',
-      when: when,
-      payload: 'duoyi://alarm-test?scheduled=1',
-      requireExactAlarm: true,
-      fullScreen: true,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已安排 30 秒后的强提醒测试'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -494,7 +536,6 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
           onRefresh: _refresh,
           onOpenSystemSettings: () => _openAppSettings(context),
           onSendTest: _sendTest,
-          onSendScheduledAlarmTest: _sendScheduledAlarmTest,
           onClearPending: _clearPending,
           onRequestNotificationPermission: _requestNotificationPermission,
           onRequestExactAlarmPermission: _requestExactAlarmPermission,
@@ -671,6 +712,7 @@ class _NavConfigTile extends StatelessWidget {
     2 => Icons.repeat,
     3 => Icons.calendar_month_outlined,
     4 => Icons.timer_outlined,
+    5 => Icons.widgets_outlined,
     _ => Icons.person_outline,
   };
 
@@ -728,7 +770,12 @@ class _NotificationHealthSnapshot {
 }
 
 Future<void> _openAppSettings(BuildContext context) async {
-  final opened = await openAppSettings();
+  final opened =
+      await NotificationSettings.openNotificationChannelSettings(
+        AlarmService.channelId,
+      ) ||
+      await NotificationSettings.openAppNotificationSettings() ||
+      await openAppSettings();
   if (!context.mounted) return;
   if (!opened) {
     ScaffoldMessenger.of(context).showSnackBar(

@@ -3,12 +3,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../core/local_timezone_resolver.dart';
 import '../core/platform_info.dart';
 import 'local_notifications.dart';
+import 'native_reminder_ringtone.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
 
@@ -33,7 +33,7 @@ class AlarmPermissionDeniedException implements Exception {
 /// 闹钟通道服务（与 [LocalNotifications] 平行）。
 ///
 /// 用于"到点必须处理"的强提醒场景：
-/// - Android：`duoyi_alarm_fullscreen_v5` 渠道，`Importance.max`，可按提醒配置启用
+/// - Android：`duoyi_alarm_fullscreen_v6` 渠道，`Importance.max`，可按提醒配置启用
 ///   `fullScreenIntent`，`category=alarm`，震动模式 `[0, 500, 500, 500]`。
 /// - iOS：`interruptionLevel=.timeSensitive`（避免使用 `.critical`，
 ///   后者需要 Apple 单独批准的 entitlement）。
@@ -63,11 +63,12 @@ class AlarmService implements ReminderAlarmSink {
   /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
   /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
   /// 继续吞掉习惯提醒。
-  static const String channelId = 'duoyi_alarm_fullscreen_v5';
+  static const String channelId = 'duoyi_alarm_fullscreen_v6';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_alarm',
     'duoyi_alarm_fullscreen_v3',
     'duoyi_alarm_fullscreen_v4',
+    'duoyi_alarm_fullscreen_v5',
   };
   static const String _channelName = '多仪 · 强提醒';
   static const String _channelDesc = '到点响铃、震动并弹出确认界面的提醒';
@@ -117,16 +118,8 @@ class AlarmService implements ReminderAlarmSink {
   Future<void> init() async {
     if (_initialized) return;
 
-    // 若主入口已调用 LocalTimezoneResolver.init()，tz.local 已就绪，直接沿用；
-    // 否则按宽松回退策略初始化 tz 数据库并尝试设置本地时区，
-    // 等待主入口下次刷新覆盖。
     if (!LocalTimezoneResolver.isInitialized) {
-      tzdata.initializeTimeZones();
-      try {
-        tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
-      } catch (_) {
-        tz.setLocalLocation(tz.UTC);
-      }
+      await LocalTimezoneResolver.init();
     }
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -275,6 +268,13 @@ class AlarmService implements ReminderAlarmSink {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
+      await NativeReminderRingtone.scheduleOnce(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      );
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) rethrow;
       // 降级重试：精准闹钟权限缺失时，退化为非精准模式，让提醒至少还能响，
@@ -290,6 +290,13 @@ class AlarmService implements ReminderAlarmSink {
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
+            payload: payload,
+          );
+          await NativeReminderRingtone.scheduleOnce(
+            id: id,
+            title: title,
+            body: body,
+            when: when,
             payload: payload,
           );
           return;
@@ -314,6 +321,12 @@ class AlarmService implements ReminderAlarmSink {
       title,
       body,
       _notificationDetails(fullScreen: true, payload: payload),
+      payload: payload,
+    );
+    await NativeReminderRingtone.showNow(
+      id: id,
+      title: title,
+      body: body,
       payload: payload,
     );
   }
@@ -365,6 +378,15 @@ class AlarmService implements ReminderAlarmSink {
               UILocalNotificationDateInterpretation.absoluteTime,
           payload: payload,
         );
+        await NativeReminderRingtone.scheduleDaily(
+          id: scheduleId,
+          title: title,
+          body: body,
+          hour: hour,
+          minute: minute,
+          weekdays: weekday == null ? null : <int>[weekday],
+          payload: payload,
+        );
       } on PlatformException catch (e) {
         if (!_isExactAlarmDenied(e)) rethrow;
         if (requireExactAlarm) {
@@ -381,6 +403,15 @@ class AlarmService implements ReminderAlarmSink {
                   : DateTimeComponents.dayOfWeekAndTime,
               uiLocalNotificationDateInterpretation:
                   UILocalNotificationDateInterpretation.absoluteTime,
+              payload: payload,
+            );
+            await NativeReminderRingtone.scheduleDaily(
+              id: scheduleId,
+              title: title,
+              body: body,
+              hour: hour,
+              minute: minute,
+              weekdays: weekday == null ? null : <int>[weekday],
               payload: payload,
             );
             continue;
@@ -405,14 +436,17 @@ class AlarmService implements ReminderAlarmSink {
   Future<void> cancel(int id) async {
     if (!_initialized) return;
     await _plugin.cancel(id);
+    await NativeReminderRingtone.cancel(id);
     for (int w = 1; w <= 7; w++) {
       await _plugin.cancel(_subId(id, w));
+      await NativeReminderRingtone.cancel(_subId(id, w));
     }
   }
 
   Future<void> cancelAll() async {
     if (!_initialized) return;
     await _plugin.cancelAll();
+    await NativeReminderRingtone.cancelAll();
   }
 
   /// 查询当前 AlarmService 下发的 pending id 列表（便于测试与诊断）。

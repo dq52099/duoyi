@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,14 +15,18 @@ class SyncConfig {
 }
 
 /// 云同步：服务器地址与 token 直接复用 AuthProvider(普通用户无需感知)。
-/// 登录后自动同步；用户可在"我的"里点"立即同步"。
+/// 登录后和本地数据变更后自动同步。
 class CloudSyncProvider extends ChangeNotifier {
+  static const _autoSyncDelay = Duration(seconds: 20);
+  static const _autoRetryDelay = Duration(minutes: 3);
+
   SyncConfig _config = SyncConfig(
     lastSync: DateTime.fromMillisecondsSinceEpoch(0),
     autoSync: true,
   );
   bool _isSyncing = false;
   String? _lastError;
+  Timer? _autoSyncTimer;
 
   VoidCallback? onSynced;
 
@@ -36,12 +42,11 @@ class CloudSyncProvider extends ChangeNotifier {
   bool get hasEverSynced => _config.lastSync.millisecondsSinceEpoch > 0;
 
   /// 是否有未同步到后端的本地改动（由 Provider 写入时打上时间戳；本次同步成功后清零）。
-  /// 对应 Requirement 12.7 —— UI 侧可据此显示小角标提醒用户。
   bool _hasPendingChanges = false;
   bool get hasPendingChanges => _hasPendingChanges;
 
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
-  /// 标记"有未同步改动"，以便 UI 角标显示。
+  /// 标记待同步并排队后台自动同步。
   ///
   /// 为避免冷启动 `loadFromStorage` 触发的 notifyListeners 与同步回写
   /// `onSynced → loadFromStorage` 触发的 notifyListeners 被当作"脏改动"
@@ -52,6 +57,22 @@ class CloudSyncProvider extends ChangeNotifier {
       _hasPendingChanges = true;
       notifyListeners();
     }
+    _scheduleAutoSync();
+  }
+
+  void _scheduleAutoSync([Duration delay = _autoSyncDelay]) {
+    _autoSyncTimer?.cancel();
+    if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
+    final client = apiClientGetter?.call();
+    if (client == null || client.token == null || client.token!.isEmpty) {
+      return;
+    }
+    _autoSyncTimer = Timer(delay, () {
+      if (_hasPendingChanges && _config.autoSync && !_isSyncing) {
+        // ignore: discarded_futures
+        syncNow();
+      }
+    });
   }
 
   /// 让一段代码块内的 `markPendingLocalChange` 静默（调用链返回后自动恢复）。
@@ -124,14 +145,21 @@ class CloudSyncProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('sync_auto', value);
     _config = SyncConfig(lastSync: _config.lastSync, autoSync: value);
+    if (value && _hasPendingChanges) {
+      _scheduleAutoSync();
+    } else {
+      _autoSyncTimer?.cancel();
+    }
     notifyListeners();
   }
 
   Future<void> syncNow() async {
+    _autoSyncTimer?.cancel();
     // Req 12.6：关闭 cloud_sync_v2 时完全离线可用，不发出任何网络请求。
     if (!FeatureFlags.cloudSyncV2) {
       return;
     }
+    if (_isSyncing) return;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       _lastError = '请先登录';
@@ -235,7 +263,7 @@ class CloudSyncProvider extends ChangeNotifier {
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
-      _hasPendingChanges = false; // Req 12.7: 同步成功后清零"未同步"标记
+      _hasPendingChanges = false;
 
       onSynced?.call();
     } catch (e) {
@@ -243,7 +271,16 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     _isSyncing = false;
+    if (_lastError != null && _hasPendingChanges) {
+      _scheduleAutoSync(_autoRetryDelay);
+    }
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _autoSyncTimer?.cancel();
+    super.dispose();
   }
 
   Map<String, dynamic> _buildWorkspacePayloads(Map<String, dynamic> payload) {

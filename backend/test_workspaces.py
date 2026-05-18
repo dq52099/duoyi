@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from datetime import timedelta
 
 from fastapi import HTTPException
 
@@ -13,11 +14,13 @@ class WorkspaceApiTest(unittest.TestCase):
         self._old_db_path = api.DB_PATH
         api.DB_PATH = os.path.join(self._tmp.name, "duoyi-test.db")
         api.TOKENS.clear()
+        api.TOKEN_LAST_ACTIVE.clear()
         api.init_db()
 
     def tearDown(self):
         api.DB_PATH = self._old_db_path
         api.TOKENS.clear()
+        api.TOKEN_LAST_ACTIVE.clear()
         self._tmp.cleanup()
 
     def _register(self, username: str) -> str:
@@ -148,6 +151,30 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertEqual(denied.exception.status_code, 401)
         self.assertNotIn(user_id, api.TOKENS)
+
+    def test_admin_online_status_uses_recent_activity_window(self):
+        admin_id = self._register("admin-online")
+        user_id = self._register("normal-online")
+        db = api.get_db()
+        try:
+            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.commit()
+        finally:
+            db.close()
+
+        active_users = api.admin_list_users(_=admin_id, limit=100, offset=0)
+        target = next(u for u in active_users if u["user_id"] == user_id)
+        self.assertTrue(target["online"])
+        self.assertIsNotNone(target["last_active_at"])
+
+        api.TOKEN_LAST_ACTIVE[user_id] = api._utc_now() - timedelta(
+            seconds=api.SESSION_ONLINE_SECONDS + 1
+        )
+
+        stale_users = api.admin_list_users(_=admin_id, limit=100, offset=0)
+        target = next(u for u in stale_users if u["user_id"] == user_id)
+        self.assertFalse(target["online"])
+        self.assertIsNotNone(target["last_active_at"])
 
     def test_feedback_create_validates_content_and_category(self):
         user_id = self._register("feedback-user")

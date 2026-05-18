@@ -16,6 +16,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val platformInfoChannel = "duoyi/platform_info"
     private val updateChannel = "duoyi/update"
+    private val notificationSettingsChannel = "duoyi/notification_settings"
+    private val reminderRingtoneChannel = "duoyi/reminder_ringtone"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -99,6 +101,106 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationSettingsChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openAppNotificationSettings" -> {
+                        result.success(openAppNotificationSettings())
+                    }
+                    "openNotificationChannelSettings" -> {
+                        val channelId = call.argument<String>("channelId")
+                        result.success(openNotificationChannelSettings(channelId))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, reminderRingtoneChannel)
+            .setMethodCallHandler { call, result ->
+                val id = call.argument<Int>("id") ?: 0
+                val title = call.argument<String>("title") ?: "多仪提醒"
+                val body = call.argument<String>("body") ?: "提醒时间到了"
+                val payload = call.argument<String>("payload")
+                when (call.method) {
+                    "showNow" -> {
+                        ReminderRingtoneScheduler.showNow(this, id, title, body, payload)
+                        result.success(null)
+                    }
+                    "scheduleOnce" -> {
+                        val triggerAtMillis = call.argument<Long>("triggerAtMillis")
+                            ?: call.argument<Int>("triggerAtMillis")?.toLong()
+                            ?: 0L
+                        ReminderRingtoneScheduler.scheduleOnce(
+                            this,
+                            id,
+                            title,
+                            body,
+                            triggerAtMillis,
+                            payload,
+                        )
+                        result.success(null)
+                    }
+                    "scheduleDaily" -> {
+                        val hour = call.argument<Int>("hour") ?: 9
+                        val minute = call.argument<Int>("minute") ?: 0
+                        val weekdays = call.argument<List<Int>>("weekdays")
+                            ?.toIntArray()
+                            ?: intArrayOf()
+                        val timezoneId = call.argument<String>("timezoneId") ?: "Asia/Shanghai"
+                        ReminderRingtoneScheduler.scheduleDaily(
+                            this,
+                            id,
+                            title,
+                            body,
+                            hour,
+                            minute,
+                            weekdays,
+                            timezoneId,
+                            payload,
+                        )
+                        result.success(null)
+                    }
+                    "cancel" -> {
+                        ReminderRingtoneScheduler.cancel(this, id)
+                        result.success(null)
+                    }
+                    "cancelAll" -> {
+                        ReminderRingtoneScheduler.cancelAll(this)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun openAppNotificationSettings(): Boolean {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:$packageName"))
+        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return startSettingsActivity(intent)
+    }
+
+    private fun openNotificationChannelSettings(channelId: String?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || channelId.isNullOrBlank()) {
+            return openAppNotificationSettings()
+        }
+        val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return startSettingsActivity(intent)
+    }
+
+    private fun startSettingsActivity(intent: Intent): Boolean {
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     @Throws(IOException::class)
