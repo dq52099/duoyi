@@ -21,7 +21,7 @@ import androidx.core.app.NotificationCompat
 class ReminderRingtoneService : Service() {
     private var player: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val stopRunnable = Runnable { stopSelf() }
+    private var stopRunnable: Runnable? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == actionStop) {
@@ -33,17 +33,41 @@ class ReminderRingtoneService : Service() {
         val title = intent?.getStringExtra("title") ?: "多仪提醒"
         val body = intent?.getStringExtra("body") ?: "提醒时间到了"
         val payload = intent?.getStringExtra("payload")
+        val shouldVibrate = intent?.getBooleanExtra("vibrate", true) ?: true
+        val snoozeMinutes = intent?.getIntExtra("snoozeMinutes", 0)?.coerceIn(0, 120) ?: 0
+        val repeatRemaining = intent?.getIntExtra("repeatRemaining", 0)?.coerceIn(0, 10) ?: 0
+        if (intent?.action == actionSnooze) {
+            val delayMinutes = intent.getIntExtra("delayMinutes", 5).coerceIn(1, 120)
+            ReminderRingtoneScheduler.scheduleOnce(
+                context = this,
+                id = id,
+                title = title,
+                body = body,
+                triggerAtMillis = System.currentTimeMillis() + delayMinutes * 60_000L,
+                payload = payload,
+                vibrate = shouldVibrate,
+                snoozeMinutes = snoozeMinutes,
+                repeatCount = repeatRemaining,
+            )
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
-        startForeground(notificationId(id), buildNotification(id, title, body, payload))
+        startForeground(notificationId(id), buildNotification(id, title, body, payload, snoozeMinutes))
         playRingtone()
-        vibrate()
-        handler.removeCallbacks(stopRunnable)
-        handler.postDelayed(stopRunnable, 30_000L)
+        if (shouldVibrate) vibrate()
+        stopRunnable?.let { handler.removeCallbacks(it) }
+        stopRunnable = Runnable {
+            scheduleAutoRepeat(id, title, body, payload, shouldVibrate, snoozeMinutes, repeatRemaining)
+            stopSelf()
+        }
+        handler.postDelayed(stopRunnable!!, 30_000L)
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(stopRunnable)
+        stopRunnable?.let { handler.removeCallbacks(it) }
+        stopRunnable = null
         player?.run {
             runCatching { stop() }
             release()
@@ -56,7 +80,7 @@ class ReminderRingtoneService : Service() {
 
     private fun playRingtone() {
         player?.release()
-        val afd = resources.openRawResourceFd(R.raw.duoyi_alarm) ?: return
+        val afd = resources.openRawResourceFd(soundResId(this)) ?: return
         player = MediaPlayer().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
@@ -66,6 +90,8 @@ class ReminderRingtoneService : Service() {
             )
             setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
             isLooping = true
+            val volume = volumePercent(this@ReminderRingtoneService) / 100f
+            setVolume(volume, volume)
             setOnPreparedListener { it.start() }
             prepareAsync()
         }
@@ -95,24 +121,47 @@ class ReminderRingtoneService : Service() {
         title: String,
         body: String,
         payload: String?,
+        snoozeMinutes: Int,
     ): android.app.Notification {
         ensureChannel()
-        val openIntent = if (!payload.isNullOrBlank()) {
-            Intent(Intent.ACTION_VIEW, Uri.parse(payload), this, MainActivity::class.java)
-        } else {
-            packageManager.getLaunchIntentForPackage(packageName) ?: Intent(this, MainActivity::class.java)
-        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        val contentIntent = PendingIntent.getActivity(this, id, openIntent, flags)
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            id,
+            openAppIntent(payload, stopRingtone = true),
+            flags,
+        )
+        val fullScreenIntent = PendingIntent.getActivity(
+            this,
+            id + 3_000_000,
+            openAppIntent(payload, stopRingtone = false),
+            flags,
+        )
         val stopIntent = PendingIntent.getService(
             this,
             id + 1_000_000,
             Intent(this, ReminderRingtoneService::class.java).setAction(actionStop),
             flags,
         )
+        val snoozeIntent = if (snoozeMinutes > 0) {
+            PendingIntent.getService(
+                this,
+                id + 2_000_000,
+                Intent(this, ReminderRingtoneService::class.java)
+                    .setAction(actionSnooze)
+                    .putExtra("id", id)
+                    .putExtra("title", title)
+                    .putExtra("body", body)
+                    .putExtra("payload", payload)
+                    .putExtra("snoozeMinutes", snoozeMinutes)
+                    .putExtra("delayMinutes", snoozeMinutes),
+                flags,
+            )
+        } else {
+            null
+        }
 
-        return NotificationCompat.Builder(this, channelId)
+        val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
@@ -121,8 +170,48 @@ class ReminderRingtoneService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setContentIntent(contentIntent)
+            .setFullScreenIntent(fullScreenIntent, true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(0, "停止响铃", stopIntent)
-            .build()
+        if (snoozeIntent != null) {
+            builder.addAction(0, "稍后 $snoozeMinutes 分钟", snoozeIntent)
+        }
+        return builder.build()
+    }
+
+    private fun scheduleAutoRepeat(
+        id: Int,
+        title: String,
+        body: String,
+        payload: String?,
+        shouldVibrate: Boolean,
+        snoozeMinutes: Int,
+        repeatRemaining: Int,
+    ) {
+        if (repeatRemaining <= 0) return
+        val delayMinutes = if (snoozeMinutes > 0) snoozeMinutes else 5
+        ReminderRingtoneScheduler.scheduleOnce(
+            context = this,
+            id = id,
+            title = title,
+            body = body,
+            triggerAtMillis = System.currentTimeMillis() + delayMinutes * 60_000L,
+            payload = payload,
+            vibrate = shouldVibrate,
+            snoozeMinutes = snoozeMinutes,
+            repeatCount = repeatRemaining - 1,
+        )
+    }
+
+    private fun openAppIntent(payload: String?, stopRingtone: Boolean): Intent {
+        val intent = if (!payload.isNullOrBlank()) {
+            Intent(Intent.ACTION_VIEW, Uri.parse(payload), this, MainActivity::class.java)
+        } else {
+            packageManager.getLaunchIntentForPackage(packageName) ?: Intent(this, MainActivity::class.java)
+        }
+        return intent
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(extraStopRingtone, stopRingtone)
     }
 
     private fun ensureChannel() {
@@ -131,7 +220,7 @@ class ReminderRingtoneService : Service() {
         val channel = NotificationChannel(
             channelId,
             "多仪 · 内置提醒铃声",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "用于 HyperOS 等系统通知静音时播放应用内置提醒铃声"
             setSound(null, null)
@@ -143,8 +232,53 @@ class ReminderRingtoneService : Service() {
     private fun notificationId(id: Int) = 940_000 + kotlin.math.abs(id % 10_000)
 
     companion object {
-        private const val channelId = "duoyi_builtin_ringtone_status_v1"
+        private const val channelId = "duoyi_builtin_ringtone_status_v2"
         private const val actionStop = "com.duoyi.duoyi.REMINDER_RING_STOP"
+        private const val actionSnooze = "com.duoyi.duoyi.REMINDER_RING_SNOOZE"
+        const val extraStopRingtone = "duoyi.extra.STOP_REMINDER_RINGTONE"
+        private const val prefsName = "FlutterSharedPreferences"
+        private const val volumeKey = "flutter.pref_reminder_ringtone_volume_percent"
+        private const val soundKey = "flutter.pref_reminder_ringtone_sound"
+
+        fun setVolumePercent(context: Context, value: Int) {
+            val normalized = value.coerceIn(40, 100)
+            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                .edit()
+                .putInt(volumeKey, normalized)
+                .apply()
+        }
+
+        fun setSoundName(context: Context, value: String) {
+            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                .edit()
+                .putString(soundKey, normalizeSoundName(value))
+                .apply()
+        }
+
+        private fun volumePercent(context: Context): Int {
+            return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                .getInt(volumeKey, 80)
+                .coerceIn(40, 100)
+        }
+
+        private fun soundResId(context: Context): Int {
+            val name = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                .getString(soundKey, "alarm") ?: "alarm"
+            return when (normalizeSoundName(name)) {
+                "chime" -> R.raw.duoyi_chime
+                "bell" -> R.raw.duoyi_bell
+                "beep" -> R.raw.duoyi_beep
+                "classic" -> R.raw.duoyi_classic
+                else -> R.raw.duoyi_alarm
+            }
+        }
+
+        private fun normalizeSoundName(value: String): String {
+            return when (value) {
+                "chime", "bell", "beep", "classic" -> value
+                else -> "alarm"
+            }
+        }
 
         fun intent(
             context: Context,
@@ -152,12 +286,19 @@ class ReminderRingtoneService : Service() {
             title: String,
             body: String,
             payload: String?,
+            vibrate: Boolean = true,
+            snoozeMinutes: Int = 0,
+            repeatCount: Int = 0,
         ): Intent {
             return Intent(context, ReminderRingtoneService::class.java)
                 .putExtra("id", id)
                 .putExtra("title", title)
                 .putExtra("body", body)
                 .putExtra("payload", payload)
+                .putExtra("vibrate", vibrate)
+                .putExtra("snoozeMinutes", snoozeMinutes.coerceIn(0, 120))
+                .putExtra("repeatCount", repeatCount.coerceIn(0, 10))
+                .putExtra("repeatRemaining", repeatCount.coerceIn(0, 10))
         }
     }
 }

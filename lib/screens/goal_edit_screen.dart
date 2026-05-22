@@ -4,12 +4,17 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/design_tokens.dart';
+import '../core/focus_sound_catalog.dart';
 import '../core/goal_icons.dart';
 import '../core/goal_validation.dart';
+import '../core/i18n_date_format.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
+import '../models/workspace.dart';
+import '../providers/custom_focus_sound_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/notification_service.dart';
+import '../providers/share_provider.dart';
 import '../services/alarm_service.dart';
 import '../services/recurrence_engine.dart';
 import '../widgets/app_date_picker.dart';
@@ -30,19 +35,6 @@ const List<int> _presetColors = <int>[
 const List<String> _weekdayNames = <String>['一', '二', '三', '四', '五', '六', '日'];
 
 const List<int> _focusMinutePresets = <int>[15, 25, 30, 45, 60, 90];
-
-const List<(String, String)> _whiteNoiseOptions = <(String, String)>[
-  ('none', '无'),
-  ('rain', '雨声'),
-  ('forest', '森林'),
-  ('cafe', '咖啡馆'),
-  ('waves', '海浪'),
-  ('brown_noise', '低频棕噪'),
-  ('night_rain', '静夜细雨'),
-  ('fan', '柔和风扇'),
-  ('pink_noise', '平稳粉噪'),
-  ('deep_stream', '低频溪流'),
-];
 
 class GoalEditScreen extends StatefulWidget {
   final GoalItem? goal;
@@ -100,6 +92,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
 
   /// 保留 createdAt，避免新建后再次 update 时时间被刷新。
   DateTime? _createdAt;
+  String _workspaceId = 'private';
 
   bool get _isExisting => _editingId != null;
 
@@ -109,6 +102,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     final g = widget.goal;
     _editingId = g?.id;
     _createdAt = g?.createdAt;
+    _workspaceId = _normalizeWorkspaceId(g?.workspaceId);
 
     _titleCtrl = TextEditingController(text: g?.title ?? '');
     _descCtrl = TextEditingController(text: g?.description ?? '');
@@ -197,6 +191,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
       ).let((min) => min * 60),
       dailyTargetCount: _parsePositiveInt(_dailyCountCtrl.text),
       sortOrder: widget.goal?.sortOrder ?? 0,
+      workspaceId: _workspaceId,
       createdAt: _createdAt,
     );
   }
@@ -210,6 +205,10 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     final issues = validateGoal(item);
     if (issues.isNotEmpty) {
       _showError(issues.first.message);
+      return false;
+    }
+    if (!_canEditWorkspace(_workspaceId)) {
+      _showError('你在这个共享空间中只有查看权限');
       return false;
     }
     final provider = context.read<GoalProvider>();
@@ -257,12 +256,30 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
       );
   }
 
+  bool _canEditWorkspace(String workspaceId) {
+    return context.read<ShareProvider?>()?.canEdit(workspaceId) ?? true;
+  }
+
+  Future<void> _deleteCurrentGoal() async {
+    if (!_canEditWorkspace(_workspaceId)) {
+      _showError('你在这个共享空间中只有查看权限');
+      return;
+    }
+    final navigator = Navigator.of(context);
+    await context.read<GoalProvider>().delete(_editingId!);
+    if (!mounted) return;
+    navigator.pop();
+  }
+
   // ---------------------------------------------------------------------------
   // Build
   // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
+    final shareProvider = context.watch<ShareProvider?>();
+    final canEditCurrentWorkspace =
+        shareProvider?.canEdit(_workspaceId) ?? true;
     return Scaffold(
       appBar: AppBar(
         title: Text(_isExisting ? '编辑目标' : '新建目标'),
@@ -271,17 +288,14 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             IconButton(
               tooltip: '删除',
               icon: const Icon(Icons.delete_outline),
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-                await context.read<GoalProvider>().delete(_editingId!);
-                if (!mounted) return;
-                navigator.pop();
-              },
+              onPressed: canEditCurrentWorkspace ? _deleteCurrentGoal : null,
             ),
           IconButton(
             tooltip: '保存并返回',
             icon: const Icon(Icons.check),
-            onPressed: () => _persist(pop: true),
+            onPressed: canEditCurrentWorkspace
+                ? () => _persist(pop: true)
+                : null,
           ),
         ],
       ),
@@ -308,6 +322,14 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             onIcon: (v) => setState(() => _iconName = v),
             onSave: () => _persist(pop: false),
           ),
+          _WorkspaceSection(
+            workspaceId: _workspaceId,
+            shareProvider: shareProvider,
+            onChanged: (value) => setState(() {
+              _workspaceId = _normalizeWorkspaceId(value);
+            }),
+            onSave: () => _persist(pop: false),
+          ),
           _RecurrenceSection(
             rule: _recurrence,
             nextDispatchLabel: _nextDispatchLabel(),
@@ -315,6 +337,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
               final r = await RecurrencePicker.show(
                 context,
                 initial: _recurrence,
+                supportMaxOccurrences: false,
               );
               if (r != null) setState(() => _recurrence = r);
             },
@@ -675,6 +698,117 @@ class _BasicSection extends StatelessWidget {
   }
 }
 
+class _WorkspaceSection extends StatelessWidget {
+  final String workspaceId;
+  final ShareProvider? shareProvider;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSave;
+
+  const _WorkspaceSection({
+    required this.workspaceId,
+    required this.shareProvider,
+    required this.onChanged,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = _workspaceOptions(shareProvider, workspaceId);
+    final current = options.any((option) => option.id == workspaceId)
+        ? workspaceId
+        : 'private';
+    final role = shareProvider?.roleFor(current) ?? WorkspaceRole.owner;
+    final canEdit = shareProvider?.canEdit(current) ?? true;
+    final subtitle = current == 'private'
+        ? '个人空间'
+        : '${_workspaceLabel(options, current)} · ${role.label}';
+
+    return _SectionCard(
+      title: '空间归属',
+      icon: Icons.groups_2_outlined,
+      subtitle: subtitle,
+      onSave: canEdit ? onSave : null,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: current,
+          decoration: const InputDecoration(
+            labelText: '保存到',
+            border: OutlineInputBorder(),
+          ),
+          items: options.map((option) {
+            final optionRole = option.id == 'private'
+                ? WorkspaceRole.owner
+                : shareProvider?.roleFor(option.id) ?? WorkspaceRole.owner;
+            final enabled =
+                canEdit && (option.id == 'private' || optionRole.canEdit);
+            return DropdownMenuItem<String>(
+              value: option.id,
+              enabled: enabled,
+              child: Row(
+                children: [
+                  Icon(
+                    option.id == 'private'
+                        ? Icons.person_outline
+                        : Icons.groups_2_outlined,
+                    size: 18,
+                  ),
+                  const SizedBox(width: DesignTokens.spaceSm),
+                  Expanded(
+                    child: Text(
+                      option.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (option.id != 'private') ...[
+                    const SizedBox(width: DesignTokens.spaceSm),
+                    Text(
+                      optionRole.label,
+                      style: TextStyle(
+                        fontSize: DesignTokens.fontSizeXs,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.56),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: canEdit
+              ? (value) {
+                  if (value == null) return;
+                  final nextRole = value == 'private'
+                      ? WorkspaceRole.owner
+                      : shareProvider?.roleFor(value) ?? WorkspaceRole.owner;
+                  if (!nextRole.canEdit) return;
+                  onChanged(value);
+                }
+              : null,
+        ),
+        if (!canEdit) ...[
+          const SizedBox(height: DesignTokens.spaceSm),
+          Text(
+            '你在这个共享空间中只有查看权限',
+            style: TextStyle(
+              fontSize: DesignTokens.fontSizeSm,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _WorkspaceChoice {
+  final String id;
+  final String name;
+
+  const _WorkspaceChoice({required this.id, required this.name});
+}
+
 class _GoalIconField extends StatelessWidget {
   final String iconName;
   final int colorValue;
@@ -730,7 +864,7 @@ class _GoalIconField extends StatelessWidget {
                       Text(
                         goalIconLabel(iconName),
                         style: const TextStyle(
-                          fontWeight: DesignTokens.fontWeightSemiBold,
+                          fontWeight: DesignTokens.fontWeightRegular,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -815,7 +949,7 @@ Future<String?> _showGoalIconPicker(BuildContext context, String selected) {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: DesignTokens.fontSizeXs,
-                                    fontWeight: DesignTokens.fontWeightSemiBold,
+                                    fontWeight: DesignTokens.fontWeightRegular,
                                     color: cs.onSurface.withValues(alpha: 0.76),
                                   ),
                                 ),
@@ -911,7 +1045,7 @@ class _RecurrenceSection extends StatelessWidget {
                   nextDispatchLabel,
                   style: TextStyle(
                     fontSize: DesignTokens.fontSizeBase,
-                    fontWeight: DesignTokens.fontWeightSemiBold,
+                    fontWeight: DesignTokens.fontWeightRegular,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
@@ -1237,16 +1371,16 @@ class _FocusSection extends StatelessWidget {
     required this.onSave,
   });
 
-  String _subtitle() {
+  String _subtitle(BuildContext context) {
     if (!focus.enabled) return '已关闭';
     final sec = focus.focusSeconds;
     final min = (sec == null || sec <= 0) ? null : sec ~/ 60;
-    final noise = _whiteNoiseOptions.firstWhere(
-      (e) => e.$1 == focus.whiteNoise,
-      orElse: () => ('none', '无'),
-    );
-    if (min == null) return '已开启 · ${noise.$2}';
-    return '$min 分钟 · ${noise.$2}';
+    final custom = context.watch<CustomFocusSoundProvider>();
+    final noise = custom.isCustomSound(focus.whiteNoise)
+        ? custom.labelFor(focus.whiteNoise)
+        : FocusSoundCatalog.labelFor(focus.whiteNoise);
+    if (min == null) return '已开启 · $noise';
+    return '$min 分钟 · $noise';
   }
 
   @override
@@ -1254,7 +1388,7 @@ class _FocusSection extends StatelessWidget {
     return _SectionCard(
       title: '专注联动',
       icon: Icons.timer_outlined,
-      subtitle: _subtitle(),
+      subtitle: _subtitle(context),
       onSave: onSave,
       children: [
         SwitchListTile(
@@ -1307,14 +1441,23 @@ class _FocusSection extends StatelessWidget {
           const SizedBox(height: DesignTokens.spaceXs),
           Wrap(
             spacing: DesignTokens.spaceXs,
-            children: _whiteNoiseOptions.map((opt) {
-              final selected = focus.whiteNoise == opt.$1;
-              return ChoiceChip(
-                label: Text(opt.$2),
-                selected: selected,
-                onSelected: (_) => onPickNoise(opt.$1),
-              );
-            }).toList(),
+            runSpacing: DesignTokens.spaceXs,
+            children: [
+              for (final opt in FocusSoundCatalog.options)
+                ChoiceChip(
+                  label: Text(opt.label),
+                  selected: focus.whiteNoise == opt.id,
+                  onSelected: (_) => onPickNoise(opt.id),
+                ),
+              for (final sound
+                  in context.watch<CustomFocusSoundProvider>().sounds)
+                ChoiceChip(
+                  avatar: const Icon(Icons.audio_file_outlined, size: 16),
+                  label: Text(sound.label),
+                  selected: focus.whiteNoise == sound.id,
+                  onSelected: (_) => onPickNoise(sound.id),
+                ),
+            ],
           ),
         ],
       ],
@@ -1621,9 +1764,7 @@ class _SectionCard extends StatelessWidget {
                     color: cs.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
-          children: [
-            ...children,
-          ],
+          children: [...children],
         ),
       ),
     );
@@ -1714,8 +1855,38 @@ TextStyle _subtleLabel(BuildContext context) => TextStyle(
   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
 );
 
-String _formatDate(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _formatDate(DateTime d) => I18nDateFormat.date(d);
+
+String _normalizeWorkspaceId(String? raw) {
+  final value = raw?.trim();
+  return value == null || value.isEmpty ? 'private' : value;
+}
+
+List<_WorkspaceChoice> _workspaceOptions(
+  ShareProvider? shareProvider,
+  String currentWorkspaceId,
+) {
+  final options = <_WorkspaceChoice>[
+    const _WorkspaceChoice(id: 'private', name: '个人空间'),
+  ];
+  final known = <String>{'private'};
+  for (final workspace in shareProvider?.workspaces ?? const <Workspace>[]) {
+    if (workspace.isPrivate || workspace.id.isEmpty) continue;
+    known.add(workspace.id);
+    options.add(_WorkspaceChoice(id: workspace.id, name: workspace.name));
+  }
+  if (!known.contains(currentWorkspaceId) && currentWorkspaceId != 'private') {
+    options.add(_WorkspaceChoice(id: currentWorkspaceId, name: '共享空间'));
+  }
+  return options;
+}
+
+String _workspaceLabel(List<_WorkspaceChoice> options, String workspaceId) {
+  for (final option in options) {
+    if (option.id == workspaceId) return option.name;
+  }
+  return '共享空间';
+}
 
 /// 解析正整数输入；空串或非正整数返回 null。
 int? _parsePositiveInt(String raw) {

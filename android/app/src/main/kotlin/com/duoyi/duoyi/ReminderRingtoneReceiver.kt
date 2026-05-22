@@ -11,8 +11,11 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra("title") ?: "多仪提醒"
         val body = intent.getStringExtra("body") ?: "提醒时间到了"
         val payload = intent.getStringExtra("payload")
+        val vibrate = intent.getBooleanExtra("vibrate", true)
+        val snoozeMinutes = intent.getIntExtra("snoozeMinutes", 0)
+        val repeatRemaining = intent.getIntExtra("repeatRemaining", 0)
 
-        val serviceIntent = ReminderRingtoneService.intent(context, id, title, body, payload)
+        val serviceIntent = ReminderRingtoneService.intent(context, id, title, body, payload, vibrate, snoozeMinutes, repeatRemaining)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(serviceIntent)
         } else {

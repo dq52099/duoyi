@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n_date_format.dart';
 import '../models/diary_entry.dart';
 
 /// 近 N 周心情热图：每格代表一天，颜色由当天日记的心情决定；无日记则灰色。
@@ -85,7 +86,7 @@ class MoodHeatmap extends StatelessWidget {
                               padding: const EdgeInsets.only(bottom: 2),
                               child: Tooltip(
                                 message:
-                                    '${date.year}-${date.month}-${date.day} · ${entry?.mood?.label ?? '无记录'}',
+                                    '${I18nDateFormat.date(date)} · ${entry?.mood?.label ?? '无记录'}',
                                 child: Container(
                                   width: cell,
                                   height: cell,

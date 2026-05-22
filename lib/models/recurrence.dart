@@ -31,13 +31,36 @@ class RecurrenceRule {
         break;
       case RecurrenceFrequency.weekly:
         if (byWeekdays != null && byWeekdays!.isNotEmpty) {
-          // 找到 reference 之后最近的一个匹配 weekday
           final sorted = [...byWeekdays!]..sort();
-          for (int add = 1; add <= 7 * interval; add++) {
-            final cand = reference.add(Duration(days: add));
-            if (sorted.contains(cand.weekday - 1)) return cand;
+          final currentWeekday = reference.weekday - 1;
+          if (interval <= 1) {
+            DateTime? candidate;
+            for (int add = 1; add <= 7; add++) {
+              final cand = reference.add(Duration(days: add));
+              if (sorted.contains(cand.weekday - 1)) {
+                candidate = cand;
+                break;
+              }
+            }
+            next = candidate ?? reference.add(const Duration(days: 7));
+          } else {
+            DateTime? laterThisWeek;
+            for (final weekday in sorted) {
+              if (weekday > currentWeekday) {
+                laterThisWeek = reference.add(
+                  Duration(days: weekday - currentWeekday),
+                );
+                break;
+              }
+            }
+            next =
+                laterThisWeek ??
+                reference.add(
+                  Duration(
+                    days: (7 * interval) - currentWeekday + sorted.first,
+                  ),
+                );
           }
-          next = reference.add(Duration(days: 7 * interval));
         } else {
           next = reference.add(Duration(days: 7 * interval));
         }
@@ -46,10 +69,8 @@ class RecurrenceRule {
         final m = reference.month + interval;
         final targetYear = reference.year + (m - 1) ~/ 12;
         final targetMonth = ((m - 1) % 12) + 1;
-        final day =
-            byMonthDay ?? reference.day;
-        final lastDayOfTarget =
-            DateTime(targetYear, targetMonth + 1, 0).day;
+        final day = byMonthDay ?? reference.day;
+        final lastDayOfTarget = DateTime(targetYear, targetMonth + 1, 0).day;
         next = DateTime(
           targetYear,
           targetMonth,
@@ -57,8 +78,11 @@ class RecurrenceRule {
         );
         break;
       case RecurrenceFrequency.yearly:
-        final lastDay =
-            DateTime(reference.year + interval, reference.month + 1, 0).day;
+        final lastDay = DateTime(
+          reference.year + interval,
+          reference.month + 1,
+          0,
+        ).day;
         next = DateTime(
           reference.year + interval,
           reference.month,
@@ -68,8 +92,27 @@ class RecurrenceRule {
       case RecurrenceFrequency.none:
         return null;
     }
-    if (endDate != null && next.isAfter(endDate!)) return null;
+    if (_isAfterEndDate(next)) return null;
     return next;
+  }
+
+  bool _isAfterEndDate(DateTime value) {
+    final end = endDate;
+    if (end == null) return false;
+    if (_isDateOnly(end)) return _dateOnly(value).isAfter(_dateOnly(end));
+    return value.isAfter(end);
+  }
+
+  static bool _isDateOnly(DateTime value) {
+    return value.hour == 0 &&
+        value.minute == 0 &&
+        value.second == 0 &&
+        value.millisecond == 0 &&
+        value.microsecond == 0;
+  }
+
+  static DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
   }
 
   String get label {
@@ -77,28 +120,41 @@ class RecurrenceRule {
       RecurrenceFrequency.none => '不重复',
       RecurrenceFrequency.daily => interval == 1 ? '每天' : '每 $interval 天',
       RecurrenceFrequency.weekly => interval == 1 ? '每周' : '每 $interval 周',
-      RecurrenceFrequency.monthly =>
-        interval == 1 ? '每月' : '每 $interval 月',
+      RecurrenceFrequency.monthly => interval == 1 ? '每月' : '每 $interval 月',
       RecurrenceFrequency.yearly => interval == 1 ? '每年' : '每 $interval 年',
     };
+    if (frequency == RecurrenceFrequency.none) return base;
+    final pieces = <String>[base];
     if (frequency == RecurrenceFrequency.weekly &&
         byWeekdays != null &&
         byWeekdays!.isNotEmpty) {
       const names = ['一', '二', '三', '四', '五', '六', '日'];
       final days = ([...byWeekdays!]..sort()).map((d) => names[d]).join('/');
-      return '$base · $days';
+      pieces.add(days);
     }
-    return base;
+    if (endDate != null) {
+      pieces.add('至 ${_formatDate(endDate!)}');
+    }
+    if (maxOccurrences != null && maxOccurrences! > 0) {
+      pieces.add('共 $maxOccurrences 次');
+    }
+    return pieces.join(' · ');
+  }
+
+  static String _formatDate(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
   }
 
   Map<String, dynamic> toJson() => {
-        'frequency': frequency.index,
-        'interval': interval,
-        'byWeekdays': byWeekdays,
-        'byMonthDay': byMonthDay,
-        'endDate': endDate?.toIso8601String(),
-        'maxOccurrences': maxOccurrences,
-      };
+    'frequency': frequency.index,
+    'interval': interval,
+    'byWeekdays': byWeekdays,
+    'byMonthDay': byMonthDay,
+    'endDate': endDate?.toIso8601String(),
+    'maxOccurrences': maxOccurrences,
+  };
 
   factory RecurrenceRule.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const RecurrenceRule();
@@ -121,13 +177,12 @@ class RecurrenceRule {
     int? byMonthDay,
     DateTime? endDate,
     int? maxOccurrences,
-  }) =>
-      RecurrenceRule(
-        frequency: frequency ?? this.frequency,
-        interval: interval ?? this.interval,
-        byWeekdays: byWeekdays ?? this.byWeekdays,
-        byMonthDay: byMonthDay ?? this.byMonthDay,
-        endDate: endDate ?? this.endDate,
-        maxOccurrences: maxOccurrences ?? this.maxOccurrences,
-      );
+  }) => RecurrenceRule(
+    frequency: frequency ?? this.frequency,
+    interval: interval ?? this.interval,
+    byWeekdays: byWeekdays ?? this.byWeekdays,
+    byMonthDay: byMonthDay ?? this.byMonthDay,
+    endDate: endDate ?? this.endDate,
+    maxOccurrences: maxOccurrences ?? this.maxOccurrences,
+  );
 }

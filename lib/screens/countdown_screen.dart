@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import 'package:provider/provider.dart';
 import '../providers/countdown_provider.dart';
 import '../models/countdown.dart';
@@ -8,14 +9,18 @@ import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
+Future<void> showCountdownEditor(BuildContext context, {CountdownItem? item}) {
+  return showAppModalSheet<void>(
+    context: context,
+    builder: (_) => _CountdownEditSheet(item: item),
+  );
+}
+
 class CountdownScreen extends StatelessWidget {
   const CountdownScreen({super.key});
 
   void _showEditor(BuildContext context, {CountdownItem? item}) {
-    showAppModalSheet(
-      context: context,
-      builder: (_) => _CountdownEditSheet(item: item),
-    );
+    showCountdownEditor(context, item: item);
   }
 
   @override
@@ -35,12 +40,12 @@ class CountdownScreen extends StatelessWidget {
     final soonCount = upcoming.where((item) => item.daysRemaining <= 7).length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('倒数日')),
+      appBar: AppBar(title: Text(I18n.tr('countdown.title'))),
       body: items.isEmpty
           ? EmptyState(
               icon: Icons.event,
-              message: '暂无倒数日记录',
-              actionLabel: '添加记录',
+              message: I18n.tr('countdown.empty'),
+              actionLabel: I18n.tr('countdown.add_record'),
               onAction: () => _showEditor(context),
             )
           : ListView(
@@ -65,7 +70,7 @@ class CountdownScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '倒数日',
+                              I18n.tr('countdown.title'),
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
                                     fontWeight: FontWeight.w400,
@@ -75,8 +80,10 @@ class CountdownScreen extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               nearest == null
-                                  ? '暂无即将到期的事件'
-                                  : '下一项：${nearest.title} · 还有 ${nearest.daysRemaining} 天',
+                                  ? I18n.tr('countdown.nearest.empty')
+                                  : '${I18n.tr('countdown.nearest.prefix')}${nearest.title} · '
+                                        '${I18n.tr('countdown.nearest.days_prefix')}${nearest.daysRemaining} '
+                                        '${I18n.tr('unit.day')}',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall
@@ -88,13 +95,15 @@ class CountdownScreen extends StatelessWidget {
                             Row(
                               children: [
                                 _SummaryStat(
-                                  label: '总数',
+                                  label: I18n.tr('countdown.summary.total'),
                                   value: '${items.length}',
                                   color: cs.primary,
                                 ),
                                 const SizedBox(width: 14),
                                 _SummaryStat(
-                                  label: '7 天内',
+                                  label: I18n.tr(
+                                    'countdown.summary.within_7_days',
+                                  ),
                                   value: '$soonCount',
                                   color: cs.tertiary,
                                 ),
@@ -113,9 +122,9 @@ class CountdownScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const AppSectionHeader(
-                  title: '全部倒数日',
-                  subtitle: '按优先级和剩余天数排序',
+                AppSectionHeader(
+                  title: I18n.tr('countdown.list.title'),
+                  subtitle: I18n.tr('countdown.list.subtitle'),
                   padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
                 ),
                 ...items.map(
@@ -158,7 +167,9 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
     super.initState();
     final item = widget.item;
     _titleCtrl = TextEditingController(text: item?.title ?? '');
-    _categoryCtrl = TextEditingController(text: item?.category ?? '默认');
+    _categoryCtrl = TextEditingController(
+      text: item?.category ?? I18n.tr('countdown.category.default'),
+    );
     _targetDate =
         item?.targetDate ?? DateTime.now().add(const Duration(days: 1));
     _remind = item?.remind ?? false;
@@ -180,7 +191,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) return;
     final category = _categoryCtrl.text.trim().isEmpty
-        ? '默认'
+        ? I18n.tr('countdown.category.default')
         : _categoryCtrl.text.trim();
     final provider = context.read<CountdownProvider>();
     final next = CountdownItem(
@@ -204,13 +215,16 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final targetText =
-        '${_targetDate.year}-${_targetDate.month.toString().padLeft(2, '0')}-${_targetDate.day.toString().padLeft(2, '0')}';
-    final timeText =
-        '${_remindTime.hour.toString().padLeft(2, '0')}:${_remindTime.minute.toString().padLeft(2, '0')}';
+    final targetText = I18nDateFormat.date(_targetDate);
+    final timeText = I18nDateFormat.timeOfDay(
+      hour: _remindTime.hour,
+      minute: _remindTime.minute,
+    );
     return AppModalSheet(
-      title: widget.item == null ? '添加倒数日' : '编辑倒数日',
-      subtitle: '分类、到期日和提醒会同步到日历',
+      title: widget.item == null
+          ? I18n.tr('countdown.editor.add_title')
+          : I18n.tr('countdown.editor.edit_title'),
+      subtitle: I18n.tr('countdown.editor.subtitle'),
       leadingActions: widget.item == null
           ? const []
           : [
@@ -235,19 +249,23 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
         children: [
           TextField(
             controller: _titleCtrl,
-            decoration: const InputDecoration(labelText: '事件名称'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('countdown.field.title'),
+            ),
             autofocus: widget.item == null,
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _categoryCtrl,
-            decoration: const InputDecoration(labelText: '分类'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('countdown.field.category'),
+            ),
           ),
           const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.event_outlined),
-            title: const Text('目标日期'),
+            title: Text(I18n.tr('countdown.field.target_date')),
             subtitle: Text(targetText),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
@@ -256,7 +274,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
                 initialDate: _targetDate,
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
-                title: '目标日期',
+                title: I18n.tr('countdown.field.target_date'),
               );
               if (picked != null) {
                 setState(() => _targetDate = picked);
@@ -266,9 +284,12 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _remind,
-            title: const Text('到期提醒'),
+            title: Text(I18n.tr('countdown.field.due_reminder')),
             subtitle: Text(
-              _remind ? '提前 $_remindDaysBefore 天 · $timeText' : '关闭',
+              _remind
+                  ? '${I18n.tr('countdown.reminder.before_prefix')}$_remindDaysBefore'
+                        '${I18n.tr('countdown.reminder.before_suffix')} · $timeText'
+                  : I18n.tr('countdown.reminder.closed'),
             ),
             onChanged: (v) => setState(() => _remind = v),
           ),
@@ -276,7 +297,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             Row(
               children: [
                 const SizedBox(width: 4),
-                const Text('提前天数'),
+                Text(I18n.tr('countdown.field.remind_days')),
                 Expanded(
                   child: Slider(
                     value: _remindDaysBefore.toDouble(),
@@ -293,14 +314,14 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.schedule),
-              title: const Text('提醒时间'),
+              title: Text(I18n.tr('countdown.field.remind_time')),
               subtitle: Text(timeText),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
                 final picked = await AppTimePicker.show(
                   context,
                   initialTime: _remindTime,
-                  title: '提醒时间',
+                  title: I18n.tr('countdown.field.remind_time'),
                   minuteStep: 5,
                 );
                 if (picked != null) {
@@ -385,12 +406,12 @@ class _CountdownCard extends StatelessWidget {
         ? Colors.grey
         : (item.daysRemaining <= 3 ? cs.error : cs.primary);
     final status = item.isPinned
-        ? '置顶'
+        ? I18n.tr('countdown.status.pinned')
         : isPast
-        ? '已过期'
+        ? I18n.tr('countdown.status.expired')
         : item.daysRemaining <= 3
-        ? '临近'
-        : '倒数中';
+        ? I18n.tr('countdown.status.soon')
+        : I18n.tr('countdown.status.running');
 
     return Dismissible(
       key: ValueKey(item.id),
@@ -466,7 +487,8 @@ class _CountdownCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '目标: ${item.targetDate.year}-${item.targetDate.month.toString().padLeft(2, '0')}-${item.targetDate.day.toString().padLeft(2, '0')}',
+                              '${I18n.tr('countdown.target.prefix')}'
+                              '${I18nDateFormat.date(item.targetDate)}',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
                                     color: cs.onSurface.withValues(alpha: 0.62),
@@ -485,7 +507,10 @@ class _CountdownCard extends StatelessWidget {
                                 if (item.remind)
                                   _StatusPill(
                                     label:
-                                        '提前${item.remindDaysBefore}天 ${item.remindHour.toString().padLeft(2, '0')}:${item.remindMinute.toString().padLeft(2, '0')}',
+                                        '${I18n.tr('countdown.reminder.before_prefix')}'
+                                        '${item.remindDaysBefore}'
+                                        '${I18n.tr('countdown.reminder.before_suffix')} '
+                                        '${I18nDateFormat.timeOfDay(hour: item.remindHour, minute: item.remindMinute)}',
                                     color: cs.primary,
                                     icon: Icons.notifications_active_outlined,
                                   ),
@@ -500,7 +525,9 @@ class _CountdownCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            isPast ? '已过' : '还有',
+                            isPast
+                                ? I18n.tr('countdown.days.elapsed')
+                                : I18n.tr('countdown.days.remaining'),
                             style: TextStyle(
                               fontSize: 12,
                               color: cs.onSurface.withValues(alpha: 0.54),
@@ -522,7 +549,7 @@ class _CountdownCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '天',
+                                I18n.tr('unit.day'),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: color,

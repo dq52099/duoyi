@@ -1,5 +1,7 @@
 import 'package:uuid/uuid.dart';
 
+import '../core/i18n.dart';
+
 const _timeEntryUuid = Uuid();
 const Object _unsetTimeEntry = Object();
 
@@ -9,24 +11,24 @@ enum TimeEntryCategory { focus, todo, habit, goal, study, work, life, other }
 
 extension TimeEntrySourceX on TimeEntrySource {
   String get label => switch (this) {
-    TimeEntrySource.manual => '手动',
-    TimeEntrySource.pomodoro => '番茄钟',
-    TimeEntrySource.todo => '待办',
-    TimeEntrySource.habit => '习惯',
-    TimeEntrySource.goal => '目标',
+    TimeEntrySource.manual => I18n.tr('time_entry.source.manual'),
+    TimeEntrySource.pomodoro => I18n.tr('time_entry.source.pomodoro'),
+    TimeEntrySource.todo => I18n.tr('time_entry.source.todo'),
+    TimeEntrySource.habit => I18n.tr('time_entry.source.habit'),
+    TimeEntrySource.goal => I18n.tr('time_entry.source.goal'),
   };
 }
 
 extension TimeEntryCategoryX on TimeEntryCategory {
   String get label => switch (this) {
-    TimeEntryCategory.focus => '专注',
-    TimeEntryCategory.todo => '待办',
-    TimeEntryCategory.habit => '习惯',
-    TimeEntryCategory.goal => '目标',
-    TimeEntryCategory.study => '学习',
-    TimeEntryCategory.work => '工作',
-    TimeEntryCategory.life => '生活',
-    TimeEntryCategory.other => '其他',
+    TimeEntryCategory.focus => I18n.tr('time_entry.category.focus'),
+    TimeEntryCategory.todo => I18n.tr('time_entry.category.todo'),
+    TimeEntryCategory.habit => I18n.tr('time_entry.category.habit'),
+    TimeEntryCategory.goal => I18n.tr('time_entry.category.goal'),
+    TimeEntryCategory.study => I18n.tr('time_entry.category.study'),
+    TimeEntryCategory.work => I18n.tr('time_entry.category.work'),
+    TimeEntryCategory.life => I18n.tr('time_entry.category.life'),
+    TimeEntryCategory.other => I18n.tr('time_entry.category.other'),
   };
 }
 
@@ -116,8 +118,7 @@ class TimeEntry {
 
   factory TimeEntry.fromJson(Map<String, dynamic> json) {
     final now = DateTime.now();
-    final start =
-        DateTime.tryParse(json['startAt']?.toString() ?? '') ?? now;
+    final start = DateTime.tryParse(json['startAt']?.toString() ?? '') ?? now;
     final end = DateTime.tryParse(json['endAt']?.toString() ?? '') ?? start;
     return TimeEntry(
       id: json['id']?.toString(),
@@ -125,16 +126,10 @@ class TimeEntry {
       startAt: start,
       endAt: end,
       category:
-          _enumFromJson(
-            TimeEntryCategory.values,
-            json['category'],
-          ) ??
+          _enumFromJson(TimeEntryCategory.values, json['category']) ??
           TimeEntryCategory.other,
       source:
-          _enumFromJson(
-            TimeEntrySource.values,
-            json['source'],
-          ) ??
+          _enumFromJson(TimeEntrySource.values, json['source']) ??
           TimeEntrySource.manual,
       sourceId: json['sourceId']?.toString(),
       dedupeKey: json['dedupeKey']?.toString(),

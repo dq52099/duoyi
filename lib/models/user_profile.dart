@@ -1,39 +1,65 @@
 class UserProfile {
   String username;
   String avatarInitials;
+  String displayName;
+  String email;
+  bool emailVerified;
+  String avatarUrl;
+  String bio;
   int totalTodosCompleted;
   int totalFocusMinutes;
   int currentStreak;
   int bestStreak;
+  DateTime? updatedAt;
   DateTime? lastSyncTime;
 
   UserProfile({
     this.username = '用户',
     this.avatarInitials = '我',
+    this.displayName = '',
+    this.email = '',
+    this.emailVerified = false,
+    this.avatarUrl = '',
+    this.bio = '',
     this.totalTodosCompleted = 0,
     this.totalFocusMinutes = 0,
     this.currentStreak = 0,
     this.bestStreak = 0,
+    this.updatedAt,
     this.lastSyncTime,
   });
 
   Map<String, dynamic> toJson() => {
     'username': username,
     'avatarInitials': avatarInitials,
+    'displayName': displayName,
+    'email': email,
+    'emailVerified': emailVerified,
+    'avatarUrl': avatarUrl,
+    'bio': bio,
     'totalTodosCompleted': totalTodosCompleted,
     'totalFocusMinutes': totalFocusMinutes,
     'currentStreak': currentStreak,
     'bestStreak': bestStreak,
+    'updatedAt': updatedAt?.toIso8601String(),
     'lastSyncTime': lastSyncTime?.toIso8601String(),
   };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
     username: json['username'] ?? '用户',
     avatarInitials: json['avatarInitials'] ?? '我',
+    displayName: json['displayName'] ?? '',
+    email: json['email'] ?? '',
+    emailVerified: json['emailVerified'] == true,
+    avatarUrl: json['avatarUrl'] ?? '',
+    bio: json['bio'] ?? '',
     totalTodosCompleted: json['totalTodosCompleted'] ?? 0,
     totalFocusMinutes: json['totalFocusMinutes'] ?? 0,
     currentStreak: json['currentStreak'] ?? 0,
     bestStreak: json['bestStreak'] ?? 0,
+    updatedAt: json['updatedAt'] != null
+        ? DateTime.parse(json['updatedAt'])
+        : null,
     lastSyncTime: json['lastSyncTime'] != null
         ? DateTime.parse(json['lastSyncTime'])
         : null,

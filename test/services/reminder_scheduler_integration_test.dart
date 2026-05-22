@@ -41,12 +41,7 @@ class _FakeNotifSink implements ReminderNotificationSink {
     List<int>? weekdays,
     String? payload,
   }) async {
-    scheduled.add({
-      'kind': 'daily',
-      'id': id,
-      'hour': hour,
-      'minute': minute,
-    });
+    scheduled.add({'kind': 'daily', 'id': id, 'hour': hour, 'minute': minute});
   }
 
   @override
@@ -121,12 +116,18 @@ class _FakeAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     scheduled.add({
       'kind': 'fullscreen',
       'id': id,
       'when': when,
       'payload': payload,
+      'vibrate': vibrate,
+      'snoozeMinutes': snoozeMinutes,
+      'repeatCount': repeatCount,
     });
   }
 
@@ -141,12 +142,18 @@ class _FakeAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     scheduled.add({
       'kind': 'daily_fullscreen',
       'id': id,
       'hour': hour,
       'minute': minute,
+      'vibrate': vibrate,
+      'snoozeMinutes': snoozeMinutes,
+      'repeatCount': repeatCount,
     });
   }
 }
@@ -200,11 +207,7 @@ void main() {
       );
       await scheduler.syncHabits([h1]);
       expect(alarm.scheduled.length, 1);
-      final h1Off = Habit(
-        id: 'h1',
-        name: '阅读',
-        remind: false,
-      );
+      final h1Off = Habit(id: 'h1', name: '阅读', remind: false);
       await scheduler.syncHabits([h1Off]);
       // 第二轮再写入是空集
       expect(notif.cancelledHabits, contains('h1'));
@@ -242,11 +245,7 @@ void main() {
     });
 
     test('syncGoals 对非 active 状态不调度', () async {
-      final g = GoalItem(
-        id: 'g1',
-        title: '已完成目标',
-        status: GoalStatus.achieved,
-      );
+      final g = GoalItem(id: 'g1', title: '已完成目标', status: GoalStatus.achieved);
       await scheduler.syncGoals([g]);
       expect(notif.scheduled, isEmpty);
       expect(alarm.scheduled, isEmpty);

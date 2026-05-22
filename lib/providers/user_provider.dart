@@ -27,6 +27,9 @@ class UserProvider extends ChangeNotifier {
     _profile.totalFocusMinutes = totalFocusMinutes;
     _profile.currentStreak = currentStreak;
     _profile.bestStreak = bestStreak;
+    _profile.updatedAt = DateTime.now();
+    // ignore: discarded_futures
+    _save();
     _notifyListenersSafely();
   }
 
@@ -55,15 +58,64 @@ class UserProvider extends ChangeNotifier {
     await prefs.setString('user_profile', json.encode(_profile.toJson()));
   }
 
-  Future<void> setUsername(String name) async {
-    _profile.username = name;
-    _profile.avatarInitials = name.isNotEmpty ? name[0] : '我';
+  Future<void> updateProfile({
+    required String username,
+    String? avatarInitials,
+    String? displayName,
+    String? email,
+    bool? emailVerified,
+    String? avatarUrl,
+    String? bio,
+  }) async {
+    final cleanName = username.trim().isEmpty ? '用户' : username.trim();
+    final cleanInitials = (avatarInitials ?? '').trim();
+    _profile.username = cleanName;
+    _profile.avatarInitials = cleanInitials.isNotEmpty
+        ? _firstCodePoint(cleanInitials)
+        : _firstCodePoint(cleanName);
+    if (displayName != null) {
+      _profile.displayName = displayName.trim();
+    }
+    if (email != null) {
+      _profile.email = email.trim();
+    }
+    if (emailVerified != null) {
+      _profile.emailVerified = emailVerified;
+    }
+    if (avatarUrl != null) {
+      _profile.avatarUrl = avatarUrl.trim();
+    }
+    if (bio != null) {
+      _profile.bio = bio.trim();
+    }
+    _profile.updatedAt = DateTime.now();
     notifyListeners();
     await _save();
+  }
+
+  Future<void> clearAccountProfileCache() async {
+    _profile.username = '用户';
+    _profile.avatarInitials = _firstCodePoint(_profile.username);
+    _profile.displayName = '';
+    _profile.email = '';
+    _profile.emailVerified = false;
+    _profile.avatarUrl = '';
+    _profile.bio = '';
+    _profile.updatedAt = DateTime.now();
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setUsername(String name) async {
+    await updateProfile(username: name);
   }
 
   void updateLastSyncTime(DateTime time) {
     _profile.lastSyncTime = time;
     notifyListeners();
+  }
+
+  String _firstCodePoint(String value) {
+    return String.fromCharCode(value.runes.first);
   }
 }

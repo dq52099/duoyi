@@ -17,6 +17,9 @@ class _DispatchPayload {
   final DateTime when;
   final String? payload;
   final bool fullScreen;
+  final bool vibrate;
+  final int snoozeMinutes;
+  final int repeatCount;
 
   const _DispatchPayload({
     required this.id,
@@ -25,6 +28,9 @@ class _DispatchPayload {
     required this.when,
     this.payload,
     this.fullScreen = true,
+    this.vibrate = true,
+    this.snoozeMinutes = 0,
+    this.repeatCount = 0,
   });
 }
 
@@ -53,6 +59,9 @@ class _ResolvedRule {
   final String body;
   final String payload;
   final bool fullScreen;
+  final bool vibrate;
+  final int snoozeMinutes;
+  final int repeatCount;
   final DateTime? when;
   final int? hour;
   final int? minute;
@@ -70,6 +79,9 @@ class _ResolvedRule {
     required this.body,
     required this.payload,
     required this.fullScreen,
+    required this.vibrate,
+    required this.snoozeMinutes,
+    required this.repeatCount,
     required this.scope,
     this.when,
     this.hour,
@@ -94,6 +106,7 @@ class _ResolvedRule {
 class ReminderScheduler {
   final ReminderNotificationSink notif;
   final ReminderAlarmSink alarm;
+  final ReminderEmailSink email;
 
   /// 上一轮已下发的 todo / goal rule → 通道与调度形态。
   final Map<String, Map<String, _ScheduledRule>> _scheduledTodoRules = {};
@@ -103,10 +116,14 @@ class ReminderScheduler {
   final Map<String, String> _scheduledCountdownScopes = {};
 
   /// [notif] 必传；[alarm] 默认取 `AlarmService.instance` 单例，便于测试时
-  /// 注入 fake。两者均以 `ReminderNotificationSink` / `ReminderAlarmSink`
-  /// 接口表达，便于属性测试用 Fake 实例注入。
-  ReminderScheduler(this.notif, {ReminderAlarmSink? alarm})
-    : alarm = alarm ?? AlarmService.instance;
+  /// 注入 fake。[email] 默认 no-op，未配置邮件服务时不会误发本地通知。
+  /// 三者均以 sink 接口表达，便于属性测试用 Fake 实例注入。
+  ReminderScheduler(
+    this.notif, {
+    ReminderAlarmSink? alarm,
+    ReminderEmailSink? email,
+  }) : alarm = alarm ?? AlarmService.instance,
+       email = email ?? const NoopReminderEmailSink();
 
   // -------------------------------------------------------------------------
   // 公共 API
@@ -386,8 +403,8 @@ class ReminderScheduler {
   // 内部：通道路由
   // -------------------------------------------------------------------------
 
-  /// 按 [kind] 路由到 push 或 alarm。权限不足时记录并返回 false，避免
-  /// ChangeNotifier 监听回调里出现未处理异步异常。
+  /// 按 [kind] 路由到 push、alarm 或 email。权限不足时记录并返回 false，
+  /// 避免 ChangeNotifier 监听回调里出现未处理异步异常。
   Future<bool> _dispatch({
     required ReminderKind kind,
     required _DispatchPayload payload,
@@ -418,6 +435,9 @@ class ReminderScheduler {
             when: payload.when,
             payload: payload.payload,
             fullScreen: payload.fullScreen,
+            vibrate: payload.vibrate,
+            snoozeMinutes: payload.snoozeMinutes,
+            repeatCount: payload.repeatCount,
           );
           return true;
         } on AlarmPermissionDeniedException catch (e) {
@@ -445,6 +465,15 @@ class ReminderScheduler {
           );
           return false;
         }
+      case ReminderKind.email:
+        await email.scheduleOnce(
+          id: payload.id,
+          title: payload.title,
+          body: payload.body,
+          when: payload.when,
+          payload: payload.payload,
+        );
+        return true;
     }
   }
 
@@ -479,6 +508,9 @@ class ReminderScheduler {
             weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
             payload: rule.payload,
             fullScreen: rule.fullScreen,
+            vibrate: rule.vibrate,
+            snoozeMinutes: rule.snoozeMinutes,
+            repeatCount: rule.repeatCount,
           );
           return true;
         } on AlarmPermissionDeniedException catch (e) {
@@ -508,6 +540,17 @@ class ReminderScheduler {
           );
           return false;
         }
+      case ReminderKind.email:
+        await email.scheduleRepeating(
+          id: _idFor(rule.key),
+          title: rule.title,
+          body: rule.body,
+          hour: rule.hour!,
+          minute: rule.minute!,
+          weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
+          payload: rule.payload,
+        );
+        return true;
     }
   }
 
@@ -555,6 +598,7 @@ class ReminderScheduler {
     final intId = _idFor('$objectType:$objectId:$ruleId');
     await notif.cancel(intId);
     await alarm.cancel(intId);
+    await email.cancel(intId);
   }
 
   Future<void> _syncRuleObjects({
@@ -893,6 +937,9 @@ class ReminderScheduler {
       body: body,
       payload: payload,
       fullScreen: rule.fullScreen,
+      vibrate: rule.vibrate,
+      snoozeMinutes: rule.snoozeMinutes,
+      repeatCount: rule.repeatCount,
       when: when,
       scope: 'once',
     );
@@ -924,6 +971,9 @@ class ReminderScheduler {
       body: body,
       payload: payload,
       fullScreen: rule.fullScreen,
+      vibrate: rule.vibrate,
+      snoozeMinutes: rule.snoozeMinutes,
+      repeatCount: rule.repeatCount,
       hour: hour,
       minute: minute,
       weekdays: normalized,
@@ -945,6 +995,9 @@ class ReminderScheduler {
               when: rule.when!,
               payload: rule.payload,
               fullScreen: rule.fullScreen,
+              vibrate: rule.vibrate,
+              snoozeMinutes: rule.snoozeMinutes,
+              repeatCount: rule.repeatCount,
             ),
           );
         case _DispatchMode.repeating:
@@ -996,7 +1049,11 @@ class ReminderScheduler {
     ReminderKind kind,
   ) {
     final subject = objectType == 'goal' ? '目标' : '待办';
-    final prefix = kind == ReminderKind.alarm ? '⏰' : '🔔';
+    final prefix = switch (kind) {
+      ReminderKind.alarm => '⏰',
+      ReminderKind.email => '✉️',
+      ReminderKind.push => '🔔',
+    };
     return switch (type) {
       ReminderRuleType.absolute => '$prefix $subject提醒',
       ReminderRuleType.relativeToDue => '$prefix $subject提前提醒',

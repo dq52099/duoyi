@@ -7,66 +7,19 @@ import '../models/habit.dart';
 import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import 'period_report.dart';
 
-class PeriodReport {
-  /// 报告覆盖范围起点（含）。
-  final DateTime start;
-
-  /// 报告覆盖范围终点（含）。
-  final DateTime end;
-
-  /// 周期内创建的待办数。
-  final int todosCreated;
-
-  /// 周期内完成的待办数。
-  final int todosCompleted;
-
-  /// 周期内打卡的习惯次数总和。
-  final int habitCheckIns;
-
-  /// 周期内已坚持的最长习惯连续天数。
-  final int longestHabitStreak;
-
-  /// 周期内完成的番茄数。
-  final int focusSessions;
-
-  /// 周期内累计专注秒数。
-  final int focusSeconds;
-
-  /// 周期内累计时间足迹秒数。
-  final int timeEntrySeconds;
-
-  /// 各类别时间足迹秒数。
-  final Map<TimeEntryCategory, int> timeEntryByCategory;
-
-  /// 完成率（完成 / 创建）。
-  double get todoCompletionRate {
-    if (todosCreated == 0) return 0;
-    return (todosCompleted / todosCreated).clamp(0.0, 1.0);
-  }
-
-  /// 专注分钟。
-  int get focusMinutes => focusSeconds ~/ 60;
-
-  /// 时间足迹分钟。
-  int get timeEntryMinutes => timeEntrySeconds ~/ 60;
-
-  const PeriodReport({
-    required this.start,
-    required this.end,
-    required this.todosCreated,
-    required this.todosCompleted,
-    required this.habitCheckIns,
-    required this.longestHabitStreak,
-    required this.focusSessions,
-    required this.focusSeconds,
-    required this.timeEntrySeconds,
-    required this.timeEntryByCategory,
-  });
-}
+export 'period_report.dart';
 
 class ReportEngine {
   ReportEngine._();
+
+  static ReportComparison compare({
+    required PeriodReport current,
+    required PeriodReport previous,
+  }) {
+    return ReportComparison.compare(current: current, previous: previous);
+  }
 
   /// 生成 [start, end] 区间的报告。
   ///
@@ -81,8 +34,7 @@ class ReportEngine {
   }) {
     final endExclusive = DateTime(end.year, end.month, end.day + 1);
 
-    bool inRange(DateTime d) =>
-        !d.isBefore(start) && d.isBefore(endExclusive);
+    bool inRange(DateTime d) => !d.isBefore(start) && d.isBefore(endExclusive);
 
     final created = todos.where((t) => inRange(t.createdAt)).length;
     final completed = todos.where((t) {
@@ -95,7 +47,9 @@ class ReportEngine {
     for (final h in habits) {
       for (final entry in h.completions.entries) {
         final d = _parseDateKey(entry.key);
-        if (d != null && inRange(d)) habitCheckIns += entry.value;
+        if (d != null && inRange(d) && h.activeForDate(d)) {
+          habitCheckIns += entry.value;
+        }
       }
       longestStreak = longestStreak > h.currentStreak
           ? longestStreak
@@ -103,9 +57,7 @@ class ReportEngine {
     }
 
     final focusSessions = sessions
-        .where(
-          (s) => s.type == PomodoroType.focus && inRange(s.endTime),
-        )
+        .where((s) => s.type == PomodoroType.focus && inRange(s.endTime))
         .toList();
     final focusSeconds = focusSessions.fold<int>(
       0,

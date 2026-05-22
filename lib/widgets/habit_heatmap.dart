@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/i18n_date_format.dart';
+
 class HabitHeatmap extends StatelessWidget {
   final Map<String, int> heatmapData; // dateKey -> intensity 0-5
   final int weeks;
@@ -85,8 +87,7 @@ class HabitHeatmap extends StatelessWidget {
                           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                       final intensity = heatmapData[key] ?? 0;
                       return Tooltip(
-                        message:
-                            '${date.year}-${date.month}-${date.day} · $intensity 次',
+                        message: '${I18nDateFormat.date(date)} · $intensity 次',
                         child: Container(
                           width: cell,
                           height: cell,

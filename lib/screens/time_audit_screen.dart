@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
-import '../core/i18n.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import '../models/time_entry.dart';
 import '../providers/time_audit_provider.dart';
 import '../widgets/app_date_picker.dart';
@@ -12,7 +13,7 @@ import '../widgets/surface_components.dart';
 
 enum _AuditRange { today, week, month, all }
 
-enum _AuditView { timeline, category, calendar }
+enum _AuditView { timeline, category, calendar, trend }
 
 class TimeAuditScreen extends StatefulWidget {
   const TimeAuditScreen({super.key});
@@ -34,11 +35,20 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
       (sum, entry) => sum + entry.durationSeconds,
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('时间足迹')),
+      appBar: AppBar(
+        title: Text(I18n.tr('time_audit.title')),
+        actions: [
+          IconButton(
+            tooltip: I18n.tr('time_audit.copy_report'),
+            icon: const Icon(Icons.content_copy_outlined),
+            onPressed: entries.isEmpty ? null : () => _copyReport(entries),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showEditor(context),
         icon: const Icon(Icons.add),
-        label: const Text('补记'),
+        label: Text(I18n.tr('time_audit.add_manual')),
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
@@ -50,32 +60,50 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
           ),
           const SizedBox(height: 10),
           SegmentedButton<_AuditRange>(
-            segments: const [
-              ButtonSegment(value: _AuditRange.today, label: Text('今天')),
-              ButtonSegment(value: _AuditRange.week, label: Text('本周')),
-              ButtonSegment(value: _AuditRange.month, label: Text('本月')),
-              ButtonSegment(value: _AuditRange.all, label: Text('全部')),
+            segments: [
+              ButtonSegment(
+                value: _AuditRange.today,
+                label: Text(I18n.tr('time_audit.segment.today')),
+              ),
+              ButtonSegment(
+                value: _AuditRange.week,
+                label: Text(I18n.tr('time_audit.range.week')),
+              ),
+              ButtonSegment(
+                value: _AuditRange.month,
+                label: Text(I18n.tr('time_audit.range.month')),
+              ),
+              ButtonSegment(
+                value: _AuditRange.all,
+                label: Text(I18n.tr('time_audit.range.all')),
+              ),
             ],
             selected: {_range},
             onSelectionChanged: (value) => setState(() => _range = value.first),
           ),
           const SizedBox(height: 10),
           SegmentedButton<_AuditView>(
-            segments: const [
+            showSelectedIcon: false,
+            segments: [
               ButtonSegment(
                 value: _AuditView.timeline,
-                icon: Icon(Icons.view_agenda_outlined),
-                label: Text('时间线'),
+                icon: const Icon(Icons.view_agenda_outlined),
+                label: Text(I18n.tr('time_audit.view.timeline')),
               ),
               ButtonSegment(
                 value: _AuditView.category,
-                icon: Icon(Icons.donut_small_outlined),
-                label: Text('分类'),
+                icon: const Icon(Icons.donut_small_outlined),
+                label: Text(I18n.tr('time_audit.view.category')),
               ),
               ButtonSegment(
                 value: _AuditView.calendar,
-                icon: Icon(Icons.calendar_month_outlined),
-                label: Text('日历'),
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(I18n.tr('time_audit.view.calendar')),
+              ),
+              ButtonSegment(
+                value: _AuditView.trend,
+                icon: const Icon(Icons.bar_chart_outlined),
+                label: Text(I18n.tr('time_audit.view.trend')),
               ),
             ],
             selected: {_view},
@@ -95,7 +123,9 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
                     ).colorScheme.onSurface.withValues(alpha: 0.32),
                   ),
                   const SizedBox(height: 10),
-                  Text('${_rangeLabel(_range)}暂无时间记录'),
+                  Text(
+                    '${_rangeLabel(_range)}${I18n.tr('time_audit.empty.suffix')}',
+                  ),
                 ],
               ),
             )
@@ -123,6 +153,7 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
         entries: entries,
         onEdit: (entry) => _showEditor(context, entry: entry),
       ),
+      _AuditView.trend => _TrendAuditView(entries: entries),
     };
   }
 
@@ -131,6 +162,63 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
       context: context,
       builder: (_) => _TimeEntrySheet(entry: entry),
     );
+  }
+
+  Future<void> _copyReport(List<TimeEntry> entries) async {
+    final report = _buildReport(entries);
+    await Clipboard.setData(ClipboardData(text: report));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(I18n.tr('time_audit.report_copied')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _buildReport(List<TimeEntry> entries) {
+    final totalSeconds = entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.durationSeconds,
+    );
+    final byCategory = <TimeEntryCategory, int>{};
+    for (final entry in entries) {
+      byCategory[entry.category] =
+          (byCategory[entry.category] ?? 0) + entry.durationSeconds;
+    }
+    final categories = byCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted = [...entries]..sort((a, b) => a.startAt.compareTo(b.startAt));
+    final separator = _labelSeparator();
+    final buffer = StringBuffer()
+      ..writeln('# ${I18n.tr('time_audit.report.title')}')
+      ..writeln()
+      ..writeln(
+        '- ${I18n.tr('time_audit.report.range')}$separator${_rangeLabel(_range)}',
+      )
+      ..writeln(
+        '- ${I18n.tr('time_audit.report.total')}$separator${_formatDuration(totalSeconds)}',
+      )
+      ..writeln(
+        '- ${I18n.tr('time_audit.entry_count')}$separator${entries.length}',
+      )
+      ..writeln()
+      ..writeln('## ${I18n.tr('time_audit.report.category')}');
+    for (final item in categories) {
+      buffer.writeln(
+        '- ${item.key.label}$separator${_formatDuration(item.value)}',
+      );
+    }
+    buffer
+      ..writeln()
+      ..writeln('## ${I18n.tr('time_audit.report.details')}');
+    for (final entry in sorted) {
+      buffer.writeln(
+        '- ${_date(entry.startAt)} ${_clock(entry.startAt)}-${_clock(entry.endAt)} '
+        '${entry.title} · ${entry.category.label} · ${_formatDuration(entry.durationSeconds)}',
+      );
+    }
+    return buffer.toString().trimRight();
   }
 
   List<TimeEntry> _entriesFor(TimeAuditProvider provider) {
@@ -156,10 +244,10 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
   }
 
   String _rangeLabel(_AuditRange range) => switch (range) {
-    _AuditRange.today => '今日',
-    _AuditRange.week => '本周',
-    _AuditRange.month => '本月',
-    _AuditRange.all => '全部',
+    _AuditRange.today => I18n.tr('time_audit.range.today'),
+    _AuditRange.week => I18n.tr('time_audit.range.week'),
+    _AuditRange.month => I18n.tr('time_audit.range.month'),
+    _AuditRange.all => I18n.tr('time_audit.range.all'),
   };
 }
 
@@ -182,7 +270,7 @@ class _TimelineView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
-            '$rangeLabel时间线',
+            _rangeViewTitle(rangeLabel, I18n.tr('time_audit.view.timeline')),
             style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
           ),
         ),
@@ -223,11 +311,11 @@ class _CategoryView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
-            '分类视图',
-            style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            I18n.tr('time_audit.category_view'),
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
           ),
         ),
         AppSurfaceCard(
@@ -250,9 +338,12 @@ class _CategoryView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '来源分布',
-                style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+              Text(
+                I18n.tr('time_audit.source_breakdown'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 10),
               for (final item in sources)
@@ -401,11 +492,11 @@ class _CalendarAuditView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
-            '日历视图',
-            style: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            I18n.tr('time_audit.calendar_view'),
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
           ),
         ),
         for (final day in days) ...[
@@ -414,6 +505,131 @@ class _CalendarAuditView extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class _TrendAuditView extends StatelessWidget {
+  final List<TimeEntry> entries;
+
+  const _TrendAuditView({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <DateTime, List<TimeEntry>>{};
+    for (final entry in entries) {
+      final day = DateTime(
+        entry.startAt.year,
+        entry.startAt.month,
+        entry.startAt.day,
+      );
+      grouped.putIfAbsent(day, () => <TimeEntry>[]).add(entry);
+    }
+    final days = grouped.keys.toList()..sort();
+    final totals = {
+      for (final day in days)
+        day: grouped[day]!.fold<int>(
+          0,
+          (sum, entry) => sum + entry.durationSeconds,
+        ),
+    };
+    final maxSeconds = totals.values.fold<int>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+          child: Text(
+            I18n.tr('time_audit.trend_view'),
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+          ),
+        ),
+        AppSurfaceCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              for (final day in days)
+                _TrendDayRow(
+                  day: day,
+                  entries: grouped[day]!,
+                  totalSeconds: totals[day] ?? 0,
+                  maxSeconds: maxSeconds,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrendDayRow extends StatelessWidget {
+  final DateTime day;
+  final List<TimeEntry> entries;
+  final int totalSeconds;
+  final int maxSeconds;
+
+  const _TrendDayRow({
+    required this.day,
+    required this.entries,
+    required this.totalSeconds,
+    required this.maxSeconds,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final ratio = maxSeconds <= 0 ? 0.0 : totalSeconds / maxSeconds;
+    final topCategory = _topCategory(entries);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 58,
+            child: Text(
+              '${day.month}/${day.day}',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 9,
+                color: topCategory == null
+                    ? cs.primary
+                    : _colorFor(topCategory),
+                backgroundColor: cs.primary.withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 74,
+            child: Text(
+              _formatDuration(totalSeconds),
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  TimeEntryCategory? _topCategory(List<TimeEntry> entries) {
+    if (entries.isEmpty) return null;
+    final totals = <TimeEntryCategory, int>{};
+    for (final entry in entries) {
+      totals[entry.category] =
+          (totals[entry.category] ?? 0) + entry.durationSeconds;
+    }
+    return totals.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
   }
 }
 
@@ -444,7 +660,7 @@ class _DayGroupCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${day.month}月${day.day}日',
+                  I18nDateFormat.monthDay(day),
                   style: const TextStyle(
                     fontWeight: FontWeight.w400,
                     fontSize: 14,
@@ -552,7 +768,8 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _MetricBlock(
-                  title: '$rangeLabel投入',
+                  title:
+                      '$rangeLabel${I18n.tr('time_audit.investment_suffix')}',
                   value: _formatDuration(totalSeconds),
                   icon: Icons.timelapse_outlined,
                   color: cs.primary,
@@ -561,8 +778,9 @@ class _SummaryCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _MetricBlock(
-                  title: '记录数',
-                  value: '${entries.length} 条',
+                  title: I18n.tr('time_audit.entry_count'),
+                  value:
+                      '${entries.length}${I18n.tr('time_audit.entry_count_suffix')}',
                   icon: Icons.list_alt_outlined,
                   color: const Color(0xFF26A69A),
                 ),
@@ -764,7 +982,7 @@ class _TimeEntryCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '删除',
+            tooltip: I18n.tr('action.delete'),
             icon: const Icon(Icons.delete_outline),
             onPressed: () => context.read<TimeAuditProvider>().delete(entry.id),
           ),
@@ -795,7 +1013,9 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   void initState() {
     super.initState();
     final entry = widget.entry;
-    _titleCtrl = TextEditingController(text: entry?.title ?? '时间记录');
+    _titleCtrl = TextEditingController(
+      text: entry?.title ?? I18n.tr('time_audit.default_title'),
+    );
     _noteCtrl = TextEditingController(text: entry?.note ?? '');
     _minutesCtrl = TextEditingController(
       text: entry == null
@@ -818,7 +1038,9 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   @override
   Widget build(BuildContext context) {
     return AppModalSheet(
-      title: widget.entry == null ? '补记时间' : '编辑时间',
+      title: widget.entry == null
+          ? I18n.tr('time_audit.sheet.add_title')
+          : I18n.tr('time_audit.sheet.edit_title'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -831,15 +1053,15 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
         children: [
           TextField(
             controller: _titleCtrl,
-            decoration: const InputDecoration(
-              labelText: '标题',
-              prefixIcon: Icon(Icons.title, size: 20),
+            decoration: InputDecoration(
+              labelText: I18n.tr('time_audit.field.title'),
+              prefixIcon: const Icon(Icons.title, size: 20),
             ),
           ),
           const SizedBox(height: DesignTokens.spaceMd),
           AppDropdownField<TimeEntryCategory>(
             initialValue: _category,
-            labelText: '分类',
+            labelText: I18n.tr('time_audit.field.category'),
             prefixIcon: const Icon(Icons.label_outline, size: 20),
             items: [
               for (final c in TimeEntryCategory.values)
@@ -856,7 +1078,7 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.play_arrow),
-                  title: const Text('开始'),
+                  title: Text(I18n.tr('time_audit.field.start')),
                   subtitle: Text(_formatDateTime(_startAt)),
                   onTap: _pickStart,
                 ),
@@ -865,7 +1087,7 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.stop),
-                  title: const Text('结束'),
+                  title: Text(I18n.tr('time_audit.field.end')),
                   subtitle: Text(_formatDateTime(_endAt)),
                   onTap: _pickEnd,
                 ),
@@ -877,13 +1099,17 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
             controller: _minutesCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: '分钟数'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('time_audit.field.minutes'),
+            ),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: DesignTokens.spaceSm),
           TextField(
             controller: _noteCtrl,
-            decoration: const InputDecoration(labelText: '备注'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('time_audit.field.note'),
+            ),
           ),
         ],
       ),
@@ -896,14 +1122,14 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
       initialDate: _startAt,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      title: '开始日期',
+      title: I18n.tr('time_audit.picker.start_date'),
     );
     if (date == null) return;
     if (!mounted) return;
     final time = await AppTimePicker.show(
       context,
       initialTime: TimeOfDay.fromDateTime(_startAt),
-      title: '开始时间',
+      title: I18n.tr('time_audit.picker.start_time'),
       minuteStep: 5,
     );
     if (time == null) return;
@@ -927,14 +1153,14 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
       initialDate: _endAt,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      title: '结束日期',
+      title: I18n.tr('time_audit.picker.end_date'),
     );
     if (date == null) return;
     if (!mounted) return;
     final time = await AppTimePicker.show(
       context,
       initialTime: TimeOfDay.fromDateTime(_endAt),
-      title: '结束时间',
+      title: I18n.tr('time_audit.picker.end_time'),
       minuteStep: 5,
     );
     if (time == null) return;
@@ -958,7 +1184,9 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
         : _startAt.add(Duration(minutes: minutes <= 0 ? 1 : minutes));
     final entry = TimeEntry(
       id: widget.entry?.id,
-      title: _titleCtrl.text.trim().isEmpty ? '时间记录' : _titleCtrl.text.trim(),
+      title: _titleCtrl.text.trim().isEmpty
+          ? I18n.tr('time_audit.default_title')
+          : _titleCtrl.text.trim(),
       startAt: _startAt,
       endAt: endAt,
       category: _category,
@@ -995,17 +1223,31 @@ class _Chip extends StatelessWidget {
   }
 }
 
-String _formatDateTime(DateTime d) =>
-    '${d.month}/${d.day} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+String _formatDateTime(DateTime d) => I18nDateFormat.shortDateTime(d);
 
-String _clock(DateTime d) =>
-    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+String _clock(DateTime d) => I18nDateFormat.time(d);
+
+String _date(DateTime d) => I18nDateFormat.date(d);
 
 String _formatDuration(int seconds) {
   if (seconds >= 3600) {
-    return '${(seconds / 3600).toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} 小时';
+    return '${(seconds / 3600).toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} ${I18n.tr('unit.hour')}';
   }
-  return '${(seconds / 60).toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} 分钟';
+  return '${(seconds / 60).toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} ${I18n.tr('unit.minute')}';
+}
+
+String _rangeViewTitle(String rangeLabel, String viewLabel) {
+  return switch (I18n.current) {
+    AppLocale.en => '$rangeLabel $viewLabel',
+    AppLocale.zh => '$rangeLabel$viewLabel',
+  };
+}
+
+String _labelSeparator() {
+  return switch (I18n.current) {
+    AppLocale.en => ': ',
+    AppLocale.zh => '：',
+  };
 }
 
 Color _colorFor(TimeEntryCategory category) => switch (category) {

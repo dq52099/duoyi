@@ -1,19 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
+import '../core/notification_history_policy.dart';
+import '../core/report_reminder_config.dart';
 import '../services/alarm_service.dart';
 import '../providers/notification_service.dart';
 import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
 import '../services/permission_health_service.dart';
+import '../services/reminder_ringtone_settings.dart';
 import '../providers/preferences_provider.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/notification_health_card.dart';
 import '../widgets/surface_components.dart';
 
+enum PreferencesInitialSection { notifications }
+
 /// 偏好设置页。纯本地的用户习惯，与服务器/管理员配置无关。
-class PreferencesScreen extends StatelessWidget {
-  const PreferencesScreen({super.key});
+class PreferencesScreen extends StatefulWidget {
+  final PreferencesInitialSection? initialSection;
+
+  const PreferencesScreen({super.key, this.initialSection});
+
+  @override
+  State<PreferencesScreen> createState() => _PreferencesScreenState();
+}
+
+class _PreferencesScreenState extends State<PreferencesScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _notificationSectionKey = GlobalKey();
 
   static const _dateFormats = [
     ['yyyy-MM-dd', '2026-05-07'],
@@ -35,6 +52,46 @@ class PreferencesScreen extends StatelessWidget {
     ['Europe/Paris', '巴黎时间'],
     ['Australia/Sydney', '悉尼时间'],
   ];
+  static const _notificationHistoryLimitOptions =
+      NotificationHistoryPolicy.options;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialSection == PreferencesInitialSection.notifications) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToInitialSection();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant PreferencesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSection != widget.initialSection &&
+        widget.initialSection == PreferencesInitialSection.notifications) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToInitialSection();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToInitialSection() {
+    final target = _notificationSectionKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: 0.04,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,8 +99,9 @@ class PreferencesScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('偏好设置')),
+      appBar: AppBar(title: Text(I18n.tr('preferences.title'))),
       body: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         children: [
           AppSurfaceCard(
@@ -70,7 +128,7 @@ class PreferencesScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '本地偏好',
+                        I18n.tr('preferences.local.title'),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w400,
@@ -79,7 +137,7 @@ class PreferencesScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '调整日期、默认入口、交互反馈和本机通知行为',
+                        I18n.tr('preferences.local.subtitle'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.66),
                         ),
@@ -92,19 +150,27 @@ class PreferencesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '日期与日历',
-            subtitle: '影响今日卡片、日历和日期展示',
+            title: I18n.tr('preferences.section.date'),
+            subtitle: I18n.tr('preferences.section.date.subtitle'),
             children: [
               AppSettingsTile(
                 icon: Icons.calendar_view_week_outlined,
                 color: cs.primary,
-                title: '一周从哪一天开始',
-                subtitle: p.firstDayOfWeek == 1 ? '当前为周一' : '当前为周日',
+                title: I18n.tr('preferences.first_day.title'),
+                subtitle: p.firstDayOfWeek == 1
+                    ? I18n.tr('preferences.first_day.current_monday')
+                    : I18n.tr('preferences.first_day.current_sunday'),
                 trailing: _compactDropdown<int>(
                   value: p.firstDayOfWeek,
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('周一')),
-                    DropdownMenuItem(value: 7, child: Text('周日')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 1,
+                      child: Text(I18n.tr('weekday.mon')),
+                    ),
+                    DropdownMenuItem(
+                      value: 7,
+                      child: Text(I18n.tr('weekday.sun')),
+                    ),
                   ],
                   onChanged: (v) => v == null
                       ? null
@@ -116,7 +182,7 @@ class PreferencesScreen extends StatelessWidget {
               AppSettingsTile(
                 icon: Icons.date_range_outlined,
                 color: Colors.teal,
-                title: '日期格式',
+                title: I18n.tr('preferences.date_format.title'),
                 subtitle: _dateFormats.firstWhere(
                   (f) => f[0] == p.dateFormat,
                   orElse: () => _dateFormats.first,
@@ -139,9 +205,9 @@ class PreferencesScreen extends StatelessWidget {
               AppSettingsTile(
                 icon: Icons.public_outlined,
                 color: Colors.deepOrange,
-                title: '应用时区',
+                title: I18n.tr('preferences.timezone.title'),
                 subtitle: p.followSystemTimeZone
-                    ? '跟随手机：${p.appTimeZone}'
+                    ? '${I18n.tr('preferences.timezone.follow_system')}：${p.appTimeZone}'
                     : p.appTimeZone,
                 trailing: _compactDropdown<String>(
                   width: 156,
@@ -162,8 +228,8 @@ class PreferencesScreen extends StatelessWidget {
                 icon: Icons.brightness_2_outlined,
                 color: Colors.indigo,
                 value: p.showLunar,
-                title: '显示农历',
-                subtitle: '影响日历月视图与今日卡',
+                title: I18n.tr('preferences.lunar.title'),
+                subtitle: I18n.tr('preferences.lunar.subtitle'),
                 onChanged: (v) =>
                     context.read<PreferencesProvider>().setShowLunar(v),
               ),
@@ -171,24 +237,24 @@ class PreferencesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '默认行为',
-            subtitle: '启动入口、快捷捕获和专注时长',
+            title: I18n.tr('preferences.section.defaults'),
+            subtitle: I18n.tr('preferences.section.defaults.subtitle'),
             children: [
               AppSettingsTile(
                 icon: Icons.open_in_new,
                 color: Colors.blue,
-                title: '启动默认 Tab',
+                title: I18n.tr('preferences.default_tab.title'),
                 subtitle: _tabLabel(p.defaultTab),
                 trailing: _compactDropdown<int>(
                   value: p.defaultTab,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('今日')),
-                    DropdownMenuItem(value: 1, child: Text('待办')),
-                    DropdownMenuItem(value: 2, child: Text('习惯')),
-                    DropdownMenuItem(value: 3, child: Text('日历')),
-                    DropdownMenuItem(value: 4, child: Text('专注')),
-                    DropdownMenuItem(value: 5, child: Text('小组件')),
-                    DropdownMenuItem(value: 6, child: Text('我的')),
+                  items: [
+                    DropdownMenuItem(value: 0, child: Text(_tabLabel(0))),
+                    DropdownMenuItem(value: 1, child: Text(_tabLabel(1))),
+                    DropdownMenuItem(value: 2, child: Text(_tabLabel(2))),
+                    DropdownMenuItem(value: 3, child: Text(_tabLabel(3))),
+                    DropdownMenuItem(value: 4, child: Text(_tabLabel(4))),
+                    DropdownMenuItem(value: 5, child: Text(_tabLabel(5))),
+                    DropdownMenuItem(value: 6, child: Text(_tabLabel(6))),
                   ],
                   onChanged: (v) => v == null
                       ? null
@@ -199,17 +265,29 @@ class PreferencesScreen extends StatelessWidget {
                 icon: Icons.add_circle_outline,
                 color: cs.primary,
                 value: p.quickCaptureFab,
-                title: '显示快速捕获按钮',
-                subtitle: '今日页右下角的快捷创建按钮',
+                title: I18n.tr('preferences.quick_capture.title'),
+                subtitle: I18n.tr('preferences.quick_capture.subtitle'),
                 onChanged: (v) =>
                     context.read<PreferencesProvider>().setQuickCaptureFab(v),
+              ),
+              AppSwitchTile(
+                icon: Icons.notifications_active_outlined,
+                color: Colors.deepOrange,
+                value: p.notificationQuickAdd,
+                title: I18n.tr('preferences.notification_quick_add.title'),
+                subtitle: I18n.tr(
+                  'preferences.notification_quick_add.subtitle',
+                ),
+                onChanged: (v) => context
+                    .read<PreferencesProvider>()
+                    .setNotificationQuickAdd(v),
               ),
               AppSwitchTile(
                 icon: Icons.done_all,
                 color: Colors.green,
                 value: p.showCompletedTodos,
-                title: '待办页显示已完成',
-                subtitle: '关闭后只看未完成和进行中的事项',
+                title: I18n.tr('preferences.show_completed.title'),
+                subtitle: I18n.tr('preferences.show_completed.subtitle'),
                 onChanged: (v) => context
                     .read<PreferencesProvider>()
                     .setShowCompletedTodos(v),
@@ -217,13 +295,14 @@ class PreferencesScreen extends StatelessWidget {
               _SliderSetting(
                 icon: Icons.timer_outlined,
                 color: Colors.red,
-                title: '默认番茄钟长度',
-                subtitle: '${p.defaultPomodoroMinutes} 分钟',
+                title: I18n.tr('preferences.pomodoro_length.title'),
+                subtitle:
+                    '${p.defaultPomodoroMinutes} ${I18n.tr('unit.minute')}',
                 value: p.defaultPomodoroMinutes.toDouble(),
                 min: 5,
                 max: 90,
                 divisions: 17,
-                label: '${p.defaultPomodoroMinutes} 分',
+                label: '${p.defaultPomodoroMinutes} ${I18n.tr('unit.min')}',
                 onChanged: (v) => context
                     .read<PreferencesProvider>()
                     .setDefaultPomodoroMinutes(v.toInt()),
@@ -232,8 +311,8 @@ class PreferencesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '底部导航栏',
-            subtitle: '配置显示菜单和顺序，至少保留两个入口',
+            title: I18n.tr('preferences.section.bottom_nav'),
+            subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
             children: [
               for (final tab in p.bottomNavOrder)
                 _NavConfigTile(
@@ -249,15 +328,15 @@ class PreferencesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '交互',
-            subtitle: '触感反馈与完成动作',
+            title: I18n.tr('preferences.section.interaction'),
+            subtitle: I18n.tr('preferences.section.interaction.subtitle'),
             children: [
               AppSwitchTile(
                 icon: Icons.vibration,
                 color: Colors.purple,
                 value: p.haptic,
-                title: '震动反馈',
-                subtitle: '完成/切换/解锁等操作',
+                title: I18n.tr('preferences.haptic.title'),
+                subtitle: I18n.tr('preferences.haptic.subtitle'),
                 onChanged: (v) =>
                     context.read<PreferencesProvider>().setHaptic(v),
               ),
@@ -265,23 +344,23 @@ class PreferencesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '待办自动归档',
-            subtitle: '减少已完成项目对列表的干扰',
+            title: I18n.tr('preferences.section.auto_archive'),
+            subtitle: I18n.tr('preferences.section.auto_archive.subtitle'),
             children: [
               _SliderSetting(
                 icon: Icons.inventory_2_outlined,
                 color: Colors.brown,
-                title: '完成 N 天后隐藏',
+                title: I18n.tr('preferences.auto_archive.title'),
                 subtitle: p.autoArchiveCompletedDays == 0
-                    ? '从不归档'
-                    : '${p.autoArchiveCompletedDays} 天后自动隐藏',
+                    ? I18n.tr('preferences.auto_archive.never')
+                    : '${p.autoArchiveCompletedDays} ${I18n.tr('preferences.auto_archive.after_days')}',
                 value: p.autoArchiveCompletedDays.toDouble(),
                 min: 0,
                 max: 30,
                 divisions: 30,
                 label: p.autoArchiveCompletedDays == 0
-                    ? '关'
-                    : '${p.autoArchiveCompletedDays} 天',
+                    ? I18n.tr('action.off')
+                    : '${p.autoArchiveCompletedDays} ${I18n.tr('unit.day')}',
                 onChanged: (v) => context
                     .read<PreferencesProvider>()
                     .setAutoArchiveCompletedDays(v.toInt()),
@@ -289,26 +368,57 @@ class PreferencesScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          AppSettingsSection(
-            title: '每日提醒',
-            subtitle: '最多三组提醒：时间、任务范围、重复周期、节假日暂停',
-            children: [
-              for (var i = 0; i < p.dailyReminderSlots.length; i++)
-                _DailyReminderSlotTile(
-                  index: i,
-                  slot: p.dailyReminderSlots[i],
-                  repeatLabel: _repeatDaysLabel(
-                    p.dailyReminderSlots[i].repeatDays,
+          KeyedSubtree(
+            key: _notificationSectionKey,
+            child: AppSettingsSection(
+              title: '提醒偏好 / 通知设置',
+              subtitle: '管理每日提醒、通知权限、通知记录保留和提醒铃声',
+              children: [
+                AppSettingsTile(
+                  icon: Icons.history_outlined,
+                  color: Colors.blueGrey,
+                  title: '通知记录保留',
+                  subtitle:
+                      '最多保留 ${p.notificationHistoryLimit} 条历史，调低后会自动裁剪旧记录',
+                  trailing: AppCompactDropdown<int>(
+                    value: p.notificationHistoryLimit,
+                    width: 116,
+                    items: [
+                      for (final value in _notificationHistoryLimitOptions)
+                        DropdownMenuItem(value: value, child: Text('$value 条')),
+                    ],
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      final prefs = context.read<PreferencesProvider>();
+                      final notif = context.read<NotificationService>();
+                      await prefs.setNotificationHistoryLimit(value);
+                      await notif.setHistoryLimit(
+                        prefs.notificationHistoryLimit,
+                      );
+                    },
                   ),
-                  weekdayLabel: _weekdayLabel,
                 ),
-            ],
+                for (var i = 0; i < p.dailyReminderSlots.length; i++)
+                  _DailyReminderSlotTile(
+                    index: i,
+                    slot: p.dailyReminderSlots[i],
+                    repeatLabel: _repeatDaysLabel(
+                      p.dailyReminderSlots[i].repeatDays,
+                    ),
+                    weekdayLabel: _weekdayLabel,
+                  ),
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
+          const _ReportReminderSection(),
           const SizedBox(height: 12),
           Consumer<NotificationService>(
             builder: (context, notif, child) =>
                 _NotificationHealthSection(notificationService: notif),
           ),
+          const SizedBox(height: 12),
+          const _ReminderRingtoneSection(),
         ],
       ),
     );
@@ -331,36 +441,253 @@ class PreferencesScreen extends StatelessWidget {
   String _tabLabel(int index) {
     switch (index) {
       case 0:
-        return '今日';
+        return I18n.tr('nav.today');
       case 1:
-        return '待办';
+        return I18n.tr('nav.todo');
       case 2:
-        return '习惯';
+        return I18n.tr('nav.habit');
       case 3:
-        return '日历';
+        return I18n.tr('nav.calendar');
       case 4:
-        return '专注';
+        return I18n.tr('nav.focus');
       case 5:
-        return '小组件';
+        return I18n.tr('nav.widget');
       case 6:
-        return '我的';
+        return I18n.tr('nav.mine');
       default:
-        return '今日';
+        return I18n.tr('nav.today');
     }
   }
 
   String _repeatDaysLabel(List<int> days) {
-    if (days.length == 7) return '每天';
+    if (days.length == 7) return I18n.tr('repeat.every_day');
     if (days.length == 5 && days.every((d) => d >= 1 && d <= 5)) {
-      return '工作日';
+      return I18n.tr('repeat.weekdays');
     }
     return days.map(_weekdayLabel).join('/');
   }
 
   String _weekdayLabel(int day) {
-    const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    if (day < 1 || day > 7) return '周?';
-    return names[day - 1];
+    const keys = [
+      'weekday.mon',
+      'weekday.tue',
+      'weekday.wed',
+      'weekday.thu',
+      'weekday.fri',
+      'weekday.sat',
+      'weekday.sun',
+    ];
+    if (day < 1 || day > 7) return I18n.tr('weekday.unknown');
+    return I18n.tr(keys[day - 1]);
+  }
+}
+
+class _ReportReminderSection extends StatelessWidget {
+  const _ReportReminderSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<PreferencesProvider>();
+    return AppSettingsSection(
+      title: '报告推送',
+      subtitle: '按你的节奏提醒查看每日复盘、周报、月报和年报，点击通知直达统计报表',
+      children: [
+        _ReportReminderTile(
+          title: '每日效率复盘',
+          icon: Icons.today_outlined,
+          color: Colors.blue,
+          config: prefs.dailyReportReminderConfig,
+          cadence: _ReportReminderCadence.daily,
+        ),
+        _ReportReminderTile(
+          title: '每周效率周报',
+          icon: Icons.summarize_outlined,
+          color: Colors.indigo,
+          config: prefs.weeklyReportReminderConfig,
+          cadence: _ReportReminderCadence.weekly,
+        ),
+        _ReportReminderTile(
+          title: '每月成长月报',
+          icon: Icons.calendar_month_outlined,
+          color: Colors.teal,
+          config: prefs.monthlyReportReminderConfig,
+          cadence: _ReportReminderCadence.monthly,
+        ),
+        _ReportReminderTile(
+          title: '每年成长年报',
+          icon: Icons.event_available_outlined,
+          color: Colors.deepOrange,
+          config: prefs.yearlyReportReminderConfig,
+          cadence: _ReportReminderCadence.yearly,
+        ),
+      ],
+    );
+  }
+}
+
+enum _ReportReminderCadence { daily, weekly, monthly, yearly }
+
+class _ReportReminderTile extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final ReportReminderConfig config;
+  final _ReportReminderCadence cadence;
+
+  const _ReportReminderTile({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.config,
+    required this.cadence,
+  });
+
+  String get _time =>
+      I18nDateFormat.timeOfDay(hour: config.hour, minute: config.minute);
+
+  String get _subtitle {
+    final cadenceText = switch (cadence) {
+      _ReportReminderCadence.daily => '每天',
+      _ReportReminderCadence.weekly => '每${_weekdayLabel(config.weekday)}',
+      _ReportReminderCadence.monthly => '每月 ${config.monthDay} 日',
+      _ReportReminderCadence.yearly =>
+        '每年 ${config.month} 月 ${config.monthDay} 日',
+    };
+    final state = config.enabled ? '动态摘要' : '已关闭';
+    return '$state · $cadenceText $_time';
+  }
+
+  Future<void> _save(BuildContext context, ReportReminderConfig next) {
+    final prefs = context.read<PreferencesProvider>();
+    return switch (cadence) {
+      _ReportReminderCadence.daily => prefs.setDailyReportReminderConfig(next),
+      _ReportReminderCadence.weekly => prefs.setWeeklyReportReminderConfig(
+        next,
+      ),
+      _ReportReminderCadence.monthly => prefs.setMonthlyReportReminderConfig(
+        next,
+      ),
+      _ReportReminderCadence.yearly => prefs.setYearlyReportReminderConfig(
+        next,
+      ),
+    };
+  }
+
+  String get _timeSubtitle {
+    return switch (cadence) {
+      _ReportReminderCadence.daily => '到点推送今天报告动态摘要',
+      _ReportReminderCadence.weekly => '到点推送上一周报告动态摘要',
+      _ReportReminderCadence.monthly => '到点推送上月报告动态摘要',
+      _ReportReminderCadence.yearly => '到点推送上一年报告动态摘要',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      child: ExpansionTile(
+        leading: Icon(icon, color: color),
+        title: Text(title),
+        subtitle: Text(_subtitle),
+        trailing: Switch(
+          value: config.enabled,
+          onChanged: (v) => _save(context, config.copyWith(enabled: v)),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        children: [
+          AppSettingsTile(
+            icon: Icons.schedule,
+            color: color,
+            title: '推送时间',
+            subtitle: _timeSubtitle,
+            trailing: TextButton(
+              onPressed: () async {
+                final picked = await AppTimePicker.show(
+                  context,
+                  initialTime: TimeOfDay(
+                    hour: config.hour,
+                    minute: config.minute,
+                  ),
+                  title: '$title推送时间',
+                  subtitle: '修改后会立即重排下一次报告通知',
+                );
+                if (picked == null || !context.mounted) return;
+                await _save(
+                  context,
+                  config.copyWith(hour: picked.hour, minute: picked.minute),
+                );
+              },
+              child: Text(_time),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _cadenceChips(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _cadenceChips(BuildContext context) {
+    return switch (cadence) {
+      _ReportReminderCadence.daily => const <Widget>[],
+      _ReportReminderCadence.weekly => [
+        for (var day = 1; day <= 7; day++)
+          FilterChip(
+            label: Text(_weekdayLabel(day)),
+            selected: config.weekday == day,
+            showCheckmark: false,
+            onSelected: (_) => _save(context, config.copyWith(weekday: day)),
+          ),
+      ],
+      _ReportReminderCadence.monthly => _monthDayChips(context),
+      _ReportReminderCadence.yearly => [
+        for (var month = 1; month <= 12; month++)
+          FilterChip(
+            label: Text('$month 月'),
+            selected: config.month == month,
+            showCheckmark: false,
+            onSelected: (_) => _save(context, config.copyWith(month: month)),
+          ),
+        for (final day in const [1, 5, 10, 15, 20, 25, 28, 31])
+          FilterChip(
+            label: Text('$day 日'),
+            selected: config.monthDay == day,
+            showCheckmark: false,
+            onSelected: (_) => _save(context, config.copyWith(monthDay: day)),
+          ),
+      ],
+    };
+  }
+
+  List<Widget> _monthDayChips(BuildContext context) {
+    return [
+      for (final day in const [1, 5, 10, 15, 20, 25, 28, 31])
+        FilterChip(
+          label: Text('$day 日'),
+          selected: config.monthDay == day,
+          showCheckmark: false,
+          onSelected: (_) => _save(context, config.copyWith(monthDay: day)),
+        ),
+    ];
+  }
+
+  static String _weekdayLabel(int day) {
+    const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    if (day < 1 || day > 7) return '周一';
+    return labels[day - 1];
   }
 }
 
@@ -377,6 +704,7 @@ class _NotificationHealthSection extends StatefulWidget {
 class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     with WidgetsBindingObserver {
   Future<_NotificationHealthSnapshot>? _future;
+  int? _pendingCountOverride;
 
   @override
   void initState() {
@@ -429,6 +757,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
   Future<void> _refresh() async {
     if (!mounted) return;
     setState(() {
+      _pendingCountOverride = null;
       _future = _load();
     });
   }
@@ -438,8 +767,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     if (!mounted) return;
     if (!granted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('系统通知权限未授予'),
+        SnackBar(
+          content: Text(I18n.tr('preferences.notify.permission_denied')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -452,7 +781,11 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(granted ? '精准闹钟权限已授权' : '精准闹钟权限未授予'),
+        content: Text(
+          granted
+              ? I18n.tr('preferences.notify.exact_alarm_granted')
+              : I18n.tr('preferences.notify.exact_alarm_denied'),
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -465,7 +798,11 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(granted ? '弹出屏幕权限已允许' : '弹出屏幕权限未允许'),
+        content: Text(
+          granted
+              ? I18n.tr('preferences.notify.full_screen_granted')
+              : I18n.tr('preferences.notify.full_screen_denied'),
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -478,8 +815,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     } on NotificationPermissionDeniedException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('系统通知权限未授权，无法发送响铃测试'),
+        SnackBar(
+          content: Text(I18n.tr('preferences.notify.test_permission_denied')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -489,7 +826,7 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('响铃测试发送失败：$e'),
+          content: Text('${I18n.tr('preferences.notify.test_failed')}$e'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -498,8 +835,8 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('响铃弹屏测试已发送'),
+      SnackBar(
+        content: Text(I18n.tr('preferences.notify.test_sent')),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -510,13 +847,16 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
     await widget.notificationService.cancelAll();
     await AlarmService.instance.cancelAll();
     if (!mounted) return;
+    setState(() {
+      _pendingCountOverride = 0;
+      _future = _load();
+    });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已取消全部待调度提醒'),
+      SnackBar(
+        content: Text(I18n.tr('preferences.notify.pending_cleared')),
         behavior: SnackBarBehavior.floating,
       ),
     );
-    await _refresh();
   }
 
   @override
@@ -531,7 +871,9 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
               snapshot == null,
           errorText: snap.hasError ? '${snap.error}' : null,
           report: snapshot?.report,
-          pendingCount: snapshot?.pendingCount,
+          pendingCount: snap.connectionState == ConnectionState.waiting
+              ? (_pendingCountOverride ?? snapshot?.pendingCount)
+              : snapshot?.pendingCount,
           lastTestAt: snapshot?.lastTestAt,
           onRefresh: _refresh,
           onOpenSystemSettings: () => _openAppSettings(context),
@@ -543,6 +885,104 @@ class _NotificationHealthSectionState extends State<_NotificationHealthSection>
               _requestFullScreenIntentPermission,
         );
       },
+    );
+  }
+}
+
+class _ReminderRingtoneSection extends StatefulWidget {
+  const _ReminderRingtoneSection();
+
+  @override
+  State<_ReminderRingtoneSection> createState() =>
+      _ReminderRingtoneSectionState();
+}
+
+class _ReminderRingtoneSectionState extends State<_ReminderRingtoneSection> {
+  int _volume = ReminderRingtoneSettings.defaultVolumePercent;
+  String _sound = ReminderRingtoneSettings.defaultSound;
+  final ReminderRingtonePlatformPolicy _policy =
+      ReminderRingtoneSettings.platformPolicy;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_policy.supportsBuiltInSoundPicker) return;
+    ReminderRingtoneSettings.loadVolumePercent().then((value) {
+      if (mounted) setState(() => _volume = value);
+    });
+    ReminderRingtoneSettings.loadSound().then((value) {
+      if (mounted) setState(() => _sound = value);
+    });
+  }
+
+  Future<void> _setVolume(int value) async {
+    setState(() => _volume = value);
+    await ReminderRingtoneSettings.setVolumePercent(value);
+  }
+
+  Future<void> _setSound(String value) async {
+    setState(() => _sound = value);
+    await ReminderRingtoneSettings.setSound(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_policy.supportsBuiltInSoundPicker) {
+      return AppSettingsSection(
+        title: I18n.tr('preferences.ringtone.section'),
+        subtitle: I18n.tr(_policy.sectionSubtitleKey),
+        children: [
+          AppSettingsTile(
+            icon: Icons.notifications_active_outlined,
+            color: Colors.orange,
+            title: I18n.tr(_policy.tileTitleKey),
+            subtitle: I18n.tr(_policy.tileSubtitleKey),
+            trailing: const SizedBox.shrink(),
+          ),
+        ],
+      );
+    }
+
+    return AppSettingsSection(
+      title: I18n.tr('preferences.ringtone.section'),
+      subtitle: I18n.tr(_policy.sectionSubtitleKey),
+      children: [
+        AppSettingsTile(
+          icon: Icons.notifications_active_outlined,
+          color: Colors.orange,
+          title: I18n.tr('preferences.ringtone.sound'),
+          subtitle: ReminderRingtoneSettings.sounds
+              .firstWhere((s) => s.id == _sound)
+              .label,
+          trailing: AppCompactDropdown<String>(
+            value: _sound,
+            width: 112,
+            items: [
+              for (final sound in ReminderRingtoneSettings.sounds)
+                DropdownMenuItem(value: sound.id, child: Text(sound.label)),
+            ],
+            onChanged: (value) => value == null ? null : _setSound(value),
+          ),
+        ),
+        if (_policy.supportsVolumePresets)
+          AppSettingsTile(
+            icon: Icons.volume_up_outlined,
+            color: Colors.deepOrange,
+            title: I18n.tr('preferences.ringtone.volume'),
+            subtitle: '${I18n.tr('preferences.ringtone.current')} $_volume%',
+            trailing: Wrap(
+              spacing: 6,
+              children: [
+                for (final value in ReminderRingtoneSettings.presets)
+                  ChoiceChip(
+                    label: Text('$value%'),
+                    selected: _volume == value,
+                    onSelected: (_) => _setVolume(value),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -560,9 +1000,15 @@ class _DailyReminderSlotTile extends StatelessWidget {
     required this.weekdayLabel,
   });
 
-  String get _title => '提醒${['一', '二', '三'][index]}';
+  String get _title => I18n.tr(
+    [
+      'preferences.daily_reminder.one',
+      'preferences.daily_reminder.two',
+      'preferences.daily_reminder.three',
+    ][index],
+  );
   String get _time =>
-      '${slot.hour.toString().padLeft(2, '0')}:${slot.minute.toString().padLeft(2, '0')}';
+      I18nDateFormat.timeOfDay(hour: slot.hour, minute: slot.minute);
 
   Future<void> _save(BuildContext context, DailyReminderSlot next) {
     return context.read<PreferencesProvider>().setDailyReminderSlot(
@@ -588,7 +1034,7 @@ class _DailyReminderSlotTile extends StatelessWidget {
         subtitle: Text(
           slot.enabled
               ? '$_time · $repeatLabel · ${_taskScopeText(slot)}'
-              : '已关闭 · $_time',
+              : '${I18n.tr('preferences.daily_reminder.disabled')} · $_time',
         ),
         trailing: Switch(
           value: slot.enabled,
@@ -599,15 +1045,18 @@ class _DailyReminderSlotTile extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.schedule,
             color: Colors.deepOrange,
-            title: '提醒时间',
-            subtitle: '到点发送带声音和震动的提醒',
+            title: I18n.tr('preferences.daily_reminder.time'),
+            subtitle: I18n.tr('preferences.daily_reminder.time.subtitle'),
             trailing: TextButton(
               onPressed: () async {
                 final picked = await AppTimePicker.show(
                   context,
                   initialTime: TimeOfDay(hour: slot.hour, minute: slot.minute),
-                  title: '$_title时间',
-                  subtitle: '设置提醒触发时间',
+                  title:
+                      '$_title${I18n.tr('preferences.daily_reminder.time_suffix')}',
+                  subtitle: I18n.tr(
+                    'preferences.daily_reminder.time_picker.subtitle',
+                  ),
                 );
                 if (picked == null || !context.mounted) return;
                 await _save(
@@ -647,8 +1096,10 @@ class _DailyReminderSlotTile extends StatelessWidget {
             icon: Icons.today_outlined,
             color: Colors.blue,
             value: slot.includeTodayTasks,
-            title: '任务：今日任务',
-            subtitle: '提醒中包含今日未完成任务数量',
+            title: I18n.tr('preferences.daily_reminder.today_tasks'),
+            subtitle: I18n.tr(
+              'preferences.daily_reminder.today_tasks.subtitle',
+            ),
             onChanged: (v) =>
                 _save(context, slot.copyWith(includeTodayTasks: v)),
           ),
@@ -656,8 +1107,10 @@ class _DailyReminderSlotTile extends StatelessWidget {
             icon: Icons.next_plan_outlined,
             color: Colors.teal,
             value: slot.includeTomorrowPlan,
-            title: '任务：明日计划',
-            subtitle: '提醒中包含明日已安排任务数量',
+            title: I18n.tr('preferences.daily_reminder.tomorrow_plan'),
+            subtitle: I18n.tr(
+              'preferences.daily_reminder.tomorrow_plan.subtitle',
+            ),
             onChanged: (v) =>
                 _save(context, slot.copyWith(includeTomorrowPlan: v)),
           ),
@@ -665,16 +1118,20 @@ class _DailyReminderSlotTile extends StatelessWidget {
             icon: Icons.warning_amber_outlined,
             color: Colors.red,
             value: slot.includeOverdue,
-            title: '任务：逾期任务',
-            subtitle: '提醒中包含已过期未完成任务',
+            title: I18n.tr('preferences.daily_reminder.overdue_tasks'),
+            subtitle: I18n.tr(
+              'preferences.daily_reminder.overdue_tasks.subtitle',
+            ),
             onChanged: (v) => _save(context, slot.copyWith(includeOverdue: v)),
           ),
           AppSwitchTile(
             icon: Icons.beach_access_outlined,
             color: Colors.green,
             value: slot.pauseHolidays,
-            title: '法定节假日暂停提醒',
-            subtitle: '遇到内置节假日时顺延到下一个提醒日',
+            title: I18n.tr('preferences.daily_reminder.pause_holidays'),
+            subtitle: I18n.tr(
+              'preferences.daily_reminder.pause_holidays.subtitle',
+            ),
             onChanged: (v) => _save(context, slot.copyWith(pauseHolidays: v)),
           ),
         ],
@@ -684,10 +1141,18 @@ class _DailyReminderSlotTile extends StatelessWidget {
 
   String _taskScopeText(DailyReminderSlot slot) {
     final parts = <String>[];
-    if (slot.includeTodayTasks) parts.add('今日');
-    if (slot.includeOverdue) parts.add('逾期');
-    if (slot.includeTomorrowPlan) parts.add('明日');
-    return parts.isEmpty ? '无任务范围' : parts.join('/');
+    if (slot.includeTodayTasks) {
+      parts.add(I18n.tr('preferences.daily_reminder.scope.today'));
+    }
+    if (slot.includeOverdue) {
+      parts.add(I18n.tr('preferences.daily_reminder.scope.overdue'));
+    }
+    if (slot.includeTomorrowPlan) {
+      parts.add(I18n.tr('preferences.daily_reminder.scope.tomorrow'));
+    }
+    return parts.isEmpty
+        ? I18n.tr('preferences.daily_reminder.scope.none')
+        : parts.join('/');
   }
 }
 
@@ -718,16 +1183,21 @@ class _NavConfigTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lockedVisible = tab == 5 || tab == 6;
     return AppSettingsTile(
       icon: _icon,
       color: Theme.of(context).colorScheme.primary,
       title: label,
-      subtitle: visible ? '已显示' : '已隐藏',
+      subtitle: lockedVisible
+          ? I18n.tr('preferences.nav.fixed')
+          : visible
+          ? I18n.tr('preferences.nav.visible')
+          : I18n.tr('preferences.nav.hidden'),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: '上移',
+            tooltip: I18n.tr('action.move_up'),
             onPressed: canMoveUp
                 ? () => context.read<PreferencesProvider>().moveBottomNavTab(
                     tab,
@@ -737,7 +1207,7 @@ class _NavConfigTile extends StatelessWidget {
             icon: const Icon(Icons.keyboard_arrow_up_rounded),
           ),
           IconButton(
-            tooltip: '下移',
+            tooltip: I18n.tr('action.move_down'),
             onPressed: canMoveDown
                 ? () => context.read<PreferencesProvider>().moveBottomNavTab(
                     tab,
@@ -748,8 +1218,11 @@ class _NavConfigTile extends StatelessWidget {
           ),
           Switch(
             value: visible,
-            onChanged: (v) =>
-                context.read<PreferencesProvider>().setBottomNavVisible(tab, v),
+            onChanged: lockedVisible
+                ? null
+                : (v) => context
+                      .read<PreferencesProvider>()
+                      .setBottomNavVisible(tab, v),
           ),
         ],
       ),
@@ -771,16 +1244,16 @@ class _NotificationHealthSnapshot {
 
 Future<void> _openAppSettings(BuildContext context) async {
   final opened =
+      await NotificationSettings.openAppNotificationSettings() ||
       await NotificationSettings.openNotificationChannelSettings(
         AlarmService.channelId,
       ) ||
-      await NotificationSettings.openAppNotificationSettings() ||
       await openAppSettings();
   if (!context.mounted) return;
   if (!opened) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('无法打开系统设置'),
+      SnackBar(
+        content: Text(I18n.tr('preferences.notify.open_settings_failed')),
         behavior: SnackBarBehavior.floating,
       ),
     );

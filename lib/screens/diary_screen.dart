@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/diary_insights.dart';
+import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import '../models/diary_entry.dart';
 import '../providers/diary_provider.dart';
 import '../core/lunar_calendar.dart';
+import '../services/ai_service.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/mood_heatmap.dart';
 import '../widgets/surface_components.dart';
+
+Future<void> showDiaryEditor(
+  BuildContext context, {
+  DiaryEntry? entry,
+  DateTime? initialDate,
+}) {
+  return Navigator.push<void>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DiaryEditScreen(entry: entry, initialDate: initialDate),
+    ),
+  );
+}
 
 class DiaryScreen extends StatelessWidget {
   const DiaryScreen({super.key});
@@ -15,24 +32,32 @@ class DiaryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<DiaryProvider>();
     final entries = provider.entries;
+    final insights = DiaryInsightEngine.buildInsights(entries);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('日记'),
+        title: Text(I18n.tr('diary.title')),
         actions: [
           IconButton(
             icon: const Icon(Icons.insights),
-            tooltip: '心情统计',
+            tooltip: I18n.tr('diary.stats.tooltip'),
             onPressed: () => _showMoodStats(context, provider),
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: I18n.tr('diary.ai.deep_review.tooltip'),
+            onPressed: entries.isEmpty
+                ? null
+                : () => _runDeepDiaryReview(context, entries),
           ),
         ],
       ),
       body: entries.isEmpty
           ? EmptyState(
               icon: Icons.book_outlined,
-              message: '开始记录每天的心情吧',
-              actionLabel: '写日记',
+              message: I18n.tr('diary.empty.message'),
+              actionLabel: I18n.tr('diary.write'),
               onAction: () => _openEdit(context),
             )
           : ListView(
@@ -44,8 +69,8 @@ class DiaryScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppSectionHeader(
-                        title: '记录概览',
-                        subtitle: '累计、本月和连续写作状态',
+                        title: I18n.tr('diary.summary.title'),
+                        subtitle: I18n.tr('diary.summary.subtitle'),
                         padding: EdgeInsets.zero,
                       ),
                       const SizedBox(height: 12),
@@ -54,8 +79,8 @@ class DiaryScreen extends StatelessWidget {
                           Expanded(
                             child: _stat(
                               context,
-                              '累计',
-                              '${provider.totalCount} 篇',
+                              I18n.tr('diary.summary.total'),
+                              '${provider.totalCount}${I18n.tr('diary.entry.count_suffix')}',
                               Icons.book_outlined,
                               cs.primary,
                             ),
@@ -64,8 +89,8 @@ class DiaryScreen extends StatelessWidget {
                           Expanded(
                             child: _stat(
                               context,
-                              '本月',
-                              '${provider.thisMonthCount} 篇',
+                              I18n.tr('diary.summary.this_month'),
+                              '${provider.thisMonthCount}${I18n.tr('diary.entry.count_suffix')}',
                               Icons.calendar_month,
                               Colors.green,
                             ),
@@ -74,8 +99,8 @@ class DiaryScreen extends StatelessWidget {
                           Expanded(
                             child: _stat(
                               context,
-                              '连续',
-                              '${provider.currentStreak} 天',
+                              I18n.tr('diary.summary.streak'),
+                              '${provider.currentStreak} ${I18n.tr('unit.day')}',
                               Icons.bolt,
                               Colors.orange,
                             ),
@@ -87,10 +112,15 @@ class DiaryScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (insights.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DiaryInsightCard(insights: insights),
+                ],
                 const SizedBox(height: 12),
                 AppSectionHeader(
-                  title: '最近日记',
-                  subtitle: '${entries.length} 篇记录',
+                  title: I18n.tr('diary.recent.title'),
+                  subtitle:
+                      '${entries.length}${I18n.tr('diary.recent.records_suffix')}',
                   padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
                 ),
                 ...entries.map((entry) => _DiaryCard(entry: entry)),
@@ -99,7 +129,7 @@ class DiaryScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEdit(context),
         icon: const Icon(Icons.edit_note),
-        label: const Text('写日记'),
+        label: Text(I18n.tr('diary.write')),
       ),
     );
   }
@@ -155,12 +185,7 @@ class DiaryScreen extends StatelessWidget {
   }
 
   void _openEdit(BuildContext context, {DiaryEntry? entry, DateTime? date}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DiaryEditScreen(entry: entry, initialDate: date),
-      ),
-    );
+    showDiaryEditor(context, entry: entry, initialDate: date);
   }
 
   void _showMoodStats(BuildContext context, DiaryProvider p) {
@@ -169,15 +194,15 @@ class DiaryScreen extends StatelessWidget {
     showAppModalSheet(
       context: context,
       builder: (_) => AppModalSheet(
-        title: '近 30 天心情分布',
+        title: I18n.tr('diary.mood.stats.title'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (total == 0)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text('暂无数据')),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text(I18n.tr('diary.no_data'))),
               )
             else
               ...Mood.values.map((m) {
@@ -190,7 +215,7 @@ class DiaryScreen extends StatelessWidget {
                       SizedBox(
                         width: 52,
                         child: Text(
-                          '${m.emoji} ${m.label}',
+                          '${m.emoji} ${_moodLabel(m)}',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -208,7 +233,7 @@ class DiaryScreen extends StatelessWidget {
                       SizedBox(
                         width: 40,
                         child: Text(
-                          '$c 篇',
+                          '$c${I18n.tr('diary.entry.count_suffix')}',
                           textAlign: TextAlign.end,
                           style: TextStyle(
                             fontSize: 12,
@@ -225,6 +250,160 @@ class DiaryScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _runDeepDiaryReview(
+    BuildContext context,
+    List<DiaryEntry> entries,
+  ) async {
+    final ai = context.read<AiService>();
+    if (!ai.enabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(I18n.tr('diary.ai.disabled')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final review = await ai.deepDiaryReview(entries: entries);
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AppDialog(
+          title: Text(I18n.tr('diary.ai.deep_review.title')),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 520),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                review,
+                style: const TextStyle(height: 1.45),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(I18n.tr('action.close')),
+            ),
+          ],
+        ),
+      );
+    } on AiException catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${I18n.tr('diary.ai.review_failed_prefix')}${e.message}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${I18n.tr('diary.ai.review_failed_prefix')}$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
+
+class _DiaryInsightCard extends StatelessWidget {
+  final List<DiaryInsight> insights;
+
+  const _DiaryInsightCard({required this.insights});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology_alt_outlined, color: cs.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                I18n.tr('diary.ai.insights'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final insight in insights)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _insightIcon(insight.kind),
+                    size: 16,
+                    color: _insightColor(cs, insight.kind),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          insight.title,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          insight.message,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withValues(alpha: 0.62),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _insightIcon(DiaryInsightKind kind) => switch (kind) {
+    DiaryInsightKind.overview => Icons.auto_graph_outlined,
+    DiaryInsightKind.emotionTrend => Icons.trending_up,
+    DiaryInsightKind.theme => Icons.sell_outlined,
+    DiaryInsightKind.streak => Icons.local_fire_department_outlined,
+    DiaryInsightKind.attention => Icons.health_and_safety_outlined,
+  };
+
+  Color _insightColor(ColorScheme cs, DiaryInsightKind kind) => switch (kind) {
+    DiaryInsightKind.overview => cs.primary,
+    DiaryInsightKind.emotionTrend => const Color(0xFF2E7D32),
+    DiaryInsightKind.theme => cs.tertiary,
+    DiaryInsightKind.streak => const Color(0xFFF57C00),
+    DiaryInsightKind.attention => cs.error,
+  };
 }
 
 class _DiaryCard extends StatelessWidget {
@@ -241,10 +420,7 @@ class _DiaryCard extends StatelessWidget {
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => DiaryEditScreen(entry: entry)),
-      ),
+      onTap: () => showDiaryEditor(context, entry: entry),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -317,7 +493,7 @@ class _DiaryCard extends StatelessWidget {
                               ],
                               const Spacer(),
                               Text(
-                                '${entry.updatedAt.hour.toString().padLeft(2, '0')}:${entry.updatedAt.minute.toString().padLeft(2, '0')}',
+                                I18nDateFormat.time(entry.updatedAt),
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: cs.onSurface.withValues(alpha: 0.5),
@@ -435,6 +611,25 @@ Color _moodColor(Mood? mood, ColorScheme cs) {
   }
 }
 
+String _moodLabel(Mood mood) => switch (mood) {
+  Mood.awesome => I18n.tr('diary.mood.awesome'),
+  Mood.good => I18n.tr('diary.mood.good'),
+  Mood.okay => I18n.tr('diary.mood.okay'),
+  Mood.bad => I18n.tr('diary.mood.bad'),
+  Mood.terrible => I18n.tr('diary.mood.terrible'),
+};
+
+String _weatherLabel(Weather weather) => switch (weather) {
+  Weather.sunny => I18n.tr('diary.weather.sunny'),
+  Weather.cloudy => I18n.tr('diary.weather.cloudy'),
+  Weather.overcast => I18n.tr('diary.weather.overcast'),
+  Weather.rain => I18n.tr('diary.weather.rain'),
+  Weather.snow => I18n.tr('diary.weather.snow'),
+  Weather.wind => I18n.tr('diary.weather.wind'),
+  Weather.fog => I18n.tr('diary.weather.fog'),
+  Weather.thunder => I18n.tr('diary.weather.thunder'),
+};
+
 class DiaryEditScreen extends StatefulWidget {
   final DiaryEntry? entry;
   final DateTime? initialDate;
@@ -502,13 +697,13 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('日记'),
+        title: Text(I18n.tr('diary.title')),
         actions: [IconButton(icon: const Icon(Icons.check), onPressed: _save)],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 日期/农历
+          // Date and lunar context.
           GestureDetector(
             onTap: () async {
               final picked = await AppDatePicker.pickSolar(
@@ -516,7 +711,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                 initialDate: _date,
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2099, 12, 31),
-                title: '日记日期',
+                title: I18n.tr('diary.editor.date_title'),
               );
               if (picked != null) setState(() => _date = picked);
             },
@@ -531,7 +726,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                   Icon(Icons.calendar_today, size: 16, color: cs.primary),
                   const SizedBox(width: 8),
                   Text(
-                    '${_date.year}年${_date.month}月${_date.day}日',
+                    I18nDateFormat.date(_date),
                     style: TextStyle(
                       color: cs.primary,
                       fontWeight: FontWeight.w400,
@@ -539,7 +734,9 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    lunar.chineseText,
+                    I18n.current == AppLocale.en
+                        ? I18n.tr('calendar.chinese_lunar_calendar')
+                        : lunar.chineseText,
                     style: TextStyle(
                       color: cs.primary.withValues(alpha: 0.7),
                       fontSize: 12,
@@ -550,10 +747,10 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // 心情
-          const Text(
-            '今天心情如何？',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+          // Mood selector.
+          Text(
+            I18n.tr('diary.editor.mood_prompt'),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
           const SizedBox(height: 8),
           Row(
@@ -578,7 +775,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                     children: [
                       Text(m.emoji, style: const TextStyle(fontSize: 24)),
                       const SizedBox(height: 2),
-                      Text(m.label, style: const TextStyle(fontSize: 11)),
+                      Text(_moodLabel(m), style: const TextStyle(fontSize: 11)),
                     ],
                   ),
                 ),
@@ -586,8 +783,11 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             }).toList(),
           ),
           const SizedBox(height: 16),
-          // 天气
-          const Text('天气', style: TextStyle(fontSize: 13, color: Colors.grey)),
+          // Weather selector.
+          Text(
+            I18n.tr('diary.editor.weather'),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
@@ -595,7 +795,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             children: Weather.values.map((w) {
               final selected = _weather == w;
               return FilterChip(
-                label: Text('${w.emoji} ${w.label}'),
+                label: Text('${w.emoji} ${_weatherLabel(w)}'),
                 selected: selected,
                 onSelected: (_) =>
                     setState(() => _weather = selected ? null : w),
@@ -603,15 +803,15 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             }).toList(),
           ),
           const SizedBox(height: 16),
-          // 标签
+          // Tags.
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _tag,
-                  decoration: const InputDecoration(
-                    hintText: '添加标签 (如: 学习、旅行)',
-                    prefixIcon: Icon(Icons.tag),
+                  decoration: InputDecoration(
+                    hintText: I18n.tr('diary.editor.tag_hint'),
+                    prefixIcon: const Icon(Icons.tag),
                   ),
                   onSubmitted: (v) {
                     if (v.trim().isNotEmpty) {
@@ -641,7 +841,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             ),
           ],
           const SizedBox(height: 16),
-          // 正文
+          // Body.
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -653,8 +853,8 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
               controller: _content,
               maxLines: 12,
               minLines: 8,
-              decoration: const InputDecoration(
-                hintText: '写下今天的故事...',
+              decoration: InputDecoration(
+                hintText: I18n.tr('diary.editor.content_hint'),
                 border: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 enabledBorder: InputBorder.none,

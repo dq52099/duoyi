@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/i18n.dart';
+
 enum CalendarEventType {
+  event,
   todo,
   habit,
   pomodoro,
@@ -14,15 +17,16 @@ enum CalendarEventType {
 
 extension CalendarEventTypeX on CalendarEventType {
   String get label => switch (this) {
-    CalendarEventType.todo => '待办',
-    CalendarEventType.habit => '习惯',
-    CalendarEventType.pomodoro => '番茄钟',
-    CalendarEventType.anniversary => '纪念日',
-    CalendarEventType.course => '课程',
-    CalendarEventType.diary => '日记',
-    CalendarEventType.countdown => '倒数日',
-    CalendarEventType.goal => '目标',
-    CalendarEventType.timeEntry => '时间足迹',
+    CalendarEventType.event => I18n.tr('calendar_event.event'),
+    CalendarEventType.todo => I18n.tr('calendar_event.todo'),
+    CalendarEventType.habit => I18n.tr('calendar_event.habit'),
+    CalendarEventType.pomodoro => I18n.tr('calendar_event.pomodoro'),
+    CalendarEventType.anniversary => I18n.tr('calendar_event.anniversary'),
+    CalendarEventType.course => I18n.tr('calendar_event.course'),
+    CalendarEventType.diary => I18n.tr('calendar_event.diary'),
+    CalendarEventType.countdown => I18n.tr('calendar_event.countdown'),
+    CalendarEventType.goal => I18n.tr('calendar_event.goal'),
+    CalendarEventType.timeEntry => I18n.tr('calendar_event.time_entry'),
   };
 }
 
@@ -36,9 +40,14 @@ class CalendarEvent {
   final bool isCompleted;
   final String? sourceId;
   final String? subtitle;
+  final String? projectId;
+  final String? projectName;
+  final String? workspaceId;
   final TimeOfDay? time;
   final bool hasConflict;
   final int conflictCount;
+  final String? note;
+  final DateTime? updatedAt;
 
   const CalendarEvent({
     required this.id,
@@ -49,16 +58,27 @@ class CalendarEvent {
     this.isCompleted = false,
     this.sourceId,
     this.subtitle,
+    this.projectId,
+    this.projectName,
+    this.workspaceId,
     this.time,
     this.endDate,
     this.hasConflict = false,
     this.conflictCount = 0,
+    this.note,
+    this.updatedAt,
   });
 
   String get dateKey =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   bool get canOpen => sourceId != null && sourceId!.isNotEmpty;
+
+  String? get projectKey {
+    if (projectId != null && projectId!.isNotEmpty) return projectId;
+    if (projectName != null && projectName!.isNotEmpty) return projectName;
+    return null;
+  }
 
   CalendarEvent copyWith({
     String? id,
@@ -70,9 +90,14 @@ class CalendarEvent {
     bool? isCompleted,
     String? sourceId,
     String? subtitle,
+    String? projectId,
+    String? projectName,
+    String? workspaceId,
     TimeOfDay? time,
     bool? hasConflict,
     int? conflictCount,
+    String? note,
+    DateTime? updatedAt,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -84,9 +109,73 @@ class CalendarEvent {
       isCompleted: isCompleted ?? this.isCompleted,
       sourceId: sourceId ?? this.sourceId,
       subtitle: subtitle ?? this.subtitle,
+      projectId: projectId ?? this.projectId,
+      projectName: projectName ?? this.projectName,
+      workspaceId: workspaceId ?? this.workspaceId,
       time: time ?? this.time,
       hasConflict: hasConflict ?? this.hasConflict,
       conflictCount: conflictCount ?? this.conflictCount,
+      note: note ?? this.note,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'date': date.toIso8601String(),
+    'endDate': endDate?.toIso8601String(),
+    'type': type.name,
+    'color': color.toARGB32(),
+    'isCompleted': isCompleted,
+    'sourceId': sourceId,
+    'subtitle': subtitle,
+    'projectId': projectId,
+    'projectName': projectName,
+    'workspaceId': workspaceId,
+    'time': time == null ? null : '${time!.hour}:${time!.minute}',
+    'hasConflict': hasConflict,
+    'conflictCount': conflictCount,
+    'note': note,
+    'updatedAt': updatedAt?.toIso8601String(),
+  };
+
+  factory CalendarEvent.fromJson(Map<String, dynamic> json) {
+    final parsedType = CalendarEventType.values.firstWhere(
+      (type) => type.name == json['type'],
+      orElse: () => CalendarEventType.event,
+    );
+    final timeRaw = json['time']?.toString();
+    final timeParts = timeRaw?.split(':');
+    TimeOfDay? parsedTime;
+    if (timeParts != null && timeParts.length == 2) {
+      final hour = int.tryParse(timeParts[0]);
+      final minute = int.tryParse(timeParts[1]);
+      if (hour != null && minute != null) {
+        parsedTime = TimeOfDay(hour: hour, minute: minute);
+      }
+    }
+    final rawColor = json['color'];
+    return CalendarEvent(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      date: DateTime.parse(json['date'] as String),
+      endDate: json['endDate'] == null
+          ? null
+          : DateTime.parse(json['endDate'] as String),
+      type: parsedType,
+      color: Color(rawColor is int ? rawColor : 0xFF5B6EE1),
+      isCompleted: json['isCompleted'] == true,
+      sourceId: json['sourceId']?.toString(),
+      subtitle: json['subtitle']?.toString(),
+      projectId: json['projectId']?.toString(),
+      projectName: json['projectName']?.toString(),
+      workspaceId: json['workspaceId']?.toString(),
+      time: parsedTime,
+      hasConflict: json['hasConflict'] == true,
+      conflictCount: (json['conflictCount'] as num?)?.toInt() ?? 0,
+      note: json['note']?.toString(),
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
   }
 }

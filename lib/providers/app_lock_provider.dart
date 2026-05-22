@@ -21,6 +21,8 @@ class AppLockProvider extends ChangeNotifier {
   bool get isLocked => _enabled && _isLocked;
   int get autoLockMinutes => _autoLockMinutes;
 
+  bool _validPin(String pin) => RegExp(r'^\d{4,8}$').hasMatch(pin);
+
   Future<void> loadFromStorage() async {
     final p = await SharedPreferences.getInstance();
     _enabled = p.getBool(_kEnabled) ?? false;
@@ -40,7 +42,7 @@ class AppLockProvider extends ChangeNotifier {
   }
 
   Future<bool> setPin(String pin) async {
-    if (pin.length < 4 || pin.length > 8) return false;
+    if (!_validPin(pin)) return false;
     final p = await SharedPreferences.getInstance();
     await p.setString(_kHash, _hash(pin));
     await p.setBool(_kEnabled, true);
@@ -61,6 +63,7 @@ class AppLockProvider extends ChangeNotifier {
   }
 
   Future<bool> verify(String pin) async {
+    if (!_validPin(pin)) return false;
     final p = await SharedPreferences.getInstance();
     final stored = p.getString(_kHash);
     if (stored == null) return false;

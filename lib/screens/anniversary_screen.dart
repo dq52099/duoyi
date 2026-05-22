@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import 'package:provider/provider.dart';
 import '../models/anniversary.dart';
 import '../providers/anniversary_provider.dart';
@@ -9,9 +10,18 @@ import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
+Future<void> showAnniversaryEditor(BuildContext context, {Anniversary? item}) {
+  return showAppModalSheet<void>(
+    context: context,
+    builder: (_) => _AnniversaryEditSheet(editing: item),
+  );
+}
+
 /// 纪念日 / 生日 / 倒数日 聚合页
 class AnniversaryScreen extends StatefulWidget {
-  const AnniversaryScreen({super.key});
+  final int initialTab;
+
+  const AnniversaryScreen({super.key, this.initialTab = 0});
 
   @override
   State<AnniversaryScreen> createState() => _AnniversaryScreenState();
@@ -20,17 +30,43 @@ class AnniversaryScreen extends StatefulWidget {
 class _AnniversaryScreenState extends State<AnniversaryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
+  late int _tabIndex;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(
+      length: 4,
+      initialIndex: widget.initialTab.clamp(0, 3),
+      vsync: this,
+    );
+    _tabIndex = _tabs.index;
+    _tabs.addListener(_handleTabChanged);
   }
 
   @override
   void dispose() {
+    _tabs.removeListener(_handleTabChanged);
     _tabs.dispose();
     super.dispose();
+  }
+
+  void _handleTabChanged() {
+    if (_tabIndex == _tabs.index) return;
+    setState(() => _tabIndex = _tabs.index);
+  }
+
+  String get _title {
+    switch (_tabIndex) {
+      case 1:
+        return I18n.tr('anniversary.birthday');
+      case 2:
+        return I18n.tr('anniversary.title');
+      case 3:
+        return I18n.tr('countdown.title');
+      default:
+        return I18n.tr('anniversary.title');
+    }
   }
 
   List<Anniversary> _filter(AnniversaryProvider p, int idx) {
@@ -59,20 +95,20 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('纪念日 · 生日 · 倒数'),
+        title: Text(_title),
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [
-            Tab(text: '全部'),
-            Tab(text: '生日'),
-            Tab(text: '纪念日'),
-            Tab(text: '倒数'),
+          tabs: [
+            Tab(text: I18n.tr('anniversary.tab.all')),
+            Tab(text: I18n.tr('anniversary.birthday')),
+            Tab(text: I18n.tr('anniversary.title')),
+            Tab(text: I18n.tr('anniversary.countdown_short')),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.today),
-            tooltip: '最近 30 天',
+            tooltip: I18n.tr('anniversary.upcoming_30_days'),
             onPressed: () => _showUpcoming(context, provider),
           ),
         ],
@@ -84,8 +120,8 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
           return list.isEmpty
               ? EmptyState(
                   icon: Icons.event,
-                  message: '还没有任何纪念',
-                  actionLabel: '添加',
+                  message: I18n.tr('anniversary.empty'),
+                  actionLabel: I18n.tr('action.add'),
                   onAction: () => _showAddDialog(context),
                 )
               : ListView.builder(
@@ -110,11 +146,13 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
     showAppModalSheet(
       context: context,
       builder: (_) => AppModalSheet(
-        title: '最近 30 天',
+        title: I18n.tr('anniversary.upcoming_30_days'),
         child: up.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text('未来 30 天内没有安排')),
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(I18n.tr('anniversary.upcoming_empty')),
+                ),
               )
             : ListView(
                 shrinkWrap: true,
@@ -137,8 +175,8 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
                       ),
                       title: Text(a.title),
                       subtitle: Text(
-                        '${a.nextOccurrence.year}-${a.nextOccurrence.month.toString().padLeft(2, '0')}-${a.nextOccurrence.day.toString().padLeft(2, '0')}'
-                        '${a.yearsPassed != null ? ' · 第${a.yearsPassed! + 1}次' : ''}',
+                        '${I18nDateFormat.date(a.nextOccurrence)}'
+                        '${a.yearsPassed != null ? ' · ${I18n.tr('anniversary.occurrence.prefix')}${a.yearsPassed! + 1}${I18n.tr('anniversary.occurrence.suffix')}' : ''}',
                       ),
                     ),
                   ),
@@ -149,10 +187,7 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
   }
 
   void _showAddDialog(BuildContext context) {
-    showAppModalSheet(
-      context: context,
-      builder: (_) => const _AnniversaryEditSheet(),
-    );
+    showAnniversaryEditor(context);
   }
 }
 
@@ -161,10 +196,10 @@ class _AnniversaryCard extends StatelessWidget {
   const _AnniversaryCard({required this.item});
 
   String _typeLabel() => switch (item.type) {
-    AnniversaryType.birthday => '🎂 生日',
-    AnniversaryType.memorial => '💞 纪念日',
-    AnniversaryType.normal => '⏰ 倒数',
-    AnniversaryType.custom => '🔁 自定义',
+    AnniversaryType.birthday => '🎂 ${I18n.tr('anniversary.birthday')}',
+    AnniversaryType.memorial => '💞 ${I18n.tr('anniversary.title')}',
+    AnniversaryType.normal => '⏰ ${I18n.tr('anniversary.countdown_short')}',
+    AnniversaryType.custom => '🔁 ${I18n.tr('anniversary.custom')}',
   };
 
   @override
@@ -183,8 +218,10 @@ class _AnniversaryCard extends StatelessWidget {
         return await showDialog<bool>(
               context: context,
               builder: (ctx) => AppDialog(
-                title: const Text('确认删除？'),
-                content: Text('"${item.title}" 将被移除'),
+                title: Text(I18n.tr('anniversary.delete.title')),
+                content: Text(
+                  '"${item.title}" ${I18n.tr('anniversary.delete.content_suffix')}',
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -211,10 +248,7 @@ class _AnniversaryCard extends StatelessWidget {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: GestureDetector(
-        onTap: () => showAppModalSheet(
-          context: context,
-          builder: (_) => _AnniversaryEditSheet(editing: item),
-        ),
+        onTap: () => showAnniversaryEditor(context, item: item),
         onLongPress: () =>
             context.read<AnniversaryProvider>().togglePin(item.id),
         child: Container(
@@ -308,9 +342,9 @@ class _AnniversaryCard extends StatelessWidget {
                                             4,
                                           ),
                                         ),
-                                        child: const Text(
-                                          '农历',
-                                          style: TextStyle(
+                                        child: Text(
+                                          I18n.tr('calendar.lunar'),
+                                          style: const TextStyle(
                                             fontSize: 10,
                                             color: Colors.deepOrange,
                                           ),
@@ -319,7 +353,7 @@ class _AnniversaryCard extends StatelessWidget {
                                     if (item.yearsPassed != null &&
                                         item.yearsPassed! > 0)
                                       Text(
-                                        '已 ${item.yearsPassed} 年',
+                                        '${I18n.tr('anniversary.years_elapsed.prefix')}${item.yearsPassed}${I18n.tr('anniversary.years_elapsed.suffix')}',
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey.shade600,
@@ -331,8 +365,8 @@ class _AnniversaryCard extends StatelessWidget {
                                 Text(
                                   item.calendarType ==
                                           AnniversaryCalendarType.lunar
-                                      ? '下一次: ${next.year}-${next.month}-${next.day} (${lunar.chineseText})'
-                                      : '下一次: ${next.year}-${next.month}-${next.day}',
+                                      ? '${I18n.tr('anniversary.next.prefix')}${I18nDateFormat.date(next)} (${I18n.tr('calendar.chinese_lunar')}: ${lunar.chineseText})'
+                                      : '${I18n.tr('anniversary.next.prefix')}${I18nDateFormat.date(next)}',
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontSize: 12,
@@ -360,7 +394,13 @@ class _AnniversaryCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                isPast ? '已过' : (days == 0 ? '就是今天' : '还有'),
+                                isPast
+                                    ? I18n.tr('countdown.days.elapsed')
+                                    : (days == 0
+                                          ? I18n.tr('today.anniversary.today')
+                                          : I18n.tr(
+                                              'countdown.days.remaining',
+                                            )),
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Colors.grey.shade500,
@@ -371,7 +411,9 @@ class _AnniversaryCard extends StatelessWidget {
                                 textBaseline: TextBaseline.alphabetic,
                                 children: [
                                   Text(
-                                    days == 0 ? '今天' : days.abs().toString(),
+                                    days == 0
+                                        ? I18n.tr('anniversary.today_short')
+                                        : days.abs().toString(),
                                     style: TextStyle(
                                       fontSize: days == 0 ? 22 : 30,
                                       height: 1,
@@ -382,7 +424,7 @@ class _AnniversaryCard extends StatelessWidget {
                                   if (days != 0) ...[
                                     const SizedBox(width: 4),
                                     Text(
-                                      '天',
+                                      I18n.tr('unit.day'),
                                       style: TextStyle(
                                         color: color,
                                         fontWeight: FontWeight.w400,
@@ -491,8 +533,10 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
   @override
   Widget build(BuildContext context) {
     final lunar = LunarCalendar.fromSolar(_date);
-    final remindTimeText =
-        '${_remindTime.hour.toString().padLeft(2, '0')}:${_remindTime.minute.toString().padLeft(2, '0')}';
+    final remindTimeText = I18nDateFormat.timeOfDay(
+      hour: _remindTime.hour,
+      minute: _remindTime.minute,
+    );
 
     return DraggableScrollableSheet(
       initialChildSize: 0.8,
@@ -500,7 +544,9 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
       minChildSize: 0.5,
       expand: false,
       builder: (_, controller) => AppModalSheet(
-        title: widget.editing == null ? '新增纪念' : '编辑纪念',
+        title: widget.editing == null
+            ? I18n.tr('anniversary.editor.add_title')
+            : I18n.tr('anniversary.editor.edit_title'),
         scrollController: controller,
         leadingActions: widget.editing == null
             ? const []
@@ -523,7 +569,11 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
           ),
           FilledButton(
             onPressed: _save,
-            child: Text(widget.editing == null ? '添加' : '保存'),
+            child: Text(
+              widget.editing == null
+                  ? I18n.tr('action.add')
+                  : I18n.tr('action.save'),
+            ),
           ),
         ],
         child: Column(
@@ -532,31 +582,37 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
             TextField(
               controller: _title,
               autofocus: widget.editing == null,
-              decoration: const InputDecoration(
-                labelText: '标题',
-                hintText: '如：妈妈生日 / 结婚纪念日',
+              decoration: InputDecoration(
+                labelText: I18n.tr('anniversary.field.title'),
+                hintText: I18n.tr('anniversary.field.title_hint'),
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _desc,
               maxLines: 2,
-              decoration: const InputDecoration(labelText: '备注 (可选)'),
+              decoration: InputDecoration(
+                labelText: I18n.tr('anniversary.field.description'),
+              ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '类型',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+            Text(
+              I18n.tr('anniversary.field.type'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               children: AnniversaryType.values.map((t) {
                 final label = switch (t) {
-                  AnniversaryType.normal => '⏰ 倒数日',
-                  AnniversaryType.birthday => '🎂 生日',
-                  AnniversaryType.memorial => '💞 纪念日',
-                  AnniversaryType.custom => '🔁 自定义',
+                  AnniversaryType.normal =>
+                    '⏰ ${I18n.tr('anniversary.countdown_short')}',
+                  AnniversaryType.birthday =>
+                    '🎂 ${I18n.tr('anniversary.birthday')}',
+                  AnniversaryType.memorial =>
+                    '💞 ${I18n.tr('anniversary.title')}',
+                  AnniversaryType.custom =>
+                    '🔁 ${I18n.tr('anniversary.custom')}',
                 };
                 return ChoiceChip(
                   label: Text(label),
@@ -566,22 +622,22 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               }).toList(),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '日期类型',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+            Text(
+              I18n.tr('anniversary.field.date_type'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 6),
             SegmentedButton<AnniversaryCalendarType>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: AnniversaryCalendarType.solar,
-                  icon: Icon(Icons.wb_sunny_outlined),
-                  label: Text('公历'),
+                  icon: const Icon(Icons.wb_sunny_outlined),
+                  label: Text(I18n.tr('calendar.solar')),
                 ),
                 ButtonSegment(
                   value: AnniversaryCalendarType.lunar,
-                  icon: Icon(Icons.nightlight_round),
-                  label: Text('农历'),
+                  icon: const Icon(Icons.nightlight_round),
+                  label: Text(I18n.tr('calendar.lunar')),
                 ),
               ],
               selected: {_cal},
@@ -597,13 +653,13 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               ),
               title: Text(
                 _cal == AnniversaryCalendarType.solar
-                    ? '公历 ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'
-                    : '农历 ${_formatLunarDate(lunar)}',
+                    ? '${I18n.tr('calendar.solar')} ${I18nDateFormat.date(_date)}'
+                    : '${I18n.tr('calendar.chinese_lunar_calendar')} ${_formatLunarDate(lunar)}',
               ),
               subtitle: Text(
                 _cal == AnniversaryCalendarType.solar
-                    ? '对应农历: ${lunar.toString()}'
-                    : '对应公历: ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+                    ? '${I18n.tr('calendar.corresponding_lunar')}: ${lunar.toString()}'
+                    : '${I18n.tr('calendar.corresponding_solar')}: ${I18nDateFormat.date(_date)}',
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
@@ -612,8 +668,8 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
                   initialDate: _date,
                   firstDate: DateTime(1900),
                   lastDate: DateTime(2099, 12, 31),
-                  title: '选择日期',
-                  subtitle: '公历和农历使用独立组件',
+                  title: I18n.tr('anniversary.field.date_picker_title'),
+                  subtitle: I18n.tr('anniversary.field.date_picker_subtitle'),
                   initialMode: _cal == AnniversaryCalendarType.solar
                       ? AppDatePickerMode.solar
                       : AppDatePickerMode.lunar,
@@ -631,9 +687,9 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               },
             ),
             const SizedBox(height: 8),
-            const Text(
-              '颜色标识',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+            Text(
+              I18n.tr('anniversary.field.color'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -660,17 +716,19 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _remind,
-              title: const Text('到期提醒'),
+              title: Text(I18n.tr('countdown.field.due_reminder')),
               subtitle: _remind
-                  ? Text('提前 $_remindDays 天 · $remindTimeText')
-                  : const Text('关闭'),
+                  ? Text(
+                      '${I18n.tr('countdown.reminder.before_prefix')}$_remindDays${I18n.tr('countdown.reminder.before_suffix')} · $remindTimeText',
+                    )
+                  : Text(I18n.tr('countdown.reminder.closed')),
               onChanged: (v) => setState(() => _remind = v),
             ),
             if (_remind) ...[
               Row(
                 children: [
                   const SizedBox(width: 16),
-                  const Text('提前天数:'),
+                  Text('${I18n.tr('countdown.field.remind_days')}:'),
                   Expanded(
                     child: Slider(
                       value: _remindDays.toDouble(),
@@ -686,14 +744,14 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.schedule),
-                title: const Text('提醒时间'),
+                title: Text(I18n.tr('countdown.field.remind_time')),
                 subtitle: Text(remindTimeText),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
                   final picked = await AppTimePicker.show(
                     context,
                     initialTime: _remindTime,
-                    title: '提醒时间',
+                    title: I18n.tr('countdown.field.remind_time'),
                     minuteStep: 5,
                   );
                   if (picked != null) setState(() => _remindTime = picked);
@@ -708,6 +766,6 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
 
   String _formatLunarDate(LunarDate lunar) {
     final ganzhi = LunarCalendar.ganzhiOf(lunar.year);
-    return '$ganzhi年（${lunar.year}）${lunar.chineseText}';
+    return '$ganzhi${I18n.tr('anniversary.lunar.year_suffix')}（${lunar.year}）${lunar.chineseText}';
   }
 }

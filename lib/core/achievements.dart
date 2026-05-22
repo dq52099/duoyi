@@ -16,6 +16,15 @@ class AchievementContext {
   final int courses;
   final int notes;
   final int themeSwitches; // 切换主题次数，从 SharedPreferences 读
+  final int todayCompletedTodos;
+  final int todayHabitCheckIns;
+  final int todayFocusMinutes;
+  final int todayDiaryEntries;
+  final int weeklyCompletedTodos;
+  final int weeklyHabitCheckIns;
+  final int weeklyFocusMinutes;
+  final int weeklyDiaryEntries;
+  final int weeklyActiveDays;
 
   const AchievementContext({
     required this.totalTodos,
@@ -32,6 +41,15 @@ class AchievementContext {
     required this.courses,
     required this.notes,
     this.themeSwitches = 0,
+    this.todayCompletedTodos = 0,
+    this.todayHabitCheckIns = 0,
+    this.todayFocusMinutes = 0,
+    this.todayDiaryEntries = 0,
+    this.weeklyCompletedTodos = 0,
+    this.weeklyHabitCheckIns = 0,
+    this.weeklyFocusMinutes = 0,
+    this.weeklyDiaryEntries = 0,
+    this.weeklyActiveDays = 0,
   });
 }
 

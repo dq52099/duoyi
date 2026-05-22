@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/i18n.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
 class FeedbackScreen extends StatefulWidget {
-  const FeedbackScreen({super.key});
+  final String initialCategory;
+
+  const FeedbackScreen({super.key, this.initialCategory = 'feature'});
 
   @override
   State<FeedbackScreen> createState() => _FeedbackScreenState();
@@ -18,12 +21,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   bool _submitting = false;
   List<Map<String, dynamic>> _items = [];
   String? _error;
-  String _category = 'feature';
+  late String _category;
   final _contentCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _category = _normalizeCategory(widget.initialCategory);
     _load();
   }
 
@@ -33,13 +37,25 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     super.dispose();
   }
 
+  String _normalizeCategory(String category) {
+    switch (category) {
+      case 'feature':
+      case 'bug':
+      case 'wish':
+      case 'other':
+        return category;
+      default:
+        return 'feature';
+    }
+  }
+
   Future<void> _load() async {
     final auth = context.read<AuthProvider>();
     if (!auth.state.isLoggedIn) {
       setState(() {
         _loading = false;
         _items = const [];
-        _error = '登录后可查看反馈记录';
+        _error = I18n.tr('feedback.login.records_required');
       });
       return;
     }
@@ -64,8 +80,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final messenger = ScaffoldMessenger.of(context);
     if (!auth.state.isLoggedIn) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('请先登录后再提交反馈'),
+        SnackBar(
+          content: Text(I18n.tr('feedback.login.submit_required')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -74,8 +90,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final text = _contentCtrl.text.trim();
     if (text.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('反馈内容不能为空'),
+        SnackBar(
+          content: Text(I18n.tr('feedback.content.empty')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -89,7 +105,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       });
       if (!mounted) return;
       _contentCtrl.clear();
-      messenger.showSnackBar(const SnackBar(content: Text('反馈已提交，感谢！')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(I18n.tr('feedback.submitted'))),
+      );
       _load();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -123,26 +141,39 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   String _categoryLabel(String category) {
     switch (category) {
       case 'feature':
-        return '功能建议';
+        return I18n.tr('feedback.category.feature');
       case 'bug':
-        return '问题反馈';
+        return I18n.tr('feedback.category.bug');
       case 'wish':
-        return '许愿池';
+        return I18n.tr('feedback.category.wish');
       default:
-        return '其他';
+        return I18n.tr('feedback.category.other');
+    }
+  }
+
+  String _categoryHelp(String category) {
+    switch (category) {
+      case 'bug':
+        return I18n.tr('feedback.help.bug');
+      case 'wish':
+        return I18n.tr('feedback.help.wish');
+      case 'other':
+        return I18n.tr('feedback.help.other');
+      default:
+        return I18n.tr('feedback.help.feature');
     }
   }
 
   String _statusLabel(String status) {
     switch (status) {
       case 'resolved':
-        return '已处理';
+        return I18n.tr('feedback.status.resolved');
       case 'closed':
-        return '已关闭';
+        return I18n.tr('feedback.status.closed');
       case 'in_progress':
-        return '处理中';
+        return I18n.tr('feedback.status.in_progress');
       default:
-        return '待处理';
+        return I18n.tr('feedback.status.open');
     }
   }
 
@@ -151,9 +182,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
     final isLoggedIn = auth.state.isLoggedIn;
+    final screenTitle = _categoryLabel(_category);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('反馈与许愿')),
+      appBar: AppBar(title: Text(screenTitle)),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -188,7 +220,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '反馈与许愿',
+                          screenTitle,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.w400,
@@ -198,8 +230,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         const SizedBox(height: 4),
                         Text(
                           auth.state.isLoggedIn
-                              ? '把功能建议、问题反馈和想要的能力直接写在这里'
-                              : '登录后可以提交反馈并查看处理记录',
+                              ? _categoryHelp(_category)
+                              : I18n.tr('feedback.login.subtitle'),
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.66),
@@ -213,20 +245,34 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             ),
             const SizedBox(height: 12),
             AppSettingsSection(
-              title: isLoggedIn ? '提交新反馈' : '登录后提交反馈',
+              title: isLoggedIn
+                  ? '${I18n.tr('feedback.submit.prefix')}$screenTitle'
+                  : '${I18n.tr('feedback.submit.login_prefix')}$screenTitle',
               subtitle: isLoggedIn
-                  ? '功能建议、问题反馈或许愿都可以写在这里'
-                  : '当前未登录，无法提交或查看反馈处理记录',
+                  ? _categoryHelp(_category)
+                  : I18n.tr('feedback.login.section_subtitle'),
               children: [
                 AppDropdownField<String>(
                   initialValue: _category,
-                  labelText: '分类',
+                  labelText: I18n.tr('feedback.category.label'),
                   enabled: isLoggedIn && !_submitting,
-                  items: const [
-                    DropdownMenuItem(value: 'feature', child: Text('功能建议')),
-                    DropdownMenuItem(value: 'bug', child: Text('问题反馈')),
-                    DropdownMenuItem(value: 'wish', child: Text('许愿池')),
-                    DropdownMenuItem(value: 'other', child: Text('其他')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'feature',
+                      child: Text(I18n.tr('feedback.category.feature')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'bug',
+                      child: Text(I18n.tr('feedback.category.bug')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'wish',
+                      child: Text(I18n.tr('feedback.category.wish')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'other',
+                      child: Text(I18n.tr('feedback.category.other')),
+                    ),
                   ],
                   onChanged: (v) => setState(() => _category = v ?? 'feature'),
                 ),
@@ -236,8 +282,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   enabled: isLoggedIn && !_submitting,
                   minLines: 3,
                   maxLines: 6,
-                  decoration: const InputDecoration(
-                    labelText: '描述一下你想反馈或希望增加的功能',
+                  decoration: InputDecoration(
+                    labelText:
+                        '${I18n.tr('feedback.content.label_prefix')}$screenTitle',
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -251,15 +298,21 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.send_outlined),
-                    label: Text(_submitting ? '提交中' : '提交反馈'),
+                    label: Text(
+                      _submitting
+                          ? I18n.tr('feedback.submitting')
+                          : I18n.tr('feedback.submit.button'),
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             AppSectionHeader(
-              title: '我的反馈',
-              subtitle: _loading ? '正在加载' : _error ?? '最近提交的记录',
+              title: I18n.tr('feedback.mine.title'),
+              subtitle: _loading
+                  ? I18n.tr('feedback.loading')
+                  : _error ?? I18n.tr('feedback.recent'),
               padding: EdgeInsets.zero,
             ),
             const SizedBox(height: 8),
@@ -271,8 +324,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             else if (_items.isEmpty)
               EmptyState(
                 icon: Icons.feedback_outlined,
-                message: _error ?? '还没有反馈记录',
-                actionLabel: '刷新',
+                message: _error ?? I18n.tr('feedback.empty'),
+                actionLabel: I18n.tr('feedback.refresh'),
                 onAction: _load,
               )
             else
@@ -352,7 +405,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '管理员回复',
+                                I18n.tr('feedback.admin_reply'),
                                 style: Theme.of(context).textTheme.labelMedium
                                     ?.copyWith(
                                       color: cs.primary,

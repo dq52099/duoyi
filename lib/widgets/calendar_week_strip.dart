@@ -1,22 +1,33 @@
 import 'package:flutter/material.dart';
+import '../core/i18n_date_format.dart';
 import '../../models/calendar_event.dart';
+import '../../providers/calendar_provider.dart';
+import 'calendar_event_sheet.dart';
 
 class CalendarWeekStrip extends StatelessWidget {
   final DateTime selectedDay;
   final Map<String, List<CalendarEventType>> dateEventTypes;
+  final CalendarProvider calendarProvider;
   final void Function(DateTime) onDaySelected;
   final Set<CalendarEventType>? activeTypes;
+  final String? projectKey;
+  final String? workspaceId;
 
   const CalendarWeekStrip({
     super.key,
     required this.selectedDay,
     required this.dateEventTypes,
+    required this.calendarProvider,
     required this.onDaySelected,
     this.activeTypes,
+    this.projectKey,
+    this.workspaceId,
   });
 
   static Color _colorFor(CalendarEventType t, ColorScheme cs) {
     switch (t) {
+      case CalendarEventType.event:
+        return const Color(0xFF5B6EE1);
       case CalendarEventType.todo:
         return cs.primary;
       case CalendarEventType.habit:
@@ -46,6 +57,18 @@ class CalendarWeekStrip extends StatelessWidget {
     );
     final days = List.generate(7, (i) => monday.add(Duration(days: i)));
     final today = DateTime.now();
+    final weekEvents = [
+      for (final d in days)
+        _WeekDayEvents(
+          date: d,
+          events: calendarProvider.getEventsForDate(
+            d,
+            activeTypes: activeTypes,
+            projectKey: projectKey,
+            workspaceId: workspaceId,
+          )..sort(_compareEvents),
+        ),
+    ];
 
     return Column(
       children: [
@@ -121,46 +144,210 @@ class CalendarWeekStrip extends StatelessWidget {
         ),
         const Divider(),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: days
-                .where((d) {
-                  final key =
-                      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-                  return dateEventTypes.containsKey(key);
-                })
-                .expand((d) {
-                  final label = [
-                    '周一',
-                    '周二',
-                    '周三',
-                    '周四',
-                    '周五',
-                    '周六',
-                    '周日',
-                  ][d.weekday - 1];
-                  return [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 4),
-                      child: Text(
-                        '$label ${d.month}/${d.day}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${dateEventTypes.length} 个活动',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ];
-                })
-                .toList(),
+          child: _WeekAgendaList(
+            days: weekEvents,
+            onDaySelected: onDaySelected,
           ),
         ),
       ],
+    );
+  }
+
+  static int _compareEvents(CalendarEvent a, CalendarEvent b) {
+    final aMinutes = (a.time?.hour ?? 0) * 60 + (a.time?.minute ?? 0);
+    final bMinutes = (b.time?.hour ?? 0) * 60 + (b.time?.minute ?? 0);
+    final time = aMinutes.compareTo(bMinutes);
+    if (time != 0) return time;
+    return a.title.compareTo(b.title);
+  }
+}
+
+class _WeekDayEvents {
+  final DateTime date;
+  final List<CalendarEvent> events;
+
+  const _WeekDayEvents({required this.date, required this.events});
+}
+
+class _WeekAgendaList extends StatelessWidget {
+  final List<_WeekDayEvents> days;
+  final void Function(DateTime) onDaySelected;
+
+  const _WeekAgendaList({required this.days, required this.onDaySelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleDays = days.where((day) => day.events.isNotEmpty).toList();
+    if (visibleDays.isEmpty) {
+      return Center(
+        child: Text(
+          '本周暂无日程',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 13,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      itemCount: visibleDays.length,
+      itemBuilder: (context, index) {
+        final day = visibleDays[index];
+        return _WeekDaySection(day: day, onDaySelected: onDaySelected);
+      },
+    );
+  }
+}
+
+class _WeekDaySection extends StatelessWidget {
+  final _WeekDayEvents day;
+  final void Function(DateTime) onDaySelected;
+
+  const _WeekDaySection({required this.day, required this.onDaySelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = [
+      '周一',
+      '周二',
+      '周三',
+      '周四',
+      '周五',
+      '周六',
+      '周日',
+    ][day.date.weekday - 1];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => onDaySelected(day.date),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    '$label ${day.date.month}/${day.date.day}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${day.events.length} 项',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          for (final event in day.events) _WeekEventTile(event: event),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekEventTile extends StatelessWidget {
+  final CalendarEvent event;
+
+  const _WeekEventTile({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final time = event.time == null
+        ? null
+        : I18nDateFormat.timeOfDay(
+            hour: event.time!.hour,
+            minute: event.time!.minute,
+          );
+    final subtitle = event.subtitle;
+    final detail = switch ((time, subtitle)) {
+      (final t?, final s?) when s.isNotEmpty => '$t · $s',
+      (final t?, _) => t,
+      (_, final s?) when s.isNotEmpty => s,
+      _ => null,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => showCalendarEventSheet(context, event),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: event.hasConflict
+                  ? cs.error.withValues(alpha: 0.35)
+                  : cs.outlineVariant.withValues(alpha: 0.55),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: event.color.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        decoration: event.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                        color: event.isCompleted
+                            ? cs.onSurfaceVariant
+                            : cs.onSurface,
+                      ),
+                    ),
+                    if (detail != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

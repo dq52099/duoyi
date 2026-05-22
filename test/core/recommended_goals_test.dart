@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/recommended_goals.dart';
 import 'package:duoyi/models/goal.dart';
 
@@ -17,6 +18,10 @@ import 'package:duoyi/models/goal.dart';
 ///   `progress = 0`、`autoProgress = true`、`milestones = []`、
 ///   `sortOrder = 0`、`startDate` 为今日本地 00:00。
 void main() {
+  setUp(() {
+    I18n.setLocale(AppLocale.zh);
+  });
+
   group('RecommendedGoalsLibrary.all / byCategory 数量与分类', () {
     test('all() 至少包含 25 条推荐目标', () {
       final items = RecommendedGoalsLibrary.all();
@@ -172,6 +177,20 @@ void main() {
             'startDate=$start 应等于 today 00:00（'
             'beforeDay=$beforeDay, afterDay=$afterDay）',
       );
+    });
+
+    test('英文环境下推荐目标展示和实例化使用英文文案', () {
+      I18n.setLocale(AppLocale.en);
+      final r = RecommendedGoalsLibrary.all().firstWhere(
+        (item) => item.id == 'rec.recommend.drink_water',
+      );
+
+      expect(r.localizedTitle, 'Drink water daily');
+      expect(r.localizedDescription, isNot(contains('规律饮水')));
+
+      final goal = RecommendedGoalsLibrary.instantiate(r);
+      expect(goal.title, 'Drink water daily');
+      expect(goal.description, isNot(contains('规律饮水')));
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n_date_format.dart';
 import '../models/goal.dart';
 import 'app_time_picker.dart';
 import 'surface_components.dart';
@@ -205,7 +206,7 @@ class _ReminderRuleTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontWeight: DesignTokens.fontWeightSemiBold,
+                fontWeight: DesignTokens.fontWeightRegular,
               ),
             ),
             subtitle: Text(
@@ -349,22 +350,14 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             Wrap(
               spacing: DesignTokens.spaceXs,
               runSpacing: DesignTokens.spaceXs,
-              children:
-                  const [
-                    (-10, '10 分钟'),
-                    (-30, '30 分钟'),
-                    (-60, '1 小时'),
-                    (-1440, '1 天'),
-                    (-2880, '2 天'),
-                    (-4320, '3 天'),
-                  ].map((preset) {
-                    return ChoiceChip(
-                      label: Text(preset.$2),
-                      selected: _offsetMinutes == preset.$1,
-                      onSelected: (_) =>
-                          setState(() => _offsetMinutes = preset.$1),
-                    );
-                  }).toList(),
+              children: ReminderRule.relativeOffsetPresetMinutes.map((minutes) {
+                final offset = minutes.abs();
+                return ChoiceChip(
+                  label: Text(_durationLabel(offset)),
+                  selected: _offsetMinutes == minutes,
+                  onSelected: (_) => setState(() => _offsetMinutes = minutes),
+                );
+              }).toList(),
             ),
           ],
           if (_type == ReminderRuleType.weeklyTime) ...[
@@ -410,6 +403,11 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
                   value: ReminderKind.alarm,
                   label: Text('闹钟'),
                   icon: Icon(Icons.alarm_outlined),
+                ),
+                ButtonSegment(
+                  value: ReminderKind.email,
+                  label: Text('邮件'),
+                  icon: Icon(Icons.alternate_email),
                 ),
               ],
               selected: {_kind},
@@ -515,6 +513,7 @@ TextStyle _labelStyle(BuildContext context) {
 
 IconData _ruleIcon(ReminderRule rule) {
   if (rule.kind == ReminderKind.alarm) return Icons.alarm_outlined;
+  if (rule.kind == ReminderKind.email) return Icons.alternate_email;
   return switch (rule.type) {
     ReminderRuleType.absolute => Icons.event_available_outlined,
     ReminderRuleType.relativeToDue => Icons.timelapse_outlined,
@@ -524,7 +523,11 @@ IconData _ruleIcon(ReminderRule rule) {
 }
 
 String _ruleTitle(ReminderRule rule) {
-  final mode = rule.kind == ReminderKind.alarm ? '闹钟' : '推送';
+  final mode = switch (rule.kind) {
+    ReminderKind.alarm => '闹钟',
+    ReminderKind.email => '邮件',
+    ReminderKind.push => '推送',
+  };
   return '${_typeLabel(rule.type)} · $mode';
 }
 
@@ -555,11 +558,11 @@ String _typeLabel(ReminderRuleType type) => switch (type) {
 
 String _formatHm(int? hour, int? minute) {
   if (hour == null || minute == null) return '未设置时间';
-  return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  return I18nDateFormat.timeOfDay(hour: hour, minute: minute);
 }
 
 String _formatTimeOfDay(TimeOfDay time) {
-  return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  return I18nDateFormat.timeOfDay(hour: time.hour, minute: time.minute);
 }
 
 TimeOfDay nextHalfHourTimeOfDay([DateTime? from]) {

@@ -26,4 +26,5 @@ class PlatformInfo {
 
   static Future<AndroidDeviceInfoLite?> getAndroidDeviceInfo() async => null;
   static Future<bool> canUseFullScreenIntent() async => true;
+  static Future<String?> getSystemTimeZoneId() async => null;
 }

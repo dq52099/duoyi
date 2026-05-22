@@ -33,7 +33,7 @@ void main() {
       (check) => check.id == 'notification_permission',
     );
     expect(notification.status, PermissionHealthStatus.blocked);
-    expect(notification.actionLabel, '去授权');
+    expect(notification.actionLabel, '通知授权');
   });
 
   test('精准闹钟缺失时会阻断闹钟提醒并标出渠道状态', () async {
@@ -59,13 +59,14 @@ void main() {
       (check) => check.id == 'exact_alarm_permission',
     );
     expect(exactAlarm.status, PermissionHealthStatus.blocked);
+    expect(exactAlarm.actionLabel, '精准闹钟');
     final channels = report.checks.firstWhere(
       (check) => check.id == 'notification_channels',
     );
     expect(channels.status, PermissionHealthStatus.warning);
   });
 
-  test('Xiaomi-like 设备会输出单条人工检查项，避免重复无效跳转', () async {
+  test('Xiaomi-like 设备会输出分项人工检查，避免重复无效跳转', () async {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => true,
       exactAlarmGrantedReader: () async => true,
@@ -88,10 +89,33 @@ void main() {
 
     expect(report.isXiaomiLike, isTrue);
     expect(report.summaryStatus, PermissionHealthStatus.warning);
+    expect(report.summarySubtitle, contains('渠道声音'));
     final manualChecks = report.checks.where((check) => check.manual).toList();
-    expect(manualChecks, hasLength(1));
-    expect(manualChecks.single.id, 'xiaomi_notification_policy');
-    expect(manualChecks.single.action, PermissionHealthAction.none);
+    expect(manualChecks, hasLength(4));
+    expect(
+      manualChecks.map((check) => check.id),
+      containsAll(<String>[
+        'xiaomi_autostart_policy',
+        'xiaomi_battery_policy',
+        'xiaomi_lock_screen_policy',
+        'xiaomi_channel_sound_policy',
+      ]),
+    );
+    expect(
+      manualChecks.map((check) => check.title),
+      containsAll(<String>[
+        'HyperOS/MIUI 自启动',
+        'HyperOS/MIUI 后台与电池',
+        'HyperOS/MIUI 锁屏与横幅',
+        'HyperOS/MIUI 渠道声音',
+      ]),
+    );
+    expect(
+      manualChecks.every(
+        (check) => check.action == PermissionHealthAction.none,
+      ),
+      isTrue,
+    );
   });
 
   test('弹出屏幕权限缺失时标为阻断状态', () async {
@@ -124,6 +148,37 @@ void main() {
       fullScreen.action,
       PermissionHealthAction.requestFullScreenIntentPermission,
     );
+    expect(fullScreen.actionLabel, '弹屏权限');
+  });
+
+  test('权限处理按钮使用明确文案，避免多个去授权重复出现', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => false,
+      exactAlarmGrantedReader: () async => false,
+      fullScreenIntentGrantedReader: () async => false,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+      },
+    );
+
+    final report = await service.check();
+    final labels = report.checks
+        .map((check) => check.actionLabel)
+        .whereType<String>()
+        .toList();
+
+    expect(labels, containsAll(<String>['通知授权', '精准闹钟', '弹屏权限']));
+    expect(labels, isNot(contains('去授权')));
+    expect(labels.toSet(), hasLength(labels.length));
   });
 
   test('检测到旧通知渠道时提示用户检查声音渠道', () async {

@@ -66,16 +66,41 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_todo_item_3,
                 prefs.getString("todo_top3_3", "") ?: ""
             )
+            views.setTextViewText(
+                R.id.widget_todo_today_summary,
+                "今日待办 · ${prefs.getInt("todo_top3_count", 0)} 项"
+            )
             bindTodoRow(context, views, prefs, 1, R.id.widget_todo_item_1, R.id.widget_todo_done_1)
             bindTodoRow(context, views, prefs, 2, R.id.widget_todo_item_2, R.id.widget_todo_done_2)
             bindTodoRow(context, views, prefs, 3, R.id.widget_todo_item_3, R.id.widget_todo_done_3)
+            val secondRowVisibility = DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+            val thirdRowVisibility = DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+            views.setViewVisibility(R.id.widget_todo_item_2, secondRowVisibility)
+            views.setViewVisibility(
+                R.id.widget_todo_done_2,
+                if ((prefs.getString("todo_top3_2_id", "") ?: "").isBlank()) View.GONE else secondRowVisibility
+            )
+            views.setViewVisibility(R.id.widget_todo_item_3, thirdRowVisibility)
+            views.setViewVisibility(
+                R.id.widget_todo_done_3,
+                if ((prefs.getString("todo_top3_3_id", "") ?: "").isBlank()) View.GONE else thirdRowVisibility
+            )
+            views.setViewVisibility(
+                R.id.widget_todo_today_summary,
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+            )
 
             // 点击任意区域都打开待办页
             val open = HomeWidgetLaunchIntent.getActivity(
                 context, MainActivity::class.java,
                 Uri.parse("duoyi://tab/todo")
             )
+            val quickAdd = HomeWidgetLaunchIntent.getActivity(
+                context, MainActivity::class.java,
+                Uri.parse("duoyi://action/quick_todo")
+            )
             views.setOnClickPendingIntent(R.id.widget_todo_root, open)
+            views.setOnClickPendingIntent(R.id.widget_todo_quick_add, quickAdd)
             views.setOnClickPendingIntent(R.id.widget_todo_nav_todo, open)
             views.setOnClickPendingIntent(
                 R.id.widget_todo_nav_habit,

@@ -4,19 +4,29 @@ class PomodoroTimerRing extends StatelessWidget {
   final double progress;
   final String timeText;
   final Color color;
+  final double size;
+  final bool countUp;
 
   const PomodoroTimerRing({
     super.key,
     required this.progress,
     required this.timeText,
     required this.color,
+    this.size = 220,
+    this.countUp = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final compact = size < 150;
+    final timeFontSize = size >= 200
+        ? 48.0
+        : compact
+        ? 32.0
+        : 40.0;
     return Container(
-      width: 220,
-      height: 220,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Theme.of(context).colorScheme.surface,
@@ -37,10 +47,10 @@ class PomodoroTimerRing extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 202,
-            height: 202,
+            width: size - 18,
+            height: size - 18,
             child: CircularProgressIndicator(
-              value: progress,
+              value: countUp ? null : progress,
               strokeWidth: 6,
               strokeCap: StrokeCap.round,
               backgroundColor: Colors.grey.withValues(alpha: 0.1),
@@ -53,15 +63,15 @@ class PomodoroTimerRing extends StatelessWidget {
               Text(
                 timeText,
                 style: TextStyle(
-                  fontSize: 48,
+                  fontSize: timeFontSize,
                   fontWeight: FontWeight.w300,
                   fontFamily: 'monospace',
                   letterSpacing: 0,
                   color: Theme.of(context).textTheme.headlineSmall?.color,
                 ),
               ),
-              const SizedBox(height: 8),
-              if (progress > 0)
+              if (!compact) const SizedBox(height: 8),
+              if (!countUp && progress > 0 && !compact)
                 Text(
                   '${(progress.clamp(0.0, 1.0) * 100).round()}%',
                   style: TextStyle(

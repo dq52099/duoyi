@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n_date_format.dart';
 import 'surface_components.dart';
 
 class AppTimePicker {
@@ -25,9 +26,7 @@ class AppTimePicker {
   }
 
   static String format(TimeOfDay time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
+    return I18nDateFormat.timeOfDay(hour: time.hour, minute: time.minute);
   }
 
   static TimeOfDay nextHalfHour([DateTime? from]) {

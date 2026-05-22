@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/design_tokens.dart';
+import '../core/i18n.dart';
 import '../core/goal_icons.dart';
 import '../models/goal.dart';
 import '../providers/goal_provider.dart';
+import '../providers/share_provider.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'goal_edit_screen.dart';
@@ -23,12 +26,12 @@ class GoalScreen extends StatelessWidget {
           children: [
             Image.asset(goalFeatureIconAsset, width: 24, height: 24),
             const SizedBox(width: 8),
-            const Text('目标管理'),
+            Text(I18n.tr('goal.title')),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: '推荐模板',
+            tooltip: I18n.tr('goal.recommended_templates'),
             icon: const Icon(Icons.auto_awesome),
             onPressed: () => _openRecommended(context),
           ),
@@ -42,8 +45,8 @@ class GoalScreen extends StatelessWidget {
                 width: 40,
                 height: 40,
               ),
-              message: '设立一个目标，让时间为你累积',
-              actionLabel: '新建目标',
+              message: I18n.tr('goal.empty'),
+              actionLabel: I18n.tr('goal.create'),
               onAction: () => _openEdit(context),
             )
           : ListView.builder(
@@ -54,7 +57,7 @@ class GoalScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEdit(context),
         icon: const Icon(Icons.add),
-        label: const Text('新目标'),
+        label: Text(I18n.tr('goal.new')),
       ),
     );
   }
@@ -86,10 +89,10 @@ class _GoalCard extends StatelessWidget {
   };
 
   String _statusText() => switch (goal.status) {
-    GoalStatus.active => '进行中',
-    GoalStatus.paused => '已暂停',
-    GoalStatus.achieved => '已达成',
-    GoalStatus.abandoned => '已放弃',
+    GoalStatus.active => I18n.tr('goal.status.active'),
+    GoalStatus.paused => I18n.tr('goal.status.paused'),
+    GoalStatus.achieved => I18n.tr('goal.status.achieved'),
+    GoalStatus.abandoned => I18n.tr('goal.status.abandoned'),
   };
 
   @override
@@ -97,6 +100,10 @@ class _GoalCard extends StatelessWidget {
     final color = Color(goal.colorValue);
     final progress = goal.computedProgress;
     final days = goal.daysRemaining;
+    final shareProvider = context.watch<ShareProvider?>();
+    final isShared =
+        goal.workspaceId.trim().isNotEmpty &&
+        goal.workspaceId.trim() != 'private';
 
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 12),
@@ -125,12 +132,29 @@ class _GoalCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      goal.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            goal.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (isShared) ...[
+                          const SizedBox(width: 6),
+                          _SharedGoalBadge(
+                            label: _workspaceLabel(
+                              shareProvider,
+                              goal.workspaceId.trim(),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (goal.description.isNotEmpty)
                       Text(
@@ -193,7 +217,9 @@ class _GoalCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                '里程碑 ${goal.milestones.where((m) => m.isCompleted).length}/${goal.milestones.length}',
+                '${I18n.tr('goal.milestone.prefix')}'
+                '${goal.milestones.where((m) => m.isCompleted).length}/'
+                '${goal.milestones.length}',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
               if (goal.targetDate != null) ...[
@@ -201,7 +227,11 @@ class _GoalCard extends StatelessWidget {
                 Icon(Icons.schedule, size: 12, color: Colors.grey.shade600),
                 const SizedBox(width: 4),
                 Text(
-                  days >= 0 ? '还剩 $days 天' : '已超期 ${-days} 天',
+                  days >= 0
+                      ? '${I18n.tr('goal.days_remaining.prefix')}$days'
+                            '${I18n.tr('goal.days_remaining.suffix')}'
+                      : '${I18n.tr('goal.overdue.prefix')}${-days}'
+                            '${I18n.tr('goal.overdue.suffix')}',
                   style: TextStyle(
                     fontSize: 11,
                     color: days >= 0 ? Colors.grey.shade600 : Colors.red,
@@ -209,6 +239,54 @@ class _GoalCard extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _workspaceLabel(ShareProvider? provider, String workspaceId) {
+    for (final workspace in provider?.workspaces ?? const []) {
+      if (workspace.id == workspaceId) return workspace.name;
+    }
+    return '共享';
+  }
+}
+
+class _SharedGoalBadge extends StatelessWidget {
+  final String label;
+
+  const _SharedGoalBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 96),
+      padding: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spaceXs,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.groups_2_outlined, size: 12, color: cs.primary),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: cs.primary,
+              ),
+            ),
           ),
         ],
       ),

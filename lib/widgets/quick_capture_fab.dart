@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/ai_command.dart';
+import '../core/i18n_date_format.dart';
 import '../core/i18n.dart';
 import '../core/smart_date_parser.dart';
+import '../core/smart_todo_draft.dart';
+import '../models/goal.dart'
+    show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 import '../models/note.dart';
+import '../models/quick_capture_template.dart';
 import '../models/todo.dart';
+import '../providers/habit_provider.dart';
+import '../providers/diary_provider.dart';
 import '../providers/note_provider.dart';
+import '../providers/pomodoro_provider.dart';
+import '../providers/quick_capture_template_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ai_service.dart';
 import '../screens/diary_screen.dart';
@@ -48,6 +58,12 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     }
   }
 
+  void _closeIfOpen() {
+    if (!_open) return;
+    setState(() => _open = false);
+    _ctrl.reverse();
+  }
+
   Future<void> _quickTodo() async {
     _toggle();
     final ctrl = TextEditingController();
@@ -56,7 +72,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AppDialog(
-          title: const Text('快速待办'),
+          title: Text(I18n.tr('quick.todo.title')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,8 +80,8 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
               TextField(
                 controller: ctrl,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: '一句话描述（如：明天下午3点开会）',
+                decoration: InputDecoration(
+                  hintText: I18n.tr('quick.todo.hint'),
                 ),
                 onChanged: (v) => setSt(() {
                   parsed = SmartDateParser.parse(v);
@@ -94,7 +110,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '识别到：${_formatParsed(parsed)}',
+                          '${I18n.tr('quick.todo.parsed_prefix')}${_formatParsed(parsed)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(ctx).colorScheme.primary,
@@ -122,27 +138,13 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     );
     if (ok == true && ctrl.text.trim().isNotEmpty) {
       if (!mounted) return;
-      // 把识别到的日期片段从标题中剥离
-      var title = ctrl.text.trim();
-      if (parsed.isSuccess && parsed.matchedText.isNotEmpty) {
-        title = title.replaceFirst(parsed.matchedText, '').trim();
-        if (title.isEmpty) title = ctrl.text.trim();
-      }
-      context.read<TodoProvider>().addTodo(
-        TodoItem(
-          title: title,
-          date: parsed.dateTime ?? DateTime.now(),
-          dueDate: parsed.hasTimeOfDay ? parsed.dateTime : null,
-        ),
-      );
+      final draft = SmartTodoDraftBuilder.fromText(ctrl.text.trim());
+      context.read<TodoProvider>().addTodo(draft.toTodo());
     }
   }
 
   String _formatParsed(SmartDateParseResult r) {
-    final dt = r.dateTime!;
-    final base = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-    if (!r.hasTimeOfDay) return base;
-    return '$base ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return I18nDateFormat.smartDate(r.dateTime!, includeTime: r.hasTimeOfDay);
   }
 
   Future<void> _quickAiTodo() async {
@@ -155,31 +157,38 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AppDialog(
-          title: const Text('AI 快捷创建日程'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: '例如：准备周五汇报'),
-              ),
-              if (error.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(error, style: const TextStyle(color: Colors.red)),
-              ],
-              if (subtasks.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                ...subtasks.map(
-                  (item) => ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.subdirectory_arrow_right),
-                    title: Text(item),
+          title: Text(I18n.tr('quick.ai.title')),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 360),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: I18n.tr('quick.ai.hint'),
+                    ),
                   ),
-                ),
-              ],
-            ],
+                  if (error.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(error, style: const TextStyle(color: Colors.red)),
+                  ],
+                  if (subtasks.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ...subtasks.map(
+                      (item) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.subdirectory_arrow_right),
+                        title: Text(item),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
           actions: [
             TextButton(
@@ -201,7 +210,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
                             .breakDownTask(ctrl.text.trim());
                         setSt(() => subtasks = list);
                       } catch (_) {
-                        setSt(() => error = 'AI 创建失败，请检查 AI 配置');
+                        setSt(() => error = I18n.tr('quick.ai.error'));
                       } finally {
                         setSt(() => busy = false);
                       }
@@ -213,11 +222,11 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.auto_awesome),
-              label: const Text('生成'),
+              label: Text(I18n.tr('action.generate')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('创建'),
+              child: Text(I18n.tr('action.create')),
             ),
           ],
         ),
@@ -225,13 +234,125 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     );
     if (ok == true && ctrl.text.trim().isNotEmpty) {
       if (!mounted) return;
+      final draft = SmartTodoDraftBuilder.fromText(ctrl.text.trim());
       context.read<TodoProvider>().addTodo(
-        TodoItem(
-          title: ctrl.text.trim(),
-          subtasks: subtasks.map((s) => Subtask(title: s)).toList(),
-        ),
+        draft.toTodo(subtasks: subtasks.map((s) => Subtask(title: s)).toList()),
       );
     }
+  }
+
+  Future<void> _quickAiCommand() async {
+    _toggle();
+    final ctrl = TextEditingController();
+    var batch = const AiCommandBatch(rawText: '', commands: []);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: const Text('AI 指令'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: '例如：添加待办 明天下午3点买菜；记笔记 项目想法；开始专注',
+                  ),
+                  onChanged: (value) {
+                    setSt(() => batch = AiCommandParser.parseBatch(value));
+                  },
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    batch.preview,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: batch.executable
+                          ? Theme.of(ctx).colorScheme.onSurface
+                          : Theme.of(ctx).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton.icon(
+              onPressed: batch.executable
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
+              icon: const Icon(Icons.auto_awesome, size: 16),
+              label: const Text('执行'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    batch = AiCommandParser.parseBatch(ctrl.text);
+    await _executeAiCommands(batch.commands);
+  }
+
+  Future<void> _executeAiCommands(List<AiCommand> commands) async {
+    for (final command in commands) {
+      await _executeAiCommand(command, showSnackBar: false);
+    }
+    if (!mounted || commands.isEmpty) return;
+    final message = commands.length == 1
+        ? '${commands.single.title}已执行'
+        : '已执行 ${commands.length} 条 AI 指令';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<void> _executeAiCommand(
+    AiCommand command, {
+    bool showSnackBar = true,
+  }) async {
+    switch (command.type) {
+      case AiCommandType.addTodo:
+        final draft = command.todoDraft;
+        if (draft == null) return;
+        await context.read<TodoProvider>().addTodo(draft.toTodo());
+      case AiCommandType.addNote:
+        final note = command.note;
+        if (note == null) return;
+        context.read<NoteProvider>().addOrUpdateNote(note);
+      case AiCommandType.addDiary:
+        final diary = command.diary;
+        if (diary == null) return;
+        await context.read<DiaryProvider>().addOrUpdate(diary);
+      case AiCommandType.startFocus:
+        final pomodoro = context.read<PomodoroProvider>();
+        if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
+      case AiCommandType.unknown:
+        return;
+    }
+    if (!mounted || !showSnackBar) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${command.title}已执行'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _quickNote() async {
@@ -240,12 +361,12 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AppDialog(
-        title: const Text('随手记'),
+        title: Text(I18n.tr('quick.note.title')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           maxLines: 5,
-          decoration: const InputDecoration(hintText: '写点什么…'),
+          decoration: InputDecoration(hintText: I18n.tr('quick.note.hint')),
         ),
         actions: [
           TextButton(
@@ -287,6 +408,322 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       context,
       MaterialPageRoute(builder: (_) => const SearchScreen()),
     );
+  }
+
+  Future<void> _showTemplateSheet() async {
+    _closeIfOpen();
+    final provider = context.read<QuickCaptureTemplateProvider?>();
+    final selected = await showAppModalSheet<QuickCaptureTemplate>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final templates =
+              provider?.templates ?? QuickCaptureTemplate.builtIns();
+          return AppModalSheet(
+            title: I18n.tr('quick.template.title'),
+            subtitle: I18n.tr('quick.template.subtitle'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (provider != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.of(ctx).pop();
+                        await _showSaveTemplateDialog();
+                      },
+                      icon: const Icon(Icons.bookmark_add_outlined),
+                      label: Text(I18n.tr('quick.template.save')),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                if (templates.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    child: Text(I18n.tr('quick.template.empty')),
+                  )
+                else
+                  ...templates.map(
+                    (template) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _TemplateTile(
+                        template: template,
+                        onTap: () => Navigator.of(ctx).pop(template),
+                        onDelete: template.builtIn || provider == null
+                            ? null
+                            : () async {
+                                await provider.deleteTemplate(template.id);
+                                setSheetState(() {});
+                              },
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (selected != null) await _applyTemplate(selected);
+  }
+
+  Future<void> _showSaveTemplateDialog() async {
+    final provider = context.read<QuickCaptureTemplateProvider?>();
+    if (provider == null || !mounted) return;
+    final nameCtrl = TextEditingController();
+    final prefixCtrl = TextEditingController();
+    final tagsCtrl = TextEditingController();
+    final listCtrl = TextEditingController();
+    final habitCategoryCtrl = TextEditingController();
+    final habitTargetCtrl = TextEditingController(text: '1');
+    final habitUnitCtrl = TextEditingController(text: '次');
+    var kind = QuickCaptureTemplateKind.todo;
+    var priority = TodoPriority.none;
+    var todoReminder = false;
+    var habitReminder = false;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AppDialog(
+          title: Text(I18n.tr('quick.template.save')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: Text(I18n.tr('quick.template.kind.todo')),
+                        selected: kind == QuickCaptureTemplateKind.todo,
+                        onSelected: (_) => setDialogState(
+                          () => kind = QuickCaptureTemplateKind.todo,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: Text(I18n.tr('quick.template.kind.habit')),
+                        selected: kind == QuickCaptureTemplateKind.habit,
+                        onSelected: (_) => setDialogState(
+                          () => kind = QuickCaptureTemplateKind.habit,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('quick.template.name'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: prefixCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('quick.template.prefix'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: tagsCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('quick.template.tags'),
+                  ),
+                ),
+                if (kind == QuickCaptureTemplateKind.todo) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: listCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.list'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<TodoPriority>(
+                    initialValue: priority,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.priority'),
+                    ),
+                    items: [
+                      for (final item in TodoPriority.values)
+                        DropdownMenuItem(value: item, child: Text(item.label)),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => priority = value);
+                      }
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: todoReminder,
+                    onChanged: (value) {
+                      setDialogState(() => todoReminder = value);
+                    },
+                    title: Text(I18n.tr('quick.template.reminder15')),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: habitCategoryCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.habit_category'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: habitTargetCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: I18n.tr('quick.template.habit_target'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 92,
+                        child: TextField(
+                          controller: habitUnitCtrl,
+                          decoration: InputDecoration(
+                            labelText: I18n.tr('quick.template.habit_unit'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: habitReminder,
+                    onChanged: (value) {
+                      setDialogState(() => habitReminder = value);
+                    },
+                    title: Text(I18n.tr('quick.template.habit_reminder')),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                Navigator.pop(dialogContext, true);
+              },
+              child: Text(I18n.tr('action.save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+
+    final reminderPlan = todoReminder
+        ? ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                type: ReminderRuleType.relativeToDue,
+                kind: ReminderKind.alarm,
+                offsetMinutes: -15,
+              ),
+            ],
+          )
+        : const ReminderPlan.disabled();
+    await provider.saveTemplate(
+      QuickCaptureTemplate(
+        name: nameCtrl.text.trim(),
+        kind: kind,
+        titlePrefix: prefixCtrl.text.trim(),
+        tags: tagsCtrl.text.split(RegExp(r'[,，\s]+')),
+        priority: priority,
+        listGroupName: listCtrl.text.trim().isEmpty ? null : listCtrl.text,
+        reminderPlan: reminderPlan,
+        habitCategory: habitCategoryCtrl.text.trim().isEmpty
+            ? null
+            : habitCategoryCtrl.text,
+        habitTargetCount: int.tryParse(habitTargetCtrl.text) ?? 1,
+        habitUnit: habitUnitCtrl.text.trim().isEmpty
+            ? null
+            : habitUnitCtrl.text,
+        habitRemind: habitReminder,
+        habitRemindHour: habitReminder ? 21 : null,
+        habitRemindMinute: habitReminder ? 0 : null,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(I18n.tr('quick.template.saved')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _applyTemplate(QuickCaptureTemplate template) async {
+    if (!mounted) return;
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppDialog(
+        title: Text(template.name),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLines: template.kind == QuickCaptureTemplateKind.todo ? 2 : 1,
+          decoration: InputDecoration(
+            hintText: I18n.tr('quick.template.apply_hint'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(I18n.tr('action.create')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final input = ctrl.text.trim();
+    if (input.isEmpty && template.displayTitlePrefix.isEmpty) return;
+    if (template.kind == QuickCaptureTemplateKind.todo) {
+      await context.read<TodoProvider>().addTodo(template.toTodo(input));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(I18n.tr('quick.template.todo_done')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      final habitProvider = context.read<HabitProvider?>();
+      if (habitProvider == null) return;
+      await habitProvider.addHabit(template.toHabit(input));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(I18n.tr('quick.template.habit_done')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _mini({
@@ -340,48 +777,115 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (_open) ...[
+          _mini(
+            icon: Icons.bookmark_add_outlined,
+            label: I18n.tr('quick.menu.template'),
+            color: Colors.indigo,
+            onTap: _showTemplateSheet,
+          ),
+          if (aiEnabled)
+            _mini(
+              icon: Icons.assistant_outlined,
+              label: 'AI 指令',
+              color: Colors.deepPurple,
+              onTap: _quickAiCommand,
+            ),
           if (aiEnabled)
             _mini(
               icon: Icons.auto_awesome,
-              label: 'AI 创建日程',
+              label: I18n.tr('quick.menu.ai_schedule'),
               color: Colors.purple,
               onTap: _quickAiTodo,
             ),
           _mini(
             icon: Icons.search,
-            label: '全局搜索',
+            label: I18n.tr('quick.menu.search'),
             color: Colors.grey,
             onTap: _openSearch,
           ),
           _mini(
             icon: Icons.book_outlined,
-            label: '写日记',
+            label: I18n.tr('quick.menu.diary'),
             color: const Color(0xFF26A69A),
             onTap: _quickDiary,
           ),
           _mini(
             icon: Icons.edit_note,
-            label: '记一笔',
+            label: I18n.tr('quick.menu.note'),
             color: Colors.amber.shade700,
             onTap: _quickNote,
           ),
           _mini(
             icon: Icons.check_circle_outline,
-            label: '快速待办',
+            label: I18n.tr('quick.menu.todo'),
             color: cs.primary,
             onTap: _quickTodo,
           ),
         ],
-        FloatingActionButton(
-          heroTag: 'quick_capture',
-          onPressed: _toggle,
-          child: AnimatedRotation(
-            turns: _open ? 0.125 : 0,
-            duration: const Duration(milliseconds: 220),
-            child: const Icon(Icons.add),
+        GestureDetector(
+          onLongPress: _showTemplateSheet,
+          child: FloatingActionButton(
+            heroTag: 'quick_capture',
+            onPressed: _toggle,
+            child: AnimatedRotation(
+              turns: _open ? 0.125 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: const Icon(Icons.add),
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TemplateTile extends StatelessWidget {
+  final QuickCaptureTemplate template;
+  final VoidCallback onTap;
+  final VoidCallback? onDelete;
+
+  const _TemplateTile({
+    required this.template,
+    required this.onTap,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isHabit = template.kind == QuickCaptureTemplateKind.habit;
+    final icon = isHabit ? Icons.repeat_rounded : Icons.checklist_rounded;
+    final color = isHabit ? Colors.teal : cs.primary;
+    return Material(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        leading: CircleAvatar(
+          radius: 18,
+          backgroundColor: color.withValues(alpha: 0.14),
+          foregroundColor: color,
+          child: Icon(icon, size: 18),
+        ),
+        title: Text(
+          template.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          template.previewSummary(),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: onDelete == null
+            ? const Icon(Icons.chevron_right)
+            : IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: I18n.tr('action.delete'),
+                onPressed: onDelete,
+              ),
+        onTap: onTap,
+      ),
     );
   }
 }

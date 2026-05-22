@@ -5,6 +5,7 @@ import '../core/domain_event_bus.dart';
 import '../core/recommended_goals.dart';
 import '../models/goal.dart';
 import '../services/reminder_scheduler.dart';
+import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
 
 class GoalProvider extends ChangeNotifier {
@@ -109,6 +110,7 @@ class GoalProvider extends ChangeNotifier {
     if (_timeAudit != null) {
       await _timeAudit!.deleteGoalEntries(id);
     }
+    await CloudSyncProvider.recordDeletedItem('goals', id);
     _goals.removeWhere((g) => g.id == id);
     await _save();
   }

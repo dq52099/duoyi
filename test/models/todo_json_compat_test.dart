@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:duoyi/core/todo_kanban.dart';
 import 'package:duoyi/models/goal.dart'
     show FocusLink, ReminderConfig, ReminderKind;
 import 'package:duoyi/models/recurrence.dart';
@@ -41,6 +42,7 @@ void main() {
       expect(todo.postponeHistory, isEmpty);
       expect(todo.tags, isEmpty);
       expect(todo.subtasks, isEmpty);
+      expect(todo.kanbanColumnId, defaultKanbanPendingColumnId);
       // 重复规则缺省为 none。
       expect(todo.recurrence.frequency, RecurrenceFrequency.none);
     });
@@ -145,6 +147,7 @@ void main() {
         isCompleted: false,
         quadrant: EisenhowerQuadrant.notUrgentImportant,
         priority: TodoPriority.high,
+        kanbanColumnId: defaultKanbanInProgressColumnId,
         listGroupId: 'lg-1',
         listGroupName: '写作',
         tags: const ['writing', 'deep-work'],
@@ -209,6 +212,7 @@ void main() {
 
       // 深度相等：列表、嵌套 map、null 值都应一致。
       expect(secondJson, equals(firstJson));
+      expect(decoded.kanbanColumnId, defaultKanbanInProgressColumnId);
     });
 
     test(

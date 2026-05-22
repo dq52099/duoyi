@@ -60,6 +60,9 @@ class CalendarAggregator {
           color: colorScheme.primary,
           isCompleted: t.isCompleted,
           sourceId: t.id,
+          projectId: t.listGroupId,
+          projectName: t.listGroupName,
+          workspaceId: t.workspaceId,
           time: t.dueDate == null ? null : TimeOfDay.fromDateTime(t.dueDate!),
         ),
     ];
@@ -71,6 +74,7 @@ class CalendarAggregator {
       for (final entry in h.completions.entries) {
         final date = _parseDateKey(entry.key);
         if (date == null) continue;
+        if (!h.activeForDate(date)) continue;
         events.add(
           CalendarEvent(
             id: 'habit_${h.id}_${entry.key}',
@@ -226,6 +230,7 @@ class CalendarAggregator {
             color: Color(g.colorValue),
             isCompleted: g.status == GoalStatus.achieved,
             sourceId: g.id,
+            workspaceId: g.workspaceId,
           ),
     ];
   }

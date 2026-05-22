@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/recurrence.dart';
@@ -33,6 +33,7 @@ void main() {
       expect(goal.skipHolidays, isFalse);
       expect(goal.focusLink.enabled, isFalse);
       expect(goal.reminder.enabled, isFalse);
+      expect(goal.workspaceId, 'private');
       expect(goal.timeTargetSeconds, isNull);
       expect(goal.dailyTargetCount, isNull);
     });
@@ -168,6 +169,7 @@ void main() {
           timeTargetSeconds: 1800,
           dailyTargetCount: 1,
           sortOrder: 3,
+          workspaceId: 'workspace-1',
           createdAt: DateTime(2024, 12, 25, 9, 0),
           updatedAt: DateTime(2025, 1, 6, 18, 0),
         );
@@ -189,6 +191,7 @@ void main() {
 
         // 深度相等校验：列表、嵌套 map、null 值都应一致。
         expect(secondJson, equals(firstJson));
+        expect(decoded.workspaceId, 'workspace-1');
       },
     );
   });

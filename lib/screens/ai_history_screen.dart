@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/ai_service.dart';
@@ -16,19 +17,19 @@ class AiHistoryScreen extends StatelessWidget {
     final items = ai.reviewHistory;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI 周回顾历史'),
+        title: Text(I18n.tr('ai_history.title')),
         actions: [
           if (items.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined),
-              tooltip: '清空历史',
+              tooltip: I18n.tr('ai_history.clear.tooltip'),
               onPressed: () async {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AppDialog(
-                    title: const Text('清空全部回顾?'),
+                    title: Text(I18n.tr('ai_history.clear.title')),
                     icon: const Icon(Icons.delete_sweep_outlined),
-                    content: const Text('本地保留的 AI 回顾将被删除，无法恢复'),
+                    content: Text(I18n.tr('ai_history.clear.content')),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -36,7 +37,7 @@ class AiHistoryScreen extends StatelessWidget {
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('清空'),
+                        child: Text(I18n.tr('ai_history.clear.action')),
                       ),
                     ],
                   ),
@@ -49,9 +50,9 @@ class AiHistoryScreen extends StatelessWidget {
         ],
       ),
       body: items.isEmpty
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.auto_awesome,
-              message: '还没有 AI 回顾\n在"我的"页生成一份吧',
+              message: I18n.tr('ai_history.empty'),
             )
           : ListView.separated(
               padding: const EdgeInsets.all(12),
@@ -61,9 +62,7 @@ class AiHistoryScreen extends StatelessWidget {
                 final e = items[i];
                 final theme = Theme.of(context);
                 final cs = theme.colorScheme;
-                final createdAt =
-                    '${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')} '
-                    '${e.createdAt.hour.toString().padLeft(2, '0')}:${e.createdAt.minute.toString().padLeft(2, '0')}';
+                final createdAt = I18nDateFormat.fullDateTime(e.createdAt);
                 return AppSurfaceCard(
                   padding: const EdgeInsets.all(14),
                   child: Padding(
@@ -106,7 +105,11 @@ class AiHistoryScreen extends StatelessWidget {
                                   );
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('已复制')),
+                                    SnackBar(
+                                      content: Text(
+                                        I18n.tr('ai_history.copy.done'),
+                                      ),
+                                    ),
                                   );
                                 } else if (v == 'delete') {
                                   await context.read<AiService>().deleteReview(
@@ -114,13 +117,16 @@ class AiHistoryScreen extends StatelessWidget {
                                   );
                                 }
                               },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(value: 'copy', child: Text('复制')),
+                              itemBuilder: (_) => [
+                                PopupMenuItem(
+                                  value: 'copy',
+                                  child: Text(I18n.tr('ai_history.copy')),
+                                ),
                                 PopupMenuItem(
                                   value: 'delete',
                                   child: Text(
-                                    '删除',
-                                    style: TextStyle(color: Colors.red),
+                                    I18n.tr('ai_history.delete'),
+                                    style: const TextStyle(color: Colors.red),
                                   ),
                                 ),
                               ],

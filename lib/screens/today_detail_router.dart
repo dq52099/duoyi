@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
 import '../providers/anniversary_provider.dart';
+import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
+import '../providers/note_provider.dart';
 import '../providers/todo_provider.dart';
 import '../widgets/brand_background.dart';
 import 'anniversary_screen.dart';
@@ -15,11 +17,20 @@ import 'goal_edit_screen.dart';
 import 'goal_screen.dart';
 import 'habit_detail_screen.dart';
 import 'habit_screen.dart';
+import 'note_screen.dart';
 import 'todo_detail_screen.dart';
 import 'todo_screen.dart';
 
 /// 今日页 / 其他聚合页调用的"详情跳转"所属 section 类型（Requirement 6.2）。
-enum TodaySectionKind { todos, courses, anniversaries, goals, habits, diary }
+enum TodaySectionKind {
+  todos,
+  courses,
+  anniversaries,
+  goals,
+  habits,
+  notes,
+  diary,
+}
 
 /// 今日页 / 聚合页"查看"按钮的统一路由入口（Requirement 6）。
 ///
@@ -75,6 +86,13 @@ class TodayDetailRouter {
         return _brandRoute(TodoDetailScreen(todoId: id));
 
       case TodaySectionKind.courses:
+        if (id != null) {
+          final exists = context.read<CourseProvider>().courses.any(
+            (course) => course.id == id,
+          );
+          if (!exists) return _emptyRoute(kind, '这节课程不存在或已被删除');
+          return _brandRoute(CourseScheduleScreen(initialCourseId: id));
+        }
         return _brandRoute(const CourseScheduleScreen());
 
       case TodaySectionKind.anniversaries:
@@ -106,9 +124,22 @@ class TodayDetailRouter {
         if (!exists) return _emptyRoute(kind, '这个习惯不存在或已被删除');
         return _brandRoute(HabitDetailScreen(habitId: id));
 
+      case TodaySectionKind.notes:
+        if (id == null) {
+          return _brandRoute(const NoteScreen());
+        }
+        final notes = context.read<NoteProvider>().notes;
+        final idx = notes.indexWhere((note) => note.id == id);
+        if (idx < 0) return _emptyRoute(kind, '这条随手记不存在或已被删除');
+        return _brandRoute(NoteEditScreen(note: notes[idx]));
+
       case TodaySectionKind.diary:
-        // 预读一下 Provider，确保 context 合法；实际入口是按日期维度的日记页。
-        context.read<DiaryProvider>();
+        if (id != null) {
+          final entries = context.read<DiaryProvider>().entries;
+          final idx = entries.indexWhere((entry) => entry.id == id);
+          if (idx < 0) return _emptyRoute(kind, '这篇日记不存在或已被删除');
+          return _brandRoute(DiaryEditScreen(entry: entries[idx]));
+        }
         return _brandRoute(const DiaryScreen());
     }
   }
@@ -141,6 +172,8 @@ class TodayDetailRouter {
         return '目标';
       case TodaySectionKind.habits:
         return '习惯';
+      case TodaySectionKind.notes:
+        return '随手记';
       case TodaySectionKind.diary:
         return '日记';
     }
@@ -149,8 +182,8 @@ class TodayDetailRouter {
 
 /// 详情不可达时的兜底页（空态 / 错误态）。
 ///
-/// - 不直接依赖 `EmptyState / ErrorState` 三件套（Task 20 会补齐），
-///   当前用 `DesignTokens` 自绘，保证即便 Task 20 未完成也不会黑屏。
+/// - 不直接依赖 `EmptyState / ErrorState` 三件套，当前用 `DesignTokens`
+///   自绘，保持详情兜底页的布局和按钮文案与聚合页一致。
 class _DetailFallback extends StatelessWidget {
   final TodaySectionKind kind;
   final String title;

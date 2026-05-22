@@ -198,6 +198,126 @@ void main() {
       expect(alarm.scheduleFullScreenCalls.single.fullScreen, isFalse);
     });
 
+    test('alarm Todo 的稍后提醒分钟数会传到底层闹钟调度', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(hours: 3));
+      final todo = TodoItem(
+        title: 'alarm-snooze-15',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'snooze-rule',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.alarm,
+              hour: due.hour,
+              minute: due.minute,
+              snoozeMinutes: 15,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduleFullScreenCalls, hasLength(1));
+      expect(alarm.scheduleFullScreenCalls.single.snoozeMinutes, 15);
+    });
+
+    test('alarm Todo 的震动开关会传到底层闹钟调度', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(hours: 3));
+      final todo = TodoItem(
+        title: 'alarm-vibrate-off',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'vibrate-off',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.alarm,
+              hour: due.hour,
+              minute: due.minute,
+              vibrate: false,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduleFullScreenCalls, hasLength(1));
+      expect(alarm.scheduleFullScreenCalls.single.vibrate, isFalse);
+    });
+
+    test('alarm Todo 的重复提醒次数会传到底层闹钟调度', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(hours: 3));
+      final todo = TodoItem(
+        title: 'alarm-repeat-2',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'repeat-rule',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.alarm,
+              hour: due.hour,
+              minute: due.minute,
+              snoozeMinutes: 10,
+              repeatCount: 2,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduleFullScreenCalls, hasLength(1));
+      expect(alarm.scheduleFullScreenCalls.single.repeatCount, 2);
+    });
+
+    test('每日 alarm Todo 的重复提醒次数会传到底层闹钟调度', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final todo = TodoItem(
+        title: 'daily-repeat-3',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'daily-repeat',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.alarm,
+              hour: 9,
+              minute: 20,
+              snoozeMinutes: 5,
+              repeatCount: 3,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
+      expect(alarm.scheduleDailyFullScreenCalls.single.repeatCount, 3);
+    });
+
     test('一个 Todo 的多条 rule 会分别下发、删除后按 rule id 清理', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
@@ -595,6 +715,9 @@ class _ScheduleFullScreenCall {
   final String? payload;
   final bool requireExactAlarm;
   final bool fullScreen;
+  final bool vibrate;
+  final int snoozeMinutes;
+  final int repeatCount;
   const _ScheduleFullScreenCall({
     required this.id,
     required this.title,
@@ -603,6 +726,9 @@ class _ScheduleFullScreenCall {
     required this.payload,
     required this.requireExactAlarm,
     required this.fullScreen,
+    required this.vibrate,
+    required this.snoozeMinutes,
+    required this.repeatCount,
   });
 }
 
@@ -615,6 +741,9 @@ class _ScheduleDailyFullScreenCall {
   final List<int>? weekdays;
   final String? payload;
   final bool fullScreen;
+  final bool vibrate;
+  final int snoozeMinutes;
+  final int repeatCount;
 
   const _ScheduleDailyFullScreenCall({
     required this.id,
@@ -625,6 +754,9 @@ class _ScheduleDailyFullScreenCall {
     required this.weekdays,
     required this.payload,
     required this.fullScreen,
+    required this.vibrate,
+    required this.snoozeMinutes,
+    required this.repeatCount,
   });
 }
 
@@ -749,6 +881,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (failFullScreenIds.remove(id)) {
       throw const AlarmPermissionDeniedException('forced alarm failure');
@@ -762,6 +897,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
         payload: payload,
         requireExactAlarm: requireExactAlarm,
         fullScreen: fullScreen,
+        vibrate: vibrate,
+        snoozeMinutes: snoozeMinutes,
+        repeatCount: repeatCount,
       ),
     );
   }
@@ -777,6 +915,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (failDailyFullScreenIds.remove(id)) {
       throw const AlarmPermissionDeniedException('forced daily alarm failure');
@@ -791,6 +932,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
         weekdays: weekdays,
         payload: payload,
         fullScreen: fullScreen,
+        vibrate: vibrate,
+        snoozeMinutes: snoozeMinutes,
+        repeatCount: repeatCount,
       ),
     );
   }

@@ -25,6 +25,130 @@ class ApiClient {
     return const [];
   }
 
+  Future<String> getText(String path) async {
+    if (baseUrl.isEmpty && !kIsWeb) {
+      throw const ApiException(
+        '当前安装包未配置服务器地址，公告、登录和云同步不可用。请在构建时注入 DUOYI_SERVER_URL。',
+      );
+    }
+    final uri = baseUrl.isEmpty ? Uri.parse(path) : Uri.parse('$baseUrl$path');
+    final headers = <String, String>{'Accept': 'text/plain, text/csv'};
+    if (token != null && token!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    http.Response resp;
+    try {
+      resp = await _httpClient
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw ApiException('连接服务器超时：${_serverLabel(uri)}');
+    } catch (e) {
+      throw ApiException(
+        '无法连接服务器 ${_serverLabel(uri)}：${_friendlyNetworkError(uri, e)}',
+      );
+    }
+
+    final raw = utf8.decode(resp.bodyBytes, allowMalformed: true);
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return raw;
+    }
+    String detail = raw;
+    try {
+      final m = json.decode(raw);
+      if (m is Map && m['detail'] != null) detail = m['detail'].toString();
+    } catch (_) {}
+    throw ApiException('${resp.statusCode}: $detail');
+  }
+
+  Future<Map<String, dynamic>> uploadBytes(
+    String path, {
+    required String fieldName,
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    if (baseUrl.isEmpty && !kIsWeb) {
+      throw const ApiException(
+        '当前安装包未配置服务器地址，公告、登录和云同步不可用。请在构建时注入 DUOYI_SERVER_URL。',
+      );
+    }
+    final uri = baseUrl.isEmpty ? Uri.parse(path) : Uri.parse('$baseUrl$path');
+    final request = http.MultipartRequest('POST', uri);
+    if (token != null && token!.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    request.files.add(
+      http.MultipartFile.fromBytes(fieldName, bytes, filename: filename),
+    );
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient
+          .send(request)
+          .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw ApiException('连接服务器超时：${_serverLabel(uri)}');
+    } catch (e) {
+      throw ApiException(
+        '无法连接服务器 ${_serverLabel(uri)}：${_friendlyNetworkError(uri, e)}',
+      );
+    }
+
+    final raw = await streamed.stream.bytesToString();
+    if (streamed.statusCode >= 200 && streamed.statusCode < 300) {
+      if (raw.isEmpty) return <String, dynamic>{};
+      final decoded = json.decode(raw);
+      return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    }
+    String detail = raw;
+    try {
+      final m = json.decode(raw);
+      if (m is Map && m['detail'] != null) detail = m['detail'].toString();
+    } catch (_) {}
+    throw ApiException('${streamed.statusCode}: $detail');
+  }
+
+  Stream<String> streamLines(String path) async* {
+    if (baseUrl.isEmpty && !kIsWeb) {
+      throw const ApiException(
+        '当前安装包未配置服务器地址，公告、登录和云同步不可用。请在构建时注入 DUOYI_SERVER_URL。',
+      );
+    }
+    final uri = baseUrl.isEmpty ? Uri.parse(path) : Uri.parse('$baseUrl$path');
+    final request = http.Request('GET', uri)
+      ..headers['Accept'] = 'text/event-stream'
+      ..headers['Cache-Control'] = 'no-cache';
+    if (token != null && token!.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    http.StreamedResponse resp;
+    try {
+      resp = await _httpClient
+          .send(request)
+          .timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw ApiException('连接服务器超时：${_serverLabel(uri)}');
+    } catch (e) {
+      throw ApiException(
+        '无法连接服务器 ${_serverLabel(uri)}：${_friendlyNetworkError(uri, e)}',
+      );
+    }
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      final raw = await resp.stream.bytesToString();
+      String detail = raw;
+      try {
+        final m = json.decode(raw);
+        if (m is Map && m['detail'] != null) detail = m['detail'].toString();
+      } catch (_) {}
+      throw ApiException('${resp.statusCode}: $detail');
+    }
+
+    yield* resp.stream.transform(utf8.decoder).transform(const LineSplitter());
+  }
+
   Future<Map<String, dynamic>> _send(
     String method,
     String path, {

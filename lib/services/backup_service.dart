@@ -7,6 +7,7 @@ class BackupService {
     'todos',
     'habits',
     'pomodoro_sessions',
+    'pomodoro_focus_penalties',
     'pomodoro_config',
     'user_profile',
     'duoyi_notes',
@@ -14,10 +15,17 @@ class BackupService {
     'duoyi_anniversaries_v2',
     'duoyi_diary',
     'duoyi_goals',
+    'duoyi_local_calendar_events_v1',
     'duoyi_time_entries',
     'duoyi_courses',
     'duoyi_course_settings',
     'duoyi_achievements_unlocked',
+    'duoyi_virtual_rewards',
+    'duoyi_custom_focus_sounds',
+    'duoyi_focus_rooms',
+    'active_brand',
+    'theme_unlocked_brands',
+    'theme_shop_state',
   ];
 
   static const int schemaVersion = 1;
@@ -42,7 +50,11 @@ class BackupService {
   }
 
   /// 返回本次覆盖的键数量。
-  static Future<int> importAll(String rawJson, {bool merge = false}) async {
+  static Future<int> importAll(
+    String rawJson, {
+    bool merge = false,
+    bool clearMissing = false,
+  }) async {
     final obj = json.decode(rawJson);
     if (obj is! Map || obj['app'] != 'duoyi') {
       throw const FormatException('备份文件无效: 不是多仪备份');
@@ -52,6 +64,14 @@ class BackupService {
 
     final p = await SharedPreferences.getInstance();
     int count = 0;
+
+    if (clearMissing && !merge) {
+      for (final key in _keys) {
+        if (!data.containsKey(key)) {
+          await p.remove(key);
+        }
+      }
+    }
 
     for (final entry in data.entries) {
       final key = entry.key.toString();

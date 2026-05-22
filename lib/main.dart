@@ -5,7 +5,12 @@ import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
 import 'core/i18n.dart';
+import 'core/iterable_extensions.dart';
 import 'core/local_timezone_resolver.dart';
+import 'core/report_engine.dart';
+import 'core/smart_date_parser.dart';
+import 'core/smart_todo_draft.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'providers/todo_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/pomodoro_provider.dart';
@@ -23,20 +28,31 @@ import 'providers/goal_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/preferences_provider.dart';
+import 'providers/quick_capture_template_provider.dart';
 import 'providers/time_audit_provider.dart';
 import 'providers/achievement_provider.dart';
+import 'providers/custom_focus_sound_provider.dart';
+import 'providers/focus_room_provider.dart';
 import 'providers/share_provider.dart';
 import 'providers/location_reminder_provider.dart';
 import 'models/goal.dart' show GoalStatus;
+import 'models/habit.dart' show HabitKind;
+import 'models/calendar_event.dart'
+    show CalendarEvent, CalendarEventType, CalendarEventTypeX;
+import 'models/note.dart' show NoteItem;
+import 'models/pomodoro.dart' show PomodoroType;
 import 'models/todo.dart' show TodoPriorityX;
 import 'services/alarm_service.dart';
 import 'services/calendar_sync_service.dart';
+import 'services/deep_link_service.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
+import 'services/backend_reminder_email_sink.dart';
 import 'services/holiday_calendar.dart';
 import 'services/local_notifications.dart';
+import 'services/location_geofence_service.dart';
 import 'services/notification_permission_exception.dart';
 import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
@@ -46,11 +62,16 @@ import 'screens/calendar_screen.dart';
 import 'screens/pomodoro_screen.dart';
 import 'screens/widget_screen.dart';
 import 'screens/mine_screen.dart';
+import 'screens/integrations_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/note_screen.dart';
+import 'screens/statistics_screen.dart';
 import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
+import 'widgets/public_token_notice.dart';
 import 'widgets/quick_capture_fab.dart';
+import 'widgets/todo_completion_flow.dart';
 import 'widgets/surface_components.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
@@ -104,8 +125,11 @@ void main() async {
   final courseProvider = CourseProvider();
   final appLockProvider = AppLockProvider();
   final preferencesProvider = PreferencesProvider();
+  final quickCaptureTemplateProvider = QuickCaptureTemplateProvider();
   final timeAuditProvider = TimeAuditProvider();
   final achievementProvider = AchievementProvider();
+  final customFocusSoundProvider = CustomFocusSoundProvider();
+  final focusRoomProvider = FocusRoomProvider();
   final shareProvider = ShareProvider();
   final localeProvider = LocaleProvider();
   final locationReminderProvider = LocationReminderProvider();
@@ -115,6 +139,48 @@ void main() async {
     repo: 'dq52099/duoyi',
     currentVersion: AppVersion.name,
   );
+
+  String firstNonEmptyProfileText(List<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
+  authProvider.onAccountProfileChanged = (state) async {
+    final name = firstNonEmptyProfileText([
+      state.displayName,
+      state.username,
+      '用户',
+    ]);
+    await userProvider.updateProfile(
+      username: name,
+      displayName: state.displayName ?? '',
+      email: state.email ?? '',
+      emailVerified: state.emailVerified,
+      avatarUrl: state.avatar ?? '',
+      bio: state.bio ?? '',
+    );
+  };
+  authProvider.onAccountLoggedOut = () =>
+      userProvider.clearAccountProfileCache();
+
+  void handleDeepLink(Uri uri) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleWidgetUri(uri, pomodoroProvider);
+    });
+  }
+
+  void handleSharedText(String text) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSharedTextImportSheet(text);
+    });
+  }
+
+  DeepLinkService.onLink = handleDeepLink;
+  DeepLinkService.onSharedText = handleSharedText;
+  await _startupGuard('deep links', () => DeepLinkService.init());
 
   await Future.wait([
     _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
@@ -144,12 +210,24 @@ void main() async {
       () => preferencesProvider.loadFromStorage(),
     ),
     _startupGuard(
+      'quick capture templates storage',
+      () => quickCaptureTemplateProvider.loadFromStorage(),
+    ),
+    _startupGuard(
       'time audit storage',
       () => timeAuditProvider.loadFromStorage(),
     ),
     _startupGuard(
       'achievement storage',
       () => achievementProvider.loadFromStorage(),
+    ),
+    _startupGuard(
+      'custom focus sounds storage',
+      () => customFocusSoundProvider.loadFromStorage(),
+    ),
+    _startupGuard(
+      'focus room storage',
+      () => focusRoomProvider.loadFromStorage(),
     ),
     _startupGuard('notifications', () => notificationService.init()),
     _startupGuard('system tray', () => systemTray.init()),
@@ -165,7 +243,13 @@ void main() async {
       'calendar subscriptions storage',
       () => calendarSyncProvider.loadFromStorage(),
     ),
+    _startupGuard(
+      'calendar local events',
+      () => calendarProvider.loadFromStorage(),
+    ),
   ]);
+
+  await _startupGuard('auth profile refresh', () => authProvider.refreshMe());
 
   try {
     _initialExactAlarmGranted = await AlarmService.instance
@@ -183,6 +267,7 @@ void main() async {
   achievementProvider.attachNotificationService(notificationService);
   shareProvider.apiClientGetter = () => authProvider.client;
   shareProvider.userIdGetter = () => authProvider.state.userId;
+  focusRoomProvider.apiClientGetter = () => authProvider.client;
   // 让 PomodoroProvider 监听 AppLifecycle，以便在 resumed 时恢复白噪音。
   pomodoroProvider.attachLifecycle();
 
@@ -198,7 +283,10 @@ void main() async {
   );
 
   // 提醒调度器：监听数据变化，幂等地同步本地通知队列
-  final reminderScheduler = ReminderScheduler(notificationService);
+  final reminderScheduler = ReminderScheduler(
+    notificationService,
+    email: BackendReminderEmailSink(() => authProvider.client),
+  );
   _reminderScheduler = reminderScheduler;
   // 注入到 Provider，供 Provider 内部的局部 hook（例如 postponeOverdue、
   // onTimezoneChanged）转发调度请求。
@@ -241,7 +329,25 @@ void main() async {
   anniversaryProvider.addListener(resyncReminders);
   goalProvider.addListener(resyncReminders);
   countdownProvider.addListener(resyncReminders);
+  await notificationService.setHistoryLimit(
+    preferencesProvider.notificationHistoryLimit,
+  );
   preferencesProvider.onAppTimeZoneChanged = resyncReminders;
+
+  Future<void> syncLocationGeofences() async {
+    try {
+      await LocationGeofenceService.syncReminders(
+        locationReminderProvider.reminders,
+      );
+    } catch (e, st) {
+      debugPrint('[location geofence] sync failed: $e\n$st');
+    }
+  }
+
+  locationReminderProvider.addListener(syncLocationGeofences);
+  // ignore: discarded_futures
+  syncLocationGeofences();
+
   // 本地有改动 → 交给云同步侧排队自动同步。
   void markDirty() {
     cloudSyncProvider.markPendingLocalChange();
@@ -257,6 +363,12 @@ void main() async {
   courseProvider.addListener(markDirty);
   pomodoroProvider.addListener(markDirty);
   timeAuditProvider.addListener(markDirty);
+  userProvider.addListener(markDirty);
+  achievementProvider.addListener(markDirty);
+  customFocusSoundProvider.addListener(markDirty);
+  focusRoomProvider.onLocalChanged = markDirty;
+  locationReminderProvider.addListener(markDirty);
+  calendarProvider.onLocalEventsChanged = markDirty;
 
   void refreshUserStats() {
     userProvider.recalc(
@@ -271,7 +383,77 @@ void main() async {
   habitProvider.addListener(refreshUserStats);
   pomodoroProvider.addListener(refreshUserStats);
 
+  bool isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool isInRange(DateTime date, DateTime start, DateTime end) =>
+      !date.isBefore(start) && date.isBefore(end);
+
+  String dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
   void refreshAchievements() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final activeDays = <String>{};
+
+    final todayCompletedTodos = todoProvider.todos.where((todo) {
+      if (!todo.isCompleted) return false;
+      final completedAt = todo.completedAt ?? todo.date;
+      return isSameDay(completedAt, today);
+    }).length;
+    final weeklyCompletedTodos = todoProvider.todos.where((todo) {
+      if (!todo.isCompleted) return false;
+      final completedAt = todo.completedAt ?? todo.date;
+      final inWeek = isInRange(completedAt, weekStart, weekEnd);
+      if (inWeek) activeDays.add(dateKey(completedAt));
+      return inWeek;
+    }).length;
+
+    final todayHabitCheckIns = habitProvider.habits
+        .where((habit) => habit.activeForDate(today))
+        .fold<int>(0, (sum, habit) => sum + habit.countForDate(today));
+    var weeklyHabitCheckIns = 0;
+    for (final habit in habitProvider.habits) {
+      for (final entry in habit.completions.entries) {
+        final date = DateTime.tryParse(entry.key);
+        if (date == null || !isInRange(date, weekStart, weekEnd)) continue;
+        if (!habit.activeForDate(date)) continue;
+        weeklyHabitCheckIns += entry.value;
+        if (entry.value > 0) activeDays.add(dateKey(date));
+      }
+    }
+
+    final focusSessions = pomodoroProvider.sessions.where(
+      (session) => session.type == PomodoroType.focus,
+    );
+    final todayFocusMinutes =
+        focusSessions
+            .where((session) => isInRange(session.endTime, today, tomorrow))
+            .fold<int>(0, (sum, session) => sum + session.durationSeconds) ~/
+        60;
+    final weeklyFocusMinutes =
+        focusSessions
+            .where((session) {
+              final inWeek = isInRange(session.endTime, weekStart, weekEnd);
+              if (inWeek) activeDays.add(dateKey(session.endTime));
+              return inWeek;
+            })
+            .fold<int>(0, (sum, session) => sum + session.durationSeconds) ~/
+        60;
+
+    final todayDiaryEntries = diaryProvider.entries
+        .where((entry) => isSameDay(entry.date, today))
+        .length;
+    final weeklyDiaryEntries = diaryProvider.entries.where((entry) {
+      final inWeek = isInRange(entry.date, weekStart, weekEnd);
+      if (inWeek) activeDays.add(dateKey(entry.date));
+      return inWeek;
+    }).length;
+
     achievementProvider.updateContext(
       AchievementContext(
         totalTodos: todoProvider.todos.length,
@@ -290,6 +472,15 @@ void main() async {
         courses: courseProvider.courses.length,
         notes: noteProvider.notes.length,
         themeSwitches: themeProvider.themeSwitchCount,
+        todayCompletedTodos: todayCompletedTodos,
+        todayHabitCheckIns: todayHabitCheckIns,
+        todayFocusMinutes: todayFocusMinutes,
+        todayDiaryEntries: todayDiaryEntries,
+        weeklyCompletedTodos: weeklyCompletedTodos,
+        weeklyHabitCheckIns: weeklyHabitCheckIns,
+        weeklyFocusMinutes: weeklyFocusMinutes,
+        weeklyDiaryEntries: weeklyDiaryEntries,
+        weeklyActiveDays: activeDays.length,
       ),
     );
   }
@@ -322,9 +513,36 @@ void main() async {
     notificationService,
     todoProvider,
   );
+  Future<void> syncReportDigestReminders() => _syncReportDigestReminders(
+    preferencesProvider,
+    notificationService,
+    todos: todoProvider,
+    habits: habitProvider,
+    pomodoros: pomodoroProvider,
+    timeAudit: timeAuditProvider,
+  );
+  Timer? reportDigestSyncDebounce;
+  void queueReportDigestReminderSync() {
+    reportDigestSyncDebounce?.cancel();
+    reportDigestSyncDebounce = Timer(const Duration(seconds: 2), () {
+      // ignore: discarded_futures
+      syncReportDigestReminders();
+    });
+  }
+
+  Future<void> syncNotificationQuickAdd() =>
+      _syncNotificationQuickAdd(preferencesProvider);
   preferencesProvider.addListener(syncDailyDigestReminder);
+  preferencesProvider.addListener(syncReportDigestReminders);
+  preferencesProvider.addListener(syncNotificationQuickAdd);
   todoProvider.addListener(syncDailyDigestReminder);
+  todoProvider.addListener(queueReportDigestReminderSync);
+  habitProvider.addListener(queueReportDigestReminderSync);
+  pomodoroProvider.addListener(queueReportDigestReminderSync);
+  timeAuditProvider.addListener(queueReportDigestReminderSync);
   await _startupGuard('daily digest reminder', syncDailyDigestReminder);
+  await _startupGuard('report digest reminders', syncReportDigestReminders);
+  await _startupGuard('notification quick add', syncNotificationQuickAdd);
   refreshUserStats();
   refreshAchievements();
 
@@ -357,6 +575,7 @@ void main() async {
   };
   authProvider.addListener(() {
     aiService.attachClient(authProvider.client);
+    focusRoomProvider.apiClientGetter = () => authProvider.client;
   });
   if (authProvider.serverConfig.isNotEmpty) {
     aiService.updateFromServerConfig(authProvider.serverConfig);
@@ -376,6 +595,9 @@ void main() async {
       await goalProvider.loadFromStorage();
       await courseProvider.loadFromStorage();
       await userProvider.loadFromStorage();
+      // 云同步回写本地资料后，再拉一次账号资料，保证其它设备改过的
+      // 昵称、头像、邮箱验证状态等账号字段能覆盖本地展示缓存。
+      await authProvider.refreshMe();
       await timeAuditProvider.loadFromStorage();
       await shareProvider.load();
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
@@ -388,6 +610,9 @@ void main() async {
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
       // ignore: discarded_futures
       unawaited(cloudSyncProvider.syncNow());
+      cloudSyncProvider.startRemotePolling();
+    } else {
+      cloudSyncProvider.stopRemotePolling();
     }
   });
   if (authProvider.state.isLoggedIn) {
@@ -396,6 +621,7 @@ void main() async {
   if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
     // ignore: discarded_futures
     unawaited(cloudSyncProvider.syncNow());
+    cloudSyncProvider.startRemotePolling();
   }
 
   notificationService.setStrings(themeProvider.brand.strings);
@@ -405,6 +631,14 @@ void main() async {
       todoProvider,
       habitProvider,
       pomodoroProvider,
+      calendarProvider,
+      countdownProvider,
+      timeAuditProvider,
+      goalProvider,
+      anniversaryProvider,
+      courseProvider,
+      noteProvider,
+      diaryProvider,
       themeProvider,
     );
   });
@@ -417,11 +651,26 @@ void main() async {
     todoProvider,
     habitProvider,
     pomodoroProvider,
+    calendarProvider,
+    countdownProvider,
+    timeAuditProvider,
+    goalProvider,
+    anniversaryProvider,
+    courseProvider,
+    noteProvider,
+    diaryProvider,
     themeProvider,
   );
   todoProvider.addListener(onDataChange);
   habitProvider.addListener(onDataChange);
   pomodoroProvider.addListener(onDataChange);
+  countdownProvider.addListener(onDataChange);
+  timeAuditProvider.addListener(onDataChange);
+  goalProvider.addListener(onDataChange);
+  anniversaryProvider.addListener(onDataChange);
+  courseProvider.addListener(onDataChange);
+  noteProvider.addListener(onDataChange);
+  diaryProvider.addListener(onDataChange);
 
   await _startupGuard(
     'initial home widget push',
@@ -429,6 +678,14 @@ void main() async {
       todoProvider,
       habitProvider,
       pomodoroProvider,
+      calendarProvider,
+      countdownProvider,
+      timeAuditProvider,
+      goalProvider,
+      anniversaryProvider,
+      courseProvider,
+      noteProvider,
+      diaryProvider,
       themeProvider,
     ),
   );
@@ -444,9 +701,27 @@ void main() async {
     'home widget initial launch',
     () => HomeWidgetService.initialLaunchUri(),
   );
+  final initialDeepLink = await _startupValue<Uri>(
+    'deep link initial launch',
+    () => DeepLinkService.takeInitialLink(),
+  );
+  final initialOAuthLink = await _startupValue<Uri>(
+    'deep link initial oauth',
+    () => DeepLinkService.takeInitialOAuthLink(),
+  );
+  final initialSharedText = await _startupValue<String>(
+    'deep link initial shared text',
+    () => DeepLinkService.takeInitialSharedText(),
+  );
   if (initial != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleWidgetUri(initial, pomodoroProvider);
+    });
+  }
+  if (initialDeepLink != null &&
+      initialDeepLink.toString() != initial?.toString()) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleWidgetUri(initialDeepLink, pomodoroProvider);
     });
   }
 
@@ -472,8 +747,11 @@ void main() async {
         ChangeNotifierProvider.value(value: courseProvider),
         ChangeNotifierProvider.value(value: appLockProvider),
         ChangeNotifierProvider.value(value: preferencesProvider),
+        ChangeNotifierProvider.value(value: quickCaptureTemplateProvider),
         ChangeNotifierProvider.value(value: timeAuditProvider),
         ChangeNotifierProvider.value(value: achievementProvider),
+        ChangeNotifierProvider.value(value: customFocusSoundProvider),
+        ChangeNotifierProvider.value(value: focusRoomProvider),
         ChangeNotifierProvider.value(value: shareProvider),
         ChangeNotifierProvider.value(value: localeProvider),
         ChangeNotifierProvider.value(value: locationReminderProvider),
@@ -495,12 +773,30 @@ void main() async {
       }
     });
   }
+  if (initialOAuthLink != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleWidgetUri(initialOAuthLink, pomodoroProvider);
+    });
+  }
+  if (initialSharedText != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSharedTextImportSheet(initialSharedText);
+    });
+  }
 }
 
 Future<void> _pushHomeWidget(
   TodoProvider t,
   HabitProvider h,
   PomodoroProvider p,
+  CalendarProvider cal,
+  CountdownProvider countdowns,
+  TimeAuditProvider timeAudit,
+  GoalProvider g,
+  AnniversaryProvider a,
+  CourseProvider c,
+  NoteProvider n,
+  DiaryProvider d,
   ThemeProvider tp,
 ) async {
   final today = DateTime.now();
@@ -520,6 +816,106 @@ Future<void> _pushHomeWidget(
   final top3 = activeToday.take(3).map((e) => e.title).toList();
   final top3Ids = activeToday.take(3).map((e) => e.id).toList();
   final habitPercent = (h.todayCompletionRate * 100).round();
+  final quickCheckHabits =
+      h.habits
+          .where(
+            (habit) =>
+                habit.kind == HabitKind.positive &&
+                habit.isActiveToday() &&
+                !habit.isCompletedToday(),
+          )
+          .toList()
+        ..sort((a, b) {
+          final order = a.sortOrder.compareTo(b.sortOrder);
+          if (order != 0) return order;
+          return a.createdAt.compareTo(b.createdAt);
+        });
+  final quickCheckHabit = quickCheckHabits.firstOrNull;
+  final activeGoalItems = g.activeGoals.take(3).toList();
+  final goalHighlights = activeGoalItems
+      .map(
+        (goal) => '${goal.title} · ${(goal.computedProgress * 100).round()}%',
+      )
+      .toList();
+  final goalHighlightIds = activeGoalItems
+      .map((goal) => 'duoyi://goal/${Uri.encodeComponent(goal.id)}')
+      .toList();
+  final anniversaryItems = a.items
+      .where((item) => item.daysRemaining >= 0)
+      .take(2)
+      .toList();
+  final anniversaryHighlights = anniversaryItems
+      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .toList();
+  final anniversaryHighlightIds = anniversaryItems
+      .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
+      .toList();
+  final memorialItems = a.memorials
+      .where((item) => item.daysRemaining >= 0)
+      .take(3)
+      .toList();
+  final memorialHighlights = memorialItems
+      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .toList();
+  final memorialHighlightIds = memorialItems
+      .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
+      .toList();
+  final courseItems = c.todayCourses.take(3).toList();
+  final courseHighlights = courseItems.map((course) {
+    final location = course.location.isEmpty ? '' : ' · ${course.location}';
+    return '${course.startSection}-${course.endSection}节 ${course.name}$location';
+  }).toList();
+  final courseHighlightIds = courseItems
+      .map((course) => 'duoyi://course/${Uri.encodeComponent(course.id)}')
+      .toList();
+  final noteItems = n.notes.take(3).toList();
+  final noteHighlights = noteItems.map((note) => note.title).toList();
+  final noteHighlightIds = noteItems
+      .map((note) => 'duoyi://note/${Uri.encodeComponent(note.id)}')
+      .toList();
+  final diaryItems = d.entries.take(3).toList();
+  final diaryHighlights = diaryItems.map((entry) {
+    return '${entry.date.month}/${entry.date.day} ${entry.title}';
+  }).toList();
+  final diaryHighlightIds = diaryItems
+      .map((entry) => 'duoyi://diary/${Uri.encodeComponent(entry.id)}')
+      .toList();
+  final calendarEvents = _homeWidgetEventsForToday(
+    cal,
+    today,
+    t,
+    h,
+    p,
+    a,
+    c,
+    d,
+    countdowns,
+    g,
+    timeAudit,
+    tp,
+  );
+  final scheduleHighlights = calendarEvents
+      .take(3)
+      .map(_homeWidgetEventLabel)
+      .toList();
+  final scheduleHighlightIds = calendarEvents
+      .take(3)
+      .map(_homeWidgetEventDeepLink)
+      .toList();
+  final todayEventSummary = scheduleHighlights.isEmpty
+      ? '今日没有日程'
+      : '今日：${scheduleHighlights.first}';
+  final focusState = p.state;
+  final focusTimerEndsAtMillis = focusState.isRunning && !focusState.isCountUp
+      ? DateTime.now()
+            .add(Duration(seconds: focusState.remainingSeconds))
+            .millisecondsSinceEpoch
+      : 0;
+  final focusTimerLabel = switch (focusState.type) {
+    PomodoroType.focus => focusState.isCountUp ? '正计时专注中' : '专注倒计时',
+    PomodoroType.shortBreak => '短休息倒计时',
+    PomodoroType.longBreak => '长休息倒计时',
+  };
   await HomeWidgetService.push(
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
@@ -527,8 +923,106 @@ Future<void> _pushHomeWidget(
     strings: tp.brand.strings,
     todoTop3: top3,
     todoTop3Ids: top3Ids,
-    todayEventSummary: top3.isEmpty ? '今日没有日程' : '今日：${top3.first}',
+    goalHighlights: goalHighlights,
+    goalHighlightIds: goalHighlightIds,
+    anniversaryHighlights: anniversaryHighlights,
+    anniversaryHighlightIds: anniversaryHighlightIds,
+    courseHighlights: courseHighlights,
+    courseHighlightIds: courseHighlightIds,
+    noteHighlights: noteHighlights,
+    noteHighlightIds: noteHighlightIds,
+    memorialHighlights: memorialHighlights,
+    memorialHighlightIds: memorialHighlightIds,
+    diaryHighlights: diaryHighlights,
+    diaryHighlightIds: diaryHighlightIds,
+    scheduleHighlights: scheduleHighlights,
+    scheduleHighlightIds: scheduleHighlightIds,
+    todayEventSummary: todayEventSummary,
+    focusSummary: p.sessionCountToday == 0
+        ? '今日还未专注'
+        : '今日专注 ${p.sessionCountToday} 次',
+    habitSummary: habitPercent >= 100 ? '习惯已全部完成' : '习惯完成 $habitPercent%',
+    streakSummary: '当前连续 ${h.longestCurrentStreak} 天',
+    nextFocusLabel: '${p.config.focusDuration ~/ 60} 分钟专注',
+    focusTimerRunning: focusState.isRunning,
+    focusTimerRemainingSeconds: focusState.remainingSeconds,
+    focusTimerTotalSeconds: focusState.totalSeconds,
+    focusTimerEndsAtMillis: focusTimerEndsAtMillis,
+    focusTimerLabel: focusTimerLabel,
+    habitQuickCheckId: quickCheckHabit?.id ?? '',
+    habitQuickCheckLabel: quickCheckHabit == null
+        ? '点击进入习惯打卡'
+        : '打卡：${quickCheckHabit.name}',
   );
+}
+
+List<CalendarEvent> _homeWidgetEventsForToday(
+  CalendarProvider calendar,
+  DateTime today,
+  TodoProvider todos,
+  HabitProvider habits,
+  PomodoroProvider pomodoros,
+  AnniversaryProvider anniversaries,
+  CourseProvider courses,
+  DiaryProvider diaries,
+  CountdownProvider countdowns,
+  GoalProvider goals,
+  TimeAuditProvider timeAudit,
+  ThemeProvider themeProvider,
+) {
+  calendar.rebuild(
+    todos.todos,
+    habits.habits,
+    pomodoros.sessions,
+    themeProvider.brand.theme.colorScheme,
+    anniversaries: anniversaries.items,
+    courses: courses.courses,
+    courseSettings: courses.settings,
+    diaries: diaries.entries,
+    countdowns: countdowns.items,
+    goals: goals.goals,
+    timeEntries: timeAudit.entries,
+  );
+  final events = calendar.getEventsForDate(today).where((event) {
+    if (event.type == CalendarEventType.todo && event.isCompleted) {
+      return false;
+    }
+    return event.sourceId?.trim().isNotEmpty == true;
+  }).toList();
+  events.sort((a, b) {
+    final aTime = a.date;
+    final bTime = b.date;
+    final timeOrder = aTime.compareTo(bTime);
+    if (timeOrder != 0) return timeOrder;
+    return a.title.compareTo(b.title);
+  });
+  return events;
+}
+
+String _homeWidgetEventLabel(CalendarEvent event) {
+  final time = event.time == null
+      ? ''
+      : '${event.time!.hour.toString().padLeft(2, '0')}:'
+            '${event.time!.minute.toString().padLeft(2, '0')} ';
+  return '$time${event.type.label} · ${event.title}';
+}
+
+String _homeWidgetEventDeepLink(CalendarEvent event) {
+  final sourceId = event.sourceId?.trim();
+  if (sourceId == null || sourceId.isEmpty) return '';
+  final id = Uri.encodeComponent(sourceId);
+  return switch (event.type) {
+    CalendarEventType.todo => 'duoyi://todo/$id',
+    CalendarEventType.habit => 'duoyi://habit/$id',
+    CalendarEventType.anniversary => 'duoyi://anniversary/$id',
+    CalendarEventType.course => 'duoyi://course/$id',
+    CalendarEventType.diary => 'duoyi://diary/$id',
+    CalendarEventType.goal => 'duoyi://goal/$id',
+    CalendarEventType.countdown => 'duoyi://countdown/$id',
+    CalendarEventType.event => 'duoyi://calendar',
+    CalendarEventType.pomodoro => 'duoyi://focus',
+    CalendarEventType.timeEntry => 'duoyi://time-entry/$id',
+  };
 }
 
 Future<void> _syncDailyDigestReminder(
@@ -602,6 +1096,208 @@ String _dailyDigestBody(
   return pieces.isEmpty ? '打开多仪整理任务与计划' : pieces.join(' · ');
 }
 
+Future<void> _syncReportDigestReminders(
+  PreferencesProvider prefs,
+  NotificationService notification, {
+  required TodoProvider todos,
+  required HabitProvider habits,
+  required PomodoroProvider pomodoros,
+  required TimeAuditProvider timeAudit,
+}) async {
+  const weeklyId = 880020;
+  const monthlyId = 880021;
+  const yearlyId = 880022;
+  const dailyId = 880023;
+  await notification.cancel(dailyId);
+  await notification.cancel(weeklyId);
+  await notification.cancel(monthlyId);
+  await notification.cancel(yearlyId);
+
+  final now = DateTime.now();
+  final dailyConfig = prefs.dailyReportReminderConfig;
+  if (dailyConfig.enabled) {
+    try {
+      final when = dailyConfig.nextDailyReminderTime(now);
+      await notification.scheduleOnce(
+        id: dailyId,
+        title: '多仪每日复盘已生成',
+        body: _reportDigestNotificationBody(
+          kind: PeriodReportKind.daily,
+          now: now,
+          scheduledFor: when,
+          todos: todos,
+          habits: habits,
+          pomodoros: pomodoros,
+          timeAudit: timeAudit,
+        ),
+        when: when,
+        payload: 'duoyi://report/daily',
+      );
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[ReportDigest] daily notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[ReportDigest] daily schedule failed: $e\n$st');
+    }
+  }
+
+  final weeklyConfig = prefs.weeklyReportReminderConfig;
+  if (weeklyConfig.enabled) {
+    try {
+      final when = weeklyConfig.nextWeeklyReminderTime(now);
+      await notification.scheduleOnce(
+        id: weeklyId,
+        title: '多仪周报已生成',
+        body: _reportDigestNotificationBody(
+          kind: PeriodReportKind.weekly,
+          now: now,
+          scheduledFor: when,
+          todos: todos,
+          habits: habits,
+          pomodoros: pomodoros,
+          timeAudit: timeAudit,
+        ),
+        when: when,
+        payload: 'duoyi://report/weekly',
+      );
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[ReportDigest] weekly notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[ReportDigest] weekly schedule failed: $e\n$st');
+    }
+  }
+
+  final monthlyConfig = prefs.monthlyReportReminderConfig;
+  if (monthlyConfig.enabled) {
+    try {
+      final when = monthlyConfig.nextMonthlyReminderTime(now);
+      await notification.scheduleOnce(
+        id: monthlyId,
+        title: '多仪月报已生成',
+        body: _reportDigestNotificationBody(
+          kind: PeriodReportKind.monthly,
+          now: now,
+          scheduledFor: when,
+          todos: todos,
+          habits: habits,
+          pomodoros: pomodoros,
+          timeAudit: timeAudit,
+        ),
+        when: when,
+        payload: 'duoyi://report/monthly',
+      );
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[ReportDigest] monthly notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[ReportDigest] monthly schedule failed: $e\n$st');
+    }
+  }
+
+  final yearlyConfig = prefs.yearlyReportReminderConfig;
+  if (yearlyConfig.enabled) {
+    try {
+      final when = yearlyConfig.nextYearlyReminderTime(now);
+      await notification.scheduleOnce(
+        id: yearlyId,
+        title: '多仪年度报告已生成',
+        body: _reportDigestNotificationBody(
+          kind: PeriodReportKind.yearly,
+          now: now,
+          scheduledFor: when,
+          todos: todos,
+          habits: habits,
+          pomodoros: pomodoros,
+          timeAudit: timeAudit,
+        ),
+        when: when,
+        payload: 'duoyi://report/yearly',
+      );
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[ReportDigest] yearly notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[ReportDigest] yearly schedule failed: $e\n$st');
+    }
+  }
+}
+
+String _reportDigestNotificationBody({
+  required PeriodReportKind kind,
+  required DateTime now,
+  required DateTime scheduledFor,
+  required TodoProvider todos,
+  required HabitProvider habits,
+  required PomodoroProvider pomodoros,
+  required TimeAuditProvider timeAudit,
+}) {
+  final (start, end) = _reportDigestRange(
+    kind: kind,
+    now: now,
+    scheduledFor: scheduledFor,
+  );
+  final (previousStart, previousEnd) = _previousReportRange(start, end);
+  final report = ReportEngine.buildReport(
+    start: start,
+    end: end,
+    todos: todos.todos,
+    habits: habits.habits,
+    sessions: pomodoros.sessions,
+    timeEntries: timeAudit.entries,
+  );
+  final previousReport = ReportEngine.buildReport(
+    start: previousStart,
+    end: previousEnd,
+    todos: todos.todos,
+    habits: habits.habits,
+    sessions: pomodoros.sessions,
+    timeEntries: timeAudit.entries,
+  );
+  return PeriodReportDigest(
+    kind: kind,
+    report: report,
+    comparison: ReportEngine.compare(current: report, previous: previousReport),
+    generatedAt: now,
+  ).notificationBody;
+}
+
+(DateTime, DateTime) _reportDigestRange({
+  required PeriodReportKind kind,
+  required DateTime now,
+  required DateTime scheduledFor,
+}) {
+  final today = DateTime(now.year, now.month, now.day);
+  final scheduledDate = DateTime(
+    scheduledFor.year,
+    scheduledFor.month,
+    scheduledFor.day,
+  );
+  final DateTime start;
+  final DateTime completedEnd;
+  switch (kind) {
+    case PeriodReportKind.daily:
+      start = scheduledDate;
+      completedEnd = scheduledDate;
+    case PeriodReportKind.weekly:
+      start = scheduledDate.subtract(const Duration(days: 7));
+      completedEnd = scheduledDate.subtract(const Duration(days: 1));
+    case PeriodReportKind.monthly:
+      start = DateTime(scheduledDate.year, scheduledDate.month - 1);
+      completedEnd = DateTime(scheduledDate.year, scheduledDate.month, 0);
+    case PeriodReportKind.yearly:
+      start = DateTime(scheduledDate.year - 1);
+      completedEnd = DateTime(scheduledDate.year - 1, 12, 31);
+  }
+  final end = completedEnd.isAfter(today) ? today : completedEnd;
+  return (start, end.isBefore(start) ? start : end);
+}
+
+(DateTime, DateTime) _previousReportRange(DateTime start, DateTime end) {
+  final startDate = DateTime(start.year, start.month, start.day);
+  final endDate = DateTime(end.year, end.month, end.day);
+  final days = endDate.difference(startDate).inDays + 1;
+  final previousEnd = startDate.subtract(const Duration(days: 1));
+  final previousStart = previousEnd.subtract(Duration(days: days - 1));
+  return (previousStart, previousEnd);
+}
+
 void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   if (uri == null) return;
   if (uri.scheme != 'duoyi') return;
@@ -622,9 +1318,22 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       _ => 3,
     };
     state?.navigateTo(idx);
+  } else if (uri.host == 'oauth' && ctx != null) {
+    state?.navigateTo(6);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final latestContext = mainShellKey.currentContext ?? ctx;
+      Navigator.of(latestContext).push(
+        MaterialPageRoute(
+          builder: (_) => IntegrationsScreen(initialOAuthCallbackUri: uri),
+        ),
+      );
+    });
   } else if (uri.host == 'todo' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    if (id == null || id.isEmpty) return;
+    if (id == null || id.isEmpty) {
+      state?.navigateTo(1);
+      return;
+    }
     final confirm = uri.queryParameters['confirm'] == '1';
     if (confirm) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -636,7 +1345,11 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     }
   } else if (uri.host == 'goal' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    if (id == null || id.isEmpty) return;
+    if (id == null || id.isEmpty) {
+      // ignore: discarded_futures
+      TodayDetailRouter.open(ctx, TodaySectionKind.goals);
+      return;
+    }
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id);
   } else if (uri.host == 'habit' && ctx != null) {
@@ -654,10 +1367,48 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     }
   } else if (uri.host == 'countdown') {
     state?.navigateTo(3);
+  } else if (uri.host == 'calendar') {
+    state?.navigateTo(3);
+  } else if (uri.host == 'focus') {
+    state?.navigateTo(4);
+  } else if (uri.host == 'course' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    // ignore: discarded_futures
+    TodayDetailRouter.open(ctx, TodaySectionKind.courses, id: id);
   } else if (uri.host == 'anniversary' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.anniversaries, id: id);
+  } else if (uri.host == 'note' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) {
+      Navigator.of(
+        ctx,
+      ).push(MaterialPageRoute(builder: (_) => const NoteScreen()));
+    } else {
+      // ignore: discarded_futures
+      TodayDetailRouter.open(ctx, TodaySectionKind.notes, id: id);
+    }
+  } else if (uri.host == 'diary' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    // ignore: discarded_futures
+    TodayDetailRouter.open(ctx, TodaySectionKind.diary, id: id);
+  } else if (uri.host == 'report' && ctx != null) {
+    state?.navigateTo(6);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final latestContext = mainShellKey.currentContext ?? ctx;
+      Navigator.of(
+        latestContext,
+      ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen()));
+    });
+  } else if (uri.host == 'location' && ctx != null) {
+    state?.navigateTo(6);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final latestContext = mainShellKey.currentContext ?? ctx;
+      Navigator.of(
+        latestContext,
+      ).push(MaterialPageRoute(builder: (_) => const IntegrationsScreen()));
+    });
   } else if (uri.host == 'snooze' && ctx != null) {
     // 稍后提醒深链：duoyi://snooze/<id>?delay=<minutes>&title=...&body=...&payload=...
     final ns = Provider.of<NotificationService>(ctx, listen: false);
@@ -668,6 +1419,19 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     if (action == 'start_pomodoro') {
       state?.navigateTo(4);
       if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
+    } else if (action == 'quick_todo' && ctx != null) {
+      final text = uri.queryParameters['text']?.trim();
+      state?.navigateTo(1);
+      if (text != null && text.isNotEmpty) {
+        final draft = SmartTodoDraftBuilder.fromText(text);
+        final todos = Provider.of<TodoProvider>(ctx, listen: false);
+        // ignore: discarded_futures
+        todos.addTodo(draft.toTodo());
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showQuickTodoDialog(ctx);
+      });
     } else if (action == 'complete_todo' && ctx != null) {
       final id = uri.queryParameters['id'];
       if (id == null || id.isEmpty) return;
@@ -675,9 +1439,244 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       final target = todos.todos.where((todo) => todo.id == id).firstOrNull;
       if (target == null || target.isCompleted) return;
       // ignore: discarded_futures
-      todos.toggleTodo(id);
+      completeTodoWithOptionalTimeRecord(ctx, target);
+    } else if (action == 'checkin_habit' && ctx != null) {
+      final id = uri.queryParameters['id'];
+      state?.navigateTo(2);
+      if (id == null || id.isEmpty) return;
+      final habits = Provider.of<HabitProvider>(ctx, listen: false);
+      final target = habits.habits.where((habit) => habit.id == id).firstOrNull;
+      if (target == null ||
+          target.kind != HabitKind.positive ||
+          !target.isActiveToday() ||
+          target.isCompletedToday()) {
+        return;
+      }
+      // ignore: discarded_futures
+      habits.incrementHabit(id);
     }
   }
+}
+
+Future<void> _syncNotificationQuickAdd(PreferencesProvider prefs) async {
+  if (prefs.notificationQuickAdd) {
+    try {
+      await LocalNotifications.instance.showQuickAddOngoing();
+    } on NotificationPermissionDeniedException catch (e) {
+      debugPrint('[NotificationQuickAdd] notification permission denied: $e');
+    } catch (e, st) {
+      debugPrint('[NotificationQuickAdd] show failed: $e\n$st');
+    }
+  } else {
+    try {
+      await LocalNotifications.instance.cancel(
+        LocalNotifications.quickAddNotificationId,
+      );
+    } catch (e, st) {
+      debugPrint('[NotificationQuickAdd] cancel failed: $e\n$st');
+    }
+  }
+}
+
+Future<void> _showQuickTodoDialog(BuildContext context) async {
+  if (!context.mounted) return;
+  final ctrl = TextEditingController();
+  SmartDateParseResult parsed = SmartDateParseResult.empty;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AppDialog(
+        title: const Text('快速待办'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: '一句话描述（如：明天下午3点开会）'),
+              onChanged: (value) {
+                setState(() => parsed = SmartDateParser.parse(value));
+              },
+            ),
+            if (parsed.isSuccess) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    ctx,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 14,
+                      color: Theme.of(ctx).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '识别到：${_formatParsedSmartDate(parsed)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(ctx).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(I18n.tr('action.add')),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final text = ctrl.text.trim();
+  if (text.isEmpty) return;
+  final draft = SmartTodoDraftBuilder.fromText(text);
+  await context.read<TodoProvider>().addTodo(draft.toTodo());
+}
+
+Future<void> _showSharedTextImportSheet(String rawText) async {
+  final text = rawText.trim();
+  final context = mainShellKey.currentContext;
+  if (text.isEmpty || context == null || !context.mounted) return;
+
+  final action = await showAppModalSheet<String>(
+    context: context,
+    builder: (sheetContext) => AppModalSheet(
+      title: '导入分享文本',
+      subtitle: '选择保存位置',
+      scrollable: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  sheetContext,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(sheetContext).colorScheme.outlineVariant,
+                ),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: SelectableText(
+                  text,
+                  style: Theme.of(sheetContext).textTheme.bodyMedium,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (buttonContext, constraints) {
+              final compact = constraints.maxWidth < 420;
+              final saveNote = OutlinedButton.icon(
+                icon: const Icon(Icons.notes_outlined),
+                onPressed: () => Navigator.of(buttonContext).pop('note'),
+                label: const Text('保存笔记'),
+              );
+              final createTodo = FilledButton.icon(
+                icon: const Icon(Icons.checklist),
+                onPressed: () => Navigator.of(buttonContext).pop('todo'),
+                label: const Text('创建待办'),
+              );
+              final cancel = TextButton(
+                onPressed: () => Navigator.of(buttonContext).pop(),
+                child: Text(I18n.tr('action.cancel')),
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    createTodo,
+                    const SizedBox(height: 8),
+                    saveNote,
+                    const SizedBox(height: 4),
+                    cancel,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  cancel,
+                  const Spacer(),
+                  Expanded(child: saveNote),
+                  const SizedBox(width: 8),
+                  Expanded(child: createTodo),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+  if (action == null) return;
+
+  final latestContext = mainShellKey.currentContext;
+  if (latestContext == null || !latestContext.mounted) return;
+  final messenger = ScaffoldMessenger.maybeOf(latestContext);
+
+  if (action == 'todo') {
+    final draft = SmartTodoDraftBuilder.fromText(text);
+    await latestContext.read<TodoProvider>().addTodo(draft.toTodo());
+    mainShellKey.currentState?.navigateTo(1);
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('已创建待办'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  } else if (action == 'note') {
+    final now = DateTime.now();
+    latestContext.read<NoteProvider>().addOrUpdateNote(
+      NoteItem(
+        id: now.millisecondsSinceEpoch.toString(),
+        content: text,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    Navigator.of(
+      latestContext,
+    ).push(MaterialPageRoute(builder: (_) => const NoteScreen()));
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('已保存笔记'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+String _formatParsedSmartDate(SmartDateParseResult result) {
+  final dt = result.dateTime!;
+  final date =
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  if (!result.hasTimeOfDay) return date;
+  return '$date ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 }
 
 Future<void> _showTodoCompletePrompt(
@@ -707,33 +1706,7 @@ Future<void> _showTodoCompletePrompt(
     return;
   }
 
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogCtx) => AppDialog(
-      icon: const Icon(Icons.task_alt_outlined),
-      title: const Text('确认完成任务'),
-      content: Text('现在完成“${todo.title}”吗？'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogCtx).pop(false),
-          child: const Text('稍后'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogCtx).pop(true),
-          child: const Text('完成'),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return;
-  await todos.toggleTodo(todoId);
-  if (!context.mounted) return;
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text('已完成：${todo.title}'),
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
+  await completeTodoWithOptionalTimeRecord(context, todo);
 }
 
 Future<void> _showHabitCheckInPrompt(
@@ -792,14 +1765,6 @@ Future<void> _showHabitCheckInPrompt(
   );
 }
 
-extension _FirstOrNullMainX<T> on Iterable<T> {
-  T? get firstOrNull {
-    final iterator = this.iterator;
-    if (iterator.moveNext()) return iterator.current;
-    return null;
-  }
-}
-
 class DuoyiApp extends StatefulWidget {
   const DuoyiApp({super.key});
 
@@ -819,6 +1784,8 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   /// 差异即触发 [ReminderScheduler.resyncAll]（Requirements 8.6 / 8.8）。
   String? _lastIana;
   bool? _lastExactAlarmGranted;
+  AchievementProvider? _achievementProvider;
+  FocusRoomProvider? _focusRoomProvider;
 
   @override
   void initState() {
@@ -832,8 +1799,47 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _achievementProvider?.removeListener(_showAchievementFeedback);
+    _focusRoomProvider?.stopRealtimeRankings();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = context.read<AchievementProvider>();
+    if (_achievementProvider == provider) return;
+    _achievementProvider?.removeListener(_showAchievementFeedback);
+    _achievementProvider = provider;
+    _focusRoomProvider = context.read<FocusRoomProvider>();
+    provider.addListener(_showAchievementFeedback);
+  }
+
+  void _showAchievementFeedback() {
+    final provider = _achievementProvider;
+    if (provider == null) return;
+    final unlocked = provider.takeUnlockedFeedback();
+    if (unlocked.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      for (final achievement in unlocked) {
+        messenger.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Row(
+              children: [
+                Icon(achievement.icon, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('解锁成就：${achievement.title}')),
+              ],
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -844,11 +1850,32 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       lock.onAppLifecycleInactive();
     } else if (state == AppLifecycleState.resumed) {
       lock.onAppLifecycleResume();
+      _refreshAccountProfileOnResume();
       // 先处理时区变更（可能影响调度），再做跨日 rollover。
       _maybeResyncOnTimezoneChange();
       _maybeRunDailyRolloverOnResume();
       _refreshNotificationPermissionsOnResume();
     }
+  }
+
+  /// App 回到前台时刷新账号资料。
+  ///
+  /// 账号资料保存在后端 users 表，不一定会跟随云同步 payload 变化；这里用
+  /// `/api/auth/me` 轻量刷新，避免多设备修改昵称、头像、邮箱验证状态后，本机
+  /// 只有重启才更新。
+  void _refreshAccountProfileOnResume() {
+    final ctx = mainShellKey.currentContext ?? context;
+    final auth = Provider.of<AuthProvider>(ctx, listen: false);
+    if (!auth.state.isLoggedIn) return;
+
+    // ignore: discarded_futures
+    Future.microtask(() async {
+      try {
+        await auth.refreshMe();
+      } catch (e, st) {
+        debugPrint('[DuoyiApp] refresh account profile failed: $e\n$st');
+      }
+    });
   }
 
   /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并触发
@@ -955,6 +1982,9 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     // 两处都位于 MultiProvider 之下，任一命中即可拿到实例。
     final ctx = mainShellKey.currentContext ?? context;
     final provider = Provider.of<TodoProvider>(ctx, listen: false);
+    final habitProv = Provider.of<HabitProvider>(ctx, listen: false);
+    final pomodoroProv = Provider.of<PomodoroProvider>(ctx, listen: false);
+    final timeAuditProv = Provider.of<TimeAuditProvider>(ctx, listen: false);
     final goalProv = Provider.of<GoalProvider>(ctx, listen: false);
     final prefs = Provider.of<PreferencesProvider>(ctx, listen: false);
     final notif = Provider.of<NotificationService>(ctx, listen: false);
@@ -968,6 +1998,14 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
         goalProvider: goalProv,
       );
       await _syncDailyDigestReminder(prefs, notif, provider);
+      await _syncReportDigestReminders(
+        prefs,
+        notif,
+        todos: provider,
+        habits: habitProv,
+        pomodoros: pomodoroProv,
+        timeAudit: timeAuditProv,
+      );
     });
   }
 
@@ -975,11 +2013,13 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final brand = context.watch<ThemeProvider>().brand;
     final lock = context.watch<AppLockProvider>();
-    // watch LocaleProvider 以便切换语言时整树 rebuild
-    context.watch<LocaleProvider>();
+    final locale = context.watch<LocaleProvider>();
     return MaterialApp(
       title: brand.strings.appTitle,
       debugShowCheckedModeBanner: false,
+      locale: locale.flutterLocale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: brand.theme,
       home: Stack(
         children: [
@@ -1000,6 +2040,8 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
+  static bool _startupNoticeShown = false;
+
   int _currentIndex = 0; // Today first
 
   static final GlobalKey todayKey = GlobalKey();
@@ -1023,12 +2065,15 @@ class MainShellState extends State<MainShell> {
           prefs.defaultTab < 7) {
         setState(() => _currentIndex = prefs.defaultTab);
       }
+      if (!_startupNoticeShown && mounted) {
+        _startupNoticeShown = true;
+        PublicTokenNotice.showStartupDialog(context);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<ThemeProvider>().brand.strings;
     final prefs = context.watch<PreferencesProvider>();
     final visibleTabs = prefs.enabledBottomNavTabs;
     if (!visibleTabs.contains(_currentIndex)) {
@@ -1037,40 +2082,40 @@ class MainShellState extends State<MainShell> {
       });
     }
     final allDestinations = [
-      const NavigationDestination(
-        icon: Icon(Icons.today_outlined),
-        selectedIcon: Icon(Icons.today),
-        label: '今日',
+      NavigationDestination(
+        icon: const Icon(Icons.today_outlined),
+        selectedIcon: const Icon(Icons.today),
+        label: I18n.tr('nav.today'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.checklist),
         selectedIcon: const Icon(Icons.checklist_rounded),
-        label: s.navTodo,
+        label: I18n.tr('nav.todo'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.repeat),
         selectedIcon: const Icon(Icons.repeat_rounded),
-        label: s.navHabit,
+        label: I18n.tr('nav.habit'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.calendar_month_outlined),
         selectedIcon: const Icon(Icons.calendar_month),
-        label: s.navCalendar,
+        label: I18n.tr('nav.calendar'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.timer_outlined),
         selectedIcon: const Icon(Icons.timer),
-        label: s.navFocus,
+        label: I18n.tr('nav.focus'),
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.widgets_outlined),
-        selectedIcon: Icon(Icons.widgets_rounded),
-        label: '小组件',
+      NavigationDestination(
+        icon: const Icon(Icons.widgets_outlined),
+        selectedIcon: const Icon(Icons.widgets_rounded),
+        label: I18n.tr('nav.widget'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.person_outline),
         selectedIcon: const Icon(Icons.person),
-        label: s.navMine,
+        label: I18n.tr('nav.mine'),
       ),
     ];
     final destinations = visibleTabs.map((i) => allDestinations[i]).toList();

@@ -1,7 +1,26 @@
 <resources>
     <string name="app_name">多仪</string>
-    <string name="widget_description">多仪 · 今日待办 / 习惯 / 番茄概览</string>
+    <string name="widget_description">多仪 · 历史兼容小组件</string>
+    <string name="focus_blocker_accessibility_description">严格专注期间检测并拦截你配置的分心应用，打开后会自动回到多仪专注页。</string>
     <string name="widget_label">多仪</string>
     <string name="widget_todo_label">多仪 · 今日待办</string>
     <string name="widget_todo_description">显示当日未完成待办 Top 3</string>
+    <string name="widget_focus_habit_label">多仪 · 专注</string>
+    <string name="widget_focus_habit_description">显示今日专注次数、时长和快速开始</string>
+    <string name="widget_habit_label">多仪 · 习惯</string>
+    <string name="widget_habit_description">显示今日习惯进度、待打卡和连续记录</string>
+    <string name="widget_calendar_label">多仪 · 月历</string>
+    <string name="widget_calendar_description">显示本月日期和今日标记</string>
+    <string name="widget_schedule_label">多仪 · 今日日程</string>
+    <string name="widget_schedule_description">显示今天的日程和提醒时间</string>
+    <string name="widget_goal_label">多仪 · 目标</string>
+    <string name="widget_goal_description">显示进行中目标和进度</string>
+    <string name="widget_course_label">多仪 · 课程表</string>
+    <string name="widget_course_description">显示今日课程和日程摘要</string>
+    <string name="widget_note_label">多仪 · 随手记</string>
+    <string name="widget_note_description">显示最近更新的随手记</string>
+    <string name="widget_anniversary_label">多仪 · 纪念日</string>
+    <string name="widget_anniversary_description">显示最近的纪念日</string>
+    <string name="widget_diary_label">多仪 · 日记</string>
+    <string name="widget_diary_description">显示最近更新的日记</string>
 </resources>

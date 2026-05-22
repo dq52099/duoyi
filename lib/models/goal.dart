@@ -17,7 +17,8 @@ enum SchedulingMode { fixed, random }
 /// 提醒类型：
 /// - [ReminderKind.push] 走通知通道（`duoyi_general`）。
 /// - [ReminderKind.alarm] 走闹钟通道（`duoyi_alarm`，全屏 / 高优先级）。
-enum ReminderKind { push, alarm }
+/// - [ReminderKind.email] 走邮件提醒出口，适合桌面端或弱通知场景。
+enum ReminderKind { push, alarm, email }
 
 /// 目标调度策略：结合 [RecurrenceRule] 决定具体派发日期。
 ///
@@ -193,6 +194,20 @@ class ReminderConfig {
 enum ReminderRuleType { absolute, relativeToDue, dailyTime, weeklyTime }
 
 class ReminderRule {
+  /// 常用提前提醒模板，单位为分钟，负数表示相对截止时间提前。
+  ///
+  /// 覆盖竞品中高频的"提前 5 分钟 / 15 分钟 / 1 小时 / 1 天"录入路径，
+  /// UI 层可直接复用，避免不同提醒入口维护不一致的快捷选项。
+  static const relativeOffsetPresetMinutes = <int>[
+    -5,
+    -15,
+    -30,
+    -60,
+    -24 * 60,
+    -2 * 24 * 60,
+    -3 * 24 * 60,
+  ];
+
   final String id;
   final bool enabled;
   final ReminderRuleType type;
@@ -513,6 +528,7 @@ class GoalItem {
   int? timeTargetSeconds;
   int? dailyTargetCount;
   int sortOrder;
+  String workspaceId;
   DateTime createdAt;
   DateTime updatedAt;
 
@@ -538,6 +554,7 @@ class GoalItem {
     this.timeTargetSeconds,
     this.dailyTargetCount,
     this.sortOrder = 0,
+    this.workspaceId = 'private',
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? _uuid.v4(),
@@ -594,6 +611,7 @@ class GoalItem {
     'timeTargetSeconds': timeTargetSeconds,
     'dailyTargetCount': dailyTargetCount,
     'sortOrder': sortOrder,
+    'workspaceId': workspaceId,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -647,6 +665,9 @@ class GoalItem {
       timeTargetSeconds: (json['timeTargetSeconds'] as num?)?.toInt(),
       dailyTargetCount: (json['dailyTargetCount'] as num?)?.toInt(),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      workspaceId: json['workspaceId']?.toString().trim().isNotEmpty == true
+          ? json['workspaceId'].toString()
+          : 'private',
       createdAt: json['createdAt'] != null
           ? (DateTime.tryParse(json['createdAt'].toString()) ?? now)
           : now,

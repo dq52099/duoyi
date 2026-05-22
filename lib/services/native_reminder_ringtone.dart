@@ -17,6 +17,9 @@ class NativeReminderRingtone {
     required String title,
     required String body,
     String? payload,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (!_isAndroid) return;
     await _invoke('showNow', <String, Object?>{
@@ -24,6 +27,9 @@ class NativeReminderRingtone {
       'title': title,
       'body': body,
       'payload': payload,
+      'vibrate': vibrate,
+      'snoozeMinutes': snoozeMinutes,
+      'repeatCount': repeatCount,
     });
   }
 
@@ -33,6 +39,9 @@ class NativeReminderRingtone {
     required String body,
     required DateTime when,
     String? payload,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (!_isAndroid) return;
     await _invoke('scheduleOnce', <String, Object?>{
@@ -41,6 +50,9 @@ class NativeReminderRingtone {
       'body': body,
       'triggerAtMillis': when.millisecondsSinceEpoch,
       'payload': payload,
+      'vibrate': vibrate,
+      'snoozeMinutes': snoozeMinutes,
+      'repeatCount': repeatCount,
     });
   }
 
@@ -52,6 +64,9 @@ class NativeReminderRingtone {
     required int minute,
     List<int>? weekdays,
     String? payload,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (!_isAndroid) return;
     await _invoke('scheduleDaily', <String, Object?>{
@@ -63,6 +78,9 @@ class NativeReminderRingtone {
       'weekdays': weekdays ?? const <int>[],
       'timezoneId': LocalTimezoneResolver.currentIana,
       'payload': payload,
+      'vibrate': vibrate,
+      'snoozeMinutes': snoozeMinutes,
+      'repeatCount': repeatCount,
     });
   }
 

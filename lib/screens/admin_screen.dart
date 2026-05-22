@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../core/app_config.dart';
+import '../core/i18n_date_format.dart';
 import '../providers/auth_provider.dart';
 import '../services/admin_api.dart';
 import '../services/api_client.dart';
@@ -10,7 +16,9 @@ import '../widgets/surface_components.dart';
 
 /// 管理员后台 — 仅当 AuthProvider.state.isAdmin == true 时可进入。
 class AdminScreen extends StatefulWidget {
-  const AdminScreen({super.key});
+  final int initialTabIndex;
+
+  const AdminScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
@@ -23,7 +31,11 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 8, vsync: this);
+    _tabs = TabController(
+      length: 9,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 8),
+    );
   }
 
   @override
@@ -93,6 +105,13 @@ class _AdminScreenState extends State<AdminScreen>
               height: 44,
               child: _AdminTabLabel(icon: Icons.vpn_key_outlined, text: '邀请码'),
             ),
+            Tab(
+              height: 44,
+              child: _AdminTabLabel(
+                icon: Icons.receipt_long_outlined,
+                text: '日志',
+              ),
+            ),
           ],
         ),
       ),
@@ -107,6 +126,7 @@ class _AdminScreenState extends State<AdminScreen>
           _AnnouncementsTab(api: api),
           _FeedbackTab(api: api),
           _InvitesTab(api: api),
+          _AuditLogTab(api: api),
         ],
       ),
     );
@@ -228,15 +248,27 @@ class _DashboardTabState extends State<_DashboardTab> {
             ),
             _Kpi(
               '在线',
-              '${_stats!['tokens_online'] ?? 0}',
+              '${users['online'] ?? _stats!['tokens_online'] ?? 0}',
               Icons.wifi_tethering,
               Colors.cyan,
+            ),
+            _Kpi(
+              '邮箱未验证',
+              '${users['unverified_email'] ?? 0}',
+              Icons.mark_email_unread_outlined,
+              Colors.amber,
             ),
             _Kpi(
               '待处理反馈',
               '${fb['open'] ?? 0}',
               Icons.chat_bubble_outline,
               Colors.orange,
+            ),
+            _Kpi(
+              '处理中反馈',
+              '${fb['in_progress'] ?? 0}',
+              Icons.pending_actions_outlined,
+              Colors.deepPurple,
             ),
             _Kpi(
               '反馈总数',
@@ -404,6 +436,493 @@ class _GridCards extends StatelessWidget {
   }
 }
 
+const int _adminPageSize = 20;
+const List<int> _adminPageSizeOptions = [20, 50, 100];
+
+String _adminStatusLabel(String value) {
+  switch (value) {
+    case 'open':
+      return '待处理';
+    case 'in_progress':
+      return '处理中';
+    case 'resolved':
+      return '已解决';
+    case 'closed':
+      return '已关闭';
+    case 'published':
+      return '已发布';
+    case 'draft':
+      return '草稿';
+    case 'used':
+      return '已使用';
+    case 'unused':
+      return '未使用';
+    case 'admin':
+      return '管理员';
+    case 'disabled':
+      return '已禁用';
+    case 'active':
+      return '可登录';
+    case 'normal':
+      return '普通用户';
+    case 'online':
+      return '在线';
+    case 'offline':
+      return '离线';
+    case 'unverified_email':
+      return '邮箱未验证';
+    case 'verified_email':
+      return '邮箱已验证';
+    case 'no_email':
+      return '未绑定邮箱';
+    case 'has_feedback':
+      return '有反馈';
+    case 'info':
+      return '普通';
+    case 'warning':
+      return '重要';
+    case 'critical':
+      return '紧急';
+    default:
+      return value.isEmpty ? '全部' : value;
+  }
+}
+
+String _adminUserSortLabel(String value) {
+  switch (value) {
+    case 'last_active_desc':
+      return '最近活跃优先';
+    case 'last_login_desc':
+      return '最近登录优先';
+    case 'feedback_desc':
+      return '反馈较多优先';
+    case 'username_asc':
+      return '用户名 A-Z';
+    case 'email_asc':
+      return '邮箱 A-Z';
+    default:
+      return '最新注册优先';
+  }
+}
+
+String _adminAnnouncementSortLabel(String value) {
+  switch (value) {
+    case 'updated_desc':
+      return '最近更新优先';
+    case 'title_asc':
+      return '标题 A-Z';
+    case 'level_desc':
+      return '紧急程度优先';
+    default:
+      return '最新创建优先';
+  }
+}
+
+String _adminFeedbackSortLabel(String value) {
+  switch (value) {
+    case 'updated_desc':
+      return '最近处理优先';
+    case 'status_asc':
+      return '待处理优先';
+    case 'user_asc':
+      return '用户 A-Z';
+    default:
+      return '最新反馈优先';
+  }
+}
+
+String _adminInviteSortLabel(String value) {
+  switch (value) {
+    case 'used_desc':
+      return '最近使用优先';
+    case 'code_asc':
+      return '邀请码 A-Z';
+    case 'note_asc':
+      return '备注 A-Z';
+    default:
+      return '最新生成优先';
+  }
+}
+
+String _adminAuditSortLabel(String value) {
+  switch (value) {
+    case 'actor_asc':
+      return '管理员 A-Z';
+    case 'action_asc':
+      return '操作类型 A-Z';
+    case 'target_asc':
+      return '对象 A-Z';
+    default:
+      return '最新操作优先';
+  }
+}
+
+String _adminBackupSortLabel(String value) {
+  switch (value) {
+    case 'username_asc':
+      return '用户名 A-Z';
+    case 'size_desc':
+      return '备份体积从大到小';
+    case 'size_asc':
+      return '备份体积从小到大';
+    case 'version_desc':
+      return '同步版本较高优先';
+    default:
+      return '最近同步优先';
+  }
+}
+
+String _adminServerBackupSortLabel(String value) {
+  switch (value) {
+    case 'size_desc':
+      return '文件从大到小';
+    case 'size_asc':
+      return '文件从小到大';
+    case 'status_asc':
+      return '状态 A-Z';
+    case 'filename_asc':
+      return '文件名 A-Z';
+    default:
+      return '最新生成优先';
+  }
+}
+
+String _auditActionLabel(String value) {
+  switch (value) {
+    case 'user.update':
+      return '更新用户';
+    case 'user.delete':
+      return '删除用户';
+    case 'announcement.create':
+      return '创建公告';
+    case 'announcement.update':
+      return '更新公告';
+    case 'announcement.delete':
+      return '删除公告';
+    case 'feedback.reply':
+      return '回复反馈';
+    case 'feedback.delete':
+      return '删除反馈';
+    case 'invite.create':
+      return '生成邀请码';
+    case 'invite.delete':
+      return '删除邀请码';
+    default:
+      return value.isEmpty ? '全部操作' : value;
+  }
+}
+
+String _feedbackCategoryLabel(String value) {
+  switch (value) {
+    case 'feature':
+      return '功能建议';
+    case 'bug':
+      return '问题反馈';
+    case 'wish':
+      return '愿望清单';
+    case 'other':
+      return '其他';
+    default:
+      return value.isEmpty ? '全部分类' : value;
+  }
+}
+
+String _adminPageSummary(AdminPage? page) {
+  if (page == null) return '正在加载本页数据';
+  if (page.total <= 0) return '0 条';
+  final start = page.offset + 1;
+  final end = page.offset + page.items.length;
+  return '第 $start-$end 条 / 共 ${page.total} 条';
+}
+
+String _adminPageNumber(AdminPage? page) {
+  if (page == null) return '第 -/- 页';
+  if (page.total <= 0) return '第 0/0 页';
+  final safeLimit = page.limit <= 0 ? _adminPageSize : page.limit;
+  final current = (page.offset ~/ safeLimit) + 1;
+  final totalPages = ((page.total + safeLimit - 1) ~/ safeLimit).clamp(
+    1,
+    999999,
+  );
+  return '第 $current/$totalPages 页';
+}
+
+int _adminTotalPages(AdminPage? page, int pageSize) {
+  if (page == null || page.total <= 0) return 0;
+  final safeLimit = pageSize <= 0 ? _adminPageSize : pageSize;
+  return ((page.total + safeLimit - 1) ~/ safeLimit).clamp(1, 999999);
+}
+
+int _previousAdminOffset(int offset, [int pageSize = _adminPageSize]) {
+  return offset <= pageSize ? 0 : offset - pageSize;
+}
+
+int _offsetAfterAdminDelete({
+  required int offset,
+  required int itemCount,
+  int pageSize = _adminPageSize,
+}) {
+  if (itemCount == 1 && offset > 0) {
+    return _previousAdminOffset(offset, pageSize);
+  }
+  return offset;
+}
+
+String _adminErrorMessage(Object error, String target) {
+  final text = error is ApiException ? error.message : error.toString();
+  return '无法加载$target：$text';
+}
+
+Future<bool> _confirmAdminDangerAction({
+  required BuildContext context,
+  required String title,
+  required String message,
+  String confirmLabel = '删除',
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AppDialog(
+      title: Text(title),
+      icon: const Icon(Icons.warning_amber_outlined),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+class _AdminErrorState extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _AdminErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 40,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('重新加载'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminPaginationBar extends StatelessWidget {
+  final Key? barKey;
+  final AdminPage? page;
+  final bool loading;
+  final int pageSize;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final ValueChanged<int>? onJumpToPage;
+  final ValueChanged<int>? onPageSizeChanged;
+
+  const _AdminPaginationBar({
+    this.barKey,
+    required this.page,
+    required this.loading,
+    this.pageSize = _adminPageSize,
+    required this.onPrevious,
+    required this.onNext,
+    this.onJumpToPage,
+    this.onPageSizeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canPrevious = !loading && (page?.offset ?? 0) > 0;
+    final canNext = !loading && (page?.hasMore ?? false);
+    final totalPages = _adminTotalPages(page, pageSize);
+    final canPickPage =
+        onJumpToPage != null && totalPages > 1 && totalPages <= 200;
+    final currentPage = totalPages <= 0 || page == null
+        ? 0
+        : (page!.offset ~/ (page!.limit <= 0 ? pageSize : page!.limit)) + 1;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      key: barKey,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _adminPageSummary(page),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.68),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _adminPageNumber(page),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.52),
+                ),
+              ),
+            ],
+          );
+          final pageSizePicker = onPageSizeChanged == null
+              ? const SizedBox.shrink()
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '每页',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.68),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    DropdownButton<int>(
+                      value: pageSize,
+                      underline: const SizedBox.shrink(),
+                      isDense: true,
+                      items: _adminPageSizeOptions
+                          .map(
+                            (v) =>
+                                DropdownMenuItem(value: v, child: Text('$v')),
+                          )
+                          .toList(),
+                      onChanged: loading || onPageSizeChanged == null
+                          ? null
+                          : (v) {
+                              if (v != null) onPageSizeChanged!(v);
+                            },
+                    ),
+                  ],
+                );
+          final navigation = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (onJumpToPage != null && totalPages > 1) ...[
+                Tooltip(
+                  message: '跳到第一页',
+                  child: IconButton(
+                    onPressed: canPrevious ? () => onJumpToPage!(1) : null,
+                    icon: const Icon(Icons.first_page),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Tooltip(
+                message: '上一页',
+                child: OutlinedButton.icon(
+                  onPressed: canPrevious ? onPrevious : null,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('上一页'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: '下一页',
+                child: FilledButton.tonalIcon(
+                  onPressed: canNext ? onNext : null,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('下一页'),
+                ),
+              ),
+              if (onJumpToPage != null && totalPages > 1) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: '跳到最后一页',
+                  child: IconButton(
+                    onPressed: canNext ? () => onJumpToPage!(totalPages) : null,
+                    icon: const Icon(Icons.last_page),
+                  ),
+                ),
+              ],
+            ],
+          );
+          final pageJump = !canPickPage
+              ? const SizedBox.shrink()
+              : DropdownButton<int>(
+                  value: currentPage.clamp(1, totalPages).toInt(),
+                  underline: const SizedBox.shrink(),
+                  isDense: true,
+                  items: List.generate(totalPages > 200 ? 200 : totalPages, (
+                    index,
+                  ) {
+                    final pageNo = index + 1;
+                    return DropdownMenuItem(
+                      value: pageNo,
+                      child: Text('$pageNo/$totalPages'),
+                    );
+                  }),
+                  onChanged: loading
+                      ? null
+                      : (value) {
+                          if (value != null) onJumpToPage!(value);
+                        },
+                );
+          if (constraints.maxWidth < 520) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: summary),
+                    pageJump,
+                    if (canPickPage) const SizedBox(width: 8),
+                    pageSizePicker,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerRight, child: navigation),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: summary),
+              pageJump,
+              if (canPickPage) const SizedBox(width: 12),
+              pageSizePicker,
+              const SizedBox(width: 12),
+              navigation,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ====================================================================
 // 全站设置
 // ====================================================================
@@ -455,6 +974,9 @@ class _SettingsTabState extends State<_SettingsTab> {
       await widget.api.updateSettings(
         inviteCodeRequired: key == 'invite_code_required' ? value : null,
         registrationEnabled: key == 'registration_enabled' ? value : null,
+        registrationEmailRequired: key == 'registration_email_required'
+            ? value
+            : null,
         maintenanceMode: key == 'maintenance_mode' ? value : null,
         maintenanceMessage: key == 'maintenance_message' ? value : null,
       );
@@ -502,6 +1024,16 @@ class _SettingsTabState extends State<_SettingsTab> {
               onChanged: _saving
                   ? null
                   : (v) => _set('invite_code_required', v),
+            ),
+            AppSwitchTile(
+              icon: Icons.mark_email_read_outlined,
+              color: Colors.teal,
+              value: _data['registration_email_required'] == true,
+              title: '注册需要邮箱验证',
+              subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
+              onChanged: _saving
+                  ? null
+                  : (v) => _set('registration_email_required', v),
             ),
           ],
         ),
@@ -805,12 +1337,23 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   bool _loading = true;
   bool _saving = false;
   bool _runningServerBackup = false;
+  bool _testingReminderEmail = false;
+  bool _testingAccountEmail = false;
+  bool _exportingBackups = false;
+  bool _exportingServerBackups = false;
   String? _error;
 
   bool _backupEnabled = true;
   bool _serverBackupEnabled = true;
   bool _openlistEnabled = false;
   bool _backupEmailEnabled = false;
+  bool _reminderEmailEnabled = false;
+  bool _accountEmailEnabled = true;
+  bool _emailAutoSwitchEnabled = false;
+  bool _accountSmtpUseSsl = true;
+  String _emailPrimaryProvider = 'claw163';
+  String _emailBackupProvider = 'resend';
+  String _emailActiveSlot = 'primary';
   final _maxSizeCtrl = TextEditingController(text: '2048');
   final _intervalCtrl = TextEditingController(text: '30');
   final _retainCtrl = TextEditingController(text: '0');
@@ -827,11 +1370,46 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   final _smtpPortCtrl = TextEditingController(text: '465');
   final _smtpUserCtrl = TextEditingController();
   final _smtpPasswordCtrl = TextEditingController();
+  final _reminderEmailToCtrl = TextEditingController();
+  final _reminderEmailFromCtrl = TextEditingController();
+  final _reminderSmtpHostCtrl = TextEditingController();
+  final _reminderSmtpPortCtrl = TextEditingController(text: '465');
+  final _reminderSmtpUserCtrl = TextEditingController();
+  final _reminderSmtpPasswordCtrl = TextEditingController();
+  final _emailSenderNameCtrl = TextEditingController(text: '多仪');
+  final _openclawMailUserCtrl = TextEditingController();
+  final _openclawMailKeyCtrl = TextEditingController();
+  final _resendBaseUrlCtrl = TextEditingController();
+  final _resendApiKeyCtrl = TextEditingController();
+  final _resendFromCtrl = TextEditingController();
+  final _systemNoticeEmailCtrl = TextEditingController();
+  final _accountSmtpHostCtrl = TextEditingController();
+  final _accountSmtpPortCtrl = TextEditingController(text: '465');
+  final _accountSmtpUserCtrl = TextEditingController();
+  final _accountSmtpPasswordCtrl = TextEditingController();
   bool _openlistPasswordMasked = false;
   bool _smtpPasswordMasked = false;
+  bool _reminderSmtpPasswordMasked = false;
+  bool _openclawMailKeyMasked = false;
+  bool _resendApiKeyMasked = false;
+  bool _accountSmtpPasswordMasked = false;
 
   List<Map<String, dynamic>> _backups = [];
   List<Map<String, dynamic>> _serverBackups = [];
+  AdminPage? _backupPage;
+  AdminPage? _serverBackupPage;
+  int _backupOffset = 0;
+  int _serverBackupOffset = 0;
+  int _backupPageSize = _adminPageSize;
+  int _serverBackupPageSize = _adminPageSize;
+  String _backupQuery = '';
+  String _serverBackupQuery = '';
+  String _backupStatus = '';
+  String _serverBackupStatus = '';
+  String _backupSort = 'updated_desc';
+  String _serverBackupSort = 'created_desc';
+  final _backupSearchCtrl = TextEditingController();
+  final _serverBackupSearchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -857,10 +1435,61 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     _smtpPortCtrl.dispose();
     _smtpUserCtrl.dispose();
     _smtpPasswordCtrl.dispose();
+    _reminderEmailToCtrl.dispose();
+    _reminderEmailFromCtrl.dispose();
+    _reminderSmtpHostCtrl.dispose();
+    _reminderSmtpPortCtrl.dispose();
+    _reminderSmtpUserCtrl.dispose();
+    _reminderSmtpPasswordCtrl.dispose();
+    _emailSenderNameCtrl.dispose();
+    _openclawMailUserCtrl.dispose();
+    _openclawMailKeyCtrl.dispose();
+    _resendBaseUrlCtrl.dispose();
+    _resendApiKeyCtrl.dispose();
+    _resendFromCtrl.dispose();
+    _systemNoticeEmailCtrl.dispose();
+    _accountSmtpHostCtrl.dispose();
+    _accountSmtpPortCtrl.dispose();
+    _accountSmtpUserCtrl.dispose();
+    _accountSmtpPasswordCtrl.dispose();
+    _backupSearchCtrl.dispose();
+    _serverBackupSearchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({
+    int? backupOffset,
+    int? serverBackupOffset,
+    int? backupPageSize,
+    int? serverBackupPageSize,
+    String? backupQuery,
+    String? serverBackupQuery,
+    String? backupStatus,
+    String? serverBackupStatus,
+    String? backupSort,
+    String? serverBackupSort,
+  }) async {
+    final nextBackupOffset = backupOffset ?? _backupOffset;
+    final nextServerBackupOffset = serverBackupOffset ?? _serverBackupOffset;
+    final nextBackupPageSize = backupPageSize ?? _backupPageSize;
+    final nextServerBackupPageSize =
+        serverBackupPageSize ?? _serverBackupPageSize;
+    final nextBackupQuery = backupQuery ?? _backupQuery;
+    final nextServerBackupQuery = serverBackupQuery ?? _serverBackupQuery;
+    final nextBackupStatus = backupStatus ?? _backupStatus;
+    final nextServerBackupStatus = serverBackupStatus ?? _serverBackupStatus;
+    final nextBackupSort = backupSort ?? _backupSort;
+    final nextServerBackupSort = serverBackupSort ?? _serverBackupSort;
+    _backupOffset = nextBackupOffset;
+    _serverBackupOffset = nextServerBackupOffset;
+    _backupPageSize = nextBackupPageSize;
+    _serverBackupPageSize = nextServerBackupPageSize;
+    _backupQuery = nextBackupQuery;
+    _serverBackupQuery = nextServerBackupQuery;
+    _backupStatus = nextBackupStatus;
+    _serverBackupStatus = nextServerBackupStatus;
+    _backupSort = nextBackupSort;
+    _serverBackupSort = nextServerBackupSort;
     setState(() {
       _loading = true;
       _error = null;
@@ -903,10 +1532,78 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       _smtpPasswordCtrl.text = (data['backup_email_smtp_password'] ?? '')
           .toString();
       _smtpPasswordMasked = data['backup_email_smtp_password_set'] == true;
-      _backups = await widget.api.listBackups();
-      _serverBackups = await widget.api.listServerBackups();
+      _reminderEmailEnabled = data['reminder_email_enabled'] == true;
+      _reminderEmailToCtrl.text = (data['reminder_email_to'] ?? '').toString();
+      _reminderEmailFromCtrl.text = (data['reminder_email_from'] ?? '')
+          .toString();
+      _reminderSmtpHostCtrl.text = (data['reminder_email_smtp_host'] ?? '')
+          .toString();
+      _reminderSmtpPortCtrl.text =
+          (((data['reminder_email_smtp_port'] as num?) ?? 465).toInt())
+              .toString();
+      _reminderSmtpUserCtrl.text = (data['reminder_email_smtp_username'] ?? '')
+          .toString();
+      _reminderSmtpPasswordCtrl.text =
+          (data['reminder_email_smtp_password'] ?? '').toString();
+      _reminderSmtpPasswordMasked =
+          data['reminder_email_smtp_password_set'] == true;
+      _accountEmailEnabled = data['email_service_enabled'] != false;
+      _emailAutoSwitchEnabled = data['email_auto_switch_enabled'] == true;
+      _emailPrimaryProvider = _mailProviderValue(
+        data['email_code_primary_provider'],
+        fallback: 'claw163',
+      );
+      _emailBackupProvider = _mailProviderValue(
+        data['email_code_backup_provider'],
+        fallback: 'resend',
+      );
+      _emailActiveSlot = data['email_code_active_slot'] == 'backup'
+          ? 'backup'
+          : 'primary';
+      _emailSenderNameCtrl.text = (data['email_sender_name'] ?? '多仪')
+          .toString();
+      _openclawMailUserCtrl.text = (data['openclaw_mail_user'] ?? '')
+          .toString();
+      _openclawMailKeyCtrl.text = (data['openclaw_mail_api_key'] ?? '')
+          .toString();
+      _openclawMailKeyMasked = data['openclaw_mail_api_key_set'] == true;
+      _resendBaseUrlCtrl.text =
+          (data['resend_base_url'] ?? 'https://api.resend.com').toString();
+      _resendApiKeyCtrl.text = (data['resend_api_key'] ?? '').toString();
+      _resendApiKeyMasked = data['resend_api_key_set'] == true;
+      _resendFromCtrl.text =
+          (data['resend_from'] ?? '多仪 <noreply@mail.6688667.xyz>').toString();
+      _systemNoticeEmailCtrl.text = (data['system_notice_email_to'] ?? '')
+          .toString();
+      _accountSmtpHostCtrl.text = (data['email_smtp_host'] ?? '').toString();
+      _accountSmtpPortCtrl.text =
+          (((data['email_smtp_port'] as num?) ?? 465).toInt()).toString();
+      _accountSmtpUserCtrl.text = (data['email_smtp_username'] ?? '')
+          .toString();
+      _accountSmtpPasswordCtrl.text = (data['email_smtp_password'] ?? '')
+          .toString();
+      _accountSmtpPasswordMasked = data['email_smtp_password_set'] == true;
+      _accountSmtpUseSsl = data['email_smtp_use_ssl'] != false;
+      final backupPage = await widget.api.listBackupsPage(
+        query: nextBackupQuery.isEmpty ? null : nextBackupQuery,
+        status: nextBackupStatus.isEmpty ? null : nextBackupStatus,
+        sort: nextBackupSort,
+        limit: nextBackupPageSize,
+        offset: nextBackupOffset,
+      );
+      final serverBackupPage = await widget.api.listServerBackupsPage(
+        query: nextServerBackupQuery.isEmpty ? null : nextServerBackupQuery,
+        status: nextServerBackupStatus.isEmpty ? null : nextServerBackupStatus,
+        sort: nextServerBackupSort,
+        limit: nextServerBackupPageSize,
+        offset: nextServerBackupOffset,
+      );
+      _backupPage = backupPage;
+      _serverBackupPage = serverBackupPage;
+      _backups = backupPage.items;
+      _serverBackups = serverBackupPage.items;
     } catch (e) {
-      _error = e.toString();
+      _error = _adminErrorMessage(e, '备份配置与备份记录');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -917,6 +1614,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     try {
       final openlistPassword = _openlistPasswordCtrl.text.trim();
       final smtpPassword = _smtpPasswordCtrl.text.trim();
+      final reminderSmtpPassword = _reminderSmtpPasswordCtrl.text.trim();
+      final openclawMailKey = _openclawMailKeyCtrl.text.trim();
+      final resendApiKey = _resendApiKeyCtrl.text.trim();
+      final accountSmtpPassword = _accountSmtpPasswordCtrl.text.trim();
       final payload = <String, Object?>{
         'backup_enabled': _backupEnabled,
         'backup_max_size_kb': int.tryParse(_maxSizeCtrl.text.trim()) ?? 2048,
@@ -940,12 +1641,51 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         'backup_email_smtp_port':
             int.tryParse(_smtpPortCtrl.text.trim()) ?? 465,
         'backup_email_smtp_username': _smtpUserCtrl.text.trim(),
+        'reminder_email_enabled': _reminderEmailEnabled,
+        'reminder_email_to': _reminderEmailToCtrl.text.trim(),
+        'reminder_email_from': _reminderEmailFromCtrl.text.trim(),
+        'reminder_email_smtp_host': _reminderSmtpHostCtrl.text.trim(),
+        'reminder_email_smtp_port':
+            int.tryParse(_reminderSmtpPortCtrl.text.trim()) ?? 465,
+        'reminder_email_smtp_username': _reminderSmtpUserCtrl.text.trim(),
+        'email_service_enabled': _accountEmailEnabled,
+        'email_sender_name': _emailSenderNameCtrl.text.trim(),
+        'email_code_primary_provider': _emailPrimaryProvider,
+        'email_code_backup_provider': _emailBackupProvider,
+        'email_code_active_slot': _emailActiveSlot,
+        'email_auto_switch_enabled': _emailAutoSwitchEnabled,
+        'openclaw_mail_enabled':
+            _emailPrimaryProvider == 'claw163' ||
+            _emailBackupProvider == 'claw163',
+        'openclaw_mail_user': _openclawMailUserCtrl.text.trim(),
+        'resend_base_url': _resendBaseUrlCtrl.text.trim(),
+        'resend_from': _resendFromCtrl.text.trim(),
+        'system_notice_email_to': _systemNoticeEmailCtrl.text.trim(),
+        'email_smtp_host': _accountSmtpHostCtrl.text.trim(),
+        'email_smtp_port':
+            int.tryParse(_accountSmtpPortCtrl.text.trim()) ?? 465,
+        'email_smtp_username': _accountSmtpUserCtrl.text.trim(),
+        'email_smtp_use_ssl': _accountSmtpUseSsl,
       };
       if (!(_openlistPasswordMasked && openlistPassword.contains('***'))) {
         payload['openlist_password'] = openlistPassword;
       }
       if (!(_smtpPasswordMasked && smtpPassword.contains('***'))) {
         payload['backup_email_smtp_password'] = smtpPassword;
+      }
+      if (!(_reminderSmtpPasswordMasked &&
+          reminderSmtpPassword.contains('***'))) {
+        payload['reminder_email_smtp_password'] = reminderSmtpPassword;
+      }
+      if (!(_openclawMailKeyMasked && openclawMailKey.contains('***'))) {
+        payload['openclaw_mail_api_key'] = openclawMailKey;
+      }
+      if (!(_resendApiKeyMasked && resendApiKey.contains('***'))) {
+        payload['resend_api_key'] = resendApiKey;
+      }
+      if (!(_accountSmtpPasswordMasked &&
+          accountSmtpPassword.contains('***'))) {
+        payload['email_smtp_password'] = accountSmtpPassword;
       }
       await widget.api.client.patch('/api/admin/settings', payload);
       if (mounted) {
@@ -986,6 +1726,78 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     }
   }
 
+  Future<void> _testReminderEmail() async {
+    setState(() => _testingReminderEmail = true);
+    try {
+      final res = await widget.api.testReminderEmail();
+      if (mounted) {
+        final recipient = (res['recipient'] ?? '').toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              recipient.isEmpty ? '测试邮件已发送' : '测试邮件已发送到 $recipient',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _testingReminderEmail = false);
+    }
+  }
+
+  Future<void> _testAccountEmail() async {
+    setState(() => _testingAccountEmail = true);
+    try {
+      final res = await widget.api.testAccountEmail();
+      if (mounted) {
+        final recipient = (res['recipient'] ?? '').toString();
+        final provider = (res['provider'] ?? '').toString();
+        final channel = provider.isEmpty ? '' : ' · $provider';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              recipient.isEmpty
+                  ? '账号测试邮件已发送$channel'
+                  : '账号测试邮件已发送到 $recipient$channel',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _testingAccountEmail = false);
+    }
+  }
+
+  String _mailProviderValue(Object? value, {required String fallback}) {
+    final raw = (value ?? fallback).toString().trim().toLowerCase();
+    final normalized = switch (raw) {
+      'openclaw' || 'openclaw_mail' => 'claw163',
+      _ => raw,
+    };
+    return {'claw163', 'resend', 'smtp', 'none'}.contains(normalized)
+        ? normalized
+        : fallback;
+  }
+
+  List<DropdownMenuItem<String>> _mailProviderItems() => const [
+    DropdownMenuItem(value: 'claw163', child: Text('Claw163')),
+    DropdownMenuItem(value: 'resend', child: Text('Resend')),
+    DropdownMenuItem(value: 'smtp', child: Text('SMTP')),
+    DropdownMenuItem(value: 'none', child: Text('关闭')),
+  ];
+
   Future<void> _wipe(Map<String, dynamic> row) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -1009,7 +1821,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     if (ok != true) return;
     try {
       await widget.api.wipeBackup(row['user_id'].toString());
-      await _load();
+      final nextOffset = _backups.length == 1 && _backupOffset > 0
+          ? (_backupOffset - _backupPageSize).clamp(0, _backupOffset)
+          : _backupOffset;
+      await _load(backupOffset: nextOffset);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1019,10 +1834,111 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     }
   }
 
+  Future<void> _exportBackupsCsv() async {
+    setState(() => _exportingBackups = true);
+    try {
+      final csv = await widget.api.exportBackupsCsv(
+        query: _backupQuery.isEmpty ? null : _backupQuery,
+        status: _backupStatus.isEmpty ? null : _backupStatus,
+        sort: _backupSort,
+      );
+      await _shareAdminCsv(
+        csv,
+        prefix: 'duoyi_backups',
+        text: '多仪用户备份导出',
+        subject: '多仪用户备份 CSV',
+        successLabel: '用户备份 CSV 已导出',
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _exportingBackups = false);
+    }
+  }
+
+  Future<void> _exportServerBackupsCsv() async {
+    setState(() => _exportingServerBackups = true);
+    try {
+      final csv = await widget.api.exportServerBackupsCsv(
+        query: _serverBackupQuery.isEmpty ? null : _serverBackupQuery,
+        status: _serverBackupStatus.isEmpty ? null : _serverBackupStatus,
+        sort: _serverBackupSort,
+      );
+      await _shareAdminCsv(
+        csv,
+        prefix: 'duoyi_server_backups',
+        text: '多仪服务器备份导出',
+        subject: '多仪服务器备份 CSV',
+        successLabel: '服务器备份 CSV 已导出',
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _exportingServerBackups = false);
+    }
+  }
+
+  Future<void> _shareAdminCsv(
+    String csv, {
+    required String prefix,
+    required String text,
+    required String subject,
+    required String successLabel,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final file = File(
+      '${dir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.csv',
+    );
+    await file.writeAsString(csv, flush: true);
+    await Clipboard.setData(ClipboardData(text: file.path));
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(file.path)], text: text, subject: subject),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$successLabel，路径已复制：${file.path}')));
+  }
+
+  Widget _backupStatusChip(String label, String value) {
+    final selected = _backupStatus == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _load(backupStatus: value, backupOffset: 0),
+      ),
+    );
+  }
+
+  Widget _serverBackupStatusChip(String label, String value) {
+    final selected = _serverBackupStatus == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) =>
+            _load(serverBackupStatus: value, serverBackupOffset: 0),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+    if (_error != null) {
+      return _AdminErrorState(message: _error!, onRetry: () => _load());
+    }
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -1265,6 +2181,281 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                 prefixIcon: const Icon(Icons.key_outlined),
               ),
             ),
+            const SizedBox(height: 16),
+            AppSwitchTile(
+              icon: Icons.mark_email_read_outlined,
+              color: Colors.indigo,
+              value: _accountEmailEnabled,
+              title: '账号验证码邮件',
+              subtitle: '注册验证、邮箱登录和找回密码共用主备通道',
+              onChanged: (v) => setState(() => _accountEmailEnabled = v),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _emailSenderNameCtrl,
+              decoration: const InputDecoration(
+                labelText: '账号邮件发件人显示名',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _emailPrimaryProvider,
+                    decoration: const InputDecoration(
+                      labelText: '主通道',
+                      prefixIcon: Icon(Icons.route_outlined),
+                    ),
+                    items: _mailProviderItems(),
+                    onChanged: (v) =>
+                        setState(() => _emailPrimaryProvider = v ?? 'claw163'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _emailBackupProvider,
+                    decoration: const InputDecoration(
+                      labelText: '备用通道',
+                      prefixIcon: Icon(Icons.alt_route_outlined),
+                    ),
+                    items: _mailProviderItems(),
+                    onChanged: (v) =>
+                        setState(() => _emailBackupProvider = v ?? 'resend'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _emailActiveSlot,
+                    decoration: const InputDecoration(
+                      labelText: '当前优先线路',
+                      prefixIcon: Icon(Icons.swap_horiz_outlined),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'primary', child: Text('主通道')),
+                      DropdownMenuItem(value: 'backup', child: Text('备用通道')),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _emailActiveSlot = v ?? 'primary'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('备用成功后自动切换'),
+                    value: _emailAutoSwitchEnabled,
+                    onChanged: (v) =>
+                        setState(() => _emailAutoSwitchEnabled = v),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _openclawMailUserCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Claw163 发件邮箱',
+                      prefixIcon: Icon(Icons.alternate_email),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _openclawMailKeyCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Claw163 API Key',
+                      helperText: _openclawMailKeyMasked
+                          ? '已配置，保持不动即不修改'
+                          : null,
+                      prefixIcon: const Icon(Icons.key_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _resendBaseUrlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Resend Base URL',
+                hintText: 'https://api.resend.com',
+                prefixIcon: Icon(Icons.link_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _resendApiKeyCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Resend API Key',
+                      helperText: _resendApiKeyMasked ? '已配置，保持不动即不修改' : null,
+                      prefixIcon: const Icon(Icons.key_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _resendFromCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Resend 发件人',
+                      prefixIcon: Icon(Icons.outgoing_mail),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _systemNoticeEmailCtrl,
+              decoration: const InputDecoration(
+                labelText: '系统通知收件人',
+                helperText: '多个邮箱用逗号分隔',
+                prefixIcon: Icon(Icons.notifications_active_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _accountSmtpHostCtrl,
+              decoration: const InputDecoration(
+                labelText: '账号 SMTP Host',
+                prefixIcon: Icon(Icons.dns_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _accountSmtpPortCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '账号 SMTP 端口',
+                      prefixIcon: Icon(Icons.numbers_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _accountSmtpUserCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '账号 SMTP 用户名',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _accountSmtpPasswordCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: '账号 SMTP 密码',
+                helperText: _accountSmtpPasswordMasked ? '已配置，保持不动即不修改' : null,
+                prefixIcon: const Icon(Icons.key_outlined),
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('账号 SMTP 使用 SSL'),
+              value: _accountSmtpUseSsl,
+              onChanged: (v) => setState(() => _accountSmtpUseSsl = v),
+            ),
+            const SizedBox(height: 16),
+            AppSwitchTile(
+              icon: Icons.alternate_email_outlined,
+              color: Colors.deepPurple,
+              value: _reminderEmailEnabled,
+              title: '邮件提醒投递',
+              subtitle: '待办/目标的“邮件”提醒会按计划写入后端 SMTP 队列',
+              onChanged: (v) => setState(() => _reminderEmailEnabled = v),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _reminderEmailToCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认提醒收件人',
+                      helperText: '用户登录名是邮箱时优先投递给该用户',
+                      prefixIcon: Icon(Icons.alternate_email),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _reminderEmailFromCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '提醒发件人',
+                      prefixIcon: Icon(Icons.outgoing_mail),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _reminderSmtpHostCtrl,
+              decoration: const InputDecoration(
+                labelText: '提醒 SMTP Host',
+                prefixIcon: Icon(Icons.dns_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _reminderSmtpPortCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '提醒 SMTP 端口',
+                      prefixIcon: Icon(Icons.numbers_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _reminderSmtpUserCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '提醒 SMTP 用户名',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _reminderSmtpPasswordCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: '提醒 SMTP 密码',
+                helperText: _reminderSmtpPasswordMasked ? '已配置，保持不动即不修改' : null,
+                prefixIcon: const Icon(Icons.key_outlined),
+              ),
+            ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 10,
@@ -1286,6 +2477,28 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                       : const Icon(Icons.backup_outlined),
                   label: Text(_runningServerBackup ? '备份中…' : '立即备份'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: _testingReminderEmail ? null : _testReminderEmail,
+                  icon: _testingReminderEmail
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.mark_email_read_outlined),
+                  label: Text(_testingReminderEmail ? '发送中…' : '测试提醒邮件'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _testingAccountEmail ? null : _testAccountEmail,
+                  icon: _testingAccountEmail
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.alternate_email_outlined),
+                  label: Text(_testingAccountEmail ? '发送中…' : '测试账号邮件'),
+                ),
               ],
             ),
           ],
@@ -1293,17 +2506,83 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         const SizedBox(height: 12),
         AppSectionHeader(
           title: '服务器备份记录',
-          subtitle: '${_serverBackups.length} 条',
+          subtitle: _adminPageSummary(_serverBackupPage),
+          actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果',
+          actionIcon: Icons.ios_share_outlined,
+          onAction: _exportingServerBackups ? null : _exportServerBackupsCsv,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _loading
+                ? null
+                : () => _load(serverBackupOffset: _serverBackupOffset),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('刷新'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _serverBackupSearchCtrl,
+          decoration: InputDecoration(
+            hintText: '搜索文件名、状态、路径或详情',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _serverBackupQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空服务器备份搜索',
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _serverBackupSearchCtrl.clear();
+                      _load(serverBackupQuery: '', serverBackupOffset: 0);
+                    },
+                  ),
+            isDense: true,
+          ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _load(
+            serverBackupQuery: _serverBackupSearchCtrl.text.trim(),
+            serverBackupOffset: 0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _serverBackupStatusChip('全部备份', ''),
+              _serverBackupStatusChip('已上传', 'uploaded'),
+              _serverBackupStatusChip('仅本地', 'local_only'),
+              _serverBackupStatusChip('远端失败', 'local_created_remote_failed'),
+              _serverBackupStatusChip('已创建', 'created'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        AppDropdownField<String>(
+          initialValue: _serverBackupSort,
+          labelText: '服务器备份排序',
+          items: const [
+            DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
+            DropdownMenuItem(value: 'size_desc', child: Text('文件从大到小')),
+            DropdownMenuItem(value: 'size_asc', child: Text('文件从小到大')),
+            DropdownMenuItem(value: 'status_asc', child: Text('状态 A-Z')),
+            DropdownMenuItem(value: 'filename_asc', child: Text('文件名 A-Z')),
+          ],
+          onChanged: (value) => _load(
+            serverBackupSort: value ?? 'created_desc',
+            serverBackupOffset: 0,
+          ),
         ),
         const SizedBox(height: 6),
         if (_serverBackups.isEmpty)
           Text(
-            '暂无服务器备份',
+            '当前筛选下没有服务器备份记录。可搜索文件名、状态、路径或详情，也可以切换状态后再看。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.58),
             ),
           ),
-        ..._serverBackups.take(10).map((b) {
+        ..._serverBackups.map((b) {
           final status = (b['status'] ?? '-').toString();
           return AppListTileCard(
             margin: const EdgeInsets.only(bottom: 8),
@@ -1311,35 +2590,126 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             leading: Icon(Icons.backup_outlined, color: cs.primary),
             title: Text((b['filename'] ?? '-').toString()),
             subtitle: Text(
-              '${b['created_at'] ?? '-'} · $status · ${b['size_bytes'] ?? 0} bytes',
+              '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} bytes · 排序: ${_adminServerBackupSortLabel(_serverBackupSort)}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.62),
               ),
             ),
           );
         }),
+        _AdminPaginationBar(
+          page: _serverBackupPage,
+          loading: _loading,
+          pageSize: _serverBackupPageSize,
+          onPageSizeChanged: (value) =>
+              _load(serverBackupPageSize: value, serverBackupOffset: 0),
+          onPrevious: () => _load(
+            serverBackupOffset: (_serverBackupOffset - _serverBackupPageSize)
+                .clamp(0, _serverBackupOffset),
+          ),
+          onNext: () => _load(
+            serverBackupOffset: _serverBackupOffset + _serverBackupPageSize,
+          ),
+          onJumpToPage: (page) =>
+              _load(serverBackupOffset: (page - 1) * _serverBackupPageSize),
+        ),
         const SizedBox(height: 12),
         AppSectionHeader(
           title: '所有用户备份',
           subtitle:
-              '${_backups.length} 个 · ${(totalKb / 1024).toStringAsFixed(1)} MB',
+              '${_adminPageSummary(_backupPage)} · 本页 ${(totalKb / 1024).toStringAsFixed(1)} MB',
+          actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果',
+          actionIcon: Icons.ios_share_outlined,
+          onAction: _exportingBackups ? null : _exportBackupsCsv,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _loading
+                ? null
+                : () => _load(backupOffset: _backupOffset),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('刷新'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _backupSearchCtrl,
+          decoration: InputDecoration(
+            hintText: '搜索用户名、邮箱、昵称或用户 ID',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _backupQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空用户备份搜索',
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _backupSearchCtrl.clear();
+                      _load(backupQuery: '', backupOffset: 0);
+                    },
+                  ),
+            isDense: true,
+          ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _load(
+            backupQuery: _backupSearchCtrl.text.trim(),
+            backupOffset: 0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _backupStatusChip('全部用户', ''),
+              _backupStatusChip('已有快照', 'synced'),
+              _backupStatusChip('无快照', 'empty'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        AppDropdownField<String>(
+          initialValue: _backupSort,
+          labelText: '用户备份排序',
+          items: const [
+            DropdownMenuItem(value: 'updated_desc', child: Text('最近同步优先')),
+            DropdownMenuItem(value: 'username_asc', child: Text('用户名 A-Z')),
+            DropdownMenuItem(value: 'size_desc', child: Text('备份体积从大到小')),
+            DropdownMenuItem(value: 'size_asc', child: Text('备份体积从小到大')),
+            DropdownMenuItem(value: 'version_desc', child: Text('同步版本较高优先')),
+          ],
+          onChanged: (value) =>
+              _load(backupSort: value ?? 'updated_desc', backupOffset: 0),
         ),
         const SizedBox(height: 6),
         if (_backups.isEmpty)
           Text(
-            '暂无备份',
+            '当前筛选下没有用户备份。可搜索用户名、邮箱、昵称或用户 ID，也可以切换“已有快照/无快照”。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.58),
             ),
           ),
         ..._backups.map((b) {
+          final email = (b['email'] ?? '').toString();
+          final displayName = (b['display_name'] ?? '').toString();
+          final hasSnapshot = b['has_snapshot'] == true;
+          final updated = hasSnapshot
+              ? (b['updated_at'] ?? '尚无同步时间').toString()
+              : '尚无同步快照';
           return AppListTileCard(
             margin: const EdgeInsets.only(bottom: 8),
             dense: true,
             leading: Icon(Icons.cloud_done_outlined, color: cs.primary),
             title: Text(b['username'].toString()),
             subtitle: Text(
-              '${b['updated_at'] ?? '-'} · ${b['size_kb']} KB',
+              [
+                if (displayName.isNotEmpty) '昵称: $displayName',
+                if (email.isNotEmpty) '邮箱: $email',
+                updated,
+                '版本 ${b['sync_version'] ?? 0}',
+                '${b['size_kb']} KB',
+                '排序: ${_adminBackupSortLabel(_backupSort)}',
+              ].join(' · '),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.62),
               ),
@@ -1351,6 +2721,22 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             ),
           );
         }),
+        _AdminPaginationBar(
+          page: _backupPage,
+          loading: _loading,
+          pageSize: _backupPageSize,
+          onPageSizeChanged: (value) =>
+              _load(backupPageSize: value, backupOffset: 0),
+          onPrevious: () => _load(
+            backupOffset: (_backupOffset - _backupPageSize).clamp(
+              0,
+              _backupOffset,
+            ),
+          ),
+          onNext: () => _load(backupOffset: _backupOffset + _backupPageSize),
+          onJumpToPage: (page) =>
+              _load(backupOffset: (page - 1) * _backupPageSize),
+        ),
       ],
     );
   }
@@ -1369,35 +2755,118 @@ class _UsersTab extends StatefulWidget {
 }
 
 class _UsersTabState extends State<_UsersTab> {
+  static const _onlineRefreshInterval = Duration(seconds: 60);
+
   List<Map<String, dynamic>> _users = [];
+  AdminPage? _page;
   bool _loading = true;
   String? _error;
+  String _query = '';
+  String _status = '';
+  String _sort = 'created_desc';
+  int _pageSize = _adminPageSize;
+  int _offset = 0;
+  final Set<String> _selectedUserIds = <String>{};
+  Timer? _onlineRefreshTimer;
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _onlineRefreshTimer = Timer.periodic(_onlineRefreshInterval, (_) {
+      if (!mounted || _loading) return;
+      _load(quiet: true);
+    });
   }
 
   @override
   void dispose() {
+    _onlineRefreshTimer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({String? query}) async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      _users = await widget.api.listUsers(query: query);
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  Future<void> _load({
+    String? query,
+    String? status,
+    String? sort,
+    int? pageSize,
+    int? offset,
+    bool quiet = false,
+  }) async {
+    final nextQuery = query ?? _query;
+    final nextStatus = status ?? _status;
+    final nextSort = sort ?? _sort;
+    final nextPageSize = pageSize ?? _pageSize;
+    final nextOffset = offset ?? _offset;
+    _query = nextQuery;
+    _status = nextStatus;
+    _sort = nextSort;
+    _pageSize = nextPageSize;
+    _offset = nextOffset;
+    if (!quiet) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
     }
+    try {
+      final page = await widget.api.listUsersPage(
+        query: nextQuery.isEmpty ? null : nextQuery,
+        status: _backendStatusFilter(nextStatus),
+        online: _onlineFilter(nextStatus),
+        sort: nextSort,
+        limit: nextPageSize,
+        offset: nextOffset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _page = page;
+        _users = page.items;
+        _selectedUserIds.removeWhere(
+          (id) => !_users.any((u) => u['user_id'].toString() == id),
+        );
+        _error = null;
+      });
+    } catch (e) {
+      if (!quiet) {
+        _error = _adminErrorMessage(e, '用户列表');
+      }
+    } finally {
+      if (mounted && !quiet) setState(() => _loading = false);
+    }
+  }
+
+  void _applySearch() {
+    _load(query: _searchCtrl.text.trim(), offset: 0);
+  }
+
+  void _applyStatus(String status) {
+    setState(() => _status = status);
+    _load(status: status, offset: 0);
+  }
+
+  void _applySort(String sort) {
+    _load(sort: sort, offset: 0);
+  }
+
+  void _jumpToPage(int pageNumber) {
+    final page = pageNumber < 1 ? 1 : pageNumber;
+    _load(offset: (page - 1) * _pageSize);
+  }
+
+  bool? _onlineFilter(String status) {
+    if (status == 'online') return true;
+    if (status == 'offline') return false;
+    return null;
+  }
+
+  String? _backendStatusFilter(String status) {
+    if (status.isEmpty || status == 'online' || status == 'offline') {
+      return null;
+    }
+    return status;
   }
 
   Future<void> _toggleAdmin(Map<String, dynamic> u) async {
@@ -1405,7 +2874,7 @@ class _UsersTabState extends State<_UsersTab> {
     try {
       await widget.api.updateUser(u['user_id'], isAdmin: becomeAdmin);
       u['is_admin'] = becomeAdmin;
-      if (mounted) setState(() {});
+      await _load(quiet: true);
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1420,7 +2889,109 @@ class _UsersTabState extends State<_UsersTab> {
     try {
       await widget.api.updateUser(u['user_id'], isDisabled: disable);
       u['is_disabled'] = disable;
-      if (mounted) setState(() {});
+      await _load(quiet: true);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  Future<void> _exportUsersCsv() async {
+    try {
+      final csv = await widget.api.exportUsersCsv(
+        query: _query.isEmpty ? null : _query,
+        status: _backendStatusFilter(_status),
+        online: _onlineFilter(_status),
+        sort: _sort,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/duoyi_users_${DateTime.now().millisecondsSinceEpoch}.csv',
+      );
+      await file.writeAsString(csv, flush: true);
+      await Clipboard.setData(ClipboardData(text: file.path));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: '多仪管理员用户导出',
+          subject: '多仪用户 CSV',
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('用户 CSV 已导出，路径已复制：${file.path}')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  List<String> get _selectableCurrentPageUserIds => _users
+      .map((u) => u['user_id'].toString())
+      .where((id) => id.isNotEmpty && id != widget.selfId)
+      .toList();
+
+  List<String> get _selectedCurrentPageUserIds =>
+      _selectableCurrentPageUserIds.where(_selectedUserIds.contains).toList();
+
+  void _toggleUserSelection(String userId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedUserIds.add(userId);
+      } else {
+        _selectedUserIds.remove(userId);
+      }
+    });
+  }
+
+  void _toggleCurrentPageSelection(bool selected) {
+    setState(() {
+      final ids = _selectableCurrentPageUserIds;
+      if (selected) {
+        _selectedUserIds.addAll(ids);
+      } else {
+        _selectedUserIds.removeAll(ids);
+      }
+    });
+  }
+
+  Future<void> _bulkSetDisabled(bool disabled) async {
+    final ids = _selectedCurrentPageUserIds;
+    if (ids.isEmpty) return;
+    final ok = await _confirmAdminDangerAction(
+      context: context,
+      title: disabled ? '批量禁用账号？' : '批量恢复账号？',
+      message: disabled
+          ? '将禁用当前页已选的 ${ids.length} 个账号，并使这些账号需要重新登录。'
+          : '将恢复当前页已选的 ${ids.length} 个账号登录权限。',
+      confirmLabel: disabled ? '禁用' : '恢复',
+    );
+    if (!ok) return;
+    try {
+      await widget.api.bulkUpdateUserStatus(userIds: ids, isDisabled: disabled);
+      _selectedUserIds.removeAll(ids);
+      await _load(offset: _offset);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            disabled ? '已批量禁用 ${ids.length} 个账号' : '已批量恢复 ${ids.length} 个账号',
+          ),
+        ),
+      );
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1494,8 +3065,13 @@ class _UsersTabState extends State<_UsersTab> {
     if (ok != true) return;
     try {
       await widget.api.deleteUser(u['user_id']);
-      _users.removeWhere((x) => x['user_id'] == u['user_id']);
-      if (mounted) setState(() {});
+      await _load(
+        offset: _offsetAfterAdminDelete(
+          offset: _offset,
+          itemCount: _users.length,
+          pageSize: _pageSize,
+        ),
+      );
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1508,183 +3084,421 @@ class _UsersTabState extends State<_UsersTab> {
   String _formatServerTime(dynamic raw) {
     final text = raw?.toString() ?? '';
     if (text.isEmpty || text == 'null') return '-';
-    final normalized = text.contains('T') ? text : '${text}Z';
+    var normalized = text.contains('T') ? text : text.replaceFirst(' ', 'T');
+    final hasTimezone = RegExp(r'(Z|[+-]\d\d:?\d\d)$').hasMatch(normalized);
+    if (!hasTimezone) normalized = '${normalized}Z';
     final parsed = DateTime.tryParse(normalized);
     if (parsed == null) return text;
     final local = parsed.toLocal();
-    final y = local.year.toString();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
+    return I18nDateFormat.fullDateTime(local);
+  }
+
+  String _formatLastLogin(dynamic raw) {
+    final formatted = _formatServerTime(raw);
+    return formatted == '-' ? '从未登录' : formatted;
+  }
+
+  String _formatLastActive(dynamic raw) {
+    final formatted = _formatServerTime(raw);
+    return formatted == '-' ? '从未活跃' : formatted;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final loadingFirstPage = _loading && _page == null;
+    final selectableIds = _selectableCurrentPageUserIds;
+    final selectedIds = _selectedCurrentPageUserIds;
+    final allCurrentPageSelected =
+        selectableIds.isNotEmpty && selectedIds.length == selectableIds.length;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          child: Column(
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: const InputDecoration(
-                    hintText: '按用户名搜索',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: '搜索用户名、邮箱、昵称或用户 ID',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _query.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: '清空搜索',
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  _load(query: '', offset: 0);
+                                },
+                              ),
+                        isDense: true,
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _applySearch(),
+                    ),
                   ),
-                  onSubmitted: (v) => _load(query: v.trim()),
+                  IconButton(
+                    tooltip: '搜索用户',
+                    onPressed: _applySearch,
+                    icon: const Icon(Icons.manage_search),
+                  ),
+                  IconButton(
+                    tooltip: '导出用户筛选结果',
+                    onPressed: _loading ? null : _exportUsersCsv,
+                    icon: const Icon(Icons.download_outlined),
+                  ),
+                  IconButton(
+                    tooltip: '刷新用户列表',
+                    onPressed: _loading ? null : () => _load(offset: _offset),
+                    icon: _loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _userFilterChip('全部账号', ''),
+                    _userFilterChip('可登录', 'active'),
+                    _userFilterChip('在线', 'online'),
+                    _userFilterChip('离线', 'offline'),
+                    _userFilterChip('管理员', 'admin'),
+                    _userFilterChip('已禁用', 'disabled'),
+                    _userFilterChip('普通用户', 'normal'),
+                    _userFilterChip('有反馈', 'has_feedback'),
+                    _userFilterChip('邮箱未验证', 'unverified_email'),
+                    _userFilterChip('邮箱已验证', 'verified_email'),
+                    _userFilterChip('未绑定邮箱', 'no_email'),
+                  ],
                 ),
               ),
-              IconButton(
-                onPressed: () => _load(query: _searchCtrl.text.trim()),
-                icon: const Icon(Icons.refresh),
+              const SizedBox(height: 8),
+              AppDropdownField<String>(
+                initialValue: _sort,
+                labelText: '排序',
+                items: const [
+                  DropdownMenuItem(
+                    value: 'created_desc',
+                    child: Text('最新注册优先'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'last_active_desc',
+                    child: Text('最近活跃优先'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'last_login_desc',
+                    child: Text('最近登录优先'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'feedback_desc',
+                    child: Text('反馈较多优先'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'username_asc',
+                    child: Text('用户名 A-Z'),
+                  ),
+                  DropdownMenuItem(value: 'email_asc', child: Text('邮箱 A-Z')),
+                ],
+                onChanged: (value) => _applySort(value ?? 'created_desc'),
               ),
+              if (!loadingFirstPage && _error == null && _users.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                AppSurfaceCard(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  color: cs.secondaryContainer.withValues(alpha: 0.26),
+                  border: Border.all(
+                    color: cs.secondary.withValues(alpha: 0.16),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final summary = Text(
+                        selectedIds.isEmpty
+                            ? '本页 ${_users.length} 个账号 · 可勾选后批量禁用或恢复'
+                            : '已选 ${selectedIds.length} 个账号 · 批量操作仅作用于当前页勾选项',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.68),
+                        ),
+                      );
+                      final actions = Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          FilterChip(
+                            label: Text(
+                              allCurrentPageSelected ? '取消全选本页' : '全选本页',
+                            ),
+                            selected: allCurrentPageSelected,
+                            onSelected: selectableIds.isEmpty
+                                ? null
+                                : (_) => _toggleCurrentPageSelection(
+                                    !allCurrentPageSelected,
+                                  ),
+                          ),
+                          TextButton.icon(
+                            onPressed: selectedIds.isEmpty || _loading
+                                ? null
+                                : () => _bulkSetDisabled(true),
+                            icon: const Icon(Icons.block_outlined),
+                            label: const Text('批量禁用'),
+                          ),
+                          TextButton.icon(
+                            onPressed: selectedIds.isEmpty || _loading
+                                ? null
+                                : () => _bulkSetDisabled(false),
+                            icon: const Icon(Icons.lock_open_outlined),
+                            label: const Text('批量恢复'),
+                          ),
+                        ],
+                      );
+                      if (constraints.maxWidth < 560) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            summary,
+                            const SizedBox(height: 6),
+                            actions,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: summary),
+                          actions,
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-        if (_loading)
-          const Expanded(child: Center(child: CircularProgressIndicator()))
-        else if (_error != null)
-          Expanded(child: Center(child: Text(_error!)))
-        else if (_users.isEmpty)
+        if (loadingFirstPage)
           const Expanded(
-            child: EmptyState(icon: Icons.people_outline, message: '无用户'),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('正在加载用户列表…'),
+                ],
+              ),
+            ),
+          )
+        else if (_error != null)
+          Expanded(
+            child: _AdminErrorState(
+              message: _error!,
+              onRetry: () => _load(offset: _offset),
+            ),
+          )
+        else if (_users.isEmpty)
+          Expanded(
+            child: EmptyState(
+              icon: Icons.people_outline,
+              message: _query.isEmpty && _status.isEmpty
+                  ? '暂无用户记录'
+                  : '没有匹配的用户。请调整搜索关键词或账号状态筛选。',
+            ),
           )
         else
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: _users.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 8),
-              itemBuilder: (_, i) {
-                final u = _users[i];
-                final isSelf = u['user_id'] == widget.selfId;
-                final disabled = u['is_disabled'] == true;
-                final admin = u['is_admin'] == true;
-                final online = u['online'] == true;
-                final registeredAt = _formatServerTime(u['created_at']);
-                final lastLoginAt = _formatServerTime(u['last_login_at']);
-                final lastActiveAt = _formatServerTime(u['last_active_at']);
-                return AppListTileCard(
-                  leading: CircleAvatar(
-                    backgroundColor: admin
-                        ? Colors.deepOrange.withValues(alpha: 0.2)
-                        : cs.primary.withValues(alpha: 0.12),
-                    foregroundColor: admin ? Colors.deepOrange : cs.primary,
-                    child: Text(
-                      (u['username'] as String? ?? '?').isEmpty
-                          ? '?'
-                          : u['username'].toString().substring(0, 1),
-                    ),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          u['username'].toString(),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w400,
-                            decoration: disabled
-                                ? TextDecoration.lineThrough
-                                : null,
+            child: RefreshIndicator(
+              onRefresh: () => _load(offset: _offset),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(8),
+                itemCount: _users.length,
+                separatorBuilder: (context, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final u = _users[i];
+                  final userId = u['user_id'].toString();
+                  final isSelf = userId == widget.selfId;
+                  final disabled = u['is_disabled'] == true;
+                  final admin = u['is_admin'] == true;
+                  final online = u['online'] == true;
+                  final selected = _selectedUserIds.contains(userId);
+                  final registeredAt = _formatServerTime(u['created_at']);
+                  final lastLoginAt = _formatLastLogin(u['last_login_at']);
+                  final lastActiveAt = _formatLastActive(u['last_active_at']);
+                  final email = (u['email'] ?? '').toString();
+                  final emailVerified = u['email_verified'] == true;
+                  final displayName = (u['display_name'] ?? '').toString();
+                  final identityParts = [
+                    if (displayName.isNotEmpty) '昵称: $displayName',
+                    if (email.isNotEmpty)
+                      '邮箱: $email${emailVerified ? ' (已验证)' : ' (未验证)'}'
+                    else
+                      '未绑定邮箱',
+                    '排序: ${_adminUserSortLabel(_sort)}',
+                  ];
+                  return AppListTileCard(
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: selected,
+                          onChanged: isSelf
+                              ? null
+                              : (value) =>
+                                    _toggleUserSelection(userId, value == true),
+                        ),
+                        CircleAvatar(
+                          backgroundColor: admin
+                              ? Colors.deepOrange.withValues(alpha: 0.2)
+                              : cs.primary.withValues(alpha: 0.12),
+                          foregroundColor: admin
+                              ? Colors.deepOrange
+                              : cs.primary,
+                          child: Text(
+                            (u['username'] as String? ?? '?').isEmpty
+                                ? '?'
+                                : u['username'].toString().substring(0, 1),
                           ),
                         ),
-                      ),
-                      if (online) ...[
+                      ],
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            u['username'].toString(),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w400,
+                              decoration: disabled
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        const AppStatusBadge(
-                          label: '在线',
-                          color: Colors.green,
-                          icon: Icons.circle,
-                          padding: EdgeInsets.symmetric(
+                        AppStatusBadge(
+                          label: online ? '在线' : '离线',
+                          color: online ? Colors.green : Colors.grey,
+                          icon: online
+                              ? Icons.circle
+                              : Icons.radio_button_unchecked,
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 6,
                             vertical: 3,
                           ),
                         ),
-                      ],
-                      if (admin) ...[
-                        const SizedBox(width: 6),
-                        const AppStatusBadge(
-                          label: '管理员',
-                          color: Colors.deepOrange,
-                        ),
-                      ],
-                      if (disabled) ...[
-                        const SizedBox(width: 6),
-                        const AppStatusBadge(label: '已禁用', color: Colors.red),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    '注册: $registeredAt · 登录: $lastLoginAt · 活跃: $lastActiveAt · 反馈: ${u['feedback_count'] ?? 0}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                    ),
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) async {
-                      switch (action) {
-                        case 'admin':
-                          await _toggleAdmin(u);
-                          break;
-                        case 'disable':
-                          await _toggleDisable(u);
-                          break;
-                        case 'reset':
-                          await _resetPassword(u);
-                          break;
-                        case 'delete':
-                          await _delete(u);
-                          break;
-                        case 'copy_id':
-                          await Clipboard.setData(
-                            ClipboardData(text: u['user_id'].toString()),
-                          );
-                          if (!context.mounted) return;
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('user_id 已复制')),
-                            );
-                          }
-                          break;
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'admin',
-                        child: Text(admin ? '取消管理员' : '设为管理员'),
-                      ),
-                      PopupMenuItem(
-                        value: 'disable',
-                        child: Text(disabled ? '启用账号' : '禁用账号'),
-                      ),
-                      const PopupMenuItem(value: 'reset', child: Text('重置密码')),
-                      const PopupMenuItem(
-                        value: 'copy_id',
-                        child: Text('复制 user_id'),
-                      ),
-                      if (!isSelf)
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text(
-                            '删除账号',
-                            style: TextStyle(color: Colors.red),
+                        if (admin) ...[
+                          const SizedBox(width: 6),
+                          const AppStatusBadge(
+                            label: '管理员',
+                            color: Colors.deepOrange,
                           ),
+                        ],
+                        if (disabled) ...[
+                          const SizedBox(width: 6),
+                          const AppStatusBadge(label: '已禁用', color: Colors.red),
+                        ],
+                      ],
+                    ),
+                    subtitle: Text(
+                      '${identityParts.join(' · ')}\n注册: $registeredAt · 最近登录: $lastLoginAt · 最近活跃: $lastActiveAt · 反馈: ${u['feedback_count'] ?? 0}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) async {
+                        switch (action) {
+                          case 'admin':
+                            await _toggleAdmin(u);
+                            break;
+                          case 'disable':
+                            await _toggleDisable(u);
+                            break;
+                          case 'reset':
+                            await _resetPassword(u);
+                            break;
+                          case 'delete':
+                            await _delete(u);
+                            break;
+                          case 'copy_id':
+                            await Clipboard.setData(
+                              ClipboardData(text: u['user_id'].toString()),
+                            );
+                            if (!context.mounted) return;
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('用户 ID 已复制')),
+                              );
+                            }
+                            break;
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'admin',
+                          child: Text(admin ? '撤销管理员权限' : '授予管理员权限'),
                         ),
-                    ],
-                  ),
-                );
-              },
+                        PopupMenuItem(
+                          value: 'disable',
+                          child: Text(disabled ? '恢复账号登录' : '禁用账号登录'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'reset',
+                          child: Text('重置登录密码'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'copy_id',
+                          child: Text('复制用户 ID'),
+                        ),
+                        if (!isSelf)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text(
+                              '删除账号与数据',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
+        _AdminPaginationBar(
+          page: _page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: _jumpToPage,
+        ),
       ],
+    );
+  }
+
+  Widget _userFilterChip(String label, String value) {
+    final selected = _status == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _applyStatus(value),
+      ),
     );
   }
 }
@@ -1702,7 +3516,16 @@ class _AnnouncementsTab extends StatefulWidget {
 
 class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   List<Map<String, dynamic>> _items = [];
+  AdminPage? _page;
   bool _loading = true;
+  String? _error;
+  String _query = '';
+  String _status = '';
+  String _level = '';
+  String _sort = 'created_desc';
+  int _pageSize = _adminPageSize;
+  int _offset = 0;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -1710,12 +3533,60 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({
+    int? offset,
+    String? query,
+    String? status,
+    String? level,
+    String? sort,
+    int? pageSize,
+  }) async {
+    final nextOffset = offset ?? _offset;
+    final nextQuery = query ?? _query;
+    final nextStatus = status ?? _status;
+    final nextLevel = level ?? _level;
+    final nextSort = sort ?? _sort;
+    final nextPageSize = pageSize ?? _pageSize;
+    _offset = nextOffset;
+    _query = nextQuery;
+    _status = nextStatus;
+    _level = nextLevel;
+    _sort = nextSort;
+    _pageSize = nextPageSize;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      _items = await widget.api.listAnnouncements();
-    } catch (_) {}
+      final page = await widget.api.listAnnouncementsPage(
+        query: nextQuery.isEmpty ? null : nextQuery,
+        status: nextStatus.isEmpty ? null : nextStatus,
+        level: nextLevel.isEmpty ? null : nextLevel,
+        sort: nextSort,
+        limit: nextPageSize,
+        offset: nextOffset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _page = page;
+        _items = page.items;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = _adminErrorMessage(e, '公告列表'));
+      }
+    }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _applySearch() {
+    _load(query: _searchCtrl.text.trim(), offset: 0);
   }
 
   Future<void> _openEdit({Map<String, dynamic>? item}) async {
@@ -1814,94 +3685,258 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final loadingFirstPage = _loading && _page == null;
     return Scaffold(
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
-          ? const EmptyState(icon: Icons.campaign_outlined, message: '暂无公告')
-          : ListView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: _items.length,
-              itemBuilder: (_, i) {
-                final a = _items[i];
-                final published = a['published'] == 1 || a['published'] == true;
-                final level = (a['level'] ?? 'info').toString();
-                final levelColor = switch (level) {
-                  'critical' => Colors.red,
-                  'warning' => Colors.orange,
-                  _ => cs.primary,
-                };
-                return AppListTileCard(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  isThreeLine: true,
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          (a['title'] ?? '').toString(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w400,
-                            color: cs.onSurface,
-                          ),
-                        ),
+      body: Column(
+        children: [
+          AppSectionHeader(
+            title: '公告列表',
+            subtitle: _adminPageSummary(_page),
+            actionLabel: '刷新',
+            actionIcon: Icons.refresh,
+            onAction: _loading ? null : () => _load(offset: _offset),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: '搜索公告标题或正文',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清空公告搜索',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _load(query: '', offset: 0);
+                        },
                       ),
-                      const SizedBox(width: 8),
-                      AppStatusBadge(label: level, color: levelColor),
-                      if (!published) ...[
-                        const SizedBox(width: 6),
-                        AppStatusBadge(
-                          label: '草稿',
-                          color: cs.onSurface.withValues(alpha: 0.58),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    '${a['created_at']}\n${(a['body'] ?? '').toString()}',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.64),
-                    ),
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) async {
-                      if (action == 'edit') _openEdit(item: a);
-                      if (action == 'toggle') {
-                        await widget.api.updateAnnouncement(
-                          (a['id'] as num).toInt(),
-                          published: !published,
-                        );
-                        _load();
-                      }
-                      if (action == 'delete') {
-                        await widget.api.deleteAnnouncement(
-                          (a['id'] as num).toInt(),
-                        );
-                        _load();
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('编辑')),
-                      PopupMenuItem(
-                        value: 'toggle',
-                        child: Text(published ? '下架' : '发布'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('删除', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _applySearch(),
             ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            child: Row(
+              children: [
+                _announcementStatusChip('全部状态', ''),
+                _announcementStatusChip('已发布', 'published'),
+                _announcementStatusChip('草稿', 'draft'),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                _announcementLevelChip('全部级别', ''),
+                _announcementLevelChip('普通', 'info'),
+                _announcementLevelChip('重要', 'warning'),
+                _announcementLevelChip('紧急', 'critical'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: AppDropdownField<String>(
+              initialValue: _sort,
+              labelText: '公告排序',
+              items: const [
+                DropdownMenuItem(value: 'created_desc', child: Text('最新创建优先')),
+                DropdownMenuItem(value: 'updated_desc', child: Text('最近更新优先')),
+                DropdownMenuItem(value: 'level_desc', child: Text('紧急程度优先')),
+                DropdownMenuItem(value: 'title_asc', child: Text('标题 A-Z')),
+              ],
+              onChanged: (value) =>
+                  _load(sort: value ?? 'created_desc', offset: 0),
+            ),
+          ),
+          if (loadingFirstPage)
+            const Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('正在加载公告列表…'),
+                  ],
+                ),
+              ),
+            )
+          else if (_error != null)
+            Expanded(
+              child: _AdminErrorState(
+                message: _error!,
+                onRetry: () => _load(offset: _offset),
+              ),
+            )
+          else if (_items.isEmpty)
+            const Expanded(
+              child: EmptyState(
+                icon: Icons.campaign_outlined,
+                message: '当前筛选下没有公告。可调整关键词、发布状态或级别筛选，公告较多时使用底部分页查看。',
+              ),
+            )
+          else
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => _load(offset: _offset),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _items.length,
+                  itemBuilder: (_, i) {
+                    final a = _items[i];
+                    final published =
+                        a['published'] == 1 || a['published'] == true;
+                    final level = (a['level'] ?? 'info').toString();
+                    final levelColor = switch (level) {
+                      'critical' => Colors.red,
+                      'warning' => Colors.orange,
+                      _ => cs.primary,
+                    };
+                    return AppListTileCard(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      isThreeLine: true,
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              (a['title'] ?? '').toString(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          AppStatusBadge(
+                            label: _adminStatusLabel(level),
+                            color: levelColor,
+                          ),
+                          if (!published) ...[
+                            const SizedBox(width: 6),
+                            AppStatusBadge(
+                              label: '草稿',
+                              color: cs.onSurface.withValues(alpha: 0.58),
+                            ),
+                          ],
+                        ],
+                      ),
+                      subtitle: Text(
+                        '创建: ${a['created_at']} · 更新: ${a['updated_at'] ?? '-'} · 排序: ${_adminAnnouncementSortLabel(_sort)}\n${(a['body'] ?? '').toString()}',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.64),
+                        ),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (action) async {
+                          switch (action) {
+                            case 'edit':
+                              await _openEdit(item: a);
+                              return;
+                            case 'toggle':
+                              await widget.api.updateAnnouncement(
+                                (a['id'] as num).toInt(),
+                                published: !published,
+                              );
+                              await _load(offset: _offset);
+                              return;
+                            case 'delete':
+                              final confirmed = await _confirmAdminDangerAction(
+                                context: context,
+                                title: '删除公告？',
+                                message:
+                                    '将删除“${(a['title'] ?? '').toString()}”，已发布用户也将不再看到这条公告。',
+                              );
+                              if (!confirmed) return;
+                              await widget.api.deleteAnnouncement(
+                                (a['id'] as num).toInt(),
+                              );
+                              await _load(
+                                offset: _offsetAfterAdminDelete(
+                                  offset: _offset,
+                                  itemCount: _items.length,
+                                  pageSize: _pageSize,
+                                ),
+                              );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('公告已删除')),
+                              );
+                              return;
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(value: 'edit', child: Text('编辑')),
+                          PopupMenuItem(
+                            value: 'toggle',
+                            child: Text(published ? '下架' : '发布'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text(
+                              '删除',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          _AdminPaginationBar(
+            page: _page,
+            loading: _loading,
+            pageSize: _pageSize,
+            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+            onPrevious: () =>
+                _load(offset: _previousAdminOffset(_offset, _pageSize)),
+            onNext: () => _load(offset: _offset + _pageSize),
+            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEdit(),
         icon: const Icon(Icons.add),
         label: const Text('发布'),
+      ),
+    );
+  }
+
+  Widget _announcementStatusChip(String label, String value) {
+    final selected = _status == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _load(status: value, offset: 0),
+      ),
+    );
+  }
+
+  Widget _announcementLevelChip(String label, String value) {
+    final selected = _level == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _load(level: value, offset: 0),
       ),
     );
   }
@@ -1920,8 +3955,17 @@ class _FeedbackTab extends StatefulWidget {
 
 class _FeedbackTabState extends State<_FeedbackTab> {
   List<Map<String, dynamic>> _items = [];
+  AdminPage? _page;
   bool _loading = true;
+  bool _exporting = false;
+  String? _error;
   String _filter = '';
+  String _categoryFilter = '';
+  String _query = '';
+  String _sort = 'created_desc';
+  int _pageSize = _adminPageSize;
+  int _offset = 0;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -1929,14 +3973,160 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({
+    int? offset,
+    String? query,
+    String? sort,
+    int? pageSize,
+  }) async {
+    final nextOffset = offset ?? _offset;
+    final nextQuery = query ?? _query;
+    final nextSort = sort ?? _sort;
+    final nextPageSize = pageSize ?? _pageSize;
+    _offset = nextOffset;
+    _query = nextQuery;
+    _sort = nextSort;
+    _pageSize = nextPageSize;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      _items = await widget.api.listFeedback(
+      final page = await widget.api.listFeedbackPage(
         status: _filter.isEmpty ? null : _filter,
+        query: nextQuery.isEmpty ? null : nextQuery,
+        category: _categoryFilter.isEmpty ? null : _categoryFilter,
+        sort: nextSort,
+        limit: nextPageSize,
+        offset: nextOffset,
       );
-    } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _page = page;
+        _items = page.items;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = _adminErrorMessage(e, '反馈列表'));
+      }
+    }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _applySearch() {
+    _load(query: _searchCtrl.text.trim(), offset: 0);
+  }
+
+  List<int> get _currentPageOpenIds => _items
+      .where((f) => (f['status'] ?? 'open').toString() == 'open')
+      .map((f) => (f['id'] as num).toInt())
+      .toList();
+
+  List<int> _currentPageIdsWithStatus(String status) => _items
+      .where((f) => (f['status'] ?? 'open').toString() == status)
+      .map((f) => (f['id'] as num).toInt())
+      .toList();
+
+  Map<String, int> get _currentPageStatusCounts {
+    final counts = <String, int>{
+      'open': 0,
+      'in_progress': 0,
+      'resolved': 0,
+      'closed': 0,
+    };
+    for (final f in _items) {
+      final status = (f['status'] ?? 'open').toString();
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<void> _markCurrentPageOpenInProgress() async {
+    await _bulkUpdateCurrentPageStatus(
+      fromStatus: 'open',
+      toStatus: 'in_progress',
+      reply: '已收到，进入处理中。',
+      successMessage: '已将当前页 {count} 条待处理反馈标记为处理中',
+    );
+  }
+
+  Future<void> _bulkUpdateCurrentPageStatus({
+    required String fromStatus,
+    required String toStatus,
+    required String reply,
+    required String successMessage,
+  }) async {
+    final ids = _currentPageIdsWithStatus(fromStatus);
+    if (ids.isEmpty) return;
+    try {
+      await widget.api.bulkUpdateFeedbackStatus(
+        feedbackIds: ids,
+        reply: reply,
+        status: toStatus,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage.replaceAll('{count}', '${ids.length}')),
+        ),
+      );
+      _load(offset: _offset);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  Future<void> _exportFilteredCsv() async {
+    setState(() => _exporting = true);
+    try {
+      final csv = await widget.api.exportFeedbackCsv(
+        status: _filter.isEmpty ? null : _filter,
+        query: _query.isEmpty ? null : _query,
+        category: _categoryFilter.isEmpty ? null : _categoryFilter,
+        sort: _sort,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/duoyi_feedback_${DateTime.now().millisecondsSinceEpoch}.csv',
+      );
+      await file.writeAsString(csv, flush: true);
+      await Clipboard.setData(ClipboardData(text: file.path));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: '多仪管理员反馈导出',
+          subject: '多仪反馈 CSV',
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('反馈 CSV 已导出，路径已复制：${file.path}')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _reply(Map<String, dynamic> f) async {
@@ -1994,7 +4184,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         reply: ctrl.text.trim(),
         status: status,
       );
-      _load();
+      _load(offset: _offset);
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -2008,12 +4198,47 @@ class _FeedbackTabState extends State<_FeedbackTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final loadingFirstPage = _loading && _page == null;
+    final statusCounts = _currentPageStatusCounts;
+    final openIds = _currentPageOpenIds;
+    final inProgressIds = _currentPageIdsWithStatus('in_progress');
+    final resolvedIds = _currentPageIdsWithStatus('resolved');
     return Scaffold(
       body: Column(
         children: [
+          AppSectionHeader(
+            title: '反馈列表',
+            subtitle: _adminPageSummary(_page),
+            actionLabel: '刷新',
+            actionIcon: Icons.refresh,
+            onAction: _loading ? null : () => _load(offset: _offset),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: '搜索反馈内容、回复或用户名',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清空反馈搜索',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _load(query: '', offset: 0);
+                        },
+                      ),
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _applySearch(),
+            ),
+          ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
             child: Row(
               children: [
                 _filterChip('全部', ''),
@@ -2024,120 +4249,324 @@ class _FeedbackTabState extends State<_FeedbackTab> {
               ],
             ),
           ),
-          if (_loading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                _categoryChip(_feedbackCategoryLabel(''), ''),
+                _categoryChip(_feedbackCategoryLabel('feature'), 'feature'),
+                _categoryChip(_feedbackCategoryLabel('bug'), 'bug'),
+                _categoryChip(_feedbackCategoryLabel('wish'), 'wish'),
+                _categoryChip(_feedbackCategoryLabel('other'), 'other'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: AppDropdownField<String>(
+              initialValue: _sort,
+              labelText: '反馈排序',
+              items: const [
+                DropdownMenuItem(value: 'created_desc', child: Text('最新反馈优先')),
+                DropdownMenuItem(value: 'updated_desc', child: Text('最近处理优先')),
+                DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
+                DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
+              ],
+              onChanged: (value) =>
+                  _load(sort: value ?? 'created_desc', offset: 0),
+            ),
+          ),
+          if (!loadingFirstPage && _error == null && _items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: AppSurfaceCard(
+                padding: const EdgeInsets.all(12),
+                color: cs.primary.withValues(alpha: 0.08),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.dashboard_customize_outlined,
+                          color: cs.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '本页 ${_items.length} 条 · 待处理 ${statusCounts['open'] ?? 0} · 处理中 ${statusCounts['in_progress'] ?? 0} · 已解决 ${statusCounts['resolved'] ?? 0}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w400,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '共 ${_page?.total ?? _items.length} 条反馈，当前按${_adminFeedbackSortLabel(_sort)}排列。大量反馈按状态、分类、搜索和分页拆开处理，也可导出当前筛选结果。',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.64),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '导出筛选结果',
+                          onPressed: _loading || _exporting
+                              ? null
+                              : _exportFilteredCsv,
+                          icon: _exporting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.download_outlined),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        if (openIds.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : _markCurrentPageOpenInProgress,
+                            icon: const Icon(Icons.playlist_add_check_outlined),
+                            label: const Text('本页待处理转处理中'),
+                          ),
+                        if (inProgressIds.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : () => _bulkUpdateCurrentPageStatus(
+                                    fromStatus: 'in_progress',
+                                    toStatus: 'resolved',
+                                    reply: '已处理完成。',
+                                    successMessage:
+                                        '已将当前页 {count} 条处理中反馈标记为已解决',
+                                  ),
+                            icon: const Icon(Icons.task_alt_outlined),
+                            label: const Text('本页处理中转已解决'),
+                          ),
+                        if (resolvedIds.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : () => _bulkUpdateCurrentPageStatus(
+                                    fromStatus: 'resolved',
+                                    toStatus: 'closed',
+                                    reply: '已归档关闭。',
+                                    successMessage: '已将当前页 {count} 条已解决反馈关闭归档',
+                                  ),
+                            icon: const Icon(Icons.inventory_2_outlined),
+                            label: const Text('本页已解决转关闭'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (loadingFirstPage)
+            const Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('正在加载反馈列表…'),
+                  ],
+                ),
+              ),
+            )
+          else if (_error != null)
+            Expanded(
+              child: _AdminErrorState(
+                message: _error!,
+                onRetry: () => _load(offset: _offset),
+              ),
+            )
           else if (_items.isEmpty)
             const Expanded(
-              child: EmptyState(icon: Icons.inbox_outlined, message: '没有反馈'),
+              child: EmptyState(
+                icon: Icons.inbox_outlined,
+                message: '当前筛选下没有反馈。反馈较多时请用底部分页查看其他页面，或切换处理状态和分类。',
+              ),
             )
           else
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: _items.length,
-                itemBuilder: (_, i) {
-                  final f = _items[i];
-                  final status = (f['status'] ?? 'open').toString();
-                  final statusColor = switch (status) {
-                    'resolved' => Colors.green,
-                    'closed' => Colors.grey,
-                    'in_progress' => Colors.orange,
-                    _ => cs.primary,
-                  };
-                  final reply = (f['admin_reply'] ?? '').toString();
-                  return AppListTileCard(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${f['username']} · ${f['category']}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w400,
+              child: RefreshIndicator(
+                onRefresh: () => _load(offset: _offset),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _items.length,
+                  itemBuilder: (_, i) {
+                    final f = _items[i];
+                    final status = (f['status'] ?? 'open').toString();
+                    final category = (f['category'] ?? '').toString();
+                    final statusColor = switch (status) {
+                      'resolved' => Colors.green,
+                      'closed' => Colors.grey,
+                      'in_progress' => Colors.orange,
+                      _ => cs.primary,
+                    };
+                    final reply = (f['admin_reply'] ?? '').toString();
+                    final createdAt = (f['created_at'] ?? '').toString();
+                    return AppListTileCard(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${f['username']} · ${_feedbackCategoryLabel(category)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        AppStatusBadge(label: status, color: statusColor),
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (f['content'] ?? '').toString(),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.7),
+                          const SizedBox(width: 8),
+                          AppStatusBadge(
+                            label: _adminStatusLabel(status),
+                            color: statusColor,
                           ),
-                        ),
-                        if (reply.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.teal.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.teal.withValues(alpha: 0.16),
+                        ],
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (createdAt.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                createdAt,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.52),
                                 ),
                               ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.subdirectory_arrow_right,
-                                    size: 16,
-                                    color: Colors.teal,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      '回复: $reply',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: cs.onSurface.withValues(
-                                              alpha: 0.68,
-                                            ),
-                                            fontWeight: FontWeight.w400,
-                                          ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            ),
+                          Text(
+                            (f['content'] ?? '').toString(),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: '回复',
-                          icon: const Icon(Icons.reply),
-                          onPressed: () => _reply(f),
-                        ),
-                        IconButton(
-                          tooltip: '删除',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () async {
-                            await widget.api.deleteFeedback(
-                              (f['id'] as num).toInt(),
-                            );
-                            _load();
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                          if (reply.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.teal.withValues(alpha: 0.16),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.subdirectory_arrow_right,
+                                      size: 16,
+                                      color: Colors.teal,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        '回复: $reply',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.68,
+                                              ),
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: '回复',
+                            icon: const Icon(Icons.reply),
+                            onPressed: () => _reply(f),
+                          ),
+                          IconButton(
+                            tooltip: '删除',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              final confirmed = await _confirmAdminDangerAction(
+                                context: context,
+                                title: '删除反馈？',
+                                message: '将删除 ${f['username']} 的这条反馈，删除后无法恢复。',
+                              );
+                              if (!confirmed) return;
+                              try {
+                                await widget.api.deleteFeedback(
+                                  (f['id'] as num).toInt(),
+                                );
+                                await _load(
+                                  offset: _offsetAfterAdminDelete(
+                                    offset: _offset,
+                                    itemCount: _items.length,
+                                    pageSize: _pageSize,
+                                  ),
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('反馈已删除')),
+                                );
+                              } on ApiException catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.message)),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
+          _AdminPaginationBar(
+            barKey: const ValueKey('admin_feedback_pagination'),
+            page: _page,
+            loading: _loading,
+            pageSize: _pageSize,
+            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+            onPrevious: () =>
+                _load(offset: _previousAdminOffset(_offset, _pageSize)),
+            onNext: () => _load(offset: _offset + _pageSize),
+            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+          ),
         ],
       ),
     );
@@ -2152,7 +4581,22 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         selected: selected,
         onSelected: (_) {
           setState(() => _filter = value);
-          _load();
+          _load(offset: 0);
+        },
+      ),
+    );
+  }
+
+  Widget _categoryChip(String label, String value) {
+    final selected = _categoryFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) {
+          setState(() => _categoryFilter = value);
+          _load(offset: 0);
         },
       ),
     );
@@ -2172,7 +4616,15 @@ class _InvitesTab extends StatefulWidget {
 
 class _InvitesTabState extends State<_InvitesTab> {
   List<Map<String, dynamic>> _codes = [];
+  AdminPage? _page;
   bool _loading = true;
+  String? _error;
+  String _status = '';
+  String _query = '';
+  String _sort = 'created_desc';
+  int _pageSize = _adminPageSize;
+  int _offset = 0;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -2180,12 +4632,56 @@ class _InvitesTabState extends State<_InvitesTab> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({
+    int? offset,
+    String? status,
+    String? query,
+    String? sort,
+    int? pageSize,
+  }) async {
+    final nextOffset = offset ?? _offset;
+    final nextStatus = status ?? _status;
+    final nextQuery = query ?? _query;
+    final nextSort = sort ?? _sort;
+    final nextPageSize = pageSize ?? _pageSize;
+    _offset = nextOffset;
+    _status = nextStatus;
+    _query = nextQuery;
+    _sort = nextSort;
+    _pageSize = nextPageSize;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      _codes = await widget.api.listInviteCodes();
-    } catch (_) {}
+      final page = await widget.api.listInviteCodesPage(
+        query: nextQuery.isEmpty ? null : nextQuery,
+        status: nextStatus.isEmpty ? null : nextStatus,
+        sort: nextSort,
+        limit: nextPageSize,
+        offset: nextOffset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _page = page;
+        _codes = page.items;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = _adminErrorMessage(e, '邀请码列表'));
+      }
+    }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _applySearch() {
+    _load(query: _searchCtrl.text.trim(), offset: 0);
   }
 
   Future<void> _generate() async {
@@ -2241,7 +4737,7 @@ class _InvitesTabState extends State<_InvitesTab> {
         count: count,
         note: note,
       );
-      await _load();
+      await _load(offset: 0);
       if (!mounted) return;
       await showDialog(
         context: context,
@@ -2278,79 +4774,455 @@ class _InvitesTabState extends State<_InvitesTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final loadingFirstPage = _loading && _page == null;
     return Scaffold(
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _codes.isEmpty
-          ? const EmptyState(icon: Icons.vpn_key_outlined, message: '尚无邀请码')
-          : ListView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: _codes.length,
-              itemBuilder: (_, i) {
-                final c = _codes[i];
-                final used = (c['used_by'] ?? '').toString().isNotEmpty;
-                return AppListTileCard(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: (used ? Colors.grey : Colors.blue).withValues(
-                        alpha: 0.12,
+      body: Column(
+        children: [
+          AppSectionHeader(
+            title: '邀请码列表',
+            subtitle: _adminPageSummary(_page),
+            actionLabel: '刷新',
+            actionIcon: Icons.refresh,
+            onAction: _loading ? null : () => _load(offset: _offset),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: '搜索邀请码、备注或使用者',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清空邀请码搜索',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _load(query: '', offset: 0);
+                        },
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      used ? Icons.check_circle : Icons.key,
-                      color: used ? Colors.grey : Colors.blue,
-                    ),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: SelectableText(
-                          c['code'].toString(),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w400,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      AppStatusBadge(
-                        label: used ? '已使用' : '未使用',
-                        color: used ? Colors.grey : Colors.blue,
-                      ),
-                    ],
-                  ),
-                  subtitle: Text(
-                    used
-                        ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']}'
-                        : '创建 ${c['created_at']}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                    ),
-                  ),
-                  trailing: used
-                      ? null
-                      : IconButton(
-                          tooltip: '删除',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () async {
-                            await widget.api.deleteInviteCode(
-                              c['code'].toString(),
-                            );
-                            _load();
-                          },
-                        ),
-                );
-              },
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _applySearch(),
             ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                _inviteStatusChip('全部邀请码', ''),
+                _inviteStatusChip('未使用', 'unused'),
+                _inviteStatusChip('已使用', 'used'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: AppDropdownField<String>(
+              initialValue: _sort,
+              labelText: '邀请码排序',
+              items: const [
+                DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
+                DropdownMenuItem(value: 'used_desc', child: Text('最近使用优先')),
+                DropdownMenuItem(value: 'code_asc', child: Text('邀请码 A-Z')),
+                DropdownMenuItem(value: 'note_asc', child: Text('备注 A-Z')),
+              ],
+              onChanged: (value) =>
+                  _load(sort: value ?? 'created_desc', offset: 0),
+            ),
+          ),
+          if (loadingFirstPage)
+            const Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('正在加载邀请码列表…'),
+                  ],
+                ),
+              ),
+            )
+          else if (_error != null)
+            Expanded(
+              child: _AdminErrorState(
+                message: _error!,
+                onRetry: () => _load(offset: _offset),
+              ),
+            )
+          else if (_codes.isEmpty)
+            const Expanded(
+              child: EmptyState(
+                icon: Icons.vpn_key_outlined,
+                message: '当前筛选下没有邀请码。可搜索邀请码、备注或使用者；邀请码较多时请用底部分页查看其他页面。',
+              ),
+            )
+          else
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => _load(offset: _offset),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _codes.length,
+                  itemBuilder: (_, i) {
+                    final c = _codes[i];
+                    final used = (c['used_by'] ?? '').toString().isNotEmpty;
+                    return AppListTileCard(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: (used ? Colors.grey : Colors.blue).withValues(
+                            alpha: 0.12,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          used ? Icons.check_circle : Icons.key,
+                          color: used ? Colors.grey : Colors.blue,
+                        ),
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: SelectableText(
+                              c['code'].toString(),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          AppStatusBadge(
+                            label: used ? '已使用' : '未使用',
+                            color: used ? Colors.grey : Colors.blue,
+                          ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        used
+                            ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']} · 排序: ${_adminInviteSortLabel(_sort)}'
+                            : '创建 ${c['created_at']} · 排序: ${_adminInviteSortLabel(_sort)}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
+                      ),
+                      trailing: used
+                          ? null
+                          : IconButton(
+                              tooltip: '删除',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () async {
+                                final code = c['code'].toString();
+                                final confirmed =
+                                    await _confirmAdminDangerAction(
+                                      context: context,
+                                      title: '删除邀请码？',
+                                      message: '将删除未使用的邀请码 $code，删除后无法恢复。',
+                                    );
+                                if (!confirmed) return;
+                                await widget.api.deleteInviteCode(code);
+                                await _load(
+                                  offset: _offsetAfterAdminDelete(
+                                    offset: _offset,
+                                    itemCount: _codes.length,
+                                    pageSize: _pageSize,
+                                  ),
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('邀请码已删除')),
+                                );
+                              },
+                            ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          _AdminPaginationBar(
+            page: _page,
+            loading: _loading,
+            pageSize: _pageSize,
+            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+            onPrevious: () =>
+                _load(offset: _previousAdminOffset(_offset, _pageSize)),
+            onNext: () => _load(offset: _offset + _pageSize),
+            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _generate,
         icon: const Icon(Icons.add),
         label: const Text('生成'),
+      ),
+    );
+  }
+
+  Widget _inviteStatusChip(String label, String value) {
+    final selected = _status == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _load(status: value, offset: 0),
+      ),
+    );
+  }
+}
+
+// ====================================================================
+// 审计日志
+// ====================================================================
+
+class _AuditLogTab extends StatefulWidget {
+  final AdminApi api;
+  const _AuditLogTab({required this.api});
+  @override
+  State<_AuditLogTab> createState() => _AuditLogTabState();
+}
+
+class _AuditLogTabState extends State<_AuditLogTab> {
+  List<Map<String, dynamic>> _items = [];
+  AdminPage? _page;
+  bool _loading = true;
+  String? _error;
+  String _action = '';
+  String _query = '';
+  String _sort = 'created_desc';
+  int _pageSize = _adminPageSize;
+  int _offset = 0;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({
+    int? offset,
+    String? action,
+    String? query,
+    String? sort,
+    int? pageSize,
+  }) async {
+    final nextOffset = offset ?? _offset;
+    final nextAction = action ?? _action;
+    final nextQuery = query ?? _query;
+    final nextSort = sort ?? _sort;
+    final nextPageSize = pageSize ?? _pageSize;
+    _offset = nextOffset;
+    _action = nextAction;
+    _query = nextQuery;
+    _sort = nextSort;
+    _pageSize = nextPageSize;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await widget.api.auditLogPage(
+        action: nextAction.isEmpty ? null : nextAction,
+        query: nextQuery.isEmpty ? null : nextQuery,
+        sort: nextSort,
+        limit: nextPageSize,
+        offset: nextOffset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _page = page;
+        _items = page.items;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = _adminErrorMessage(e, '审计日志'));
+      }
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _applySearch() {
+    _load(query: _searchCtrl.text.trim(), offset: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final loadingFirstPage = _loading && _page == null;
+    return Column(
+      children: [
+        AppSectionHeader(
+          title: '审计日志',
+          subtitle: _adminPageSummary(_page),
+          actionLabel: '刷新',
+          actionIcon: Icons.refresh,
+          onAction: _loading ? null : () => _load(offset: _offset),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              hintText: '搜索管理员、操作、对象或详情',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空日志搜索',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        _load(query: '', offset: 0);
+                      },
+                    ),
+              isDense: true,
+            ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _applySearch(),
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Row(
+            children: [
+              _actionChip('全部操作', ''),
+              _actionChip('更新用户', 'user.update'),
+              _actionChip('公告', 'announcement.update'),
+              _actionChip('回复反馈', 'feedback.reply'),
+              _actionChip('邀请码', 'invite.create'),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: AppDropdownField<String>(
+            initialValue: _sort,
+            labelText: '日志排序',
+            items: const [
+              DropdownMenuItem(value: 'created_desc', child: Text('最新操作优先')),
+              DropdownMenuItem(value: 'actor_asc', child: Text('管理员 A-Z')),
+              DropdownMenuItem(value: 'action_asc', child: Text('操作类型 A-Z')),
+              DropdownMenuItem(value: 'target_asc', child: Text('对象 A-Z')),
+            ],
+            onChanged: (value) =>
+                _load(sort: value ?? 'created_desc', offset: 0),
+          ),
+        ),
+        if (loadingFirstPage)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('正在加载审计日志…'),
+                ],
+              ),
+            ),
+          )
+        else if (_error != null)
+          Expanded(
+            child: _AdminErrorState(
+              message: _error!,
+              onRetry: () => _load(offset: _offset),
+            ),
+          )
+        else if (_items.isEmpty)
+          const Expanded(
+            child: EmptyState(
+              icon: Icons.receipt_long_outlined,
+              message: '当前筛选下没有审计日志。管理员操作较多时可搜索管理员、操作或对象，并使用底部分页查看。',
+            ),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => _load(offset: _offset),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: _items.length,
+                itemBuilder: (_, i) {
+                  final item = _items[i];
+                  final action = (item['action'] ?? '').toString();
+                  final actor = (item['actor_name'] ?? item['actor'] ?? '-')
+                      .toString();
+                  final target = (item['target'] ?? '').toString();
+                  final detail = (item['detail'] ?? '').toString();
+                  final createdAt = (item['created_at'] ?? '').toString();
+                  return AppListTileCard(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    leading: Icon(
+                      Icons.receipt_long_outlined,
+                      color: cs.primary,
+                    ),
+                    title: Text(
+                      '${_auditActionLabel(action)} · $actor',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    subtitle: Text(
+                      [
+                        if (createdAt.isNotEmpty) createdAt,
+                        '排序: ${_adminAuditSortLabel(_sort)}',
+                        if (target.isNotEmpty) '对象: $target',
+                        if (detail.isNotEmpty) '详情: $detail',
+                      ].join('\n'),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.64),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        _AdminPaginationBar(
+          page: _page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionChip(String label, String value) {
+    final selected = _action == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _load(action: value, offset: 0),
       ),
     );
   }

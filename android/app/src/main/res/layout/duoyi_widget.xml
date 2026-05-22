@@ -17,7 +17,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="指尖时光"
+            android:text="多仪"
             android:textColor="#FF6B6B"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -153,6 +153,39 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:text="今日日程"
+        android:textColor="#666666"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/widget_goal_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="目标 · 暂无进行中目标"
+        android:textColor="#666666"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/widget_anniversary_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="纪念日 · 暂无近期纪念日"
+        android:textColor="#666666"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/widget_course_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="课程 · 今日暂无课程"
         android:textColor="#666666"
         android:textSize="10sp" />
 

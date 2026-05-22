@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/anniversary.dart';
+import 'cloud_sync_provider.dart';
 
 class AnniversaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_anniversaries_v2';
@@ -47,14 +48,16 @@ class AnniversaryProvider extends ChangeNotifier {
     if (_items.isEmpty && legacy.isNotEmpty) {
       for (final s in legacy) {
         final j = jsonDecode(s);
-        _items.add(Anniversary(
-          id: j['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-          title: j['title'] ?? '',
-          originDate: DateTime.parse(j['targetDate']),
-          type: AnniversaryType.normal,
-          calendarType: AnniversaryCalendarType.solar,
-          isPinned: j['isPinned'] ?? false,
-        ));
+        _items.add(
+          Anniversary(
+            id: j['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            title: j['title'] ?? '',
+            originDate: DateTime.parse(j['targetDate']),
+            type: AnniversaryType.normal,
+            calendarType: AnniversaryCalendarType.solar,
+            isPinned: j['isPinned'] ?? false,
+          ),
+        );
       }
       await _save();
     }
@@ -64,13 +67,41 @@ class AnniversaryProvider extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
-        _key, _items.map((e) => jsonEncode(e.toJson())).toList());
+      _key,
+      _items.map((e) => jsonEncode(e.toJson())).toList(),
+    );
     notifyListeners();
   }
 
   Future<void> add(Anniversary item) async {
     _items.add(item);
     await _save();
+  }
+
+  Future<AnniversaryImportSummary> importAnniversaries(
+    Iterable<Anniversary> items,
+  ) async {
+    var inserted = 0;
+    var skippedDuplicates = 0;
+    final seen = _items.map(_importDuplicateKey).toSet();
+    for (final item in items) {
+      if (item.title.trim().isEmpty) continue;
+      final key = _importDuplicateKey(item);
+      if (seen.contains(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seen.add(key);
+      _items.add(item);
+      inserted++;
+    }
+    if (inserted > 0) {
+      await _save();
+    }
+    return AnniversaryImportSummary(
+      inserted: inserted,
+      skippedDuplicates: skippedDuplicates,
+    );
   }
 
   Future<void> update(Anniversary item) async {
@@ -82,6 +113,7 @@ class AnniversaryProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    await CloudSyncProvider.recordDeletedItem('anniversaries', id);
     _items.removeWhere((e) => e.id == id);
     await _save();
   }
@@ -93,4 +125,23 @@ class AnniversaryProvider extends ChangeNotifier {
       await _save();
     }
   }
+}
+
+class AnniversaryImportSummary {
+  final int inserted;
+  final int skippedDuplicates;
+
+  const AnniversaryImportSummary({
+    required this.inserted,
+    required this.skippedDuplicates,
+  });
+}
+
+String _importDuplicateKey(Anniversary item) {
+  return [
+    item.title.trim().toLowerCase(),
+    item.originDate.toIso8601String(),
+    item.type.index,
+    item.calendarType.index,
+  ].join('|');
 }

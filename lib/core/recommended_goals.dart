@@ -16,6 +16,7 @@ library;
 
 import 'package:uuid/uuid.dart';
 
+import 'i18n.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
 
@@ -68,7 +69,127 @@ class RecommendedGoal {
     this.timeTargetSeconds,
     this.dailyTargetCount,
   });
+
+  String get localizedTitle {
+    return I18n.current == AppLocale.en ? (_enText[id]?.title ?? title) : title;
+  }
+
+  String get localizedDescription {
+    return I18n.current == AppLocale.en
+        ? (_enText[id]?.description ?? description)
+        : description;
+  }
 }
+
+class _RecommendedGoalText {
+  final String title;
+  final String description;
+
+  const _RecommendedGoalText(this.title, this.description);
+}
+
+const Map<String, _RecommendedGoalText> _enText = {
+  'rec.recommend.drink_water': _RecommendedGoalText(
+    'Drink water daily',
+    'Build a steady hydration rhythm for clearer focus.',
+  ),
+  'rec.recommend.early_sleep': _RecommendedGoalText(
+    'Sleep early',
+    'Put the phone down before 11 PM and reduce screen light before bed.',
+  ),
+  'rec.recommend.morning_meditation': _RecommendedGoalText(
+    'Morning meditation',
+    'Start the day with 10 minutes of breathing and awareness.',
+  ),
+  'rec.recommend.daily_journal': _RecommendedGoalText(
+    'Daily journal',
+    'Capture the day and your mood in a few short lines.',
+  ),
+  'rec.recommend.daily_review': _RecommendedGoalText(
+    'Daily review',
+    'Spend 5 minutes before bed reviewing today and planning tomorrow.',
+  ),
+  'rec.health.walk_8000': _RecommendedGoalText(
+    'Walk 8,000 steps',
+    'Commutes, walks, and stairs all count toward the daily goal.',
+  ),
+  'rec.health.water_8_glasses': _RecommendedGoalText(
+    'Eight glasses of water',
+    'Drink one glass every two hours to stay hydrated.',
+  ),
+  'rec.health.annual_checkup': _RecommendedGoalText(
+    'Annual health checkup',
+    'Schedule a full checkup once a year and track body changes.',
+  ),
+  'rec.health.eye_massage': _RecommendedGoalText(
+    'Eye massage before bed',
+    'Press around the eyes for 2 minutes to ease screen fatigue.',
+  ),
+  'rec.health.daily_breakfast': _RecommendedGoalText(
+    'Eat breakfast',
+    'Give your body a stable start and avoid low blood sugar.',
+  ),
+  'rec.study.read_30min': _RecommendedGoalText(
+    'Read 30 minutes',
+    'Paper or ebook, the goal is to start reading first.',
+  ),
+  'rec.study.english_words': _RecommendedGoalText(
+    'Review English words',
+    'Learn 50 new words and review yesterday’s list every day.',
+  ),
+  'rec.study.weekly_summary': _RecommendedGoalText(
+    'Weekly summary',
+    'Spend 20 minutes on Sunday reviewing the week and planning ahead.',
+  ),
+  'rec.study.new_skill_1h': _RecommendedGoalText(
+    'Learn a new skill',
+    'Pick 3 random days each week and practice with focus for 1 hour.',
+  ),
+  'rec.study.mooc_homework': _RecommendedGoalText(
+    'Finish MOOC homework',
+    'Reserve Tuesday and Thursday evenings for course assignments.',
+  ),
+  'rec.sport.running_3x_week': _RecommendedGoalText(
+    'Run 3 times a week',
+    'Run 5 km on Monday, Wednesday, and Friday for at least 15 km weekly.',
+  ),
+  'rec.sport.pushups': _RecommendedGoalText(
+    'Push-up check-in',
+    'Do 20 standard push-ups each day to build upper-body strength.',
+  ),
+  'rec.sport.core_15min': _RecommendedGoalText(
+    'Core training 15 min',
+    'Rotate planks, crunches, and glute bridges for core stability.',
+  ),
+  'rec.sport.stairs_over_elevator': _RecommendedGoalText(
+    'Take stairs',
+    'Use the stairs within 6 floors and turn commuting into training.',
+  ),
+  'rec.sport.weekend_cycling': _RecommendedGoalText(
+    'Weekend cycling',
+    'Ride outdoors for at least 1 hour on Saturday or Sunday.',
+  ),
+  'rec.emotion.gratitude_3': _RecommendedGoalText(
+    'Three gratitudes',
+    'Write down three small things that made today feel warmer.',
+  ),
+  'rec.emotion.family_call': _RecommendedGoalText(
+    'Call family',
+    'Call at least once a week, even briefly, just to stay connected.',
+  ),
+  'rec.emotion.mood_diary': _RecommendedGoalText(
+    'Mood diary',
+    'Record the day’s emotional changes with colors or keywords.',
+  ),
+  'rec.emotion.breathing_10min': _RecommendedGoalText(
+    'Breathing relax 10 min',
+    'Use 4-7-8 breathing and white noise to release tension.',
+  ),
+  'rec.emotion.friend_greeting': _RecommendedGoalText(
+    'Greet a friend',
+    'Pick two days a week to message a friend you have not contacted lately.',
+  ),
+};
 
 /// 推荐目标库的只读入口。
 ///
@@ -399,10 +520,7 @@ class RecommendedGoalsLibrary {
         frequency: RecurrenceFrequency.weekly,
         interval: 1,
       ),
-      scheduling: GoalScheduling.random(
-        minGapDays: 1,
-        maxPerWeek: 3,
-      ),
+      scheduling: GoalScheduling.random(minGapDays: 1, maxPerWeek: 3),
       skipHolidays: true,
       focusLink: FocusLink(
         enabled: true,
@@ -556,10 +674,7 @@ class RecommendedGoalsLibrary {
         frequency: RecurrenceFrequency.weekly,
         interval: 1,
       ),
-      scheduling: GoalScheduling.random(
-        minGapDays: 1,
-        maxPerWeek: 1,
-      ),
+      scheduling: GoalScheduling.random(minGapDays: 1, maxPerWeek: 1),
       skipHolidays: false,
       focusLink: FocusLink(
         enabled: true,
@@ -610,10 +725,7 @@ class RecommendedGoalsLibrary {
         frequency: RecurrenceFrequency.weekly,
         interval: 1,
       ),
-      scheduling: GoalScheduling.random(
-        minGapDays: 1,
-        maxPerWeek: 1,
-      ),
+      scheduling: GoalScheduling.random(minGapDays: 1, maxPerWeek: 1),
       skipHolidays: false,
       reminder: ReminderConfig(
         enabled: true,
@@ -680,10 +792,7 @@ class RecommendedGoalsLibrary {
         frequency: RecurrenceFrequency.weekly,
         interval: 1,
       ),
-      scheduling: GoalScheduling.random(
-        minGapDays: 2,
-        maxPerWeek: 2,
-      ),
+      scheduling: GoalScheduling.random(minGapDays: 2, maxPerWeek: 2),
       skipHolidays: false,
       reminder: ReminderConfig(
         enabled: true,
@@ -723,8 +832,8 @@ class RecommendedGoalsLibrary {
     final today = DateTime(now.year, now.month, now.day);
     return GoalItem(
       id: _uuid.v4(),
-      title: r.title,
-      description: r.description,
+      title: r.localizedTitle,
+      description: r.localizedDescription,
       icon: r.icon,
       colorValue: r.colorValue,
       startDate: today,

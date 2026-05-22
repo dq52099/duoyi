@@ -5,8 +5,11 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:duoyi/core/local_timezone_resolver.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   tearDown(() {
     LocalTimezoneResolver.debugSystemTimeZoneReader = null;
+    LocalTimezoneResolver.debugNativeSystemTimeZoneReader = null;
   });
 
   test('默认跟随手机系统时区，例如墨西哥城', () async {
@@ -20,14 +23,38 @@ void main() {
     expect(tz.local.name, 'America/Mexico_City');
   });
 
-  test('系统只返回 UTC 时才回退应用默认时区', () async {
+  test('flutter_timezone 返回 UTC 时优先使用 Android 原生手机时区', () async {
     SharedPreferences.setMockInitialValues({});
     LocalTimezoneResolver.debugSystemTimeZoneReader = () async => 'UTC';
+    LocalTimezoneResolver.debugNativeSystemTimeZoneReader = () async =>
+        'America/Mexico_City';
+
+    await LocalTimezoneResolver.refresh();
+
+    expect(LocalTimezoneResolver.currentIana, 'America/Mexico_City');
+    expect(tz.local.name, 'America/Mexico_City');
+  });
+
+  test('系统和原生都只返回 UTC 类时区时才回退应用默认时区', () async {
+    SharedPreferences.setMockInitialValues({});
+    LocalTimezoneResolver.debugSystemTimeZoneReader = () async => 'Etc/UTC';
+    LocalTimezoneResolver.debugNativeSystemTimeZoneReader = () async => 'GMT';
 
     await LocalTimezoneResolver.refresh();
 
     expect(LocalTimezoneResolver.currentIana, 'Asia/Shanghai');
-    expect(tz.local.name, isNot('UTC'));
+    expect(tz.local.name, isNot(anyOf('UTC', 'Etc/UTC', 'GMT', 'Etc/GMT')));
+  });
+
+  test('Android 非 IANA 的墨西哥时区名称会归一为墨西哥城', () async {
+    SharedPreferences.setMockInitialValues({});
+    LocalTimezoneResolver.debugSystemTimeZoneReader = () async =>
+        'Central Standard Time (Mexico)';
+
+    await LocalTimezoneResolver.refresh();
+
+    expect(LocalTimezoneResolver.currentIana, 'America/Mexico_City');
+    expect(tz.local.name, 'America/Mexico_City');
   });
 
   test('固定保存的 UTC 会被迁移回应用默认时区', () async {

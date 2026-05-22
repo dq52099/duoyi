@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/i18n_date_format.dart';
 import '../models/recurrence.dart';
 import 'app_date_picker.dart';
 import 'surface_components.dart';
@@ -6,15 +7,24 @@ import 'surface_components.dart';
 /// 重复规则编辑弹出层。
 class RecurrencePicker extends StatefulWidget {
   final RecurrenceRule initial;
-  const RecurrencePicker({super.key, required this.initial});
+  final bool supportMaxOccurrences;
+  const RecurrencePicker({
+    super.key,
+    required this.initial,
+    this.supportMaxOccurrences = true,
+  });
 
   static Future<RecurrenceRule?> show(
     BuildContext context, {
     required RecurrenceRule initial,
+    bool supportMaxOccurrences = true,
   }) {
     return showAppModalSheet<RecurrenceRule>(
       context: context,
-      builder: (_) => RecurrencePicker(initial: initial),
+      builder: (_) => RecurrencePicker(
+        initial: initial,
+        supportMaxOccurrences: supportMaxOccurrences,
+      ),
     );
   }
 
@@ -26,8 +36,11 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
   late RecurrenceFrequency _freq;
   late int _interval;
   late List<int> _weekdays;
+  late final TextEditingController _intervalCtrl;
+  late final TextEditingController _maxOccurrencesCtrl;
   int? _byMonthDay;
   DateTime? _endDate;
+  int? _maxOccurrences;
 
   @override
   void initState() {
@@ -35,15 +48,29 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
     _freq = widget.initial.frequency;
     _interval = widget.initial.interval;
     _weekdays = [...?widget.initial.byWeekdays];
+    _intervalCtrl = TextEditingController(text: '$_interval');
+    _maxOccurrences = widget.initial.maxOccurrences;
+    _maxOccurrencesCtrl = TextEditingController(
+      text: _maxOccurrences?.toString() ?? '',
+    );
     _byMonthDay = widget.initial.byMonthDay;
     _endDate = widget.initial.endDate;
+  }
+
+  @override
+  void dispose() {
+    _intervalCtrl.dispose();
+    _maxOccurrencesCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AppModalSheet(
       title: '重复',
-      subtitle: '设置循环频率、间隔和结束日期',
+      subtitle: widget.supportMaxOccurrences
+          ? '设置循环频率、间隔、结束日期和重复次数'
+          : '设置循环频率、间隔和结束日期',
       leadingActions: [
         TextButton(
           onPressed: () => Navigator.pop(context, const RecurrenceRule()),
@@ -69,6 +96,11 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                   ? _byMonthDay
                   : null,
               endDate: _endDate,
+              maxOccurrences:
+                  _freq == RecurrenceFrequency.none ||
+                      !widget.supportMaxOccurrences
+                  ? null
+                  : _maxOccurrences,
             ),
           ),
           child: const Text('保存'),
@@ -99,11 +131,13 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                   child: TextField(
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
-                    controller: TextEditingController(text: '$_interval'),
+                    controller: _intervalCtrl,
                     decoration: const InputDecoration(isDense: true),
                     onChanged: (v) {
                       final n = int.tryParse(v);
-                      if (n != null && n > 0) _interval = n;
+                      if (n != null && n > 0) {
+                        setState(() => _interval = n);
+                      }
                     },
                   ),
                 ),
@@ -174,9 +208,7 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
               leading: const Icon(Icons.event_busy, size: 18),
               title: const Text('结束日期 (可选)'),
               subtitle: Text(
-                _endDate == null
-                    ? '永不结束'
-                    : '${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}',
+                _endDate == null ? '永不结束' : I18nDateFormat.date(_endDate!),
               ),
               trailing: _endDate == null
                   ? const Icon(Icons.chevron_right)
@@ -196,6 +228,44 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                 if (picked != null) setState(() => _endDate = picked);
               },
             ),
+            if (widget.supportMaxOccurrences) ...[
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.repeat_one, size: 18),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextField(
+                      controller: _maxOccurrencesCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '重复次数 (可选)',
+                        helperText: '留空表示不限次数；例如 10 表示共 10 次',
+                      ),
+                      onChanged: (v) {
+                        final text = v.trim();
+                        final n = int.tryParse(text);
+                        setState(() {
+                          _maxOccurrences = text.isEmpty || n == null || n < 1
+                              ? null
+                              : n;
+                        });
+                      },
+                    ),
+                  ),
+                  if (_maxOccurrences != null)
+                    IconButton(
+                      tooltip: '清除重复次数',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() {
+                        _maxOccurrences = null;
+                        _maxOccurrencesCtrl.clear();
+                      }),
+                    ),
+                ],
+              ),
+            ],
           ],
         ],
       ),

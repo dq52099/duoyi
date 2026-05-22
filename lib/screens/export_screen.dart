@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/i18n.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/countdown_provider.dart';
@@ -11,6 +12,7 @@ import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/todo_provider.dart';
+import '../services/calendar_sync_service.dart';
 import '../services/ics_exporter.dart';
 import '../widgets/surface_components.dart';
 
@@ -26,8 +28,9 @@ class _ExportScreenState extends State<ExportScreen> {
   bool _includeAnniversaries = true;
   bool _includeCalendar = true;
   String? _ics;
+  bool _pushingCalDav = false;
 
-  void _generate() {
+  void _rebuildCalendarIndex() {
     final ann = context.read<AnniversaryProvider>();
     final cal = context.read<CalendarProvider>();
 
@@ -44,6 +47,12 @@ class _ExportScreenState extends State<ExportScreen> {
       countdowns: context.read<CountdownProvider>().items,
       goals: context.read<GoalProvider>().goals,
     );
+  }
+
+  void _generate() {
+    _rebuildCalendarIndex();
+    final ann = context.read<AnniversaryProvider>();
+    final cal = context.read<CalendarProvider>();
 
     final sb = StringBuffer();
     if (_includeAnniversaries) {
@@ -55,21 +64,61 @@ class _ExportScreenState extends State<ExportScreen> {
     setState(() => _ics = sb.toString());
   }
 
+  Future<void> _pushCalDav() async {
+    final sync = context.read<CalendarSyncProvider>();
+    if (sync.writeTarget?.isConfigured != true) return;
+    setState(() => _pushingCalDav = true);
+    try {
+      _rebuildCalendarIndex();
+      final count = await sync.pushEventsToCalDav(
+        context.read<CalendarProvider>().events,
+      );
+      if (!mounted) return;
+      final conflicts = sync.lastCalDavConflicts.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            conflicts == 0
+                ? '${I18n.tr('export.caldav.success.prefix')}$count'
+                      '${I18n.tr('export.caldav.success.suffix')}'
+                : '${I18n.tr('export.caldav.conflict.prefix')}$count'
+                      '${I18n.tr('export.caldav.conflict.middle')}$conflicts'
+                      '${I18n.tr('export.caldav.conflict.suffix')}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${I18n.tr('export.caldav.failed_prefix')}$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _pushingCalDav = false);
+    }
+  }
+
   Future<void> _copy() async {
     if (_ics == null) return;
     await Clipboard.setData(ClipboardData(text: _ics!));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已复制 .ics 内容')));
+    ).showSnackBar(SnackBar(content: Text(I18n.tr('export.copy.done'))));
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final calendarSync = context.watch<CalendarSyncProvider>();
+    final canPushCalDav =
+        _includeCalendar && calendarSync.writeTarget?.isConfigured == true;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('导出为日历 (.ics)')),
+      appBar: AppBar(title: Text(I18n.tr('export.title'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         children: [
@@ -101,7 +150,7 @@ class _ExportScreenState extends State<ExportScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '日历导出',
+                        I18n.tr('export.hero.title'),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w400,
@@ -110,7 +159,7 @@ class _ExportScreenState extends State<ExportScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '生成一份 iCalendar 文件，可粘贴到系统日历、Google Calendar 或 Outlook。',
+                        I18n.tr('export.hero.subtitle'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.66),
                         ),
@@ -123,33 +172,50 @@ class _ExportScreenState extends State<ExportScreen> {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '导出范围',
-            subtitle: '选择要包含的内容',
+            title: I18n.tr('export.range.title'),
+            subtitle: I18n.tr('export.range.subtitle'),
             children: [
               AppSwitchTile(
                 icon: Icons.cake_outlined,
                 color: Colors.pink,
-                title: '包含纪念日与生日',
-                subtitle: 'YEARLY 循环事件',
+                title: I18n.tr('export.include_anniversaries'),
+                subtitle: I18n.tr('export.include_anniversaries.subtitle'),
                 value: _includeAnniversaries,
                 onChanged: (v) => setState(() => _includeAnniversaries = v),
               ),
               AppSwitchTile(
                 icon: Icons.calendar_month_outlined,
                 color: Colors.blue,
-                title: '包含日程总表',
-                subtitle: '待办、习惯、课程、日记和目标',
+                title: I18n.tr('export.include_calendar'),
+                subtitle: I18n.tr('export.include_calendar.subtitle'),
                 value: _includeCalendar,
                 onChanged: (v) => setState(() => _includeCalendar = v),
               ),
               const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: _generate,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('生成 .ics'),
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: canPushCalDav && !_pushingCalDav
+                        ? _pushCalDav
+                        : null,
+                    icon: _pushingCalDav
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload_outlined),
+                    label: Text(I18n.tr('export.push_caldav')),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _generate,
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: Text(I18n.tr('export.generate_ics')),
+                  ),
+                ],
               ),
             ],
           ),
@@ -164,7 +230,7 @@ class _ExportScreenState extends State<ExportScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '导出内容',
+                          I18n.tr('export.content.title'),
                           style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(
                                 fontWeight: FontWeight.w400,
@@ -175,7 +241,7 @@ class _ExportScreenState extends State<ExportScreen> {
                       TextButton.icon(
                         onPressed: _copy,
                         icon: const Icon(Icons.copy, size: 14),
-                        label: const Text('复制'),
+                        label: Text(I18n.tr('export.copy')),
                       ),
                     ],
                   ),

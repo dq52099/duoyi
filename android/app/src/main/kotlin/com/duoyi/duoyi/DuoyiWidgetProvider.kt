@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.widget.RemoteViews
-import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
 import java.text.SimpleDateFormat
@@ -43,6 +42,34 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(
                 R.id.widget_today_event,
                 prefs.getString("today_event_summary", "今日没有日程") ?: "今日没有日程"
+            )
+            views.setTextViewText(
+                R.id.widget_goal_summary,
+                prefs.getString("goal_highlight_1", "暂无进行中目标") ?: "暂无进行中目标"
+            )
+            views.setTextViewText(
+                R.id.widget_anniversary_summary,
+                prefs.getString("anniversary_highlight_1", "暂无近期纪念日") ?: "暂无近期纪念日"
+            )
+            views.setTextViewText(
+                R.id.widget_course_summary,
+                prefs.getString("course_highlight_1", "今日暂无课程") ?: "今日暂无课程"
+            )
+            views.setViewVisibility(
+                R.id.widget_quick_row,
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+            )
+            views.setViewVisibility(
+                R.id.widget_goal_summary,
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+            )
+            views.setViewVisibility(
+                R.id.widget_anniversary_summary,
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+            )
+            views.setViewVisibility(
+                R.id.widget_course_summary,
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
@@ -102,9 +129,11 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 )
             )
 
-            // Quick start pomodoro: launch into focus tab with auto-start flag
-            val quickPomodoroIntent: PendingIntent = HomeWidgetBackgroundIntent.getBroadcast(
-                context, Uri.parse("duoyi://action/start_pomodoro")
+            // Quick start pomodoro: launch into focus tab with auto-start flag.
+            val quickPomodoroIntent: PendingIntent = HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java,
+                Uri.parse("duoyi://action/start_pomodoro")
             )
             views.setOnClickPendingIntent(R.id.widget_quick_pomodoro, quickPomodoroIntent)
 

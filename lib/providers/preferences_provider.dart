@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/local_timezone_resolver.dart';
+import '../core/notification_history_policy.dart';
+import '../core/report_reminder_config.dart';
 
 class DailyReminderSlot {
   final bool enabled;
@@ -63,6 +65,9 @@ class PreferencesProvider extends ChangeNotifier {
   static const _kShowCompletedTodos = 'pref_show_completed_todos';
   static const _kDefaultPomodoroMinutes = 'pref_default_pomodoro_minutes';
   static const _kQuickCaptureFab = 'pref_quick_capture_fab';
+  static const _kNotificationQuickAdd = 'pref_notification_quick_add';
+  static const _kNotificationHistoryLimit =
+      NotificationHistoryPolicy.preferenceKey;
   static const _kAutoArchiveCompletedDays = 'pref_auto_archive_completed_days';
   static const _kDailyReminderEnabled = 'pref_daily_reminder_enabled';
   static const _kDailyReminderHour = 'pref_daily_reminder_hour';
@@ -76,6 +81,29 @@ class PreferencesProvider extends ChangeNotifier {
   static const _kDailyReminderPauseHolidays =
       'pref_daily_reminder_pause_holidays';
   static const _kDailyReminderSlotPrefix = 'pref_daily_reminder_slot';
+  static const _kDailyReportReminder = 'pref_daily_report_reminder';
+  static const _kDailyReportReminderHour = 'pref_daily_report_reminder_hour';
+  static const _kDailyReportReminderMinute =
+      'pref_daily_report_reminder_minute';
+  static const _kWeeklyReportReminder = 'pref_weekly_report_reminder';
+  static const _kWeeklyReportReminderWeekday =
+      'pref_weekly_report_reminder_weekday';
+  static const _kWeeklyReportReminderHour = 'pref_weekly_report_reminder_hour';
+  static const _kWeeklyReportReminderMinute =
+      'pref_weekly_report_reminder_minute';
+  static const _kMonthlyReportReminder = 'pref_monthly_report_reminder';
+  static const _kMonthlyReportReminderDay = 'pref_monthly_report_reminder_day';
+  static const _kMonthlyReportReminderHour =
+      'pref_monthly_report_reminder_hour';
+  static const _kMonthlyReportReminderMinute =
+      'pref_monthly_report_reminder_minute';
+  static const _kYearlyReportReminder = 'pref_yearly_report_reminder';
+  static const _kYearlyReportReminderMonth =
+      'pref_yearly_report_reminder_month';
+  static const _kYearlyReportReminderDay = 'pref_yearly_report_reminder_day';
+  static const _kYearlyReportReminderHour = 'pref_yearly_report_reminder_hour';
+  static const _kYearlyReportReminderMinute =
+      'pref_yearly_report_reminder_minute';
   static const _kBottomNavOrder = 'pref_bottom_nav_order';
   static const _kBottomNavVisible = 'pref_bottom_nav_visible';
   static const _kAppTimeZone = LocalTimezoneResolver.preferenceKey;
@@ -91,6 +119,8 @@ class PreferencesProvider extends ChangeNotifier {
   bool _showCompletedTodos = false;
   int _defaultPomodoroMinutes = 25;
   bool _quickCaptureFab = true;
+  bool _notificationQuickAdd = false;
+  int _notificationHistoryLimit = NotificationHistoryPolicy.defaultLimit;
   int _autoArchiveCompletedDays = 0; // 0=不归档
   bool _dailyReminderEnabled = false;
   int _dailyReminderHour = 20;
@@ -105,6 +135,22 @@ class PreferencesProvider extends ChangeNotifier {
     DailyReminderSlot(hour: 8, enabled: false),
     DailyReminderSlot(hour: 22, enabled: false),
   ];
+  bool _dailyReportReminder = false;
+  int _dailyReportReminderHour = 21;
+  int _dailyReportReminderMinute = 30;
+  bool _weeklyReportReminder = false;
+  int _weeklyReportReminderWeekday = DateTime.monday;
+  int _weeklyReportReminderHour = 9;
+  int _weeklyReportReminderMinute = 0;
+  bool _monthlyReportReminder = false;
+  int _monthlyReportReminderDay = 1;
+  int _monthlyReportReminderHour = 9;
+  int _monthlyReportReminderMinute = 0;
+  bool _yearlyReportReminder = false;
+  int _yearlyReportReminderMonth = 1;
+  int _yearlyReportReminderDay = 1;
+  int _yearlyReportReminderHour = 9;
+  int _yearlyReportReminderMinute = 0;
   List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
   Set<int> _bottomNavVisible = const {0, 1, 2, 3, 4, 5, 6};
   String _appTimeZone = LocalTimezoneResolver.defaultIana;
@@ -118,6 +164,8 @@ class PreferencesProvider extends ChangeNotifier {
   bool get showCompletedTodos => _showCompletedTodos;
   int get defaultPomodoroMinutes => _defaultPomodoroMinutes;
   bool get quickCaptureFab => _quickCaptureFab;
+  bool get notificationQuickAdd => _notificationQuickAdd;
+  int get notificationHistoryLimit => _notificationHistoryLimit;
   int get autoArchiveCompletedDays => _autoArchiveCompletedDays;
   bool get dailyReminderEnabled => _dailyReminderEnabled;
   int get dailyReminderHour => _dailyReminderHour;
@@ -131,6 +179,46 @@ class PreferencesProvider extends ChangeNotifier {
   bool get dailyReminderPauseHolidays => _dailyReminderPauseHolidays;
   List<DailyReminderSlot> get dailyReminderSlots =>
       List.unmodifiable(_dailyReminderSlots);
+  bool get dailyReportReminder => _dailyReportReminder;
+  int get dailyReportReminderHour => _dailyReportReminderHour;
+  int get dailyReportReminderMinute => _dailyReportReminderMinute;
+  ReportReminderConfig get dailyReportReminderConfig => ReportReminderConfig(
+    enabled: _dailyReportReminder,
+    hour: _dailyReportReminderHour,
+    minute: _dailyReportReminderMinute,
+  );
+  bool get weeklyReportReminder => _weeklyReportReminder;
+  int get weeklyReportReminderWeekday => _weeklyReportReminderWeekday;
+  int get weeklyReportReminderHour => _weeklyReportReminderHour;
+  int get weeklyReportReminderMinute => _weeklyReportReminderMinute;
+  ReportReminderConfig get weeklyReportReminderConfig => ReportReminderConfig(
+    enabled: _weeklyReportReminder,
+    weekday: _weeklyReportReminderWeekday,
+    hour: _weeklyReportReminderHour,
+    minute: _weeklyReportReminderMinute,
+  );
+  bool get monthlyReportReminder => _monthlyReportReminder;
+  int get monthlyReportReminderDay => _monthlyReportReminderDay;
+  int get monthlyReportReminderHour => _monthlyReportReminderHour;
+  int get monthlyReportReminderMinute => _monthlyReportReminderMinute;
+  ReportReminderConfig get monthlyReportReminderConfig => ReportReminderConfig(
+    enabled: _monthlyReportReminder,
+    monthDay: _monthlyReportReminderDay,
+    hour: _monthlyReportReminderHour,
+    minute: _monthlyReportReminderMinute,
+  );
+  bool get yearlyReportReminder => _yearlyReportReminder;
+  int get yearlyReportReminderMonth => _yearlyReportReminderMonth;
+  int get yearlyReportReminderDay => _yearlyReportReminderDay;
+  int get yearlyReportReminderHour => _yearlyReportReminderHour;
+  int get yearlyReportReminderMinute => _yearlyReportReminderMinute;
+  ReportReminderConfig get yearlyReportReminderConfig => ReportReminderConfig(
+    enabled: _yearlyReportReminder,
+    month: _yearlyReportReminderMonth,
+    monthDay: _yearlyReportReminderDay,
+    hour: _yearlyReportReminderHour,
+    minute: _yearlyReportReminderMinute,
+  );
   List<int> get bottomNavOrder => List.unmodifiable(_bottomNavOrder);
   Set<int> get bottomNavVisible => Set.unmodifiable(_bottomNavVisible);
   String get appTimeZone => _appTimeZone;
@@ -187,6 +275,10 @@ class PreferencesProvider extends ChangeNotifier {
     _showCompletedTodos = p.getBool(_kShowCompletedTodos) ?? false;
     _defaultPomodoroMinutes = p.getInt(_kDefaultPomodoroMinutes) ?? 25;
     _quickCaptureFab = p.getBool(_kQuickCaptureFab) ?? true;
+    _notificationQuickAdd = p.getBool(_kNotificationQuickAdd) ?? false;
+    _notificationHistoryLimit = NotificationHistoryPolicy.normalize(
+      p.getInt(_kNotificationHistoryLimit),
+    );
     _autoArchiveCompletedDays = p.getInt(_kAutoArchiveCompletedDays) ?? 0;
     _dailyReminderEnabled = p.getBool(_kDailyReminderEnabled) ?? false;
     _dailyReminderHour = p.getInt(_kDailyReminderHour) ?? 20;
@@ -241,6 +333,39 @@ class PreferencesProvider extends ChangeNotifier {
         pauseHolidays: p.getBool('${prefix}_pause_holidays') ?? false,
       );
     });
+    _dailyReportReminder = p.getBool(_kDailyReportReminder) ?? false;
+    _dailyReportReminderHour = (p.getInt(_kDailyReportReminderHour) ?? 21)
+        .clamp(0, 23);
+    _dailyReportReminderMinute = (p.getInt(_kDailyReportReminderMinute) ?? 30)
+        .clamp(0, 59);
+    _weeklyReportReminder = p.getBool(_kWeeklyReportReminder) ?? false;
+    _weeklyReportReminderWeekday =
+        (p.getInt(_kWeeklyReportReminderWeekday) ?? DateTime.monday).clamp(
+          1,
+          7,
+        );
+    _weeklyReportReminderHour = (p.getInt(_kWeeklyReportReminderHour) ?? 9)
+        .clamp(0, 23);
+    _weeklyReportReminderMinute = (p.getInt(_kWeeklyReportReminderMinute) ?? 0)
+        .clamp(0, 59);
+    _monthlyReportReminder = p.getBool(_kMonthlyReportReminder) ?? false;
+    _monthlyReportReminderDay = (p.getInt(_kMonthlyReportReminderDay) ?? 1)
+        .clamp(1, 31);
+    _monthlyReportReminderHour = (p.getInt(_kMonthlyReportReminderHour) ?? 9)
+        .clamp(0, 23);
+    _monthlyReportReminderMinute =
+        (p.getInt(_kMonthlyReportReminderMinute) ?? 0).clamp(0, 59);
+    _yearlyReportReminder = p.getBool(_kYearlyReportReminder) ?? false;
+    _yearlyReportReminderMonth = (p.getInt(_kYearlyReportReminderMonth) ?? 1)
+        .clamp(1, 12);
+    _yearlyReportReminderDay = (p.getInt(_kYearlyReportReminderDay) ?? 1).clamp(
+      1,
+      31,
+    );
+    _yearlyReportReminderHour = (p.getInt(_kYearlyReportReminderHour) ?? 9)
+        .clamp(0, 23);
+    _yearlyReportReminderMinute = (p.getInt(_kYearlyReportReminderMinute) ?? 0)
+        .clamp(0, 59);
     _bottomNavOrder = _normalizeNavOrder(
       storedOrder?.map(int.tryParse).whereType<int>(),
     );
@@ -330,8 +455,95 @@ class PreferencesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setWeeklyReportReminder(bool value) async {
+    _weeklyReportReminder = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kWeeklyReportReminder, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReportReminder(bool value) async {
+    _dailyReportReminder = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReportReminder, value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReportReminderConfig(ReportReminderConfig config) async {
+    _dailyReportReminder = config.enabled;
+    _dailyReportReminderHour = config.hour.clamp(0, 23);
+    _dailyReportReminderMinute = config.minute.clamp(0, 59);
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDailyReportReminder, _dailyReportReminder);
+    await p.setInt(_kDailyReportReminderHour, _dailyReportReminderHour);
+    await p.setInt(_kDailyReportReminderMinute, _dailyReportReminderMinute);
+    notifyListeners();
+  }
+
+  Future<void> setWeeklyReportReminderConfig(
+    ReportReminderConfig config,
+  ) async {
+    _weeklyReportReminder = config.enabled;
+    _weeklyReportReminderWeekday = config.weekday.clamp(1, 7);
+    _weeklyReportReminderHour = config.hour.clamp(0, 23);
+    _weeklyReportReminderMinute = config.minute.clamp(0, 59);
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kWeeklyReportReminder, _weeklyReportReminder);
+    await p.setInt(_kWeeklyReportReminderWeekday, _weeklyReportReminderWeekday);
+    await p.setInt(_kWeeklyReportReminderHour, _weeklyReportReminderHour);
+    await p.setInt(_kWeeklyReportReminderMinute, _weeklyReportReminderMinute);
+    notifyListeners();
+  }
+
+  Future<void> setMonthlyReportReminder(bool value) async {
+    _monthlyReportReminder = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kMonthlyReportReminder, value);
+    notifyListeners();
+  }
+
+  Future<void> setMonthlyReportReminderConfig(
+    ReportReminderConfig config,
+  ) async {
+    _monthlyReportReminder = config.enabled;
+    _monthlyReportReminderDay = config.monthDay.clamp(1, 31);
+    _monthlyReportReminderHour = config.hour.clamp(0, 23);
+    _monthlyReportReminderMinute = config.minute.clamp(0, 59);
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kMonthlyReportReminder, _monthlyReportReminder);
+    await p.setInt(_kMonthlyReportReminderDay, _monthlyReportReminderDay);
+    await p.setInt(_kMonthlyReportReminderHour, _monthlyReportReminderHour);
+    await p.setInt(_kMonthlyReportReminderMinute, _monthlyReportReminderMinute);
+    notifyListeners();
+  }
+
+  Future<void> setYearlyReportReminder(bool value) async {
+    _yearlyReportReminder = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kYearlyReportReminder, value);
+    notifyListeners();
+  }
+
+  Future<void> setYearlyReportReminderConfig(
+    ReportReminderConfig config,
+  ) async {
+    _yearlyReportReminder = config.enabled;
+    _yearlyReportReminderMonth = config.month.clamp(1, 12);
+    _yearlyReportReminderDay = config.monthDay.clamp(1, 31);
+    _yearlyReportReminderHour = config.hour.clamp(0, 23);
+    _yearlyReportReminderMinute = config.minute.clamp(0, 59);
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kYearlyReportReminder, _yearlyReportReminder);
+    await p.setInt(_kYearlyReportReminderMonth, _yearlyReportReminderMonth);
+    await p.setInt(_kYearlyReportReminderDay, _yearlyReportReminderDay);
+    await p.setInt(_kYearlyReportReminderHour, _yearlyReportReminderHour);
+    await p.setInt(_kYearlyReportReminderMinute, _yearlyReportReminderMinute);
+    notifyListeners();
+  }
+
   Future<void> setBottomNavVisible(int tab, bool visible) async {
     if (tab < 0 || tab > 6) return;
+    if ((tab == 5 || tab == 6) && !visible) return;
     final next = {..._bottomNavVisible};
     if (visible) {
       next.add(tab);
@@ -382,6 +594,7 @@ class PreferencesProvider extends ChangeNotifier {
     }
     if (result.length < 2) return const {0, 1, 2, 3, 4, 5, 6};
     result.add(5);
+    result.add(6);
     return Set.unmodifiable(result);
   }
 
@@ -431,6 +644,20 @@ class PreferencesProvider extends ChangeNotifier {
     _quickCaptureFab = value;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kQuickCaptureFab, value);
+    notifyListeners();
+  }
+
+  Future<void> setNotificationQuickAdd(bool value) async {
+    _notificationQuickAdd = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kNotificationQuickAdd, value);
+    notifyListeners();
+  }
+
+  Future<void> setNotificationHistoryLimit(int value) async {
+    _notificationHistoryLimit = NotificationHistoryPolicy.normalize(value);
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kNotificationHistoryLimit, _notificationHistoryLimit);
     notifyListeners();
   }
 

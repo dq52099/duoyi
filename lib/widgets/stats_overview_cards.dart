@@ -4,6 +4,7 @@ import 'surface_components.dart';
 class StatsOverviewCard extends StatelessWidget {
   final String title;
   final String value;
+  final String? unit;
   final IconData icon;
   final Color color;
 
@@ -11,6 +12,7 @@ class StatsOverviewCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.value,
+    this.unit,
     required this.icon,
     required this.color,
   });
@@ -20,10 +22,10 @@ class StatsOverviewCard extends StatelessWidget {
     return AppMetricCard(
       title: title,
       value: value,
+      unit: unit,
       icon: icon,
       color: color,
-      padding: const EdgeInsets.all(16),
-      borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.all(10),
     );
   }
 }

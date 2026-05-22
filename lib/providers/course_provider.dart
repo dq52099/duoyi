@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course_schedule.dart';
+import 'cloud_sync_provider.dart';
 
 class CourseProvider extends ChangeNotifier {
   static const _coursesKey = 'duoyi_courses';
@@ -38,7 +39,9 @@ class CourseProvider extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
-        _coursesKey, _courses.map((e) => jsonEncode(e.toJson())).toList());
+      _coursesKey,
+      _courses.map((e) => jsonEncode(e.toJson())).toList(),
+    );
     await prefs.setString(_settingsKey, jsonEncode(_settings.toJson()));
     notifyListeners();
   }
@@ -73,6 +76,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    await CloudSyncProvider.recordDeletedItem('courses', id);
     _courses.removeWhere((c) => c.id == id);
     await _save();
   }

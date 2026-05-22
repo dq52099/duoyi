@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+import '../core/i18n.dart';
 import '../core/lunar_calendar.dart';
 import '../widgets/app_date_picker.dart';
 
-/// 黄历 / 万年历
+enum AlmanacEntryMode { calendar, almanac }
+
+/// 黄历与万年历共用日期算法，但入口默认侧重点不同。
 class AlmanacScreen extends StatefulWidget {
   final DateTime? initialDate;
-  const AlmanacScreen({super.key, this.initialDate});
+  final AlmanacEntryMode initialMode;
+
+  const AlmanacScreen({
+    super.key,
+    this.initialDate,
+    this.initialMode = AlmanacEntryMode.calendar,
+  });
 
   @override
   State<AlmanacScreen> createState() => _AlmanacScreenState();
@@ -37,6 +46,8 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAlmanac = widget.initialMode == AlmanacEntryMode.almanac;
+    final pageTitle = isAlmanac ? '黄历' : '万年历';
     final lunar = LunarCalendar.fromSolar(_date);
     final zodiac = LunarCalendar.zodiacOf(lunar.year);
     final ganzhi = LunarCalendar.ganzhiOf(lunar.year);
@@ -50,7 +61,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('黄历 · 万年历'),
+        title: Text(pageTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.today),
@@ -62,7 +73,6 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 主卡：大字公历 + 农历
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -133,42 +143,31 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                   spacing: 10,
                   runSpacing: 4,
                   children: [
-                    _chip('农历${lunar.chineseText}'),
-                    _chip('$ganzhi · 属$zodiac'),
+                    _chip(
+                      '${I18n.tr('calendar.chinese_lunar_calendar')} ${lunar.chineseText}',
+                    ),
+                    if (I18n.current == AppLocale.zh)
+                      _chip('$ganzhi · 属$zodiac'),
                     if (term != null) _chip('🌿 $term'),
                     if (solarFes != null) _chip('🎉 $solarFes'),
-                    if (lunarFes != null) _chip('🏮 $lunarFes'),
+                    if (lunarFes != null && I18n.current == AppLocale.zh)
+                      _chip('🏮 $lunarFes'),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          // 宜忌
-          Row(
-            children: [
-              Expanded(
-                child: _yijiCard(
-                  title: '宜',
-                  body: suitable,
-                  color: const Color(0xFF66BB6A),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _yijiCard(
-                  title: '忌',
-                  body: avoid,
-                  color: const Color(0xFFEF5350),
-                ),
-              ),
-            ],
-          ),
+          if (isAlmanac) ...[
+            _yijiRow(suitable: suitable, avoid: avoid),
+            const SizedBox(height: 16),
+            _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
+          ] else ...[
+            _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
+            const SizedBox(height: 16),
+            _yijiRow(suitable: suitable, avoid: avoid),
+          ],
           const SizedBox(height: 16),
-          // 小月历
-          _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
-          const SizedBox(height: 16),
-          // 说明
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -181,7 +180,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '农历/节气基于通用压缩算法，覆盖 1900-2099 年；宜忌仅供娱乐参考。',
+                    isAlmanac
+                        ? '宜忌仅供娱乐参考，农历与节气覆盖 1900-2099 年。'
+                        : '万年历覆盖 1900-2099 年，支持公历、农历与节气查看。',
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ),
@@ -249,6 +250,28 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
       ),
     );
   }
+
+  Widget _yijiRow({required String suitable, required String avoid}) {
+    return Row(
+      children: [
+        Expanded(
+          child: _yijiCard(
+            title: '宜',
+            body: suitable,
+            color: const Color(0xFF66BB6A),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _yijiCard(
+            title: '忌',
+            body: avoid,
+            color: const Color(0xFFEF5350),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _MiniMonth extends StatelessWidget {
@@ -300,7 +323,9 @@ class _MiniMonth extends StatelessWidget {
                   return const Expanded(child: SizedBox(height: 42));
                 }
                 final day = DateTime(date.year, date.month, d);
-                final lunar = LunarCalendar.fromSolar(day);
+                final lunar = I18n.current == AppLocale.zh
+                    ? LunarCalendar.fromSolar(day)
+                    : null;
                 final isSelected =
                     day.year == date.year &&
                     day.month == date.month &&
@@ -338,15 +363,16 @@ class _MiniMonth extends StatelessWidget {
                                   : (isToday ? cs.primary : null),
                             ),
                           ),
-                          Text(
-                            lunar.shortDayOrMonth,
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: isSelected
-                                  ? cs.onPrimary.withValues(alpha: 0.8)
-                                  : Colors.grey.shade500,
+                          if (lunar != null)
+                            Text(
+                              lunar.shortDayOrMonth,
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: isSelected
+                                    ? cs.onPrimary.withValues(alpha: 0.8)
+                                    : Colors.grey.shade500,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../models/diary_entry.dart';
+import 'cloud_sync_provider.dart';
 
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
@@ -118,6 +119,7 @@ class DiaryProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    await CloudSyncProvider.recordDeletedItem('diaries', id);
     _entries.removeWhere((e) => e.id == id);
     await _save();
   }

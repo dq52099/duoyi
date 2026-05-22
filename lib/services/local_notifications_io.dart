@@ -25,6 +25,8 @@ class LocalNotifications {
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const String _defaultChannelId = 'duoyi_general_alerts_v7';
   static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v6';
+  static const String _quickAddChannelId = 'duoyi_quick_add_ongoing_v1';
+  static const int quickAddNotificationId = 880016;
   static const Set<String> _legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
@@ -61,6 +63,24 @@ class LocalNotifications {
         final actionId = resp.actionId;
         // 把 todo 的 action 按钮映射成深链 payload
         if (actionId != null && actionId.isNotEmpty) {
+          if (actionId == 'quick_todo' || actionId == 'quick_todo_open') {
+            final text = resp.input?.trim();
+            if (onTap != null) {
+              if (text != null && text.isNotEmpty) {
+                onTap!(
+                  'duoyi://action/quick_todo'
+                  '?text=${Uri.encodeComponent(text)}',
+                );
+              } else {
+                onTap!('duoyi://action/quick_todo');
+              }
+            }
+            return;
+          }
+          if (actionId == 'quick_focus') {
+            if (onTap != null) onTap!('duoyi://action/start_pomodoro');
+            return;
+          }
           if (actionId.startsWith('todo_complete_')) {
             final id = actionId.substring('todo_complete_'.length);
             if (onTap != null) onTap!('duoyi://action/complete_todo?id=$id');
@@ -123,6 +143,17 @@ class LocalNotifications {
             sound: _alarmSound,
             enableVibration: true,
             audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+        );
+        await android?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _quickAddChannelId,
+            '多仪 · 快捷入口',
+            description: '通知栏常驻快捷添加待办和开始专注',
+            importance: Importance.low,
+            playSound: false,
+            enableVibration: false,
+            showBadge: false,
           ),
         );
         for (final channelId in _legacyChannelIds) {
@@ -273,6 +304,53 @@ class LocalNotifications {
     );
   }
 
+  NotificationDetails _quickAddDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _quickAddChannelId,
+        '多仪 · 快捷入口',
+        channelDescription: '通知栏常驻快捷添加待办和开始专注',
+        importance: Importance.low,
+        priority: Priority.low,
+        category: AndroidNotificationCategory.status,
+        playSound: false,
+        enableVibration: false,
+        silent: true,
+        visibility: NotificationVisibility.public,
+        icon: '@mipmap/ic_launcher',
+        ticker: '多仪快捷入口',
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        showWhen: false,
+        channelShowBadge: false,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            'quick_todo',
+            '添加待办',
+            showsUserInterface: true,
+            cancelNotification: false,
+            inputs: <AndroidNotificationActionInput>[
+              AndroidNotificationActionInput(label: '例如：明天下午3点开会'),
+            ],
+          ),
+          AndroidNotificationAction(
+            'quick_todo_open',
+            '打开输入',
+            showsUserInterface: true,
+            cancelNotification: false,
+          ),
+          AndroidNotificationAction(
+            'quick_focus',
+            '开始专注',
+            showsUserInterface: true,
+            cancelNotification: false,
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 为待办提醒构建 "完成 / 稍后" 两个 action 按钮。
   ///
   /// payload 形如 `duoyi://todo/{id}`。每个 action 用 input ID 绑定深链方案。
@@ -315,6 +393,22 @@ class LocalNotifications {
         androidActions: _todoActionsFor(payload),
       ),
       payload: payload,
+    );
+  }
+
+  Future<void> showQuickAddOngoing({
+    String title = '多仪快捷记录',
+    String body = '下拉通知栏添加待办，或一键开始专注',
+  }) async {
+    if (!_isAndroid) return;
+    if (!_initialized) await init();
+    await _ensureDeliveryPermission('showQuickAddOngoing');
+    await _plugin.show(
+      quickAddNotificationId,
+      title,
+      body,
+      _quickAddDetails(),
+      payload: 'duoyi://action/quick_todo',
     );
   }
 

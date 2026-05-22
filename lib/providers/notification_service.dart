@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
 import '../core/brand_strings.dart';
+import '../core/notification_history_policy.dart';
+import '../models/location_reminder.dart';
+import '../providers/location_reminder_provider.dart';
 import '../services/desktop_notification.dart';
 import '../services/alarm_service.dart';
 import '../services/local_notifications.dart';
@@ -46,7 +49,7 @@ class NotificationItem {
   );
 }
 
-enum NotificationType { todo, habit, pomodoro, anniversary, general }
+enum NotificationType { todo, habit, pomodoro, anniversary, general, location }
 
 /// NotificationService —— 推送通道（`duoyi_general_alerts_v7`，`Importance.max`）。
 ///
@@ -82,6 +85,7 @@ class NotificationService extends ChangeNotifier
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;
+  int _historyLimit = NotificationHistoryPolicy.defaultLimit;
   final List<NotificationItem> _history = [];
   final DesktopNotification _desktop = DesktopNotification();
   bool _desktopReady = false;
@@ -89,6 +93,7 @@ class NotificationService extends ChangeNotifier
 
   int get pendingCount => _pendingNotifications;
   int get historyCount => _history.length;
+  int get historyLimit => _historyLimit;
   List<NotificationItem> get history => List.unmodifiable(_history);
   bool get desktopReady => _desktopReady;
   bool get permissionGranted => LocalNotifications.instance.permissionGranted;
@@ -122,12 +127,15 @@ class NotificationService extends ChangeNotifier
     final p = await SharedPreferences.getInstance();
     await p.setStringList(
       _kHistoryKey,
-      _history.take(50).map((e) => jsonEncode(e.toJson())).toList(),
+      _history.take(_historyLimit).map((e) => jsonEncode(e.toJson())).toList(),
     );
   }
 
   Future<void> _loadHistory() async {
     final p = await SharedPreferences.getInstance();
+    _historyLimit = NotificationHistoryPolicy.normalize(
+      p.getInt(NotificationHistoryPolicy.preferenceKey),
+    );
     final raw = p.getStringList(_kHistoryKey) ?? const [];
     _history
       ..clear()
@@ -140,11 +148,26 @@ class NotificationService extends ChangeNotifier
           }
         }).whereType<NotificationItem>(),
       );
+    if (_history.length > _historyLimit) {
+      _history.removeRange(_historyLimit, _history.length);
+      await _saveHistory();
+    }
     notifyListeners();
   }
 
   @visibleForTesting
   Future<void> loadHistoryForTest() => _loadHistory();
+
+  Future<void> setHistoryLimit(int value) async {
+    final next = NotificationHistoryPolicy.normalize(value);
+    if (_historyLimit == next && _history.length <= next) return;
+    _historyLimit = next;
+    if (_history.length > _historyLimit) {
+      _history.removeRange(_historyLimit, _history.length);
+      await _saveHistory();
+    }
+    notifyListeners();
+  }
 
   int _idFor(String key) {
     // 从字符串 id 生成稳定 int(用于 flutter_local_notifications)
@@ -202,6 +225,16 @@ class NotificationService extends ChangeNotifier
       channelId: channelId,
       payload: payload,
     );
+    _addToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: body,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.general,
+      ),
+    );
+    notifyListeners();
   }
 
   /// 稍后提醒（Snooze, Task T-12）。
@@ -225,6 +258,16 @@ class NotificationService extends ChangeNotifier
       channelId: channelId,
       payload: payload,
     );
+    _addToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: body,
+        scheduledTime: when,
+        type: NotificationType.general,
+      ),
+    );
+    notifyListeners();
   }
 
   /// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。
@@ -268,6 +311,15 @@ class NotificationService extends ChangeNotifier
       payload: payload,
     );
     _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: body,
+        scheduledTime: when,
+        type: NotificationType.general,
+      ),
+    );
     notifyListeners();
   }
 
@@ -293,6 +345,15 @@ class NotificationService extends ChangeNotifier
       payload: payload,
     );
     _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: body,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.general,
+      ),
+    );
     notifyListeners();
   }
 
@@ -300,6 +361,10 @@ class NotificationService extends ChangeNotifier
   @override
   Future<void> cancel(int id) async {
     await LocalNotifications.instance.cancel(id);
+    if (_pendingNotifications > 0) {
+      _pendingNotifications--;
+      notifyListeners();
+    }
   }
 
   /// 取消全部已调度通知（push + alarm 都会被清；Task 14 前保留该行为，
@@ -315,6 +380,48 @@ class NotificationService extends ChangeNotifier
   // ——————————————————————————————————————————————
   // 便捷语义 API（语义化包装，全部走 push 通道）
   // ——————————————————————————————————————————————
+
+  void notifyLocationReminderHit(LocationReminderHit hit) {
+    final reminder = hit.reminder;
+    final direction = hit.triggeredBy == LocationTrigger.enter ? '到达' : '离开';
+    final title = '位置提醒：${reminder.title}';
+    final note = reminder.note?.trim();
+    final body = note == null || note.isEmpty
+        ? '已$direction ${reminder.radiusMeters.toStringAsFixed(0)} 米提醒范围'
+        : '已$direction提醒范围 · $note';
+    final payload = _locationPayload(reminder);
+    final notificationId = _idFor(
+      'location_${reminder.id}_${hit.fix.at.millisecondsSinceEpoch}',
+    );
+
+    _desktopShow(title, body);
+    _showImmediate(
+      id: notificationId,
+      title: title,
+      body: body,
+      payload: payload,
+    );
+    _addToHistory(
+      NotificationItem(
+        id: notificationId.toString(),
+        title: title,
+        body: body,
+        scheduledTime: hit.fix.at,
+        type: NotificationType.location,
+        relatedId: reminder.id,
+      ),
+    );
+    notifyListeners();
+  }
+
+  String _locationPayload(LocationReminder reminder) {
+    final linkedId = reminder.linkedId;
+    if (linkedId != null && linkedId.isNotEmpty) {
+      if (reminder.linkedType == 'todo') return 'duoyi://todo/$linkedId';
+      if (reminder.linkedType == 'goal') return 'duoyi://goal/$linkedId';
+    }
+    return 'duoyi://location/${reminder.id}';
+  }
 
   /// 调度一次性待办到期提醒（push 语义）。
   ///
@@ -335,6 +442,16 @@ class NotificationService extends ChangeNotifier
       payload: 'duoyi://tab/todo',
     );
     _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: _idFor('todo_$todoId').toString(),
+        title: _strings.notifTodoDueTitle,
+        body: title,
+        scheduledTime: when,
+        type: NotificationType.todo,
+        relatedId: todoId,
+      ),
+    );
     notifyListeners();
   }
 
@@ -366,6 +483,16 @@ class NotificationService extends ChangeNotifier
       payload: 'duoyi://habit/$habitId?confirm=1',
     );
     _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: _idFor('habit_$habitId').toString(),
+        title: _strings.notifHabitRemindTitle,
+        body: '别忘了: $habitName',
+        scheduledTime: DateTime.now(),
+        type: NotificationType.habit,
+        relatedId: habitId,
+      ),
+    );
     notifyListeners();
   }
 
@@ -405,6 +532,16 @@ class NotificationService extends ChangeNotifier
       payload: 'duoyi://tab/calendar',
     );
     _pendingNotifications++;
+    _addToHistory(
+      NotificationItem(
+        id: _idFor('anni_$annId').toString(),
+        title: '📅 纪念日提醒',
+        body: daysBefore == 0 ? '今天是 $title' : '$daysBefore 天后是 $title',
+        scheduledTime: remindAt,
+        type: NotificationType.anniversary,
+        relatedId: annId,
+      ),
+    );
     notifyListeners();
   }
 
@@ -489,12 +626,11 @@ class NotificationService extends ChangeNotifier
     Duration delay = const Duration(minutes: 1),
   }) async {
     final when = DateTime.now().add(delay);
-    await LocalNotifications.instance.scheduleOnce(
+    await AlarmService.instance.scheduleFullScreen(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: '多仪 · 定时测试',
-      body: '如果你看到这条，定时提醒调度已经正常工作。',
+      body: '如果到点有声音、震动和弹屏，定时强提醒调度正常。',
       when: when,
-      channelId: channelId,
       payload: 'duoyi://tab/mine',
     );
     _pendingNotifications++;
@@ -537,7 +673,9 @@ class NotificationService extends ChangeNotifier
 
   void _addToHistory(NotificationItem item) {
     _history.insert(0, item);
-    if (_history.length > 50) _history.removeLast();
+    if (_history.length > _historyLimit) {
+      _history.removeRange(_historyLimit, _history.length);
+    }
     _saveHistory();
   }
 

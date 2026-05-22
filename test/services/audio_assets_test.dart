@@ -3,7 +3,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:duoyi/core/focus_sound_catalog.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('音频资源', () {
@@ -17,11 +18,45 @@ void main() {
       'fan',
       'pink_noise',
       'deep_stream',
+      'thunderstorm',
+      'storm_rain',
+      'campfire',
+      'dawn_birds',
+      'waterfall',
+      'brook',
+      'river',
+      'crickets',
+      'white_stream',
+      'clock',
+      'keyboard',
+      'wind',
+      'train_station',
+      'classroom',
+      'pebble_beach',
+      'mall',
+      'restaurant',
+      'garden_birds',
+      'country_night',
+      'shallow_river',
+      'veranda_rain',
+      'breeze_birds',
     ];
 
     test('播放服务、番茄钟和目标编辑器暴露同一组音轨', () {
+      final catalog = File(
+        'lib/core/focus_sound_catalog.dart',
+      ).readAsStringSync();
       final focusService = File(
         'lib/services/focus_sound_service.dart',
+      ).readAsStringSync();
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final mainActivity = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+      ).readAsStringSync();
+      final foregroundService = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/services/FocusSoundForegroundService.kt',
       ).readAsStringSync();
       final pomodoroScreen = File(
         'lib/screens/pomodoro_screen.dart',
@@ -31,13 +66,51 @@ void main() {
       ).readAsStringSync();
 
       for (final id in ['none', ...tracks]) {
+        expect(catalog, contains("'$id'"), reason: 'FocusSoundCatalog 缺少 $id');
+      }
+
+      expect(focusService, contains('FocusSoundCatalog.assetMap'));
+      expect(focusService, contains('AssetSource(asset)'));
+      expect(focusService, contains('await player.play(source)'));
+      expect(focusService, isNot(contains('Random(')));
+      expect(focusService, isNot(contains('sin(')));
+      expect(focusService, isNot(contains('Float32List')));
+      expect(focusService, isNot(contains('Uint8List')));
+      expect(focusService, contains('MethodChannel('));
+      expect(focusService, contains("'duoyi/focus_sound_foreground'"));
+      expect(focusService, contains('_startForegroundService'));
+      expect(focusService, contains('_stopForegroundService'));
+      expect(manifest, contains('.services.FocusSoundForegroundService'));
+      expect(
+        manifest,
+        contains('android:foregroundServiceType="mediaPlayback"'),
+      );
+      expect(manifest, isNot(contains('MissingClass')));
+      expect(mainActivity, contains('focusSoundForegroundChannel'));
+      expect(foregroundService, contains('startForeground(notificationId'));
+      expect(foregroundService, contains('NotificationManager.IMPORTANCE_LOW'));
+      expect(pomodoroScreen, contains('FocusSoundCatalog.options'));
+      expect(pomodoroScreen, isNot(contains('组合环境音')));
+      expect(pomodoroScreen, isNot(contains('组合音轨')));
+      expect(goalEditScreen, contains('FocusSoundCatalog.options'));
+    });
+
+    test('白噪音不解析也不发布组合配置', () {
+      final mixes = <String>[
+        'rain+thunderstorm',
+        'waves+storm_rain',
+        'forest+deep_stream',
+        'cafe+rain',
+      ];
+
+      for (final mix in mixes) {
+        expect(FocusSoundCatalog.trackIdsFor(mix), isEmpty);
+        expect(FocusSoundCatalog.assetsFor(mix), isEmpty);
+        expect(FocusSoundCatalog.labelFor(mix), '无白噪音');
         expect(
-          focusService,
-          contains("'$id'"),
-          reason: 'FocusSoundService 缺少 $id',
+          FocusSoundCatalog.options.map((option) => option.id),
+          isNot(contains(mix)),
         );
-        expect(pomodoroScreen, contains("'$id'"), reason: '番茄钟选择器缺少 $id');
-        expect(goalEditScreen, contains("'$id'"), reason: '目标专注联动缺少 $id');
       }
     });
 
@@ -80,6 +153,98 @@ void main() {
       for (final license in ['Public domain', 'CC0', 'CC BY']) {
         expect(readme, contains(license), reason: 'README 缺少 $license 授权说明');
       }
+      expect(
+        readme,
+        contains('File:Heavy_rain_in_Glenshaw,_PA.ogg'),
+        reason: 'storm_rain.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Trains_through_a_railwa.ogg'),
+        reason: 'train_station.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Ambient_classroom_mono.ogg'),
+        reason: 'classroom.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:On_a_pebble_beach.ogg'),
+        reason: 'pebble_beach.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:1_minute_at_the_alexa_mall_in_berlin.ogg'),
+        reason: 'mall.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Restaurant_ambience.ogg'),
+        reason: 'restaurant.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Birds_singing_in_garden.ogg'),
+        reason: 'garden_birds.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Country_night_noise.ogg'),
+        reason: 'country_night.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Shallow_small_river_with_stony_riverbed.ogg'),
+        reason: 'shallow_river.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Rain_on_a_veranda_and_t.ogg'),
+        reason: 'veranda_rain.mp3 必须记录单个可追溯来源',
+      );
+      expect(
+        readme,
+        contains('File:Gentle_breeze_and_birds_singing.ogg'),
+        reason: 'breeze_birds.mp3 必须记录单个可追溯来源',
+      );
+      expect(readme, isNot(contains('待复核')));
+      expect(readme, isNot(contains('禁止组合来源')));
+    });
+
+    test('白噪音文案、资源和 README 来源一一对应', () {
+      final readme = File(
+        'assets/sounds/white_noise/README.md',
+      ).readAsStringSync();
+      final assetFiles = Directory('assets/sounds/white_noise')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.mp3'))
+          .map((file) => file.uri.pathSegments.last)
+          .toSet();
+      final catalogFiles = FocusSoundCatalog.tracks
+          .map((track) => track.asset.split('/').last)
+          .toSet();
+
+      expect(catalogFiles, assetFiles);
+
+      final labels = FocusSoundCatalog.tracks.map((track) => track.label);
+      for (final label in labels) {
+        expect(label, isNot(contains('噪')), reason: '$label 不应显示为噪声占位名');
+        expect(label, isNot(contains('生成')), reason: '$label 不应显示为生成音频');
+        expect(label, isNot(contains('合成')), reason: '$label 不应显示为合成音频');
+        expect(label, isNot(contains('噪音')), reason: '$label 文案不应像占位噪音');
+      }
+
+      for (final track in FocusSoundCatalog.tracks) {
+        final fileName = track.asset.split('/').last;
+        expect(readme, contains('`$fileName`'), reason: 'README 缺少 $fileName');
+        expect(
+          readme,
+          contains(track.label.replaceAll('低频棕噪', '棕噪')),
+          reason: 'README 来源说明应能对应 ${track.label}',
+        );
+      }
     });
 
     test('音轨可解码且存在可听信号', () {
@@ -110,11 +275,19 @@ void main() {
     });
 
     test('Android 通知提示音存在且不是静音占位文件', () {
-      final file = File('android/app/src/main/res/raw/duoyi_alarm.wav');
+      final files = [
+        'duoyi_alarm.wav',
+        'duoyi_chime.wav',
+        'duoyi_bell.wav',
+        'duoyi_beep.wav',
+        'duoyi_classic.wav',
+      ].map((name) => File('android/app/src/main/res/raw/$name'));
 
-      expect(file.existsSync(), isTrue);
-      expect(file.lengthSync(), greaterThan(32 * 1024));
-      expect(file.lengthSync(), lessThan(256 * 1024));
+      for (final file in files) {
+        expect(file.existsSync(), isTrue, reason: '${file.path} 不存在');
+        expect(file.lengthSync(), greaterThan(32 * 1024));
+        expect(file.lengthSync(), lessThan(256 * 1024));
+      }
     });
   });
 }

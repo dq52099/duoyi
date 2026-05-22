@@ -75,4 +75,15 @@ class PlatformInfo {
       return false;
     }
   }
+
+  static Future<String?> getSystemTimeZoneId() async {
+    if (!isAndroid) return null;
+    try {
+      final name = await _channel.invokeMethod<String>('getSystemTimeZoneId');
+      final trimmed = name?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    } catch (_) {
+      return null;
+    }
+  }
 }

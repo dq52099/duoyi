@@ -98,8 +98,8 @@ class CompletionVisibilityPolicy {
   ///    迁移到今日同一时刻，并在 `postponeHistory` 追加
   ///    `reason = 'auto_daily_rollover'`。
   /// 3. **基于 recurrence 派发今日实例**：`materializeTodayFromRecurring`
-  ///    目前还未接入（见 Task 22.2 / Requirement 11.8），此处先留占位
-  ///    hook，防止回归时忘记接线。
+  ///    已由冷启动和 `AppLifecycleState.resumed` 跨天路径传入 [GoalProvider]
+  ///    接线；命中后触发目标提醒重同步。
   ///
   /// [now] 作为参数注入便于测试；内部只使用其"日"部分做对齐。
   /// [goalProvider] 可选，传入时会触发 `materializeTodayFromRecurring` 并

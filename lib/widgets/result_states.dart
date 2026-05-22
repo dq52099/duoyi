@@ -153,7 +153,7 @@ class ErrorState extends StatelessWidget {
               title,
               style: const TextStyle(
                 fontSize: DesignTokens.fontSizeMd,
-                fontWeight: DesignTokens.fontWeightSemiBold,
+                fontWeight: DesignTokens.fontWeightRegular,
               ),
             ),
             const SizedBox(height: DesignTokens.spaceXs),

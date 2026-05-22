@@ -117,11 +117,7 @@ void main() {
           ),
         ],
         habits: [
-          Habit(
-            id: 'h1',
-            name: '阅读',
-            completions: {'2026-05-14': 1},
-          ),
+          Habit(id: 'h1', name: '阅读', completions: {'2026-05-14': 1}),
         ],
         pomodoroSessions: [
           PomodoroSession(
@@ -140,6 +136,34 @@ void main() {
         CalendarEventType.habit,
         CalendarEventType.pomodoro,
       });
+    });
+
+    test('习惯起止周期外的补卡记录不生成日历事件', () {
+      final events = CalendarAggregator.buildEvents(
+        todos: const [],
+        habits: [
+          Habit(
+            id: 'h-range',
+            name: '阶段阅读',
+            startDate: DateTime(2026, 5, 10),
+            endDate: DateTime(2026, 5, 12),
+            completions: {
+              '2026-05-09': 1,
+              '2026-05-10': 1,
+              '2026-05-12': 1,
+              '2026-05-13': 1,
+            },
+          ),
+        ],
+        pomodoroSessions: const [],
+        colorScheme: cs,
+      );
+
+      expect(events.map((e) => e.date), [
+        DateTime(2026, 5, 10),
+        DateTime(2026, 5, 12),
+      ]);
+      expect(events.every((e) => e.type == CalendarEventType.habit), isTrue);
     });
   });
 }

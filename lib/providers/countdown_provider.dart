@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/countdown.dart';
+import 'cloud_sync_provider.dart';
 
 class CountdownProvider extends ChangeNotifier {
   static const _key = 'duoyi_countdowns';
@@ -34,6 +35,32 @@ class CountdownProvider extends ChangeNotifier {
     _save();
   }
 
+  Future<CountdownImportSummary> importCountdowns(
+    Iterable<CountdownItem> items,
+  ) async {
+    var inserted = 0;
+    var skippedDuplicates = 0;
+    final seen = _items.map(_importDuplicateKey).toSet();
+    for (final item in items) {
+      if (item.title.trim().isEmpty) continue;
+      final key = _importDuplicateKey(item);
+      if (seen.contains(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seen.add(key);
+      _items.add(item);
+      inserted++;
+    }
+    if (inserted > 0) {
+      await _save();
+    }
+    return CountdownImportSummary(
+      inserted: inserted,
+      skippedDuplicates: skippedDuplicates,
+    );
+  }
+
   void updateItem(CountdownItem item) {
     final idx = _items.indexWhere((e) => e.id == item.id);
     if (idx == -1) return;
@@ -41,9 +68,10 @@ class CountdownProvider extends ChangeNotifier {
     _save();
   }
 
-  void deleteItem(String id) {
+  Future<void> deleteItem(String id) async {
+    await CloudSyncProvider.recordDeletedItem('countdowns', id);
     _items.removeWhere((e) => e.id == id);
-    _save();
+    await _save();
   }
 
   void togglePin(String id) {
@@ -54,4 +82,22 @@ class CountdownProvider extends ChangeNotifier {
       _save();
     }
   }
+}
+
+class CountdownImportSummary {
+  final int inserted;
+  final int skippedDuplicates;
+
+  const CountdownImportSummary({
+    required this.inserted,
+    required this.skippedDuplicates,
+  });
+}
+
+String _importDuplicateKey(CountdownItem item) {
+  return [
+    item.title.trim().toLowerCase(),
+    item.targetDate.toIso8601String(),
+    item.category.trim().toLowerCase(),
+  ].join('|');
 }

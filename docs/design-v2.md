@@ -40,38 +40,31 @@ backend/      FastAPI auth/sync/admin/feedback/announcements
 | DomainEventBus | 已实现 | 单例 broadcast StreamController，10 种事件类型 |
 | ReminderScheduler | 已实现 | syncTodos/Goals (rule-based), syncHabits (alarm+fallback), syncAnniversaries (push), syncCountdowns (push), resyncAll |
 | CalendarAggregator | 已实现 | 9 种来源聚合，冲突检测，统一排序 |
-| CalendarEventSheet | 已实现 | 打开/完成/改期/删除操作 |
-| PermissionHealthService | 已实现 | 通知/闹钟/弹屏/渠道/小米检查 |
+| CalendarEventSheet | 已实现 | 打开/完成/改期/调整时间/编辑/删除/打卡/开始专注 |
+| PermissionHealthService | 已实现 | 通知/闹钟/弹屏/渠道/HyperOS/MIUI 分项检查 |
 | AchievementEngine | 已实现 | 20 个规则，快照式求值 |
-| AchievementProvider | 已实现 | 订阅 DomainEventBus，持久化 unlockedAt |
-| TimeEntry + TimeAuditProvider | 已实现 | 模型/CRUD/dedupeKey/分类 |
-| Workspace + ShareProvider | 已实现 | 模型/角色/邀请码 |
-| FocusSoundService | 已实现 | 9 个音轨，循环/淡入/淡出 |
-| HomeWidgetService | 已实现 | push()，Todo Top3，点击流 |
-| HolidayCalendar | 已实现 | 2024-2025 内置数据，updateFrom 扩展口 |
+| AchievementProvider | 已实现 | 订阅 DomainEventBus，持久化 unlockedAt，解锁反馈和时光币奖励 |
+| TimeEntry + TimeAuditProvider | 已实现 | 模型/CRUD/dedupeKey/分类，番茄/待办/日历入口写入 |
+| Workspace + ShareProvider | 已实现 | 模型/角色/邀请码/评论/提及/负责人/排行榜 |
+| FocusSoundService | 已实现 | 13 条单音轨，循环/淡入/淡出，自定义音轨播放 |
+| HomeWidgetService | 已实现 | 10 个可见独立 Android 小组件数据推送和点击流 |
+| HolidayCalendar | 已实现 | 2024-2026 内置数据，updateFrom 扩展口 |
 | FeatureFlags | 已实现 | 4 个开关，全部默认 true |
 | AudioService (deprecated) | 保留 | 转发到 FocusSoundService 的 shim |
 
-### 2.2 主要不足（v2 要解决的）
+### 2.2 当前剩余风险 / 待回归
 
-1. CalendarEventSheet 缺少"开始专注"和"打卡"操作；缺少类型过滤。
-2. ReminderScheduler 缺少 snooze（稍后提醒）和通知点击 deep-link 分发。
-3. PermissionHealthService 缺少 HyperOS 区分、测试通知结果日志、app resume 自动刷新。
-4. TimeAuditProvider 尚未自动从 PomodoroProvider 接收记录；统计页缺时间分布。
-5. ShareProvider 后端 workspace API 未验证，邀请流程 UI 缺失，viewer 角色未在 UI 执行。
-6. AchievementProvider 虽订阅 DomainEventBus，但 providers 发布事件不够全面；无 unlock overlay。
-7. 倒数日/纪念日/课程表与日历和提醒的深度集成不够。
-8. HomeWidget 缺少完成操作和 deep-link。
-9. 无中文自然语言日期解析。
-10. 无看板视图。
-11. 专注模式缺 DND 集成和标签统计。
-12. 习惯缺灵活频次（如每周 N 次）和分组。
-13. 缺周报/年报等综合数据可视化。
-14. 缺通知栏快速添加等快捷操作。
-15. 所有字符串硬编码中文，无 i18n。
-16. HolidayCalendar 无 2026 数据。
-17. TodoProvider/GoalProvider 使用动态 dispatch 回退，未直接调用 ReminderScheduler。
-18. deprecated AudioService shim 仍存在。
+1. CalendarEventSheet 已补本地日程编辑/删除、待办完成/改期/调整时间、习惯打卡、番茄开始/编辑和时间足迹调整；仍需更多真机路径和平台差异回归。
+2. ReminderScheduler / NotificationService 已接入 snooze（稍后提醒）和通知点击 deep-link 分发；仍需真机回归确认端到端触发。
+3. PermissionHealthService 已补 HyperOS/MIUI 分项、测试通知时间和 app resume 刷新；仍需 HyperOS/MIUI 真机确认系统级通知、弹屏、声音和后台行为。
+4. TimeAuditProvider 已接入番茄自动记录、待办完成可选记录、日历 FAB 手动时间段和统计页时间分布；仍需真机路径与同步回归。
+5. ShareProvider 后端 workspace API、邀请 UI、viewer 权限、任务负责人、空间/任务评论、@ 提及、成员排行榜、共享目标/本地共享日程和同步冲突记录已落地；仍需字段级冲突解释和多账号端到端回归。
+6. AchievementProvider 已补解锁反馈、时光币、成长等级、挑战和奖励商店；后续可继续补更强的解锁动效和目标里程碑奖励。
+7. 倒数日、纪念日、课程表与日历/提醒已有深度联动；仍需强提醒、农历生日和课程深链真机回归。
+8. Android 已暴露 10 个可见独立小组件，待办勾选、快捷添加、习惯打卡和 deep-link 已接入；iOS 已补 10 个 WidgetKit kind、App Group 数据契约、Runner URL scheme、Xcode Extension target、待办详情/完成、快捷添加、习惯打卡、开始专注和底部导航 Link，仍缺开发者账号签名/App Group capability 真机确认、iOS 真机添加和 Android launcher 尺寸拖拽真机回归。
+9. 中文自然语言日期解析、看板、专注 DND、专注标签统计、习惯弹性规则、周/月/年报告、通知栏快捷添加、Flutter gen-l10n/ARB 和 HolidayCalendar 2026 数据已落地；剩余以真机验证、逐页硬编码文案迁移和深度扩展为主。
+10. TodoProvider/GoalProvider 已可注入 ReminderScheduler 并在关键写路径直接重同步；常规路径仍保留 main.dart listener 兜底。
+11. deprecated AudioService shim 仍保留以兼容旧调用，后续确认无引用后可移除。
 
 ## 3. 目标架构（v2）
 
@@ -233,15 +226,17 @@ Android notification action button 回调路径：
         → 重新 scheduleOnce(id + '_snooze', when: now + 5min, ...)
 ```
 
-ReminderScheduler 新增：
+NotificationService 负责将通知 action / deep-link 统一转入稍后提醒：
 
 ```dart
 /// 稍后提醒：取消原通知，延后重新下发。
-Future<void> snooze(int notificationId, Duration delay) async {
-  // 1. 查 _snoozePayloads[notificationId] 获取原始 payload
-  // 2. notif.cancel(notificationId)
-  // 3. notif.scheduleOnce(id: notificationId, when: now + delay, ...)
-}
+Future<void> snooze({
+  required int id,
+  required String title,
+  required String body,
+  required Duration delay,
+  String? payload,
+}) async { ... }
 ```
 
 通知注册时添加 action buttons（仅 Android）：
@@ -394,12 +389,12 @@ Future<void> addFromPomodoro(PomodoroSession session) async {
 
 #### 4.4.2 待办完成可选记录
 
-TodoProvider.toggleTodo() 完成时发布 DomainEvent，由 UI 层（TodayScreen 或
-TodoDetailScreen）在收到 `todoCompleted` 事件后弹出可选的耗时记录弹层：
+TodayScreen / TodoScreen / CalendarEventSheet / `duoyi://action/complete_todo`
+统一调用 `completeTodoWithOptionalTimeRecord()`，在完成待办后弹出可选的耗时记录弹层：
 
 ```dart
 // 不在 Provider 层弹 UI，保持关注点分离。
-// TodayScreen 监听 DomainEventBus.events.where((e) => e.type == todoCompleted)
+// 完成入口统一复用 completeTodoWithOptionalTimeRecord()
 // → 显示可选的"记录耗时？"底部弹层 → 用户确认后调用 TimeAuditProvider.add()
 ```
 
@@ -415,12 +410,12 @@ StatisticsScreen 增加时间分布 Tab：
 
 #### 4.4.4 日历添加时间记录
 
-CalendarActionRouter 中 `addTimeEntry` 操作：
+CalendarScreen FAB 已提供“记录一段时间”入口，直接写入 TimeAuditProvider：
 
 ```dart
-case CalendarAction.addTimeEntry:
-  // 弹出 TimeEntryEditSheet，预填日期
-  // 保存到 TimeAuditProvider
+// _showQuickAddTimeEntry()
+// 预填所选日期，选择开始时间、分类、时长和备注
+// 保存为 source = TimeEntrySource.manual
 ```
 
 ### D5: 共享空间补齐
@@ -950,7 +945,7 @@ class ReportEngine {
 StatisticsScreen 新增 Tabs：
 
 ```
-现有: 概览 | 待办 | 习惯 | 专注
+现有: 待办 | 习惯 | 专注 | 日程
 新增: 时间 | 周报 | 年报
 ```
 
@@ -992,7 +987,7 @@ class QuickActionService {
 
 #### 4.14.2 Widget 快速添加
 
-HomeWidgetService 在 DuoyiWidgetProvider 中增加"+"按钮：
+HomeWidgetService 在独立待办小组件中增加"+"按钮：
 
 ```kotlin
 // 点击"+" → 启动 Flutter Activity，传入 intent extra quickAdd=true

@@ -2,7 +2,8 @@
 ///
 /// 设计目标：把 `ReminderScheduler` 与具体的 `NotificationService` /
 /// `AlarmService` 解耦，让通道路由（`ReminderKind.push` 走 push、
-/// `ReminderKind.alarm` 走 alarm）可被单元/属性测试以 Fake 实例直接验证，
+/// `ReminderKind.alarm` 走 alarm、`ReminderKind.email` 走 email outbox）
+/// 可被单元/属性测试以 Fake 实例直接验证，
 /// 而无需初始化 flutter_local_notifications 等平台插件。
 ///
 /// 生产代码仍由 `NotificationService implements ReminderNotificationSink`、
@@ -81,6 +82,9 @@ abstract class ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   });
 
   /// 全屏闹钟的重复调度（每日 / 每周）。
@@ -94,8 +98,65 @@ abstract class ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   });
 
   /// 按 id 取消一条闹钟。
   Future<void> cancel(int id);
+}
+
+/// 邮件提醒出口。
+///
+/// 当前客户端只负责把邮件提醒解析成可投递请求；真正投递可以由后端、
+/// OpenList/WebDAV 备份任务或后续 SMTP 配置接管。默认 no-op 实现保证
+/// 未配置邮件服务时不会误发本地通知或闹钟。
+abstract class ReminderEmailSink {
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  });
+
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  });
+
+  Future<void> cancel(int id);
+}
+
+class NoopReminderEmailSink implements ReminderEmailSink {
+  const NoopReminderEmailSink();
+
+  @override
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> cancel(int id) async {}
 }

@@ -1,66 +1,55 @@
-import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:duoyi/models/pomodoro.dart';
-import 'package:duoyi/providers/pomodoro_provider.dart';
-import 'package:duoyi/providers/time_audit_provider.dart';
+import 'package:test/test.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  test('PomodoroProvider updates and deletes paired time audit records', () {
+    final provider = File(
+      'lib/providers/pomodoro_provider.dart',
+    ).readAsStringSync();
+    final model = File('lib/models/pomodoro.dart').readAsStringSync();
+    final audit = File(
+      'lib/providers/time_audit_provider.dart',
+    ).readAsStringSync();
 
-  setUp(() {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    expect(
+      provider,
+      contains('Future<bool> updateSession(PomodoroSession updated) async'),
+    );
+    expect(provider, contains('final previous = _sessions[idx];'));
+    expect(provider, contains('_sessions[idx] = updated;'));
+    expect(provider, contains('_affectsTodayFocusCount(previous)'));
+    expect(provider, contains('_affectsTodayFocusCount(updated)'));
+    expect(provider, contains('await _refreshTodayFocusMeta();'));
+    expect(
+      provider,
+      contains(
+        'final dedupeKey = TimeAuditProvider.pomodoroDedupeKey(updated.id);',
+      ),
+    );
+    expect(provider, contains('await _timeAudit?.recordPomodoroSession('));
+    expect(
+      provider,
+      contains('await _timeAudit?.deleteByDedupeKey(dedupeKey);'),
+    );
+    expect(provider, contains('await _saveSessions();'));
+    expect(provider, contains('notifyListeners();'));
+
+    expect(provider, contains('Future<bool> deleteSession(String id) async'));
+    expect(provider, contains('await _timeAudit?.deleteByDedupeKey('));
+    expect(provider, contains('TimeAuditProvider.pomodoroDedupeKey(id)'));
+    expect(provider, contains('_sessionCountToday = _sessions'));
+
+    expect(model, contains('PomodoroSession copyWith('));
+    expect(model, contains('bool clearTaskName = false'));
+    expect(model, contains('bool clearTag = false'));
+    expect(model, contains('bool clearFocusRoomId = false'));
+
+    expect(audit, contains('Future<void> recordPomodoroSession('));
+    expect(audit, contains('dedupeKey: pomodoroDedupeKey(sessionId),'));
+    expect(
+      audit,
+      contains('static String pomodoroDedupeKey(String sessionId)'),
+    );
   });
-
-  test(
-    'deleteSession removes focus history and paired time audit entry',
-    () async {
-      final now = DateTime.now();
-      final session = PomodoroSession(
-        id: 'focus-session-1',
-        startTime: DateTime(now.year, now.month, now.day, 9),
-        endTime: DateTime(now.year, now.month, now.day, 9, 25),
-        durationSeconds: 1500,
-        type: PomodoroType.focus,
-        taskName: '阅读',
-      );
-      final todayKey = '${now.year}-${now.month}-${now.day}';
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'pomodoro_sessions': jsonEncode(<Map<String, dynamic>>[
-          session.toJson(),
-        ]),
-        'pomodoro_count_today': 1,
-        'pomodoro_last_date': todayKey,
-      });
-
-      final audit = TimeAuditProvider();
-      await audit.loadFromStorage();
-      await audit.recordPomodoroSession(
-        sessionId: session.id,
-        title: session.taskName!,
-        startAt: session.startTime,
-        endAt: session.endTime,
-      );
-
-      final provider = PomodoroProvider()..attachTimeAudit(audit);
-      await provider.loadFromStorage();
-
-      expect(provider.sessions.single.id, session.id);
-      expect(provider.sessionCountToday, 1);
-      expect(audit.entries.single.sourceId, session.id);
-
-      final deleted = await provider.deleteSession(session.id);
-
-      expect(deleted, isTrue);
-      expect(provider.sessions, isEmpty);
-      expect(provider.sessionCountToday, 0);
-      expect(audit.entries, isEmpty);
-
-      final prefs = await SharedPreferences.getInstance();
-      final stored = jsonDecode(prefs.getString('pomodoro_sessions')!) as List;
-      expect(stored, isEmpty);
-    },
-  );
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/i18n_date_format.dart';
 import '../models/workspace.dart';
 import '../providers/auth_provider.dart';
 import '../providers/share_provider.dart';
@@ -50,6 +51,10 @@ class _ShareScreenState extends State<ShareScreen> {
       appBar: AppBar(
         title: const Text('共享空间'),
         actions: [
+          _MentionInboxButton(
+            unreadCount: provider.unreadMentionCount,
+            onPressed: () => _openMentionInbox(context),
+          ),
           IconButton(
             tooltip: '加入空间',
             onPressed: () => _acceptInvite(context),
@@ -151,6 +156,51 @@ class _ShareScreenState extends State<ShareScreen> {
     );
   }
 
+  Future<void> _openMentionInbox(BuildContext context) async {
+    final provider = context.read<ShareProvider>();
+    await provider.loadMentionInbox();
+    if (!context.mounted) return;
+    await showAppModalSheet(
+      context: context,
+      builder: (sheetContext) => _MentionInboxSheet(
+        onOpenMention: (mention) =>
+            _openMentionContext(context, sheetContext, mention),
+      ),
+    );
+  }
+
+  Future<void> _openMentionContext(
+    BuildContext context,
+    BuildContext sheetContext,
+    WorkspaceMention mention,
+  ) async {
+    final provider = context.read<ShareProvider>();
+    try {
+      if (mention.isUnread) {
+        await provider.markMentionRead(mention.id);
+      }
+      await provider.loadWorkspaceCollaboration(mention.workspaceId);
+      if (sheetContext.mounted) {
+        Navigator.pop(sheetContext);
+      }
+      if (!context.mounted) return;
+      final workspace = provider.workspaceById(mention.workspaceId);
+      await showAppModalSheet(
+        context: context,
+        builder: (_) => _WorkspaceCollaborationSheet(
+          workspace: workspace ?? mention.asWorkspaceFallback,
+          focusTargetId: mention.targetId,
+          focusCommentId: mention.commentId,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('打开提及失败: $e')));
+    }
+  }
+
   Future<void> _createWorkspace(BuildContext context) async {
     final ctrl = TextEditingController();
     final name = await showDialog<String>(
@@ -224,6 +274,139 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 }
 
+class _MentionInboxButton extends StatelessWidget {
+  final int unreadCount;
+  final VoidCallback onPressed;
+
+  const _MentionInboxButton({
+    required this.unreadCount,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: unreadCount > 0 ? '$unreadCount 条未读提及' : '@ 提及',
+      onPressed: onPressed,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.alternate_email_outlined),
+          if (unreadCount > 0)
+            Positioned(
+              right: -7,
+              top: -7,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: cs.error,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  unreadCount > 99 ? '99+' : '$unreadCount',
+                  style: TextStyle(
+                    color: cs.onError,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MentionInboxSheet extends StatelessWidget {
+  final ValueChanged<WorkspaceMention> onOpenMention;
+
+  const _MentionInboxSheet({required this.onOpenMention});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ShareProvider>();
+    final mentions = provider.mentions;
+    final cs = Theme.of(context).colorScheme;
+    return AppModalSheet(
+      title: '@ 提及',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (mentions.isEmpty)
+            _EmptyCollaborationLine(
+              icon: Icons.alternate_email_outlined,
+              text: '还没有成员提及你',
+              color: cs.onSurfaceVariant,
+            )
+          else
+            ...mentions
+                .take(20)
+                .map(
+                  (mention) => _MentionTile(
+                    mention: mention,
+                    onOpen: () => onOpenMention(mention),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MentionTile extends StatelessWidget {
+  final WorkspaceMention mention;
+  final VoidCallback onOpen;
+
+  const _MentionTile({required this.mention, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final author = mention.authorName.isEmpty
+        ? mention.authorUserId
+        : mention.authorName;
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      onTap: onOpen,
+      leading: CircleAvatar(
+        radius: 15,
+        backgroundColor: mention.isUnread
+            ? cs.primary.withValues(alpha: 0.16)
+            : cs.surfaceContainerHighest,
+        child: Icon(
+          mention.isUnread
+              ? Icons.alternate_email
+              : Icons.alternate_email_outlined,
+          size: 16,
+          color: mention.isUnread ? cs.primary : cs.onSurfaceVariant,
+        ),
+      ),
+      title: Text(
+        mention.body,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: mention.isUnread ? cs.onSurface : cs.onSurfaceVariant,
+        ),
+      ),
+      subtitle: Text(
+        '$author · ${mention.workspaceName} · ${_formatShortTime(mention.createdAt)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 11),
+      ),
+      trailing: mention.isUnread
+          ? FilledButton.tonal(onPressed: onOpen, child: const Text('查看'))
+          : const Icon(Icons.chevron_right),
+    );
+  }
+}
+
 class _WorkspaceCard extends StatelessWidget {
   final Workspace workspace;
 
@@ -277,15 +460,26 @@ class _WorkspaceCard extends StatelessWidget {
                         color: cs.onSurface.withValues(alpha: 0.62),
                       ),
                     ),
+                    if (workspace.members.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _MemberAvatarStack(members: workspace.members),
+                    ],
                   ],
                 ),
               ),
-              if (!workspace.isPrivate && role.canEdit)
+              if (!workspace.isPrivate) ...[
                 IconButton(
-                  tooltip: '生成邀请码',
-                  onPressed: () => _createInvite(context, workspace),
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  tooltip: '协作动态',
+                  onPressed: () => _openCollaboration(context, workspace),
+                  icon: const Icon(Icons.forum_outlined),
                 ),
+                if (role.canEdit)
+                  IconButton(
+                    tooltip: '生成邀请码',
+                    onPressed: () => _createInvite(context, workspace),
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                  ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -382,6 +576,349 @@ class _WorkspaceCard extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _openCollaboration(
+    BuildContext context,
+    Workspace workspace,
+  ) async {
+    final provider = context.read<ShareProvider>();
+    await provider.loadWorkspaceCollaboration(workspace.id);
+    if (!context.mounted) return;
+    await showAppModalSheet(
+      context: context,
+      builder: (_) => _WorkspaceCollaborationSheet(workspace: workspace),
+    );
+  }
+}
+
+class _WorkspaceCollaborationSheet extends StatefulWidget {
+  final Workspace workspace;
+  final String? focusTargetId;
+  final String? focusCommentId;
+
+  const _WorkspaceCollaborationSheet({
+    required this.workspace,
+    this.focusTargetId,
+    this.focusCommentId,
+  });
+
+  @override
+  State<_WorkspaceCollaborationSheet> createState() =>
+      _WorkspaceCollaborationSheetState();
+}
+
+class _WorkspaceCollaborationSheetState
+    extends State<_WorkspaceCollaborationSheet> {
+  final _commentCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ShareProvider>();
+    final comments = provider.commentsFor(widget.workspace.id);
+    final focusComments =
+        widget.focusTargetId == null || widget.focusTargetId!.isEmpty
+        ? const <WorkspaceComment>[]
+        : provider.commentsForTarget(
+            widget.workspace.id,
+            widget.focusTargetId!,
+          );
+    final activities = provider.activitiesFor(widget.workspace.id);
+    final leaderboard = provider.leaderboardFor(widget.workspace.id);
+    final cs = Theme.of(context).colorScheme;
+    return AppModalSheet(
+      title: '${widget.workspace.name} · 协作',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _commentCtrl,
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.mode_comment_outlined),
+              hintText: '写评论，@用户名/邮箱/昵称 可提醒成员',
+              suffixIcon: IconButton(
+                tooltip: '发送',
+                icon: const Icon(Icons.send_outlined),
+                onPressed: () => _send(context),
+              ),
+            ),
+            onSubmitted: (_) => _send(context),
+          ),
+          const SizedBox(height: 12),
+          if (widget.focusTargetId != null &&
+              widget.focusTargetId!.isNotEmpty) ...[
+            _MentionContextBlock(
+              targetId: widget.focusTargetId!,
+              commentId: widget.focusCommentId ?? '',
+              comments: focusComments,
+            ),
+            const SizedBox(height: 12),
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('成员排行榜', style: Theme.of(context).textTheme.labelLarge),
+          ),
+          const SizedBox(height: 8),
+          if (leaderboard.isEmpty)
+            _EmptyCollaborationLine(
+              icon: Icons.leaderboard_outlined,
+              text: '还没有可排行的分配任务',
+              color: cs.onSurfaceVariant,
+            )
+          else
+            ...leaderboard
+                .take(5)
+                .mapIndexed(
+                  (index, entry) =>
+                      _LeaderboardTile(rank: index + 1, entry: entry),
+                ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('最新评论', style: Theme.of(context).textTheme.labelLarge),
+          ),
+          const SizedBox(height: 8),
+          if (comments.isEmpty)
+            _EmptyCollaborationLine(
+              icon: Icons.forum_outlined,
+              text: '还没有评论',
+              color: cs.onSurfaceVariant,
+            )
+          else
+            ...comments.take(5).map((comment) => _CommentTile(comment)),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('动态流', style: Theme.of(context).textTheme.labelLarge),
+          ),
+          const SizedBox(height: 8),
+          if (activities.isEmpty)
+            _EmptyCollaborationLine(
+              icon: Icons.history,
+              text: '还没有协作动态',
+              color: cs.onSurfaceVariant,
+            )
+          else
+            ...activities.take(8).map((activity) => _ActivityTile(activity)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _send(BuildContext context) async {
+    final text = _commentCtrl.text.trim();
+    if (text.isEmpty) return;
+    try {
+      await context.read<ShareProvider>().createComment(
+        widget.workspace.id,
+        text,
+      );
+      _commentCtrl.clear();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('发送失败: $e')));
+    }
+  }
+}
+
+class _MentionContextBlock extends StatelessWidget {
+  final String targetId;
+  final String commentId;
+  final List<WorkspaceComment> comments;
+
+  const _MentionContextBlock({
+    required this.targetId,
+    required this.commentId,
+    required this.comments,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final focused = comments
+        .where((comment) => comment.id == commentId)
+        .toList();
+    final visible = focused.isEmpty ? comments.take(3).toList() : focused;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(12),
+      color: cs.primary.withValues(alpha: 0.06),
+      border: Border.all(color: cs.primary.withValues(alpha: 0.22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(Icons.alternate_email, size: 16, color: cs.primary),
+              Text(
+                '提及上下文',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              AppStatusBadge(label: targetId, color: cs.primary),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (visible.isEmpty)
+            Text(
+              '这条提及关联到 $targetId，当前页未加载到对应评论。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.66),
+              ),
+            )
+          else
+            ...visible.map((comment) => _CommentTile(comment)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeaderboardTile extends StatelessWidget {
+  final int rank;
+  final WorkspaceLeaderboardEntry entry;
+
+  const _LeaderboardTile({required this.rank, required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final percent = (entry.completionRate * 100).round();
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _IdentityAvatar(
+            userId: entry.userId,
+            username: entry.username,
+            role: entry.role,
+            radius: 16,
+          ),
+          Positioned(right: -4, bottom: -3, child: _RankBadge(rank: rank)),
+        ],
+      ),
+      title: Text(
+        entry.username.isEmpty ? entry.userId : entry.username,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${entry.role.label} · 分配 ${entry.assigned} · 完成 ${entry.completed}',
+        style: const TextStyle(fontSize: 11),
+      ),
+      trailing: Text(
+        '$percent%',
+        style: TextStyle(
+          color: cs.primary,
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+}
+
+extension _IterableMapIndexed<E> on Iterable<E> {
+  Iterable<T> mapIndexed<T>(T Function(int index, E item) convert) sync* {
+    var index = 0;
+    for (final item in this) {
+      yield convert(index, item);
+      index++;
+    }
+  }
+}
+
+class _CommentTile extends StatelessWidget {
+  final WorkspaceComment comment;
+
+  const _CommentTile(this.comment);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: _IdentityAvatar(
+        userId: comment.authorUserId,
+        username: comment.authorName,
+        radius: 16,
+      ),
+      title: Text(comment.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        '${comment.authorName.isEmpty ? comment.authorUserId : comment.authorName} · ${_formatShortTime(comment.createdAt)}',
+        style: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  final WorkspaceActivity activity;
+
+  const _ActivityTile(this.activity);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.bolt_outlined, size: 18),
+      title: Text(
+        '${activity.actorName} ${activity.label}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        _formatShortTime(activity.createdAt),
+        style: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
+}
+
+class _EmptyCollaborationLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _EmptyCollaborationLine({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatShortTime(DateTime value) {
+  return I18nDateFormat.shortDateTime(value);
 }
 
 class _MemberChip extends StatelessWidget {
@@ -394,37 +931,296 @@ class _MemberChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(6, 5, 9, 5),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 10,
-            backgroundColor: cs.primary.withValues(alpha: 0.14),
-            child: Text(
-              member.username.isEmpty ? '?' : member.username.substring(0, 1),
-              style: TextStyle(fontSize: 10, color: cs.primary),
-            ),
-          ),
+          _WorkspaceMemberAvatar(member: member, radius: 12),
           const SizedBox(width: 6),
           Text(
             member.username.isEmpty ? member.userId : member.username,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
           ),
           const SizedBox(width: 5),
-          Text(
-            member.role.label,
-            style: TextStyle(
-              fontSize: 11,
-              color: cs.onSurface.withValues(alpha: 0.56),
-            ),
-          ),
+          _MemberRoleBadge(role: member.role),
         ],
       ),
     );
   }
+}
+
+class _MemberAvatarStack extends StatelessWidget {
+  final List<WorkspaceMember> members;
+
+  const _MemberAvatarStack({required this.members});
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = members.take(5).toList(growable: false);
+    final extra = members.length - visible.length;
+    return SizedBox(
+      height: 28,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < visible.length; i++)
+            Positioned(
+              left: i * 20,
+              top: 0,
+              child: _WorkspaceMemberAvatar(
+                member: visible[i],
+                radius: 14,
+                showRoleRing: visible[i].role == WorkspaceRole.owner,
+              ),
+            ),
+          if (extra > 0)
+            Positioned(
+              left: visible.length * 20,
+              top: 0,
+              child: _ExtraMemberAvatar(count: extra),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceMemberAvatar extends StatelessWidget {
+  final WorkspaceMember member;
+  final double radius;
+  final bool showRoleRing;
+
+  const _WorkspaceMemberAvatar({
+    required this.member,
+    required this.radius,
+    this.showRoleRing = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = _memberColor(
+      member.userId.isEmpty ? member.username : member.userId,
+    );
+    final ringColor = member.role == WorkspaceRole.owner
+        ? cs.primary
+        : cs.outlineVariant;
+    return Tooltip(
+      message: '${_memberName(member)} · ${member.role.label}',
+      child: Container(
+        padding: EdgeInsets.all(showRoleRing ? 2 : 1),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.surface,
+          border: Border.all(
+            color: showRoleRing ? ringColor : cs.surface,
+            width: showRoleRing ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: CircleAvatar(
+          radius: radius,
+          backgroundColor: color.withValues(alpha: 0.16),
+          child: Text(
+            _memberInitial(member),
+            style: TextStyle(
+              fontSize: radius <= 12 ? 10 : 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IdentityAvatar extends StatelessWidget {
+  final String userId;
+  final String username;
+  final WorkspaceRole? role;
+  final double radius;
+
+  const _IdentityAvatar({
+    required this.userId,
+    required this.username,
+    this.role,
+    required this.radius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = _memberColor(userId.isEmpty ? username : userId);
+    return Tooltip(
+      message: role == null
+          ? _identityName(userId, username)
+          : '${_identityName(userId, username)} · ${role!.label}',
+      child: Container(
+        padding: const EdgeInsets.all(1),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.surface,
+          border: Border.all(color: cs.surface),
+        ),
+        child: CircleAvatar(
+          radius: radius,
+          backgroundColor: color.withValues(alpha: 0.16),
+          child: Text(
+            _identityInitial(userId, username),
+            style: TextStyle(
+              fontSize: radius <= 14 ? 10 : 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RankBadge extends StatelessWidget {
+  final int rank;
+
+  const _RankBadge({required this.rank});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final highlighted = rank <= 3;
+    final color = highlighted ? Colors.amber.shade800 : cs.primary;
+    return Container(
+      width: 17,
+      height: 17,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: highlighted ? Colors.amber.shade100 : cs.primaryContainer,
+        shape: BoxShape.circle,
+        border: Border.all(color: cs.surface, width: 1.5),
+      ),
+      child: Text(
+        '$rank',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _ExtraMemberAvatar extends StatelessWidget {
+  final int count;
+
+  const _ExtraMemberAvatar({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: cs.surface,
+        border: Border.all(color: cs.surface),
+      ),
+      child: CircleAvatar(
+        radius: 14,
+        backgroundColor: cs.surfaceContainerHighest,
+        child: Text(
+          '+$count',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberRoleBadge extends StatelessWidget {
+  final WorkspaceRole role;
+
+  const _MemberRoleBadge({required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = switch (role) {
+      WorkspaceRole.owner => cs.primary,
+      WorkspaceRole.editor => Colors.teal,
+      WorkspaceRole.viewer => cs.onSurfaceVariant,
+    };
+    final icon = switch (role) {
+      WorkspaceRole.owner => Icons.workspace_premium_outlined,
+      WorkspaceRole.editor => Icons.edit_outlined,
+      WorkspaceRole.viewer => Icons.visibility_outlined,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(role.label, style: TextStyle(fontSize: 10.5, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+String _memberName(WorkspaceMember member) {
+  return _identityName(member.userId, member.username);
+}
+
+String _memberInitial(WorkspaceMember member) {
+  return _identityInitial(member.userId, member.username);
+}
+
+String _identityName(String userId, String username) {
+  final name = username.trim();
+  if (name.isNotEmpty) return name;
+  final id = userId.trim();
+  return id.isEmpty ? '成员' : id;
+}
+
+String _identityInitial(String userId, String username) {
+  final source = _identityName(userId, username);
+  if (source.isEmpty) return '?';
+  return String.fromCharCode(source.runes.first).toUpperCase();
+}
+
+Color _memberColor(String seed) {
+  const colors = <Color>[
+    Color(0xFF2563EB),
+    Color(0xFF059669),
+    Color(0xFFDC2626),
+    Color(0xFF7C3AED),
+    Color(0xFF0891B2),
+    Color(0xFF9333EA),
+    Color(0xFFCA8A04),
+    Color(0xFFDB2777),
+  ];
+  final value = seed.runes.fold<int>(0, (sum, code) => sum + code);
+  return colors[value.abs() % colors.length];
 }

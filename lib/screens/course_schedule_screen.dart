@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import 'package:provider/provider.dart';
 import '../models/course_schedule.dart';
 import '../providers/course_provider.dart';
@@ -8,8 +9,58 @@ import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
-class CourseScheduleScreen extends StatelessWidget {
-  const CourseScheduleScreen({super.key});
+const _weekdayKeys = [
+  'weekday.mon',
+  'weekday.tue',
+  'weekday.wed',
+  'weekday.thu',
+  'weekday.fri',
+  'weekday.sat',
+  'weekday.sun',
+];
+
+Future<void> showCourseEditor(BuildContext context, {CourseItem? course}) {
+  final provider = context.read<CourseProvider>();
+  return showAppModalSheet<void>(
+    context: context,
+    builder: (_) => _CourseEditSheet(provider: provider, course: course),
+  );
+}
+
+class CourseScheduleScreen extends StatefulWidget {
+  final String? initialCourseId;
+
+  const CourseScheduleScreen({super.key, this.initialCourseId});
+
+  @override
+  State<CourseScheduleScreen> createState() => _CourseScheduleScreenState();
+}
+
+class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
+  bool _openedInitialCourse = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _openInitialCourseIfNeeded();
+  }
+
+  void _openInitialCourseIfNeeded() {
+    final id = widget.initialCourseId;
+    if (_openedInitialCourse || id == null || id.isEmpty) return;
+    _openedInitialCourse = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<CourseProvider>();
+      final matches = provider.courses.where((course) => course.id == id);
+      if (matches.isEmpty) return;
+      final course = matches.first;
+      if (course.weeks.isNotEmpty) {
+        provider.setViewingWeek(course.weeks.first);
+      }
+      showCourseEditor(context, course: course);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +76,7 @@ class CourseScheduleScreen extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('第 $week 周'),
+              Text(_courseWeekLabel(week)),
               const SizedBox(width: 4),
               const Icon(Icons.arrow_drop_down, size: 18),
             ],
@@ -42,7 +93,7 @@ class CourseScheduleScreen extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.today),
-            tooltip: '回到本周',
+            tooltip: I18n.tr('course.week.current_tooltip'),
             onPressed: () => provider.setViewingWeek(provider.currentWeek),
           ),
           IconButton(
@@ -54,13 +105,13 @@ class CourseScheduleScreen extends StatelessWidget {
       body: provider.courses.isEmpty
           ? EmptyState(
               icon: Icons.school_outlined,
-              message: '添加课表后就能看到你的一周啦',
-              actionLabel: '添加课程',
-              onAction: () => _addCourse(context, provider),
+              message: I18n.tr('course.empty.message'),
+              actionLabel: I18n.tr('course.add'),
+              onAction: () => _addCourse(context),
             )
           : _ScheduleGrid(settings: settings, courses: courses, week: week),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _addCourse(context, provider),
+        onPressed: () => _addCourse(context),
         child: const Icon(Icons.add),
       ),
     );
@@ -70,8 +121,8 @@ class CourseScheduleScreen extends StatelessWidget {
     showAppModalSheet(
       context: context,
       builder: (_) => AppModalSheet(
-        title: '选择周次',
-        subtitle: '切换当前查看的课表周',
+        title: I18n.tr('course.week_picker.title'),
+        subtitle: I18n.tr('course.week_picker.subtitle'),
         child: GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -99,7 +150,7 @@ class CourseScheduleScreen extends StatelessWidget {
                     : (current ? cs.primary.withValues(alpha: 0.1) : null),
                 foregroundColor: selected ? cs.onPrimary : null,
               ),
-              child: Text('第$w周'),
+              child: Text(_courseWeekLabel(w)),
             );
           },
         ),
@@ -114,12 +165,7 @@ class CourseScheduleScreen extends StatelessWidget {
     );
   }
 
-  void _addCourse(BuildContext context, CourseProvider p) {
-    showAppModalSheet(
-      context: context,
-      builder: (_) => _CourseEditSheet(provider: p),
-    );
-  }
+  void _addCourse(BuildContext context) => showCourseEditor(context);
 }
 
 class _ScheduleGrid extends StatelessWidget {
@@ -135,7 +181,6 @@ class _ScheduleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
     final monday = settings.termStart.add(Duration(days: (week - 1) * 7));
     final today = DateTime.now();
 
@@ -167,7 +212,7 @@ class _ScheduleGrid extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          '周${weekdays[i]}',
+                          _weekdayLabel(i + 1),
                           style: TextStyle(
                             fontSize: 12,
                             color: isToday ? cs.primary : null,
@@ -284,13 +329,7 @@ class _CourseBlock extends StatelessWidget {
     final settings = context.read<CourseProvider>().settings;
     final weekPattern = _weekPatternLabel(course.weeks, settings.totalWeeks);
     return GestureDetector(
-      onTap: () => showAppModalSheet(
-        context: context,
-        builder: (_) => _CourseEditSheet(
-          provider: context.read<CourseProvider>(),
-          course: course,
-        ),
-      ),
+      onTap: () => showCourseEditor(context, course: course),
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
@@ -358,7 +397,7 @@ class _CourseBlock extends StatelessWidget {
     if (weeks.isEmpty) return null;
     final normalized = weeks.toSet();
     final all = normalized.length >= totalWeeks;
-    if (all) return '全周';
+    if (all) return I18n.tr('course.weeks.all');
     final oddCount = normalized.where((w) => w.isOdd).length;
     final evenCount = normalized.where((w) => w.isEven).length;
     final expectedOdd = List.generate(
@@ -366,9 +405,13 @@ class _CourseBlock extends StatelessWidget {
       (i) => i + 1,
     ).where((w) => w.isOdd).length;
     final expectedEven = totalWeeks - expectedOdd;
-    if (oddCount == expectedOdd && evenCount == 0) return '单周';
-    if (evenCount == expectedEven && oddCount == 0) return '双周';
-    return '${normalized.length}周';
+    if (oddCount == expectedOdd && evenCount == 0) {
+      return I18n.tr('course.weeks.odd');
+    }
+    if (evenCount == expectedEven && oddCount == 0) {
+      return I18n.tr('course.weeks.even');
+    }
+    return '${normalized.length}${I18n.tr('course.week.count_suffix')}';
   }
 }
 
@@ -406,8 +449,8 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     return AppModalSheet(
-      title: '课表设置',
-      subtitle: '调整学期起点和显示密度',
+      title: I18n.tr('course.settings.title'),
+      subtitle: I18n.tr('course.settings.subtitle'),
       actions: [
         FilledButton(
           onPressed: () {
@@ -433,10 +476,8 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('开学日期 (第 1 周的周一)'),
-            subtitle: Text(
-              '${_termStart.year}-${_termStart.month.toString().padLeft(2, '0')}-${_termStart.day.toString().padLeft(2, '0')}',
-            ),
+            title: Text(I18n.tr('course.field.term_start')),
+            subtitle: Text(I18nDateFormat.date(_termStart)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               final picked = await AppDatePicker.pickSolar(
@@ -444,7 +485,7 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
                 initialDate: _termStart,
                 firstDate: DateTime(2020),
                 lastDate: DateTime(2099, 12, 31),
-                title: '开学日期',
+                title: I18n.tr('course.field.term_start_picker'),
               );
               if (picked != null) {
                 final monday = picked.subtract(
@@ -454,28 +495,52 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
               }
             },
           ),
-          _sliderRow('总周数', _totalWeeks.toDouble(), 8, 30, 1, (v) {
-            setState(() => _totalWeeks = v.toInt());
-          }),
-          _sliderRow('每天节数', _sessionsPerDay.toDouble(), 4, 14, 1, (v) {
-            setState(() => _sessionsPerDay = v.toInt());
-          }),
-          _sliderRow('每节分钟数', _sessionMinutes.toDouble(), 30, 90, 5, (v) {
-            setState(() => _sessionMinutes = v.toInt());
-          }),
+          _sliderRow(
+            I18n.tr('course.field.total_weeks'),
+            _totalWeeks.toDouble(),
+            8,
+            30,
+            1,
+            (v) {
+              setState(() => _totalWeeks = v.toInt());
+            },
+          ),
+          _sliderRow(
+            I18n.tr('course.field.sessions_per_day'),
+            _sessionsPerDay.toDouble(),
+            4,
+            14,
+            1,
+            (v) {
+              setState(() => _sessionsPerDay = v.toInt());
+            },
+          ),
+          _sliderRow(
+            I18n.tr('course.field.session_minutes'),
+            _sessionMinutes.toDouble(),
+            30,
+            90,
+            5,
+            (v) {
+              setState(() => _sessionMinutes = v.toInt());
+            },
+          ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('第一节开始时间'),
+            title: Text(I18n.tr('course.field.first_session_time')),
             subtitle: Text(
-              '${_firstSessionTime.hour.toString().padLeft(2, '0')}:${_firstSessionTime.minute.toString().padLeft(2, '0')}',
+              I18nDateFormat.timeOfDay(
+                hour: _firstSessionTime.hour,
+                minute: _firstSessionTime.minute,
+              ),
             ),
             trailing: const Icon(Icons.schedule),
             onTap: () async {
               final picked = await AppTimePicker.show(
                 context,
                 initialTime: _firstSessionTime,
-                title: '第一节开始时间',
-                subtitle: '课程表将按这个时间推算后续节次',
+                title: I18n.tr('course.field.first_session_time'),
+                subtitle: I18n.tr('course.field.first_session_time_subtitle'),
                 minuteStep: 5,
               );
               if (picked != null) {
@@ -483,12 +548,19 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
               }
             },
           ),
-          _sliderRow('课间分钟数', _breakMinutes.toDouble(), 0, 30, 5, (v) {
-            setState(() => _breakMinutes = v.toInt());
-          }),
+          _sliderRow(
+            I18n.tr('course.field.break_minutes'),
+            _breakMinutes.toDouble(),
+            0,
+            30,
+            5,
+            (v) {
+              setState(() => _breakMinutes = v.toInt());
+            },
+          ),
           const SizedBox(height: 8),
           Text(
-            '节次预览：1 ${_previewSettings().sectionTimeLabel(1)} · '
+            '${I18n.tr('course.settings.preview_prefix')}1 ${_previewSettings().sectionTimeLabel(1)} · '
             '2 ${_previewSettings().sectionTimeLabel(2)}',
             style: TextStyle(
               fontSize: 12,
@@ -606,8 +678,10 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
   Widget build(BuildContext context) {
     final settings = widget.provider.settings;
     return AppModalSheet(
-      title: widget.course == null ? '新增课程' : '编辑课程',
-      subtitle: '按周次、节次和颜色整理课表',
+      title: widget.course == null
+          ? I18n.tr('course.editor.add_title')
+          : I18n.tr('course.editor.edit_title'),
+      subtitle: I18n.tr('course.editor.subtitle'),
       leadingActions: widget.course == null
           ? const []
           : [
@@ -646,7 +720,11 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
             }
             Navigator.pop(context);
           },
-          child: Text(widget.course == null ? '添加' : '保存'),
+          child: Text(
+            widget.course == null
+                ? I18n.tr('action.add')
+                : I18n.tr('action.save'),
+          ),
         ),
       ],
       child: Column(
@@ -656,28 +734,36 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
           TextField(
             controller: _name,
             autofocus: widget.course == null,
-            decoration: const InputDecoration(labelText: '课程名'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('course.field.name'),
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _teacher,
-            decoration: const InputDecoration(labelText: '教师'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('course.field.teacher'),
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _location,
-            decoration: const InputDecoration(labelText: '教室'),
+            decoration: InputDecoration(
+              labelText: I18n.tr('course.field.location'),
+            ),
           ),
           const SizedBox(height: 16),
-          const Text('星期', style: TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(
+            I18n.tr('course.field.weekday'),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,
             children: List.generate(7, (i) {
               final w = i + 1;
-              const labels = ['一', '二', '三', '四', '五', '六', '日'];
               return ChoiceChip(
-                label: Text('周${labels[i]}'),
+                label: Text(_weekdayLabel(w)),
                 selected: _weekday == w,
                 onSelected: (_) => setState(() => _weekday = w),
               );
@@ -688,7 +774,7 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
             children: [
               Expanded(
                 child: _numberPick(
-                  label: '第几节开始',
+                  label: I18n.tr('course.field.start_section'),
                   helper: settings.sectionTimeLabel(_startSection),
                   value: _startSection,
                   min: 1,
@@ -699,7 +785,7 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: _numberPick(
-                  label: '连上几节',
+                  label: I18n.tr('course.field.section_count'),
                   helper: settings.sectionTimeRangeLabel(
                     _startSection,
                     _sectionCount,
@@ -719,16 +805,16 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                '上课周',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+              Text(
+                I18n.tr('course.field.class_weeks'),
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
               TextButton(
                 onPressed: () => setState(
                   () =>
                       _weeks = List.generate(settings.totalWeeks, (i) => i + 1),
                 ),
-                child: const Text('全选'),
+                child: Text(I18n.tr('course.weeks.select_all')),
               ),
               TextButton(
                 onPressed: () => setState(
@@ -737,7 +823,7 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
                     (i) => i + 1,
                   ).where((w) => w.isOdd).toList(),
                 ),
-                child: const Text('单周'),
+                child: Text(I18n.tr('course.weeks.odd')),
               ),
               TextButton(
                 onPressed: () => setState(
@@ -746,11 +832,11 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
                     (i) => i + 1,
                   ).where((w) => w.isEven).toList(),
                 ),
-                child: const Text('双周'),
+                child: Text(I18n.tr('course.weeks.even')),
               ),
               TextButton(
                 onPressed: () => setState(() => _weeks = []),
-                child: const Text('清空'),
+                child: Text(I18n.tr('action.clear')),
               ),
             ],
           ),
@@ -775,7 +861,10 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
             }),
           ),
           const SizedBox(height: 14),
-          const Text('颜色', style: TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(
+            I18n.tr('course.field.color'),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 10,
@@ -859,4 +948,13 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
       ),
     );
   }
+}
+
+String _courseWeekLabel(int week) {
+  return '${I18n.tr('course.week.prefix')}$week${I18n.tr('course.week.suffix')}';
+}
+
+String _weekdayLabel(int weekday) {
+  final index = weekday.clamp(1, 7) - 1;
+  return I18n.tr(_weekdayKeys[index]);
 }

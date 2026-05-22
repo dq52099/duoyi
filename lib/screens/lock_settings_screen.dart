@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/i18n.dart';
 import '../providers/app_lock_provider.dart';
 import '../widgets/surface_components.dart';
 
@@ -15,36 +17,48 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
   Future<void> _setPinFlow() async {
     final messenger = ScaffoldMessenger.of(context);
     final lock = context.read<AppLockProvider>();
-    final pin = await _askPin('设置 PIN (4-8 位数字)');
+    final pin = await _askPin(I18n.tr('app_lock.dialog.set_pin'));
     if (pin == null) return;
-    final confirm = await _askPin('再输一遍确认');
+    final confirm = await _askPin(I18n.tr('app_lock.dialog.confirm_pin'));
     if (confirm == null) return;
     if (pin != confirm) {
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('两次输入不一致')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(I18n.tr('app_lock.pin_mismatch'))),
+      );
       return;
     }
     final ok = await lock.setPin(pin);
     if (!mounted) return;
     messenger.showSnackBar(
-      SnackBar(content: Text(ok ? '应用锁已启用' : 'PIN 长度需 4-8 位')),
+      SnackBar(
+        content: Text(
+          ok
+              ? I18n.tr('app_lock.enabled_message')
+              : I18n.tr('app_lock.pin_invalid'),
+        ),
+      ),
     );
   }
 
   Future<void> _disableFlow() async {
     final messenger = ScaffoldMessenger.of(context);
     final lock = context.read<AppLockProvider>();
-    final pin = await _askPin('输入当前 PIN 以关闭');
+    final pin = await _askPin(I18n.tr('app_lock.dialog.disable_pin'));
     if (pin == null) return;
     final ok = await lock.verify(pin);
     if (!ok) {
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('PIN 错误')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(I18n.tr('app_lock.pin_wrong'))),
+      );
       return;
     }
     await lock.disable(pin);
     if (!mounted) return;
-    messenger.showSnackBar(const SnackBar(content: Text('应用锁已关闭')));
+    messenger.showSnackBar(
+      SnackBar(content: Text(I18n.tr('app_lock.disabled_message'))),
+    );
   }
 
   Future<String?> _askPin(String title) async {
@@ -57,31 +71,32 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
           controller: ctrl,
           autofocus: true,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           obscureText: true,
           maxLength: 8,
-          decoration: const InputDecoration(
-            hintText: '4-8 位数字',
+          decoration: InputDecoration(
+            hintText: I18n.tr('app_lock.pin_hint'),
             counterText: '',
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
+            child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('确认'),
+            child: Text(I18n.tr('action.confirm')),
           ),
         ],
       ),
     );
     if (v == null) return null;
-    if (v.length < 4 || v.length > 8) {
+    if (!RegExp(r'^\d{4,8}$').hasMatch(v)) {
       if (!mounted) return null;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('需要 4-8 位数字')));
+      ).showSnackBar(SnackBar(content: Text(I18n.tr('app_lock.pin_invalid'))));
       return null;
     }
     return v;
@@ -93,7 +108,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('应用锁')),
+      appBar: AppBar(title: Text(I18n.tr('app_lock.title'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         children: [
@@ -121,7 +136,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '本机 PIN 锁',
+                        I18n.tr('app_lock.hero.title'),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w400,
@@ -130,7 +145,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '用于保护本地数据，切回应用或重新启动时需要验证',
+                        I18n.tr('app_lock.hero.subtitle'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.66),
                         ),
@@ -143,14 +158,16 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
           ),
           const SizedBox(height: 12),
           AppSettingsSection(
-            title: '锁定状态',
-            subtitle: '启用后会在启动或切回前台时要求 PIN',
+            title: I18n.tr('app_lock.section.status'),
+            subtitle: I18n.tr('app_lock.section.status.subtitle'),
             children: [
               AppSwitchTile(
                 icon: lock.enabled ? Icons.lock : Icons.lock_open,
                 color: lock.enabled ? Colors.green : Colors.orange,
-                title: '启用应用锁',
-                subtitle: lock.enabled ? '当前已启用' : '关闭后不会再要求 PIN',
+                title: I18n.tr('app_lock.enable'),
+                subtitle: lock.enabled
+                    ? I18n.tr('app_lock.enabled')
+                    : I18n.tr('app_lock.disabled.subtitle'),
                 value: lock.enabled,
                 onChanged: (enabled) =>
                     enabled ? _setPinFlow() : _disableFlow(),
@@ -159,27 +176,53 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                 AppSettingsTile(
                   icon: Icons.password,
                   color: cs.primary,
-                  title: '更换 PIN',
-                  subtitle: '重新设置 4-8 位数字密码',
+                  title: I18n.tr('app_lock.change_pin'),
+                  subtitle: I18n.tr('app_lock.change_pin.subtitle'),
                   onTap: _setPinFlow,
                 ),
                 AppSettingsTile(
                   icon: Icons.timer_outlined,
                   color: Colors.orange,
-                  title: '自动锁定',
+                  title: I18n.tr('app_lock.auto_lock'),
                   subtitle: lock.autoLockMinutes == 0
-                      ? '每次切回前台都锁定'
-                      : '离开 ${lock.autoLockMinutes} 分钟后锁定',
+                      ? I18n.tr('app_lock.auto_lock.every_foreground')
+                      : '${I18n.tr('app_lock.auto_lock.after_prefix')}'
+                            '${lock.autoLockMinutes}'
+                            '${I18n.tr('app_lock.auto_lock.after_suffix')}',
                   trailing: AppCompactDropdown<int>(
                     width: 132,
                     value: lock.autoLockMinutes,
-                    items: const [
-                      DropdownMenuItem(value: 0, child: Text('立即')),
-                      DropdownMenuItem(value: 1, child: Text('1 分钟')),
-                      DropdownMenuItem(value: 5, child: Text('5 分钟')),
-                      DropdownMenuItem(value: 15, child: Text('15 分钟')),
-                      DropdownMenuItem(value: 60, child: Text('1 小时')),
-                      DropdownMenuItem(value: 240, child: Text('4 小时')),
+                    items: [
+                      DropdownMenuItem(
+                        value: 0,
+                        child: Text(I18n.tr('app_lock.auto_lock.immediate')),
+                      ),
+                      DropdownMenuItem(
+                        value: 1,
+                        child: Text(
+                          '1${I18n.tr('app_lock.auto_lock.minute_label')}',
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 5,
+                        child: Text(
+                          '5${I18n.tr('app_lock.auto_lock.minute_label')}',
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 15,
+                        child: Text(
+                          '15${I18n.tr('app_lock.auto_lock.minute_label')}',
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 60,
+                        child: Text(I18n.tr('app_lock.auto_lock.one_hour')),
+                      ),
+                      DropdownMenuItem(
+                        value: 240,
+                        child: Text(I18n.tr('app_lock.auto_lock.four_hours')),
+                      ),
                     ],
                     onChanged: (v) {
                       if (v != null) {
@@ -191,8 +234,8 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                 AppSettingsTile(
                   icon: Icons.lock_clock_outlined,
                   color: Colors.red,
-                  title: '立即锁定',
-                  subtitle: '立刻切回输入 PIN',
+                  title: I18n.tr('app_lock.lock_now'),
+                  subtitle: I18n.tr('app_lock.lock_now.subtitle'),
                   onTap: () {
                     context.read<AppLockProvider>().lock();
                     Navigator.pop(context);
@@ -211,7 +254,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '提示：应用锁仅作用于本机，云端数据不受影响；忘记 PIN 只能清应用数据找回。',
+                    I18n.tr('app_lock.tip'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.68),
                       height: 1.45,

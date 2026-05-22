@@ -2,6 +2,10 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
     android:minHeight="150dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="80dp"
+    android:maxResizeWidth="360dp"
+    android:maxResizeHeight="320dp"
     android:targetCellWidth="2"
     android:targetCellHeight="3"
     android:updatePeriodMillis="1800000"
@@ -10,4 +14,5 @@
     android:previewLayout="@layout/duoyi_todo_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:configure="com.duoyi.duoyi.DuoyiWidgetConfigActivity"
     android:description="@string/widget_todo_description" />

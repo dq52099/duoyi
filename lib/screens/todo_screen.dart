@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
+import '../core/i18n_date_format.dart';
+import '../core/iterable_extensions.dart';
+import '../core/smart_date_parser.dart';
+import '../core/smart_todo_draft.dart';
+import '../core/todo_filters.dart';
+import '../core/todo_kanban.dart';
 import '../models/goal.dart' show ReminderKind;
 import '../models/todo.dart';
 import '../models/workspace.dart';
@@ -13,6 +20,7 @@ import '../services/ai_service.dart';
 import '../core/todo_templates.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/todo_completion_flow.dart';
 import '../widgets/surface_components.dart';
 import 'share_screen.dart';
 import 'todo_detail_screen.dart' show TodoDetailScreen, priorityColor;
@@ -24,13 +32,179 @@ class TodoScreen extends StatefulWidget {
   State<TodoScreen> createState() => _TodoScreenState();
 }
 
+enum _TodoViewMode { matrix, list, kanban }
+
 class _TodoScreenState extends State<TodoScreen> {
-  bool _isMatrixView = true;
+  _TodoViewMode _viewMode = _TodoViewMode.matrix;
+  TodoFilterState<EisenhowerQuadrant, TodoPriority> _filter =
+      const TodoFilterState<EisenhowerQuadrant, TodoPriority>();
+  TodoKanbanBoardConfig _kanbanConfig = TodoKanbanBoardConfig.defaults();
+  bool _batchMode = false;
+  final Set<String> _selectedTodoIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadKanbanConfig();
+  }
+
+  Future<void> _loadKanbanConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final config = TodoKanbanBoardConfig.decode(
+      prefs.getString(todoKanbanColumnsPrefsKey),
+    );
+    if (!mounted) return;
+    setState(() => _kanbanConfig = config);
+  }
+
+  Future<void> _saveKanbanConfig(TodoKanbanBoardConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(todoKanbanColumnsPrefsKey, config.encode());
+    if (!mounted) return;
+    setState(() => _kanbanConfig = config);
+  }
+
+  void _enterBatchMode({String? todoId, bool switchToList = false}) {
+    setState(() {
+      _batchMode = true;
+      if (switchToList) _viewMode = _TodoViewMode.list;
+      if (todoId != null) _selectedTodoIds.add(todoId);
+    });
+  }
+
+  void _exitBatchMode() {
+    setState(() {
+      _batchMode = false;
+      _selectedTodoIds.clear();
+    });
+  }
+
+  void _toggleSelection(String todoId) {
+    setState(() {
+      if (_selectedTodoIds.contains(todoId)) {
+        _selectedTodoIds.remove(todoId);
+        if (_selectedTodoIds.isEmpty) _batchMode = false;
+      } else {
+        _batchMode = true;
+        _selectedTodoIds.add(todoId);
+      }
+    });
+  }
+
+  void _selectAllVisible(Iterable<String> editableIds) {
+    final ids = editableIds.toSet();
+    setState(() {
+      _batchMode = true;
+      if (_selectedTodoIds.containsAll(ids)) {
+        _selectedTodoIds.removeAll(ids);
+        if (_selectedTodoIds.isEmpty) _batchMode = false;
+      } else {
+        _selectedTodoIds.addAll(ids);
+      }
+    });
+  }
+
+  void _setFilter(TodoFilterState<EisenhowerQuadrant, TodoPriority> filter) {
+    setState(() {
+      _filter = filter;
+      _batchMode = false;
+      _selectedTodoIds.clear();
+    });
+  }
+
+  void _clearFilter() {
+    _setFilter(const TodoFilterState<EisenhowerQuadrant, TodoPriority>());
+  }
+
+  Future<void> _completeSelected() async {
+    final count = await context.read<TodoProvider>().completeTodos(
+      _selectedTodoIds,
+    );
+    if (!mounted) return;
+    _exitBatchMode();
+    _showBatchSnack('已完成 $count 个任务');
+  }
+
+  Future<void> _reopenSelected() async {
+    final count = await context.read<TodoProvider>().reopenTodos(
+      _selectedTodoIds,
+    );
+    if (!mounted) return;
+    _exitBatchMode();
+    _showBatchSnack('已恢复 $count 个任务为未完成');
+  }
+
+  Future<void> _moveSelected(EisenhowerQuadrant quadrant) async {
+    final count = await context.read<TodoProvider>().updateTodosQuadrant(
+      _selectedTodoIds,
+      quadrant,
+    );
+    if (!mounted) return;
+    _exitBatchMode();
+    _showBatchSnack('已移动 $count 个任务到${_quadrantLabel(quadrant)}');
+  }
+
+  Future<void> _setSelectedPriority(TodoPriority priority) async {
+    final count = await context.read<TodoProvider>().updateTodosPriority(
+      _selectedTodoIds,
+      priority,
+    );
+    if (!mounted) return;
+    _exitBatchMode();
+    _showBatchSnack('已更新 $count 个任务优先级');
+  }
+
+  Future<void> _showKanbanSettings() async {
+    final next = await showModalBottomSheet<TodoKanbanBoardConfig>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _KanbanSettingsSheet(config: _kanbanConfig),
+    );
+    if (next == null) return;
+    await _saveKanbanConfig(next);
+  }
+
+  Future<void> _deleteSelected() async {
+    final selectedCount = _selectedTodoIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: const Text('删除所选任务'),
+        content: Text('确认删除 $selectedCount 个任务吗？相关时间足迹也会同步移除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final count = await context.read<TodoProvider>().deleteTodos(
+      _selectedTodoIds,
+    );
+    if (!mounted) return;
+    _exitBatchMode();
+    _showBatchSnack('已删除 $count 个任务');
+  }
+
+  void _showBatchSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
 
   void _showAddDialog() {
     final s = context.read<ThemeProvider>().brand.strings;
     final ai = context.read<AiService>();
     final titleCtrl = TextEditingController();
+    SmartDateParseResult parsed = SmartDateParseResult.empty;
     var quadrant = EisenhowerQuadrant.notUrgentImportant;
     var priority = TodoPriority.none;
     String groupName = '';
@@ -79,9 +253,17 @@ class _TodoScreenState extends State<TodoScreen> {
 
                 TextField(
                   controller: titleCtrl,
-                  decoration: const InputDecoration(hintText: '准备做什么？'),
+                  decoration: const InputDecoration(
+                    hintText: '准备做什么？例如：明天下午3点开会',
+                  ),
                   autofocus: true,
+                  onChanged: (v) =>
+                      setSt(() => parsed = SmartDateParser.parse(v)),
                 ),
+                if (parsed.isSuccess) ...[
+                  const SizedBox(height: 8),
+                  _SmartDatePreview(parsed: parsed),
+                ],
                 const SizedBox(height: 12),
 
                 // AI Action
@@ -301,8 +483,10 @@ class _TodoScreenState extends State<TodoScreen> {
                           return;
                         }
                         context.read<TodoProvider>().addTodo(
-                          TodoItem(
-                            title: titleCtrl.text.trim(),
+                          SmartTodoDraftBuilder.fromText(
+                            titleCtrl.text.trim(),
+                            defaultReminderKind: ReminderKind.alarm,
+                          ).toTodo(
                             quadrant: quadrant,
                             priority: priority,
                             listGroupName: groupName.isEmpty ? null : groupName,
@@ -347,80 +531,1644 @@ class _TodoScreenState extends State<TodoScreen> {
   @override
   Widget build(BuildContext context) {
     final todoProvider = context.watch<TodoProvider>();
+    final shareProvider = context.watch<ShareProvider>();
     final s = context.watch<ThemeProvider>().brand.strings;
-    final quadrantGroups = todoProvider.quadrantGroups;
-    final listGroups = todoProvider.listGroupedTodos;
+    final now = DateTime.now();
+    final baseTodos = todoProvider.visibleListTodos;
+    final filteredTodos = filterTodos(
+      baseTodos,
+      _filter,
+      now: now,
+      quadrantOf: (todo) => todo.quadrant,
+      priorityOf: (todo) => todo.priority,
+      tagsOf: (todo) => todo.tags,
+      listGroupNameOf: (todo) => todo.listGroupName,
+      dueDateOf: (todo) => todo.dueDate,
+      isCompletedOf: (todo) => todo.isCompleted,
+      isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
+    );
+    final quadrantGroups = groupTodosByQuadrant(
+      filteredTodos,
+      quadrants: EisenhowerQuadrant.values,
+      quadrantOf: (todo) => todo.quadrant,
+    );
+    final listGroups = groupTodosByList(
+      filteredTodos,
+      (todo) => todo.listGroupName,
+    );
+    final kanbanGroups = <String, List<TodoItem>>{
+      for (final column in _kanbanConfig.columns) column.id: <TodoItem>[],
+    };
+    for (final todo in filteredTodos) {
+      final columnId = _kanbanConfig.normalizeColumnId(todo.kanbanColumnId);
+      kanbanGroups.putIfAbsent(columnId, () => <TodoItem>[]).add(todo);
+    }
+    final availableTags = collectTodoTags(baseTodos, (todo) => todo.tags);
+    final availableListGroups = collectTodoListGroups(
+      baseTodos,
+      (todo) => todo.listGroupName,
+    );
     final overdueCount = todoProvider.overdueTodos.length;
+    final editableVisibleIds = filteredTodos
+        .where((todo) => shareProvider.canEdit(todo.workspaceId))
+        .map((todo) => todo.id)
+        .toList();
+    final allVisibleSelected =
+        editableVisibleIds.isNotEmpty &&
+        editableVisibleIds.every(_selectedTodoIds.contains);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(s.todoTitle),
+        leading: _batchMode
+            ? IconButton(
+                tooltip: '退出批量操作',
+                onPressed: _exitBatchMode,
+                icon: const Icon(Icons.close),
+              )
+            : null,
+        title: Text(
+          _batchMode ? '已选择 ${_selectedTodoIds.length} 项' : s.todoTitle,
+        ),
         actions: [
-          if (overdueCount > 0)
-            TextButton.icon(
-              onPressed: () async {
-                await context.read<TodoProvider>().postponeOverdue(
-                  DateTime.now(),
-                );
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('已顺延 $overdueCount 个逾期任务'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-              icon: const Icon(Icons.update_outlined, size: 18),
-              label: const Text('顺延'),
+          if (_batchMode)
+            IconButton(
+              tooltip: allVisibleSelected ? '取消全选' : '全选当前视图',
+              onPressed: editableVisibleIds.isEmpty
+                  ? null
+                  : () => _selectAllVisible(editableVisibleIds),
+              icon: Icon(
+                allVisibleSelected
+                    ? Icons.deselect_outlined
+                    : Icons.select_all_outlined,
+              ),
+            )
+          else ...[
+            if (_viewMode == _TodoViewMode.kanban)
+              IconButton(
+                tooltip: '看板列设置',
+                onPressed: _showKanbanSettings,
+                icon: const Icon(Icons.tune_outlined),
+              ),
+            IconButton(
+              tooltip: '批量操作',
+              onPressed: filteredTodos.isEmpty
+                  ? null
+                  : () => _enterBatchMode(switchToList: true),
+              icon: const Icon(Icons.checklist_outlined),
             ),
-          IconButton(
-            icon: Icon(_isMatrixView ? Icons.list : Icons.grid_view),
-            onPressed: () => setState(() => _isMatrixView = !_isMatrixView),
-            tooltip: _isMatrixView ? s.todoListView : s.todoMatrixView,
-          ),
+            if (overdueCount > 0)
+              TextButton.icon(
+                onPressed: () async {
+                  await context.read<TodoProvider>().postponeOverdue(
+                    DateTime.now(),
+                  );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('已顺延 $overdueCount 个逾期任务'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.update_outlined, size: 18),
+                label: const Text('顺延'),
+              ),
+          ],
         ],
       ),
-      body: todoProvider.activeTodos.isEmpty
+      body: baseTodos.isEmpty
           ? EmptyState(
               icon: Icons.task_alt,
               message: s.todoEmpty,
               actionLabel: s.todoAddAction,
               onAction: _showAddDialog,
             )
-          : _isMatrixView
-          ? SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: EisenhowerMatrix(
-                quadrantGroups: quadrantGroups,
-                onQuadrantTap: (q) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => QuadrantListScreen(quadrant: q),
+          : Column(
+              children: [
+                if (!_batchMode)
+                  _TodoViewSwitcher(
+                    selected: _viewMode,
+                    onChanged: (mode) => setState(() => _viewMode = mode),
+                  ),
+                _TodoFilterBar(
+                  filter: _filter,
+                  totalCount: baseTodos.length,
+                  filteredCount: filteredTodos.length,
+                  availableTags: availableTags,
+                  availableListGroups: availableListGroups,
+                  onChanged: _setFilter,
+                  onClear: _clearFilter,
+                ),
+                Expanded(
+                  child: filteredTodos.isEmpty
+                      ? _TodoNoMatches(
+                          onClear: () {
+                            setState(
+                              () => _filter =
+                                  const TodoFilterState<
+                                    EisenhowerQuadrant,
+                                    TodoPriority
+                                  >(),
+                            );
+                          },
+                        )
+                      : switch (_viewMode) {
+                          _TodoViewMode.matrix => SingleChildScrollView(
+                            padding: const EdgeInsets.all(12),
+                            child: EisenhowerMatrix(
+                              quadrantGroups: quadrantGroups,
+                              onQuadrantTap: (q) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => QuadrantListScreen(
+                                      quadrant: q,
+                                      filter: _filter,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          _TodoViewMode.list => ListView(
+                            children: listGroups.entries
+                                .map(
+                                  (e) => _ListGroupTile(
+                                    groupName: e.key,
+                                    todos: e.value,
+                                    batchMode: _batchMode,
+                                    selectedTodoIds: _selectedTodoIds,
+                                    onToggleSelection: _toggleSelection,
+                                    onEnterBatchMode: (id) =>
+                                        _enterBatchMode(todoId: id),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          _TodoViewMode.kanban => _TodoKanbanView(
+                            config: _kanbanConfig,
+                            kanbanGroups: kanbanGroups,
+                            batchMode: _batchMode,
+                            selectedTodoIds: _selectedTodoIds,
+                            onToggleSelection: _toggleSelection,
+                            onEnterBatchMode: (id) =>
+                                _enterBatchMode(todoId: id),
+                          ),
+                        },
+                ),
+              ],
+            ),
+      bottomNavigationBar: _batchMode
+          ? _TodoBatchActionBar(
+              selectedCount: _selectedTodoIds.length,
+              onComplete: _selectedTodoIds.isEmpty ? null : _completeSelected,
+              onReopen: _selectedTodoIds.isEmpty ? null : _reopenSelected,
+              onMove: _selectedTodoIds.isEmpty ? null : _moveSelected,
+              onPriority: _selectedTodoIds.isEmpty
+                  ? null
+                  : _setSelectedPriority,
+              onDelete: _selectedTodoIds.isEmpty ? null : _deleteSelected,
+            )
+          : null,
+      floatingActionButton: _batchMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _showAddDialog,
+              child: const Icon(Icons.add),
+            ),
+    );
+  }
+}
+
+class _SmartDatePreview extends StatelessWidget {
+  final SmartDateParseResult parsed;
+
+  const _SmartDatePreview({required this.parsed});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, size: 16, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '识别到：${_formatParsedSmartDate(parsed)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: cs.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatParsedSmartDate(SmartDateParseResult parsed) {
+  return I18nDateFormat.smartDate(
+    parsed.dateTime!,
+    includeTime: parsed.hasTimeOfDay,
+  );
+}
+
+class _TodoViewSwitcher extends StatelessWidget {
+  final _TodoViewMode selected;
+  final ValueChanged<_TodoViewMode> onChanged;
+
+  const _TodoViewSwitcher({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: SegmentedButton<_TodoViewMode>(
+        segments: const [
+          ButtonSegment(
+            value: _TodoViewMode.matrix,
+            icon: Icon(Icons.grid_view),
+            label: Text('四象限'),
+          ),
+          ButtonSegment(
+            value: _TodoViewMode.list,
+            icon: Icon(Icons.view_list_outlined),
+            label: Text('列表'),
+          ),
+          ButtonSegment(
+            value: _TodoViewMode.kanban,
+            icon: Icon(Icons.view_kanban_outlined),
+            label: Text('看板'),
+          ),
+        ],
+        selected: {selected},
+        showSelectedIcon: false,
+        onSelectionChanged: (values) => onChanged(values.first),
+      ),
+    );
+  }
+}
+
+class _TodoFilterBar extends StatelessWidget {
+  final TodoFilterState<EisenhowerQuadrant, TodoPriority> filter;
+  final int totalCount;
+  final int filteredCount;
+  final List<String> availableTags;
+  final List<String> availableListGroups;
+  final ValueChanged<TodoFilterState<EisenhowerQuadrant, TodoPriority>>
+  onChanged;
+  final VoidCallback onClear;
+
+  const _TodoFilterBar({
+    required this.filter,
+    required this.totalCount,
+    required this.filteredCount,
+    required this.availableTags,
+    required this.availableListGroups,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final active = filter.hasActiveFilters;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.filter_alt_outlined,
+                size: 18,
+                color: active ? cs.primary : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '自定义视图 · $filteredCount/$totalCount',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: active ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (active)
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('清空'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _TodoQuickFilterChip(
+                  label: '今日',
+                  icon: Icons.today_outlined,
+                  selected: filter.due == TodoDueFilter.dueToday,
+                  onPressed: () => onChanged(
+                    filter.copyWith(
+                      due: filter.due == TodoDueFilter.dueToday
+                          ? TodoDueFilter.all
+                          : TodoDueFilter.dueToday,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _TodoQuickFilterChip(
+                  label: '逾期',
+                  icon: Icons.warning_amber_outlined,
+                  selected: filter.due == TodoDueFilter.overdue,
+                  onPressed: () => onChanged(
+                    filter.copyWith(
+                      due: filter.due == TodoDueFilter.overdue
+                          ? TodoDueFilter.all
+                          : TodoDueFilter.overdue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _TodoQuickFilterChip(
+                  label: '7天内',
+                  icon: Icons.date_range_outlined,
+                  selected: filter.due == TodoDueFilter.next7Days,
+                  onPressed: () => onChanged(
+                    filter.copyWith(
+                      due: filter.due == TodoDueFilter.next7Days
+                          ? TodoDueFilter.all
+                          : TodoDueFilter.next7Days,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _TodoQuickFilterChip(
+                  label: '已完成',
+                  icon: Icons.check_circle_outline,
+                  selected: filter.completion == TodoCompletionFilter.completed,
+                  onPressed: () => onChanged(
+                    filter.copyWith(
+                      completion:
+                          filter.completion == TodoCompletionFilter.completed
+                          ? TodoCompletionFilter.all
+                          : TodoCompletionFilter.completed,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TodoFilterMenu<EisenhowerQuadrant>(
+                  icon: Icons.grid_view_outlined,
+                  label: filter.quadrant == null
+                      ? '象限'
+                      : _quadrantLabel(filter.quadrant!),
+                  selected: filter.quadrant != null,
+                  selectedValue: filter.quadrant,
+                  options: [
+                    const _TodoFilterOption(label: '全部象限'),
+                    for (final quadrant in EisenhowerQuadrant.values)
+                      _TodoFilterOption(
+                        label: _quadrantLabel(quadrant),
+                        value: quadrant,
+                      ),
+                  ],
+                  onSelected: (value) =>
+                      onChanged(filter.copyWith(quadrant: value)),
+                ),
+                const SizedBox(width: 8),
+                _TodoFilterMenu<TodoPriority>(
+                  icon: Icons.flag_outlined,
+                  label: filter.priority == null
+                      ? '优先级'
+                      : filter.priority!.label,
+                  selected: filter.priority != null,
+                  selectedValue: filter.priority,
+                  options: [
+                    const _TodoFilterOption(label: '全部优先级'),
+                    for (final priority in TodoPriority.values)
+                      _TodoFilterOption(label: priority.label, value: priority),
+                  ],
+                  onSelected: (value) =>
+                      onChanged(filter.copyWith(priority: value)),
+                ),
+                const SizedBox(width: 8),
+                _TodoFilterMenu<TodoDueFilter>(
+                  icon: Icons.event_outlined,
+                  label: filter.due == TodoDueFilter.all
+                      ? '日期'
+                      : _dueFilterLabel(filter.due),
+                  selected: filter.due != TodoDueFilter.all,
+                  selectedValue: filter.due,
+                  options: [
+                    for (final due in TodoDueFilter.values)
+                      _TodoFilterOption(
+                        label: _dueFilterLabel(due),
+                        value: due,
+                      ),
+                  ],
+                  onSelected: (value) => onChanged(filter.copyWith(due: value)),
+                ),
+                const SizedBox(width: 8),
+                _TodoFilterMenu<TodoCompletionFilter>(
+                  icon: Icons.task_alt_outlined,
+                  label: filter.completion == TodoCompletionFilter.all
+                      ? '完成状态'
+                      : _completionFilterLabel(filter.completion),
+                  selected: filter.completion != TodoCompletionFilter.all,
+                  selectedValue: filter.completion,
+                  options: [
+                    for (final completion in TodoCompletionFilter.values)
+                      _TodoFilterOption(
+                        label: _completionFilterLabel(completion),
+                        value: completion,
+                      ),
+                  ],
+                  onSelected: (value) =>
+                      onChanged(filter.copyWith(completion: value)),
+                ),
+                if (availableTags.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _TodoFilterMenu<String>(
+                    icon: Icons.sell_outlined,
+                    label: filter.tag == null ? '标签' : '#${filter.tag}',
+                    selected: filter.tag != null,
+                    selectedValue: filter.tag,
+                    options: [
+                      const _TodoFilterOption(label: '全部标签'),
+                      for (final tag in availableTags)
+                        _TodoFilterOption(label: '#$tag', value: tag),
+                    ],
+                    onSelected: (value) =>
+                        onChanged(filter.copyWith(tag: value)),
+                  ),
+                ],
+                if (availableListGroups.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _TodoFilterMenu<String>(
+                    icon: Icons.folder_outlined,
+                    label: filter.listGroupName ?? '清单',
+                    selected: filter.listGroupName != null,
+                    selectedValue: filter.listGroupName,
+                    options: [
+                      const _TodoFilterOption(label: '全部清单'),
+                      for (final group in availableListGroups)
+                        _TodoFilterOption(label: group, value: group),
+                    ],
+                    onSelected: (value) =>
+                        onChanged(filter.copyWith(listGroupName: value)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodoQuickFilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const _TodoQuickFilterChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      selected: selected,
+      showCheckmark: false,
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      onSelected: (_) => onPressed(),
+    );
+  }
+}
+
+class _TodoFilterMenu<T> extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final T? selectedValue;
+  final List<_TodoFilterOption<T>> options;
+  final ValueChanged<T?> onSelected;
+
+  const _TodoFilterMenu({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.selectedValue,
+    required this.options,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = selected ? cs.primary : cs.onSurfaceVariant;
+
+    return PopupMenuButton<_TodoFilterOption<T>>(
+      tooltip: label,
+      position: PopupMenuPosition.under,
+      onSelected: (option) => onSelected(option.value),
+      itemBuilder: (context) => [
+        for (final option in options)
+          PopupMenuItem(
+            value: option,
+            child: Row(
+              children: [
+                Expanded(child: Text(option.label)),
+                if (option.value == selectedValue)
+                  Icon(Icons.check, size: 16, color: cs.primary),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? cs.primary.withValues(alpha: 0.1)
+              : cs.surfaceContainerHighest.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? cs.primary.withValues(alpha: 0.35)
+                : cs.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 132),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: color),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 18, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodoFilterOption<T> {
+  final String label;
+  final T? value;
+
+  const _TodoFilterOption({required this.label, this.value});
+}
+
+class _TodoNoMatches extends StatelessWidget {
+  final VoidCallback onClear;
+
+  const _TodoNoMatches({required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_alt_off_outlined,
+              size: 44,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 12),
+            Text('没有匹配任务', style: TextStyle(fontSize: 16, color: cs.onSurface)),
+            const SizedBox(height: 8),
+            Text(
+              '调整自定义视图条件或清空筛选',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.close, size: 16),
+              label: const Text('清空筛选'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodoBatchActionBar extends StatelessWidget {
+  final int selectedCount;
+  final Future<void> Function()? onComplete;
+  final Future<void> Function()? onReopen;
+  final Future<void> Function(EisenhowerQuadrant quadrant)? onMove;
+  final Future<void> Function(TodoPriority priority)? onPriority;
+  final Future<void> Function()? onDelete;
+
+  const _TodoBatchActionBar({
+    required this.selectedCount,
+    required this.onComplete,
+    required this.onReopen,
+    required this.onMove,
+    required this.onPriority,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final enabled = selectedCount > 0;
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
+          ),
+          boxShadow: DesignTokens.shadowXs,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '已选 $selectedCount',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: cs.primary,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: onComplete,
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('完成'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onReopen,
+                  icon: const Icon(Icons.undo_outlined, size: 18),
+                  label: const Text('恢复'),
+                ),
+                const SizedBox(width: 8),
+                PopupMenuButton<EisenhowerQuadrant>(
+                  tooltip: '移动到',
+                  enabled: enabled && onMove != null,
+                  onSelected: (quadrant) => onMove?.call(quadrant),
+                  itemBuilder: (context) => [
+                    for (final quadrant in EisenhowerQuadrant.values)
+                      PopupMenuItem(
+                        value: quadrant,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.circle,
+                              size: 10,
+                              color: _quadrantColor(quadrant),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(_quadrantLabel(quadrant)),
+                          ],
+                        ),
+                      ),
+                  ],
+                  child: _BatchMenuButton(
+                    icon: Icons.drive_file_move_outline,
+                    label: '移动到',
+                    enabled: enabled && onMove != null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                PopupMenuButton<TodoPriority>(
+                  tooltip: '优先级',
+                  enabled: enabled && onPriority != null,
+                  onSelected: (priority) => onPriority?.call(priority),
+                  itemBuilder: (context) => [
+                    for (final priority in TodoPriority.values)
+                      PopupMenuItem(
+                        value: priority,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.flag,
+                              size: 16,
+                              color: priorityColor(priority),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(priority.label),
+                          ],
+                        ),
+                      ),
+                  ],
+                  child: _BatchMenuButton(
+                    icon: Icons.flag_outlined,
+                    label: '优先级',
+                    enabled: enabled && onPriority != null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('删除'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: cs.error,
+                    side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BatchMenuButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool enabled;
+
+  const _BatchMenuButton({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = enabled ? cs.onSurface : cs.onSurface.withValues(alpha: 0.38);
+    final border = enabled
+        ? cs.outline.withValues(alpha: 0.5)
+        : cs.outline.withValues(alpha: 0.24);
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: color)),
+          const SizedBox(width: 2),
+          Icon(Icons.arrow_drop_down, size: 18, color: color),
+        ],
+      ),
+    );
+  }
+}
+
+String _dueFilterLabel(TodoDueFilter filter) {
+  return switch (filter) {
+    TodoDueFilter.all => '全部日期',
+    TodoDueFilter.overdue => '逾期',
+    TodoDueFilter.dueToday => '今日',
+    TodoDueFilter.next7Days => '未来7天',
+    TodoDueFilter.noDue => '无日期',
+  };
+}
+
+String _completionFilterLabel(TodoCompletionFilter filter) {
+  return switch (filter) {
+    TodoCompletionFilter.all => '全部任务',
+    TodoCompletionFilter.active => '未完成',
+    TodoCompletionFilter.completed => '已完成',
+  };
+}
+
+class _TodoKanbanView extends StatelessWidget {
+  final TodoKanbanBoardConfig config;
+  final Map<String, List<TodoItem>> kanbanGroups;
+  final bool batchMode;
+  final Set<String> selectedTodoIds;
+  final ValueChanged<String> onToggleSelection;
+  final ValueChanged<String> onEnterBatchMode;
+
+  const _TodoKanbanView({
+    required this.config,
+    required this.kanbanGroups,
+    required this.batchMode,
+    required this.selectedTodoIds,
+    required this.onToggleSelection,
+    required this.onEnterBatchMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        if (config.groupMode != TodoKanbanGroupMode.none)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                Icon(Icons.account_tree_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  '看板分组：${config.groupMode.label}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.66),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            children: [
+              for (final column in config.sortedColumns)
+                _KanbanColumn(
+                  column: column,
+                  columns: config.sortedColumns,
+                  groupMode: config.groupMode,
+                  todos: kanbanGroups[column.id] ?? const <TodoItem>[],
+                  batchMode: batchMode,
+                  selectedTodoIds: selectedTodoIds,
+                  onToggleSelection: onToggleSelection,
+                  onEnterBatchMode: onEnterBatchMode,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KanbanGroupedTodos {
+  final String label;
+  final int sortOrder;
+  final List<TodoItem> todos;
+
+  const _KanbanGroupedTodos({
+    required this.label,
+    required this.sortOrder,
+    required this.todos,
+  });
+}
+
+class _KanbanGroupKey {
+  final String id;
+  final String label;
+  final int sortOrder;
+
+  const _KanbanGroupKey({
+    required this.id,
+    required this.label,
+    required this.sortOrder,
+  });
+}
+
+List<_KanbanGroupedTodos> _groupKanbanTodos(
+  List<TodoItem> todos,
+  TodoKanbanGroupMode mode,
+  DateTime now,
+) {
+  if (mode == TodoKanbanGroupMode.none) {
+    return [
+      if (todos.isNotEmpty)
+        _KanbanGroupedTodos(label: '', sortOrder: 0, todos: todos),
+    ];
+  }
+  final groups = <String, _KanbanGroupedTodos>{};
+  for (final todo in todos) {
+    final key = _kanbanGroupKey(todo, mode, now);
+    groups.putIfAbsent(
+      key.id,
+      () => _KanbanGroupedTodos(
+        label: key.label,
+        sortOrder: key.sortOrder,
+        todos: <TodoItem>[],
+      ),
+    );
+    groups[key.id]!.todos.add(todo);
+  }
+  final result = groups.values.toList();
+  result.sort((a, b) {
+    final order = a.sortOrder.compareTo(b.sortOrder);
+    if (order != 0) return order;
+    return a.label.compareTo(b.label);
+  });
+  return result;
+}
+
+_KanbanGroupKey _kanbanGroupKey(
+  TodoItem todo,
+  TodoKanbanGroupMode mode,
+  DateTime now,
+) {
+  switch (mode) {
+    case TodoKanbanGroupMode.priority:
+      if (todo.priority == TodoPriority.none) {
+        return const _KanbanGroupKey(
+          id: 'priority_none',
+          label: '无优先级',
+          sortOrder: 50,
+        );
+      }
+      return _KanbanGroupKey(
+        id: 'priority_${todo.priority.name}',
+        label: todo.priority.label,
+        sortOrder: 10 - todo.priority.rank,
+      );
+    case TodoKanbanGroupMode.dueDate:
+      final due = todo.dueDate;
+      if (due == null) {
+        return const _KanbanGroupKey(
+          id: 'due_none',
+          label: '无截止日',
+          sortOrder: 50,
+        );
+      }
+      final today = DateTime(now.year, now.month, now.day);
+      final dueDay = DateTime(due.year, due.month, due.day);
+      if (dueDay.isBefore(today)) {
+        return const _KanbanGroupKey(
+          id: 'due_overdue',
+          label: '已逾期',
+          sortOrder: 0,
+        );
+      }
+      if (dueDay == today) {
+        return const _KanbanGroupKey(
+          id: 'due_today',
+          label: '今天',
+          sortOrder: 10,
+        );
+      }
+      if (dueDay.isBefore(today.add(const Duration(days: 7)))) {
+        return const _KanbanGroupKey(
+          id: 'due_week',
+          label: '7 天内',
+          sortOrder: 20,
+        );
+      }
+      return const _KanbanGroupKey(id: 'due_later', label: '更晚', sortOrder: 30);
+    case TodoKanbanGroupMode.tag:
+      final tag = todo.tags
+          .map((item) => item.trim())
+          .firstWhere((item) => item.isNotEmpty, orElse: () => '');
+      if (tag.isEmpty) {
+        return const _KanbanGroupKey(
+          id: 'tag_none',
+          label: '无标签',
+          sortOrder: 9999,
+        );
+      }
+      return _KanbanGroupKey(id: 'tag_$tag', label: tag, sortOrder: 100);
+    case TodoKanbanGroupMode.list:
+      final listName = todo.listGroupName?.trim() ?? '';
+      if (listName.isEmpty) {
+        return const _KanbanGroupKey(
+          id: 'list_default',
+          label: '默认清单',
+          sortOrder: 9999,
+        );
+      }
+      return _KanbanGroupKey(
+        id: 'list_$listName',
+        label: listName,
+        sortOrder: 100,
+      );
+    case TodoKanbanGroupMode.none:
+      return const _KanbanGroupKey(id: 'none', label: '', sortOrder: 0);
+  }
+}
+
+class _KanbanColumn extends StatelessWidget {
+  final TodoKanbanColumn column;
+  final List<TodoKanbanColumn> columns;
+  final TodoKanbanGroupMode groupMode;
+  final List<TodoItem> todos;
+  final bool batchMode;
+  final Set<String> selectedTodoIds;
+  final ValueChanged<String> onToggleSelection;
+  final ValueChanged<String> onEnterBatchMode;
+
+  const _KanbanColumn({
+    required this.column,
+    required this.columns,
+    required this.groupMode,
+    required this.todos,
+    required this.batchMode,
+    required this.selectedTodoIds,
+    required this.onToggleSelection,
+    required this.onEnterBatchMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = Color(column.colorValue);
+    final groupedTodos = _groupKanbanTodos(todos, groupMode, DateTime.now());
+    return SizedBox(
+      width: 280,
+      child: DragTarget<String>(
+        onWillAcceptWithDetails: (_) => true,
+        onAcceptWithDetails: (details) {
+          context.read<TodoProvider>().updateTodosKanbanColumn([
+            details.data,
+          ], column.id);
+        },
+        builder: (context, candidateData, rejectedData) {
+          final hovering = candidateData.isNotEmpty;
+          return AppSurfaceCard(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withValues(alpha: hovering ? 0.58 : 0.22),
+              width: hovering ? 1.4 : 1,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        column.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    AppStatusBadge(label: '${todos.length}', color: color),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: todos.isEmpty
+                      ? Center(
+                          child: Text(
+                            hovering ? '松手移动到这里' : '暂无任务',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurface.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        )
+                      : ListView(
+                          children: [
+                            for (final group in groupedTodos) ...[
+                              if (groupMode != TodoKanbanGroupMode.none)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 2,
+                                    bottom: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          group.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.62,
+                                            ),
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ),
+                                      AppStatusBadge(
+                                        label: '${group.todos.length}',
+                                        color: color,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              for (final todo in group.todos)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _KanbanTodoCard(
+                                    todo: todo,
+                                    columns: columns,
+                                    color: color,
+                                    batchMode: batchMode,
+                                    selected: selectedTodoIds.contains(todo.id),
+                                    onToggleSelection: onToggleSelection,
+                                    onEnterBatchMode: onEnterBatchMode,
+                                  ),
+                                ),
+                            ],
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _KanbanTodoCard extends StatelessWidget {
+  final TodoItem todo;
+  final List<TodoKanbanColumn> columns;
+  final Color color;
+  final bool batchMode;
+  final bool selected;
+  final ValueChanged<String> onToggleSelection;
+  final ValueChanged<String> onEnterBatchMode;
+
+  const _KanbanTodoCard({
+    required this.todo,
+    required this.columns,
+    required this.color,
+    required this.batchMode,
+    required this.selected,
+    required this.onToggleSelection,
+    required this.onEnterBatchMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final provider = context.read<TodoProvider>();
+    final canEdit = context.watch<ShareProvider>().canEdit(todo.workspaceId);
+    final card = Material(
+      color: selected
+          ? color.withValues(alpha: 0.14)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: batchMode
+            ? canEdit
+                  ? () => onToggleSelection(todo.id)
+                  : null
+            : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TodoDetailScreen(todoId: todo.id),
+                ),
+              ),
+        onLongPress: canEdit ? () => onEnterBatchMode(todo.id) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (batchMode) ...[
+                    Checkbox(
+                      value: selected,
+                      visualDensity: VisualDensity.compact,
+                      onChanged: canEdit
+                          ? (_) => onToggleSelection(todo.id)
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Text(
+                      todo.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  if (canEdit && !batchMode)
+                    PopupMenuButton<TodoKanbanColumn>(
+                      tooltip: '移动到',
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        Icons.more_horiz,
+                        size: 18,
+                        color: cs.onSurface.withValues(alpha: 0.56),
+                      ),
+                      onSelected: (column) => provider.updateTodosKanbanColumn([
+                        todo.id,
+                      ], column.id),
+                      itemBuilder: (context) => [
+                        for (final column in columns)
+                          PopupMenuItem(
+                            value: column,
+                            enabled: column.id != todo.kanbanColumnId,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.circle,
+                                  size: 10,
+                                  color: Color(column.colorValue),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(column.title),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (todo.priority != TodoPriority.none)
+                    AppStatusBadge(
+                      label: todo.priority.label,
+                      color: priorityColor(todo.priority),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                  if (todo.dueDate != null)
+                    AppStatusBadge(
+                      label: I18nDateFormat.compactDateTime(
+                        todo.dueDate!,
+                        omitTimeWhenMidnight: true,
+                      ),
+                      color: color,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                  if (todo.subtasks.isNotEmpty)
+                    AppStatusBadge(
+                      label:
+                          '${todo.subtasks.where((s) => s.isCompleted).length}/${todo.subtasks.length} 子任务',
+                      color: cs.secondary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!canEdit || batchMode) return card;
+    return LongPressDraggable<String>(
+      data: todo.id,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 260),
+          child: Opacity(opacity: 0.92, child: card),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.42, child: card),
+      child: card,
+    );
+  }
+}
+
+class _KanbanSettingsSheet extends StatefulWidget {
+  final TodoKanbanBoardConfig config;
+
+  const _KanbanSettingsSheet({required this.config});
+
+  @override
+  State<_KanbanSettingsSheet> createState() => _KanbanSettingsSheetState();
+}
+
+class _KanbanSettingsSheetState extends State<_KanbanSettingsSheet> {
+  late List<TodoKanbanColumn> _columns;
+  late TodoKanbanGroupMode _groupMode;
+
+  static const _palette = [
+    0xFF607D8B,
+    0xFF1976D2,
+    0xFF7B1FA2,
+    0xFFD32F2F,
+    0xFFF57C00,
+    0xFF2E7D32,
+    0xFF00897B,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _columns = widget.config.sortedColumns;
+    _groupMode = widget.config.groupMode;
+  }
+
+  void _updateColumn(TodoKanbanColumn column) {
+    setState(() {
+      final index = _columns.indexWhere((item) => item.id == column.id);
+      if (index != -1) _columns[index] = column;
+    });
+  }
+
+  void _moveColumn(int index, int delta) {
+    final target = index + delta;
+    if (target < 0 || target >= _columns.length) return;
+    setState(() {
+      final column = _columns.removeAt(index);
+      _columns.insert(target, column);
+      _renumber();
+    });
+  }
+
+  void _addColumn() {
+    setState(() {
+      final id = 'custom_${DateTime.now().microsecondsSinceEpoch}';
+      _columns.add(
+        TodoKanbanColumn(
+          id: id,
+          title: '新列',
+          colorValue: _palette[_columns.length % _palette.length],
+          sortOrder: _columns.length,
+        ),
+      );
+    });
+  }
+
+  void _renumber() {
+    for (var i = 0; i < _columns.length; i++) {
+      _columns[i] = _columns[i].copyWith(sortOrder: i);
+    }
+  }
+
+  void _save() {
+    final normalized = <TodoKanbanColumn>[];
+    for (var i = 0; i < _columns.length; i++) {
+      final column = _columns[i];
+      final title = column.title.trim();
+      normalized.add(
+        column.copyWith(title: title.isEmpty ? '未命名列' : title, sortOrder: i),
+      );
+    }
+    Navigator.pop(
+      context,
+      TodoKanbanBoardConfig(columns: normalized, groupMode: _groupMode),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.view_kanban_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '看板列设置',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                TextButton(onPressed: _save, child: const Text('保存')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<TodoKanbanGroupMode>(
+              initialValue: _groupMode,
+              decoration: const InputDecoration(
+                labelText: '默认分组',
+                helperText: '列内可按优先级、截止日、标签或清单分组',
+                isDense: true,
+              ),
+              items: [
+                for (final mode in TodoKanbanGroupMode.values)
+                  DropdownMenuItem(value: mode, child: Text(mode.label)),
+              ],
+              onChanged: (mode) {
+                if (mode == null) return;
+                setState(() => _groupMode = mode);
+              },
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 440),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _columns.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final column = _columns[index];
+                  return AppSurfaceCard(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.circle,
+                              color: Color(column.colorValue),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: column.title,
+                                decoration: const InputDecoration(
+                                  labelText: '列名称',
+                                  isDense: true,
+                                ),
+                                onChanged: (value) => _updateColumn(
+                                  column.copyWith(title: value),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '上移',
+                              onPressed: index == 0
+                                  ? null
+                                  : () => _moveColumn(index, -1),
+                              icon: const Icon(Icons.arrow_upward),
+                            ),
+                            IconButton(
+                              tooltip: '下移',
+                              onPressed: index == _columns.length - 1
+                                  ? null
+                                  : () => _moveColumn(index, 1),
+                              icon: const Icon(Icons.arrow_downward),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final value in _palette)
+                              InkWell(
+                                borderRadius: BorderRadius.circular(999),
+                                onTap: () => _updateColumn(
+                                  column.copyWith(colorValue: value),
+                                ),
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: Color(value),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: column.colorValue == value
+                                          ? cs.onSurface
+                                          : cs.outlineVariant,
+                                      width: column.colorValue == value ? 2 : 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   );
                 },
               ),
-            )
-          : ListView(
-              children: listGroups.entries
-                  .map((e) => _ListGroupTile(groupName: e.key, todos: e.value))
-                  .toList(),
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
-        child: const Icon(Icons.add),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _addColumn,
+              icon: const Icon(Icons.add),
+              label: const Text('新增列'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+}
+
+Color _quadrantColor(EisenhowerQuadrant q) {
+  switch (q) {
+    case EisenhowerQuadrant.urgentImportant:
+      return const Color(0xFFE53935);
+    case EisenhowerQuadrant.notUrgentImportant:
+      return const Color(0xFFF6A339);
+    case EisenhowerQuadrant.urgentNotImportant:
+      return const Color(0xFF42A5F5);
+    case EisenhowerQuadrant.notUrgentNotImportant:
+      return const Color(0xFF8E8E8E);
+  }
+}
+
+String _quadrantLabel(EisenhowerQuadrant q) {
+  switch (q) {
+    case EisenhowerQuadrant.urgentImportant:
+      return '重要且紧急';
+    case EisenhowerQuadrant.notUrgentImportant:
+      return '重要不紧急';
+    case EisenhowerQuadrant.urgentNotImportant:
+      return '紧急不重要';
+    case EisenhowerQuadrant.notUrgentNotImportant:
+      return '不重要不紧急';
   }
 }
 
 class _ListGroupTile extends StatefulWidget {
   final String groupName;
   final List<TodoItem> todos;
+  final bool batchMode;
+  final Set<String> selectedTodoIds;
+  final ValueChanged<String> onToggleSelection;
+  final ValueChanged<String> onEnterBatchMode;
 
-  const _ListGroupTile({required this.groupName, required this.todos});
+  const _ListGroupTile({
+    required this.groupName,
+    required this.todos,
+    required this.batchMode,
+    required this.selectedTodoIds,
+    required this.onToggleSelection,
+    required this.onEnterBatchMode,
+  });
 
   @override
   State<_ListGroupTile> createState() => _ListGroupTileState();
@@ -501,10 +2249,85 @@ class _ListGroupTileState extends State<_ListGroupTile> {
             ),
             onTap: () => setState(() => _expanded = !_expanded),
           ),
-          if (_expanded) ...widget.todos.map((t) => _TodoTile(todo: t)),
+          if (_expanded) _buildTodoList(context, shareProvider),
         ],
       ),
     );
+  }
+
+  Widget _buildTodoList(BuildContext context, ShareProvider shareProvider) {
+    final canReorder =
+        !widget.batchMode &&
+        widget.todos.length > 1 &&
+        widget.todos.every((todo) => shareProvider.canEdit(todo.workspaceId));
+
+    if (!canReorder) {
+      return Column(
+        children: [for (final todo in widget.todos) _buildTodoTile(todo)],
+      );
+    }
+
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: widget.todos.length,
+      onReorder: _reorderTodos,
+      proxyDecorator: (child, index, animation) => Material(
+        type: MaterialType.transparency,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 1, end: 1.02).animate(animation),
+          child: child,
+        ),
+      ),
+      itemBuilder: (context, index) {
+        final todo = widget.todos[index];
+        return _buildTodoTile(
+          todo,
+          key: ValueKey('todo-reorder-${todo.id}'),
+          trailing: ReorderableDragStartListener(
+            index: index,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.grab,
+              child: Tooltip(
+                message: '拖拽排序',
+                child: Padding(
+                  padding: const EdgeInsets.only(left: DesignTokens.spaceXs),
+                  child: Icon(
+                    Icons.drag_indicator,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTodoTile(TodoItem todo, {Key? key, Widget? trailing}) {
+    return _TodoTile(
+      key: key,
+      todo: todo,
+      batchMode: widget.batchMode,
+      selected: widget.selectedTodoIds.contains(todo.id),
+      onToggleSelection: widget.onToggleSelection,
+      onEnterBatchMode: widget.onEnterBatchMode,
+      trailing: trailing,
+    );
+  }
+
+  Future<void> _reorderTodos(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+
+    final ids = widget.todos.map((todo) => todo.id).toList();
+    final moved = ids.removeAt(oldIndex);
+    ids.insert(newIndex, moved);
+    await context.read<TodoProvider>().reorderVisibleTodos(ids);
   }
 
   Future<void> _shareGroup(BuildContext context) async {
@@ -573,30 +2396,23 @@ class _ListGroupTileState extends State<_ListGroupTile> {
   }
 }
 
-extension _FirstOrNullX<T> on Iterable<T> {
-  T? get firstOrNull {
-    final iterator = this.iterator;
-    if (iterator.moveNext()) return iterator.current;
-    return null;
-  }
-}
-
 class _TodoTile extends StatelessWidget {
   final TodoItem todo;
-  const _TodoTile({required this.todo});
+  final bool batchMode;
+  final bool selected;
+  final ValueChanged<String> onToggleSelection;
+  final ValueChanged<String> onEnterBatchMode;
+  final Widget? trailing;
 
-  Color _quadrantColor(EisenhowerQuadrant q) {
-    switch (q) {
-      case EisenhowerQuadrant.urgentImportant:
-        return const Color(0xFFE53935);
-      case EisenhowerQuadrant.notUrgentImportant:
-        return const Color(0xFFF6A339);
-      case EisenhowerQuadrant.urgentNotImportant:
-        return const Color(0xFF42A5F5);
-      case EisenhowerQuadrant.notUrgentNotImportant:
-        return const Color(0xFF8E8E8E);
-    }
-  }
+  const _TodoTile({
+    super.key,
+    required this.todo,
+    required this.batchMode,
+    required this.selected,
+    required this.onToggleSelection,
+    required this.onEnterBatchMode,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -610,6 +2426,103 @@ class _TodoTile extends StatelessWidget {
     final canEdit = context.watch<ShareProvider>().canEdit(todo.workspaceId);
     final cs = Theme.of(context).colorScheme;
     final qColor = _quadrantColor(todo.quadrant);
+    final content = Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spaceMd,
+        vertical: DesignTokens.spaceSm,
+      ),
+      decoration: BoxDecoration(
+        color: selected ? cs.primary.withValues(alpha: 0.08) : cs.surface,
+        borderRadius: DesignTokens.borderRadiusMd,
+        border: selected
+            ? Border.all(color: cs.primary.withValues(alpha: 0.28))
+            : null,
+        boxShadow: DesignTokens.shadowXs,
+      ),
+      child: ClipRRect(
+        borderRadius: DesignTokens.borderRadiusMd,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: qColor),
+              Expanded(
+                child: InkWell(
+                  onTap: batchMode
+                      ? canEdit
+                            ? () => onToggleSelection(todo.id)
+                            : null
+                      : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TodoDetailScreen(todoId: todo.id),
+                          ),
+                        ),
+                  onLongPress: canEdit ? () => onEnterBatchMode(todo.id) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      DesignTokens.spaceSm,
+                      DesignTokens.spaceSm,
+                      DesignTokens.spaceSm,
+                      DesignTokens.spaceSm,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: DesignTokens.spaceXxs,
+                          ),
+                          child: SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Checkbox(
+                              value: batchMode ? selected : todo.isCompleted,
+                              shape: const CircleBorder(),
+                              activeColor: qColor,
+                              onChanged: canEdit
+                                  ? (_) {
+                                      if (batchMode) {
+                                        onToggleSelection(todo.id);
+                                      } else {
+                                        completeTodoWithOptionalTimeRecord(
+                                          context,
+                                          todo,
+                                        );
+                                      }
+                                    }
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: DesignTokens.spaceXs),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _TitleRow(todo: todo, visual: visual),
+                              const SizedBox(height: DesignTokens.spaceXxs),
+                              _MetaRow(
+                                todo: todo,
+                                quadrantColor: qColor,
+                                visual: visual,
+                              ),
+                            ],
+                          ),
+                        ),
+                        ?trailing,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (batchMode) return content;
 
     return Dismissible(
       key: ValueKey(todo.id),
@@ -628,83 +2541,7 @@ class _TodoTile extends StatelessWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       onDismissed: (_) => provider.deleteTodo(todo.id),
-      child: Container(
-        margin: const EdgeInsets.symmetric(
-          horizontal: DesignTokens.spaceMd,
-          vertical: DesignTokens.spaceSm,
-        ),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: DesignTokens.borderRadiusMd,
-          boxShadow: DesignTokens.shadowXs,
-        ),
-        child: ClipRRect(
-          borderRadius: DesignTokens.borderRadiusMd,
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(width: 4, color: qColor),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TodoDetailScreen(todoId: todo.id),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spaceSm,
-                        DesignTokens.spaceSm,
-                        DesignTokens.spaceSm,
-                        DesignTokens.spaceSm,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              top: DesignTokens.spaceXxs,
-                            ),
-                            child: SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Checkbox(
-                                value: todo.isCompleted,
-                                shape: const CircleBorder(),
-                                activeColor: qColor,
-                                onChanged: canEdit
-                                    ? (_) => provider.toggleTodo(todo.id)
-                                    : null,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: DesignTokens.spaceXs),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _TitleRow(todo: todo, visual: visual),
-                                const SizedBox(height: DesignTokens.spaceXxs),
-                                _MetaRow(
-                                  todo: todo,
-                                  quadrantColor: qColor,
-                                  visual: visual,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      child: content,
     );
   }
 }
@@ -768,6 +2605,7 @@ class _MetaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <Widget>[];
+    final shareProvider = context.watch<ShareProvider>();
 
     if (todo.priority != TodoPriority.none) {
       final c = priorityColor(todo.priority);
@@ -779,7 +2617,7 @@ class _MetaRow extends StatelessWidget {
             style: TextStyle(
               fontSize: DesignTokens.fontSizeXs,
               color: c,
-              fontWeight: DesignTokens.fontWeightSemiBold,
+              fontWeight: DesignTokens.fontWeightRegular,
             ),
           ),
         ),
@@ -806,7 +2644,7 @@ class _MetaRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeXs,
                   color: c,
-                  fontWeight: DesignTokens.fontWeightSemiBold,
+                  fontWeight: DesignTokens.fontWeightRegular,
                 ),
               ),
             ],
@@ -831,7 +2669,7 @@ class _MetaRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeXs,
                   color: c,
-                  fontWeight: DesignTokens.fontWeightSemiBold,
+                  fontWeight: DesignTokens.fontWeightRegular,
                 ),
               ),
             ],
@@ -851,7 +2689,7 @@ class _MetaRow extends StatelessWidget {
             style: TextStyle(
               fontSize: DesignTokens.fontSizeXs,
               color: c,
-              fontWeight: DesignTokens.fontWeightSemiBold,
+              fontWeight: DesignTokens.fontWeightRegular,
             ),
           ),
         ),
@@ -943,8 +2781,10 @@ class _MetaRow extends StatelessWidget {
     // 下一次提醒。临期状态下把 alarm icon 也闪烁一下，强化提示。
     final r = todo.reminder;
     if (r.enabled && r.hour != null && r.minute != null) {
-      final hh = r.hour!.toString().padLeft(2, '0');
-      final mm = r.minute!.toString().padLeft(2, '0');
+      final reminderTime = I18nDateFormat.timeOfDay(
+        hour: r.hour!,
+        minute: r.minute!,
+      );
       final icon = r.kind == ReminderKind.alarm
           ? Icons.alarm
           : Icons.notifications;
@@ -963,7 +2803,7 @@ class _MetaRow extends StatelessWidget {
               iconWidget,
               const SizedBox(width: 2),
               Text(
-                '下次 $hh:$mm',
+                '下次 $reminderTime',
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeXs,
                   color: reminderColor,
@@ -985,7 +2825,7 @@ class _MetaRow extends StatelessWidget {
               Icon(Icons.calendar_today, size: 10, color: quadrantColor),
               const SizedBox(width: 4),
               Text(
-                '${todo.dueDate!.month}/${todo.dueDate!.day}',
+                I18nDateFormat.monthDay(todo.dueDate!),
                 style: TextStyle(
                   fontSize: DesignTokens.fontSizeXs,
                   color: quadrantColor,
@@ -1023,6 +2863,33 @@ class _MetaRow extends StatelessWidget {
       );
     }
 
+    final assigneeName = _assigneeName(shareProvider, todo);
+    if (assigneeName != null) {
+      chips.add(
+        _MetaPill(
+          color: Colors.deepPurple,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.assignment_ind_outlined,
+                size: 11,
+                color: Colors.deepPurple,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '@$assigneeName',
+                style: const TextStyle(
+                  fontSize: DesignTokens.fontSizeXs,
+                  color: Colors.deepPurple,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (chips.isEmpty) return const SizedBox.shrink();
     return Wrap(
       spacing: DesignTokens.spaceXs,
@@ -1030,6 +2897,20 @@ class _MetaRow extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: chips,
     );
+  }
+
+  String? _assigneeName(ShareProvider provider, TodoItem todo) {
+    final assigneeId = todo.assigneeId;
+    if (assigneeId == null || assigneeId.isEmpty) return null;
+    for (final workspace in provider.workspaces) {
+      if (workspace.id != todo.workspaceId) continue;
+      for (final member in workspace.members) {
+        if (member.userId == assigneeId) {
+          return member.username.isEmpty ? member.userId : member.username;
+        }
+      }
+    }
+    return assigneeId;
   }
 }
 
@@ -1111,8 +2992,9 @@ class _MetaPill extends StatelessWidget {
 
 class QuadrantListScreen extends StatelessWidget {
   final EisenhowerQuadrant quadrant;
+  final TodoFilterState<EisenhowerQuadrant, TodoPriority>? filter;
 
-  const QuadrantListScreen({super.key, required this.quadrant});
+  const QuadrantListScreen({super.key, required this.quadrant, this.filter});
 
   String _title(EisenhowerQuadrant q) {
     switch (q) {
@@ -1129,13 +3011,40 @@ class QuadrantListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final todos = context.watch<TodoProvider>().getQuadrantTodos(quadrant);
+    final baseTodos = context.watch<TodoProvider>().visibleListTodos;
+    final effectiveFilter =
+        filter?.copyWith(quadrant: quadrant) ??
+        TodoFilterState<EisenhowerQuadrant, TodoPriority>(quadrant: quadrant);
+    final todos = filterTodos(
+      baseTodos,
+      effectiveFilter,
+      now: DateTime.now(),
+      quadrantOf: (todo) => todo.quadrant,
+      priorityOf: (todo) => todo.priority,
+      tagsOf: (todo) => todo.tags,
+      listGroupNameOf: (todo) => todo.listGroupName,
+      dueDateOf: (todo) => todo.dueDate,
+      isCompletedOf: (todo) => todo.isCompleted,
+      isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
+    );
 
     return Scaffold(
       appBar: AppBar(title: Text(_title(quadrant))),
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
-          : ListView(children: todos.map((t) => _TodoTile(todo: t)).toList()),
+          : ListView(
+              children: todos
+                  .map(
+                    (t) => _TodoTile(
+                      todo: t,
+                      batchMode: false,
+                      selected: false,
+                      onToggleSelection: (_) {},
+                      onEnterBatchMode: (_) {},
+                    ),
+                  )
+                  .toList(),
+            ),
     );
   }
 }

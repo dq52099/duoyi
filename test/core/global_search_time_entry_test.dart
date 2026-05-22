@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 
 import 'package:duoyi/core/global_search.dart';
+import 'package:duoyi/models/calendar_event.dart';
 import 'package:duoyi/models/time_entry.dart';
 
 void main() {
@@ -88,6 +90,51 @@ void main() {
       expect(hits, hasLength(1));
       expect(hits.first.kind, SearchKind.timeEntry);
       expect(hits.first.subtitle, '攻克难点');
+    });
+
+    test('CalendarEvent 本地/订阅日程命中但不重复聚合待办', () {
+      final events = <CalendarEvent>[
+        CalendarEvent(
+          id: 'local-event-1',
+          title: '客户复盘会议',
+          date: DateTime(2026, 5, 2, 14),
+          type: CalendarEventType.event,
+          sourceId: 'local-event-1',
+          subtitle: '会议室 A',
+          note: '准备复盘材料',
+          projectName: '客户项目',
+          color: const Color(0xFF5B6EE1),
+        ),
+        CalendarEvent(
+          id: 'todo-calendar-1',
+          title: '客户复盘待办',
+          date: DateTime(2026, 5, 2),
+          type: CalendarEventType.todo,
+          sourceId: 'todo-1',
+          color: const Color(0xFF5B6EE1),
+        ),
+      ];
+
+      final hits = GlobalSearch.run(
+        query: '复盘',
+        todos: const [],
+        habits: const [],
+        notes: const [],
+        diaries: const [],
+        anniversaries: const [],
+        countdowns: const [],
+        goals: const [],
+        courses: const [],
+        calendarEvents: events,
+        timeEntries: const [],
+      );
+
+      expect(hits, hasLength(1));
+      expect(hits.first.kind, SearchKind.calendarEvent);
+      expect(hits.first.title, '客户复盘会议');
+      expect(hits.first.subtitle, '会议室 A');
+      expect(hits.first.sourceId, 'local-event-1');
+      expect(hits.first.when, DateTime(2026, 5, 2, 14));
     });
   });
 }

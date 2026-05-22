@@ -1,0 +1,203 @@
+import 'dart:io';
+
+import 'package:test/test.dart';
+
+void main() {
+  test('管理员用户列表显示真实最近活跃和在线离线状态', () {
+    final backend = File('backend/main.py').readAsStringSync();
+    final adminScreen = File(
+      'lib/screens/admin_screen.dart',
+    ).readAsStringSync();
+
+    expect(backend, contains('SESSION_ONLINE_SECONDS'));
+    expect(backend, contains('last_active_at TEXT'));
+    expect(backend, contains('def _utc_now_text()'));
+    expect(backend, contains('UPDATE users SET last_active_at=?'));
+    expect(backend, contains('VALUES(?,?,?,?)'));
+    expect(
+      backend,
+      contains('UPDATE users SET last_login_at=?, last_active_at=? WHERE id=?'),
+    );
+    expect(backend, contains('def _has_recent_user_activity'));
+    expect(
+      backend,
+      isNot(contains("last_login_at >= datetime('now','-7 days')")),
+    );
+    expect(backend, contains('u.last_login_at, u.last_active_at'));
+    expect(backend, contains('"last_active_at": r["last_active_at"]'));
+    expect(backend, contains('"online": r["id"] in online_user_ids'));
+
+    expect(adminScreen, contains("u['last_login_at']"));
+    expect(adminScreen, contains("u['last_active_at']"));
+    expect(adminScreen, contains('text.replaceFirst'));
+    expect(adminScreen, contains('hasTimezone'));
+    expect(adminScreen, contains('_formatLastLogin'));
+    expect(adminScreen, contains("online ? '在线' : '离线'"));
+    expect(adminScreen, contains(r'最近登录: $lastLoginAt'));
+    expect(adminScreen, contains(r'最近活跃: $lastActiveAt'));
+    expect(adminScreen, contains('从未登录'));
+    expect(adminScreen, contains('从未活跃'));
+    expect(adminScreen, contains('Timer.periodic(_onlineRefreshInterval'));
+    expect(adminScreen, contains('Duration(seconds: 60)'));
+    expect(adminScreen, contains('_load(quiet: true)'));
+  });
+
+  test('管理员后台大数据列表使用分页 API 和分页文案', () {
+    final adminScreen = File(
+      'lib/screens/admin_screen.dart',
+    ).readAsStringSync();
+    final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
+
+    expect(adminApi, contains('class AdminPage'));
+    expect(adminApi, contains('Future<AdminPage> listUsersPage'));
+    expect(adminApi, contains('Future<AdminPage> listBackupsPage'));
+    expect(adminApi, contains('Future<AdminPage> listServerBackupsPage'));
+    expect(adminApi, contains('Future<String> exportBackupsCsv'));
+    expect(adminApi, contains('Future<String> exportServerBackupsCsv'));
+    expect(adminApi, contains("'/api/admin/backups/export.csv'"));
+    expect(adminApi, contains("'/api/admin/server-backups/export.csv'"));
+    expect(adminApi, contains('Future<AdminPage> listAnnouncementsPage'));
+    expect(adminApi, contains('Future<AdminPage> listFeedbackPage'));
+    expect(adminApi, contains('Future<AdminPage> listInviteCodesPage'));
+    expect(adminApi, contains('Future<String> exportFeedbackCsv'));
+    expect(adminApi, contains("'/api/admin/feedback/export.csv'"));
+    expect(adminApi, contains('client.getText('));
+    expect(adminApi, contains("'limit': limit"));
+    expect(adminApi, contains("'offset': offset"));
+    expect(
+      adminApi,
+      contains("params: {'q': query, 'status': status, 'sort': sort}"),
+    );
+
+    expect(adminScreen, contains('const int _adminPageSize = 20'));
+    expect(adminScreen, contains('_AdminPaginationBar'));
+    expect(adminScreen, contains(r'第 $start-$end 条 / 共 ${page.total} 条'));
+    expect(adminScreen, contains('String _adminPageNumber(AdminPage? page)'));
+    expect(adminScreen, contains(r'第 $current/$totalPages 页'));
+    expect(adminScreen, contains('正在加载公告列表…'));
+    expect(adminScreen, contains('正在加载反馈列表…'));
+    expect(adminScreen, contains('正在加载邀请码列表…'));
+    expect(adminScreen, contains('正在加载审计日志…'));
+    expect(adminScreen, contains("hintText: '搜索文件名、状态、路径或详情'"));
+    expect(adminScreen, contains("hintText: '搜索用户名、邮箱、昵称或用户 ID'"));
+    expect(adminScreen, contains("hintText: '搜索用户名、邮箱、昵称或用户 ID'"));
+    expect(adminScreen, contains("tooltip: '清空服务器备份搜索'"));
+    expect(adminScreen, contains("tooltip: '清空用户备份搜索'"));
+    expect(adminScreen, contains('Future<void> _exportBackupsCsv()'));
+    expect(adminScreen, contains('Future<void> _exportServerBackupsCsv()'));
+    expect(adminScreen, contains('widget.api.exportBackupsCsv('));
+    expect(adminScreen, contains('widget.api.exportServerBackupsCsv('));
+    expect(adminScreen, contains("prefix: 'duoyi_backups'"));
+    expect(adminScreen, contains("prefix: 'duoyi_server_backups'"));
+    expect(
+      adminScreen,
+      contains("actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果'"),
+    );
+    expect(
+      adminScreen,
+      contains("actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果'"),
+    );
+    expect(adminScreen, contains("labelText: '服务器备份排序'"));
+    expect(adminScreen, contains("labelText: '用户备份排序'"));
+    expect(adminScreen, contains("_serverBackupStatusChip('已上传', 'uploaded')"));
+    expect(adminScreen, contains("_backupStatusChip('已有快照', 'synced')"));
+    expect(adminScreen, contains("_userFilterChip('在线', 'online')"));
+    expect(
+      adminScreen,
+      contains("_userFilterChip('邮箱未验证', 'unverified_email')"),
+    );
+    expect(adminScreen, contains("_userFilterChip('有反馈', 'has_feedback')"));
+    expect(adminScreen, contains("online: _onlineFilter(nextStatus)"));
+    expect(adminScreen, contains("status: _backendStatusFilter(nextStatus)"));
+    expect(adminScreen, contains("value: 'email_asc'"));
+    expect(adminScreen, contains("value: 'version_desc'"));
+    expect(adminScreen, contains('serverBackupPageSize: value'));
+    expect(adminScreen, contains('backupPageSize: value'));
+    expect(adminScreen, contains('_adminServerBackupSortLabel'));
+    expect(adminScreen, contains('_adminBackupSortLabel'));
+    expect(adminScreen, contains('公告较多时使用底部分页查看'));
+    expect(adminScreen, contains('当前筛选下没有反馈'));
+    expect(adminScreen, contains('反馈较多时请用底部分页查看其他页面'));
+    expect(adminScreen, contains('切换处理状态和分类'));
+    expect(adminScreen, contains('Future<void> _exportFilteredCsv()'));
+    expect(adminScreen, contains('widget.api.exportFeedbackCsv('));
+    expect(adminScreen, contains("tooltip: '导出筛选结果'"));
+    expect(adminScreen, contains('SharePlus.instance.share'));
+    expect(adminScreen, contains('duoyi_feedback_'));
+    expect(adminScreen, contains('也可导出当前筛选结果'));
+    expect(adminScreen, contains('邀请码较多时请用底部分页查看其他页面'));
+    expect(adminScreen, contains('搜索邀请码、备注或使用者'));
+    expect(adminScreen, contains('搜索管理员、操作、对象或详情'));
+    expect(adminScreen, contains("tooltip: '清空邀请码搜索'"));
+    expect(adminScreen, contains("tooltip: '清空日志搜索'"));
+    expect(
+      adminScreen,
+      contains('query: nextQuery.isEmpty ? null : nextQuery'),
+    );
+    expect(adminScreen, contains('删除公告？'));
+    expect(adminScreen, contains('删除反馈？'));
+    expect(adminScreen, contains('删除邀请码？'));
+    expect(adminScreen, contains("'每页'"));
+    expect(adminScreen, contains("message: '跳到第一页'"));
+    expect(adminScreen, contains("message: '跳到最后一页'"));
+    expect(adminScreen, contains('onJumpToPage'));
+    expect(adminScreen, contains("label: const Text('上一页')"));
+    expect(adminScreen, contains("label: const Text('下一页')"));
+    expect(
+      adminScreen,
+      contains('const List<int> _adminPageSizeOptions = [20, 50, 100]'),
+    );
+    expect(adminScreen, contains('items: _adminPageSizeOptions'));
+    expect(adminScreen, contains('DropdownMenuItem(value: v'));
+    expect(adminScreen, contains('widget.api.listAnnouncementsPage'));
+    expect(adminScreen, contains('widget.api.listFeedbackPage'));
+    expect(adminScreen, contains('widget.api.listInviteCodesPage'));
+    expect(adminScreen, contains('widget.api.auditLogPage'));
+    expect(adminScreen, contains('公告排序'));
+    expect(adminScreen, contains('反馈排序'));
+    expect(adminScreen, contains('邀请码排序'));
+    expect(adminScreen, contains('日志排序'));
+    expect(adminScreen, contains('最近更新优先'));
+    expect(adminScreen, contains('最近处理优先'));
+    expect(adminScreen, contains('最近使用优先'));
+    expect(adminScreen, contains('操作类型 A-Z'));
+    expect(adminScreen, contains('本页处理中转已解决'));
+    expect(adminScreen, contains('本页已解决转关闭'));
+    expect(adminScreen, contains('_adminAnnouncementSortLabel'));
+    expect(adminScreen, contains('_adminFeedbackSortLabel'));
+    expect(adminScreen, contains('_adminInviteSortLabel'));
+    expect(adminScreen, contains('_adminAuditSortLabel'));
+    expect(adminScreen, contains('_feedbackCategoryLabel(category)'));
+    expect(adminScreen, contains('_categoryChip(_feedbackCategoryLabel'));
+    expect(adminScreen, contains('_inviteStatusChip'));
+    expect(adminScreen, contains('_offsetAfterAdminDelete'));
+  });
+
+  test('管理员反馈 CSV 导出使用当前筛选并做表格公式防护', () {
+    final backend = File('backend/main.py').readAsStringSync();
+
+    expect(backend, contains('@app.get("/api/admin/feedback/export.csv")'));
+    expect(backend, contains('def export_feedback_csv'));
+    expect(backend, contains('_feedback_admin_filters('));
+    expect(backend, contains('_feedback_admin_order_by(sort)'));
+    expect(backend, contains('email_verified'));
+    expect(backend, contains('sync_version'));
+    expect(backend, contains('has_snapshot'));
+    expect(backend, contains('status == "has_feedback"'));
+    expect(backend, contains('status == "unverified_email"'));
+    expect(backend, contains('"email_asc"'));
+    expect(backend, contains('"version_desc"'));
+    expect(backend, contains('limit: int = Query(5000, ge=1, le=20000)'));
+    expect(backend, contains('"Content-Disposition"'));
+    expect(backend, contains('"X-Total-Count"'));
+    expect(backend, contains('"X-Exported-Count"'));
+    expect(backend, contains('"feedback.export"'));
+    expect(backend, contains('def _csv_safe(value)'));
+    expect(
+      backend,
+      contains('text[0] in ("=", "+", "-", "@", "\\t", "\\r", "\\n")'),
+    );
+    expect(backend, contains('writer.writerow('));
+    expect(backend, contains('text/csv; charset=utf-8'));
+  });
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/i18n.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
@@ -37,7 +38,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = '公告加载失败：$e';
+      _error = '${I18n.tr('announcement.load_failed_prefix')}$e';
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -57,11 +58,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   String _levelLabel(String level) {
     switch (level) {
       case 'warning':
-        return '提醒';
+        return I18n.tr('announcement.level.warning');
       case 'critical':
-        return '重要';
+        return I18n.tr('announcement.level.critical');
       default:
-        return '公告';
+        return I18n.tr('announcement.level.info');
     }
   }
 
@@ -70,7 +71,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('公告')),
+      appBar: AppBar(title: Text(I18n.tr('announcement.title'))),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -105,7 +106,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '公告中心',
+                          I18n.tr('announcement.center'),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.w400,
@@ -114,7 +115,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '系统通知、维护说明和版本更新会先出现在这里',
+                          I18n.tr('announcement.subtitle'),
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.66),
@@ -128,8 +129,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
             const SizedBox(height: 12),
             AppSectionHeader(
-              title: '最新公告',
-              subtitle: '下拉可刷新',
+              title: I18n.tr('announcement.latest'),
+              subtitle: I18n.tr('announcement.pull_to_refresh'),
               padding: EdgeInsets.zero,
             ),
             const SizedBox(height: 8),
@@ -141,8 +142,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             else if (_items.isEmpty)
               EmptyState(
                 icon: Icons.campaign_outlined,
-                message: _error ?? '暂无公告',
-                actionLabel: '刷新',
+                message: _error ?? I18n.tr('announcement.empty'),
+                actionLabel: I18n.tr('announcement.refresh'),
                 onAction: _load,
               )
             else

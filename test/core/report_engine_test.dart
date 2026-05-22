@@ -177,5 +177,31 @@ void main() {
       );
       expect(report.habitCheckIns, 2);
     });
+
+    test('不计入习惯起止周期外的打卡次数', () {
+      final habit = Habit(
+        id: 'range',
+        name: '阶段阅读',
+        startDate: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 12),
+        completions: {
+          '2026-05-09': 10,
+          '2026-05-10': 1,
+          '2026-05-12': 2,
+          '2026-05-13': 10,
+        },
+      );
+
+      final report = ReportEngine.buildReport(
+        start: DateTime(2026, 5, 8),
+        end: DateTime(2026, 5, 14),
+        todos: const [],
+        habits: [habit],
+        sessions: const [],
+        timeEntries: const [],
+      );
+
+      expect(report.habitCheckIns, 3);
+    });
   });
 }

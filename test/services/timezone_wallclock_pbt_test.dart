@@ -363,6 +363,9 @@ class _ScheduleFullScreenCall {
   final String? payload;
   final bool requireExactAlarm;
   final bool fullScreen;
+  final bool vibrate;
+  final int snoozeMinutes;
+  final int repeatCount;
   const _ScheduleFullScreenCall({
     required this.id,
     required this.title,
@@ -371,6 +374,9 @@ class _ScheduleFullScreenCall {
     required this.payload,
     required this.requireExactAlarm,
     required this.fullScreen,
+    required this.vibrate,
+    required this.snoozeMinutes,
+    required this.repeatCount,
   });
 }
 
@@ -452,6 +458,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     scheduleFullScreenCalls.add(
       _ScheduleFullScreenCall(
@@ -462,6 +471,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
         payload: payload,
         requireExactAlarm: requireExactAlarm,
         fullScreen: fullScreen,
+        vibrate: vibrate,
+        snoozeMinutes: snoozeMinutes,
+        repeatCount: repeatCount,
       ),
     );
   }
@@ -477,6 +489,9 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {}
 
   @override

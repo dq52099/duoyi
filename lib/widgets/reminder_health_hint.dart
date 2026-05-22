@@ -104,24 +104,24 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
             status = PermissionHealthStatus.blocked;
             subtitle = '系统通知未授权，提醒不会正常显示';
             action = _handleNotificationPermission;
-            actionLabel = '去授权';
+            actionLabel = '通知授权';
             icon = Icons.notifications_off_outlined;
           } else if (alarmKind && !exactGranted) {
             status = PermissionHealthStatus.blocked;
             subtitle = '系统通知已授权，但精准闹钟未开启，强提醒可能延后';
             action = _handleExactAlarmPermission;
-            actionLabel = '去授权';
+            actionLabel = '精准闹钟';
             icon = Icons.alarm_off_outlined;
           } else if (alarmKind && !fullScreenIntentGranted) {
             status = PermissionHealthStatus.blocked;
             subtitle = '弹出屏幕权限未允许，强提醒可能只显示在通知栏';
             action = _handleFullScreenIntentPermission;
-            actionLabel = '去授权';
+            actionLabel = '弹屏权限';
             icon = Icons.phonelink_lock_outlined;
           } else if (report.hasWarnings) {
             status = PermissionHealthStatus.warning;
             subtitle = isXiaomi
-                ? '小米/MIUI 需人工确认后台、锁屏和电池策略'
+                ? 'HyperOS/MIUI 需确认自启动、后台、电池、锁屏、横幅和渠道声音'
                 : 'Android 设备还要检查后台和电池限制';
             icon = Icons.tips_and_updates_outlined;
           } else if (report.hasUnknown) {

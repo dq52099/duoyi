@@ -49,71 +49,34 @@ TextTheme _textTheme({
   required Color mutedColor,
   required Color headingColor,
 }) {
-  final isDark = brightness == Brightness.dark;
+  TextStyle style(double size, Color color, {double height = 1.3}) {
+    return TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      fontSize: size,
+      height: height,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0,
+      color: color,
+    );
+  }
+
   return TextTheme(
-    headlineSmall: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: isDark ? 26 : 25,
-      height: 1.2,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: headingColor,
-    ),
-    titleLarge: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 22,
-      height: 1.24,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: headingColor,
-    ),
-    titleMedium: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 18,
-      height: 1.28,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: headingColor,
-    ),
-    bodyLarge: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 16,
-      height: 1.56,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: bodyColor,
-    ),
-    bodyMedium: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 14,
-      height: 1.58,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: bodyColor,
-    ),
-    bodySmall: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 12,
-      height: 1.5,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: mutedColor,
-    ),
-    labelLarge: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      fontSize: 14,
-      height: 1.2,
-      fontWeight: FontWeight.w400,
-      letterSpacing: 0,
-      color: bodyColor,
-    ),
+    displayLarge: style(57, headingColor, height: 1.12),
+    displayMedium: style(45, headingColor, height: 1.16),
+    displaySmall: style(36, headingColor, height: 1.2),
+    headlineLarge: style(32, headingColor, height: 1.22),
+    headlineMedium: style(28, headingColor, height: 1.24),
+    headlineSmall: style(25, headingColor, height: 1.28),
+    titleLarge: style(22, headingColor, height: 1.24),
+    titleMedium: style(18, headingColor, height: 1.28),
+    titleSmall: style(14, headingColor, height: 1.3),
+    bodyLarge: style(16, bodyColor, height: 1.56),
+    bodyMedium: style(14, bodyColor, height: 1.58),
+    bodySmall: style(12, mutedColor, height: 1.5),
+    labelLarge: style(14, bodyColor, height: 1.2),
+    labelMedium: style(12, bodyColor, height: 1.2),
+    labelSmall: style(11, bodyColor, height: 1.2),
   );
 }
 
@@ -963,7 +926,7 @@ final _defaultTheme = _lightTheme(
 class AppBrands {
   static final defaultBrand = AppBrand(
     style: BrandStyle.defaultBrand,
-    name: '指尖时光',
+    name: '多仪',
     theme: _defaultTheme,
     backgroundOverlay: const Color(0xFFFFF8F0),
     backgroundOverlayOpacity: 1.0,

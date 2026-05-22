@@ -34,6 +34,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('习惯趋势'), findsOneWidget);
+    expect(find.text('区间明细'), findsOneWidget);
+    expect(find.textContaining('达标'), findsOneWidget);
+
     await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 

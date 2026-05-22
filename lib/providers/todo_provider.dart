@@ -3,10 +3,22 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/domain_event_bus.dart';
+import '../core/todo_kanban.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
 import '../services/reminder_scheduler.dart';
+import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
+
+class TodoImportSummary {
+  final int inserted;
+  final int skippedDuplicates;
+
+  const TodoImportSummary({
+    required this.inserted,
+    required this.skippedDuplicates,
+  });
+}
 
 class TodoProvider extends ChangeNotifier {
   List<TodoItem> _todos = [];
@@ -33,16 +45,18 @@ class TodoProvider extends ChangeNotifier {
 
   List<TodoItem> get todos => _todos;
 
+  int _compareTodos(TodoItem a, TodoItem b) {
+    if (a.sortOrder != b.sortOrder) {
+      return a.sortOrder.compareTo(b.sortOrder);
+    }
+    // 次序相同时按优先级倒序，再按创建时间
+    final p = b.priority.rank.compareTo(a.priority.rank);
+    if (p != 0) return p;
+    return a.createdAt.compareTo(b.createdAt);
+  }
+
   void _notify() {
-    _todos.sort((a, b) {
-      if (a.sortOrder != b.sortOrder) {
-        return a.sortOrder.compareTo(b.sortOrder);
-      }
-      // 次序相同时按优先级倒序，再按创建时间
-      final p = b.priority.rank.compareTo(a.priority.rank);
-      if (p != 0) return p;
-      return a.createdAt.compareTo(b.createdAt);
-    });
+    _todos.sort(_compareTodos);
     notifyListeners();
   }
 
@@ -159,13 +173,63 @@ class TodoProvider extends ChangeNotifier {
     await _saveToStorage();
   }
 
+  Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
+    final incoming = imported.toList();
+    if (incoming.isEmpty) {
+      return const TodoImportSummary(inserted: 0, skippedDuplicates: 0);
+    }
+
+    final seen = _todos.map(_importDuplicateKey).toSet();
+    final currentMaxSortOrder = _todos.isEmpty
+        ? -1
+        : _todos.map((todo) => todo.sortOrder).reduce((a, b) => a > b ? a : b);
+    var nextSortOrder = currentMaxSortOrder + 1;
+    var inserted = 0;
+    var skippedDuplicates = 0;
+
+    for (final todo in incoming) {
+      final key = _importDuplicateKey(todo);
+      if (seen.contains(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seen.add(key);
+      final next = todo.copyWith(sortOrder: nextSortOrder++);
+      _todos.add(next);
+      inserted++;
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.todoCreated, objectId: next.id),
+      );
+    }
+
+    if (inserted == 0) {
+      return TodoImportSummary(
+        inserted: 0,
+        skippedDuplicates: skippedDuplicates,
+      );
+    }
+    _notify();
+    await _saveToStorage();
+    return TodoImportSummary(
+      inserted: inserted,
+      skippedDuplicates: skippedDuplicates,
+    );
+  }
+
   Future<void> updateTodo(String id, TodoItem updated) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
       final prev = _todos[idx];
-      final next = updated.isCompleted && updated.completedAt == null
+      var next = updated.isCompleted && updated.completedAt == null
           ? updated.copyWith(completedAt: DateTime.now())
           : updated;
+      if (!prev.isCompleted && next.isCompleted) {
+        next = next.copyWith(kanbanColumnId: defaultKanbanDoneColumnId);
+      } else if (prev.isCompleted &&
+          !next.isCompleted &&
+          next.kanbanColumnId == defaultKanbanDoneColumnId) {
+        next = next.copyWith(kanbanColumnId: defaultKanbanPendingColumnId);
+      }
       _todos[idx] = next;
       if (!prev.isCompleted && next.isCompleted) {
         DomainEventBus.instance.publish(
@@ -188,8 +252,90 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
+  Future<int> completeTodos(
+    Iterable<String> ids, {
+    bool recordCompletionTime = true,
+  }) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+
+    final completed = <TodoItem>[];
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final prev = _todos[i];
+      if (!selected.contains(prev.id) || prev.isCompleted) continue;
+
+      final next = prev.copyWith(
+        isCompleted: true,
+        completedAt: DateTime.now(),
+        kanbanColumnId: defaultKanbanDoneColumnId,
+      );
+      _todos[i] = next;
+      completed.add(next);
+      changed++;
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
+      );
+
+      if (prev.recurrence.isActive) {
+        final recurring = _nextRecurringTodo(prev);
+        if (recurring != null) _todos.add(recurring);
+      }
+    }
+
+    if (changed == 0) return 0;
+    _notify();
+    await _saveToStorage();
+
+    if (recordCompletionTime) {
+      for (final todo in completed) {
+        await _timeAudit?.recordTodoCompletion(
+          todo,
+          completedAt: todo.completedAt,
+        );
+      }
+    }
+    return changed;
+  }
+
+  Future<int> reopenTodos(Iterable<String> ids) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+
+    final reopened = <TodoItem>[];
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final prev = _todos[i];
+      if (!selected.contains(prev.id) || !prev.isCompleted) continue;
+      _todos[i] = prev.copyWith(
+        isCompleted: false,
+        completedAt: null,
+        kanbanColumnId: prev.kanbanColumnId == defaultKanbanDoneColumnId
+            ? defaultKanbanPendingColumnId
+            : prev.kanbanColumnId,
+      );
+      reopened.add(prev);
+      changed++;
+    }
+
+    if (changed == 0) return 0;
+    _notify();
+    await _saveToStorage();
+
+    for (final todo in reopened) {
+      await _timeAudit?.removeTodoCompletion(
+        todo,
+        completedAt: todo.completedAt,
+      );
+    }
+    return changed;
+  }
+
   /// 切换完成状态。若任务带有重复规则并且本次变为已完成，自动克隆一条下次的任务。
-  Future<void> toggleTodo(String id) async {
+  ///
+  /// [recordCompletionTime] 为 `true` 时，在完成状态变更后会自动写入时间足迹；
+  /// 由 UI 层统一决定是否要先弹出"顺手记耗时"对话框，或改用自定义时长。
+  Future<void> toggleTodo(String id, {bool recordCompletionTime = true}) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return;
     final prev = _todos[idx];
@@ -197,6 +343,11 @@ class TodoProvider extends ChangeNotifier {
     _todos[idx] = prev.copyWith(
       isCompleted: nowCompleted,
       completedAt: nowCompleted ? DateTime.now() : null,
+      kanbanColumnId: nowCompleted
+          ? defaultKanbanDoneColumnId
+          : prev.kanbanColumnId == defaultKanbanDoneColumnId
+          ? defaultKanbanPendingColumnId
+          : prev.kanbanColumnId,
     );
     if (nowCompleted) {
       DomainEventBus.instance.publish(
@@ -205,71 +356,18 @@ class TodoProvider extends ChangeNotifier {
     }
 
     if (nowCompleted && prev.recurrence.isActive) {
-      final next = prev.recurrence.nextAfter(prev.date);
-      if (next != null) {
-        final delta = prev.dueDate == null
-            ? Duration.zero
-            : prev.dueDate!.difference(prev.date);
-        final nextDue = prev.dueDate == null ? null : next.add(delta);
-        DateTime? nextReminderAt;
-        // ignore: deprecated_member_use_from_same_package
-        final reminderEnabled = prev.reminder.enabled || prev.hasReminder;
-        if (reminderEnabled) {
-          final hour = prev.reminder.enabled
-              ? prev.reminder.hour
-              // ignore: deprecated_member_use_from_same_package
-              : prev.reminderAt?.hour;
-          final minute = prev.reminder.enabled
-              ? prev.reminder.minute
-              // ignore: deprecated_member_use_from_same_package
-              : prev.reminderAt?.minute;
-          if (hour != null && minute != null) {
-            final reminderAnchor = nextDue ?? next;
-            nextReminderAt = DateTime(
-              reminderAnchor.year,
-              reminderAnchor.month,
-              reminderAnchor.day,
-              hour,
-              minute,
-            );
-          }
-        }
-        _todos.add(
-          TodoItem(
-            title: prev.title,
-            notes: prev.notes,
-            quadrant: prev.quadrant,
-            priority: prev.priority,
-            listGroupId: prev.listGroupId,
-            listGroupName: prev.listGroupName,
-            tags: [...prev.tags],
-            dueDate: nextDue,
-            date: next,
-            hasReminder: reminderEnabled,
-            reminderAt: nextReminderAt,
-            reminder: prev.reminder,
-            reminderPlan: prev.reminderPlan,
-            focusLink: prev.focusLink,
-            timeTargetSeconds: prev.timeTargetSeconds,
-            subtasks: prev.subtasks
-                .map((s) => Subtask(title: s.title, sortOrder: s.sortOrder))
-                .toList(),
-            autoToggleByChildren: prev.autoToggleByChildren,
-            recurrence: prev.recurrence,
-            sortOrder: prev.sortOrder,
-          ),
-        );
-      }
+      final recurring = _nextRecurringTodo(prev);
+      if (recurring != null) _todos.add(recurring);
     }
 
     _notify();
     await _saveToStorage();
-    if (nowCompleted) {
+    if (nowCompleted && recordCompletionTime) {
       await _timeAudit?.recordTodoCompletion(
         _todos[idx],
         completedAt: _todos[idx].completedAt,
       );
-    } else {
+    } else if (!nowCompleted) {
       await _timeAudit?.removeTodoCompletion(
         prev,
         completedAt: prev.completedAt,
@@ -280,11 +378,151 @@ class TodoProvider extends ChangeNotifier {
   Future<void> deleteTodo(String id) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
+      await CloudSyncProvider.recordDeletedItem('todos', id);
       await _timeAudit?.deleteBySource(TimeEntrySource.todo, id);
     }
     _todos.removeWhere((t) => t.id == id);
     _notify();
     await _saveToStorage();
+  }
+
+  Future<int> deleteTodos(Iterable<String> ids) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+    final existing = _todos.where((t) => selected.contains(t.id)).toList();
+    if (existing.isEmpty) return 0;
+
+    await CloudSyncProvider.recordDeletedItems(
+      'todos',
+      existing.map((todo) => todo.id),
+    );
+    for (final todo in existing) {
+      await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id);
+    }
+    _todos.removeWhere((t) => selected.contains(t.id));
+    _notify();
+    await _saveToStorage();
+    return existing.length;
+  }
+
+  Future<int> updateTodosQuadrant(
+    Iterable<String> ids,
+    EisenhowerQuadrant quadrant,
+  ) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id) || todo.quadrant == quadrant) continue;
+      _todos[i] = todo.copyWith(quadrant: quadrant);
+      changed++;
+    }
+    if (changed == 0) return 0;
+    _notify();
+    await _saveToStorage();
+    return changed;
+  }
+
+  Future<int> updateTodosPriority(
+    Iterable<String> ids,
+    TodoPriority priority,
+  ) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id) || todo.priority == priority) continue;
+      _todos[i] = todo.copyWith(priority: priority);
+      changed++;
+    }
+    if (changed == 0) return 0;
+    _notify();
+    await _saveToStorage();
+    return changed;
+  }
+
+  Future<int> updateTodosKanbanColumn(
+    Iterable<String> ids,
+    String columnId,
+  ) async {
+    final target = columnId.trim().isEmpty
+        ? defaultKanbanPendingColumnId
+        : columnId.trim();
+    final selected = ids.toSet();
+    if (selected.isEmpty) return 0;
+    final completed = <TodoItem>[];
+    final reopened = <TodoItem>[];
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id) || todo.kanbanColumnId == target) {
+        continue;
+      }
+      final next = todo.copyWith(
+        kanbanColumnId: target,
+        isCompleted: target == defaultKanbanDoneColumnId
+            ? true
+            : target != defaultKanbanDoneColumnId &&
+                  todo.kanbanColumnId == defaultKanbanDoneColumnId
+            ? false
+            : todo.isCompleted,
+        completedAt: target == defaultKanbanDoneColumnId && !todo.isCompleted
+            ? DateTime.now()
+            : target != defaultKanbanDoneColumnId &&
+                  todo.kanbanColumnId == defaultKanbanDoneColumnId
+            ? null
+            : todo.completedAt,
+      );
+      _todos[i] = next;
+      if (!todo.isCompleted && next.isCompleted) {
+        completed.add(next);
+        DomainEventBus.instance.publish(
+          DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
+        );
+        if (todo.recurrence.isActive) {
+          final recurring = _nextRecurringTodo(todo);
+          if (recurring != null) _todos.add(recurring);
+        }
+      } else if (todo.isCompleted && !next.isCompleted) {
+        reopened.add(todo);
+      }
+      changed++;
+    }
+    if (changed == 0) return 0;
+    _notify();
+    await _saveToStorage();
+    for (final todo in completed) {
+      await _timeAudit?.recordTodoCompletion(
+        todo,
+        completedAt: todo.completedAt,
+      );
+    }
+    for (final todo in reopened) {
+      await _timeAudit?.removeTodoCompletion(
+        todo,
+        completedAt: todo.completedAt,
+      );
+    }
+    return changed;
+  }
+
+  Future<bool> scheduleTodoForToday(String id, {DateTime? now}) async {
+    final idx = _todos.indexWhere((t) => t.id == id);
+    if (idx == -1) return false;
+    final todo = _todos[idx];
+    if (todo.isCompleted || todo.isArchivedAfterRollover) return false;
+
+    final base = now ?? DateTime.now();
+    final today = DateTime(base.year, base.month, base.day);
+    final currentDay = DateTime(todo.date.year, todo.date.month, todo.date.day);
+    if (currentDay == today && !todo.isArchivedAfterRollover) return false;
+
+    _todos[idx] = todo.copyWith(date: today, isArchivedAfterRollover: false);
+    _notify();
+    await _saveToStorage();
+    return true;
   }
 
   Future<void> reorder(List<String> orderedIds) async {
@@ -301,6 +539,120 @@ class TodoProvider extends ChangeNotifier {
     _todos = newList;
     _notify();
     await _saveToStorage();
+  }
+
+  Future<int> reorderVisibleTodos(List<String> orderedIds) async {
+    final ordered = orderedIds.toList(growable: false);
+    if (ordered.length < 2) return 0;
+    final orderedSet = ordered.toSet();
+    if (orderedSet.length != ordered.length) return 0;
+
+    final byId = {for (final todo in _todos) todo.id: todo};
+    if (!ordered.every(byId.containsKey)) return 0;
+
+    final sorted = [..._todos]..sort(_compareTodos);
+    final slots = <int>[];
+    for (var i = 0; i < sorted.length; i++) {
+      if (orderedSet.contains(sorted[i].id)) slots.add(i);
+    }
+    if (slots.length != ordered.length) return 0;
+
+    final current = [for (final slot in slots) sorted[slot].id];
+    var changedOrder = false;
+    for (var i = 0; i < current.length; i++) {
+      if (current[i] != ordered[i]) {
+        changedOrder = true;
+        break;
+      }
+    }
+    if (!changedOrder) return 0;
+
+    for (var i = 0; i < slots.length; i++) {
+      sorted[slots[i]] = byId[ordered[i]]!;
+    }
+
+    var changed = 0;
+    final rebuilt = <TodoItem>[];
+    for (var i = 0; i < sorted.length; i++) {
+      final todo = sorted[i];
+      if (todo.sortOrder == i) {
+        rebuilt.add(todo);
+      } else {
+        rebuilt.add(todo.copyWith(sortOrder: i));
+        changed++;
+      }
+    }
+    _todos = rebuilt;
+    _notify();
+    await _saveToStorage();
+    return changed;
+  }
+
+  TodoItem? _nextRecurringTodo(TodoItem prev) {
+    final remainingOccurrences = prev.recurrence.maxOccurrences;
+    if (remainingOccurrences != null && remainingOccurrences <= 1) {
+      return null;
+    }
+    final next = prev.recurrence.nextAfter(prev.date);
+    if (next == null) return null;
+    final nextRecurrence = remainingOccurrences == null
+        ? prev.recurrence
+        : prev.recurrence.copyWith(maxOccurrences: remainingOccurrences - 1);
+    final delta = prev.dueDate == null
+        ? Duration.zero
+        : prev.dueDate!.difference(prev.date);
+    final nextDue = prev.dueDate == null ? null : next.add(delta);
+    DateTime? nextReminderAt;
+    // ignore: deprecated_member_use_from_same_package
+    final reminderEnabled = prev.reminder.enabled || prev.hasReminder;
+    if (reminderEnabled) {
+      final hour = prev.reminder.enabled
+          ? prev.reminder.hour
+          // ignore: deprecated_member_use_from_same_package
+          : prev.reminderAt?.hour;
+      final minute = prev.reminder.enabled
+          ? prev.reminder.minute
+          // ignore: deprecated_member_use_from_same_package
+          : prev.reminderAt?.minute;
+      if (hour != null && minute != null) {
+        final reminderAnchor = nextDue ?? next;
+        nextReminderAt = DateTime(
+          reminderAnchor.year,
+          reminderAnchor.month,
+          reminderAnchor.day,
+          hour,
+          minute,
+        );
+      }
+    }
+    return TodoItem(
+      title: prev.title,
+      notes: prev.notes,
+      quadrant: prev.quadrant,
+      priority: prev.priority,
+      listGroupId: prev.listGroupId,
+      listGroupName: prev.listGroupName,
+      workspaceId: prev.workspaceId,
+      createdBy: prev.createdBy,
+      updatedBy: prev.updatedBy,
+      assigneeId: prev.assigneeId,
+      tags: [...prev.tags],
+      attachments: [...prev.attachments],
+      dueDate: nextDue,
+      date: next,
+      hasReminder: reminderEnabled,
+      reminderAt: nextReminderAt,
+      reminder: prev.reminder,
+      reminderPlan: prev.reminderPlan,
+      focusLink: prev.focusLink,
+      timeTargetSeconds: prev.timeTargetSeconds,
+      subtasks: prev.subtasks
+          .map((s) => Subtask(title: s.title, sortOrder: s.sortOrder))
+          .toList(),
+      autoToggleByChildren: prev.autoToggleByChildren,
+      recurrence: nextRecurrence,
+      sortOrder: prev.sortOrder,
+    );
   }
 
   Future<void> updateListGroupWorkspace(
@@ -539,4 +891,14 @@ class TodoProvider extends ChangeNotifier {
 
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _importDuplicateKey(TodoItem todo) {
+    final dueKey = todo.dueDate == null ? '' : _dateKey(todo.dueDate!);
+    final title = todo.title.trim().toLowerCase().replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
+    final list = (todo.listGroupName ?? '').trim().toLowerCase();
+    return '$title|$dueKey|$list';
+  }
 }

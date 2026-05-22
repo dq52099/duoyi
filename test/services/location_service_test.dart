@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:duoyi/models/location_reminder.dart';
+import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/providers/location_reminder_provider.dart';
 import 'package:duoyi/services/location_service.dart';
 
@@ -80,6 +81,35 @@ void main() {
       expect(probe.isTracking, isFalse);
       probe.setCurrentLocation(39.9042, 116.4074);
       // 不报错就行
+    });
+
+    test('location reminder hit is recorded as notification history', () async {
+      final service = NotificationService();
+      final hit = LocationReminderHit(
+        reminder: LocationReminder(
+          id: 'r1',
+          title: '到办公室',
+          note: '带门禁卡',
+          latitude: 39.9042,
+          longitude: 116.4074,
+          radiusMeters: 300,
+          trigger: LocationTrigger.enter,
+        ),
+        triggeredBy: LocationTrigger.enter,
+        fix: LocationFix(
+          latitude: 39.9042,
+          longitude: 116.4074,
+          at: DateTime(2026, 5, 19, 9),
+        ),
+      );
+
+      service.notifyLocationReminderHit(hit);
+
+      expect(service.history, hasLength(1));
+      expect(service.history.single.type, NotificationType.location);
+      expect(service.history.single.relatedId, 'r1');
+      expect(service.history.single.title, '位置提醒：到办公室');
+      expect(service.history.single.body, contains('带门禁卡'));
     });
   });
 }

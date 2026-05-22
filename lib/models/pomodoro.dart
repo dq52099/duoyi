@@ -8,6 +8,11 @@ class PomodoroConfig {
   String whiteNoiseSound;
   bool autoStartBreaks;
   bool autoStartFocus;
+  bool autoEnableDnd;
+  bool strictFocusMode;
+  bool monitorDistractingApps;
+  List<String> distractingAppPackages;
+  String? focusRoomId;
 
   /// 休息阶段是否继续播放白噪音。默认 `false`，与 `design.md §3.7` 对齐
   /// （focus 播、break 可配置）。
@@ -21,8 +26,13 @@ class PomodoroConfig {
     this.whiteNoiseSound = 'none',
     this.autoStartBreaks = false,
     this.autoStartFocus = false,
+    this.autoEnableDnd = false,
+    this.strictFocusMode = false,
+    this.monitorDistractingApps = false,
+    List<String>? distractingAppPackages,
+    this.focusRoomId,
     this.playSoundInBreak = false,
-  });
+  }) : distractingAppPackages = distractingAppPackages ?? const <String>[];
 
   Map<String, dynamic> toJson() => {
     'focusDuration': focusDuration,
@@ -32,6 +42,11 @@ class PomodoroConfig {
     'whiteNoiseSound': whiteNoiseSound,
     'autoStartBreaks': autoStartBreaks,
     'autoStartFocus': autoStartFocus,
+    'autoEnableDnd': autoEnableDnd,
+    'strictFocusMode': strictFocusMode,
+    'monitorDistractingApps': monitorDistractingApps,
+    'distractingAppPackages': distractingAppPackages,
+    'focusRoomId': focusRoomId,
     'playSoundInBreak': playSoundInBreak,
   };
 
@@ -51,7 +66,113 @@ class PomodoroConfig {
       whiteNoiseSound: sound,
       autoStartBreaks: json['autoStartBreaks'] ?? false,
       autoStartFocus: json['autoStartFocus'] ?? false,
+      autoEnableDnd: json['autoEnableDnd'] ?? false,
+      strictFocusMode: json['strictFocusMode'] ?? false,
+      monitorDistractingApps: json['monitorDistractingApps'] ?? false,
+      distractingAppPackages:
+          (json['distractingAppPackages'] as List?)
+              ?.map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList() ??
+          const <String>[],
+      focusRoomId: json['focusRoomId']?.toString(),
       playSoundInBreak: json['playSoundInBreak'] ?? false,
+    );
+  }
+}
+
+enum FocusPenaltyReason { pause, skip, reset, leaveApp, distractingApp }
+
+extension FocusPenaltyReasonX on FocusPenaltyReason {
+  String get key {
+    switch (this) {
+      case FocusPenaltyReason.pause:
+        return 'pause';
+      case FocusPenaltyReason.skip:
+        return 'skip';
+      case FocusPenaltyReason.reset:
+        return 'reset';
+      case FocusPenaltyReason.leaveApp:
+        return 'leaveApp';
+      case FocusPenaltyReason.distractingApp:
+        return 'distractingApp';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case FocusPenaltyReason.pause:
+        return '暂停专注';
+      case FocusPenaltyReason.skip:
+        return '跳过专注';
+      case FocusPenaltyReason.reset:
+        return '重置专注';
+      case FocusPenaltyReason.leaveApp:
+        return '离开应用';
+      case FocusPenaltyReason.distractingApp:
+        return '打开分心应用';
+    }
+  }
+
+  static FocusPenaltyReason fromKey(String? key) {
+    for (final reason in FocusPenaltyReason.values) {
+      if (reason.key == key) return reason;
+    }
+    return FocusPenaltyReason.pause;
+  }
+}
+
+class PomodoroFocusPenalty {
+  final String id;
+  final DateTime occurredAt;
+  final FocusPenaltyReason reason;
+  final int affectedSeconds;
+  final String? taskName;
+  final String? tag;
+  final String? focusRoomId;
+  final String? appPackage;
+
+  const PomodoroFocusPenalty({
+    required this.id,
+    required this.occurredAt,
+    required this.reason,
+    required this.affectedSeconds,
+    this.taskName,
+    this.tag,
+    this.focusRoomId,
+    this.appPackage,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'occurredAt': occurredAt.toIso8601String(),
+    'updatedAt': occurredAt.toIso8601String(),
+    'reason': reason.key,
+    'reasonLabel': reason.label,
+    'affectedSeconds': affectedSeconds,
+    'taskName': taskName,
+    'tag': tag,
+    'focusRoomId': focusRoomId,
+    'appPackage': appPackage,
+  };
+
+  factory PomodoroFocusPenalty.fromJson(Map<String, dynamic> json) {
+    final occurredAt =
+        DateTime.tryParse(json['occurredAt']?.toString() ?? '') ??
+        DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    return PomodoroFocusPenalty(
+      id:
+          json['id']?.toString() ??
+          occurredAt.microsecondsSinceEpoch.toString(),
+      occurredAt: occurredAt,
+      reason: FocusPenaltyReasonX.fromKey(json['reason']?.toString()),
+      affectedSeconds: (json['affectedSeconds'] as num?)?.round() ?? 0,
+      taskName: json['taskName']?.toString(),
+      tag: json['tag']?.toString(),
+      focusRoomId: json['focusRoomId']?.toString(),
+      appPackage: json['appPackage']?.toString(),
     );
   }
 }
@@ -65,6 +186,8 @@ class PomodoroSession {
   final String? taskName;
   final String whiteNoiseSound;
   final String? tag;
+  final String? focusRoomId;
+  final DateTime updatedAt;
 
   PomodoroSession({
     required this.id,
@@ -75,7 +198,37 @@ class PomodoroSession {
     this.taskName,
     this.whiteNoiseSound = 'none',
     this.tag,
-  });
+    this.focusRoomId,
+    DateTime? updatedAt,
+  }) : updatedAt = updatedAt ?? endTime;
+
+  PomodoroSession copyWith({
+    DateTime? startTime,
+    DateTime? endTime,
+    int? durationSeconds,
+    PomodoroType? type,
+    String? taskName,
+    bool clearTaskName = false,
+    String? whiteNoiseSound,
+    String? tag,
+    bool clearTag = false,
+    String? focusRoomId,
+    bool clearFocusRoomId = false,
+    DateTime? updatedAt,
+  }) {
+    return PomodoroSession(
+      id: id,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      type: type ?? this.type,
+      taskName: clearTaskName ? null : (taskName ?? this.taskName),
+      whiteNoiseSound: whiteNoiseSound ?? this.whiteNoiseSound,
+      tag: clearTag ? null : (tag ?? this.tag),
+      focusRoomId: clearFocusRoomId ? null : (focusRoomId ?? this.focusRoomId),
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -86,6 +239,8 @@ class PomodoroSession {
     'taskName': taskName,
     'whiteNoiseSound': whiteNoiseSound,
     'tag': tag,
+    'focusRoomId': focusRoomId,
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory PomodoroSession.fromJson(Map<String, dynamic> json) {
@@ -105,6 +260,11 @@ class PomodoroSession {
       taskName: json['taskName'],
       whiteNoiseSound: sound,
       tag: json['tag']?.toString(),
+      focusRoomId: json['focusRoomId']?.toString(),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+          DateTime.tryParse(json['endTime']?.toString() ?? '') ??
+          DateTime.now(),
     );
   }
 }
@@ -113,45 +273,55 @@ class PomodoroState {
   final int remainingSeconds;
   final int totalSeconds;
   final bool isRunning;
+  final bool isCountUp;
   final PomodoroType type;
   final int completedSessions;
   final String? taskName;
   final String whiteNoiseSound;
   final String? tag;
+  final String? focusRoomId;
 
   const PomodoroState({
     required this.remainingSeconds,
     required this.totalSeconds,
     required this.isRunning,
+    this.isCountUp = false,
     required this.type,
     required this.completedSessions,
     this.taskName,
     this.whiteNoiseSound = 'none',
     this.tag,
+    this.focusRoomId,
   });
 
-  double get progress =>
-      totalSeconds > 0 ? remainingSeconds / totalSeconds : 1.0;
+  double get progress => isCountUp
+      ? 1.0
+      : (totalSeconds > 0 ? remainingSeconds / totalSeconds : 1.0);
 
   PomodoroState copyWith({
     int? remainingSeconds,
     int? totalSeconds,
     bool? isRunning,
+    bool? isCountUp,
     PomodoroType? type,
     int? completedSessions,
     String? taskName,
     String? whiteNoiseSound,
     String? tag,
+    String? focusRoomId,
     bool clearTaskName = false,
     bool clearTag = false,
+    bool clearFocusRoom = false,
   }) => PomodoroState(
     remainingSeconds: remainingSeconds ?? this.remainingSeconds,
     totalSeconds: totalSeconds ?? this.totalSeconds,
     isRunning: isRunning ?? this.isRunning,
+    isCountUp: isCountUp ?? this.isCountUp,
     type: type ?? this.type,
     completedSessions: completedSessions ?? this.completedSessions,
     taskName: clearTaskName ? null : (taskName ?? this.taskName),
     whiteNoiseSound: whiteNoiseSound ?? this.whiteNoiseSound,
     tag: clearTag ? null : (tag ?? this.tag),
+    focusRoomId: clearFocusRoom ? null : (focusRoomId ?? this.focusRoomId),
   );
 }

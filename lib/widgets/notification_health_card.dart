@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/i18n_date_format.dart';
 import '../services/permission_health_service.dart';
 import 'surface_components.dart';
 
@@ -89,13 +90,15 @@ class NotificationHealthCard extends StatelessWidget {
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
           ),
-          AppSettingsTile(
-            icon: Icons.settings_outlined,
-            color: Colors.deepOrange,
-            title: '系统通知设置',
-            subtitle: '检查强提醒渠道的声音、振动、横幅和锁屏显示',
-            onTap: onOpenSystemSettings,
-          ),
+          if (report == null ||
+              report.summaryStatus != PermissionHealthStatus.ok)
+            AppSettingsTile(
+              icon: Icons.settings_outlined,
+              color: Colors.deepOrange,
+              title: '疑难设置入口',
+              subtitle: '系统无法直达厂商开关时再打开应用页；先按上方检查项逐项确认',
+              onTap: onOpenSystemSettings,
+            ),
           AppSettingsTile(
             icon: Icons.schedule,
             color: Colors.teal,
@@ -276,10 +279,5 @@ IconData _statusTrailingIcon(PermissionHealthStatus status) {
 }
 
 String _formatDateTime(DateTime value) {
-  final y = value.year.toString().padLeft(4, '0');
-  final m = value.month.toString().padLeft(2, '0');
-  final d = value.day.toString().padLeft(2, '0');
-  final hh = value.hour.toString().padLeft(2, '0');
-  final mm = value.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d $hh:$mm';
+  return I18nDateFormat.fullDateTime(value);
 }

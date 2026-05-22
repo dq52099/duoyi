@@ -15,10 +15,10 @@
 |------|--------|--------|
 | `lib/services/audio_service.dart` | 旧版 AudioService 只切内存标记，不播真实音频 | ✅ **15.4**（改为转发到 `FocusSoundService` 的 deprecated shim） |
 | `lib/screens/today_screen.dart` | 今日页 "查看" 原直接 `Navigator.push`，遇空数据会黑屏 | ✅ **17**（统一到 `TodayDetailRouter`） |
-| `lib/services/recurrence_engine.dart` | `RecurrenceEngine` 尚未实现，编辑页"下一派发日"临时用 `RecurrenceRule.nextAfter` | ⏳ **22.1** |
-| `lib/services/holiday_calendar.dart` | `HolidayCalendar` 尚未落地，"跳过节假日"只在模型上有开关 | ⏳ **21** |
-| `lib/widgets/result_states.dart` | `EmptyState / LoadingState / ErrorState` 三件套尚未拆出 | ⏳ **20** |
-| `backend/main.py` | 后端 `cloud_sync_v2` 接口字段与新 Goal/Todo 结构未对齐 | ⏳ **23.3** |
+| `lib/services/recurrence_engine.dart` | `RecurrenceEngine` 已实现，编辑页"下一派发日"已改用 `RecurrenceEngine.nextOccurrence` | ✅ **22.1** |
+| `lib/services/holiday_calendar.dart` | `HolidayCalendar` 已实现，2024-2026 节假日与调休数据已内置 | ✅ **21** |
+| `lib/widgets/result_states.dart` | `EmptyState / LoadingState / ErrorState` 三件套已实现并统一导出 | ✅ **20** |
+| `backend/main.py` | 后端 `cloud_sync_v2` 接口字段已和新 Goal/Todo 结构对齐，字段可直通 JSON TEXT | ✅ **23.3** |
 
 > ✅ = 已闭环；⏳ = 进行中 / 待实现
 

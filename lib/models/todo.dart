@@ -1,5 +1,8 @@
 import 'package:uuid/uuid.dart';
+import '../core/i18n.dart';
+import '../core/todo_kanban.dart';
 import 'goal.dart' show FocusLink, ReminderConfig, ReminderKind, ReminderPlan;
+import 'note.dart' show NoteAttachment;
 import 'recurrence.dart';
 
 const uuid = Uuid();
@@ -17,11 +20,11 @@ enum TodoPriority { none, low, medium, high, urgent }
 
 extension TodoPriorityX on TodoPriority {
   String get label => switch (this) {
-    TodoPriority.none => '无',
-    TodoPriority.low => '低',
-    TodoPriority.medium => '中',
-    TodoPriority.high => '高',
-    TodoPriority.urgent => '紧急',
+    TodoPriority.none => I18n.tr('todo.priority.none'),
+    TodoPriority.low => I18n.tr('todo.priority.low'),
+    TodoPriority.medium => I18n.tr('todo.priority.medium'),
+    TodoPriority.high => I18n.tr('todo.priority.high'),
+    TodoPriority.urgent => I18n.tr('todo.priority.urgent'),
   };
 
   int get rank => switch (this) {
@@ -100,6 +103,7 @@ class TodoItem {
   bool isCompleted;
   EisenhowerQuadrant quadrant;
   TodoPriority priority;
+  String kanbanColumnId;
   String? listGroupId;
   String? listGroupName;
   String workspaceId;
@@ -107,6 +111,7 @@ class TodoItem {
   String? updatedBy;
   String? assigneeId;
   List<String> tags;
+  List<NoteAttachment> attachments;
   DateTime? dueDate;
   DateTime date;
 
@@ -166,6 +171,7 @@ class TodoItem {
     this.isCompleted = false,
     this.quadrant = EisenhowerQuadrant.notUrgentImportant,
     this.priority = TodoPriority.none,
+    String? kanbanColumnId,
     this.listGroupId,
     this.listGroupName,
     this.workspaceId = 'private',
@@ -173,6 +179,7 @@ class TodoItem {
     this.updatedBy,
     this.assigneeId,
     List<String>? tags,
+    List<NoteAttachment>? attachments,
     this.dueDate,
     DateTime? date,
     bool hasReminder = false,
@@ -192,6 +199,11 @@ class TodoItem {
     DateTime? updatedAt,
   }) : id = id ?? uuid.v4(),
        date = date ?? DateTime.now(),
+       kanbanColumnId =
+           kanbanColumnId ??
+           (isCompleted
+               ? defaultKanbanDoneColumnId
+               : defaultKanbanPendingColumnId),
        tags = tags ?? [],
        reminder =
            reminder ??
@@ -204,6 +216,7 @@ class TodoItem {
            hasReminder ||
            (reminder?.enabled ?? false) ||
            (reminderPlan?.enabled ?? false),
+       attachments = attachments ?? [],
        focusLink = focusLink ?? const FocusLink.disabled(),
        postponeHistory = postponeHistory ?? [],
        subtasks = subtasks ?? [],
@@ -218,6 +231,7 @@ class TodoItem {
     'isCompleted': isCompleted,
     'quadrant': quadrant.index,
     'priority': priority.index,
+    'kanbanColumnId': kanbanColumnId,
     'listGroupId': listGroupId,
     'listGroupName': listGroupName,
     'workspaceId': workspaceId,
@@ -225,6 +239,7 @@ class TodoItem {
     'updatedBy': updatedBy,
     'assigneeId': assigneeId,
     'tags': tags,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
     'dueDate': dueDate?.toIso8601String(),
     'date': date.toIso8601String(),
     // 旧字段保留，方便旧代码与降级读取。
@@ -287,6 +302,8 @@ class TodoItem {
       isCompleted: json['isCompleted'] ?? false,
       quadrant: EisenhowerQuadrant.values[json['quadrant'] ?? 1],
       priority: TodoPriority.values[json['priority'] ?? 0],
+      kanbanColumnId: (json['kanbanColumnId'] ?? _legacyKanbanColumnId(json))
+          .toString(),
       listGroupId: json['listGroupId'],
       listGroupName: json['listGroupName'],
       workspaceId: json['workspaceId']?.toString() ?? 'private',
@@ -294,6 +311,13 @@ class TodoItem {
       updatedBy: json['updatedBy']?.toString(),
       assigneeId: json['assigneeId']?.toString(),
       tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+      attachments:
+          (json['attachments'] as List<dynamic>?)
+              ?.whereType<Map>()
+              .map((e) => NoteAttachment.fromJson(Map<String, dynamic>.from(e)))
+              .where((a) => a.uri.isNotEmpty)
+              .toList() ??
+          [],
       dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
       date: DateTime.parse(json['date']),
       hasReminder: effectiveHasReminder,
@@ -333,6 +357,7 @@ class TodoItem {
     bool? isCompleted,
     EisenhowerQuadrant? quadrant,
     TodoPriority? priority,
+    String? kanbanColumnId,
     Object? listGroupId = _copyWithUnset,
     Object? listGroupName = _copyWithUnset,
     String? workspaceId,
@@ -340,6 +365,7 @@ class TodoItem {
     Object? updatedBy = _copyWithUnset,
     Object? assigneeId = _copyWithUnset,
     List<String>? tags,
+    List<NoteAttachment>? attachments,
     Object? dueDate = _copyWithUnset,
     DateTime? date,
     bool? hasReminder,
@@ -362,6 +388,7 @@ class TodoItem {
     isCompleted: isCompleted ?? this.isCompleted,
     quadrant: quadrant ?? this.quadrant,
     priority: priority ?? this.priority,
+    kanbanColumnId: kanbanColumnId ?? this.kanbanColumnId,
     listGroupId: identical(listGroupId, _copyWithUnset)
         ? this.listGroupId
         : listGroupId as String?,
@@ -379,6 +406,7 @@ class TodoItem {
         ? this.assigneeId
         : assigneeId as String?,
     tags: tags ?? this.tags,
+    attachments: attachments ?? this.attachments,
     dueDate: identical(dueDate, _copyWithUnset)
         ? this.dueDate
         : dueDate as DateTime?,
@@ -417,4 +445,10 @@ class TodoItem {
 
   bool get isOverdue =>
       !isCompleted && dueDate != null && dueDate!.isBefore(DateTime.now());
+}
+
+String _legacyKanbanColumnId(Map<String, dynamic> json) {
+  return json['isCompleted'] == true
+      ? defaultKanbanDoneColumnId
+      : defaultKanbanPendingColumnId;
 }

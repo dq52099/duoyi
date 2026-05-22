@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
+import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
 
 class HabitProvider extends ChangeNotifier {
@@ -19,8 +20,9 @@ class HabitProvider extends ChangeNotifier {
         active.length;
   }
 
-  int get todayTotalCompletions =>
-      _habits.fold(0, (sum, h) => sum + h.todayCount());
+  int get todayTotalCompletions => _habits
+      .where((h) => h.isActiveToday())
+      .fold(0, (sum, h) => sum + h.todayCount());
 
   double get todayCompletionRate {
     final active = _habits.where((h) => h.isActiveToday()).toList();
@@ -64,6 +66,7 @@ class HabitProvider extends ChangeNotifier {
   // --- CRUD ---
 
   Future<void> addHabit(Habit habit) async {
+    habit.updatedAt = DateTime.now();
     _habits.add(habit);
     DomainEventBus.instance.publish(
       DomainEvent(type: DomainEventType.habitCreated, objectId: habit.id),
@@ -72,28 +75,73 @@ class HabitProvider extends ChangeNotifier {
     await _save();
   }
 
+  Future<HabitImportSummary> importHabits(Iterable<Habit> habits) async {
+    var inserted = 0;
+    var skippedDuplicates = 0;
+    final existing = _habits
+        .map((habit) => habit.name.trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    for (final habit in habits) {
+      final key = habit.name.trim().toLowerCase();
+      if (key.isEmpty || existing.contains(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      _habits.add(habit);
+      existing.add(key);
+      inserted++;
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.habitCreated, objectId: habit.id),
+      );
+    }
+    if (inserted > 0) {
+      notifyListeners();
+      await _save();
+    }
+    return HabitImportSummary(
+      inserted: inserted,
+      skippedDuplicates: skippedDuplicates,
+    );
+  }
+
   Future<void> incrementHabit(String id) async {
     await incrementHabitForDate(id, DateTime.now());
   }
 
-  Future<void> incrementHabitForDate(String id, DateTime date) async {
+  Future<void> incrementHabitForDate(
+    String id,
+    DateTime date, {
+    int? amount,
+  }) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx != -1) {
+      final habit = _habits[idx];
+      if (!habit.activeForDate(date)) return;
       final key = _habits[idx].dateKey(date);
-      _habits[idx].completions[key] = (_habits[idx].completions[key] ?? 0) + 1;
+      final previousCount = habit.completions[key] ?? 0;
+      final increment = amount ?? _defaultCheckInAmount(habit, previousCount);
+      if (increment <= 0) return;
+      habit.completions[key] = previousCount + increment;
       _recalcStreak(idx);
+      habit.updatedAt = DateTime.now();
       DomainEventBus.instance.publish(
         DomainEvent(
           type: DomainEventType.habitCheckedIn,
-          objectId: _habits[idx].id,
-          metadata: {'count': _habits[idx].completions[key] ?? 0, 'date': key},
+          objectId: habit.id,
+          metadata: {
+            'amount': increment,
+            'count': habit.completions[key] ?? 0,
+            'date': key,
+          },
         ),
       );
       notifyListeners();
       await _save();
       await _timeAudit?.recordHabitCheckIn(
-        _habits[idx],
-        cumulativeCount: _habits[idx].completions[key] ?? 0,
+        habit,
+        cumulativeCount: habit.completions[key] ?? 0,
+        amount: increment,
         at: _timeForHabitRecord(date),
       );
     }
@@ -109,22 +157,45 @@ class HabitProvider extends ChangeNotifier {
       final key = _habits[idx].dateKey(date);
       final v = _habits[idx].completions[key] ?? 0;
       if (v > 0) {
-        final next = v - 1;
-        if (next == 0) {
+        final recordTime = _timeForHabitRecord(date);
+        final amount =
+            _timeAudit?.habitCheckInRecordedAmount(
+              _habits[idx],
+              count: v,
+              at: recordTime,
+            ) ??
+            _defaultUndoAmount(_habits[idx], v);
+        final next = v - amount;
+        if (next <= 0) {
           _habits[idx].completions.remove(key);
         } else {
           _habits[idx].completions[key] = next;
         }
         _recalcStreak(idx);
+        _habits[idx].updatedAt = DateTime.now();
         notifyListeners();
         await _save();
         await _timeAudit?.removeHabitCheckIn(
           _habits[idx],
           count: v,
-          at: _timeForHabitRecord(date),
+          at: recordTime,
         );
       }
     }
+  }
+
+  int _defaultCheckInAmount(Habit habit, int currentCount) {
+    if (habit.kind != HabitKind.positive) return 1;
+    if (TimeAuditProvider.habitUnitSeconds(habit) == null) return 1;
+    final remaining = habit.targetCount - currentCount;
+    return remaining > 0 ? remaining : 1;
+  }
+
+  int _defaultUndoAmount(Habit habit, int currentCount) {
+    if (habit.kind != HabitKind.positive) return 1;
+    if (TimeAuditProvider.habitUnitSeconds(habit) == null) return 1;
+    if (currentCount <= habit.targetCount) return currentCount;
+    return 1;
   }
 
   DateTime _timeForHabitRecord(DateTime date) {
@@ -139,6 +210,10 @@ class HabitProvider extends ChangeNotifier {
 
   void _recalcStreak(int idx) {
     final h = _habits[idx];
+    if (h.hasFlexRule) {
+      _recalcFlexStreak(h);
+      return;
+    }
     int streak = 0;
     final now = DateTime.now();
     for (int i = 0; i < 365; i++) {
@@ -153,11 +228,28 @@ class HabitProvider extends ChangeNotifier {
     if (streak > h.bestStreak) h.bestStreak = streak;
   }
 
+  void _recalcFlexStreak(Habit h) {
+    var streak = 0;
+    var bounds = h.periodBoundsForDate(DateTime.now());
+    for (int i = 0; i < 120; i++) {
+      final completed =
+          h.flexProgressForDate(bounds.start)?.isCompleted ?? false;
+      if (completed) {
+        streak++;
+      } else if (i > 0) {
+        break;
+      }
+      bounds = h.previousPeriodBounds(bounds);
+    }
+    h.currentStreak = streak;
+    if (streak > h.bestStreak) h.bestStreak = streak;
+  }
+
   Future<void> deleteHabit(String id) async {
     final idx = _habits.indexWhere((h) => h.id == id);
-    if (idx != -1) {
-      await _timeAudit?.deleteBySource(TimeEntrySource.habit, id);
-    }
+    if (idx == -1) return;
+    await CloudSyncProvider.recordDeletedItem('habits', id);
+    await _timeAudit?.deleteBySource(TimeEntrySource.habit, id);
     _habits.removeWhere((h) => h.id == id);
     notifyListeners();
     await _save();
@@ -166,7 +258,7 @@ class HabitProvider extends ChangeNotifier {
   Future<void> updateHabit(String id, Habit updated) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx != -1) {
-      _habits[idx] = updated;
+      _habits[idx] = updated.copyWith(updatedAt: DateTime.now());
       notifyListeners();
       await _save();
     }
@@ -182,9 +274,7 @@ class HabitProvider extends ChangeNotifier {
         final date = now.subtract(Duration(days: w * 7 + (6 - d)));
         final key =
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-        final active = _habits
-            .where((h) => h.activeWeekdays.contains(date.weekday - 1))
-            .toList();
+        final active = _habits.where((h) => h.activeForDate(date)).toList();
         if (active.isEmpty) {
           data[key] = 0;
           continue;
@@ -206,9 +296,7 @@ class HabitProvider extends ChangeNotifier {
     final now = DateTime.now();
     return List.generate(7, (i) {
       final d = now.subtract(Duration(days: 6 - i));
-      final active = _habits
-          .where((h) => h.activeWeekdays.contains(d.weekday - 1))
-          .toList();
+      final active = _habits.where((h) => h.activeForDate(d)).toList();
       if (active.isEmpty) return 0;
       return active.where((h) => h.isCompletedForDate(d)).length /
           active.length;
@@ -223,7 +311,10 @@ class HabitProvider extends ChangeNotifier {
     for (int i = 0; i < orderedIds.length; i++) {
       final h = map[orderedIds[i]];
       if (h != null) {
-        h.sortOrder = i;
+        if (h.sortOrder != i) {
+          h.sortOrder = i;
+          h.updatedAt = DateTime.now();
+        }
         newList.add(h);
         map.remove(orderedIds[i]);
       }
@@ -233,4 +324,14 @@ class HabitProvider extends ChangeNotifier {
     notifyListeners();
     await _save();
   }
+}
+
+class HabitImportSummary {
+  final int inserted;
+  final int skippedDuplicates;
+
+  const HabitImportSummary({
+    required this.inserted,
+    required this.skippedDuplicates,
+  });
 }

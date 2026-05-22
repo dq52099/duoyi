@@ -95,7 +95,9 @@ class NotificationHealthReport {
       return '存在需要修复的权限或系统开关';
     }
     if (hasWarnings) {
-      return isXiaomiLike ? '小米/MIUI 仍需确认后台、锁屏和电池策略' : '仍有系统策略需要人工确认';
+      return isXiaomiLike
+          ? 'HyperOS/MIUI 仍需确认自启动、后台、电池、锁屏、横幅和渠道声音'
+          : '仍有系统策略需要人工确认';
     }
     if (hasUnknown) {
       return '部分系统状态无法自动读取';
@@ -198,7 +200,7 @@ class PermissionHealthService {
         action: notificationGranted
             ? null
             : PermissionHealthAction.requestNotificationPermission,
-        actionLabel: notificationGranted ? null : '去授权',
+        actionLabel: notificationGranted ? null : '通知授权',
       ),
     ];
 
@@ -220,7 +222,7 @@ class PermissionHealthService {
           action: exactRelevant && !exactAlarmGranted
               ? PermissionHealthAction.requestExactAlarmPermission
               : null,
-          actionLabel: exactRelevant && !exactAlarmGranted ? '去授权' : null,
+          actionLabel: exactRelevant && !exactAlarmGranted ? '精准闹钟' : null,
         ),
       );
 
@@ -243,7 +245,7 @@ class PermissionHealthService {
               ? PermissionHealthAction.requestFullScreenIntentPermission
               : null,
           actionLabel: fullScreenRelevant && !fullScreenIntentGranted
-              ? '去授权'
+              ? '弹屏权限'
               : null,
         ),
       );
@@ -300,20 +302,7 @@ class PermissionHealthService {
         }
       }
 
-      checks.add(
-        PermissionHealthCheck(
-          id: device?.isXiaomiLike == true
-              ? 'xiaomi_notification_policy'
-              : 'android_notification_policy',
-          title: device?.isXiaomiLike == true ? '小米通知策略' : '后台和电池策略',
-          subtitle: device?.isXiaomiLike == true
-              ? '确认自启动、后台无限制、锁屏通知和电池优化；这些入口因系统差异无法自动直达'
-              : '若定时提醒不稳定，请在系统中允许后台运行并排除电池优化',
-          status: PermissionHealthStatus.warning,
-          action: PermissionHealthAction.none,
-          manual: true,
-        ),
-      );
+      checks.addAll(_manualAndroidPolicyChecks(device));
     }
 
     return NotificationHealthReport(
@@ -327,5 +316,56 @@ class PermissionHealthService {
       checkedAt: DateTime.now(),
       checks: checks,
     );
+  }
+
+  List<PermissionHealthCheck> _manualAndroidPolicyChecks(
+    AndroidDeviceInfoLite? device,
+  ) {
+    if (device?.isXiaomiLike == true) {
+      return const [
+        PermissionHealthCheck(
+          id: 'xiaomi_autostart_policy',
+          title: 'HyperOS/MIUI 自启动',
+          subtitle: '安全中心或应用管理中允许多仪自启动，避免重启后提醒不恢复',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.none,
+          manual: true,
+        ),
+        PermissionHealthCheck(
+          id: 'xiaomi_battery_policy',
+          title: 'HyperOS/MIUI 后台与电池',
+          subtitle: '把多仪设为后台无限制，关闭省电策略对闹钟和白噪音的限制',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.none,
+          manual: true,
+        ),
+        PermissionHealthCheck(
+          id: 'xiaomi_lock_screen_policy',
+          title: 'HyperOS/MIUI 锁屏与横幅',
+          subtitle: '通知管理中允许锁屏通知、横幅通知、悬浮通知、声音和振动',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.none,
+          manual: true,
+        ),
+        PermissionHealthCheck(
+          id: 'xiaomi_channel_sound_policy',
+          title: 'HyperOS/MIUI 渠道声音',
+          subtitle: '分别检查“多仪 · 通知提醒”和“多仪 · 强提醒”渠道，不要设为静音',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.none,
+          manual: true,
+        ),
+      ];
+    }
+    return const [
+      PermissionHealthCheck(
+        id: 'android_notification_policy',
+        title: '后台和电池策略',
+        subtitle: '若定时提醒不稳定，请在系统中允许后台运行并排除电池优化',
+        status: PermissionHealthStatus.warning,
+        action: PermissionHealthAction.none,
+        manual: true,
+      ),
+    ];
   }
 }

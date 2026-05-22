@@ -14,7 +14,7 @@ publish_to: 'none'
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.4+110004
+version: 1.1.5+110005
 
 environment:
   sdk: ^3.11.5
@@ -28,6 +28,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   provider: ^6.1.2
   shared_preferences: ^2.3.4
@@ -38,6 +40,7 @@ dependencies:
   dbus: ^0.7.10
   home_widget: ^0.7.0
   http: ^1.2.2
+  web_socket_channel: ^3.0.3
   crypto: ^3.0.5
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
@@ -45,10 +48,15 @@ dependencies:
   permission_handler: ^11.3.1
   url_launcher: ^6.3.2
   audioplayers: ^6.0.0
+  path_provider: ^2.1.5
+  file_selector: ^1.1.0
+  share_plus: ^11.1.0
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  test: ^1.30.0
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
   integration_test:
@@ -68,11 +76,13 @@ flutter_launcher_icons:
 
 # The following section is specific to Flutter packages.
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     - assets/backgrounds/
     - assets/logo/
     - assets/icons/
+    - assets/fonts/
     - assets/sounds/white_noise/
 
   # To add assets to your application, add an assets section, like this:

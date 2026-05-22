@@ -1,12 +1,22 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import '../models/goal.dart' show ReminderKind, ReminderPlan;
+import '../models/location_reminder.dart';
+import '../models/note.dart' show NoteAttachment, NoteBlock, NoteBlockType;
 import '../models/todo.dart';
+import '../models/workspace.dart';
 import '../services/alarm_service.dart';
+import '../services/note_attachment_picker.dart';
+import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/share_provider.dart';
 import '../providers/todo_provider.dart';
@@ -54,6 +64,8 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   final _timeTargetCtrl = TextEditingController();
   late TodoItem _todo;
   bool _missingTodo = false;
+  bool _notesPreview = false;
+  String? _commentsLoadedForWorkspaceId;
 
   /// "保存不返回"状态机当前状态。
   _EditState _state = _EditState.clean;
@@ -88,6 +100,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       'timeTargetSeconds': t.timeTargetSeconds,
       'recurrence': t.recurrence.toJson(),
       'autoToggleByChildren': t.autoToggleByChildren,
+      'workspaceId': t.workspaceId,
+      'assigneeId': t.assigneeId,
+      'attachments': t.attachments.map((a) => a.toJson()).toList(),
     }.toString();
   }
 
@@ -289,6 +304,88 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     _markEditing();
   }
 
+  Future<void> _addAttachment() async {
+    final picked = await NoteAttachmentPicker.pickFile();
+    if (!mounted || picked == null) return;
+    setState(() {
+      _todo = _todo.copyWith(attachments: [..._todo.attachments, picked]);
+    });
+    _markEditing();
+  }
+
+  void _addManualAttachment(NoteAttachment attachment) {
+    setState(() {
+      _todo = _todo.copyWith(attachments: [..._todo.attachments, attachment]);
+    });
+    _markEditing();
+  }
+
+  Future<void> _showManualAttachmentDialog() async {
+    final nameCtrl = TextEditingController();
+    final uriCtrl = TextEditingController();
+    final mimeCtrl = TextEditingController();
+    final attachment = await showDialog<NoteAttachment>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('添加附件链接'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: '名称'),
+              autofocus: true,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: uriCtrl,
+              decoration: const InputDecoration(labelText: '链接或本地路径'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: mimeCtrl,
+              decoration: const InputDecoration(labelText: '类型（可选）'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final uri = uriCtrl.text.trim();
+              if (uri.isEmpty) return;
+              Navigator.pop(
+                ctx,
+                NoteAttachment(
+                  name: nameCtrl.text.trim().isEmpty
+                      ? '附件'
+                      : nameCtrl.text.trim(),
+                  uri: uri,
+                  mimeType: mimeCtrl.text.trim(),
+                ),
+              );
+            },
+            child: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || attachment == null) return;
+    _addManualAttachment(attachment);
+  }
+
+  void _removeAttachment(NoteAttachment attachment) {
+    setState(() {
+      _todo = _todo.copyWith(
+        attachments: _todo.attachments.where((a) => a != attachment).toList(),
+      );
+    });
+    _markEditing();
+  }
+
   Future<void> _pickDueDate() async {
     final picked = await AppDatePicker.pickSolar(
       context,
@@ -364,6 +461,67 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     _markEditing();
   }
 
+  void _insertNotePrefix(String prefix) {
+    final text = _notesCtrl.text;
+    final selection = _notesCtrl.selection;
+    final start = selection.isValid ? selection.start : text.length;
+    final lineStart = start <= 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
+    final next = text.replaceRange(lineStart, lineStart, prefix);
+    _notesCtrl.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + prefix.length),
+    );
+    _markEditing();
+  }
+
+  void _wrapNoteSelection(String marker) {
+    final text = _notesCtrl.text;
+    final selection = _notesCtrl.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      final offset = selection.isValid ? selection.start : text.length;
+      final next = text.replaceRange(offset, offset, '$marker$marker');
+      _notesCtrl.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: offset + marker.length),
+      );
+      _markEditing();
+      return;
+    }
+
+    final selected = selection.textInside(text);
+    final next = text.replaceRange(
+      selection.start,
+      selection.end,
+      '$marker$selected$marker',
+    );
+    _notesCtrl.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(
+        offset: selection.end + marker.length * 2,
+      ),
+    );
+    _markEditing();
+  }
+
+  void _insertNoteLink() {
+    final text = _notesCtrl.text;
+    final selection = _notesCtrl.selection;
+    final selected = selection.isValid && !selection.isCollapsed
+        ? selection.textInside(text)
+        : '链接';
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final replacement = '[$selected](https://)';
+    final next = text.replaceRange(start, end, replacement);
+    _notesCtrl.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(
+        offset: start + replacement.length - 1,
+      ),
+    );
+    _markEditing();
+  }
+
   @override
   void dispose() {
     _titleCtrl.dispose();
@@ -417,6 +575,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     }
     final canEdit =
         context.watch<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true;
+    final shareProvider = context.watch<ShareProvider?>();
+    final locationReminderProvider = context.watch<LocationReminderProvider?>();
+    final linkedLocationReminders =
+        locationReminderProvider?.reminders
+            .where((r) => r.linkedType == 'todo' && r.linkedId == _todo.id)
+            .toList() ??
+        const <LocationReminder>[];
+    final workspace = _workspaceFor(shareProvider, _todo.workspaceId);
+    if (workspace != null &&
+        _commentsLoadedForWorkspaceId != workspace.id &&
+        shareProvider != null) {
+      _commentsLoadedForWorkspaceId = workspace.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ShareProvider>().loadWorkspaceCollaboration(workspace.id);
+      });
+    }
     final cs = Theme.of(context).colorScheme;
 
     // canPop 反映当前状态机是否允许直接 pop：
@@ -472,11 +647,30 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               onChanged: (_) => _markEditing(),
             ),
             const SizedBox(height: DesignTokens.spaceMd),
-            TextField(
+            _TodoMarkdownDescriptionEditor(
               controller: _notesCtrl,
-              decoration: const InputDecoration(labelText: '备注'),
-              maxLines: 3,
+              preview: _notesPreview,
+              enabled: canEdit,
+              onPreviewChanged: (value) =>
+                  setState(() => _notesPreview = value),
               onChanged: (_) => _markEditing(),
+              onHeading: () => _insertNotePrefix('## '),
+              onBold: () => _wrapNoteSelection('**'),
+              onItalic: () => _wrapNoteSelection('*'),
+              onQuote: () => _insertNotePrefix('> '),
+              onBullet: () => _insertNotePrefix('- '),
+              onChecklist: () => _insertNotePrefix('- [ ] '),
+              onCode: () => _wrapNoteSelection('`'),
+              onLink: _insertNoteLink,
+            ),
+
+            const SizedBox(height: DesignTokens.spaceLg),
+            _TodoAttachmentPanel(
+              attachments: _todo.attachments,
+              enabled: canEdit,
+              onPickFile: _addAttachment,
+              onAddManual: _showManualAttachmentDialog,
+              onRemove: _removeAttachment,
             ),
 
             // ---- 四象限 --------------------------------------------------
@@ -546,6 +740,29 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               onTap: _pickRecurrence,
             ),
 
+            // ---- 共享负责人 ----------------------------------------------
+            const SizedBox(height: DesignTokens.spaceSm),
+            _AssignmentEditor(
+              workspace: workspace,
+              assigneeId: _todo.assigneeId,
+              enabled: canEdit,
+              onChanged: (value) {
+                setState(() => _todo = _todo.copyWith(assigneeId: value));
+                _markEditing();
+              },
+            ),
+            if (workspace != null && shareProvider != null) ...[
+              const SizedBox(height: DesignTokens.spaceLg),
+              _TaskCommentsPanel(
+                workspace: workspace,
+                todoId: _todo.id,
+                comments: shareProvider.commentsForTarget(
+                  workspace.id,
+                  _todo.id,
+                ),
+              ),
+            ],
+
             // ---- 提醒 ----------------------------------------------------
             const SizedBox(height: DesignTokens.spaceSm),
             ReminderPlanEditor(
@@ -583,6 +800,22 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 );
               },
             ),
+            if (locationReminderProvider != null) ...[
+              const SizedBox(height: DesignTokens.spaceSm),
+              _TodoLocationReminderCard(
+                reminders: linkedLocationReminders,
+                enabled: canEdit,
+                onAdd: canEdit
+                    ? () => _addLinkedLocationReminder(
+                        context,
+                        locationReminderProvider,
+                      )
+                    : null,
+                onRemove: canEdit
+                    ? (id) => locationReminderProvider.remove(id)
+                    : null,
+              ),
+            ],
 
             // ---- 目标时长 ------------------------------------------------
             const SizedBox(height: DesignTokens.spaceLg),
@@ -728,6 +961,161 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       ),
     );
   }
+
+  Workspace? _workspaceFor(ShareProvider? provider, String workspaceId) {
+    if (provider == null || workspaceId.isEmpty || workspaceId == 'private') {
+      return null;
+    }
+    for (final workspace in provider.workspaces) {
+      if (workspace.id == workspaceId) return workspace;
+    }
+    return null;
+  }
+
+  Future<void> _addLinkedLocationReminder(
+    BuildContext context,
+    LocationReminderProvider provider,
+  ) async {
+    final titleCtrl = TextEditingController(text: _todo.title);
+    final noteCtrl = TextEditingController(text: _todo.notes);
+    final latCtrl = TextEditingController();
+    final lngCtrl = TextEditingController();
+    final radiusCtrl = TextEditingController(text: '200');
+    var trigger = LocationTrigger.enter;
+    var oneShot = true;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: const Text('添加位置提醒'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(labelText: '提醒标题'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: noteCtrl,
+                  decoration: const InputDecoration(labelText: '备注'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latCtrl,
+                        decoration: const InputDecoration(labelText: '纬度'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: lngCtrl,
+                        decoration: const InputDecoration(labelText: '经度'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: radiusCtrl,
+                  decoration: const InputDecoration(labelText: '半径（米）'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text('触发方向'),
+                    const Spacer(),
+                    ChoiceChip(
+                      label: const Text('到达'),
+                      selected: trigger == LocationTrigger.enter,
+                      onSelected: (_) =>
+                          setSt(() => trigger = LocationTrigger.enter),
+                    ),
+                    const SizedBox(width: 4),
+                    ChoiceChip(
+                      label: const Text('离开'),
+                      selected: trigger == LocationTrigger.leave,
+                      onSelected: (_) =>
+                          setSt(() => trigger = LocationTrigger.leave),
+                    ),
+                  ],
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: oneShot,
+                  onChanged: (value) => setSt(() => oneShot = value),
+                  title: const Text('触发后自动关闭'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(I18n.tr('action.save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    final title = titleCtrl.text.trim();
+    final lat = double.tryParse(latCtrl.text.trim());
+    final lng = double.tryParse(lngCtrl.text.trim());
+    final radius = double.tryParse(radiusCtrl.text.trim()) ?? 200;
+    if (title.isEmpty || lat == null || lng == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请输入标题和有效经纬度'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    await provider.add(
+      LocationReminder(
+        title: title,
+        note: noteCtrl.text.trim(),
+        latitude: lat,
+        longitude: lng,
+        radiusMeters: radius.clamp(50, 10000).toDouble(),
+        trigger: trigger,
+        oneShot: oneShot,
+        linkedType: 'todo',
+        linkedId: _todo.id,
+      ),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('已添加任务位置提醒'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
 
 Future<void> _openSystemSettings(BuildContext context) async {
@@ -762,6 +1150,726 @@ class _SectionLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TodoLocationReminderCard extends StatelessWidget {
+  final List<LocationReminder> reminders;
+  final bool enabled;
+  final VoidCallback? onAdd;
+  final ValueChanged<String>? onRemove;
+
+  const _TodoLocationReminderCard({
+    required this.reminders,
+    required this.enabled,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.location_on_outlined, color: cs.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '位置提醒',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: enabled ? onAdd : null,
+                icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+                label: const Text('添加'),
+              ),
+            ],
+          ),
+          if (reminders.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 28, bottom: 4),
+              child: Text(
+                '可为这条任务设置到达或离开某地时提醒',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            )
+          else
+            ...reminders.map((reminder) {
+              final trigger = reminder.trigger == LocationTrigger.enter
+                  ? '到达'
+                  : '离开';
+              return Padding(
+                padding: const EdgeInsets.only(left: 28, top: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${reminder.title} · $trigger · '
+                        '${reminder.radiusMeters.toStringAsFixed(0)}m',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '删除位置提醒',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close, size: 16),
+                      onPressed: enabled
+                          ? () => onRemove?.call(reminder.id)
+                          : null,
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodoMarkdownDescriptionEditor extends StatelessWidget {
+  final TextEditingController controller;
+  final bool preview;
+  final bool enabled;
+  final ValueChanged<bool> onPreviewChanged;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onHeading;
+  final VoidCallback onBold;
+  final VoidCallback onItalic;
+  final VoidCallback onQuote;
+  final VoidCallback onBullet;
+  final VoidCallback onChecklist;
+  final VoidCallback onCode;
+  final VoidCallback onLink;
+
+  const _TodoMarkdownDescriptionEditor({
+    required this.controller,
+    required this.preview,
+    required this.enabled,
+    required this.onPreviewChanged,
+    required this.onChanged,
+    required this.onHeading,
+    required this.onBold,
+    required this.onItalic,
+    required this.onQuote,
+    required this.onBullet,
+    required this.onChecklist,
+    required this.onCode,
+    required this.onLink,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: EdgeInsets.zero,
+      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 6),
+            child: Row(
+              children: [
+                const Expanded(child: _SectionLabel(text: '任务描述')),
+                IconButton(
+                  tooltip: preview ? '编辑描述' : '预览描述',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => onPreviewChanged(!preview),
+                  icon: Icon(
+                    preview ? Icons.edit_outlined : Icons.visibility_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!preview)
+            _TodoMarkdownToolbar(
+              enabled: enabled,
+              onHeading: onHeading,
+              onBold: onBold,
+              onItalic: onItalic,
+              onQuote: onQuote,
+              onBullet: onBullet,
+              onChecklist: onChecklist,
+              onCode: onCode,
+              onLink: onLink,
+            ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: preview
+                ? _TodoMarkdownPreview(
+                    key: const ValueKey('todo-description-preview'),
+                    content: controller.text,
+                  )
+                : Padding(
+                    key: const ValueKey('todo-description-editor'),
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    child: TextField(
+                      controller: controller,
+                      enabled: enabled,
+                      minLines: 4,
+                      maxLines: 8,
+                      decoration: const InputDecoration(
+                        hintText: '支持 Markdown 描述',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: onChanged,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodoMarkdownToolbar extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onHeading;
+  final VoidCallback onBold;
+  final VoidCallback onItalic;
+  final VoidCallback onQuote;
+  final VoidCallback onBullet;
+  final VoidCallback onChecklist;
+  final VoidCallback onCode;
+  final VoidCallback onLink;
+
+  const _TodoMarkdownToolbar({
+    required this.enabled,
+    required this.onHeading,
+    required this.onBold,
+    required this.onItalic,
+    required this.onQuote,
+    required this.onBullet,
+    required this.onChecklist,
+    required this.onCode,
+    required this.onLink,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.48)),
+          bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.48)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _TodoMarkdownToolButton(
+              icon: Icons.title,
+              tooltip: '标题',
+              enabled: enabled,
+              onPressed: onHeading,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.format_bold,
+              tooltip: '加粗',
+              enabled: enabled,
+              onPressed: onBold,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.format_italic,
+              tooltip: '斜体',
+              enabled: enabled,
+              onPressed: onItalic,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.format_quote,
+              tooltip: '引用',
+              enabled: enabled,
+              onPressed: onQuote,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.format_list_bulleted,
+              tooltip: '列表',
+              enabled: enabled,
+              onPressed: onBullet,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.checklist,
+              tooltip: '清单',
+              enabled: enabled,
+              onPressed: onChecklist,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.code,
+              tooltip: '代码',
+              enabled: enabled,
+              onPressed: onCode,
+            ),
+            _TodoMarkdownToolButton(
+              icon: Icons.link,
+              tooltip: '链接',
+              enabled: enabled,
+              onPressed: onLink,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodoMarkdownToolButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _TodoMarkdownToolButton({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      onPressed: enabled ? onPressed : null,
+    );
+  }
+}
+
+class _TodoMarkdownPreview extends StatelessWidget {
+  final String content;
+
+  const _TodoMarkdownPreview({super.key, required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final blocks = content.trim().isEmpty
+        ? const <NoteBlock>[]
+        : NoteBlock.fromMarkdown(content);
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 132),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: blocks.isEmpty
+          ? Text(
+              '暂无描述',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final block in blocks)
+                  _TodoMarkdownPreviewBlock(block: block, colorScheme: cs),
+              ],
+            ),
+    );
+  }
+}
+
+class _TodoMarkdownPreviewBlock extends StatelessWidget {
+  final NoteBlock block;
+  final ColorScheme colorScheme;
+
+  const _TodoMarkdownPreviewBlock({
+    required this.block,
+    required this.colorScheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (block.type == NoteBlockType.heading) {
+      final style = block.level <= 1
+          ? Theme.of(context).textTheme.titleLarge
+          : Theme.of(context).textTheme.titleMedium;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _TodoInlineMarkdownText(
+          text: block.text,
+          style: style?.copyWith(fontWeight: FontWeight.w400),
+        ),
+      );
+    }
+    if (block.type == NoteBlockType.quote) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: colorScheme.primary, width: 3),
+          ),
+          color: colorScheme.primary.withValues(alpha: 0.06),
+        ),
+        child: _TodoInlineMarkdownText(
+          text: block.text,
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.45,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    if (block.type == NoteBlockType.checklist) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              block.checked ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 18,
+              color: block.checked
+                  ? Colors.green
+                  : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _TodoInlineMarkdownText(text: block.text)),
+          ],
+        ),
+      );
+    }
+    if (block.type == NoteBlockType.bullet) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Icon(
+                Icons.circle,
+                size: 6,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _TodoInlineMarkdownText(text: block.text)),
+          ],
+        ),
+      );
+    }
+    if (block.type == NoteBlockType.code) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          block.text,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+        ),
+      );
+    }
+    if (block.type == NoteBlockType.divider) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Divider(color: colorScheme.outlineVariant),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _TodoInlineMarkdownText(text: block.text),
+    );
+  }
+}
+
+class _TodoInlineMarkdownText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _TodoInlineMarkdownText({required this.text, this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = style ?? const TextStyle(fontSize: 15, height: 1.5);
+    return Text.rich(TextSpan(style: base, children: _parseInline(text, base)));
+  }
+
+  List<InlineSpan> _parseInline(String source, TextStyle base) {
+    final spans = <InlineSpan>[];
+    var i = 0;
+    while (i < source.length) {
+      final bold = source.indexOf('**', i);
+      final italic = source.indexOf('*', i);
+      final code = source.indexOf('`', i);
+      final link = source.indexOf('[', i);
+      final candidates = <int>[
+        bold,
+        italic,
+        code,
+        link,
+      ].where((pos) => pos >= 0).toList()..sort();
+      final next = candidates.isEmpty ? -1 : candidates.first;
+      if (next < 0) {
+        spans.add(TextSpan(text: source.substring(i)));
+        break;
+      }
+      if (next > i) {
+        spans.add(TextSpan(text: source.substring(i, next)));
+        i = next;
+      }
+      if (source.startsWith('**', i)) {
+        final end = source.indexOf('**', i + 2);
+        if (end > i + 2) {
+          spans.add(
+            TextSpan(
+              text: source.substring(i + 2, end),
+              style: base.copyWith(fontWeight: FontWeight.w400),
+            ),
+          );
+          i = end + 2;
+          continue;
+        }
+      }
+      if (source.startsWith('`', i)) {
+        final end = source.indexOf('`', i + 1);
+        if (end > i + 1) {
+          spans.add(
+            TextSpan(
+              text: source.substring(i + 1, end),
+              style: base.copyWith(
+                fontFamily: 'monospace',
+                backgroundColor: Colors.black.withValues(alpha: 0.06),
+              ),
+            ),
+          );
+          i = end + 1;
+          continue;
+        }
+      }
+      if (source.startsWith('[', i)) {
+        final closeLabel = source.indexOf('](', i + 1);
+        final closeUrl = closeLabel < 0 ? -1 : source.indexOf(')', closeLabel);
+        if (closeLabel > i + 1 && closeUrl > closeLabel + 2) {
+          spans.add(
+            TextSpan(
+              text: source.substring(i + 1, closeLabel),
+              style: base.copyWith(
+                color: Colors.blue,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          );
+          i = closeUrl + 1;
+          continue;
+        }
+      }
+      if (source.startsWith('*', i)) {
+        final end = source.indexOf('*', i + 1);
+        if (end > i + 1) {
+          spans.add(
+            TextSpan(
+              text: source.substring(i + 1, end),
+              style: base.copyWith(fontStyle: FontStyle.italic),
+            ),
+          );
+          i = end + 1;
+          continue;
+        }
+      }
+      spans.add(TextSpan(text: source[i]));
+      i++;
+    }
+    return spans;
+  }
+}
+
+class _AssignmentEditor extends StatelessWidget {
+  final Workspace? workspace;
+  final String? assigneeId;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  const _AssignmentEditor({
+    required this.workspace,
+    required this.assigneeId,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final workspace = this.workspace;
+    if (workspace == null) {
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.person_outline),
+        title: const Text('负责人'),
+        subtitle: const Text('私有任务无需指派；共享清单任务可选择成员'),
+      );
+    }
+    final members = workspace.members;
+    final selected = members.any((member) => member.userId == assigneeId)
+        ? assigneeId!
+        : '';
+    return DropdownButtonFormField<String>(
+      initialValue: selected,
+      decoration: InputDecoration(
+        labelText: '负责人',
+        helperText: '共享空间：${workspace.name}',
+        prefixIcon: const Icon(Icons.assignment_ind_outlined),
+      ),
+      items: [
+        const DropdownMenuItem<String>(value: '', child: Text('未指派')),
+        for (final member in members)
+          DropdownMenuItem<String>(
+            value: member.userId,
+            child: Text(
+              member.username.isEmpty ? member.userId : member.username,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: enabled
+          ? (value) => onChanged(value!.isEmpty ? null : value)
+          : null,
+    );
+  }
+}
+
+class _TaskCommentsPanel extends StatefulWidget {
+  final Workspace workspace;
+  final String todoId;
+  final List<WorkspaceComment> comments;
+
+  const _TaskCommentsPanel({
+    required this.workspace,
+    required this.todoId,
+    required this.comments,
+  });
+
+  @override
+  State<_TaskCommentsPanel> createState() => _TaskCommentsPanelState();
+}
+
+class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(12),
+      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.forum_outlined, size: 18, color: cs.primary),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('任务评论')),
+              Text(
+                '${widget.comments.length}',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _ctrl,
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: '针对这个任务记录进展或风险，@用户名/邮箱/昵称 可提醒对方',
+              suffixIcon: IconButton(
+                tooltip: '发送评论',
+                icon: const Icon(Icons.send_outlined),
+                onPressed: _send,
+              ),
+            ),
+            onSubmitted: (_) => _send(),
+          ),
+          const SizedBox(height: 8),
+          if (widget.comments.isEmpty)
+            Text(
+              '暂无任务评论',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            )
+          else
+            ...widget.comments
+                .take(4)
+                .map(
+                  (comment) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      radius: 13,
+                      backgroundColor: cs.primary.withValues(alpha: 0.12),
+                      child: Text(
+                        comment.authorName.isEmpty
+                            ? '?'
+                            : comment.authorName.substring(0, 1),
+                        style: TextStyle(fontSize: 10, color: cs.primary),
+                      ),
+                    ),
+                    title: Text(
+                      comment.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${comment.authorName.isEmpty ? comment.authorUserId : comment.authorName} · ${_formatCommentTime(comment.createdAt)}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _send() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
+    try {
+      await context.read<ShareProvider>().createComment(
+        widget.workspace.id,
+        text,
+        targetId: widget.todoId,
+      );
+      _ctrl.clear();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('评论发送失败: $e')));
+    }
+  }
+}
+
+String _formatCommentTime(DateTime value) {
+  return I18nDateFormat.shortDateTime(value);
 }
 
 /// 优先级 Chip 行。
@@ -859,6 +1967,174 @@ class _TimeTargetEditor extends StatelessWidget {
 }
 
 /// 标签编辑器：已有标签 + 新标签输入。
+class _TodoAttachmentPanel extends StatelessWidget {
+  final List<NoteAttachment> attachments;
+  final bool enabled;
+  final VoidCallback onPickFile;
+  final VoidCallback onAddManual;
+  final ValueChanged<NoteAttachment> onRemove;
+
+  const _TodoAttachmentPanel({
+    required this.attachments,
+    required this.enabled,
+    required this.onPickFile,
+    required this.onAddManual,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final images = attachments.where((attachment) => attachment.isImage);
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(DesignTokens.spaceMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.attach_file, size: 18),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  '附件',
+                  style: TextStyle(fontWeight: FontWeight.w400),
+                ),
+              ),
+              IconButton(
+                tooltip: '选择文件',
+                onPressed: enabled ? onPickFile : null,
+                icon: const Icon(Icons.upload_file_outlined),
+              ),
+              IconButton(
+                tooltip: '添加链接',
+                onPressed: enabled ? onAddManual : null,
+                icon: const Icon(Icons.add_link),
+              ),
+            ],
+          ),
+          if (attachments.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: DesignTokens.spaceXs),
+              child: Text(
+                '暂无附件',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            )
+          else ...[
+            const SizedBox(height: DesignTokens.spaceXs),
+            Wrap(
+              spacing: DesignTokens.spaceXs,
+              runSpacing: DesignTokens.spaceXs,
+              children: [
+                for (final attachment in attachments)
+                  _TodoAttachmentChip(
+                    attachment: attachment,
+                    onDeleted: enabled ? () => onRemove(attachment) : null,
+                  ),
+              ],
+            ),
+          ],
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: DesignTokens.spaceMd),
+            for (final image in images)
+              _TodoAttachmentImagePreview(attachment: image),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TodoAttachmentChip extends StatelessWidget {
+  final NoteAttachment attachment;
+  final VoidCallback? onDeleted;
+
+  const _TodoAttachmentChip({required this.attachment, this.onDeleted});
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = Uri.tryParse(attachment.uri);
+    return InputChip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        _isWebUri(uri) ? Icons.link : Icons.insert_drive_file_outlined,
+      ),
+      label: Text(
+        attachment.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onDeleted: onDeleted,
+      onPressed: uri == null
+          ? null
+          : () async {
+              final target = _isWebUri(uri)
+                  ? uri
+                  : Uri.file(attachment.uri, windows: false);
+              await launchUrl(target, mode: LaunchMode.externalApplication);
+            },
+    );
+  }
+
+  bool _isWebUri(Uri? uri) => uri?.scheme == 'http' || uri?.scheme == 'https';
+}
+
+class _TodoAttachmentImagePreview extends StatelessWidget {
+  final NoteAttachment attachment;
+
+  const _TodoAttachmentImagePreview({required this.attachment});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final uri = Uri.tryParse(attachment.uri);
+    Widget image;
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      image = Image.network(
+        attachment.uri,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallback(cs),
+      );
+    } else if (uri != null && uri.scheme == 'file') {
+      image = Image.file(
+        File(uri.toFilePath()),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallback(cs),
+      );
+    } else if (attachment.uri.startsWith('/')) {
+      image = Image.file(
+        File(attachment.uri),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallback(cs),
+      );
+    } else {
+      image = _fallback(cs);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: DesignTokens.spaceSm),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ColoredBox(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            child: image,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback(ColorScheme cs) => Center(
+    child: Icon(Icons.image_not_supported_outlined, color: cs.onSurfaceVariant),
+  );
+}
+
+/// 标签编辑器：已有标签 + 新标签输入。
 class _TagsEditor extends StatelessWidget {
   final List<String> tags;
   final TextEditingController controller;
@@ -936,5 +2212,4 @@ Color priorityColor(TodoPriority p) {
   }
 }
 
-String _formatYmd(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _formatYmd(DateTime d) => I18nDateFormat.date(d);

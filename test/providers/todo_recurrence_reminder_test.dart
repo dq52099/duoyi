@@ -51,4 +51,29 @@ void main() {
     // ignore: deprecated_member_use_from_same_package
     expect(next.reminderAt, DateTime(2026, 5, 11, 17, 30));
   });
+
+  test('repeating todo honors max occurrence count', () async {
+    final provider = TodoProvider();
+    final todo = TodoItem(
+      title: 'repeat twice',
+      date: DateTime(2026, 5, 10, 9),
+      recurrence: const RecurrenceRule(
+        frequency: RecurrenceFrequency.daily,
+        maxOccurrences: 2,
+      ),
+    );
+
+    await provider.addTodo(todo);
+    await provider.toggleTodo(todo.id);
+
+    expect(provider.todos.length, 2);
+    final second = provider.todos.firstWhere((t) => t.id != todo.id);
+    expect(second.date, DateTime(2026, 5, 11, 9));
+    expect(second.recurrence.maxOccurrences, 1);
+
+    await provider.toggleTodo(second.id);
+
+    expect(provider.todos.length, 2);
+    expect(provider.todos.every((t) => t.isCompleted), isTrue);
+  });
 }

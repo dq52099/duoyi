@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
+import '../providers/theme_provider.dart';
 
 class AppSurfaceCard extends StatelessWidget {
   final Widget child;
@@ -33,16 +35,45 @@ class AppSurfaceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    ThemeProvider? themeProvider;
+    try {
+      themeProvider = context.watch<ThemeProvider>();
+    } catch (_) {
+      themeProvider = null;
+    }
+    final cardSkin = themeProvider?.activeCardSkin;
+    final useCardSkin =
+        cardSkin != null &&
+        cardSkin.id != ThemeProvider.defaultCardSkinId &&
+        color == null &&
+        gradient == null;
     final surfaceColor =
         color ?? (isDark ? cs.surface.withValues(alpha: 0.92) : cs.surface);
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.08)
         : Colors.black.withValues(alpha: 0.05);
+    final skinGradient = useCardSkin
+        ? LinearGradient(
+            colors: [
+              cardSkin.colors.first.withValues(alpha: isDark ? 0.22 : 0.18),
+              cardSkin.colors.last.withValues(alpha: isDark ? 0.18 : 0.12),
+              surfaceColor,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+        : null;
     final decoration = BoxDecoration(
-      color: gradient == null ? surfaceColor : null,
-      gradient: gradient,
+      color: gradient == null && skinGradient == null ? surfaceColor : null,
+      gradient: gradient ?? skinGradient,
       borderRadius: borderRadius,
-      border: border ?? Border.all(color: borderColor),
+      border:
+          border ??
+          Border.all(
+            color: useCardSkin
+                ? cardSkin.colors.first.withValues(alpha: 0.28)
+                : borderColor,
+          ),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
@@ -76,6 +107,8 @@ class AppSectionHeader extends StatelessWidget {
   final IconData? actionIcon;
   final VoidCallback? onAction;
   final EdgeInsetsGeometry padding;
+  final TextStyle? titleStyle;
+  final TextStyle? actionTextStyle;
 
   const AppSectionHeader({
     super.key,
@@ -85,6 +118,8 @@ class AppSectionHeader extends StatelessWidget {
     this.actionIcon,
     this.onAction,
     this.padding = const EdgeInsets.fromLTRB(16, 14, 12, 8),
+    this.titleStyle,
+    this.actionTextStyle,
   });
 
   @override
@@ -102,10 +137,12 @@ class AppSectionHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w400,
-                    color: cs.onSurface,
-                  ),
+                  style:
+                      titleStyle ??
+                      theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w400,
+                        color: cs.onSurface,
+                      ),
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -127,6 +164,11 @@ class AppSectionHeader extends StatelessWidget {
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 foregroundColor: cs.primary,
+                textStyle:
+                    actionTextStyle ??
+                    theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w400,
+                    ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 8,
@@ -276,6 +318,11 @@ class AppMetricCard extends StatelessWidget {
   final EdgeInsetsGeometry margin;
   final EdgeInsetsGeometry padding;
   final BorderRadius borderRadius;
+  final TextStyle? valueStyle;
+  final TextStyle? unitStyle;
+  final TextStyle? titleStyle;
+  final double iconBoxSize;
+  final double iconSize;
 
   const AppMetricCard({
     super.key,
@@ -286,67 +333,120 @@ class AppMetricCard extends StatelessWidget {
     this.unit,
     this.onTap,
     this.margin = EdgeInsets.zero,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.fromLTRB(12, 10, 12, 10),
     this.borderRadius = const BorderRadius.all(
-      Radius.circular(DesignTokens.radiusLg),
+      Radius.circular(DesignTokens.radiusMd),
     ),
+    this.valueStyle,
+    this.unitStyle,
+    this.titleStyle,
+    this.iconBoxSize = 28,
+    this.iconSize = 15,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return AppSurfaceCard(
-      margin: margin,
-      padding: padding,
-      borderRadius: borderRadius,
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(height: 12),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: value,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w400,
-                    color: cs.onSurface,
-                  ),
-                ),
-                if (unit != null && unit!.isNotEmpty)
-                  TextSpan(
-                    text: unit!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w400,
-                      color: cs.onSurface.withValues(alpha: 0.65),
-                    ),
-                  ),
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.62),
-              fontWeight: FontWeight.w400,
-            ),
+    final isDark = theme.brightness == Brightness.dark;
+    final fill = isDark
+        ? cs.surface.withValues(alpha: 0.62)
+        : cs.surface.withValues(alpha: 0.78);
+    final tile = Ink(
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.5 : 0.64),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.018),
+            blurRadius: 8,
+            offset: const Offset(0, 1),
           ),
         ],
+      ),
+      child: Padding(
+        padding: padding,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: iconBoxSize,
+              height: iconBoxSize,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+                borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+              ),
+              child: Icon(icon, color: color, size: iconSize),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        titleStyle ??
+                        theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          fontWeight: FontWeight.w400,
+                          height: 1.1,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: value,
+                          style:
+                              valueStyle ??
+                              theme.textTheme.titleMedium?.copyWith(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
+                                height: 1.08,
+                              ),
+                        ),
+                        if (unit != null && unit!.isNotEmpty)
+                          TextSpan(
+                            text: ' $unit',
+                            style:
+                                unitStyle ??
+                                theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w400,
+                                  color: cs.onSurface.withValues(alpha: 0.62),
+                                  height: 1.08,
+                                ),
+                          ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: margin,
+      child: Material(
+        color: Colors.transparent,
+        child: onTap == null
+            ? tile
+            : InkWell(onTap: onTap, borderRadius: borderRadius, child: tile),
       ),
     );
   }

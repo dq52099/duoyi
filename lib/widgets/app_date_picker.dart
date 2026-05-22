@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
 import '../core/lunar_calendar.dart';
 import 'surface_components.dart';
 
@@ -17,14 +19,16 @@ class AppDatePickerResult {
     this.ignoreYear = false,
   });
 
-  String get solarText =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  String get solarText => I18nDateFormat.date(date);
 
   String get lunarText {
     final lunar = LunarCalendar.fromSolar(date);
-    return '${LunarCalendar.ganzhiOf(lunar.year)}年（${date.year}）'
+    final text =
+        '${LunarCalendar.ganzhiOf(lunar.year)}年（${date.year}）'
         '${LunarCalendar.monthName(lunar.month, isLeap: lunar.isLeapMonth)} '
         '${LunarCalendar.dayName(lunar.day)}';
+    if (I18n.current == AppLocale.zh) return text;
+    return '${I18n.tr('calendar.chinese_lunar_calendar')}: $text';
   }
 }
 
@@ -178,16 +182,16 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SegmentedButton<AppDatePickerMode>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: AppDatePickerMode.solar,
-                icon: Icon(Icons.calendar_month_outlined),
-                label: Text('公历'),
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(I18n.tr('calendar.solar')),
               ),
               ButtonSegment(
                 value: AppDatePickerMode.lunar,
-                icon: Icon(Icons.brightness_2_outlined),
-                label: Text('农历'),
+                icon: const Icon(Icons.brightness_2_outlined),
+                label: Text(I18n.tr('calendar.lunar')),
               ),
             ],
             selected: {_mode},
@@ -198,9 +202,14 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
+              color: Color.alphaBlend(
+                cs.primary.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
+                ),
+                cs.surface,
+              ),
               borderRadius: DesignTokens.borderRadiusLg,
-              border: Border.all(color: cs.outline.withValues(alpha: 0.12)),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
             ),
             child: Row(
               children: [
@@ -303,13 +312,19 @@ class _SolarCalendar extends StatelessWidget {
     final canGoNext = month.isBefore(lastMonth);
     final firstOfMonth = DateTime(month.year, month.month, 1);
     final leadingBlankCount = firstOfMonth.weekday - 1;
+    final calendarFill = Color.alphaBlend(
+      cs.primary.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.06 : 0.025,
+      ),
+      cs.surface,
+    );
     const rows = 6;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: calendarFill,
         borderRadius: DesignTokens.borderRadiusLg,
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.52)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
@@ -334,12 +349,12 @@ class _SolarCalendar extends StatelessWidget {
                       style:
                           theme.textTheme.titleMedium?.copyWith(
                             color: cs.onSurface,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ) ??
                           TextStyle(
                             color: cs.onSurface,
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                     ),
                   ),
@@ -426,8 +441,8 @@ class _WeekdayLabel extends StatelessWidget {
       child: Text(
         label,
         style: theme.textTheme.labelMedium?.copyWith(
-          color: cs.onSurfaceVariant,
-          fontWeight: FontWeight.w500,
+          color: cs.primary.withValues(alpha: 0.82),
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -460,10 +475,25 @@ class _SolarDayCell extends StatelessWidget {
     final isSelected = _sameDate(day, selectedDay);
     final disabled =
         day.isBefore(_dateOnly(firstDay)) || day.isAfter(_dateOnly(lastDay));
+    final isEnabledCurrentMonth = !disabled && cell.inCurrentMonth;
+    final currentMonthFill = Color.alphaBlend(
+      cs.primary.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.10 : 0.07,
+      ),
+      cs.surface,
+    );
+    final todayFill = Color.alphaBlend(
+      cs.primary.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.18 : 0.13,
+      ),
+      cs.surface,
+    );
     final background = isSelected
         ? cs.primary
         : isToday
-        ? cs.primary.withValues(alpha: 0.12)
+        ? todayFill
+        : isEnabledCurrentMonth
+        ? currentMonthFill
         : Colors.transparent;
     final foreground = disabled
         ? cs.onSurface.withValues(alpha: 0.30)
@@ -473,14 +503,19 @@ class _SolarDayCell extends StatelessWidget {
         ? cs.primary
         : cell.inCurrentMonth
         ? cs.onSurface
-        : cs.onSurfaceVariant.withValues(alpha: 0.52);
+        : cs.onSurfaceVariant.withValues(alpha: 0.36);
     final border = isToday && !isSelected
-        ? Border.all(color: cs.primary.withValues(alpha: 0.55), width: 1.2)
+        ? Border.all(color: cs.primary.withValues(alpha: 0.72), width: 1.2)
+        : isEnabledCurrentMonth
+        ? Border.all(color: cs.primary.withValues(alpha: 0.18))
         : null;
 
     return Padding(
       padding: const EdgeInsets.all(3),
       child: Material(
+        key: ValueKey(
+          'solar-day-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
+        ),
         color: background,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -497,9 +532,7 @@ class _SolarDayCell extends StatelessWidget {
               '${day.day}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: foreground,
-                fontWeight: isSelected || isToday
-                    ? FontWeight.w700
-                    : FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

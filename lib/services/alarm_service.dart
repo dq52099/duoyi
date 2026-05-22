@@ -216,10 +216,30 @@ class AlarmService implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
     if (when.isBefore(DateTime.now())) return;
-    await _ensureNotificationPermission('scheduleFullScreen');
+    if (_isAndroid) {
+      await NativeReminderRingtone.scheduleOnce(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        vibrate: vibrate,
+        snoozeMinutes: snoozeMinutes,
+        repeatCount: repeatCount,
+      );
+    }
+    try {
+      await _ensureNotificationPermission('scheduleFullScreen');
+    } on NotificationPermissionDeniedException {
+      if (_isAndroid) return;
+      rethrow;
+    }
 
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -231,8 +251,8 @@ class AlarmService implements ReminderAlarmSink {
       fullScreenIntent: fullScreen,
       playSound: true,
       sound: _alarmSound,
-      enableVibration: true,
-      vibrationPattern: _vibrationPattern,
+      enableVibration: vibrate,
+      vibrationPattern: vibrate ? _vibrationPattern : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
       actions: _actionsForPayload(payload),
@@ -268,13 +288,18 @@ class AlarmService implements ReminderAlarmSink {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
-      await NativeReminderRingtone.scheduleOnce(
-        id: id,
-        title: title,
-        body: body,
-        when: when,
-        payload: payload,
-      );
+      if (!_isAndroid) {
+        await NativeReminderRingtone.scheduleOnce(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+          vibrate: vibrate,
+          snoozeMinutes: snoozeMinutes,
+          repeatCount: repeatCount,
+        );
+      }
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) rethrow;
       // 降级重试：精准闹钟权限缺失时，退化为非精准模式，让提醒至少还能响，
@@ -292,13 +317,18 @@ class AlarmService implements ReminderAlarmSink {
                 UILocalNotificationDateInterpretation.absoluteTime,
             payload: payload,
           );
-          await NativeReminderRingtone.scheduleOnce(
-            id: id,
-            title: title,
-            body: body,
-            when: when,
-            payload: payload,
-          );
+          if (!_isAndroid) {
+            await NativeReminderRingtone.scheduleOnce(
+              id: id,
+              title: title,
+              body: body,
+              when: when,
+              payload: payload,
+              vibrate: vibrate,
+              snoozeMinutes: snoozeMinutes,
+              repeatCount: repeatCount,
+            );
+          }
           return;
         } catch (_) {
           // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
@@ -315,7 +345,20 @@ class AlarmService implements ReminderAlarmSink {
     String payload = 'duoyi://alarm-test',
   }) async {
     if (!_initialized) await init();
-    await _ensureNotificationPermission('showFullScreenTest');
+    if (_isAndroid) {
+      await NativeReminderRingtone.showNow(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+      );
+    }
+    try {
+      await _ensureNotificationPermission('showFullScreenTest');
+    } on NotificationPermissionDeniedException {
+      if (_isAndroid) return;
+      rethrow;
+    }
     await _plugin.show(
       id,
       title,
@@ -323,12 +366,14 @@ class AlarmService implements ReminderAlarmSink {
       _notificationDetails(fullScreen: true, payload: payload),
       payload: payload,
     );
-    await NativeReminderRingtone.showNow(
-      id: id,
-      title: title,
-      body: body,
-      payload: payload,
-    );
+    if (!_isAndroid) {
+      await NativeReminderRingtone.showNow(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+      );
+    }
   }
 
   @override
@@ -342,13 +387,36 @@ class AlarmService implements ReminderAlarmSink {
     String? payload,
     bool requireExactAlarm = true,
     bool fullScreen = true,
+    bool vibrate = true,
+    int snoozeMinutes = 0,
+    int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
-    await _ensureNotificationPermission('scheduleDailyFullScreen');
+    if (_isAndroid) {
+      await NativeReminderRingtone.scheduleDaily(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: payload,
+        vibrate: vibrate,
+        snoozeMinutes: snoozeMinutes,
+        repeatCount: repeatCount,
+      );
+    }
+    try {
+      await _ensureNotificationPermission('scheduleDailyFullScreen');
+    } on NotificationPermissionDeniedException {
+      if (_isAndroid) return;
+      rethrow;
+    }
 
     final details = _notificationDetails(
       fullScreen: fullScreen,
       payload: payload,
+      vibrate: vibrate,
     );
     final normalized = weekdays == null || weekdays.isEmpty
         ? const <int>[]
@@ -378,15 +446,20 @@ class AlarmService implements ReminderAlarmSink {
               UILocalNotificationDateInterpretation.absoluteTime,
           payload: payload,
         );
-        await NativeReminderRingtone.scheduleDaily(
-          id: scheduleId,
-          title: title,
-          body: body,
-          hour: hour,
-          minute: minute,
-          weekdays: weekday == null ? null : <int>[weekday],
-          payload: payload,
-        );
+        if (!_isAndroid) {
+          await NativeReminderRingtone.scheduleDaily(
+            id: scheduleId,
+            title: title,
+            body: body,
+            hour: hour,
+            minute: minute,
+            weekdays: weekday == null ? null : <int>[weekday],
+            payload: payload,
+            vibrate: vibrate,
+            snoozeMinutes: snoozeMinutes,
+            repeatCount: repeatCount,
+          );
+        }
       } on PlatformException catch (e) {
         if (!_isExactAlarmDenied(e)) rethrow;
         if (requireExactAlarm) {
@@ -405,15 +478,20 @@ class AlarmService implements ReminderAlarmSink {
                   UILocalNotificationDateInterpretation.absoluteTime,
               payload: payload,
             );
-            await NativeReminderRingtone.scheduleDaily(
-              id: scheduleId,
-              title: title,
-              body: body,
-              hour: hour,
-              minute: minute,
-              weekdays: weekday == null ? null : <int>[weekday],
-              payload: payload,
-            );
+            if (!_isAndroid) {
+              await NativeReminderRingtone.scheduleDaily(
+                id: scheduleId,
+                title: title,
+                body: body,
+                hour: hour,
+                minute: minute,
+                weekdays: weekday == null ? null : <int>[weekday],
+                payload: payload,
+                vibrate: vibrate,
+                snoozeMinutes: snoozeMinutes,
+                repeatCount: repeatCount,
+              );
+            }
             continue;
           } catch (_) {
             // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
@@ -559,6 +637,7 @@ class AlarmService implements ReminderAlarmSink {
   NotificationDetails _notificationDetails({
     required bool fullScreen,
     String? payload,
+    bool vibrate = true,
   }) {
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -570,8 +649,8 @@ class AlarmService implements ReminderAlarmSink {
       fullScreenIntent: fullScreen,
       playSound: true,
       sound: _alarmSound,
-      enableVibration: true,
-      vibrationPattern: _vibrationPattern,
+      enableVibration: vibrate,
+      vibrationPattern: vibrate ? _vibrationPattern : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
       actions: _actionsForPayload(payload),

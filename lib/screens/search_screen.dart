@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/global_search.dart';
+import '../core/i18n.dart';
 import '../providers/anniversary_provider.dart';
+import '../providers/calendar_provider.dart';
 import '../providers/countdown_provider.dart';
 import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
@@ -15,6 +17,7 @@ import '../widgets/brand_background.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'anniversary_screen.dart';
+import 'calendar_screen.dart';
 import 'countdown_screen.dart';
 import 'course_schedule_screen.dart';
 import 'diary_screen.dart';
@@ -76,6 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
         countdowns: context.read<CountdownProvider>().items,
         goals: context.read<GoalProvider>().goals,
         courses: context.read<CourseProvider>().courses,
+        calendarEvents: context.read<CalendarProvider>().events,
         timeEntries: context.read<TimeAuditProvider>().entries,
       );
       setState(() {
@@ -150,6 +154,15 @@ class _SearchScreenState extends State<SearchScreen> {
           MaterialPageRoute(
             builder: (_) =>
                 const BrandRouteSurface(child: CourseScheduleScreen()),
+          ),
+        );
+        break;
+      case SearchKind.calendarEvent:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                BrandRouteSurface(child: CalendarScreen(initialDate: h.when)),
           ),
         );
         break;
@@ -280,9 +293,9 @@ class _SearchScreenState extends State<SearchScreen> {
         title: TextField(
           controller: _ctrl,
           autofocus: true,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             border: InputBorder.none,
-            hintText: '搜索待办 · 习惯 · 笔记 · 日记 · 纪念日 …',
+            hintText: I18n.tr('search.hint'),
           ),
           onChanged: _onChanged,
         ),
@@ -290,6 +303,7 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_ctrl.text.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.close),
+              tooltip: I18n.tr('search.clear'),
               onPressed: () {
                 _ctrl.clear();
                 _onChanged('');
@@ -298,11 +312,12 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
       body: _query.isEmpty
-          ? const EmptyState(icon: Icons.search, message: '输入关键字，搜索全部内容')
+          ? EmptyState(icon: Icons.search, message: I18n.tr('search.empty'))
           : _hits.isEmpty
           ? EmptyState(
               icon: Icons.sentiment_dissatisfied,
-              message: '没找到 "$_query" 相关结果',
+              message:
+                  '${I18n.tr('search.no_results.prefix')}"$_query"${I18n.tr('search.no_results.suffix')}',
             )
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
@@ -326,7 +341,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '搜索结果',
+                              I18n.tr('search.results.title'),
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w400,
                                 color: cs.onSurface,
@@ -334,7 +349,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '“$_query” 共 ${_hits.length} 条命中',
+                              '${I18n.tr('search.results.summary_prefix')}$_query${I18n.tr('search.results.summary_middle')}${_hits.length}${I18n.tr('search.results.summary_suffix')}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -345,7 +360,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: '清空搜索',
+                        tooltip: I18n.tr('search.clear'),
                         onPressed: () {
                           _ctrl.clear();
                           _onChanged('');

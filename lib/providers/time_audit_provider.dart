@@ -8,6 +8,17 @@ import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import 'cloud_sync_provider.dart';
+
+class TimeEntryImportSummary {
+  final int inserted;
+  final int skippedDuplicates;
+
+  const TimeEntryImportSummary({
+    required this.inserted,
+    required this.skippedDuplicates,
+  });
+}
 
 class TimeAuditProvider extends ChangeNotifier {
   static const storageKey = 'duoyi_time_entries';
@@ -15,7 +26,8 @@ class TimeAuditProvider extends ChangeNotifier {
   List<TimeEntry> _entries = [];
 
   List<TimeEntry> get entries {
-    final sorted = [..._entries]..sort((a, b) => b.startAt.compareTo(a.startAt));
+    final sorted = [..._entries]
+      ..sort((a, b) => b.startAt.compareTo(a.startAt));
     return List.unmodifiable(sorted);
   }
 
@@ -49,6 +61,32 @@ class TimeAuditProvider extends ChangeNotifier {
     await _save();
   }
 
+  Future<TimeEntryImportSummary> importTimeEntries(
+    Iterable<TimeEntry> entries,
+  ) async {
+    var inserted = 0;
+    var skippedDuplicates = 0;
+    final seen = _entries.map(_importDuplicateKey).toSet();
+    for (final entry in entries) {
+      final key = _importDuplicateKey(entry);
+      if (seen.contains(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seen.add(key);
+      _entries.add(entry);
+      inserted++;
+    }
+    if (inserted > 0) {
+      notifyListeners();
+      await _save();
+    }
+    return TimeEntryImportSummary(
+      inserted: inserted,
+      skippedDuplicates: skippedDuplicates,
+    );
+  }
+
   Future<void> upsertAuto(TimeEntry entry) async {
     final key = entry.dedupeKey;
     if (key != null && key.isNotEmpty) {
@@ -64,27 +102,30 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> deleteByDedupeKey(String dedupeKey) async {
-    final before = _entries.length;
+    final removedIds = _entries
+        .where((e) => e.dedupeKey == dedupeKey)
+        .map((e) => e.id)
+        .toList();
+    if (removedIds.isEmpty) return;
     _entries.removeWhere((e) => e.dedupeKey == dedupeKey);
-    if (_entries.length == before) return;
+    await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
     notifyListeners();
     await _save();
   }
 
   Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
-    final before = _entries.length;
+    final removedIds = _entries.where(test).map((e) => e.id).toList();
+    if (removedIds.isEmpty) return;
     _entries.removeWhere(test);
-    if (_entries.length == before) return;
+    await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
     notifyListeners();
     await _save();
   }
 
-  Future<void> deleteBySource(
-    TimeEntrySource source,
-    String sourceId,
-  ) async {
-    await deleteWhere((entry) =>
-        entry.source == source && entry.sourceId == sourceId);
+  Future<void> deleteBySource(TimeEntrySource source, String sourceId) async {
+    await deleteWhere(
+      (entry) => entry.source == source && entry.sourceId == sourceId,
+    );
   }
 
   Future<void> deleteGoalEntries(String goalId) async {
@@ -105,7 +146,10 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    final exists = _entries.any((e) => e.id == id);
+    if (!exists) return;
     _entries.removeWhere((e) => e.id == id);
+    await CloudSyncProvider.recordDeletedItem('time_entries', id);
     notifyListeners();
     await _save();
   }
@@ -196,6 +240,24 @@ class TimeAuditProvider extends ChangeNotifier {
     );
   }
 
+  int? habitCheckInRecordedAmount(
+    Habit habit, {
+    required int count,
+    DateTime? at,
+  }) {
+    final unitSeconds = habitUnitSeconds(habit);
+    if (unitSeconds == null || unitSeconds <= 0) return null;
+    final endAt = at ?? DateTime.now();
+    final key = habitCheckInDedupeKey(habit.id, _dateKey(endAt), count);
+    for (final entry in _entries) {
+      if (entry.dedupeKey == key && entry.durationSeconds > 0) {
+        final amount = entry.durationSeconds ~/ unitSeconds;
+        return amount > 0 ? amount : null;
+      }
+    }
+    return null;
+  }
+
   Future<void> recordGoalMilestone(
     GoalItem goal,
     GoalMilestone milestone, {
@@ -238,10 +300,10 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   int totalSecondsInRange(DateTime start, DateTime end) {
-    return entriesInRange(start, end).fold<int>(
-      0,
-      (sum, entry) => sum + _durationWithin(entry, start, end),
-    );
+    return entriesInRange(
+      start,
+      end,
+    ).fold<int>(0, (sum, entry) => sum + _durationWithin(entry, start, end));
   }
 
   Map<TimeEntryCategory, int> secondsByCategory(DateTime start, DateTime end) {
@@ -287,6 +349,22 @@ class TimeAuditProvider extends ChangeNotifier {
   static String goalMilestoneDedupeKey(String goalId, String milestoneId) =>
       'goal:$goalId:milestone:$milestoneId';
 
+  static int? habitUnitSeconds(Habit habit) {
+    final unit = habit.unit?.trim();
+    if (unit == null || unit.isEmpty) return null;
+    final lower = unit.toLowerCase();
+    if (unit.contains('小时') || lower.contains('hour') || lower == 'h') {
+      return 3600;
+    }
+    if (unit.contains('分钟') ||
+        unit.contains('分') ||
+        lower.contains('min') ||
+        lower == 'm') {
+      return 60;
+    }
+    return null;
+  }
+
   int? _todoDurationSeconds(TodoItem todo) {
     if (todo.timeTargetSeconds != null && todo.timeTargetSeconds! > 0) {
       return todo.timeTargetSeconds;
@@ -300,19 +378,8 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   int? _habitDurationSeconds(Habit habit, int count) {
-    final unit = habit.unit?.trim();
-    if (unit == null || unit.isEmpty) return null;
-    final lower = unit.toLowerCase();
-    if (unit.contains('小时') || lower.contains('hour') || lower == 'h') {
-      return count * 3600;
-    }
-    if (unit.contains('分钟') ||
-        unit.contains('分') ||
-        lower.contains('min') ||
-        lower == 'm') {
-      return count * 60;
-    }
-    return null;
+    final unitSeconds = habitUnitSeconds(habit);
+    return unitSeconds == null ? null : count * unitSeconds;
   }
 
   int? _goalDurationSeconds(GoalItem goal) {
@@ -331,6 +398,20 @@ class TimeAuditProvider extends ChangeNotifier {
     final clippedStart = entry.startAt.isBefore(start) ? start : entry.startAt;
     final clippedEnd = entry.endAt.isAfter(end) ? end : entry.endAt;
     return math.max(0, clippedEnd.difference(clippedStart).inSeconds);
+  }
+
+  String _importDuplicateKey(TimeEntry entry) {
+    final normalizedTitle = entry.title.trim().toLowerCase();
+    final source = entry.sourceId?.trim().isNotEmpty == true
+        ? '${entry.source.name}:${entry.sourceId}'
+        : entry.source.name;
+    return [
+      normalizedTitle,
+      entry.startAt.toIso8601String(),
+      entry.endAt.toIso8601String(),
+      entry.category.name,
+      source,
+    ].join('|');
   }
 
   String _dateKey(DateTime date) =>

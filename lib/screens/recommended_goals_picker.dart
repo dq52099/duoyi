@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
 import '../core/goal_icons.dart';
+import '../core/i18n_date_format.dart';
 import '../core/recommended_goals.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
@@ -220,15 +221,15 @@ class _RecommendedGoalCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      goal.title,
+                      goal.localizedTitle,
                       style: const TextStyle(
                         fontSize: DesignTokens.fontSizeMd,
-                        fontWeight: DesignTokens.fontWeightSemiBold,
+                        fontWeight: DesignTokens.fontWeightRegular,
                       ),
                     ),
                     const SizedBox(height: DesignTokens.spaceXxs),
                     Text(
-                      goal.description,
+                      goal.localizedDescription,
                       style: TextStyle(
                         fontSize: DesignTokens.fontSizeSm,
                         color: cs.onSurface.withValues(alpha: 0.65),
@@ -502,7 +503,5 @@ String _focusLabel(int? focusSeconds) {
 /// 把 `hour:minute` 渲染成 `HH:MM`，任一为 null 时返回 null。
 String? _formatHm(int? hour, int? minute) {
   if (hour == null || minute == null) return null;
-  final hh = hour.toString().padLeft(2, '0');
-  final mm = minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
+  return I18nDateFormat.timeOfDay(hour: hour, minute: minute);
 }

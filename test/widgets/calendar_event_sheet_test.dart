@@ -1,0 +1,173 @@
+import 'package:duoyi/models/calendar_event.dart';
+import 'package:duoyi/models/time_entry.dart';
+import 'package:duoyi/models/todo.dart';
+import 'package:duoyi/providers/time_audit_provider.dart';
+import 'package:duoyi/providers/todo_provider.dart';
+import 'package:duoyi/widgets/calendar_event_sheet.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  testWidgets('time entry event exposes quick duration adjustment', (
+    tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    final provider = TimeAuditProvider();
+    final entry = TimeEntry(
+      id: 'time-1',
+      title: '深度工作',
+      startAt: DateTime(2026, 5, 18, 9),
+      endAt: DateTime(2026, 5, 18, 9, 30),
+      category: TimeEntryCategory.work,
+      source: TimeEntrySource.manual,
+    );
+    await provider.add(entry);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TimeAuditProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarEventSheet(
+              event: CalendarEvent(
+                id: 'time_time-1',
+                title: '深度工作',
+                date: entry.startAt,
+                endDate: entry.endAt,
+                type: CalendarEventType.timeEntry,
+                color: Colors.orange,
+                sourceId: entry.id,
+                time: TimeOfDay.fromDateTime(entry.startAt),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('改期'), findsOneWidget);
+    expect(find.text('调整开始'), findsOneWidget);
+    expect(find.text('调整时长'), findsOneWidget);
+
+    await tester.tap(find.text('调整时长'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('90 分钟'));
+    await tester.pumpAndSettle();
+
+    expect(provider.entries.single.durationSeconds, 90 * 60);
+    expect(provider.entries.single.startAt, entry.startAt);
+    expect(provider.entries.single.endAt, DateTime(2026, 5, 18, 10, 30));
+  });
+
+  testWidgets('time entry event can adjust start time and keep duration', (
+    tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    final provider = TimeAuditProvider();
+    final entry = TimeEntry(
+      id: 'time-2',
+      title: '阅读',
+      startAt: DateTime(2026, 5, 18, 9),
+      endAt: DateTime(2026, 5, 18, 10),
+      category: TimeEntryCategory.study,
+      source: TimeEntrySource.manual,
+    );
+    await provider.add(entry);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TimeAuditProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarEventSheet(
+              event: CalendarEvent(
+                id: 'time_time-2',
+                title: '阅读',
+                date: entry.startAt,
+                endDate: entry.endAt,
+                type: CalendarEventType.timeEntry,
+                color: Colors.orange,
+                sourceId: entry.id,
+                time: TimeOfDay.fromDateTime(entry.startAt),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('调整开始'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('晚上 20:00'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(provider.entries.single.startAt, DateTime(2026, 5, 18, 20));
+    expect(provider.entries.single.endAt, DateTime(2026, 5, 18, 21));
+    expect(provider.entries.single.durationSeconds, 60 * 60);
+  });
+
+  testWidgets('todo event can adjust due time from calendar sheet', (
+    tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    final provider = TodoProvider();
+    final todo = TodoItem(
+      id: 'todo-1',
+      title: '提交周报',
+      date: DateTime(2026, 5, 18),
+      dueDate: DateTime(2026, 5, 18, 9),
+    );
+    await provider.addTodo(todo);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TodoProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarEventSheet(
+              event: CalendarEvent(
+                id: 'todo_todo-1',
+                title: '提交周报',
+                date: todo.date,
+                endDate: todo.dueDate,
+                type: CalendarEventType.todo,
+                color: Colors.blue,
+                sourceId: todo.id,
+                time: TimeOfDay.fromDateTime(todo.dueDate!),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('调整时间'), findsOneWidget);
+
+    await tester.tap(find.text('调整时间'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('晚上 20:00'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(provider.todos.single.dueDate, DateTime(2026, 5, 18, 20));
+    expect(provider.todos.single.date, DateTime(2026, 5, 18));
+  });
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'goal_icons.dart';
+import 'i18n.dart';
 import '../models/todo.dart';
 import '../models/habit.dart';
 import '../models/note.dart';
@@ -9,6 +10,7 @@ import '../models/goal.dart';
 import '../models/course_schedule.dart';
 import '../models/countdown.dart';
 import '../models/time_entry.dart';
+import '../models/calendar_event.dart';
 
 enum SearchKind {
   todo,
@@ -19,6 +21,7 @@ enum SearchKind {
   countdown,
   goal,
   course,
+  calendarEvent,
   timeEntry,
 }
 
@@ -48,19 +51,21 @@ class SearchHit {
     SearchKind.countdown => Icons.hourglass_bottom,
     SearchKind.goal => iconOverride ?? Icons.flag_circle_outlined,
     SearchKind.course => Icons.class_outlined,
+    SearchKind.calendarEvent => Icons.event_available_outlined,
     SearchKind.timeEntry => Icons.timelapse_outlined,
   };
 
   String get kindLabel => switch (kind) {
-    SearchKind.todo => '待办',
-    SearchKind.habit => '习惯',
-    SearchKind.note => '笔记',
-    SearchKind.diary => '日记',
-    SearchKind.anniversary => '纪念',
-    SearchKind.countdown => '倒数',
-    SearchKind.goal => '目标',
-    SearchKind.course => '课程',
-    SearchKind.timeEntry => '时间足迹',
+    SearchKind.todo => I18n.tr('search.kind.todo'),
+    SearchKind.habit => I18n.tr('search.kind.habit'),
+    SearchKind.note => I18n.tr('search.kind.note'),
+    SearchKind.diary => I18n.tr('search.kind.diary'),
+    SearchKind.anniversary => I18n.tr('search.kind.anniversary'),
+    SearchKind.countdown => I18n.tr('search.kind.countdown'),
+    SearchKind.goal => I18n.tr('search.kind.goal'),
+    SearchKind.course => I18n.tr('search.kind.course'),
+    SearchKind.calendarEvent => I18n.tr('search.kind.event'),
+    SearchKind.timeEntry => I18n.tr('search.kind.time_entry'),
   };
 }
 
@@ -76,6 +81,7 @@ class GlobalSearch {
     required List<CountdownItem> countdowns,
     required List<GoalItem> goals,
     required List<CourseItem> courses,
+    List<CalendarEvent> calendarEvents = const [],
     List<TimeEntry> timeEntries = const [],
     int maxPerKind = 10,
   }) {
@@ -204,6 +210,30 @@ class GlobalSearch {
               subtitle:
                   '${c.teacher.isEmpty ? '' : '${c.teacher} · '}${c.location}',
               sourceId: c.id,
+            ),
+          ),
+    );
+
+    hits.addAll(
+      calendarEvents
+          .where((event) => event.type == CalendarEventType.event)
+          .where(
+            (event) =>
+                hit(event.title) ||
+                hit(event.subtitle) ||
+                hit(event.note) ||
+                hit(event.projectName),
+          )
+          .take(maxPerKind)
+          .map(
+            (event) => SearchHit(
+              kind: SearchKind.calendarEvent,
+              title: event.title,
+              subtitle: event.subtitle ?? event.note ?? event.projectName,
+              sourceId: event.sourceId?.isNotEmpty == true
+                  ? event.sourceId!
+                  : event.id,
+              when: event.date,
             ),
           ),
     );

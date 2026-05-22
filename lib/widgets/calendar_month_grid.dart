@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/i18n.dart';
 import '../../models/calendar_event.dart';
 import '../../core/lunar_calendar.dart';
 
@@ -81,7 +82,7 @@ class CalendarMonthGrid extends StatelessWidget {
                 // 农历/节气/节日 小字
                 String? subText;
                 Color? subColor;
-                if (showLunar) {
+                if (showLunar && I18n.current == AppLocale.zh) {
                   final lunar = LunarCalendar.fromSolar(date);
                   final term = LunarCalendar.solarTerm(date);
                   final solarFes = LunarCalendar.solarFestival(date);
@@ -152,6 +153,12 @@ class CalendarMonthGrid extends StatelessWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  if (types.contains(CalendarEventType.event))
+                                    _dot(
+                                      isSelected
+                                          ? Colors.white
+                                          : const Color(0xFF5B6EE1),
+                                    ),
                                   if (types.contains(CalendarEventType.todo))
                                     _dot(
                                       isSelected ? Colors.white : cs.primary,
