@@ -20,11 +20,11 @@ class LocalNotifications {
   String? _launchPayload;
   bool get permissionGranted => _granted;
   static const RawResourceAndroidNotificationSound _alarmSound =
-      RawResourceAndroidNotificationSound('duoyi_chime');
+      RawResourceAndroidNotificationSound('duoyi_classic');
   static const RawResourceAndroidNotificationSound _defaultSound =
       RawResourceAndroidNotificationSound('duoyi_chime');
   static const String _defaultChannelId = 'duoyi_general_alerts_v9';
-  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v7';
+  static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v8';
   static const String _quickAddChannelId = 'duoyi_quick_add_ongoing_v1';
   static const int quickAddNotificationId = 880016;
   static const Set<String> _legacyChannelIds = <String>{
@@ -40,6 +40,7 @@ class LocalNotifications {
     'duoyi_alarm_fullscreen_v4',
     'duoyi_alarm_fullscreen_v5',
     'duoyi_alarm_fullscreen_v6',
+    'duoyi_alarm_fullscreen_v7',
   };
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
@@ -139,8 +140,8 @@ class LocalNotifications {
         await android?.createNotificationChannel(
           AndroidNotificationChannel(
             _alarmChannelId,
-            '多仪 · 强提醒',
-            description: '重要提醒会响铃、震动并弹出确认界面',
+            '多仪 · 柔和强提醒',
+            description: '重要提醒使用柔和内置铃声，可在通知上手动停止',
             importance: Importance.max,
             playSound: true,
             sound: _alarmSound,
@@ -275,9 +276,9 @@ class LocalNotifications {
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
-        isAlarm ? '多仪 · 强提醒' : '多仪 · 通知提醒',
+        isAlarm ? '多仪 · 柔和强提醒' : '多仪 · 通知提醒',
         channelDescription: isAlarm
-            ? '重要提醒会响铃、震动并弹出确认界面'
+            ? '重要提醒使用柔和内置铃声，可在通知上手动停止'
             : '日常提醒使用柔和提示音、震动并尽量显示横幅',
         importance: isAlarm ? Importance.max : Importance.high,
         priority: isAlarm ? Priority.max : Priority.high,
@@ -293,6 +294,9 @@ class LocalNotifications {
         visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
         ticker: '多仪提醒',
+        autoCancel: true,
+        ongoing: false,
+        onlyAlertOnce: true,
         actions: androidActions,
       ),
       iOS: const DarwinNotificationDetails(

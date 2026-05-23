@@ -56,7 +56,8 @@ class AppUpdateService extends ChangeNotifier {
   }
 
   bool get mustUpdate {
-    if (_forceUpdateRequired && hasUpdate) return true;
+    if (!_forceUpdateRequired) return false;
+    if (hasUpdate) return true;
     final minimum = _minimumSupportedVersion;
     if (minimum == null || minimum.trim().isEmpty) return false;
     return _compareSemver(_normalize(currentVersion), _normalize(minimum)) < 0;
@@ -165,6 +166,17 @@ class AppUpdateService extends ChangeNotifier {
   @visibleForTesting
   String debugFormatReleaseNotesForTest(String? notes) =>
       _formatReleaseNotes(notes);
+
+  @visibleForTesting
+  void debugSetUpdatePolicyForTest({
+    String? latestVersion,
+    String? minimumSupportedVersion,
+    bool forceUpdateRequired = false,
+  }) {
+    _latestVersion = latestVersion;
+    _minimumSupportedVersion = minimumSupportedVersion;
+    _forceUpdateRequired = forceUpdateRequired;
+  }
 
   Future<void> downloadAndInstallLatest() async {
     if (_latestUrl == null) {

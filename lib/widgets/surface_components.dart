@@ -800,6 +800,7 @@ Future<T?> showAppModalSheet<T>({
   bool useRootNavigator = false,
   bool isDismissible = true,
   bool enableDrag = true,
+  bool shiftForKeyboard = false,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -808,7 +809,15 @@ Future<T?> showAppModalSheet<T>({
     isDismissible: isDismissible,
     enableDrag: enableDrag,
     backgroundColor: Colors.transparent,
-    builder: builder,
+    builder: (sheetContext) {
+      final child = builder(sheetContext);
+      if (shiftForKeyboard) return child;
+      return MediaQuery.removeViewInsets(
+        context: sheetContext,
+        removeBottom: true,
+        child: child,
+      );
+    },
   );
 }
 
@@ -914,6 +923,7 @@ class AppModalSheet extends StatelessWidget {
   final bool showDragHandle;
   final EdgeInsetsGeometry padding;
   final double maxWidth;
+  final bool shiftForKeyboard;
 
   const AppModalSheet({
     super.key,
@@ -927,6 +937,7 @@ class AppModalSheet extends StatelessWidget {
     this.showDragHandle = true,
     this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 20),
     this.maxWidth = 720,
+    this.shiftForKeyboard = false,
   });
 
   @override
@@ -935,7 +946,7 @@ class AppModalSheet extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final media = MediaQuery.of(context);
-    final viewInsets = media.viewInsets;
+    final viewInsets = shiftForKeyboard ? media.viewInsets : EdgeInsets.zero;
     final resolvedPadding = padding.resolve(Directionality.of(context));
     final sheetPadding = EdgeInsets.fromLTRB(
       resolvedPadding.left,

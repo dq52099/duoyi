@@ -141,6 +141,8 @@ void main() {
     expect(surface, contains('this.shiftForKeyboard = false'));
     expect(surface, contains('if (!shiftForKeyboard) return scopedDialog;'));
     expect(surface, contains('MediaQuery.removeViewInsets'));
+    expect(surface, contains('bool shiftForKeyboard = false'));
+    expect(surface, contains('final viewInsets = shiftForKeyboard'));
 
     final start = mine.indexOf('class _ChangePasswordDialog');
     final end = mine.indexOf('class _TileGroup', start);

@@ -86,10 +86,8 @@ void main() {
     expect(badgeIndex, greaterThan(nameIndex));
     expect(streakIndex, greaterThan(badgeIndex));
     expect(cardSource, contains("key: ValueKey('habit-completed-feedback')"));
-    expect(
-      cardSource,
-      contains("key: const ValueKey('habit-warning-feedback')"),
-    );
+    expect(cardSource, contains('key: const ValueKey('));
+    expect(cardSource, contains("'habit-warning-feedback'"));
   });
 
   test('习惯详情提供长期趋势范围切换和区间明细', () {

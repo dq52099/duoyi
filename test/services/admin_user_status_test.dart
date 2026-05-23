@@ -145,15 +145,16 @@ void main() {
     expect(adminScreen, contains("label: '每页'"));
     expect(adminScreen, contains("label: '页码'"));
     expect(adminScreen, contains('class _AdminPaginationLabeledControl'));
-    expect(adminScreen, contains('constraints.maxWidth < 640'));
+    expect(adminScreen, contains('constraints.maxWidth < 760'));
     expect(adminScreen, isNot(contains('constraints.maxWidth < 520')));
+    expect(adminScreen, contains('minWidth: 160'));
     expect(adminScreen, contains('Wrap('));
     expect(adminScreen, contains('alignment: WrapAlignment.spaceBetween'));
     expect(adminScreen, contains('Expanded(child: previousButton)'));
     expect(adminScreen, contains('Expanded(child: nextButton)'));
     expect(
       adminScreen,
-      contains('minimumSize: const WidgetStatePropertyAll(Size(0, 44))'),
+      contains('minimumSize: const WidgetStatePropertyAll(Size(0, 46))'),
     );
     expect(adminScreen, contains("message: '分页导航'"));
     expect(adminScreen, contains("message: '跳到第一页'"));

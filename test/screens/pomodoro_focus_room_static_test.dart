@@ -93,6 +93,20 @@ void main() {
     expect(screen, contains('_showAcceptFocusRoomInviteDialog'));
     expect(screen, contains('rooms.socialRankingFor'));
     expect(screen, contains('pomodoro.setFocusRoomId'));
+    expect(
+      screen,
+      contains('context.select<PomodoroProvider, int>'),
+      reason: '自习室页只应随会话持久化修订刷新，避免秒表 tick 导致闪屏',
+    );
+    expect(
+      screen,
+      contains('provider.persistedRevision'),
+      reason: '自习室排行同步 keyed by persistedRevision, not remainingSeconds',
+    );
+    expect(
+      screen,
+      isNot(contains('final pomodoro = context.watch<PomodoroProvider>()')),
+    );
 
     expect(main, contains('FocusRoomProvider()'));
     expect(main, contains('FocusRoomProvider? _focusRoomProvider'));

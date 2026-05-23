@@ -147,12 +147,21 @@ class HabitProvider extends ChangeNotifier {
         ),
       );
       await _save();
-      await _timeAudit?.recordHabitCheckIn(
-        habit,
-        cumulativeCount: habit.completions[key] ?? 0,
-        amount: increment,
-        at: _timeForHabitRecord(date),
-      );
+      final timeAudit = _timeAudit;
+      if (timeAudit != null) {
+        try {
+          await timeAudit.recordHabitCheckIn(
+            habit,
+            cumulativeCount: habit.completions[key] ?? 0,
+            amount: increment,
+            at: _timeForHabitRecord(date),
+          );
+        } catch (error, stackTrace) {
+          debugPrint(
+            '[HabitProvider] recordHabitCheckIn failed: $error\n$stackTrace',
+          );
+        }
+      }
       notifyListeners();
     }
   }
@@ -186,11 +195,20 @@ class HabitProvider extends ChangeNotifier {
         _recalcStreak(idx);
         _habits[idx].updatedAt = stamp;
         await _save();
-        await _timeAudit?.removeHabitCheckIn(
-          _habits[idx],
-          count: v,
-          at: recordTime,
-        );
+        final timeAudit = _timeAudit;
+        if (timeAudit != null) {
+          try {
+            await timeAudit.removeHabitCheckIn(
+              _habits[idx],
+              count: v,
+              at: recordTime,
+            );
+          } catch (error, stackTrace) {
+            debugPrint(
+              '[HabitProvider] removeHabitCheckIn failed: $error\n$stackTrace',
+            );
+          }
+        }
         notifyListeners();
       }
     }

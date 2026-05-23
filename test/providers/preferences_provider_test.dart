@@ -67,11 +67,13 @@ void main() {
     expect(provider.bottomNavVisible, <int>{0, 1, 3, 5, 6});
   });
 
-  test('个性设置页将小组件和我的标记为固定显示并提示上限', () {
+  test('底部导航设置将小组件和我的标记为固定显示并提示上限', () {
     final source = File(
       'lib/screens/preferences_screen.dart',
     ).readAsStringSync();
 
+    expect(source, contains('class BottomNavSettingsScreen'));
+    expect(source, contains('const _BottomNavSettingsSection()'));
     expect(source, contains('lockedVisible = tab == 5 || tab == 6'));
     expect(source, contains("I18n.tr('preferences.nav.fixed')"));
     expect(source, contains('onChanged: lockedVisible'));
@@ -106,6 +108,27 @@ void main() {
     expect(source, contains("label: '日期日历'"));
     expect(source, contains("label: '默认行为'"));
     expect(source, contains("label: '交互归档'"));
+  });
+
+  test('我的页中个性设置和底部导航栏跳转到不同页面', () {
+    final source = File('lib/screens/mine_screen.dart').readAsStringSync();
+
+    final preferencesStart = source.indexOf("label: '个性设置'");
+    final bottomNavStart = source.indexOf("label: '底部导航栏'");
+    expect(preferencesStart, greaterThanOrEqualTo(0));
+    expect(bottomNavStart, greaterThan(preferencesStart));
+
+    final preferencesEntry = source.substring(preferencesStart, bottomNavStart);
+    final bottomNavEnd = source.indexOf("label: '应用锁'", bottomNavStart);
+    expect(bottomNavEnd, greaterThan(bottomNavStart));
+    final bottomNavEntry = source.substring(bottomNavStart, bottomNavEnd);
+
+    expect(preferencesEntry, contains('const PreferencesScreen()'));
+    expect(bottomNavEntry, contains('const BottomNavSettingsScreen()'));
+    expect(
+      source,
+      isNot(contains('initialSection: PreferencesInitialSection.bottomNav')),
+    );
   });
 
   test('通知记录保留数量可配置并按范围归一化', () async {

@@ -25,22 +25,13 @@ class _LoginActionField extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 520) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              field,
-              const SizedBox(height: 8),
-              SizedBox(height: 48, child: action),
-            ],
-          );
-        }
+        final actionWidth = constraints.maxWidth < 360 ? 108.0 : 132.0;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: field),
             const SizedBox(width: 12),
-            SizedBox(width: 132, height: 56, child: action),
+            SizedBox(width: actionWidth, height: 56, child: action),
           ],
         );
       },

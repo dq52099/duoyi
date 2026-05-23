@@ -113,7 +113,7 @@ class ReminderRingtoneService : Service() {
     }
 
     private fun vibrate() {
-        val pattern = longArrayOf(0, 600, 350, 600, 350, 900)
+        val pattern = longArrayOf(0, 220, 420, 220)
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             manager.defaultVibrator
@@ -188,11 +188,12 @@ class ReminderRingtoneService : Service() {
             .setOngoing(false)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentIntent)
             .setDeleteIntent(stopIntent)
-            .setFullScreenIntent(fullScreenIntent, true)
+            .setFullScreenIntent(fullScreenIntent, false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(true)
             .addAction(0, "停止响铃", stopIntent)
         if (snoozeIntent != null) {
             builder.addAction(0, "稍后 $snoozeMinutes 分钟", snoozeIntent)
@@ -240,10 +241,10 @@ class ReminderRingtoneService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
             channelId,
-            "多仪 · 内置提醒铃声",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "用于 HyperOS 等系统通知静音时播放应用内置提醒铃声"
+                "多仪 · 内置柔和提醒铃声",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "播放苹果/小米风格轻铃，并可在通知上手动停止"
             setSound(null, null)
             enableVibration(false)
         }
@@ -293,8 +294,8 @@ class ReminderRingtoneService : Service() {
 
         private fun volumePercent(context: Context): Int {
             return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                .getInt(volumeKey, 40)
-                .coerceIn(40, 100)
+                .getInt(volumeKey, 60)
+                .coerceIn(40, 80)
         }
 
         private fun soundResId(context: Context): Int {

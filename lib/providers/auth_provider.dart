@@ -266,10 +266,12 @@ class AuthProvider extends ChangeNotifier {
     String? bio,
   }) async {
     final res = await _client.patch('/api/auth/profile', {
-      'email': email,
-      if (emailCode != null && emailCode.isNotEmpty) 'email_code': emailCode,
-      'display_name': displayName,
-      'bio': bio,
+      'email': ?email,
+      'email_code': ?(emailCode != null && emailCode.isNotEmpty
+          ? emailCode
+          : null),
+      'display_name': ?displayName,
+      'bio': ?bio,
     });
     _state = _stateFromAuthResponse(res, keepToken: true);
     await _persistState();

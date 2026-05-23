@@ -87,6 +87,30 @@ void main() {
     expect(audit.entries, hasLength(1));
   });
 
+  test('habit check-in still notifies when time audit write fails', () async {
+    final provider = HabitProvider()..timeAudit = _FailingTimeAuditProvider();
+    final habit = Habit(
+      id: 'audit-fails',
+      name: '阅读',
+      targetCount: 30,
+      unit: '分钟',
+    );
+    await provider.addHabit(habit);
+
+    var notifications = 0;
+    provider.addListener(() => notifications++);
+
+    await provider.incrementHabit(habit.id);
+
+    expect(provider.habits.single.todayCount(), 30);
+    expect(notifications, 1);
+
+    await provider.decrementHabit(habit.id);
+
+    expect(provider.habits.single.todayCount(), 0);
+    expect(notifications, 2);
+  });
+
   test(
     'combined heatmap and weekly completion skip inactive date ranges',
     () async {
@@ -111,4 +135,25 @@ void main() {
       expect(weekly.last, 0);
     },
   );
+}
+
+class _FailingTimeAuditProvider extends TimeAuditProvider {
+  @override
+  Future<void> recordHabitCheckIn(
+    Habit habit, {
+    required int cumulativeCount,
+    int amount = 1,
+    DateTime? at,
+  }) async {
+    throw StateError('time audit unavailable');
+  }
+
+  @override
+  Future<void> removeHabitCheckIn(
+    Habit habit, {
+    required int count,
+    DateTime? at,
+  }) async {
+    throw StateError('time audit unavailable');
+  }
 }

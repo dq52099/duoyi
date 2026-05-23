@@ -15,19 +15,48 @@ void main() {
     expect(adminApi, contains(r"'/api/admin/users/$userId/coins'"));
 
     final backend = File('backend/main.py').readAsStringSync();
+    final statsSource = backend.substring(
+      backend.indexOf('@app.get("/api/admin/stats")'),
+      backend.indexOf('@app.get("/api/admin/users")'),
+    );
+    expect(statsSource, isNot(contains('virtual_rewards')));
+    expect(statsSource, isNot(contains('coin_balance')));
+    expect(statsSource, isNot(contains('lifetime_coins')));
+    expect(
+      backend,
+      contains('"coin_balance": coin_balance'),
+      reason: '用户分页列表仍需展示每个账号的时光币余额。',
+    );
+    expect(
+      backend,
+      contains('"lifetime_coins": lifetime_coins'),
+      reason: '用户分页列表仍需展示每个账号的累计时光币。',
+    );
     expect(backend, contains('@app.post("/api/admin/users/{user_id}/coins")'));
     expect(backend, contains('_ensure_admin_permission(db, actor, "coins")'));
-    expect(backend, contains('SET virtual_rewards=?, sync_version=?, updated_at=?'));
+    expect(
+      backend,
+      contains('SET virtual_rewards=?, sync_version=?, updated_at=?'),
+    );
     expect(backend, contains('"user.coins_adjust"'));
     expect(backend, contains('if req.admin_permissions is not None:'));
-    expect(backend, contains('UPDATE users SET admin_permissions=? WHERE id=?'));
+    expect(
+      backend,
+      contains('UPDATE users SET admin_permissions=? WHERE id=?'),
+    );
   });
 
   test('backend gates granular admin feature permissions', () {
     final backend = File('backend/main.py').readAsStringSync();
 
-    expect(backend, contains('_ensure_admin_permission(db, actor, "settings")'));
-    expect(backend, contains('_ensure_admin_permission(db, actor, "feedback")'));
+    expect(
+      backend,
+      contains('_ensure_admin_permission(db, actor, "settings")'),
+    );
+    expect(
+      backend,
+      contains('_ensure_admin_permission(db, actor, "feedback")'),
+    );
     expect(
       backend,
       contains('_ensure_admin_permission(db, actor, "announcements")'),
@@ -50,10 +79,7 @@ void main() {
     expect(backend, contains('page_size: Optional[int] = None'));
     expect(backend, contains('"total_pages"'));
     expect(backend, contains('"page_size"'));
-    expect(
-      backend,
-      contains('if page is None and page_size is None:'),
-    );
+    expect(backend, contains('if page is None and page_size is None:'));
   });
 
   test('admin user list shows compact permissions and time coins', () {
@@ -73,11 +99,20 @@ void main() {
     expect(adminScreen, contains("u['admin_permissions']"));
     expect(adminScreen, contains("u['coin_balance']"));
     expect(adminScreen, contains("u['lifetime_coins']"));
-    expect(adminScreen, contains(r"'权限: $permissionsText'"));
+    expect(adminScreen, contains('final pageCoinBalance = _users.fold<int>'));
+    expect(adminScreen, contains('final pageLifetimeCoins = _users.fold<int>'));
     expect(
       adminScreen,
-      contains(r"'时光币: $coinBalance / 累计 $lifetimeCoins'"),
+      contains(r'本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'),
     );
+    final dashboardBody = adminScreen.substring(
+      adminScreen.indexOf('class _DashboardTab'),
+      adminScreen.indexOf('class _GridCards'),
+    );
+    expect(dashboardBody, isNot(contains("'时光币余额'")));
+    expect(dashboardBody, isNot(contains("'累计时光币'")));
+    expect(adminScreen, contains(r"'权限: $permissionsText'"));
+    expect(adminScreen, contains(r"'时光币: $coinBalance / 累计 $lifetimeCoins'"));
     expect(adminScreen, contains("label: '细分权限'"));
     expect(adminScreen, contains(r"'排序: ${_adminUserSortLabel(_sort)}'"));
     expect(adminScreen, contains('ListView.separated'));
@@ -100,7 +135,10 @@ void main() {
     expect(adminScreen, contains('widget.api.setUserAdminPermissions('));
     expect(adminScreen, contains('widget.api.adjustUserCoins('));
     expect(adminScreen, contains("u['coin_balance'] = adjusted['balance'];"));
-    expect(adminScreen, contains("u['lifetime_coins'] = adjusted['lifetime'];"));
+    expect(
+      adminScreen,
+      contains("u['lifetime_coins'] = adjusted['lifetime'];"),
+    );
     expect(adminScreen, contains("helperText: '正数增加，负数扣减'"));
     expect(adminScreen, contains("SnackBar(content: Text('管理权限已更新'))"));
     expect(adminScreen, contains("SnackBar(content: Text('时光币已调整'))"));

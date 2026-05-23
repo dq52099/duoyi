@@ -61,116 +61,127 @@ void main() {
     expect(source, contains('_stateFromAuthResponse'));
   });
 
-  test('Profile screen supports RE0-style profile, avatar and email binding UX', () {
-    final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
-    final source = File('lib/screens/profile_screen.dart').readAsStringSync();
+  test(
+    'Profile screen supports RE0-style profile, avatar and email binding UX',
+    () {
+      final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+      final source = File('lib/screens/profile_screen.dart').readAsStringSync();
 
-    expect(mine, contains("import 'profile_screen.dart';"));
-    expect(
-      mine,
-      contains('MaterialPageRoute(builder: (_) => const ProfileScreen())'),
-    );
-    expect(mine, contains("label: '个人资料'"));
-    expect(mine, contains("auth.state.isLoggedIn ? '账号' : '本地'"));
-    expect(mine, isNot(contains("package:file_selector/file_selector.dart")));
-    expect(mine, isNot(contains('class _ProfileEditDialog')));
-    expect(mine, isNot(contains('class _LocalProfileEditDialog')));
-    expect(mine, isNot(contains('openFile(')));
+      expect(mine, contains("import 'profile_screen.dart';"));
+      expect(
+        mine,
+        contains('MaterialPageRoute(builder: (_) => const ProfileScreen())'),
+      );
+      expect(mine, contains("label: '个人资料'"));
+      expect(mine, contains("auth.state.isLoggedIn ? '账号' : '本地'"));
+      expect(mine, isNot(contains("package:file_selector/file_selector.dart")));
+      expect(mine, isNot(contains('class _ProfileEditDialog')));
+      expect(mine, isNot(contains('class _LocalProfileEditDialog')));
+      expect(mine, isNot(contains('openFile(')));
 
-    for (final field in [
-      "package:file_selector/file_selector.dart",
-      'class ProfileScreen',
-      'class _AccountProfileEditor',
-      'class _ProfileMetricChip',
-      'class _ProfileSectionHeader',
-      "I18n.tr('profile.nickname')",
-      "I18n.tr('auth.username')",
-      "I18n.tr('profile.username.locked')",
-      'readOnly: true',
-      "I18n.tr('auth.email')",
-      "I18n.tr('auth.email_code')",
-      "I18n.tr('profile.email.binding')",
-      "I18n.tr('profile.coins')",
-      "I18n.tr('profile.account_id')",
-      'addListener(_refreshPreview)',
-      'removeListener(_refreshPreview)',
-      'AuthProvider? _authProvider',
-      '_authProvider?.removeListener(_handleAuthStateChanged)',
-      'controller.addListener(_handleProfileFieldChanged)',
-      'controller.removeListener(_handleProfileFieldChanged)',
-      'void _handleAuthStateChanged()',
-      'void _syncAccountStateIfClean(AuthState state)',
-      'void _applyAccountState(AuthState state, {bool clearEmailCode = false})',
-      'bool _hasLocalProfileEdits = false',
-      'if (_hasLocalProfileEdits || _busy || _avatarBusy || _sendingEmailCode)',
-      'void _setControllerText(TextEditingController controller, String value)',
-      'String _accountProfileSnapshot(AuthState state)',
-      "I18n.tr('auth.error.username_length')",
-      "I18n.tr('auth.error.username_no_space')",
-      'openFile(',
-      'XTypeGroup(',
-      "extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif']",
-      'uploadAvatarBytes(',
-      "I18n.tr('profile.avatar.saved')",
-      "purpose: 'bind'",
-      'emailCode: _emailCodeCtrl.text.trim()',
-      'final userProvider = context.read<UserProvider>()',
-      'await userProvider.updateProfile(',
-      'displayName: state.displayName ??',
-      'email: state.email ??',
-      'emailVerified: state.emailVerified',
-      'avatarUrl: state.avatar ??',
-      'bio: state.bio ??',
-      'class _LocalProfileEditor',
-      "I18n.tr('profile.display_name')",
-      "I18n.tr('profile.local_nickname')",
-      "I18n.tr('profile.email.local_display')",
-      "I18n.tr('profile.bio')",
-      'Future<void> _pickLocalAvatar()',
-      '_copyLocalAvatarFile(file)',
-      'await _save(showSnackBar: false)',
-      "I18n.tr('profile.avatar.choose')",
-      'await context.read<UserProvider>().updateProfile(',
-      'final avatarIsLocalFile = _localAvatarPath(avatar) != null',
-      'final avatarIsImage = avatarIsUrl || avatarIsLocalFile',
-      'final avatarInitials = avatarIsImage',
-      "avatarUrl: avatarIsImage ? avatar : ''",
-      'bool _isHttpAvatar(String value)',
-      'String? _localAvatarPath(String value)',
-      'Future<String> _copyLocalAvatarFile(XFile file)',
-      "final dir = Directory('\${root.path}/profile_avatars')",
-      "I18n.tr('profile.local.updated')",
-      "I18n.tr('profile.account_security')",
-      "I18n.tr('profile.change_password')",
-      'class _ChangePasswordDialog',
-      'changePassword(',
-      "I18n.tr('profile.current_password')",
-      "I18n.tr('auth.new_password')",
-      "I18n.tr('profile.confirm_new_password')",
-    ]) {
-      expect(source, contains(field));
-    }
+      for (final field in [
+        "package:file_selector/file_selector.dart",
+        'class ProfileScreen',
+        'class _AccountProfileEditor',
+        'class _ProfileMetricChip',
+        'class _ProfileSectionHeader',
+        "I18n.tr('profile.nickname')",
+        "I18n.tr('auth.username')",
+        "I18n.tr('profile.username.locked')",
+        'readOnly: true',
+        "I18n.tr('auth.email')",
+        "I18n.tr('auth.email_code')",
+        "I18n.tr('profile.email.binding')",
+        'class _EmailBindingDialog',
+        'builder: (_) => const _EmailBindingDialog()',
+        "I18n.tr('profile.coins')",
+        "I18n.tr('profile.account_id')",
+        'addListener(_refreshPreview)',
+        'removeListener(_refreshPreview)',
+        'AuthProvider? _authProvider',
+        '_authProvider?.removeListener(_handleAuthStateChanged)',
+        'controller.addListener(_handleProfileFieldChanged)',
+        'controller.removeListener(_handleProfileFieldChanged)',
+        'void _handleAuthStateChanged()',
+        'void _syncAccountStateIfClean(AuthState state)',
+        'void _applyAccountState(AuthState state)',
+        'bool _hasLocalProfileEdits = false',
+        'if (_hasLocalProfileEdits || _busy || _avatarBusy)',
+        'void _setControllerText(TextEditingController controller, String value)',
+        'String _accountProfileSnapshot(AuthState state)',
+        "I18n.tr('auth.error.username_length')",
+        "I18n.tr('auth.error.username_no_space')",
+        'openFile(',
+        'XTypeGroup(',
+        "extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif']",
+        'uploadAvatarBytes(',
+        "I18n.tr('profile.avatar.saved')",
+        "purpose: 'bind'",
+        'emailCode: code',
+        'final userProvider = context.read<UserProvider>()',
+        'await userProvider.updateProfile(',
+        'displayName: state.displayName ??',
+        'email: state.email ??',
+        'emailVerified: state.emailVerified',
+        'avatarUrl: state.avatar ??',
+        'bio: state.bio ??',
+        'class _LocalProfileEditor',
+        "I18n.tr('profile.display_name')",
+        "I18n.tr('profile.local_nickname')",
+        "I18n.tr('profile.email.local_display')",
+        "I18n.tr('profile.bio')",
+        'Future<void> _pickLocalAvatar()',
+        '_copyLocalAvatarFile(file)',
+        'await _save(showSnackBar: false)',
+        "I18n.tr('profile.avatar.choose')",
+        'await context.read<UserProvider>().updateProfile(',
+        'final avatarIsLocalFile = _localAvatarPath(avatar) != null',
+        'final avatarIsImage = avatarIsUrl || avatarIsLocalFile',
+        'final avatarInitials = avatarIsImage',
+        "avatarUrl: avatarIsImage ? avatar : ''",
+        'bool _isHttpAvatar(String value)',
+        'String? _localAvatarPath(String value)',
+        'Future<String> _copyLocalAvatarFile(XFile file)',
+        "final dir = Directory('\${root.path}/profile_avatars')",
+        "I18n.tr('profile.local.updated')",
+        "I18n.tr('profile.account_security')",
+        "I18n.tr('profile.change_password')",
+        'class _ChangePasswordDialog',
+        'changePassword(',
+        "I18n.tr('profile.current_password')",
+        "I18n.tr('auth.new_password')",
+        "I18n.tr('profile.confirm_new_password')",
+      ]) {
+        expect(source, contains(field));
+      }
 
-    final accountBody = source.substring(
-      source.indexOf('class _AccountProfileEditor'),
-      source.indexOf('class _LocalProfileEditor'),
-    );
-    expect(
-      accountBody,
-      isNot(contains("I18n.tr('profile.avatar.url_or_text')")),
-    );
-    expect(
-      accountBody,
-      isNot(contains("I18n.tr('profile.avatar.url_file_or_text')")),
-    );
-    expect(
-      accountBody,
-      isNot(contains('username: username')),
-      reason: '账号唯一标识不能通过资料保存路径编辑',
-    );
-    expect(accountBody, isNot(contains('OutlinedButton.icon(')));
-    expect(accountBody, isNot(contains('ListTile(')));
-  });
+      final accountBody = source.substring(
+        source.indexOf('class _AccountProfileEditor'),
+        source.indexOf('class _LocalProfileEditor'),
+      );
+      expect(
+        accountBody,
+        isNot(contains("I18n.tr('profile.avatar.url_or_text')")),
+      );
+      expect(
+        accountBody,
+        isNot(contains("I18n.tr('profile.avatar.url_file_or_text')")),
+      );
+      expect(
+        accountBody,
+        isNot(contains('username: username')),
+        reason: '账号唯一标识不能通过资料保存路径编辑',
+      );
+      expect(accountBody, isNot(contains('OutlinedButton.icon(')));
+      expect(accountBody, contains('AppListTileCard('));
+      expect(accountBody, isNot(contains('ListTile(')));
+      expect(accountBody, contains("leading: const Icon(Icons.mail_outline)"));
+      expect(
+        accountBody,
+        contains('trailing: const Icon(Icons.chevron_right)'),
+      );
+    },
+  );
 
   test('UserProvider persists editable local profile fields', () {
     final source = File('lib/providers/user_provider.dart').readAsStringSync();
@@ -275,15 +286,12 @@ void main() {
       'button: true',
       'onTap: _uploadAvatar',
       'onTap: _pickLocalAvatar',
-      'if (constraints.maxWidth < 520)',
-      'SizedBox(width: 132, height: 56, child: action)',
-      'bool get _canSendBindEmailCode',
-      'return email.isNotEmpty && _looksLikeEmail(email);',
-      'final canSend = _canSendBindEmailCode',
-      'onPressed: canSend ? _sendBindEmailCode : null',
-      "'\${_emailCooldownSeconds}s 后'",
-      'if (_busy || _avatarBusy || _sendingEmailCode) return;',
-      'onPressed: _busy || _avatarBusy || _sendingEmailCode ? null : _save',
+      'SizedBox(width: 112, height: 56, child: action)',
+      'bool get _canSend',
+      'return _looksLikeEmail(_emailCtrl.text.trim());',
+      'onPressed: _canSend ? _sendCode : null',
+      "'\${_cooldownSeconds}s 后'",
+      'if (_busy || _avatarBusy) return;',
       'onPressed: _busy || _avatarBusy ? null : _save',
     ]) {
       expect(profile, contains(field), reason: field);
@@ -293,8 +301,8 @@ void main() {
 
     for (final field in [
       'class _LoginActionField',
-      'if (constraints.maxWidth < 520)',
-      'SizedBox(width: 132, height: 56, child: action)',
+      'final actionWidth = constraints.maxWidth < 360 ? 108.0 : 132.0',
+      'SizedBox(width: actionWidth, height: 56, child: action)',
       '_userCtrl.addListener(_refreshControls)',
       '_emailCtrl.addListener(_refreshControls)',
       'if (_busy || _sendingEmailCode) return;',

@@ -37,16 +37,16 @@ class ReminderRingtoneSettings {
   static const String volumePreferenceKey =
       'pref_reminder_ringtone_volume_percent';
   static const String soundPreferenceKey = 'pref_reminder_ringtone_sound';
-  static const int defaultVolumePercent = 40;
+  static const int defaultVolumePercent = 60;
   static const String defaultSound = 'chime';
 
-  static const List<int> presets = <int>[40, 60, 80, 100];
+  static const List<int> presets = <int>[40, 60, 80];
   static const List<ReminderRingtoneOption> sounds = <ReminderRingtoneOption>[
-    ReminderRingtoneOption(id: 'chime', label: '经典轻铃'),
-    ReminderRingtoneOption(id: 'bell', label: '铃铛'),
-    ReminderRingtoneOption(id: 'beep', label: '电子提示'),
-    ReminderRingtoneOption(id: 'classic', label: '经典闹铃'),
-    ReminderRingtoneOption(id: 'alarm', label: '强提醒闹钟'),
+    ReminderRingtoneOption(id: 'chime', label: '苹果经典轻铃'),
+    ReminderRingtoneOption(id: 'bell', label: '小米轻铃'),
+    ReminderRingtoneOption(id: 'classic', label: '经典闹钟柔和版'),
+    ReminderRingtoneOption(id: 'beep', label: '短促提示音'),
+    ReminderRingtoneOption(id: 'alarm', label: '强提醒'),
   ];
 
   static const MethodChannel _channel = MethodChannel(
@@ -168,8 +168,7 @@ class ReminderRingtoneSettings {
   static int _normalizeVolume(int value) {
     if (value <= 40) return 40;
     if (value <= 60) return 60;
-    if (value <= 80) return 80;
-    return 100;
+    return 80;
   }
 
   static String _normalizeSound(String value) {

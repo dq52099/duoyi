@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
@@ -24,6 +25,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   PomodoroConfig _config = PomodoroConfig();
   Timer? _timer;
+  final ValueNotifier<int> _timerTicks = ValueNotifier<int>(0);
   List<PomodoroSession> _sessions = [];
   List<PomodoroFocusPenalty> _penalties = [];
   int _persistedRevision = 0;
@@ -58,6 +60,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   FocusDndStatus get focusDndStatus => _dndStatus;
   bool get focusDndActive => _dndActive;
   FocusDistractionStatus get focusDistractionStatus => _distractionStatus;
+  ValueListenable<int> get timerTicks => _timerTicks;
 
   void attachNotifier(NotificationService n) {
     _notifier = n;
@@ -314,7 +317,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_state.isCountUp) {
         _state = _state.copyWith(remainingSeconds: _state.remainingSeconds + 1);
-        notifyListeners();
+        _notifyTimerTick();
         return;
       }
       if (_state.remainingSeconds <= 1) {
@@ -322,8 +325,12 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
       _state = _state.copyWith(remainingSeconds: _state.remainingSeconds - 1);
-      notifyListeners();
+      _notifyTimerTick();
     });
+  }
+
+  void _notifyTimerTick() {
+    _timerTicks.value++;
   }
 
   void _cancelTimer() {
@@ -911,6 +918,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     // ignore: discarded_futures
     _restoreFocusDndIfNeeded(notify: false);
     _distractionTimer?.cancel();
+    _timerTicks.dispose();
     super.dispose();
   }
 }

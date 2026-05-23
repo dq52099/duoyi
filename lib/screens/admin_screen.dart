@@ -28,6 +28,7 @@ class AdminScreen extends StatefulWidget {
 class _AdminScreenState extends State<AdminScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
+  late final List<int> _tabRefreshSerials;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _AdminScreenState extends State<AdminScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 8),
     );
+    _tabRefreshSerials = List<int>.filled(9, 0);
   }
 
   @override
@@ -59,6 +61,16 @@ class _AdminScreenState extends State<AdminScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('管理员后台'),
+        actions: [
+          IconButton(
+            tooltip: '刷新当前页',
+            onPressed: () {
+              final index = _tabs.index.clamp(0, _tabRefreshSerials.length - 1);
+              setState(() => _tabRefreshSerials[index]++);
+            },
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
@@ -100,7 +112,10 @@ class _AdminScreenState extends State<AdminScreen>
             ),
             Tab(
               height: 44,
-              child: _AdminTabLabel(icon: Icons.feedback_outlined, text: '反馈'),
+              child: _AdminTabLabel(
+                icon: Icons.feedback_outlined,
+                text: '许愿与反馈',
+              ),
             ),
             Tab(
               height: 44,
@@ -119,15 +134,43 @@ class _AdminScreenState extends State<AdminScreen>
       body: TabBarView(
         controller: _tabs,
         children: [
-          _DashboardTab(api: api),
-          _SettingsTab(api: api),
-          _AiSettingsTab(api: api),
-          _BackupSettingsTab(api: api),
-          _UsersTab(api: api, selfId: auth.state.userId),
-          _AnnouncementsTab(api: api),
-          _FeedbackTab(api: api),
-          _InvitesTab(api: api),
-          _AuditLogTab(api: api),
+          _DashboardTab(
+            key: ValueKey('admin-dashboard-${_tabRefreshSerials[0]}'),
+            api: api,
+          ),
+          _SettingsTab(
+            key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
+            api: api,
+          ),
+          _AiSettingsTab(
+            key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
+            api: api,
+          ),
+          _BackupSettingsTab(
+            key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
+            api: api,
+          ),
+          _UsersTab(
+            key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
+            api: api,
+            selfId: auth.state.userId,
+          ),
+          _AnnouncementsTab(
+            key: ValueKey('admin-announcements-${_tabRefreshSerials[5]}'),
+            api: api,
+          ),
+          _FeedbackTab(
+            key: ValueKey('admin-feedback-${_tabRefreshSerials[6]}'),
+            api: api,
+          ),
+          _InvitesTab(
+            key: ValueKey('admin-invites-${_tabRefreshSerials[7]}'),
+            api: api,
+          ),
+          _AuditLogTab(
+            key: ValueKey('admin-audit-${_tabRefreshSerials[8]}'),
+            api: api,
+          ),
         ],
       ),
     );
@@ -234,7 +277,7 @@ class _AdminSettingsSection extends StatelessWidget {
 
 class _DashboardTab extends StatefulWidget {
   final AdminApi api;
-  const _DashboardTab({required this.api});
+  const _DashboardTab({super.key, required this.api});
   @override
   State<_DashboardTab> createState() => _DashboardTabState();
 }
@@ -947,7 +990,7 @@ class _AdminPaginationBar extends StatelessWidget {
     );
     return Container(
       key: barKey,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
         border: Border(top: BorderSide(color: topBorderColor)),
@@ -1121,7 +1164,7 @@ class _AdminPaginationBar extends StatelessWidget {
             );
           }
 
-          final isCompact = constraints.maxWidth < 720;
+          final isCompact = constraints.maxWidth < 760;
           if (isCompact) {
             final controls = [?pageJump, ?pageSizePicker];
             return Column(
@@ -1134,7 +1177,7 @@ class _AdminPaginationBar extends StatelessWidget {
                   Wrap(
                     spacing: 12,
                     runSpacing: 8,
-                    alignment: WrapAlignment.start,
+                    alignment: WrapAlignment.spaceBetween,
                     children: controls,
                   ),
                 ],
@@ -1183,7 +1226,7 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 136, minHeight: 44),
+        constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
@@ -1211,7 +1254,7 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
 
 class _SettingsTab extends StatefulWidget {
   final AdminApi api;
-  const _SettingsTab({required this.api});
+  const _SettingsTab({super.key, required this.api});
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
 }
@@ -1342,21 +1385,14 @@ class _SettingsTabState extends State<_SettingsTab> {
     return '${parts[0]}.${parts[1] + 1}.0';
   }
 
-  String get _forceCurrentMinimumVersion => _nextPatchVersion;
-
-  bool _isCurrentAppVersion(String value) {
-    final normalized = value.trim();
-    return normalized == AppVersion.name || normalized == AppVersion.display;
-  }
+  String get _forceCurrentMinimumVersion => AppVersion.name;
 
   String _latestVersionForSave() {
-    final value = _latestVersionCtrl.text.trim();
-    return _isCurrentAppVersion(value) ? '' : value;
+    return _latestVersionCtrl.text.trim();
   }
 
   String _minimumSupportedVersionForSave() {
-    final value = _minimumVersionCtrl.text.trim();
-    return _isCurrentAppVersion(value) ? '' : value;
+    return _minimumVersionCtrl.text.trim();
   }
 
   void _syncUpdateVersionPreset() {
@@ -1531,14 +1567,13 @@ class _SettingsTabState extends State<_SettingsTab> {
     final hasNewerLatest =
         latestVersion.isNotEmpty &&
         _compareAppVersions(latestVersion, AppVersion.name) > 0;
-    final blocksCurrent =
-        minimumSupportedVersion.isNotEmpty &&
-        _compareAppVersions(AppVersion.name, minimumSupportedVersion) < 0;
     if (hasAnyUpdatePolicy && updateNotes.trim().isEmpty) {
       return '发布新版本或设置最低支持版本时，必须填写更新内容。';
     }
-    if (forceUpdateRequired && !hasNewerLatest && !blocksCurrent) {
-      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或填写高于当前版本的最低支持版本。';
+    if (forceUpdateRequired &&
+        !hasNewerLatest &&
+        minimumSupportedVersion.isEmpty) {
+      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或填写最低支持版本。';
     }
     return null;
   }
@@ -1781,7 +1816,7 @@ class _SettingsTabState extends State<_SettingsTab> {
 
 class _AiSettingsTab extends StatefulWidget {
   final AdminApi api;
-  const _AiSettingsTab({required this.api});
+  const _AiSettingsTab({super.key, required this.api});
   @override
   State<_AiSettingsTab> createState() => _AiSettingsTabState();
 }
@@ -1879,6 +1914,13 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       final res = await widget.api.testAi();
       if (!mounted) return;
       final content = (res['content'] ?? res['sample'] ?? '').toString();
+      if (res['enabled'] == false) {
+        setState(() {
+          _testResult = '⚠️ 模型 ${res['model']} 配置完整，但 AI 功能开关未启用。$content';
+          _testColor = Colors.orange;
+        });
+        return;
+      }
       setState(() {
         _testResult = '✅ 模型 ${res['model']} 可达，回复: $content';
         _testColor = Colors.green;
@@ -2034,7 +2076,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
 
 class _BackupSettingsTab extends StatefulWidget {
   final AdminApi api;
-  const _BackupSettingsTab({required this.api});
+  const _BackupSettingsTab({super.key, required this.api});
   @override
   State<_BackupSettingsTab> createState() => _BackupSettingsTabState();
 }
@@ -3459,7 +3501,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 class _UsersTab extends StatefulWidget {
   final AdminApi api;
   final String? selfId;
-  const _UsersTab({required this.api, required this.selfId});
+  const _UsersTab({super.key, required this.api, required this.selfId});
   @override
   State<_UsersTab> createState() => _UsersTabState();
 }
@@ -4012,6 +4054,14 @@ class _UsersTabState extends State<_UsersTab> {
     final selectedIds = _selectedCurrentPageUserIds;
     final allCurrentPageSelected =
         selectableIds.isNotEmpty && selectedIds.length == selectableIds.length;
+    final pageCoinBalance = _users.fold<int>(
+      0,
+      (sum, user) => sum + _adminIntValue(user['coin_balance']),
+    );
+    final pageLifetimeCoins = _users.fold<int>(
+      0,
+      (sum, user) => sum + _adminIntValue(user['lifetime_coins']),
+    );
     return Column(
       children: [
         Padding(
@@ -4125,8 +4175,8 @@ class _UsersTabState extends State<_UsersTab> {
                     builder: (context, constraints) {
                       final summary = Text(
                         selectedIds.isEmpty
-                            ? '本页 ${_users.length} 个账号 · 可勾选后批量禁用或恢复'
-                            : '已选 ${selectedIds.length} 个账号 · 批量操作仅作用于当前页勾选项',
+                            ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 可勾选后批量禁用或恢复'
+                            : '已选 ${selectedIds.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 批量操作仅作用于当前页勾选项',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.68),
                         ),
@@ -4446,7 +4496,7 @@ class _UsersTabState extends State<_UsersTab> {
 
 class _AnnouncementsTab extends StatefulWidget {
   final AdminApi api;
-  const _AnnouncementsTab({required this.api});
+  const _AnnouncementsTab({super.key, required this.api});
   @override
   State<_AnnouncementsTab> createState() => _AnnouncementsTabState();
 }
@@ -4898,7 +4948,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 
 class _FeedbackTab extends StatefulWidget {
   final AdminApi api;
-  const _FeedbackTab({required this.api});
+  const _FeedbackTab({super.key, required this.api});
   @override
   State<_FeedbackTab> createState() => _FeedbackTabState();
 }
@@ -5215,20 +5265,36 @@ class _FeedbackTabState extends State<_FeedbackTab> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: AppDropdownField<String>(
-              initialValue: _sort,
-              labelText: '反馈排序',
-              items: const [
-                DropdownMenuItem(value: 'created_desc', child: Text('最新反馈优先')),
-                DropdownMenuItem(value: 'updated_desc', child: Text('最近处理优先')),
-                DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
-                DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
-              ],
-              onChanged: (value) =>
-                  _load(sort: value ?? 'created_desc', offset: 0),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final sortField = AppDropdownField<String>(
+                initialValue: _sort,
+                labelText: '反馈排序',
+                items: const [
+                  DropdownMenuItem(
+                    value: 'created_desc',
+                    child: Text('最新反馈优先'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'updated_desc',
+                    child: Text('最近处理优先'),
+                  ),
+                  DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
+                  DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
+                ],
+                onChanged: (value) =>
+                    _load(sort: value ?? 'created_desc', offset: 0),
+              );
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                child: constraints.maxHeight < 520
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(width: 260, child: sortField),
+                      )
+                    : sortField,
+              );
+            },
           ),
           _AdminInlineLoadingIndicator(
             visible: _loading && _page != null,
@@ -5238,7 +5304,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: AppSurfaceCard(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 color: cs.primary.withValues(alpha: 0.08),
                 border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
                 child: Column(
@@ -5264,9 +5330,10 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                                   color: cs.onSurface,
                                 ),
                               ),
-                              const SizedBox(height: 3),
                               Text(
                                 '共 ${_page?.total ?? _items.length} 条反馈，当前按${_adminFeedbackSortLabel(_sort)}排列。大量反馈按状态、分类、搜索和分页拆开处理，也可导出当前筛选结果。',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.64),
                                 ),
@@ -5291,10 +5358,10 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
-                      runSpacing: 4,
+                      runSpacing: 2,
                       children: [
                         if (openIds.isNotEmpty)
                           TextButton.icon(
@@ -5585,7 +5652,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
 
 class _InvitesTab extends StatefulWidget {
   final AdminApi api;
-  const _InvitesTab({required this.api});
+  const _InvitesTab({super.key, required this.api});
   @override
   State<_InvitesTab> createState() => _InvitesTabState();
 }
@@ -5975,7 +6042,7 @@ class _InvitesTabState extends State<_InvitesTab> {
 
 class _AuditLogTab extends StatefulWidget {
   final AdminApi api;
-  const _AuditLogTab({required this.api});
+  const _AuditLogTab({super.key, required this.api});
   @override
   State<_AuditLogTab> createState() => _AuditLogTabState();
 }

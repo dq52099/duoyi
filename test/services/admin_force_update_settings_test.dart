@@ -43,6 +43,10 @@ void main() {
     expect(adminScreen, contains('_adminUpdatePresetForceCurrent'));
     expect(adminScreen, contains('String _latestVersionForSave()'));
     expect(adminScreen, contains('String _minimumSupportedVersionForSave()'));
+    expect(
+      adminScreen,
+      contains('String get _forceCurrentMinimumVersion => AppVersion.name'),
+    );
     expect(adminScreen, contains('void _syncUpdateVersionPreset()'));
     expect(adminScreen, contains('_syncUpdateVersionPreset();'));
     expect(adminScreen, contains('默认当前版本'));
@@ -55,6 +59,8 @@ void main() {
     expect(adminScreen, contains('_validateUpdatePolicy'));
     expect(adminScreen, contains('发布新版本或设置最低支持版本时，必须填写更新内容。'));
     expect(adminScreen, contains('强制更新未生效'));
+    expect(adminScreen, contains('minimumSupportedVersion.isEmpty'));
+    expect(adminScreen, isNot(contains('高于当前版本的最低支持版本')));
     expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
 
     expect(updateService, contains("Uri.parse('/api/config')"));
@@ -154,8 +160,8 @@ void main() {
     expect(adminScreen, contains('onPageSizeChanged'));
     expect(adminScreen, contains('onJumpToPage'));
     expect(adminScreen, contains('DropdownButton<int>'));
-    expect(adminScreen, contains('minWidth: 136'));
-    expect(adminScreen, contains('constraints.maxWidth < 720'));
+    expect(adminScreen, contains('minWidth: 160'));
+    expect(adminScreen, contains('constraints.maxWidth < 760'));
     expect(adminScreen, contains('cs.surfaceContainerLowest'));
     expect(adminScreen, contains('_AdminListTileCard'));
     expect(adminScreen, contains('_adminSubtleSectionBorder'));

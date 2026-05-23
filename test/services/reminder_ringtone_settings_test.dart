@@ -14,7 +14,7 @@ void main() {
       await ReminderRingtoneSettings.loadVolumePercent(),
       ReminderRingtoneSettings.defaultVolumePercent,
     );
-    expect(ReminderRingtoneSettings.defaultVolumePercent, 40);
+    expect(ReminderRingtoneSettings.defaultVolumePercent, 60);
     expect(
       await ReminderRingtoneSettings.loadSound(),
       ReminderRingtoneSettings.defaultSound,
@@ -22,10 +22,10 @@ void main() {
   });
 
   test('persists preset volume and selected ringtone', () async {
-    await ReminderRingtoneSettings.setVolumePercent(100);
+    await ReminderRingtoneSettings.setVolumePercent(80);
     await ReminderRingtoneSettings.setSound('classic');
 
-    expect(await ReminderRingtoneSettings.loadVolumePercent(), 100);
+    expect(await ReminderRingtoneSettings.loadVolumePercent(), 80);
     expect(await ReminderRingtoneSettings.loadSound(), 'classic');
   });
 
@@ -49,9 +49,10 @@ void main() {
       ReminderRingtoneSettings.sounds
           .firstWhere((sound) => sound.id == 'chime')
           .label,
-      '经典轻铃',
+      '苹果经典轻铃',
     );
     expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(5));
+    expect(ReminderRingtoneSettings.presets, <int>[40, 60, 80]);
   });
 
   test('uses native built-in ringtone controls on Android only', () {

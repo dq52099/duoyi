@@ -20,6 +20,8 @@ void main() {
       expect(source, contains('class _AdminInlineLoadingIndicator'));
       expect(source, contains("label: '正在更新当前页'"));
       expect(source, contains("label: '正在更新反馈列表'"));
+      expect(source, contains("text: '许愿与反馈'"));
+      expect(source, contains("tooltip: '刷新当前页'"));
       expect(source, contains('final loadSerial = ++_loadSerial;'));
       expect(
         RegExp(r'int _loadSerial = 0;').allMatches(source).length,

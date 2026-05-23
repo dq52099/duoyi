@@ -63,43 +63,47 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
 
   Future<String?> _askPin(String title) async {
     final ctrl = TextEditingController();
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          obscureText: true,
-          maxLength: 8,
-          decoration: InputDecoration(
-            hintText: I18n.tr('app_lock.pin_hint'),
-            counterText: '',
+    try {
+      final v = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AppDialog(
+          title: Text(title),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            obscureText: true,
+            maxLength: 8,
+            decoration: InputDecoration(
+              hintText: I18n.tr('app_lock.pin_hint'),
+              counterText: '',
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: Text(I18n.tr('action.confirm')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: Text(I18n.tr('action.confirm')),
-          ),
-        ],
-      ),
-    );
-    if (v == null) return null;
-    if (!RegExp(r'^\d{4,8}$').hasMatch(v)) {
-      if (!mounted) return null;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('app_lock.pin_invalid'))));
-      return null;
+      );
+      if (v == null) return null;
+      if (!RegExp(r'^\d{4,8}$').hasMatch(v)) {
+        if (!mounted) return null;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(I18n.tr('app_lock.pin_invalid'))),
+        );
+        return null;
+      }
+      return v;
+    } finally {
+      ctrl.dispose();
     }
-    return v;
   }
 
   @override

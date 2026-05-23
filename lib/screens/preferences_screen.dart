@@ -397,22 +397,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
           const SizedBox(height: 12),
           KeyedSubtree(
             key: _bottomNavSectionKey,
-            child: AppSettingsSection(
-              title: I18n.tr('preferences.section.bottom_nav'),
-              subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
-              children: [
-                for (final tab in p.bottomNavOrder)
-                  _NavConfigTile(
-                    tab: tab,
-                    label: _tabLabel(tab),
-                    visible: p.bottomNavVisible.contains(tab),
-                    canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
-                    canMoveDown:
-                        p.bottomNavOrder.indexOf(tab) <
-                        p.bottomNavOrder.length - 1,
-                  ),
-              ],
-            ),
+            child: const _BottomNavSettingsSection(),
           ),
           const SizedBox(height: 12),
           KeyedSubtree(
@@ -538,27 +523,6 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     );
   }
 
-  String _tabLabel(int index) {
-    switch (index) {
-      case 0:
-        return I18n.tr('nav.today');
-      case 1:
-        return I18n.tr('nav.todo');
-      case 2:
-        return I18n.tr('nav.habit');
-      case 3:
-        return I18n.tr('nav.calendar');
-      case 4:
-        return I18n.tr('nav.focus');
-      case 5:
-        return I18n.tr('nav.widget');
-      case 6:
-        return I18n.tr('nav.mine');
-      default:
-        return I18n.tr('nav.today');
-    }
-  }
-
   String _repeatDaysLabel(List<int> days) {
     if (days.length == 7) return I18n.tr('repeat.every_day');
     if (days.length == 5 && days.every((d) => d >= 1 && d <= 5)) {
@@ -579,6 +543,77 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     ];
     if (day < 1 || day > 7) return I18n.tr('weekday.unknown');
     return I18n.tr(keys[day - 1]);
+  }
+}
+
+class BottomNavSettingsScreen extends StatelessWidget {
+  const BottomNavSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text(I18n.tr('preferences.section.bottom_nav'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          AppInfoBanner(
+            icon: Icons.space_dashboard_outlined,
+            title: I18n.tr('preferences.section.bottom_nav'),
+            message: '底部导航最多显示 5 个入口，小组件和我的固定显示；隐藏的今日、待办、习惯、日历会出现在我的“更多应用”。',
+            color: cs.primary,
+            margin: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 12),
+          const _BottomNavSettingsSection(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomNavSettingsSection extends StatelessWidget {
+  const _BottomNavSettingsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.watch<PreferencesProvider>();
+    return AppSettingsSection(
+      title: I18n.tr('preferences.section.bottom_nav'),
+      subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
+      children: [
+        for (final tab in p.bottomNavOrder)
+          _NavConfigTile(
+            tab: tab,
+            label: _tabLabel(tab),
+            visible: p.bottomNavVisible.contains(tab),
+            canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
+            canMoveDown:
+                p.bottomNavOrder.indexOf(tab) < p.bottomNavOrder.length - 1,
+          ),
+      ],
+    );
+  }
+}
+
+String _tabLabel(int index) {
+  switch (index) {
+    case 0:
+      return I18n.tr('nav.today');
+    case 1:
+      return I18n.tr('nav.todo');
+    case 2:
+      return I18n.tr('nav.habit');
+    case 3:
+      return I18n.tr('nav.calendar');
+    case 4:
+      return I18n.tr('nav.focus');
+    case 5:
+      return I18n.tr('nav.widget');
+    case 6:
+      return I18n.tr('nav.mine');
+    default:
+      return I18n.tr('nav.today');
   }
 }
 

@@ -862,7 +862,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileEmailUnbound => 'No email bound';
 
   @override
-  String get profileEmailLocalDisplay => 'Email (local display)';
+  String get profileEmailBinding => 'Email binding';
+
+  @override
+  String get profileEmailLocalDisplay =>
+      'Email (local display only, not for sign-in or recovery)';
 
   @override
   String get profileEmailCodeHelper =>
@@ -894,7 +898,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileAvatarUploaded => 'Avatar uploaded';
 
   @override
+  String get profileAvatarSaved => 'Avatar saved';
+
+  @override
   String get profileAvatarSelected => 'Avatar selected. Save to apply it.';
+
+  @override
+  String get profileCoins => 'Coins';
+
+  @override
+  String get profileAccountId => 'Account';
+
+  @override
+  String get profileUsernameLocked =>
+      'Username is the unique account ID and cannot be changed here.';
+
+  @override
+  String get profileAccountSecurity => 'Account security';
+
+  @override
+  String get profileAccountSecuritySubtitle =>
+      'Password and sensitive actions are grouped here';
 
   @override
   String get profileBio => 'Bio';

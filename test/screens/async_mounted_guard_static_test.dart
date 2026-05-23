@@ -37,9 +37,12 @@ void main() {
     expect(source, contains('lastDate: _lastSupportedDate'));
     expect(source, contains('onPressed: _date == _firstSupportedDate'));
     expect(source, contains('onPressed: _date == _lastSupportedDate'));
-    expect(source, contains('void _toggleMode()'));
-    expect(source, contains('Navigator.pushReplacement'));
-    expect(source, contains("tooltip: isAlmanac ? '切换到万年历' : '切换到黄历'"));
+    expect(source, contains('void _goToday()'));
+    expect(source, contains('messenger.hideCurrentSnackBar();'));
+    expect(source, contains('messenger.showSnackBar('));
+    expect(source, contains("tooltip: '回到今天'"));
+    expect(source, isNot(contains('void _toggleMode()')));
+    expect(source, isNot(contains('Navigator.pushReplacement')));
   });
 
   test('无状态日期字段使用 context.mounted 防止返回后回调继续写状态', () {

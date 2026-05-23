@@ -1252,6 +1252,15 @@ def _virtual_rewards_summary(raw) -> tuple[int, int]:
     )
 
 
+def _ai_chat_completions_url(base_url: str) -> str:
+    base = (base_url or "https://api.openai.com").strip().rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
+
+
 def _merge_virtual_rewards(server: dict, client: dict) -> dict:
     if not isinstance(server, dict):
         server = {}
@@ -2109,7 +2118,7 @@ def ai_chat(req: AiChatRequest, user_id: str = Depends(_verify_token)):
         ).encode("utf-8")
 
         upstream = urllib.request.Request(
-            f"{base_url}/v1/chat/completions",
+            _ai_chat_completions_url(base_url),
             data=payload,
             headers={
                 "Content-Type": "application/json",
@@ -2173,8 +2182,7 @@ def admin_ai_test(actor: str = Depends(_require_admin)):
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "ai")
-        if not _setting_get(db, "ai_enabled", False):
-            raise HTTPException(status_code=503, detail="AI 未启用")
+        ai_enabled = bool(_setting_get(db, "ai_enabled", False))
         api_key = str(_setting_get(db, "ai_api_key", "")).strip()
         if not api_key:
             raise HTTPException(status_code=503, detail="尚未配置 API Key")
@@ -2182,6 +2190,14 @@ def admin_ai_test(actor: str = Depends(_require_admin)):
             _setting_get(db, "ai_base_url", "https://api.openai.com")
         ).rstrip("/")
         model = str(_setting_get(db, "ai_model", "gpt-4o-mini"))
+        endpoint = _ai_chat_completions_url(base_url)
+        if not ai_enabled:
+            return {
+                "ok": True,
+                "enabled": False,
+                "model": model,
+                "sample": "配置完整，AI 功能开关当前未启用，未发起上游请求。",
+            }
         payload = json.dumps(
             {
                 "model": model,
@@ -2194,7 +2210,7 @@ def admin_ai_test(actor: str = Depends(_require_admin)):
             ensure_ascii=False,
         ).encode("utf-8")
         req = urllib.request.Request(
-            f"{base_url}/v1/chat/completions",
+            endpoint,
             data=payload,
             headers={
                 "Content-Type": "application/json",
@@ -2216,7 +2232,7 @@ def admin_ai_test(actor: str = Depends(_require_admin)):
         choices = data.get("choices") or []
         if choices:
             content = (choices[0].get("message") or {}).get("content", "")
-        return {"ok": True, "model": model, "sample": content}
+        return {"ok": True, "enabled": True, "model": model, "sample": content}
     finally:
         db.close()
 

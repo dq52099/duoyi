@@ -57,7 +57,10 @@ class MineScreen extends StatelessWidget {
     final s = themeProvider.brand.strings;
     final todoProvider = context.watch<TodoProvider>();
     final habitProvider = context.watch<HabitProvider>();
-    final pomodoroProvider = context.watch<PomodoroProvider>();
+    context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final pomodoroProvider = context.read<PomodoroProvider>();
     final userProvider = context.watch<UserProvider>();
     final notifService = context.watch<NotificationService>();
     final auth = context.watch<AuthProvider>();
@@ -529,9 +532,7 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const PreferencesScreen(
-                      initialSection: PreferencesInitialSection.bottomNav,
-                    ),
+                    builder: (_) => const BottomNavSettingsScreen(),
                   ),
                 ),
               ),

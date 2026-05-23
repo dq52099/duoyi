@@ -94,6 +94,10 @@ void main() {
   test('startIfIdle does not create duplicate active timers', () async {
     final provider = PomodoroProvider();
     await provider.setConfig(PomodoroConfig(focusDuration: 5));
+    var listenerNotifications = 0;
+    var timerTicks = 0;
+    provider.addListener(() => listenerNotifications++);
+    provider.timerTicks.addListener(() => timerTicks++);
 
     fakeAsync((async) {
       provider.startIfIdle();
@@ -101,10 +105,17 @@ void main() {
 
       expect(provider.state.isRunning, isTrue);
       expect(async.periodicTimerCount, 1);
+      expect(listenerNotifications, 1);
 
       async.elapse(const Duration(seconds: 1));
       expect(provider.state.remainingSeconds, 4);
       expect(async.periodicTimerCount, 1);
+      expect(timerTicks, 1);
+      expect(
+        listenerNotifications,
+        1,
+        reason: 'second ticks must not rebuild the whole app shell',
+      );
 
       provider.dispose();
       expect(async.periodicTimerCount, 0);

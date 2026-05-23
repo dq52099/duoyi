@@ -33,7 +33,7 @@ class FocusSoundService with WidgetsBindingObserver {
   String _currentSound = 'none';
   bool _isPlaying = false;
   int _playbackGeneration = 0;
-  static const double defaultVolume = 0.6;
+  static const double defaultVolume = 0.8;
   double _volume = defaultVolume;
 
   static final AudioContext _focusAudioContext = AudioContextConfig(
@@ -79,17 +79,15 @@ class FocusSoundService with WidgetsBindingObserver {
     }
     final generation = ++_playbackGeneration;
     final assets = FocusSoundCatalog.assetsFor(normalizedInput);
-    if (assets.isEmpty) {
+    if (assets.length != 1) {
       return;
     }
     final normalizedSound = FocusSoundCatalog.trackIdsFor(
       normalizedInput,
     ).join('+');
-    await _playSources(
-      normalizedSound,
-      assets.map<Source>((asset) => AssetSource(asset)).toList(growable: false),
-      generation,
-    );
+    await _playSources(normalizedSound, <Source>[
+      AssetSource(assets.single),
+    ], generation);
   }
 
   Future<void> _playSources(
@@ -101,12 +99,12 @@ class FocusSoundService with WidgetsBindingObserver {
       await _applyVolumeToPlayers(_volume);
       return;
     }
+    await _stopPlayers();
     final nextPlayers = <AudioPlayer>[];
     try {
       for (final source in sources) {
         final player = AudioPlayer();
         nextPlayers.add(player);
-        _attachCompletionHook(player, source);
         await player.setAudioContext(_focusAudioContext);
         await player.setReleaseMode(ReleaseMode.loop);
         await player.setPlayerMode(PlayerMode.mediaPlayer);
@@ -121,7 +119,6 @@ class FocusSoundService with WidgetsBindingObserver {
         await _disposePlayers(nextPlayers);
         return;
       }
-      await _stopPlayers();
       _players.addAll(nextPlayers);
       _currentSound = normalizedSound;
       _isPlaying = true;
@@ -156,16 +153,6 @@ class FocusSoundService with WidgetsBindingObserver {
 
   Future<void> _applyVolumeToPlayers(double volume) async {
     await Future.wait(_players.map((player) => player.setVolume(volume)));
-  }
-
-  void _attachCompletionHook(AudioPlayer player, Source source) {
-    player.onPlayerComplete.listen((_) {
-      final sound = _currentSound;
-      if (!_isPlaying || sound == 'none') return;
-      // 某些 Android 设备在长 MP3 loop 边界会短暂停止，手动补播。
-      // ignore: discarded_futures
-      player.play(source);
-    });
   }
 
   Future<void> _stopPlayers() async {

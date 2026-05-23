@@ -121,27 +121,13 @@ class _ProfileActionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 520) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              field,
-              const SizedBox(height: 8),
-              SizedBox(height: 48, child: action),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: field),
-            const SizedBox(width: 12),
-            SizedBox(width: 132, height: 56, child: action),
-          ],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: 12),
+        SizedBox(width: 112, height: 56, child: action),
+      ],
     );
   }
 }
@@ -288,8 +274,6 @@ class _AccountProfileEditor extends StatefulWidget {
 
 class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   late final TextEditingController _usernameCtrl;
-  late final TextEditingController _emailCtrl;
-  late final TextEditingController _emailCodeCtrl;
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _avatarCtrl;
   late final TextEditingController _bioCtrl;
@@ -299,9 +283,6 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   bool _hasLocalProfileEdits = false;
   bool _busy = false;
   bool _avatarBusy = false;
-  bool _sendingEmailCode = false;
-  int _emailCooldownSeconds = 0;
-  Timer? _emailCooldownTimer;
   String? _error;
   String? _message;
 
@@ -310,16 +291,12 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     super.initState();
     final state = context.read<AuthProvider>().state;
     _usernameCtrl = TextEditingController(text: state.username ?? '');
-    _emailCtrl = TextEditingController(text: state.email ?? '');
-    _emailCodeCtrl = TextEditingController();
     _displayNameCtrl = TextEditingController(text: state.displayName ?? '');
     _avatarCtrl = TextEditingController(text: state.avatar ?? '');
     _bioCtrl = TextEditingController(text: state.bio ?? '');
     _lastAccountSnapshot = _accountProfileSnapshot(state);
     for (final controller in [
       _usernameCtrl,
-      _emailCtrl,
-      _emailCodeCtrl,
       _displayNameCtrl,
       _avatarCtrl,
       _bioCtrl,
@@ -340,12 +317,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   @override
   void dispose() {
-    _emailCooldownTimer?.cancel();
     _authProvider?.removeListener(_handleAuthStateChanged);
     for (final controller in [
       _usernameCtrl,
-      _emailCtrl,
-      _emailCodeCtrl,
       _displayNameCtrl,
       _avatarCtrl,
       _bioCtrl,
@@ -353,8 +327,6 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       controller.removeListener(_handleProfileFieldChanged);
     }
     _usernameCtrl.dispose();
-    _emailCtrl.dispose();
-    _emailCodeCtrl.dispose();
     _displayNameCtrl.dispose();
     _avatarCtrl.dispose();
     _bioCtrl.dispose();
@@ -380,21 +352,19 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   void _syncAccountStateIfClean(AuthState state) {
     final nextSnapshot = _accountProfileSnapshot(state);
     if (nextSnapshot == _lastAccountSnapshot) return;
-    if (_hasLocalProfileEdits || _busy || _avatarBusy || _sendingEmailCode) {
+    if (_hasLocalProfileEdits || _busy || _avatarBusy) {
       return;
     }
     _applyAccountState(state);
   }
 
-  void _applyAccountState(AuthState state, {bool clearEmailCode = false}) {
+  void _applyAccountState(AuthState state) {
     _syncingControllers = true;
     try {
       _setControllerText(_usernameCtrl, state.username ?? '');
-      _setControllerText(_emailCtrl, state.email ?? '');
       _setControllerText(_displayNameCtrl, state.displayName ?? '');
       _setControllerText(_avatarCtrl, state.avatar ?? '');
       _setControllerText(_bioCtrl, state.bio ?? '');
-      if (clearEmailCode) _emailCodeCtrl.clear();
     } finally {
       _syncingControllers = false;
     }
@@ -422,109 +392,8 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     );
   }
 
-  Future<void> _sendBindEmailCode() async {
-    if (!_canSendBindEmailCode) return;
-    final email = _emailCtrl.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_required'));
-      return;
-    }
-    if (!_looksLikeEmail(email)) {
-      setState(() => _error = I18n.tr('auth.error.email_invalid'));
-      return;
-    }
-    setState(() {
-      _sendingEmailCode = true;
-      _error = null;
-      _message = null;
-    });
-    try {
-      final result = await context.read<AuthProvider>().sendEmailCode(
-        email: email,
-        purpose: 'bind',
-      );
-      final devCode = (result['dev_code'] ?? '').toString();
-      final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
-          .toString();
-      if (!mounted) return;
-      _startEmailCooldown();
-      setState(() {
-        _message = devCode.isEmpty
-            ? message
-            : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
-      });
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _sendingEmailCode = false);
-    }
-  }
-
-  void _startEmailCooldown() {
-    _emailCooldownTimer?.cancel();
-    setState(() => _emailCooldownSeconds = 60);
-    _emailCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_emailCooldownSeconds <= 1) {
-        timer.cancel();
-        setState(() => _emailCooldownSeconds = 0);
-      } else {
-        setState(() => _emailCooldownSeconds -= 1);
-      }
-    });
-  }
-
-  Widget _bindEmailCodeButton() {
-    final canSend = _canSendBindEmailCode;
-    return OutlinedButton(
-      onPressed: canSend ? _sendBindEmailCode : null,
-      child: _sendingEmailCode
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(
-              _emailCooldownSeconds > 0
-                  ? '${_emailCooldownSeconds}s 后'
-                  : I18n.tr('auth.send'),
-              textAlign: TextAlign.center,
-            ),
-    );
-  }
-
-  Widget _emailCodeField() {
-    return _ProfileActionField(
-      field: TextField(
-        controller: _emailCodeCtrl,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: I18n.tr('auth.email_code'),
-          helperText: I18n.tr('profile.email_code.helper'),
-        ),
-      ),
-      action: _bindEmailCodeButton(),
-    );
-  }
-
-  bool get _canSendBindEmailCode {
-    if (_busy ||
-        _avatarBusy ||
-        _sendingEmailCode ||
-        _emailCooldownSeconds > 0) {
-      return false;
-    }
-    final email = _emailCtrl.text.trim();
-    return email.isNotEmpty && _looksLikeEmail(email);
-  }
-
   Future<void> _uploadAvatar() async {
-    if (_busy || _avatarBusy || _sendingEmailCode) return;
+    if (_busy || _avatarBusy) return;
     final auth = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
     setState(() {
@@ -578,7 +447,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   }
 
   Future<void> _save() async {
-    if (_busy || _avatarBusy || _sendingEmailCode) return;
+    if (_busy || _avatarBusy) return;
     final username = _usernameCtrl.text.trim();
     if (username.length < 3 || username.length > 64) {
       setState(() => _error = I18n.tr('auth.error.username_length'));
@@ -586,11 +455,6 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     }
     if (RegExp(r'\s').hasMatch(username)) {
       setState(() => _error = I18n.tr('auth.error.username_no_space'));
-      return;
-    }
-    final email = _emailCtrl.text.trim();
-    if (email.isNotEmpty && !_looksLikeEmail(email)) {
-      setState(() => _error = I18n.tr('auth.error.email_invalid'));
       return;
     }
     setState(() {
@@ -602,13 +466,11 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       final auth = context.read<AuthProvider>();
       final userProvider = context.read<UserProvider>();
       await auth.updateProfile(
-        email: email,
-        emailCode: _emailCodeCtrl.text.trim(),
         displayName: _displayNameCtrl.text.trim(),
         bio: _bioCtrl.text.trim(),
       );
       final state = auth.state;
-      _applyAccountState(state, clearEmailCode: true);
+      _applyAccountState(state);
       final localName = _firstNonEmptyProfileText([
         state.displayName,
         state.username,
@@ -656,7 +518,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         title: Text(I18n.tr('profile.title')),
         actions: [
           TextButton(
-            onPressed: _busy || _avatarBusy || _sendingEmailCode ? null : _save,
+            onPressed: _busy || _avatarBusy ? null : _save,
             child: _busy
                 ? const SizedBox(
                     width: 16,
@@ -785,18 +647,27 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                       : I18n.tr('profile.email.unverified_or_pending'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.email'),
-                    helperText: state.emailVerified
+                AppListTileCard(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.mail_outline),
+                  title: Text(
+                    state.email?.isNotEmpty == true
+                        ? state.email!
+                        : I18n.tr('profile.email.unbound'),
+                  ),
+                  subtitle: Text(
+                    state.emailVerified
                         ? I18n.tr('profile.email.verified')
                         : I18n.tr('profile.email.unverified_or_pending'),
                   ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _busy || _avatarBusy
+                      ? null
+                      : () => showDialog(
+                          context: context,
+                          builder: (_) => const _EmailBindingDialog(),
+                        ),
                 ),
-                const SizedBox(height: 12),
-                _emailCodeField(),
               ],
             ),
           ),
@@ -815,7 +686,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: _busy || _avatarBusy || _sendingEmailCode
+                    onPressed: _busy || _avatarBusy
                         ? null
                         : () => showDialog(
                             context: context,
@@ -1124,6 +995,227 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _EmailBindingDialog extends StatefulWidget {
+  const _EmailBindingDialog();
+
+  @override
+  State<_EmailBindingDialog> createState() => _EmailBindingDialogState();
+}
+
+class _EmailBindingDialogState extends State<_EmailBindingDialog> {
+  late final TextEditingController _emailCtrl;
+  final _codeCtrl = TextEditingController();
+  bool _busy = false;
+  bool _sending = false;
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
+  String? _error;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(
+      text: context.read<AuthProvider>().state.email ?? '',
+    )..addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _cooldownTimer?.cancel();
+    _emailCtrl.removeListener(_refresh);
+    _emailCtrl.dispose();
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _canSend {
+    if (_busy || _sending || _cooldownSeconds > 0) return false;
+    return _looksLikeEmail(_emailCtrl.text.trim());
+  }
+
+  Future<void> _sendCode() async {
+    if (!_canSend) return;
+    setState(() {
+      _sending = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final result = await context.read<AuthProvider>().sendEmailCode(
+        email: _emailCtrl.text.trim(),
+        purpose: 'bind',
+      );
+      final devCode = (result['dev_code'] ?? '').toString();
+      final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
+          .toString();
+      if (!mounted) return;
+      _startCooldown();
+      setState(() {
+        _message = devCode.isEmpty
+            ? message
+            : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
+      });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    setState(() => _cooldownSeconds = 60);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_cooldownSeconds <= 1) {
+        timer.cancel();
+        setState(() => _cooldownSeconds = 0);
+      } else {
+        setState(() => _cooldownSeconds -= 1);
+      }
+    });
+  }
+
+  Widget _sendButton() {
+    return OutlinedButton(
+      onPressed: _canSend ? _sendCode : null,
+      child: _sending
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(
+              _cooldownSeconds > 0
+                  ? '${_cooldownSeconds}s 后'
+                  : I18n.tr('auth.send'),
+              textAlign: TextAlign.center,
+            ),
+    );
+  }
+
+  Future<void> _save() async {
+    final email = _emailCtrl.text.trim();
+    final code = _codeCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = I18n.tr('auth.error.email_required'));
+      return;
+    }
+    if (!_looksLikeEmail(email)) {
+      setState(() => _error = I18n.tr('auth.error.email_invalid'));
+      return;
+    }
+    if (code.isEmpty) {
+      setState(() => _error = I18n.tr('auth.error.email_code_required'));
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final auth = context.read<AuthProvider>();
+      final userProvider = context.read<UserProvider>();
+      await auth.updateProfile(email: email, emailCode: code);
+      final state = auth.state;
+      await userProvider.updateProfile(
+        username: _firstNonEmptyProfileText([
+          state.displayName,
+          state.username,
+        ]),
+        displayName: state.displayName ?? '',
+        email: state.email ?? '',
+        emailVerified: state.emailVerified,
+        avatarUrl: state.avatar ?? '',
+        bio: state.bio ?? '',
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(I18n.tr('profile.email.binding')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(labelText: I18n.tr('auth.email')),
+            ),
+            const SizedBox(height: 12),
+            _ProfileActionField(
+              field: TextField(
+                controller: _codeCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('auth.email_code'),
+                  helperText: I18n.tr('profile.email_code.helper'),
+                ),
+              ),
+              action: _sendButton(),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy || _sending ? null : () => Navigator.pop(context),
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        FilledButton(
+          onPressed: _busy || _sending ? null : _save,
+          child: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(I18n.tr('action.save')),
+        ),
+      ],
     );
   }
 }

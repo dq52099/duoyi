@@ -44,26 +44,34 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   }
 
   Future<void> _pickDate() async {
+    final isAlmanac = widget.initialMode == AlmanacEntryMode.almanac;
     final picked = await AppDatePicker.pickSolar(
       context,
       initialDate: _clampDate(_date),
       firstDate: _firstSupportedDate,
       lastDate: _lastSupportedDate,
-      title: '万年历',
+      title: isAlmanac ? '黄历' : '万年历',
     );
     if (!mounted) return;
     if (picked != null) setState(() => _date = _clampDate(picked));
   }
 
-  void _toggleMode() {
-    final nextMode = widget.initialMode == AlmanacEntryMode.almanac
-        ? AlmanacEntryMode.calendar
-        : AlmanacEntryMode.almanac;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            AlmanacScreen(initialDate: _date, initialMode: nextMode),
+  void _goToday() {
+    final today = _clampDate(DateTime.now());
+    final alreadyToday =
+        _date.year == today.year &&
+        _date.month == today.month &&
+        _date.day == today.day;
+    if (!alreadyToday) {
+      setState(() => _date = today);
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(alreadyToday ? '已经是今天' : '已回到今天'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1200),
       ),
     );
   }
@@ -88,18 +96,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
         title: Text(pageTitle),
         actions: [
           IconButton(
-            icon: Icon(
-              isAlmanac
-                  ? Icons.calendar_month_outlined
-                  : Icons.wb_sunny_outlined,
-            ),
-            tooltip: isAlmanac ? '切换到万年历' : '切换到黄历',
-            onPressed: _toggleMode,
-          ),
-          IconButton(
             icon: const Icon(Icons.today),
             tooltip: '回到今天',
-            onPressed: () => setState(() => _date = _clampDate(DateTime.now())),
+            onPressed: _goToday,
           ),
         ],
       ),

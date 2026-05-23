@@ -1,6 +1,8 @@
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/core/todo_kanban.dart';
 import 'package:duoyi/providers/auth_provider.dart';
+import 'package:duoyi/providers/goal_provider.dart';
+import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/providers/share_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
@@ -34,6 +36,8 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ChangeNotifierProvider(create: (_) => AiService()),
           ChangeNotifierProvider(create: (_) => ShareProvider()),
@@ -96,6 +100,8 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ChangeNotifierProvider(create: (_) => AiService()),
           ChangeNotifierProvider(create: (_) => ShareProvider()),

@@ -71,6 +71,44 @@ void main() {
     },
   );
 
+  test('updateProfile omits untouched profile fields', () async {
+    Map<String, dynamic>? requestBody;
+    final auth = AuthProvider(
+      initialState: const AuthState(
+        userId: 'u-1',
+        username: 'stable-user',
+        email: 'old@example.com',
+        displayName: '旧昵称',
+        bio: '旧简介',
+        token: 'token-1',
+      ),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          requestBody = json.decode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            json.encode({
+              'user_id': 'u-1',
+              'username': 'stable-user',
+              'email': 'old@example.com',
+              'display_name': requestBody!['display_name'],
+              'bio': requestBody!['bio'],
+              'token': 'ignored',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+
+    await auth.updateProfile(displayName: '新昵称', bio: '');
+
+    expect(requestBody, {'display_name': '新昵称', 'bio': ''});
+    expect(auth.state.email, 'old@example.com');
+  });
+
   test(
     'register requires username and sends optional email verification',
     () async {

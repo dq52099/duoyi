@@ -72,7 +72,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final todoProv = context.watch<TodoProvider>();
     final goalProv = context.watch<GoalProvider>();
     final habitProv = context.watch<HabitProvider>();
-    final pomoProv = context.watch<PomodoroProvider>();
+    context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final pomoProv = context.read<PomodoroProvider>();
     final diaryProv = context.watch<DiaryProvider>();
     final timeAuditProv = context.watch<TimeAuditProvider>();
     final ai = context.watch<AiService>();
@@ -3426,7 +3429,10 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
             padding: const pw.EdgeInsets.only(top: 4, bottom: 8),
             child: pw.Text(
               line.substring(2),
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.normal),
+              style: pw.TextStyle(
+                fontSize: 24,
+                fontWeight: pw.FontWeight.normal,
+              ),
             ),
           ),
         );
@@ -3436,7 +3442,10 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
             padding: const pw.EdgeInsets.only(top: 12, bottom: 6),
             child: pw.Text(
               line.substring(3),
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.normal,
+              ),
             ),
           ),
         );

@@ -64,13 +64,13 @@ jobs:
       - name: Get packages
         run: flutter pub get
 
-      - name: Analyze (non-blocking)
-        run: flutter analyze || true
+      - name: Analyze
+        run: flutter analyze
 
       - name: Run tests (if any)
         run: |
           if [ -d test ] && [ -n "$(ls -A test 2>/dev/null)" ]; then
-            flutter test --no-pub || echo "::warning::Tests failed"
+            flutter test --no-pub
           else
             echo "No tests found, skipping."
           fi
@@ -293,7 +293,7 @@ jobs:
   # ─────────────────────────────────────────────
   release:
     needs: [android, web]
-    if: always() && startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && needs.android.result == 'success' && needs.web.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -312,7 +312,6 @@ jobs:
         with:
           name: duoyi-web
           path: dist
-        continue-on-error: true
 
       - name: List artifacts
         run: ls -R dist

@@ -826,7 +826,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileEmailUnbound => '未绑定邮箱';
 
   @override
-  String get profileEmailLocalDisplay => '邮箱（本地展示）';
+  String get profileEmailBinding => '邮箱绑定';
+
+  @override
+  String get profileEmailLocalDisplay => '邮箱（仅本地展示，不用于登录或找回）';
 
   @override
   String get profileEmailCodeHelper => '换绑或验证邮箱时填写';
@@ -856,7 +859,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileAvatarUploaded => '头像已上传';
 
   @override
+  String get profileAvatarSaved => '头像已保存';
+
+  @override
   String get profileAvatarSelected => '头像已选择，点击保存后生效';
+
+  @override
+  String get profileCoins => '时光币';
+
+  @override
+  String get profileAccountId => '账号';
+
+  @override
+  String get profileUsernameLocked => '用户名是账号唯一标识，暂不在资料页修改';
+
+  @override
+  String get profileAccountSecurity => '账号安全';
+
+  @override
+  String get profileAccountSecuritySubtitle => '密码等敏感操作集中在这里';
 
   @override
   String get profileBio => '简介';

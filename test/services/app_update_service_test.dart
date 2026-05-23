@@ -21,4 +21,29 @@ void main() {
     expect(display, isNot(contains('Full Changelog')));
     expect(display, isNot(contains('compare/v1.0.0')));
   });
+
+  test(
+    'minimum supported version only locks app when force update is enabled',
+    () {
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.9',
+      );
+
+      service.debugSetUpdatePolicyForTest(
+        latestVersion: '1.2.0',
+        minimumSupportedVersion: '1.2.0',
+        forceUpdateRequired: false,
+      );
+      expect(service.hasUpdate, isTrue);
+      expect(service.mustUpdate, isFalse);
+
+      service.debugSetUpdatePolicyForTest(
+        latestVersion: '1.2.0',
+        minimumSupportedVersion: '1.2.0',
+        forceUpdateRequired: true,
+      );
+      expect(service.mustUpdate, isTrue);
+    },
+  );
 }

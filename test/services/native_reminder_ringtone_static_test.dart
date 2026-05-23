@@ -43,8 +43,11 @@ void main() {
     expect(service, contains('putExtra("vibrate", vibrate)'));
     expect(receiver, contains('getBooleanExtra("vibrate", true)'));
     expect(scheduler, contains('.put("vibrate"'));
-    expect(service, contains('setFullScreenIntent(fullScreenIntent, true)'));
+    expect(service, contains('setFullScreenIntent(fullScreenIntent, false)'));
     expect(service, contains('NotificationCompat.VISIBILITY_PUBLIC'));
+    expect(service, contains('NotificationCompat.PRIORITY_HIGH'));
+    expect(service, contains('setOnlyAlertOnce(true)'));
+    expect(service, contains('longArrayOf(0, 220, 420, 220)'));
     expect(service, contains('addAction(0, "停止响铃"'));
     expect(service, contains('.setAction(actionStop)'));
     expect(service, contains('.putExtra("id", id)'));
@@ -71,15 +74,19 @@ void main() {
     expect(service, contains('setDeleteIntent(stopIntent)'));
     expect(service, contains('setOngoing(false)'));
     expect(service, contains('setAutoCancel(true)'));
-    expect(alarmService, contains("channelId = 'duoyi_alarm_fullscreen_v7'"));
+    expect(alarmService, contains("channelId = 'duoyi_alarm_fullscreen_v8'"));
     expect(
       alarmService,
-      contains("RawResourceAndroidNotificationSound('duoyi_chime')"),
+      contains("RawResourceAndroidNotificationSound('duoyi_classic')"),
     );
-    expect(alarmService, contains("'duoyi_alarm_fullscreen_v6'"));
+    expect(alarmService, contains("'duoyi_alarm_fullscreen_v7'"));
+    expect(alarmService, contains('ongoing: false'));
+    expect(alarmService, contains('autoCancel: true'));
+    expect(alarmService, contains('onlyAlertOnce: true'));
     expect(scheduler, contains('ReminderRingtoneService.stopIfActive'));
     expect(scheduler, contains('ReminderRingtoneService.stopActive'));
-    expect(service, contains('.getInt(volumeKey, 40)'));
+    expect(service, contains('.getInt(volumeKey, 60)'));
+    expect(service, contains('.coerceIn(40, 80)'));
 
     for (final name in ['alarm', 'chime', 'bell', 'beep', 'classic']) {
       expect(

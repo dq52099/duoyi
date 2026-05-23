@@ -1712,10 +1712,16 @@ abstract class AppLocalizations {
   /// **'未绑定邮箱'**
   String get profileEmailUnbound;
 
+  /// No description provided for @profileEmailBinding.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮箱绑定'**
+  String get profileEmailBinding;
+
   /// No description provided for @profileEmailLocalDisplay.
   ///
   /// In zh, this message translates to:
-  /// **'邮箱（本地展示）'**
+  /// **'邮箱（仅本地展示，不用于登录或找回）'**
   String get profileEmailLocalDisplay;
 
   /// No description provided for @profileEmailCodeHelper.
@@ -1772,11 +1778,47 @@ abstract class AppLocalizations {
   /// **'头像已上传'**
   String get profileAvatarUploaded;
 
+  /// No description provided for @profileAvatarSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像已保存'**
+  String get profileAvatarSaved;
+
   /// No description provided for @profileAvatarSelected.
   ///
   /// In zh, this message translates to:
   /// **'头像已选择，点击保存后生效'**
   String get profileAvatarSelected;
+
+  /// No description provided for @profileCoins.
+  ///
+  /// In zh, this message translates to:
+  /// **'时光币'**
+  String get profileCoins;
+
+  /// No description provided for @profileAccountId.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号'**
+  String get profileAccountId;
+
+  /// No description provided for @profileUsernameLocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户名是账号唯一标识，暂不在资料页修改'**
+  String get profileUsernameLocked;
+
+  /// No description provided for @profileAccountSecurity.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号安全'**
+  String get profileAccountSecurity;
+
+  /// No description provided for @profileAccountSecuritySubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码等敏感操作集中在这里'**
+  String get profileAccountSecuritySubtitle;
 
   /// No description provided for @profileBio.
   ///

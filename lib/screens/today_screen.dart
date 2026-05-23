@@ -41,7 +41,10 @@ class TodayScreen extends StatelessWidget {
 
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
-    final pomoP = context.watch<PomodoroProvider>();
+    context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final pomoP = context.read<PomodoroProvider>();
     final diaryP = context.watch<DiaryProvider>();
     final timeAuditP = context.watch<TimeAuditProvider>();
     final anniP = context.watch<AnniversaryProvider>();

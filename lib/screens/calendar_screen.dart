@@ -468,7 +468,10 @@ class _CalendarScreenState extends State<CalendarScreen>
   Widget build(BuildContext context) {
     final todoProvider = context.watch<TodoProvider>();
     final habitProvider = context.watch<HabitProvider>();
-    final pomodoroProvider = context.watch<PomodoroProvider>();
+    context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final pomodoroProvider = context.read<PomodoroProvider>();
     final calendarProvider = context.watch<CalendarProvider>();
     final anniversaryProvider = context.watch<AnniversaryProvider>();
     final courseProvider = context.watch<CourseProvider>();
@@ -1414,7 +1417,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
         child: SizedBox(
-          height: 52,
+          height: 60,
           child: Row(
             children: [
               _NavIconButton(
@@ -1426,8 +1429,9 @@ class _CalendarNavigationHeader extends StatelessWidget {
               Expanded(
                 flex: 8,
                 child: FilledButton.tonalIcon(
+                  key: const ValueKey('calendar_navigation_date_button'),
                   onPressed: onPickDate,
-                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  icon: const Icon(Icons.calendar_today_outlined, size: 20),
                   label: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
@@ -1438,16 +1442,16 @@ class _CalendarNavigationHeader extends StatelessWidget {
                     backgroundColor: cs.secondaryContainer.withValues(
                       alpha: 0.72,
                     ),
-                    minimumSize: const Size(0, 46),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(double.infinity, 54),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
                         color: cs.outlineVariant.withValues(alpha: 0.55),
                       ),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 17,
+                      fontSize: 18,
                       fontWeight: FontWeight.w400,
                     ),
                   ),

@@ -147,6 +147,17 @@ void main() {
       expect(mine, contains('_hiddenBottomNavApps'));
       expect(mine, contains("label: '更多应用'"));
       expect(mine, contains("label: '通知设置'"));
+      expect(
+        mine,
+        contains(
+          'MaterialPageRoute(builder: (_) => const PreferencesScreen())',
+        ),
+      );
+      expect(mine, contains('builder: (_) => const BottomNavSettingsScreen()'));
+      expect(
+        mine,
+        isNot(contains('initialSection: PreferencesInitialSection.bottomNav')),
+      );
       expect(mine, isNot(contains("label: '偏好设置'")));
       expect(mine, isNot(contains("label: '功能建议'")));
       expect(mine, isNot(contains("label: '问题反馈'")));
