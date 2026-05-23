@@ -1414,58 +1414,77 @@ class _CalendarNavigationHeader extends StatelessWidget {
 
     return Material(
       color: cs.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              _NavIconButton(
-                icon: Icons.chevron_left,
-                onPressed: previous,
-                tooltip: previousTooltip,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 8,
-                child: FilledButton.tonalIcon(
-                  key: const ValueKey('calendar_navigation_date_button'),
-                  onPressed: onPickDate,
-                  icon: const Icon(Icons.calendar_today_outlined, size: 20),
-                  label: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 360;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 6 : 10,
+              6,
+              compact ? 6 : 10,
+              8,
+            ),
+            child: SizedBox(
+              height: 60,
+              child: Row(
+                children: [
+                  _NavIconButton(
+                    icon: Icons.chevron_left,
+                    onPressed: previous,
+                    tooltip: previousTooltip,
+                    dimension: compact ? 40 : 44,
                   ),
-                  style: FilledButton.styleFrom(
-                    foregroundColor: cs.onSecondaryContainer,
-                    backgroundColor: cs.secondaryContainer.withValues(
-                      alpha: 0.72,
-                    ),
-                    minimumSize: const Size(double.infinity, 54),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: cs.outlineVariant.withValues(alpha: 0.55),
+                  SizedBox(width: compact ? 4 : 8),
+                  Expanded(
+                    flex: 8,
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('calendar_navigation_date_button'),
+                      onPressed: onPickDate,
+                      icon: Icon(
+                        Icons.calendar_today_outlined,
+                        size: compact ? 18 : 20,
+                      ),
+                      label: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      style: FilledButton.styleFrom(
+                        foregroundColor: cs.onSecondaryContainer,
+                        backgroundColor: cs.secondaryContainer.withValues(
+                          alpha: 0.72,
+                        ),
+                        minimumSize: compact
+                            ? const Size(0, 46)
+                            : const Size(double.infinity, 54),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 10 : 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: cs.outlineVariant.withValues(alpha: 0.55),
+                          ),
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: compact ? 15 : 18,
+                          fontWeight: FontWeight.w400,
+                        ),
                       ),
                     ),
-                    textStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400,
-                    ),
                   ),
-                ),
+                  SizedBox(width: compact ? 4 : 8),
+                  _NavIconButton(
+                    icon: Icons.chevron_right,
+                    onPressed: next,
+                    tooltip: nextTooltip,
+                    dimension: compact ? 40 : 44,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              _NavIconButton(
-                icon: Icons.chevron_right,
-                onPressed: next,
-                tooltip: nextTooltip,
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1475,17 +1494,19 @@ class _NavIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
   final String tooltip;
+  final double dimension;
 
   const _NavIconButton({
     required this.icon,
     required this.onPressed,
     required this.tooltip,
+    this.dimension = 44,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox.square(
-      dimension: 44,
+      dimension: dimension,
       child: IconButton(
         tooltip: tooltip,
         icon: Icon(icon),

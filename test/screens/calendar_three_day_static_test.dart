@@ -76,7 +76,13 @@ void main() {
       source.indexOf('class _NavIconButton'),
     );
 
-    expect(headerSource, contains('minimumSize: const Size(0, 46)'));
+    expect(
+      headerSource,
+      contains('final compact = constraints.maxWidth < 360'),
+    );
+    expect(headerSource, contains('? const Size(0, 46)'));
+    expect(headerSource, contains(': const Size(double.infinity, 54)'));
+    expect(headerSource, contains('dimension: compact ? 40 : 44'));
     expect(headerSource, contains('label: Text('));
     expect(headerSource, contains('TextOverflow.ellipsis'));
     expect(headerSource, isNot(contains('minWidth: 180')));

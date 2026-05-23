@@ -116,6 +116,7 @@ Future<void> showPomodoroSessionEditor(
           return AppModalSheet(
             title: '编辑专注会话',
             subtitle: '同步更新番茄钟历史和时间足迹',
+            shiftForKeyboard: true,
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(sheetCtx).pop(),
@@ -295,14 +296,105 @@ Future<void> showPomodoroSessionEditor(
   }
 }
 
-class PomodoroScreen extends StatefulWidget {
+class PomodoroScreen extends StatelessWidget {
   const PomodoroScreen({super.key});
 
   @override
-  State<PomodoroScreen> createState() => _PomodoroScreenState();
+  Widget build(BuildContext context) {
+    if (context.read<PomodoroProvider?>() == null ||
+        context.read<FocusRoomProvider?>() == null ||
+        context.read<ThemeProvider?>() == null ||
+        context.read<CustomFocusSoundProvider?>() == null ||
+        context.read<AuthProvider?>() == null) {
+      return const _PomodoroProviderFallback(child: _PomodoroScreenBody());
+    }
+    return const _PomodoroScreenBody();
+  }
 }
 
-class _PomodoroScreenState extends State<PomodoroScreen>
+class _PomodoroScreenBody extends StatefulWidget {
+  const _PomodoroScreenBody();
+
+  @override
+  State<_PomodoroScreenBody> createState() => _PomodoroScreenState();
+}
+
+class _PomodoroProviderFallback extends StatefulWidget {
+  final Widget child;
+
+  const _PomodoroProviderFallback({required this.child});
+
+  @override
+  State<_PomodoroProviderFallback> createState() =>
+      _PomodoroProviderFallbackState();
+}
+
+class _PomodoroProviderFallbackState extends State<_PomodoroProviderFallback> {
+  late final PomodoroProvider _pomodoro = PomodoroProvider();
+  late final ThemeProvider _theme = ThemeProvider();
+  late final FocusRoomProvider _rooms = FocusRoomProvider();
+  late final CustomFocusSoundProvider _customSounds =
+      CustomFocusSoundProvider();
+  late final AuthProvider _auth = AuthProvider();
+
+  @override
+  void initState() {
+    super.initState();
+    _pomodoro.attachLifecycle();
+    unawaited(_pomodoro.loadFromStorage());
+    unawaited(_rooms.loadFromStorage());
+    unawaited(_customSounds.loadFromStorage());
+  }
+
+  @override
+  void dispose() {
+    _pomodoro.dispose();
+    _theme.dispose();
+    _rooms.dispose();
+    _customSounds.dispose();
+    _auth.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<PomodoroProvider>.value(value: _pomodoro),
+        ChangeNotifierProvider<ThemeProvider>.value(value: _theme),
+        ChangeNotifierProvider<FocusRoomProvider>.value(value: _rooms),
+        ChangeNotifierProvider<CustomFocusSoundProvider>.value(
+          value: _customSounds,
+        ),
+        ChangeNotifierProvider<AuthProvider>.value(value: _auth),
+      ],
+      child: widget.child,
+    );
+  }
+}
+
+class _PomodoroDialogBody extends StatelessWidget {
+  final Widget child;
+
+  const _PomodoroDialogBody({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final maxHeight = (media.size.height - media.viewInsets.bottom - 180)
+        .clamp(220.0, 520.0)
+        .toDouble();
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: 420, maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _PomodoroScreenState extends State<_PomodoroScreenBody>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
 
@@ -898,6 +990,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           return AppModalSheet(
             title: '严格专注',
             subtitle: '暂停、跳过、重置、离开应用或打开分心 App 会留下中断记录',
+            shiftForKeyboard: true,
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -1074,25 +1167,28 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       context: context,
       builder: (ctx) => AppDialog(
         title: const Text('新建自习室'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: '名称'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descCtrl,
-              decoration: const InputDecoration(labelText: '说明'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: targetCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '每周目标（分钟）'),
-            ),
-          ],
+        shiftForKeyboard: true,
+        content: _PomodoroDialogBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '名称'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: descCtrl,
+                decoration: const InputDecoration(labelText: '说明'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: targetCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '每周目标（分钟）'),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -1129,22 +1225,25 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       context: context,
       builder: (ctx) => AppDialog(
         title: Text(s.focusTaskLinkLabel),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: ctrl,
-              decoration: const InputDecoration(hintText: '任务名称'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: tagCtrl,
-              decoration: const InputDecoration(
-                hintText: '标签（用于专注统计分类，可选）',
-                prefixIcon: Icon(Icons.label_outline),
+        shiftForKeyboard: true,
+        content: _PomodoroDialogBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(hintText: '任务名称'),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: tagCtrl,
+                decoration: const InputDecoration(
+                  hintText: '标签（用于专注统计分类，可选）',
+                  prefixIcon: Icon(Icons.label_outline),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -2114,40 +2213,43 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setState) => AppDialog(
           title: const Text('新建邀请码'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<int>(
-                initialValue: expiryDays,
-                decoration: const InputDecoration(
-                  labelText: '有效期',
-                  prefixIcon: Icon(Icons.event_available_outlined),
+          shiftForKeyboard: true,
+          content: _PomodoroDialogBody(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: expiryDays,
+                  decoration: const InputDecoration(
+                    labelText: '有效期',
+                    prefixIcon: Icon(Icons.event_available_outlined),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('不过期')),
+                    DropdownMenuItem(value: 1, child: Text('1 天')),
+                    DropdownMenuItem(value: 7, child: Text('7 天')),
+                    DropdownMenuItem(value: 30, child: Text('30 天')),
+                  ],
+                  onChanged: (value) => setState(() => expiryDays = value ?? 0),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 0, child: Text('不过期')),
-                  DropdownMenuItem(value: 1, child: Text('1 天')),
-                  DropdownMenuItem(value: 7, child: Text('7 天')),
-                  DropdownMenuItem(value: 30, child: Text('30 天')),
-                ],
-                onChanged: (value) => setState(() => expiryDays = value ?? 0),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<int>(
-                initialValue: maxUses,
-                decoration: const InputDecoration(
-                  labelText: '使用次数',
-                  prefixIcon: Icon(Icons.confirmation_number_outlined),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                  initialValue: maxUses,
+                  decoration: const InputDecoration(
+                    labelText: '使用次数',
+                    prefixIcon: Icon(Icons.confirmation_number_outlined),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('不限次数')),
+                    DropdownMenuItem(value: 1, child: Text('1 次')),
+                    DropdownMenuItem(value: 5, child: Text('5 次')),
+                    DropdownMenuItem(value: 10, child: Text('10 次')),
+                    DropdownMenuItem(value: 50, child: Text('50 次')),
+                  ],
+                  onChanged: (value) => setState(() => maxUses = value ?? 0),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 0, child: Text('不限次数')),
-                  DropdownMenuItem(value: 1, child: Text('1 次')),
-                  DropdownMenuItem(value: 5, child: Text('5 次')),
-                  DropdownMenuItem(value: 10, child: Text('10 次')),
-                  DropdownMenuItem(value: 50, child: Text('50 次')),
-                ],
-                onChanged: (value) => setState(() => maxUses = value ?? 0),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -2269,22 +2371,25 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
       context: context,
       builder: (ctx) => AppDialog(
         title: const Text('输入邀请码'),
-        content: TextField(
-          controller: codeCtrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.none,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: '自习室邀请码',
-            prefixIcon: Icon(Icons.key_outlined),
-          ),
-          onSubmitted: (_) => _acceptFocusRoomInvite(
-            context,
-            ctx,
-            rooms,
-            pomodoro,
-            codeCtrl.text,
-            displayName,
+        shiftForKeyboard: true,
+        content: _PomodoroDialogBody(
+          child: TextField(
+            controller: codeCtrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: '自习室邀请码',
+              prefixIcon: Icon(Icons.key_outlined),
+            ),
+            onSubmitted: (_) => _acceptFocusRoomInvite(
+              context,
+              ctx,
+              rooms,
+              pomodoro,
+              codeCtrl.text,
+              displayName,
+            ),
           ),
         ),
         actions: [
@@ -2470,17 +2575,24 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
       context: context,
       builder: (dialogContext) => AppDialog(
         title: const Text('发送好友申请'),
-        content: TextField(
-          controller: usernameCtrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.none,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: '好友用户名',
-            prefixIcon: Icon(Icons.alternate_email_outlined),
+        shiftForKeyboard: true,
+        content: _PomodoroDialogBody(
+          child: TextField(
+            controller: usernameCtrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: '好友用户名',
+              prefixIcon: Icon(Icons.alternate_email_outlined),
+            ),
+            onSubmitted: (_) => _addFocusFriend(
+              context,
+              dialogContext,
+              rooms,
+              usernameCtrl.text,
+            ),
           ),
-          onSubmitted: (_) =>
-              _addFocusFriend(context, dialogContext, rooms, usernameCtrl.text),
         ),
         actions: [
           TextButton(

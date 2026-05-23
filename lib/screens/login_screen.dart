@@ -56,6 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   String? _message;
 
+  bool get _registrationEmailVerificationRequired => true;
+
   @override
   void initState() {
     super.initState();
@@ -188,13 +190,13 @@ class _LoginScreenState extends State<LoginScreen> {
         return I18n.tr('auth.error.username_no_space');
       }
       final email = _emailCtrl.text.trim();
-      if (auth.registrationEmailRequired && email.isEmpty) {
+      if (_registrationEmailVerificationRequired && email.isEmpty) {
         return I18n.tr('auth.error.email_required');
       }
       if (email.isNotEmpty && !_looksLikeEmail(email)) {
         return I18n.tr('auth.error.email_invalid');
       }
-      if ((auth.registrationEmailRequired || email.isNotEmpty) &&
+      if ((_registrationEmailVerificationRequired || email.isNotEmpty) &&
           _emailCodeCtrl.text.trim().isEmpty) {
         return I18n.tr('auth.error.email_code_required');
       }
@@ -298,6 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final s = context.watch<ThemeProvider>().brand.strings;
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
+    final registrationEmailRequired = _registrationEmailVerificationRequired;
 
     return BrandBackground(
       child: Scaffold(
@@ -406,10 +409,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  labelText: auth.registrationEmailRequired
+                  labelText: registrationEmailRequired
                       ? I18n.tr('auth.email')
                       : I18n.tr('auth.email.optional'),
-                  helperText: auth.registrationEmailRequired
+                  helperText: registrationEmailRequired
                       ? I18n.tr('auth.email.required_helper')
                       : null,
                 ),
@@ -417,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
               _emailCodeSendField(
                 controller: _emailCodeCtrl,
-                labelText: auth.registrationEmailRequired
+                labelText: registrationEmailRequired
                     ? I18n.tr('auth.email_code')
                     : I18n.tr('auth.email_code.optional'),
               ),

@@ -69,6 +69,16 @@ void main() {
     ).readAsStringSync();
 
     expect(provider, contains('if (_timer?.isActive ?? false)'));
+    final activeTimerBranch = provider.substring(
+      provider.indexOf('if (_timer?.isActive ?? false)'),
+      provider.indexOf(
+        'return;',
+        provider.indexOf('if (_timer?.isActive ?? false)'),
+      ),
+    );
+    expect(activeTimerBranch, contains('_syncSoundToState();'));
+    expect(activeTimerBranch, contains('_syncDndToState();'));
+    expect(activeTimerBranch, contains('_syncDistractionMonitorToState();'));
     expect(provider, contains('final completedState = _state;'));
     expect(provider, contains('final completedType = completedState.type;'));
     expect(

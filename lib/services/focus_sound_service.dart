@@ -33,7 +33,7 @@ class FocusSoundService with WidgetsBindingObserver {
   String _currentSound = 'none';
   bool _isPlaying = false;
   int _playbackGeneration = 0;
-  static const double defaultVolume = 0.8;
+  static const double defaultVolume = 0.95;
   double _volume = defaultVolume;
 
   static final AudioContext _focusAudioContext = AudioContextConfig(

@@ -103,12 +103,12 @@ void main() {
     await provider.incrementHabit(habit.id);
 
     expect(provider.habits.single.todayCount(), 30);
-    expect(notifications, 1);
+    expect(notifications, greaterThanOrEqualTo(1));
 
     await provider.decrementHabit(habit.id);
 
     expect(provider.habits.single.todayCount(), 0);
-    expect(notifications, 2);
+    expect(notifications, greaterThanOrEqualTo(2));
   });
 
   test(

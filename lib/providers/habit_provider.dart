@@ -147,6 +147,7 @@ class HabitProvider extends ChangeNotifier {
         ),
       );
       await _save();
+      notifyListeners();
       final timeAudit = _timeAudit;
       if (timeAudit != null) {
         try {
@@ -162,7 +163,6 @@ class HabitProvider extends ChangeNotifier {
           );
         }
       }
-      notifyListeners();
     }
   }
 
@@ -195,6 +195,7 @@ class HabitProvider extends ChangeNotifier {
         _recalcStreak(idx);
         _habits[idx].updatedAt = stamp;
         await _save();
+        notifyListeners();
         final timeAudit = _timeAudit;
         if (timeAudit != null) {
           try {
@@ -209,7 +210,6 @@ class HabitProvider extends ChangeNotifier {
             );
           }
         }
-        notifyListeners();
       }
     }
   }

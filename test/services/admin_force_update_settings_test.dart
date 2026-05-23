@@ -43,6 +43,12 @@ void main() {
     expect(adminScreen, contains('_adminUpdatePresetForceCurrent'));
     expect(adminScreen, contains('String _latestVersionForSave()'));
     expect(adminScreen, contains('String _minimumSupportedVersionForSave()'));
+    expect(adminScreen, contains('_normalizedUpdateVersionsForSave'));
+    expect(adminScreen, contains('isDefaultCurrentVersions'));
+    expect(
+      adminScreen,
+      contains("return (latestVersion: '', minimumSupportedVersion: '')"),
+    );
     expect(
       adminScreen,
       contains('String get _forceCurrentMinimumVersion => AppVersion.name'),
@@ -59,12 +65,14 @@ void main() {
     expect(adminScreen, contains('_validateUpdatePolicy'));
     expect(adminScreen, contains('发布新版本或设置最低支持版本时，必须填写更新内容。'));
     expect(adminScreen, contains('强制更新未生效'));
-    expect(adminScreen, contains('minimumSupportedVersion.isEmpty'));
-    expect(adminScreen, isNot(contains('高于当前版本的最低支持版本')));
+    expect(adminScreen, contains('hasRaisedMinimum'));
+    expect(adminScreen, contains('高于当前版本的最低支持版本'));
     expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
 
     expect(updateService, contains("Uri.parse('/api/config')"));
     expect(updateService, contains("decoded['app_update']"));
+    expect(updateService, contains('final hasNewerLatest'));
+    expect(updateService, contains('final hasRaisedMinimum'));
     expect(updateService, contains('bool get forceUpdateRequired'));
     expect(updateService, contains('bool get mustUpdate'));
     expect(updateService, contains('if (_checking) return;'));
@@ -92,6 +100,9 @@ void main() {
     expect(mainApp, contains("label: I18n.tr('nav.mine')"));
     expect(mainApp, contains("'更新内容'"));
     expect(backend, contains('发布更新策略时必须填写更新内容'));
+    expect(backend, contains('APP_CURRENT_VERSION'));
+    expect(backend, contains('def _has_effective_update_policy'));
+    expect(backend, contains('强制更新需要高于当前版本的最新版本或最低支持版本'));
   });
 
   test('release builds refuse debug signing fallback', () {

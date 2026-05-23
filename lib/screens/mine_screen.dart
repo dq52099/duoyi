@@ -132,36 +132,44 @@ class MineScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(22),
             child: Row(
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  padding: avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                      ? EdgeInsets.zero
-                      : const EdgeInsets.all(3),
-                  decoration:
-                      avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                      ? null
-                      : BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: avatarFrame.colors,
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: avatarFrame.colors.first.withValues(
-                                alpha: 0.22,
+                Tooltip(
+                  message: '查看或编辑头像',
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _showProfileDialog(context),
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      padding:
+                          avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.all(3),
+                      decoration:
+                          avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                          ? null
+                          : BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: avatarFrame.colors,
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                              blurRadius: 14,
-                              offset: const Offset(0, 5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: avatarFrame.colors.first.withValues(
+                                    alpha: 0.22,
+                                  ),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                  child: _ProfileAvatar(
-                    avatar: avatarValue,
-                    displayName: displayName,
-                    radius: 30,
+                      child: _ProfileAvatar(
+                        avatar: avatarValue,
+                        displayName: displayName,
+                        radius: 30,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -642,8 +650,11 @@ class MineScreen extends StatelessWidget {
               _Tile(
                 icon: Icons.notifications_outlined,
                 label: '通知设置',
-                subtitle: '管理提醒时间、通知权限和铃声',
+                subtitle: '提醒时间、权限、铃声和记录保留',
                 color: Colors.orange,
+                trailing: notifService.hasUnreadHistory
+                    ? const _UnreadDot()
+                    : null,
                 onTap: () => _openNotificationSettings(context),
               ),
               _Tile(
@@ -677,7 +688,7 @@ class MineScreen extends StatelessWidget {
               _Tile(
                 icon: Icons.forum_outlined,
                 label: '许愿与反馈',
-                subtitle: '反馈记录、功能建议、问题反馈和许愿池',
+                subtitle: '提交建议并分页查看处理记录',
                 color: Colors.indigo,
                 onTap: () => _openFeedback(context, auth, 'feature'),
               ),

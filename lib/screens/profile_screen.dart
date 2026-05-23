@@ -194,6 +194,83 @@ class _ProfileAvatarPicker extends StatelessWidget {
   }
 }
 
+class _ProfileAvatarSheet extends StatelessWidget {
+  final String? avatar;
+  final String displayName;
+  final bool busy;
+  final VoidCallback? onChangeAvatar;
+  final VoidCallback? onSave;
+
+  const _ProfileAvatarSheet({
+    required this.avatar,
+    required this.displayName,
+    required this.busy,
+    required this.onChangeAvatar,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppModalSheet(
+      title: '头像',
+      subtitle: '查看当前头像，或更换后保存到资料',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: _ProfileAvatarPreview(
+              avatar: avatar,
+              displayName: displayName,
+              radius: 84,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy || onChangeAvatar == null
+                      ? null
+                      : onChangeAvatar,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('更换头像'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: busy || onSave == null ? null : onSave,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(I18n.tr('action.save')),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: busy ? null : () => Navigator.pop(context),
+            child: Text(I18n.tr('action.close')),
+          ),
+          Text(
+            '用户名和账号标识不会随头像保存而改变',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.58),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProfileMetricChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -446,6 +523,40 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     }
   }
 
+  Future<void> _showAvatarSheet() async {
+    if (_busy) return;
+    final displayName = _firstNonEmptyProfileText([
+      _displayNameCtrl.text,
+      _usernameCtrl.text,
+      context.read<AuthProvider>().state.displayName,
+      context.read<AuthProvider>().state.username,
+      I18n.tr('profile.default_user'),
+    ]);
+    await showAppModalSheet<void>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          return _ProfileAvatarSheet(
+            avatar: _avatarCtrl.text.trim().isEmpty
+                ? context.read<AuthProvider>().state.avatar
+                : _avatarCtrl.text.trim(),
+            displayName: displayName,
+            busy: _avatarBusy || _busy,
+            onChangeAvatar: () async {
+              await _uploadAvatar();
+              setSheetState(() {});
+            },
+            onSave: () async {
+              await _save();
+              if (!sheetContext.mounted) return;
+              Navigator.pop(sheetContext);
+            },
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (_busy || _avatarBusy) return;
     final username = _usernameCtrl.text.trim();
@@ -538,8 +649,8 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
               children: [
                 _ProfileAvatarPicker(
                   busy: _avatarBusy,
-                  tooltip: I18n.tr('profile.avatar.upload'),
-                  onTap: _uploadAvatar,
+                  tooltip: '查看或编辑头像',
+                  onTap: _showAvatarSheet,
                   child: Container(
                     width: 76,
                     height: 76,
@@ -819,6 +930,36 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     }
   }
 
+  Future<void> _showAvatarSheet() async {
+    if (_busy) return;
+    final displayName = _firstNonEmptyProfileText([
+      _displayNameCtrl.text,
+      _usernameCtrl.text,
+      I18n.tr('profile.default_user'),
+    ]);
+    await showAppModalSheet<void>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          return _ProfileAvatarSheet(
+            avatar: _avatarCtrl.text.trim(),
+            displayName: displayName,
+            busy: _avatarBusy || _busy,
+            onChangeAvatar: () async {
+              await _pickLocalAvatar();
+              setSheetState(() {});
+            },
+            onSave: () async {
+              await _save();
+              if (!sheetContext.mounted) return;
+              Navigator.pop(sheetContext);
+            },
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _save({bool showSnackBar = true}) async {
     if (_busy || _avatarBusy) return;
     final username = _usernameCtrl.text.trim();
@@ -900,8 +1041,8 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
               children: [
                 _ProfileAvatarPicker(
                   busy: _avatarBusy,
-                  tooltip: I18n.tr('profile.avatar.choose'),
-                  onTap: _pickLocalAvatar,
+                  tooltip: '查看或编辑头像',
+                  onTap: _showAvatarSheet,
                   child: _ProfileAvatarPreview(
                     avatar: _avatarCtrl.text.trim(),
                     displayName: displayName,
@@ -1166,22 +1307,22 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(labelText: I18n.tr('auth.email')),
-            ),
-            const SizedBox(height: 12),
             _ProfileActionField(
               field: TextField(
-                controller: _codeCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.email_code'),
-                  helperText: I18n.tr('profile.email_code.helper'),
-                ),
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(labelText: I18n.tr('auth.email')),
               ),
               action: _sendButton(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _codeCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: I18n.tr('auth.email_code'),
+                helperText: I18n.tr('profile.email_code.helper'),
+              ),
             ),
             if (_message != null) ...[
               const SizedBox(height: 12),

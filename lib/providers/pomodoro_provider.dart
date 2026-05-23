@@ -305,6 +305,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         _state = _state.copyWith(isRunning: true);
         notifyListeners();
       }
+      _syncSoundToState();
+      _syncDndToState();
+      _syncDistractionMonitorToState();
       return;
     }
     if (!_state.isRunning) {

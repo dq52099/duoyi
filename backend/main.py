@@ -116,6 +116,7 @@ EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp"
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
 DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
+APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.9"))
 ADMIN_ALL_PERMISSION = "*"
 ADMIN_NO_PERMISSION = "__none__"
 ADMIN_PERMISSION_KEYS = {
@@ -257,6 +258,51 @@ def _admin_page_response(items: list, total: int, limit: int, offset: int) -> di
         "offset": offset,
         "has_more": offset + len(items) < int(total or 0),
     }
+
+
+def _version_parts(value: str) -> list[int]:
+    normalized = (
+        str(value or "")
+        .strip()
+        .removeprefix("v")
+        .split("-", 1)[0]
+        .split("+", 1)[0]
+    )
+    parts = []
+    for item in normalized.split("."):
+        try:
+            parts.append(int(item))
+        except ValueError:
+            parts.append(0)
+    return parts
+
+
+def _version_gt(left: str, right: str) -> bool:
+    left_parts = _version_parts(left)
+    right_parts = _version_parts(right)
+    for index in range(3):
+        a = left_parts[index] if index < len(left_parts) else 0
+        b = right_parts[index] if index < len(right_parts) else 0
+        if a != b:
+            return a > b
+    return False
+
+
+def _has_effective_update_policy(
+    *,
+    latest_version: str,
+    minimum_supported_version: str,
+    update_download_url: str,
+    update_notes: str,
+    force_update_required: bool,
+) -> bool:
+    return bool(
+        force_update_required
+        or update_download_url
+        or update_notes
+        or _version_gt(latest_version, APP_CURRENT_VERSION)
+        or _version_gt(minimum_supported_version, APP_CURRENT_VERSION)
+    )
 
 
 def _feedback_admin_filters(
@@ -7721,17 +7767,29 @@ def admin_update_settings(
                 update_items.get("update_notes", _setting_get(db, "update_notes", ""))
                 or ""
             ).strip()
-            has_update_policy = bool(
-                latest_version
-                or minimum_supported_version
-                or update_download_url
-                or update_items.get(
+            force_update_required = bool(
+                update_items.get(
                     "force_update_required",
                     _setting_get(db, "force_update_required", False),
                 )
             )
+            has_update_policy = _has_effective_update_policy(
+                latest_version=latest_version,
+                minimum_supported_version=minimum_supported_version,
+                update_download_url=update_download_url,
+                update_notes=update_notes,
+                force_update_required=force_update_required,
+            )
             if has_update_policy and not update_notes:
                 raise HTTPException(status_code=400, detail="发布更新策略时必须填写更新内容")
+            if force_update_required and not (
+                _version_gt(latest_version, APP_CURRENT_VERSION)
+                or _version_gt(minimum_supported_version, APP_CURRENT_VERSION)
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="强制更新需要高于当前版本的最新版本或最低支持版本",
+                )
         changed = {}
         for key, value in update_items.items():
             _setting_set(db, key, value)

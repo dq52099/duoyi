@@ -383,6 +383,9 @@ void main() {
 
     final requests = <String>[];
     final requestBodies = <Map<String, dynamic>>[];
+    var serverEmail = 'old@example.com';
+    var serverDisplayName = '旧昵称';
+    var serverBio = '旧简介';
     final auth = AuthProvider(
       initialState: const AuthState(
         userId: 'u-1',
@@ -406,15 +409,24 @@ void main() {
             expect(request.headers['authorization'], 'Bearer token-1');
             final body = json.decode(request.body) as Map<String, dynamic>;
             requestBodies.add(body);
+            if (body.containsKey('email')) {
+              serverEmail = body['email'] as String;
+            }
+            if (body.containsKey('display_name')) {
+              serverDisplayName = body['display_name'] as String;
+            }
+            if (body.containsKey('bio')) {
+              serverBio = body['bio'] as String;
+            }
             return http.Response(
               json.encode({
                 'user_id': 'u-1',
                 'username': 'old-user',
-                'email': body['email'],
+                'email': serverEmail,
                 'email_verified': false,
-                'display_name': body['display_name'],
+                'display_name': serverDisplayName,
                 'avatar': 'https://example.com/old.png',
-                'bio': body['bio'],
+                'bio': serverBio,
                 'is_admin': false,
                 'coin_balance': 88,
                 'lifetime_coins': 144,
@@ -452,22 +464,25 @@ void main() {
       find.widgetWithText(TextField, '用户名'),
     );
     expect(usernameField.readOnly, isTrue);
+    await tester.enterText(find.widgetWithText(TextField, '简介'), '新的账号简介');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('old@example.com'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, '邮箱'),
       'new@example.com',
     );
     await tester.enterText(find.widgetWithText(TextField, '邮箱验证码'), '123456');
-    await tester.enterText(find.widgetWithText(TextField, '简介'), '新的账号简介');
-    await tester.tap(find.text('保存'));
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
 
     expect(requests, contains('PATCH /api/auth/profile'));
-    expect(requestBodies.single, {
-      'email': 'new@example.com',
-      'email_code': '123456',
-      'display_name': '新昵称',
-      'bio': '新的账号简介',
-    });
+    expect(requestBodies, [
+      {'display_name': '新昵称', 'bio': '新的账号简介'},
+      {'email': 'new@example.com', 'email_code': '123456'},
+    ]);
     expect(auth.state.username, 'old-user');
     expect(auth.state.email, 'new@example.com');
     expect(auth.state.emailVerified, isFalse);

@@ -133,7 +133,11 @@ void main() {
         'Future<void> _pickLocalAvatar()',
         '_copyLocalAvatarFile(file)',
         'await _save(showSnackBar: false)',
-        "I18n.tr('profile.avatar.choose')",
+        'class _ProfileAvatarSheet',
+        "title: '头像'",
+        "tooltip: '查看或编辑头像'",
+        'showAppModalSheet<void>',
+        "label: const Text('更换头像')",
         'await context.read<UserProvider>().updateProfile(',
         'final avatarIsLocalFile = _localAvatarPath(avatar) != null',
         'final avatarIsImage = avatarIsUrl || avatarIsLocalFile',
@@ -172,7 +176,8 @@ void main() {
         isNot(contains('username: username')),
         reason: '账号唯一标识不能通过资料保存路径编辑',
       );
-      expect(accountBody, isNot(contains('OutlinedButton.icon(')));
+      expect(accountBody, contains('onTap: _showAvatarSheet'));
+      expect(accountBody, isNot(contains("I18n.tr('profile.avatar.upload')")));
       expect(accountBody, contains('AppListTileCard('));
       expect(accountBody, isNot(contains('ListTile(')));
       expect(accountBody, contains("leading: const Icon(Icons.mail_outline)"));
@@ -284,8 +289,10 @@ void main() {
       'class _ProfileAvatarPicker',
       'Semantics(',
       'button: true',
-      'onTap: _uploadAvatar',
-      'onTap: _pickLocalAvatar',
+      'onTap: _showAvatarSheet',
+      'onChangeAvatar: () async',
+      'await _uploadAvatar();',
+      'await _pickLocalAvatar();',
       'SizedBox(width: 112, height: 56, child: action)',
       'bool get _canSend',
       'return _looksLikeEmail(_emailCtrl.text.trim());',

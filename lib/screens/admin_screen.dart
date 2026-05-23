@@ -1395,6 +1395,28 @@ class _SettingsTabState extends State<_SettingsTab> {
     return _minimumVersionCtrl.text.trim();
   }
 
+  ({String latestVersion, String minimumSupportedVersion})
+  _normalizedUpdateVersionsForSave({
+    required bool forceUpdateRequired,
+    required String latestVersion,
+    required String minimumSupportedVersion,
+    required String updateDownloadUrl,
+    required String updateNotes,
+  }) {
+    final latest = latestVersion.trim();
+    final minimum = minimumSupportedVersion.trim();
+    final isDefaultCurrentVersions =
+        latest == AppVersion.name && minimum == AppVersion.name;
+    final hasExplicitPolicy =
+        forceUpdateRequired ||
+        updateDownloadUrl.trim().isNotEmpty ||
+        updateNotes.trim().isNotEmpty;
+    if (isDefaultCurrentVersions && !hasExplicitPolicy) {
+      return (latestVersion: '', minimumSupportedVersion: '');
+    }
+    return (latestVersion: latest, minimumSupportedVersion: minimum);
+  }
+
   void _syncUpdateVersionPreset() {
     final preset = _presetForVersions(
       latestVersion: _latestVersionCtrl.text,
@@ -1467,6 +1489,13 @@ class _SettingsTabState extends State<_SettingsTab> {
     final updateDownloadUrl = _downloadUrlCtrl.text.trim();
     final updateNotes = _updateNotesCtrl.text.trim();
     final forceUpdateRequired = _data['force_update_required'] == true;
+    final versions = _normalizedUpdateVersionsForSave(
+      forceUpdateRequired: forceUpdateRequired,
+      latestVersion: latestVersion,
+      minimumSupportedVersion: minimumSupportedVersion,
+      updateDownloadUrl: updateDownloadUrl,
+      updateNotes: updateNotes,
+    );
     final message = _validateUpdatePolicy(
       forceUpdateRequired: forceUpdateRequired,
       latestVersion: latestVersion,
@@ -1488,13 +1517,13 @@ class _SettingsTabState extends State<_SettingsTab> {
     setState(() => _savingKeys.addAll(keys));
     try {
       await widget.api.updateSettings(
-        latestVersion: latestVersion,
-        minimumSupportedVersion: minimumSupportedVersion,
+        latestVersion: versions.latestVersion,
+        minimumSupportedVersion: versions.minimumSupportedVersion,
         updateDownloadUrl: updateDownloadUrl,
         updateNotes: updateNotes,
       );
-      _data['latest_version'] = latestVersion;
-      _data['minimum_supported_version'] = minimumSupportedVersion;
+      _data['latest_version'] = versions.latestVersion;
+      _data['minimum_supported_version'] = versions.minimumSupportedVersion;
       _data['update_download_url'] = updateDownloadUrl;
       _data['update_notes'] = updateNotes;
       _syncUpdateVersionPreset();
@@ -1511,6 +1540,13 @@ class _SettingsTabState extends State<_SettingsTab> {
     final minimumSupportedVersion = _minimumSupportedVersionForSave();
     final updateDownloadUrl = _downloadUrlCtrl.text.trim();
     final updateNotes = _updateNotesCtrl.text.trim();
+    final versions = _normalizedUpdateVersionsForSave(
+      forceUpdateRequired: value,
+      latestVersion: latestVersion,
+      minimumSupportedVersion: minimumSupportedVersion,
+      updateDownloadUrl: updateDownloadUrl,
+      updateNotes: updateNotes,
+    );
     final message = _validateUpdatePolicy(
       forceUpdateRequired: value,
       latestVersion: latestVersion,
@@ -1534,14 +1570,14 @@ class _SettingsTabState extends State<_SettingsTab> {
     try {
       await widget.api.updateSettings(
         forceUpdateRequired: value,
-        latestVersion: latestVersion,
-        minimumSupportedVersion: minimumSupportedVersion,
+        latestVersion: versions.latestVersion,
+        minimumSupportedVersion: versions.minimumSupportedVersion,
         updateDownloadUrl: updateDownloadUrl,
         updateNotes: updateNotes,
       );
       _data['force_update_required'] = value;
-      _data['latest_version'] = latestVersion;
-      _data['minimum_supported_version'] = minimumSupportedVersion;
+      _data['latest_version'] = versions.latestVersion;
+      _data['minimum_supported_version'] = versions.minimumSupportedVersion;
       _data['update_download_url'] = updateDownloadUrl;
       _data['update_notes'] = updateNotes;
       _syncUpdateVersionPreset();
@@ -1560,20 +1596,21 @@ class _SettingsTabState extends State<_SettingsTab> {
     required String updateNotes,
   }) {
     final hasAnyUpdatePolicy =
-        latestVersion.isNotEmpty ||
-        minimumSupportedVersion.isNotEmpty ||
+        forceUpdateRequired ||
         updateDownloadUrl.isNotEmpty ||
-        forceUpdateRequired;
+        _compareAppVersions(latestVersion, AppVersion.name) > 0 ||
+        _compareAppVersions(minimumSupportedVersion, AppVersion.name) > 0;
     final hasNewerLatest =
         latestVersion.isNotEmpty &&
         _compareAppVersions(latestVersion, AppVersion.name) > 0;
+    final hasRaisedMinimum =
+        minimumSupportedVersion.isNotEmpty &&
+        _compareAppVersions(minimumSupportedVersion, AppVersion.name) > 0;
     if (hasAnyUpdatePolicy && updateNotes.trim().isEmpty) {
       return '发布新版本或设置最低支持版本时，必须填写更新内容。';
     }
-    if (forceUpdateRequired &&
-        !hasNewerLatest &&
-        minimumSupportedVersion.isEmpty) {
-      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或填写最低支持版本。';
+    if (forceUpdateRequired && !hasNewerLatest && !hasRaisedMinimum) {
+      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或高于当前版本的最低支持版本。';
     }
     return null;
   }

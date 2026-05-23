@@ -82,7 +82,7 @@ void main() {
       expect(focusService, contains('ctx: _focusAudioContext'));
       expect(focusService, contains('AudioContextConfig('));
       expect(focusService, contains('stayAwake: true'));
-      expect(focusService, contains('defaultVolume = 0.8'));
+      expect(focusService, contains('defaultVolume = 0.95'));
       expect(focusService, contains('_playbackGeneration'));
       expect(focusService, contains('assets.length != 1'));
       expect(

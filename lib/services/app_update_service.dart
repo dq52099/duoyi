@@ -133,11 +133,17 @@ class AppUpdateService extends ChangeNotifier {
       final downloadUrl = _stringValue(data['update_download_url']);
       final notes = _stringValue(data['update_notes']);
       final minimum = _stringValue(data['minimum_supported_version']);
+      final hasNewerLatest =
+          latest.isNotEmpty &&
+          _compareSemver(_normalize(latest), _normalize(currentVersion)) > 0;
+      final hasRaisedMinimum =
+          minimum.isNotEmpty &&
+          _compareSemver(_normalize(minimum), _normalize(currentVersion)) > 0;
       final hasPolicy =
-          latest.isNotEmpty ||
           downloadUrl.isNotEmpty ||
           notes.isNotEmpty ||
-          minimum.isNotEmpty ||
+          hasNewerLatest ||
+          hasRaisedMinimum ||
           data['force_update_required'] == true;
       if (!hasPolicy) return false;
       _latestVersion = latest.isEmpty ? null : latest;

@@ -67,6 +67,8 @@ void main() {
     expect(source, contains("key: const ValueKey('habit-undo-inline-button')"));
     expect(source, contains('OutlinedButton.icon('));
     expect(source, contains("label: const Text('撤回一次')"));
+    expect(source, contains('minimumSize: const Size(128, 44)'));
+    expect(source, contains('tapTargetSize: MaterialTapTargetSize.padded'));
     expect(source, isNot(contains('dimension: 48')));
     expect(source, contains('messenger.hideCurrentSnackBar()'));
     expect(source, contains('今日已达标'));
@@ -88,6 +90,29 @@ void main() {
     expect(cardSource, contains("key: ValueKey('habit-completed-feedback')"));
     expect(cardSource, contains('key: const ValueKey('));
     expect(cardSource, contains("'habit-warning-feedback'"));
+  });
+
+  test('习惯打卡先通知界面再写入时间足迹，避免被耗时记录拖住状态', () {
+    final source = File('lib/providers/habit_provider.dart').readAsStringSync();
+
+    final incrementStart = source.indexOf('Future<void> incrementHabitForDate');
+    final decrementStart = source.indexOf('Future<void> decrementHabitForDate');
+    final defaultStart = source.indexOf('int _defaultCheckInAmount');
+    expect(incrementStart, greaterThanOrEqualTo(0));
+    expect(decrementStart, greaterThan(incrementStart));
+    expect(defaultStart, greaterThan(decrementStart));
+
+    final incrementBody = source.substring(incrementStart, decrementStart);
+    final decrementBody = source.substring(decrementStart, defaultStart);
+
+    expect(
+      incrementBody.indexOf('notifyListeners();'),
+      lessThan(incrementBody.indexOf('await timeAudit.recordHabitCheckIn(')),
+    );
+    expect(
+      decrementBody.indexOf('notifyListeners();'),
+      lessThan(decrementBody.indexOf('await timeAudit.removeHabitCheckIn(')),
+    );
   });
 
   test('习惯详情提供长期趋势范围切换和区间明细', () {

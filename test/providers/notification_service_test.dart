@@ -84,7 +84,8 @@ void main() {
       expect(group, contains("label: '通知记录'"));
       expect(group, contains('onTap: () => _openNotificationHistory(context)'));
       expect(group, contains("label: '通知设置'"));
-      expect(group, contains("subtitle: '管理提醒时间、通知权限和铃声'"));
+      expect(group, contains("subtitle: '提醒时间、权限、铃声和记录保留'"));
+      expect(group, contains('notifService.hasUnreadHistory'));
       expect(
         group,
         contains('onTap: () => _openNotificationSettings(context)'),

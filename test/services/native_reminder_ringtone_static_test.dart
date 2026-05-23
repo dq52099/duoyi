@@ -83,6 +83,8 @@ void main() {
     expect(alarmService, contains('ongoing: false'));
     expect(alarmService, contains('autoCancel: true'));
     expect(alarmService, contains('onlyAlertOnce: true'));
+    expect(alarmService, contains('int snoozeMinutes = 5'));
+    expect(alarmService, contains('fullScreen: false'));
     expect(scheduler, contains('ReminderRingtoneService.stopIfActive'));
     expect(scheduler, contains('ReminderRingtoneService.stopActive'));
     expect(service, contains('.getInt(volumeKey, 60)'));

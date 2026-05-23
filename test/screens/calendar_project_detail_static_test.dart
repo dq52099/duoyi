@@ -31,7 +31,9 @@ void main() {
       contains("key: const ValueKey('calendar_navigation_date_button')"),
     );
     expect(source, contains('height: 60'));
-    expect(source, contains('minimumSize: const Size(double.infinity, 54)'));
+    expect(source, contains('const Size(double.infinity, 54)'));
+    expect(source, contains('const Size(0, 46)'));
+    expect(source, contains('constraints.maxWidth < 360'));
     expect(
       source,
       contains("key: const ValueKey('calendar_month_detail_agenda')"),

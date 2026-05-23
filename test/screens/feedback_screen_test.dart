@@ -135,10 +135,14 @@ void main() {
     expect(find.text('管理员回复'), findsOneWidget);
     expect(find.text('已加入排查'), findsOneWidget);
 
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey('feedback_inline_submit_card')),
+        matching: find.byType(TextField),
+      ),
+      '小组件想要月历',
+    );
     await tester.tap(find.byKey(const ValueKey('feedback_submit_fab')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '小组件想要月历');
-    await tester.tap(find.widgetWithText(FilledButton, '提交反馈'));
     await tester.pumpAndSettle();
 
     expect(requests, <String>[
@@ -152,11 +156,16 @@ void main() {
     expect(find.text('小组件想要月历'), findsOneWidget);
   });
 
-  test('FeedbackScreen keeps three-level menu, pagination and FAB submit', () {
+  test('FeedbackScreen keeps merged submit form, menu, pagination and FAB', () {
     final source = File('lib/screens/feedback_screen.dart').readAsStringSync();
 
     expect(source, contains("title: const Text('许愿与反馈')"));
     expect(source, contains("title: '反馈记录'"));
+    expect(source, contains("title: '提交许愿与反馈'"));
+    expect(
+      source,
+      contains("key: const ValueKey('feedback_inline_submit_card')"),
+    );
     expect(
       source,
       contains("key: const ValueKey('feedback_three_level_menu')"),
@@ -173,7 +182,7 @@ void main() {
       contains("for (final category in const ['feature', 'bug', 'wish'])"),
     );
     expect(source, contains('FloatingActionButton.extended'));
-    expect(source, contains('showAppModalSheet<void>'));
+    expect(source, isNot(contains('showAppModalSheet<void>')));
   });
 
   test('FeedbackScreen ignores stale pagination responses', () {

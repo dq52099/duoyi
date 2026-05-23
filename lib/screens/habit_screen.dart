@@ -1112,26 +1112,34 @@ class _HabitCheckinCard extends StatelessWidget {
                   ),
                 ),
                 if (todayCount > 0)
-                  OutlinedButton.icon(
-                    key: const ValueKey('habit-undo-inline-button'),
-                    onPressed: () => _handleUndo(context),
-                    icon: Icon(
-                      Icons.undo,
-                      size: 16,
-                      color: hasNegativeOccurrence
-                          ? cs.error
-                          : cs.onSurfaceVariant,
-                    ),
-                    label: const Text('撤回一次'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(104, 40),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 128),
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('habit-undo-inline-button'),
+                      onPressed: () => _handleUndo(context),
+                      icon: Icon(
+                        Icons.undo_rounded,
+                        size: 18,
+                        color: hasNegativeOccurrence
+                            ? cs.error
+                            : cs.onSurfaceVariant,
                       ),
-                      foregroundColor: hasNegativeOccurrence
-                          ? cs.error
-                          : cs.onSurfaceVariant,
+                      label: const Text('撤回一次'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(128, 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        foregroundColor: hasNegativeOccurrence
+                            ? cs.error
+                            : cs.onSurfaceVariant,
+                        visualDensity: VisualDensity.standard,
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
               ],

@@ -219,7 +219,7 @@ class AlarmService implements ReminderAlarmSink {
     bool requireExactAlarm = true,
     bool fullScreen = true,
     bool vibrate = true,
-    int snoozeMinutes = 0,
+    int snoozeMinutes = 5,
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
@@ -359,7 +359,8 @@ class AlarmService implements ReminderAlarmSink {
         title: title,
         body: body,
         payload: payload,
-        fullScreen: true,
+        fullScreen: false,
+        snoozeMinutes: 5,
       );
     }
     try {
@@ -397,7 +398,7 @@ class AlarmService implements ReminderAlarmSink {
     bool requireExactAlarm = true,
     bool fullScreen = true,
     bool vibrate = true,
-    int snoozeMinutes = 0,
+    int snoozeMinutes = 5,
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();

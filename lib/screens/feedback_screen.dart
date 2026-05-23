@@ -26,6 +26,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   bool _loading = false;
   bool _submitting = false;
   String? _error;
+  String? _submitError;
   int _page = 1;
   int _totalPages = 1;
   int _total = 0;
@@ -142,14 +143,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
     final content = _contentCtrl.text.trim();
     if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(I18n.tr('feedback.content.empty'))),
-      );
+      setState(() => _submitError = I18n.tr('feedback.content.empty'));
       return;
     }
     setState(() {
       _submitting = true;
       _error = null;
+      _submitError = null;
     });
     try {
       await auth.client.post('/api/feedback', {
@@ -158,82 +158,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       });
       _contentCtrl.clear();
       if (!mounted) return;
-      Navigator.of(context).pop();
       await _load(page: 1);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(I18n.tr('feedback.submitted'))));
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _submitError = e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _submitError = e.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  void _openSubmitSheet() {
-    showAppModalSheet<void>(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return AppModalSheet(
-            title: I18n.tr('feedback.submit.button'),
-            subtitle: _categoryHelp(_category),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _FeedbackCategoryMenu(
-                  selected: _category,
-                  labelFor: _categoryLabel,
-                  onSelected: (value) {
-                    final next = _normalizeCategory(value);
-                    setState(() => _category = next);
-                    setSheetState(() {});
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _contentCtrl,
-                  minLines: 5,
-                  maxLines: 8,
-                  decoration: InputDecoration(
-                    labelText:
-                        '${I18n.tr('feedback.content.label_prefix')}${_categoryLabel(_category)}',
-                    helperText: _categoryHelp(_category),
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 10),
-                  Text(_error!, style: TextStyle(color: Colors.red.shade600)),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_outlined),
-                    label: Text(
-                      _submitting
-                          ? I18n.tr('feedback.submitting')
-                          : I18n.tr('feedback.submit.button'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 
   @override
@@ -245,7 +181,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       appBar: AppBar(title: const Text('许愿与反馈')),
       floatingActionButton: FloatingActionButton.extended(
         key: const ValueKey('feedback_submit_fab'),
-        onPressed: loggedIn ? _openSubmitSheet : null,
+        onPressed: loggedIn ? _submit : null,
         icon: const Icon(Icons.add_comment_outlined),
         label: Text(I18n.tr('feedback.submit.button')),
       ),
@@ -294,22 +230,20 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _FeedbackCategoryMenu(
-              selected: _category,
-              labelFor: _categoryLabel,
-              onSelected: (value) =>
-                  setState(() => _category = _normalizeCategory(value)),
+            _FeedbackSubmitCard(
+              category: _category,
+              categoryLabel: _categoryLabel,
+              categoryHelp: _categoryHelp,
+              contentController: _contentCtrl,
+              enabled: loggedIn,
+              submitting: _submitting,
+              error: _submitError,
+              onCategoryChanged: (value) => setState(() {
+                _category = _normalizeCategory(value);
+                _submitError = null;
+              }),
+              onSubmit: _submit,
             ),
-            if (!loggedIn) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton(
-                  onPressed: null,
-                  child: Text(I18n.tr('feedback.submit.button')),
-                ),
-              ),
-            ],
             const SizedBox(height: 12),
             if (!loggedIn)
               EmptyState(
@@ -337,7 +271,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 icon: Icons.feedback_outlined,
                 message: I18n.tr('feedback.empty'),
                 actionLabel: I18n.tr('feedback.submit.button'),
-                onAction: _openSubmitSheet,
+                onAction: _submit,
               )
             else ...[
               ..._items.map(
@@ -430,6 +364,93 @@ class _FeedbackCategoryMenu extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FeedbackSubmitCard extends StatelessWidget {
+  final String category;
+  final String Function(String) categoryLabel;
+  final String Function(String) categoryHelp;
+  final TextEditingController contentController;
+  final bool enabled;
+  final bool submitting;
+  final String? error;
+  final ValueChanged<String> onCategoryChanged;
+  final VoidCallback onSubmit;
+
+  const _FeedbackSubmitCard({
+    required this.category,
+    required this.categoryLabel,
+    required this.categoryHelp,
+    required this.contentController,
+    required this.enabled,
+    required this.submitting,
+    required this.error,
+    required this.onCategoryChanged,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      key: const ValueKey('feedback_inline_submit_card'),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppSectionHeader(
+            title: '提交许愿与反馈',
+            subtitle: enabled
+                ? '功能建议、问题反馈和许愿池统一从这里提交'
+                : I18n.tr('feedback.login.submit_required'),
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 12),
+          _FeedbackCategoryMenu(
+            selected: category,
+            labelFor: categoryLabel,
+            onSelected: enabled && !submitting ? onCategoryChanged : (_) {},
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: contentController,
+            enabled: enabled && !submitting,
+            minLines: 4,
+            maxLines: 7,
+            decoration: InputDecoration(
+              labelText:
+                  '${I18n.tr('feedback.content.label_prefix')}${categoryLabel(category)}',
+              helperText: categoryHelp(category),
+              alignLabelWithHint: true,
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(error!, style: TextStyle(color: cs.error)),
+          ],
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: enabled && !submitting ? onSubmit : null,
+              icon: submitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_outlined),
+              label: Text(
+                submitting
+                    ? I18n.tr('feedback.submitting')
+                    : I18n.tr('feedback.submit.button'),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
