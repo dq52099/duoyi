@@ -111,7 +111,15 @@ void main() {
       );
       expect(
         main,
-        contains('pomodoroProvider.addListener(queueReportDigestReminderSync)'),
+        contains('void queueReportDigestReminderSyncOnPomodoroSummaryChange()'),
+      );
+      expect(
+        main,
+        contains(
+          'pomodoroProvider.addListener(\n'
+          '    queueReportDigestReminderSyncOnPomodoroSummaryChange,\n'
+          '  )',
+        ),
       );
       expect(
         main,

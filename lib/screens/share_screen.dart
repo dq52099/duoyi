@@ -1037,7 +1037,7 @@ class _WorkspaceMemberAvatar extends StatelessWidget {
             _memberInitial(member),
             style: TextStyle(
               fontSize: radius <= 12 ? 10 : 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               color: color,
             ),
           ),
@@ -1082,7 +1082,7 @@ class _IdentityAvatar extends StatelessWidget {
             _identityInitial(userId, username),
             style: TextStyle(
               fontSize: radius <= 14 ? 10 : 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               color: color,
             ),
           ),
@@ -1115,7 +1115,7 @@ class _RankBadge extends StatelessWidget {
         '$rank',
         style: TextStyle(
           fontSize: 9,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: color,
         ),
       ),
@@ -1145,7 +1145,7 @@ class _ExtraMemberAvatar extends StatelessWidget {
           '+$count',
           style: TextStyle(
             fontSize: 10,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
             color: cs.onSurfaceVariant,
           ),
         ),

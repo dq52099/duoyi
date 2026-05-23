@@ -52,6 +52,9 @@ void main() {
     expect(source, contains("import 'package:flutter/services.dart';"));
     expect(source, contains('FilteringTextInputFormatter.digitsOnly'));
     expect(source, contains(r"RegExp(r'^\d{4,8}$')"));
-    expect(source, contains('需要 4-8 位数字'));
+    expect(source, contains("I18n.tr('app_lock.pin_invalid')"));
+
+    final i18n = File('lib/core/i18n.dart').readAsStringSync();
+    expect(i18n, contains("'app_lock.pin_invalid': '需要 4-8 位数字'"));
   });
 }

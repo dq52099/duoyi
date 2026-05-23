@@ -755,28 +755,40 @@ class _AdminErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 40,
-              color: Theme.of(context).colorScheme.error,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final content = Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 12),
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('重新加载'),
+              ),
+            ],
+          ),
+        );
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.hasBoundedHeight
+                  ? constraints.maxHeight
+                  : 0,
             ),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重新加载'),
-            ),
-          ],
-        ),
-      ),
+            child: Center(child: content),
+          ),
+        );
+      },
     );
   }
 }
@@ -883,128 +895,226 @@ class _AdminPaginationBar extends StatelessWidget {
               ),
             ],
           );
+          final compactButtonStyle = ButtonStyle(
+            minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 8),
+            ),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
           final pageSizePicker = onPageSizeChanged == null
-              ? const SizedBox.shrink()
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '每页',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.68),
+              ? null
+              : _AdminPaginationLabeledControl(
+                  label: '每页',
+                  child: DropdownButton<int>(
+                    value: pageSize,
+                    underline: const SizedBox.shrink(),
+                    isDense: true,
+                    items: _adminPageSizeOptions
+                        .map(
+                          (v) => DropdownMenuItem(value: v, child: Text('$v')),
+                        )
+                        .toList(),
+                    onChanged: loading || onPageSizeChanged == null
+                        ? null
+                        : (v) {
+                            if (v != null) onPageSizeChanged!(v);
+                          },
+                  ),
+                );
+          final pageJump = !canPickPage
+              ? null
+              : _AdminPaginationLabeledControl(
+                  label: '页码',
+                  child: DropdownButton<int>(
+                    value: currentPage.clamp(1, totalPages).toInt(),
+                    underline: const SizedBox.shrink(),
+                    isDense: true,
+                    items: List.generate(totalPages > 200 ? 200 : totalPages, (
+                      index,
+                    ) {
+                      final pageNo = index + 1;
+                      return DropdownMenuItem(
+                        value: pageNo,
+                        child: Text('$pageNo/$totalPages'),
+                      );
+                    }),
+                    onChanged: loading
+                        ? null
+                        : (value) {
+                            if (value != null) onJumpToPage!(value);
+                          },
+                  ),
+                );
+          Widget navigation({required bool compact}) {
+            final previousButton = compact
+                ? OutlinedButton(
+                    style: compactButtonStyle,
+                    onPressed: canPrevious ? onPrevious : null,
+                    child: const Text('上一页'),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: canPrevious ? onPrevious : null,
+                    icon: const Icon(Icons.chevron_left),
+                    label: const Text('上一页'),
+                  );
+            final nextButton = compact
+                ? FilledButton.tonal(
+                    style: compactButtonStyle,
+                    onPressed: canNext ? onNext : null,
+                    child: const Text('下一页'),
+                  )
+                : FilledButton.tonalIcon(
+                    onPressed: canNext ? onNext : null,
+                    icon: const Icon(Icons.chevron_right),
+                    label: const Text('下一页'),
+                  );
+            final hasPageShortcuts = onJumpToPage != null && totalPages > 1;
+            if (compact) {
+              return Row(
+                children: [
+                  if (hasPageShortcuts) ...[
+                    Tooltip(
+                      message: '跳到第一页',
+                      child: SizedBox.square(
+                        dimension: 44,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: canPrevious
+                              ? () => onJumpToPage!(1)
+                              : null,
+                          icon: const Icon(Icons.first_page),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    DropdownButton<int>(
-                      value: pageSize,
-                      underline: const SizedBox.shrink(),
-                      isDense: true,
-                      items: _adminPageSizeOptions
-                          .map(
-                            (v) =>
-                                DropdownMenuItem(value: v, child: Text('$v')),
-                          )
-                          .toList(),
-                      onChanged: loading || onPageSizeChanged == null
-                          ? null
-                          : (v) {
-                              if (v != null) onPageSizeChanged!(v);
-                            },
+                  ],
+                  Expanded(child: previousButton),
+                  const SizedBox(width: 8),
+                  Expanded(child: nextButton),
+                  if (hasPageShortcuts) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: '跳到最后一页',
+                      child: SizedBox.square(
+                        dimension: 44,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: canNext
+                              ? () => onJumpToPage!(totalPages)
+                              : null,
+                          icon: const Icon(Icons.last_page),
+                        ),
+                      ),
                     ),
                   ],
-                );
-          final navigation = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (onJumpToPage != null && totalPages > 1) ...[
-                Tooltip(
-                  message: '跳到第一页',
-                  child: IconButton(
-                    onPressed: canPrevious ? () => onJumpToPage!(1) : null,
-                    icon: const Icon(Icons.first_page),
+                ],
+              );
+            }
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasPageShortcuts) ...[
+                  Tooltip(
+                    message: '跳到第一页',
+                    child: IconButton(
+                      onPressed: canPrevious ? () => onJumpToPage!(1) : null,
+                      icon: const Icon(Icons.first_page),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              Tooltip(
-                message: '上一页',
-                child: OutlinedButton.icon(
-                  onPressed: canPrevious ? onPrevious : null,
-                  icon: const Icon(Icons.chevron_left),
-                  label: const Text('上一页'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: '下一页',
-                child: FilledButton.tonalIcon(
-                  onPressed: canNext ? onNext : null,
-                  icon: const Icon(Icons.chevron_right),
-                  label: const Text('下一页'),
-                ),
-              ),
-              if (onJumpToPage != null && totalPages > 1) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: '跳到最后一页',
-                  child: IconButton(
-                    onPressed: canNext ? () => onJumpToPage!(totalPages) : null,
-                    icon: const Icon(Icons.last_page),
+                  const SizedBox(width: 4),
+                ],
+                Tooltip(message: '上一页', child: previousButton),
+                const SizedBox(width: 8),
+                Tooltip(message: '下一页', child: nextButton),
+                if (hasPageShortcuts) ...[
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: '跳到最后一页',
+                    child: IconButton(
+                      onPressed: canNext
+                          ? () => onJumpToPage!(totalPages)
+                          : null,
+                      icon: const Icon(Icons.last_page),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
-          );
-          final pageJump = !canPickPage
-              ? const SizedBox.shrink()
-              : DropdownButton<int>(
-                  value: currentPage.clamp(1, totalPages).toInt(),
-                  underline: const SizedBox.shrink(),
-                  isDense: true,
-                  items: List.generate(totalPages > 200 ? 200 : totalPages, (
-                    index,
-                  ) {
-                    final pageNo = index + 1;
-                    return DropdownMenuItem(
-                      value: pageNo,
-                      child: Text('$pageNo/$totalPages'),
-                    );
-                  }),
-                  onChanged: loading
-                      ? null
-                      : (value) {
-                          if (value != null) onJumpToPage!(value);
-                        },
-                );
-          if (constraints.maxWidth < 520) {
+            );
+          }
+
+          final isCompact = constraints.maxWidth < 640;
+          if (isCompact) {
+            final controls = [?pageJump, ?pageSizePicker];
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Expanded(child: summary),
-                    pageJump,
-                    if (canPickPage) const SizedBox(width: 8),
-                    pageSizePicker,
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Align(alignment: Alignment.centerRight, child: navigation),
+                summary,
+                if (controls.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    children: controls,
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Tooltip(message: '分页导航', child: navigation(compact: true)),
               ],
             );
           }
           return Row(
             children: [
               Expanded(child: summary),
-              pageJump,
-              if (canPickPage) const SizedBox(width: 12),
-              pageSizePicker,
-              const SizedBox(width: 12),
-              navigation,
+              if (pageJump != null) ...[pageJump, const SizedBox(width: 12)],
+              if (pageSizePicker != null) ...[
+                pageSizePicker,
+                const SizedBox(width: 12),
+              ],
+              navigation(compact: false),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _AdminPaginationLabeledControl extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _AdminPaginationLabeledControl({
+    required this.label,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.68),
+              ),
+            ),
+            const SizedBox(width: 6),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -4287,6 +4397,17 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: () => _openEdit(),
+                icon: const Icon(Icons.add),
+                label: const Text('发布公告'),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
@@ -4501,11 +4622,6 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
             onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEdit(),
-        icon: const Icon(Icons.add),
-        label: const Text('发布'),
       ),
     );
   }
@@ -5409,6 +5525,17 @@ class _InvitesTabState extends State<_InvitesTab> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _generate,
+                icon: const Icon(Icons.add),
+                label: const Text('生成邀请码'),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
@@ -5584,11 +5711,6 @@ class _InvitesTabState extends State<_InvitesTab> {
             onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _generate,
-        icon: const Icon(Icons.add),
-        label: const Text('生成'),
       ),
     );
   }

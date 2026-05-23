@@ -84,7 +84,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 | 推 `v*` tag | `release` | 汇总 APK + AAB + web 打包，自动建 GitHub Release |
 
 #### 需要的仓库 Secrets
-- `DUOYI_KEYSTORE_BASE64` — keystore 文件的 base64，用于正式签名。**不设置时会降级为 debug 签名，依然能跑**。
+- `DUOYI_KEYSTORE_BASE64` — keystore 文件的 base64，用于正式签名。**不设置时发布构建会直接失败，不会降级为 debug 签名**。
 - `DUOYI_KEYSTORE_PASSWORD` / `DUOYI_KEY_ALIAS` / `DUOYI_KEY_PASSWORD`
 
 生成 keystore 并编码：

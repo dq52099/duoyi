@@ -137,7 +137,25 @@ void main() {
     expect(adminScreen, contains('删除公告？'));
     expect(adminScreen, contains('删除反馈？'));
     expect(adminScreen, contains('删除邀请码？'));
+    expect(adminScreen, contains("label: const Text('发布公告')"));
+    expect(adminScreen, contains("label: const Text('生成邀请码')"));
+    expect(adminScreen, isNot(contains('floatingActionButton:')));
+    expect(adminScreen, isNot(contains('FloatingActionButton.extended')));
     expect(adminScreen, contains("'每页'"));
+    expect(adminScreen, contains("label: '每页'"));
+    expect(adminScreen, contains("label: '页码'"));
+    expect(adminScreen, contains('class _AdminPaginationLabeledControl'));
+    expect(adminScreen, contains('constraints.maxWidth < 640'));
+    expect(adminScreen, isNot(contains('constraints.maxWidth < 520')));
+    expect(adminScreen, contains('Wrap('));
+    expect(adminScreen, contains('alignment: WrapAlignment.spaceBetween'));
+    expect(adminScreen, contains('Expanded(child: previousButton)'));
+    expect(adminScreen, contains('Expanded(child: nextButton)'));
+    expect(
+      adminScreen,
+      contains('minimumSize: const WidgetStatePropertyAll(Size(0, 44))'),
+    );
+    expect(adminScreen, contains("message: '分页导航'"));
     expect(adminScreen, contains("message: '跳到第一页'"));
     expect(adminScreen, contains("message: '跳到最后一页'"));
     expect(adminScreen, contains('onJumpToPage'));

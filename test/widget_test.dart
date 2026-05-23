@@ -11,6 +11,8 @@ import 'package:duoyi/providers/cloud_sync_provider.dart';
 import 'package:duoyi/providers/countdown_provider.dart';
 import 'package:duoyi/providers/course_provider.dart';
 import 'package:duoyi/providers/diary_provider.dart';
+import 'package:duoyi/providers/custom_focus_sound_provider.dart';
+import 'package:duoyi/providers/focus_room_provider.dart';
 import 'package:duoyi/providers/goal_provider.dart';
 import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/providers/location_reminder_provider.dart';
@@ -39,6 +41,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => HabitProvider()),
           ChangeNotifierProvider(create: (_) => PomodoroProvider()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => FocusRoomProvider()),
+          ChangeNotifierProvider(create: (_) => CustomFocusSoundProvider()),
           ChangeNotifierProvider(create: (_) => CloudSyncProvider()),
           ChangeNotifierProvider(create: (_) => CalendarProvider()),
           ChangeNotifierProvider(create: (_) => UserProvider()),

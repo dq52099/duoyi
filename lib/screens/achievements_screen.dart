@@ -204,7 +204,7 @@ class _ChallengeCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -270,7 +270,7 @@ class _ChallengeCard extends StatelessWidget {
                 '+${challenge.rewardCoins}',
                 style: TextStyle(
                   color: completed ? color : cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   fontSize: 12,
                 ),
               ),
@@ -403,7 +403,7 @@ class _LevelCoinPanel extends StatelessWidget {
             style: TextStyle(
               color: cs.onPrimary,
               fontSize: 18,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
           Text(
@@ -712,7 +712,7 @@ class _AchievementShareCard extends StatelessWidget {
             '$unlockedCount / $totalCount',
             style: Theme.of(
               context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w500),
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w400),
           ),
           const SizedBox(height: 6),
           ClipRRect(

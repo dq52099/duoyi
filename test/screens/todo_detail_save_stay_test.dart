@@ -127,14 +127,18 @@ void main() {
       await tester.tap(find.text('open-detail'));
       await tester.pumpAndSettle();
 
-      final reminderSwitch = find.widgetWithText(SwitchListTile, '提醒');
-      expect(reminderSwitch, findsOneWidget);
-      await tester.dragUntilVisible(
-        reminderSwitch,
-        find.byType(ListView),
-        const Offset(0, -300),
+      await tester.scrollUntilVisible(
+        find.text('提醒'),
+        400,
+        scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
+
+      final reminderSwitch = find.ancestor(
+        of: find.text('提醒'),
+        matching: find.byType(SwitchListTile),
+      );
+      expect(reminderSwitch, findsOneWidget);
       await tester.tap(reminderSwitch);
       await tester.pumpAndSettle();
 

@@ -759,7 +759,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         '#${index + 1}',
                         style: TextStyle(
                           color: cs.primary,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -2924,7 +2924,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
               title,
               style: pw.TextStyle(
                 fontSize: 27,
-                fontWeight: pw.FontWeight.bold,
+                fontWeight: pw.FontWeight.normal,
                 color: PdfColors.white,
               ),
             ),
@@ -2985,7 +2985,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       children: [
         pw.Text(
           title,
-          style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.normal),
         ),
         pw.SizedBox(height: 7),
         if (items.isEmpty)
@@ -3045,7 +3045,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
               title,
               style: pw.TextStyle(
                 fontSize: 28,
-                fontWeight: pw.FontWeight.bold,
+                fontWeight: pw.FontWeight.normal,
                 color: PdfColors.white,
               ),
             ),
@@ -3060,7 +3060,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       pw.SizedBox(height: 18),
       pw.Text(
         '核心指标',
-        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 8),
       pw.Wrap(
@@ -3096,7 +3096,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
                 '完成事项',
                 style: pw.TextStyle(
                   fontSize: 11,
-                  fontWeight: pw.FontWeight.bold,
+                  fontWeight: pw.FontWeight.normal,
                 ),
               ),
               pw.SizedBox(height: 4),
@@ -3158,7 +3158,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           pw.SizedBox(height: 5),
           pw.Text(
             value,
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.normal),
           ),
         ],
       ),
@@ -3178,7 +3178,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         children: [
           pw.Text(
             title,
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.normal),
           ),
           pw.SizedBox(height: 9),
           ...children,
@@ -3248,7 +3248,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
                   title,
                   style: pw.TextStyle(
                     fontSize: 27,
-                    fontWeight: pw.FontWeight.bold,
+                    fontWeight: pw.FontWeight.normal,
                   ),
                 ),
                 pw.SizedBox(height: 5),
@@ -3281,7 +3281,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       pw.SizedBox(height: 18),
       pw.Text(
         '最近时间记录',
-        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 9),
       if (records.isEmpty)
@@ -3365,7 +3365,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         children: [
           pw.Text(
             title,
-            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.normal),
           ),
           pw.SizedBox(height: 7),
           if (items.isEmpty)
@@ -3407,7 +3407,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     final widgets = <pw.Widget>[
       pw.Text(
         template == _ReportPdfTemplate.visual ? '可检索文字层' : '多仪时光报告',
-        style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 6),
       pw.Text(
@@ -3426,7 +3426,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
             padding: const pw.EdgeInsets.only(top: 4, bottom: 8),
             child: pw.Text(
               line.substring(2),
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.normal),
             ),
           ),
         );
@@ -3436,7 +3436,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
             padding: const pw.EdgeInsets.only(top: 12, bottom: 6),
             child: pw.Text(
               line.substring(3),
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
             ),
           ),
         );
@@ -4184,7 +4184,7 @@ class _ScoreBadge extends StatelessWidget {
         '$score',
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: cs.primary,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -4215,7 +4215,7 @@ class _CrossMetricBadge extends StatelessWidget {
         '$label $value',
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: cs.primary,
         ),
       ),
@@ -4253,7 +4253,7 @@ class _ProjectEfficiencyRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -4263,7 +4263,7 @@ class _ProjectEfficiencyRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   color: cs.primary,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],

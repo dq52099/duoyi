@@ -244,6 +244,21 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final category in const ['feature', 'bug', 'wish'])
+                  ChoiceChip(
+                    label: Text(_categoryLabel(category)),
+                    selected: _category == category,
+                    onSelected: _submitting
+                        ? null
+                        : (_) => setState(() => _category = category),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
             AppSettingsSection(
               title: isLoggedIn
                   ? '${I18n.tr('feedback.submit.prefix')}$screenTitle'

@@ -70,12 +70,24 @@ void main() {
     expect(sheet, contains("import '../screens/habit_detail_screen.dart';"));
     expect(sheet, contains("import '../providers/diary_provider.dart';"));
     expect(sheet, contains('Future<void> _editSourceEvent'));
-    expect(sheet, contains('showAnniversaryEditor(context, item: item)'));
-    expect(sheet, contains('showCountdownEditor(context, item: item)'));
-    expect(sheet, contains('showCourseEditor(context, course: item)'));
-    expect(sheet, contains('showDiaryEditor(context, entry: item)'));
-    expect(sheet, contains('showHabitEditor(context, item)'));
-    expect(sheet, contains('showPomodoroSessionEditor(context, item)'));
+    expect(
+      sheet,
+      contains('showAnniversaryEditor(navigationContext, item: item)'),
+    );
+    expect(
+      sheet,
+      contains('showCountdownEditor(navigationContext, item: item)'),
+    );
+    expect(
+      sheet,
+      contains('showCourseEditor(navigationContext, course: item)'),
+    );
+    expect(sheet, contains('showDiaryEditor(navigationContext, entry: item)'));
+    expect(sheet, contains('showHabitEditor(navigationContext, item)'));
+    expect(
+      sheet,
+      contains('showPomodoroSessionEditor(navigationContext, item)'),
+    );
     expect(sheet, contains('context.read<DiaryProvider>().delete(sourceId)'));
     expect(
       sheet,

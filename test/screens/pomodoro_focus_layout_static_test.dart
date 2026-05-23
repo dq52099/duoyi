@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:duoyi/providers/custom_focus_sound_provider.dart';
+import 'package:duoyi/providers/focus_room_provider.dart';
 import 'package:duoyi/providers/pomodoro_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/screens/pomodoro_screen.dart';
@@ -31,6 +33,8 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => PomodoroProvider()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => FocusRoomProvider()),
+          ChangeNotifierProvider(create: (_) => CustomFocusSoundProvider()),
         ],
         child: const MaterialApp(home: PomodoroScreen()),
       ),

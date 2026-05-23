@@ -1944,6 +1944,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   bool? _lastExactAlarmGranted;
   AchievementProvider? _achievementProvider;
   FocusRoomProvider? _focusRoomProvider;
+  AppUpdateService? _appUpdateService;
   DateTime? _lastUpdatePolicyCheckAt;
 
   @override
@@ -1972,11 +1973,13 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final provider = context.read<AchievementProvider>();
-    if (_achievementProvider == provider) return;
-    _achievementProvider?.removeListener(_showAchievementFeedback);
-    _achievementProvider = provider;
+    if (_achievementProvider != provider) {
+      _achievementProvider?.removeListener(_showAchievementFeedback);
+      _achievementProvider = provider;
+      provider.addListener(_showAchievementFeedback);
+    }
     _focusRoomProvider = context.read<FocusRoomProvider>();
-    provider.addListener(_showAchievementFeedback);
+    _appUpdateService = context.read<AppUpdateService>();
   }
 
   void _showAchievementFeedback() {
@@ -2051,7 +2054,8 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       return;
     }
     _lastUpdatePolicyCheckAt = now;
-    final updater = context.read<AppUpdateService>();
+    final updater = _appUpdateService;
+    if (updater == null) return;
     if (updater.checking) return;
     // ignore: discarded_futures
     updater.checkNow();
@@ -2250,7 +2254,7 @@ class _ForceUpdateGate extends StatelessWidget {
                         '必须更新后才能继续使用',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -2294,7 +2298,7 @@ class _ForceUpdateGate extends StatelessWidget {
                         Text(
                           '更新内容',
                           style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -2409,7 +2413,7 @@ class _ForceUpdateInfoRow extends StatelessWidget {
             child: Text(
               value,
               style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
