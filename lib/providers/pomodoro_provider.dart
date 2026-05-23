@@ -25,6 +25,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _timer;
   List<PomodoroSession> _sessions = [];
   List<PomodoroFocusPenalty> _penalties = [];
+  int _persistedRevision = 0;
   int _sessionCountToday = 0;
   String? _lastDate;
   NotificationService? _notifier;
@@ -51,6 +52,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   PomodoroConfig get config => _config;
   List<PomodoroSession> get sessions => _sessions;
   List<PomodoroFocusPenalty> get penalties => List.unmodifiable(_penalties);
+  int get persistedRevision => _persistedRevision;
   int get sessionCountToday => _sessionCountToday;
   FocusDndStatus get focusDndStatus => _dndStatus;
   bool get focusDndActive => _dndActive;
@@ -82,7 +84,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      _recordStrictFocusPenalty(FocusPenaltyReason.leaveApp);
+      unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.leaveApp));
     }
     if (state == AppLifecycleState.resumed) {
       // 回到前台：若番茄钟正在跑 + 已选择白噪音，但服务静音了，补上。
@@ -129,7 +131,19 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _sessionCountToday = prefs.getInt('pomodoro_count_today') ?? 0;
     _lastDate = prefs.getString('pomodoro_last_date');
     _checkDayReset();
-    _initState();
+    if (_state.isRunning) {
+      _state = _state.copyWith(
+        whiteNoiseSound: _config.whiteNoiseSound,
+        focusRoomId: _config.focusRoomId,
+        clearFocusRoom: _config.focusRoomId == null,
+      );
+      _syncSoundToState();
+      _syncDndToState();
+      _syncDistractionMonitorToState();
+    } else {
+      _initState();
+    }
+    _persistedRevision++;
     notifyListeners();
   }
 
@@ -164,14 +178,20 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<void> _saveMeta() async {
+    final lastDate = _lastDate ??= _todayKey();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('pomodoro_count_today', _sessionCountToday);
-    await prefs.setString('pomodoro_last_date', _lastDate!);
+    await prefs.setString('pomodoro_last_date', lastDate);
   }
 
   Future<void> _saveConfig() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('pomodoro_config', json.encode(_config.toJson()));
+  }
+
+  Future<void> _touchAndSaveConfig() async {
+    _config.touch();
+    await _saveConfig();
   }
 
   Future<void> _saveSessions() async {
@@ -182,11 +202,11 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _savePenalties() async {
+  Future<void> _savePenaltyList(List<PomodoroFocusPenalty> penalties) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'pomodoro_focus_penalties',
-      json.encode(_penalties.map((e) => e.toJson()).toList()),
+      json.encode(penalties.map((e) => e.toJson()).toList()),
     );
   }
 
@@ -205,6 +225,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       TimeAuditProvider.pomodoroDedupeKey(id),
     );
     await _saveSessions();
+    _persistedRevision++;
     notifyListeners();
     return true;
   }
@@ -237,6 +258,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     await _saveSessions();
+    _persistedRevision++;
     notifyListeners();
     return true;
   }
@@ -261,16 +283,30 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void toggleTimer() {
     if (_state.isRunning) {
-      _recordStrictFocusPenalty(FocusPenaltyReason.pause);
+      unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.pause));
       _pauseTimer();
     } else {
       _startTimer();
     }
   }
 
+  void startIfIdle() {
+    if (_state.isRunning) return;
+    _startTimer();
+  }
+
   void _startTimer() {
-    _state = _state.copyWith(isRunning: true);
-    notifyListeners();
+    if (_timer?.isActive ?? false) {
+      if (!_state.isRunning) {
+        _state = _state.copyWith(isRunning: true);
+        notifyListeners();
+      }
+      return;
+    }
+    if (!_state.isRunning) {
+      _state = _state.copyWith(isRunning: true);
+      notifyListeners();
+    }
     _syncSoundToState();
     _syncDndToState();
     _syncDistractionMonitorToState();
@@ -289,8 +325,13 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  void _pauseTimer() {
+  void _cancelTimer() {
     _timer?.cancel();
+    _timer = null;
+  }
+
+  void _pauseTimer() {
+    _cancelTimer();
     _state = _state.copyWith(isRunning: false);
     notifyListeners();
     _syncDndToState();
@@ -325,63 +366,36 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _completeSession() {
-    _timer?.cancel();
-    final durationSeconds = _state.isCountUp
-        ? _state.remainingSeconds.clamp(1, 24 * 60 * 60)
-        : _state.totalSeconds;
+    _cancelTimer();
+    final completedState = _state;
+    final completedType = completedState.type;
+    final durationSeconds = completedState.isCountUp
+        ? completedState.remainingSeconds.clamp(1, 24 * 60 * 60).toInt()
+        : completedState.totalSeconds;
+    final completedAt = DateTime.now();
     final session = PomodoroSession(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      startTime: DateTime.now().subtract(Duration(seconds: durationSeconds)),
-      endTime: DateTime.now(),
+      id: completedAt.microsecondsSinceEpoch.toString(),
+      startTime: completedAt.subtract(Duration(seconds: durationSeconds)),
+      endTime: completedAt,
       durationSeconds: durationSeconds,
-      type: _state.type,
-      taskName: _state.taskName,
-      whiteNoiseSound: _state.whiteNoiseSound,
-      tag: _state.tag,
-      focusRoomId: _state.focusRoomId,
+      type: completedType,
+      taskName: completedState.taskName,
+      whiteNoiseSound: completedState.whiteNoiseSound,
+      tag: completedState.tag,
+      focusRoomId: completedState.focusRoomId,
     );
     _sessions.add(session);
-    _saveSessions();
 
-    if (_state.type == PomodoroType.focus) {
-      DomainEventBus.instance.publish(
-        DomainEvent(
-          type: DomainEventType.pomodoroCompleted,
-          objectId: session.id,
-          metadata: {'durationSeconds': session.durationSeconds},
-        ),
-      );
-      // ignore: discarded_futures
-      _timeAudit?.recordPomodoroSession(
-        sessionId: session.id,
-        title: session.taskName?.isNotEmpty == true
-            ? session.taskName!
-            : '番茄专注',
-        startAt: session.startTime,
-        endAt: session.endTime,
-        note: session.whiteNoiseSound == 'none'
-            ? ''
-            : '白噪音：${session.whiteNoiseSound}',
-      );
-    }
-
-    // Fire desktop notification
-    if (_state.type == PomodoroType.focus) {
-      _notifier?.notifyPomodoroComplete(taskName: _state.taskName);
-    } else {
-      _notifier?.notifyBreakComplete();
-    }
-
-    int newCount = _state.completedSessions;
-    if (_state.type == PomodoroType.focus) {
+    int newCount = completedState.completedSessions;
+    final shouldSaveMeta = completedType == PomodoroType.focus;
+    if (completedType == PomodoroType.focus) {
       newCount++;
       _sessionCountToday++;
-      _saveMeta();
     }
 
     PomodoroType nextType;
     int nextDuration;
-    if (_state.type == PomodoroType.focus) {
+    if (completedType == PomodoroType.focus) {
       if (newCount % _config.sessionsPerLongBreak == 0) {
         nextType = PomodoroType.longBreak;
         nextDuration = _config.longBreakDuration;
@@ -393,9 +407,12 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       nextType = PomodoroType.focus;
       nextDuration = _config.focusDuration;
     }
+    final shouldAutoStartNext = completedType == PomodoroType.focus
+        ? _config.autoStartBreaks
+        : _config.autoStartFocus;
 
-    if (_state.isCountUp) {
-      _state = _state.copyWith(
+    if (completedState.isCountUp) {
+      _state = completedState.copyWith(
         remainingSeconds: 0,
         totalSeconds: 0,
         isRunning: false,
@@ -404,10 +421,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         completedSessions: newCount,
       );
     } else {
-      _state = _state.copyWith(
+      _state = completedState.copyWith(
         remainingSeconds: nextDuration,
         totalSeconds: nextDuration,
-        isRunning: _config.autoStartBreaks || _config.autoStartFocus,
+        isRunning: shouldAutoStartNext,
         type: nextType,
         completedSessions: newCount,
       );
@@ -423,11 +440,63 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       _syncDistractionMonitorToState();
     }
     notifyListeners();
+    unawaited(
+      _persistCompletedSession(
+        session: session,
+        completedState: completedState,
+        completedType: completedType,
+        saveMeta: shouldSaveMeta,
+      ),
+    );
+  }
+
+  Future<void> _persistCompletedSession({
+    required PomodoroSession session,
+    required PomodoroState completedState,
+    required PomodoroType completedType,
+    required bool saveMeta,
+  }) async {
+    await _saveSessions();
+
+    if (completedType == PomodoroType.focus) {
+      await _timeAudit?.recordPomodoroSession(
+        sessionId: session.id,
+        title: session.taskName?.isNotEmpty == true
+            ? session.taskName!
+            : '番茄专注',
+        startAt: session.startTime,
+        endAt: session.endTime,
+        note: session.whiteNoiseSound == 'none'
+            ? ''
+            : '白噪音：${session.whiteNoiseSound}',
+      );
+      DomainEventBus.instance.publish(
+        DomainEvent(
+          type: DomainEventType.pomodoroCompleted,
+          objectId: session.id,
+          metadata: {'durationSeconds': session.durationSeconds},
+        ),
+      );
+    }
+
+    // Fire desktop notification
+    if (completedType == PomodoroType.focus) {
+      _notifier?.notifyPomodoroComplete(taskName: completedState.taskName);
+    } else {
+      _notifier?.notifyBreakComplete();
+    }
+
+    if (saveMeta) {
+      await _saveMeta();
+    }
+
+    _persistedRevision++;
+    notifyListeners();
   }
 
   void skipSession() {
-    _timer?.cancel();
-    _recordStrictFocusPenalty(FocusPenaltyReason.skip);
+    _cancelTimer();
+    unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.skip));
     if (_state.type == PomodoroType.focus) {
       _state = _state.copyWith(
         remainingSeconds: _config.shortBreakDuration,
@@ -451,8 +520,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void resetTimer() {
-    _timer?.cancel();
-    _recordStrictFocusPenalty(FocusPenaltyReason.reset);
+    _cancelTimer();
+    unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.reset));
     _state = _state.copyWith(
       remainingSeconds: _state.isCountUp ? 0 : _config.focusDuration,
       totalSeconds: _state.isCountUp ? 0 : _config.focusDuration,
@@ -477,7 +546,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void setCountUpMode(bool enabled) {
     if (_state.isRunning) return;
-    _timer?.cancel();
+    _cancelTimer();
     _state = _state.copyWith(
       remainingSeconds: enabled ? 0 : _config.focusDuration,
       totalSeconds: enabled ? 0 : _config.focusDuration,
@@ -496,7 +565,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> setConfig(PomodoroConfig cfg) async {
     _config = cfg;
-    await _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     if (!_state.isRunning) {
       _state = _state.copyWith(
         remainingSeconds: _state.isCountUp ? 0 : cfg.focusDuration,
@@ -513,7 +583,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setAutoEnableDnd(bool enabled) async {
     if (_config.autoEnableDnd == enabled) return;
     _config.autoEnableDnd = enabled;
-    await _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     if (enabled) {
       await refreshFocusDndStatus();
     } else {
@@ -526,7 +597,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setStrictFocusMode(bool enabled) async {
     if (_config.strictFocusMode == enabled) return;
     _config.strictFocusMode = enabled;
-    await _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     notifyListeners();
     _syncDistractionMonitorToState();
   }
@@ -620,14 +692,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void setFocusRoomId(String? roomId) {
+  Future<void> setFocusRoomId(String? roomId) async {
     final clean = roomId?.trim();
     _config.focusRoomId = clean?.isEmpty == true ? null : clean;
     _state = _state.copyWith(
       focusRoomId: _config.focusRoomId,
       clearFocusRoom: _config.focusRoomId == null,
     );
-    _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     notifyListeners();
   }
 
@@ -644,17 +717,18 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     return _distraction.openAccessibilitySettings();
   }
 
-  void setMonitorDistractingApps(bool enabled) {
+  Future<void> setMonitorDistractingApps(bool enabled) async {
     if (_config.monitorDistractingApps == enabled) return;
     _config.monitorDistractingApps = enabled;
-    _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     notifyListeners();
     // ignore: discarded_futures
     refreshFocusDistractionStatus();
     _syncDistractionMonitorToState();
   }
 
-  void setDistractingAppPackages(List<String> packages) {
+  Future<void> setDistractingAppPackages(List<String> packages) async {
     final normalized =
         packages
             .map((p) => p.trim())
@@ -662,28 +736,37 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
             .toSet()
             .toList()
           ..sort();
+    if (_config.distractingAppPackages.length == normalized.length &&
+        _config.distractingAppPackages.every(normalized.contains)) {
+      return;
+    }
     _config.distractingAppPackages = normalized;
-    _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     notifyListeners();
     _syncDistractionMonitorToState();
   }
 
-  void setWhiteNoiseSound(String sound) {
+  Future<void> setWhiteNoiseSound(String sound) async {
+    if (_config.whiteNoiseSound == sound && _state.whiteNoiseSound == sound) {
+      return;
+    }
     _state = _state.copyWith(whiteNoiseSound: sound);
     _config.whiteNoiseSound = sound;
-    _saveConfig();
+    await _touchAndSaveConfig();
+    _persistedRevision++;
     notifyListeners();
     _syncSoundToState();
   }
 
   void recordFocusLeaveAppPenalty() {
-    _recordStrictFocusPenalty(FocusPenaltyReason.leaveApp);
+    unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.leaveApp));
   }
 
-  void _recordStrictFocusPenalty(
+  Future<void> _recordStrictFocusPenalty(
     FocusPenaltyReason reason, {
     String? appPackage,
-  }) {
+  }) async {
     if (!_config.strictFocusMode ||
         !_state.isRunning ||
         _state.type != PomodoroType.focus) {
@@ -708,8 +791,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       focusRoomId: _state.focusRoomId,
       appPackage: appPackage,
     );
-    _penalties = [penalty, ..._penalties].take(100).toList();
-    _savePenalties();
+    final nextPenalties = [penalty, ..._penalties].take(100).toList();
+    await _savePenaltyList(nextPenalties);
+    _penalties = nextPenalties;
+    _persistedRevision++;
     notifyListeners();
   }
 
@@ -762,9 +847,11 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (_lastDistractingPackage == packageName) return;
     _lastDistractingPackage = packageName;
-    _recordStrictFocusPenalty(
-      FocusPenaltyReason.distractingApp,
-      appPackage: packageName,
+    unawaited(
+      _recordStrictFocusPenalty(
+        FocusPenaltyReason.distractingApp,
+        appPackage: packageName,
+      ),
     );
   }
 
@@ -803,7 +890,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _cancelTimer();
     if (_lifecycleAttached) {
       WidgetsBinding.instance.removeObserver(this);
       _lifecycleAttached = false;

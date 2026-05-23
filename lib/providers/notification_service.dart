@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
 import '../core/brand_strings.dart';
@@ -9,7 +8,6 @@ import '../core/notification_history_policy.dart';
 import '../models/location_reminder.dart';
 import '../providers/location_reminder_provider.dart';
 import '../services/desktop_notification.dart';
-import '../services/alarm_service.dart';
 import '../services/local_notifications.dart';
 import '../services/reminder_sinks.dart';
 
@@ -51,7 +49,7 @@ class NotificationItem {
 
 enum NotificationType { todo, habit, pomodoro, anniversary, general, location }
 
-/// NotificationService —— 推送通道（`duoyi_general_alerts_v7`，`Importance.max`）。
+/// NotificationService —— 推送通道（`duoyi_general_alerts_v9`，`Importance.high`）。
 ///
 /// 本服务**只**处理「系统通知」语义的发送：番茄钟结束、休息结束、纪念日提醒、
 /// 成就解锁等轻提示；对应设计文档 §2.4 的 push 通道（R4.1 / R4.2）。
@@ -61,7 +59,7 @@ enum NotificationType { todo, habit, pomodoro, anniversary, general, location }
 /// 按 `ReminderConfig.kind` 分发到本服务或 `AlarmService`（Task 14）。
 ///
 /// 设计目的是在模型上把「消息」与「闹钟」两条路径彻底分离：
-///   * `duoyi_general_alerts_v7` → 普通提醒，发声、震动并尽量弹出横幅；
+///   * `duoyi_general_alerts_v9` → 普通提醒，柔和提示音、震动并尽量弹出横幅；
 ///   * `duoyi_alarm_fullscreen_v6` → 强提醒，全屏 intent、震动序列、`Importance.max`。
 ///
 /// 所以本文件中普通提醒对 `LocalNotifications` 的调用都固定使用 [channelId]；
@@ -73,14 +71,16 @@ class NotificationService extends ChangeNotifier
   /// 本服务使用的唯一通道 id。
   ///
   /// Android 通知渠道创建后，声音/重要性由系统固定，后续代码修改不会覆盖
-  /// 用户手机上的旧渠道。v7 使用明确的响铃资源和最高优先级，并强制新建渠道。
-  static const String channelId = 'duoyi_general_alerts_v7';
+  /// 用户手机上的旧渠道。v9 更新默认轻铃提示音，并清理旧渠道。
+  static const String channelId = 'duoyi_general_alerts_v9';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_general_alerts_v2',
     'duoyi_general_alerts_v3',
     'duoyi_general_alerts_v4',
     'duoyi_general_alerts_v5',
     'duoyi_general_alerts_v6',
+    'duoyi_general_alerts_v7',
+    'duoyi_general_alerts_v8',
   };
 
   Timer? _pomodoroNotificationTimer;
@@ -596,24 +596,23 @@ class NotificationService extends ChangeNotifier
     notifyListeners();
   }
 
-  /// 发送一条测试提醒。
+  /// 发送一条普通测试通知。
   ///
-  /// 偏好设置里的测试必须验证用户最关心的"响铃/弹屏"链路，因此这里优先
-  /// 走强提醒通道，而不是只发一条可能被系统收进通知栏的普通通知。
+  /// 偏好设置里的默认测试只验证普通通知渠道是否可见、可响铃；强提醒闹钟
+  /// 必须由用户在提醒规则中明确选择，避免误触后突然全屏响铃。
   Future<void> sendTest() async {
-    await SystemSound.play(SystemSoundType.alert);
-    await HapticFeedback.vibrate();
-    await AlarmService.instance.showFullScreenTest(
+    await LocalNotifications.instance.show(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
-      title: '多仪 · 响铃弹屏测试',
-      body: '如果这条仍然没有声音或弹屏，请打开系统通知设置，确认“强提醒”渠道允许声音、振动和弹窗。',
+      title: '多仪 · 通知测试',
+      body: '这是一条普通提醒测试。如果没有声音，请检查“通知提醒”渠道声音设置。',
+      channelId: channelId,
       payload: 'duoyi://tab/mine',
     );
     _addToHistory(
       NotificationItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: '测试通知',
-        body: '已发送响铃弹屏测试。',
+        body: '已发送普通通知测试。',
         scheduledTime: DateTime.now(),
         type: NotificationType.general,
       ),
@@ -626,11 +625,12 @@ class NotificationService extends ChangeNotifier
     Duration delay = const Duration(minutes: 1),
   }) async {
     final when = DateTime.now().add(delay);
-    await AlarmService.instance.scheduleFullScreen(
+    await LocalNotifications.instance.scheduleOnce(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
-      title: '多仪 · 定时测试',
-      body: '如果到点有声音、震动和弹屏，定时强提醒调度正常。',
+      title: '多仪 · 定时通知测试',
+      body: '如果到点能收到普通提醒，定时通知调度正常。',
       when: when,
+      channelId: channelId,
       payload: 'duoyi://tab/mine',
     );
     _pendingNotifications++;
@@ -639,7 +639,7 @@ class NotificationService extends ChangeNotifier
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: '定时测试通知',
         body:
-            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发',
+            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发普通通知',
         scheduledTime: when,
         type: NotificationType.general,
       ),

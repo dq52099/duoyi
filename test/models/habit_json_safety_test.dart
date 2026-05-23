@@ -111,6 +111,33 @@ void main() {
     expect(restored.streakUnitLabel, '月');
   });
 
+  test('completionUpdatedAt round trips through JSON', () {
+    final updatedAt = DateTime.utc(2026, 5, 20, 0, 2);
+    final tombstoneAt = DateTime.utc(2026, 5, 20, 0, 3);
+    final habit = Habit(
+      id: 'habit-completion-updated-at',
+      name: '阅读',
+      completions: {'2026-05-20': 1},
+      completionUpdatedAt: {
+        '2026-05-20': updatedAt,
+        '2026-05-21': tombstoneAt,
+      },
+    );
+
+    final json = habit.toJson();
+    final restored = Habit.fromJson(json);
+
+    expect(json['completionUpdatedAt'], {
+      '2026-05-20': '2026-05-20T00:02:00.000Z',
+      '2026-05-21': '2026-05-20T00:03:00.000Z',
+    });
+    expect(restored.completions, {'2026-05-20': 1});
+    expect(restored.completionUpdatedAt, {
+      '2026-05-20': updatedAt,
+      '2026-05-21': tombstoneAt,
+    });
+  });
+
   test('date range round trips and gates active progress', () {
     final habit = Habit(
       id: 'range',

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:duoyi/providers/auth_provider.dart';
 import 'package:duoyi/screens/admin_screen.dart';
@@ -11,6 +12,30 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  test(
+    'Admin large-data tabs keep stable refresh state and ignore stale loads',
+    () {
+      final source = File('lib/screens/admin_screen.dart').readAsStringSync();
+
+      expect(source, contains('class _AdminInlineLoadingIndicator'));
+      expect(source, contains("label: '正在更新当前页'"));
+      expect(source, contains("label: '正在更新反馈列表'"));
+      expect(source, contains('final loadSerial = ++_loadSerial;'));
+      expect(
+        RegExp(r'int _loadSerial = 0;').allMatches(source).length,
+        greaterThanOrEqualTo(5),
+      );
+      expect(
+        source,
+        contains('if (!mounted || loadSerial != _loadSerial) return;'),
+      );
+      expect(
+        source,
+        contains('if (mounted && loadSerial == _loadSerial) setState'),
+      );
+    },
+  );
+
   testWidgets('Admin feedback tab lists feedback and paginates', (
     tester,
   ) async {
@@ -31,6 +56,9 @@ void main() {
                 {
                   'id': 7,
                   'username': 'tester',
+                  'email': 'tester@example.com',
+                  'email_verified': true,
+                  'display_name': '测试同学',
                   'category': 'bug',
                   'content': offset == 0 ? '通知没有声音' : '第二页反馈',
                   'status': 'open',
@@ -40,6 +68,9 @@ void main() {
                   {
                     'id': 8,
                     'username': 'tester',
+                    'email': 'tester@example.com',
+                    'email_verified': false,
+                    'display_name': '',
                     'category': 'feature',
                     'content': '希望支持批量处理',
                     'status': 'in_progress',
@@ -77,9 +108,15 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    expect(find.textContaining('测试同学', skipOffstage: false), findsOneWidget);
+    expect(find.textContaining('@tester', skipOffstage: false), findsWidgets);
     expect(
-      find.textContaining('tester', skipOffstage: false),
-      findsNWidgets(2),
+      find.textContaining('tester@example.com (已验证)', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('tester@example.com (未验证)', skipOffstage: false),
+      findsOneWidget,
     );
     expect(find.textContaining('问题反馈', skipOffstage: false), findsWidgets);
     expect(find.textContaining('通知没有声音', skipOffstage: false), findsOneWidget);
@@ -126,6 +163,9 @@ void main() {
                 {
                   'id': 7,
                   'username': 'tester',
+                  'email': 'tester@example.com',
+                  'email_verified': true,
+                  'display_name': '测试同学',
                   'category': 'bug',
                   'content': '通知没有声音',
                   'status': 'open',
@@ -134,6 +174,9 @@ void main() {
                 {
                   'id': 8,
                   'username': 'tester',
+                  'email': 'tester@example.com',
+                  'email_verified': true,
+                  'display_name': '测试同学',
                   'category': 'feature',
                   'content': '希望支持批量处理',
                   'status': 'in_progress',

@@ -84,9 +84,9 @@ class NotificationHealthCard extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.notifications_active_outlined,
             color: cs.primary,
-            title: '立即响铃弹屏测试',
+            title: '立即发送测试通知',
             subtitle: lastTestAt == null
-                ? '直接验证强提醒声音、震动和弹屏'
+                ? '验证普通通知渠道是否可见、可响铃'
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
           ),

@@ -357,13 +357,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesNotifyTestPermissionDenied =>
-      'Notification permission is disabled, so the ringing test cannot be sent';
+      'Notification permission is disabled, so the test notification cannot be sent';
 
   @override
-  String get preferencesNotifyTestFailed => 'Ringing test failed: ';
+  String get preferencesNotifyTestFailed => 'Test notification failed: ';
 
   @override
-  String get preferencesNotifyTestSent => 'Ringing full-screen test sent';
+  String get preferencesNotifyTestSent => 'Test notification sent';
 
   @override
   String get preferencesNotifyPendingCleared =>

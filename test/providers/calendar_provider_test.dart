@@ -186,4 +186,29 @@ void main() {
       [CalendarEventType.goal, CalendarEventType.event],
     );
   });
+
+  test(
+    'CalendarProvider bumps sourceRevision only for changed external events',
+    () {
+      final provider = CalendarProvider();
+      final event = CalendarEvent(
+        id: 'external-stable',
+        title: '订阅日程',
+        date: DateTime(2026, 5, 20),
+        type: CalendarEventType.event,
+        color: Colors.orange,
+      );
+
+      expect(provider.sourceRevision, 0);
+
+      provider.setExternalEvents([event]);
+      expect(provider.sourceRevision, 1);
+
+      provider.setExternalEvents([event]);
+      expect(provider.sourceRevision, 1);
+
+      provider.setExternalEvents([event.copyWith(title: '订阅日程更新')]);
+      expect(provider.sourceRevision, 2);
+    },
+  );
 }

@@ -148,8 +148,8 @@ class ReminderScheduler {
 
   /// 按最新的 [habits] 幂等地重新同步习惯提醒。
   ///
-  /// 习惯提醒默认走强提醒通道：Android 会使用 full-screen intent 唤起应用，
-  /// payload 进入确认打卡弹窗；若精准闹钟权限不足则降级为普通通知。
+  /// 习惯提醒默认走普通通知通道，payload 进入确认打卡弹窗。强提醒只保留
+  /// 给用户在提醒规则里明确选择的 `alarm` 场景，避免默认响铃/弹屏吓人。
   Future<void> syncHabits(Iterable<Habit> habits) async {
     final wanted = <String, Habit>{};
     for (final h in habits) {
@@ -166,20 +166,6 @@ class ReminderScheduler {
       // 1..7(周一=1..周日=7)
       final weekdays = h.activeWeekdays.map((w) => w + 1).toList();
       try {
-        await alarm.scheduleDailyFullScreen(
-          id: _idFor('habit_${h.id}'),
-          title: '⏰ 习惯打卡',
-          body: '${h.name} 到时间了，点开确认打卡',
-          hour: h.remindHour!,
-          minute: h.remindMinute!,
-          weekdays: weekdays.isEmpty ? null : weekdays,
-          payload: 'duoyi://habit/${h.id}?confirm=1',
-          fullScreen: true,
-        );
-      } on AlarmPermissionDeniedException catch (e) {
-        debugPrint(
-          '[ReminderScheduler] habit alarm permission denied for ${h.id}: $e',
-        );
         await notif.scheduleHabitReminder(
           habitId: h.id,
           habitName: h.name,
@@ -193,14 +179,7 @@ class ReminderScheduler {
         );
       } catch (e, st) {
         debugPrint(
-          '[ReminderScheduler] habit alarm dispatch failed for ${h.id}: $e\n$st',
-        );
-        await notif.scheduleHabitReminder(
-          habitId: h.id,
-          habitName: h.name,
-          hour: h.remindHour!,
-          minute: h.remindMinute!,
-          weekdays: weekdays.isEmpty ? null : weekdays,
+          '[ReminderScheduler] habit notification dispatch failed for ${h.id}: $e\n$st',
         );
       }
     }

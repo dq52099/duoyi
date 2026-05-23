@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../core/app_version.dart';
 import '../core/app_config.dart';
 import '../core/i18n_date_format.dart';
 import '../providers/auth_provider.dart';
@@ -438,6 +439,19 @@ class _GridCards extends StatelessWidget {
 
 const int _adminPageSize = 20;
 const List<int> _adminPageSizeOptions = [20, 50, 100];
+const String _adminAllPermission = '*';
+const String _adminNoPermission = '__none__';
+const Map<String, String> _adminPermissionLabels = {
+  'settings': '全站设置',
+  'users': '用户',
+  'coins': '时光币',
+  'backup': '备份',
+  'ai': 'AI',
+  'announcements': '公告',
+  'feedback': '反馈',
+  'invites': '邀请码',
+  'audit': '日志',
+};
 
 String _adminStatusLabel(String value) {
   switch (value) {
@@ -503,6 +517,38 @@ String _adminUserSortLabel(String value) {
     default:
       return '最新注册优先';
   }
+}
+
+List<String> _adminUserPermissions(dynamic raw, {required bool isAdmin}) {
+  if (raw is List) {
+    final values = raw.map((e) => e.toString()).where((e) => e.isNotEmpty);
+    final normalized = <String>[];
+    for (final value in values) {
+      if (value == _adminNoPermission) return const [];
+      if (value == _adminAllPermission) return const [_adminAllPermission];
+      if (_adminPermissionLabels.containsKey(value) &&
+          !normalized.contains(value)) {
+        normalized.add(value);
+      }
+    }
+    if (normalized.isNotEmpty) return normalized;
+  }
+  return isAdmin ? const [_adminAllPermission] : const [];
+}
+
+String _adminPermissionsLabel(
+  List<String> permissions, {
+  required bool isAdmin,
+}) {
+  if (!isAdmin) return '无管理权限';
+  if (permissions.contains(_adminAllPermission)) return '全部权限';
+  if (permissions.isEmpty) return '无管理权限';
+  return permissions.map((key) => _adminPermissionLabels[key] ?? key).join('、');
+}
+
+int _adminIntValue(dynamic raw) {
+  if (raw is num) return raw.toInt();
+  return int.tryParse(raw?.toString() ?? '') ?? 0;
 }
 
 String _adminAnnouncementSortLabel(String value) {
@@ -735,6 +781,47 @@ class _AdminErrorState extends StatelessWidget {
   }
 }
 
+class _AdminInlineLoadingIndicator extends StatelessWidget {
+  final bool visible;
+  final String label;
+
+  const _AdminInlineLoadingIndicator({
+    required this.visible,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      child: visible
+          ? Padding(
+              key: ValueKey(label),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      backgroundColor: cs.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox(key: ValueKey('idle'), height: 0),
+    );
+  }
+}
+
 class _AdminPaginationBar extends StatelessWidget {
   final Key? barKey;
   final AdminPage? page;
@@ -937,9 +1024,13 @@ class _SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<_SettingsTab> {
   Map<String, dynamic> _data = {};
   bool _loading = true;
-  bool _saving = false;
+  final Set<String> _savingKeys = <String>{};
   String? _error;
   final _msgCtrl = TextEditingController();
+  final _latestVersionCtrl = TextEditingController();
+  final _minimumVersionCtrl = TextEditingController();
+  final _updateNotesCtrl = TextEditingController();
+  final _downloadUrlCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -950,6 +1041,10 @@ class _SettingsTabState extends State<_SettingsTab> {
   @override
   void dispose() {
     _msgCtrl.dispose();
+    _latestVersionCtrl.dispose();
+    _minimumVersionCtrl.dispose();
+    _updateNotesCtrl.dispose();
+    _downloadUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -959,9 +1054,17 @@ class _SettingsTabState extends State<_SettingsTab> {
       _error = null;
     });
     try {
-      _data = await widget.api.getSettings();
+      final data = await widget.api.getSettings();
+      if (!mounted) return;
+      _data = data;
       _msgCtrl.text = (_data['maintenance_message'] ?? '').toString();
+      _latestVersionCtrl.text = (_data['latest_version'] ?? '').toString();
+      _minimumVersionCtrl.text = (_data['minimum_supported_version'] ?? '')
+          .toString();
+      _updateNotesCtrl.text = (_data['update_notes'] ?? '').toString();
+      _downloadUrlCtrl.text = (_data['update_download_url'] ?? '').toString();
     } catch (e) {
+      if (!mounted) return;
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -969,7 +1072,11 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Future<void> _set(String key, dynamic value) async {
-    setState(() => _saving = true);
+    if (key == 'force_update_required') {
+      await _saveForceUpdateRequired(value == true);
+      return;
+    }
+    setState(() => _savingKeys.add(key));
     try {
       await widget.api.updateSettings(
         inviteCodeRequired: key == 'invite_code_required' ? value : null,
@@ -979,6 +1086,13 @@ class _SettingsTabState extends State<_SettingsTab> {
             : null,
         maintenanceMode: key == 'maintenance_mode' ? value : null,
         maintenanceMessage: key == 'maintenance_message' ? value : null,
+        forceUpdateRequired: key == 'force_update_required' ? value : null,
+        latestVersion: key == 'latest_version' ? value : null,
+        minimumSupportedVersion: key == 'minimum_supported_version'
+            ? value
+            : null,
+        updateNotes: key == 'update_notes' ? value : null,
+        updateDownloadUrl: key == 'update_download_url' ? value : null,
       );
       _data[key] = value;
     } on ApiException catch (e) {
@@ -988,8 +1102,167 @@ class _SettingsTabState extends State<_SettingsTab> {
         ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _savingKeys.remove(key));
     }
+  }
+
+  bool _saving(String key) => _savingKeys.contains(key);
+
+  bool get _savingUpdateConfig => _savingKeys.any(
+    const {
+      'latest_version',
+      'minimum_supported_version',
+      'update_download_url',
+      'update_notes',
+      'force_update_required',
+    }.contains,
+  );
+
+  void _showSettingsSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _saveUpdateConfig() async {
+    final latestVersion = _latestVersionCtrl.text.trim();
+    final minimumSupportedVersion = _minimumVersionCtrl.text.trim();
+    final updateDownloadUrl = _downloadUrlCtrl.text.trim();
+    final updateNotes = _updateNotesCtrl.text.trim();
+    final forceUpdateRequired = _data['force_update_required'] == true;
+    final message = _validateUpdatePolicy(
+      forceUpdateRequired: forceUpdateRequired,
+      latestVersion: latestVersion,
+      minimumSupportedVersion: minimumSupportedVersion,
+      updateDownloadUrl: updateDownloadUrl,
+      updateNotes: updateNotes,
+    );
+    if (message != null) {
+      _showSettingsSnack(message);
+      return;
+    }
+
+    const keys = {
+      'latest_version',
+      'minimum_supported_version',
+      'update_download_url',
+      'update_notes',
+    };
+    setState(() => _savingKeys.addAll(keys));
+    try {
+      await widget.api.updateSettings(
+        latestVersion: latestVersion,
+        minimumSupportedVersion: minimumSupportedVersion,
+        updateDownloadUrl: updateDownloadUrl,
+        updateNotes: updateNotes,
+      );
+      _data['latest_version'] = latestVersion;
+      _data['minimum_supported_version'] = minimumSupportedVersion;
+      _data['update_download_url'] = updateDownloadUrl;
+      _data['update_notes'] = updateNotes;
+      _showSettingsSnack('更新配置已保存');
+    } on ApiException catch (e) {
+      _showSettingsSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _savingKeys.removeAll(keys));
+    }
+  }
+
+  Future<void> _saveForceUpdateRequired(bool value) async {
+    final latestVersion = _latestVersionCtrl.text.trim();
+    final minimumSupportedVersion = _minimumVersionCtrl.text.trim();
+    final updateDownloadUrl = _downloadUrlCtrl.text.trim();
+    final updateNotes = _updateNotesCtrl.text.trim();
+    final message = _validateUpdatePolicy(
+      forceUpdateRequired: value,
+      latestVersion: latestVersion,
+      minimumSupportedVersion: minimumSupportedVersion,
+      updateDownloadUrl: updateDownloadUrl,
+      updateNotes: updateNotes,
+    );
+    if (message != null) {
+      _showSettingsSnack(message);
+      return;
+    }
+
+    const keys = {
+      'force_update_required',
+      'latest_version',
+      'minimum_supported_version',
+      'update_download_url',
+      'update_notes',
+    };
+    setState(() => _savingKeys.addAll(keys));
+    try {
+      await widget.api.updateSettings(
+        forceUpdateRequired: value,
+        latestVersion: latestVersion,
+        minimumSupportedVersion: minimumSupportedVersion,
+        updateDownloadUrl: updateDownloadUrl,
+        updateNotes: updateNotes,
+      );
+      _data['force_update_required'] = value;
+      _data['latest_version'] = latestVersion;
+      _data['minimum_supported_version'] = minimumSupportedVersion;
+      _data['update_download_url'] = updateDownloadUrl;
+      _data['update_notes'] = updateNotes;
+    } on ApiException catch (e) {
+      _showSettingsSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _savingKeys.removeAll(keys));
+    }
+  }
+
+  String? _validateUpdatePolicy({
+    required bool forceUpdateRequired,
+    required String latestVersion,
+    required String minimumSupportedVersion,
+    required String updateDownloadUrl,
+    required String updateNotes,
+  }) {
+    final hasAnyUpdatePolicy =
+        latestVersion.isNotEmpty ||
+        minimumSupportedVersion.isNotEmpty ||
+        updateDownloadUrl.isNotEmpty ||
+        forceUpdateRequired;
+    final hasNewerLatest =
+        latestVersion.isNotEmpty &&
+        _compareAppVersions(latestVersion, AppVersion.name) > 0;
+    final blocksCurrent =
+        minimumSupportedVersion.isNotEmpty &&
+        _compareAppVersions(AppVersion.name, minimumSupportedVersion) < 0;
+    if (hasAnyUpdatePolicy && updateNotes.trim().isEmpty) {
+      return '发布新版本或设置最低支持版本时，必须填写更新内容。';
+    }
+    if (forceUpdateRequired && !hasNewerLatest && !blocksCurrent) {
+      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或填写高于当前版本的最低支持版本。';
+    }
+    return null;
+  }
+
+  int _compareAppVersions(String a, String b) {
+    final pa = _versionParts(a);
+    final pb = _versionParts(b);
+    for (var i = 0; i < 3; i++) {
+      final ai = i < pa.length ? pa[i] : 0;
+      final bi = i < pb.length ? pb[i] : 0;
+      if (ai != bi) return ai.compareTo(bi);
+    }
+    return 0;
+  }
+
+  List<int> _versionParts(String value) {
+    return value
+        .trim()
+        .replaceFirst(RegExp(r'^v'), '')
+        .split('-')
+        .first
+        .split('+')
+        .first
+        .split('.')
+        .map((part) => int.tryParse(part) ?? 0)
+        .toList(growable: false);
   }
 
   @override
@@ -1011,7 +1284,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               value: _data['registration_enabled'] == true,
               title: '允许注册',
               subtitle: '关闭后新用户无法注册，现有用户仍可登录',
-              onChanged: _saving
+              onChanged: _saving('registration_enabled')
                   ? null
                   : (v) => _set('registration_enabled', v),
             ),
@@ -1021,7 +1294,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               value: _data['invite_code_required'] == true,
               title: '注册需要邀请码',
               subtitle: '只有带邀请码才能注册',
-              onChanged: _saving
+              onChanged: _saving('invite_code_required')
                   ? null
                   : (v) => _set('invite_code_required', v),
             ),
@@ -1031,7 +1304,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               value: _data['registration_email_required'] == true,
               title: '注册需要邮箱验证',
               subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
-              onChanged: _saving
+              onChanged: _saving('registration_email_required')
                   ? null
                   : (v) => _set('registration_email_required', v),
             ),
@@ -1048,7 +1321,9 @@ class _SettingsTabState extends State<_SettingsTab> {
               value: _data['maintenance_mode'] == true,
               title: '启用维护模式',
               subtitle: '开启后 /api/sync 拒绝服务；客户端登录页会提示',
-              onChanged: _saving ? null : (v) => _set('maintenance_mode', v),
+              onChanged: _saving('maintenance_mode')
+                  ? null
+                  : (v) => _set('maintenance_mode', v),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -1060,6 +1335,83 @@ class _SettingsTabState extends State<_SettingsTab> {
               ),
               onEditingComplete: () =>
                   _set('maintenance_message', _msgCtrl.text.trim()),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        AppSettingsSection(
+          title: '应用更新',
+          subtitle: '通过 /api/config 下发版本、更新内容与强制更新策略',
+          children: [
+            AppSwitchTile(
+              icon: Icons.system_update_alt_outlined,
+              color: Colors.red,
+              value: _data['force_update_required'] == true,
+              title: '强制更新',
+              subtitle: '开启前必须配置可生效的新版本或最低支持版本',
+              onChanged: _saving('force_update_required')
+                  ? null
+                  : (v) => _set('force_update_required', v),
+            ),
+            const SizedBox(height: 10),
+            AppInfoBanner(
+              icon: Icons.info_outline,
+              title: '当前客户端版本 ${AppVersion.name}',
+              message:
+                  '普通更新会在“检查更新”和底部“我的”入口显示红点；强制更新会锁定客户端，直到用户安装新版本。发布新版本时必须填写更新内容。',
+              color: Theme.of(context).colorScheme.primary,
+              margin: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _latestVersionCtrl,
+              decoration: const InputDecoration(
+                labelText: '最新版本',
+                hintText: '例如 1.2.0',
+                prefixIcon: Icon(Icons.new_releases_outlined),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _minimumVersionCtrl,
+              decoration: const InputDecoration(
+                labelText: '最低支持版本',
+                hintText: '低于该版本时视为需要强制更新',
+                prefixIcon: Icon(Icons.priority_high_outlined),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _downloadUrlCtrl,
+              decoration: const InputDecoration(
+                labelText: '下载地址',
+                hintText: 'APK 或发布页 URL',
+                prefixIcon: Icon(Icons.link_outlined),
+              ),
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _updateNotesCtrl,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: '更新内容',
+                hintText: '展示给用户的更新说明',
+                prefixIcon: Icon(Icons.notes_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _savingUpdateConfig ? null : _saveUpdateConfig,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('保存更新配置'),
+              ),
             ),
           ],
         ),
@@ -1122,6 +1474,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     });
     try {
       final data = await widget.api.getSettings();
+      if (!mounted) return;
       _enabled = data['ai_enabled'] == true;
       _baseCtrl.text = (data['ai_base_url'] ?? '').toString();
       _keyCtrl.text = (data['ai_api_key'] ?? '').toString();
@@ -1130,6 +1483,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       _quotaCtrl.text = (((data['ai_daily_quota'] as num?) ?? 0).toInt())
           .toString();
     } catch (e) {
+      if (!mounted) return;
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -1175,16 +1529,19 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     });
     try {
       final res = await widget.api.testAi();
+      if (!mounted) return;
       setState(() {
         _testResult = '✅ 模型 ${res['model']} 可达，回复: ${res['sample']}';
         _testColor = Colors.green;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _testResult = '❌ ${e.message}';
         _testColor = Colors.red;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _testResult = '❌ $e';
         _testColor = Colors.red;
@@ -1496,6 +1853,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     });
     try {
       final data = await widget.api.getSettings();
+      if (!mounted) return;
       _backupEnabled = data['backup_enabled'] != false;
       _maxSizeCtrl.text =
           (((data['backup_max_size_kb'] as num?) ?? 2048).toInt()).toString();
@@ -1591,6 +1949,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         limit: nextBackupPageSize,
         offset: nextBackupOffset,
       );
+      if (!mounted) return;
       final serverBackupPage = await widget.api.listServerBackupsPage(
         query: nextServerBackupQuery.isEmpty ? null : nextServerBackupQuery,
         status: nextServerBackupStatus.isEmpty ? null : nextServerBackupStatus,
@@ -1598,11 +1957,13 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         limit: nextServerBackupPageSize,
         offset: nextServerBackupOffset,
       );
+      if (!mounted) return;
       _backupPage = backupPage;
       _serverBackupPage = serverBackupPage;
       _backups = backupPage.items;
       _serverBackups = serverBackupPage.items;
     } catch (e) {
+      if (!mounted) return;
       _error = _adminErrorMessage(e, '备份配置与备份记录');
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -2766,6 +3127,7 @@ class _UsersTabState extends State<_UsersTab> {
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
+  int _loadSerial = 0;
   final Set<String> _selectedUserIds = <String>{};
   Timer? _onlineRefreshTimer;
   final _searchCtrl = TextEditingController();
@@ -2795,6 +3157,7 @@ class _UsersTabState extends State<_UsersTab> {
     int? offset,
     bool quiet = false,
   }) async {
+    final loadSerial = ++_loadSerial;
     final nextQuery = query ?? _query;
     final nextStatus = status ?? _status;
     final nextSort = sort ?? _sort;
@@ -2820,7 +3183,7 @@ class _UsersTabState extends State<_UsersTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _users = page.items;
@@ -2830,11 +3193,14 @@ class _UsersTabState extends State<_UsersTab> {
         _error = null;
       });
     } catch (e) {
+      if (!mounted || loadSerial != _loadSerial) return;
       if (!quiet) {
-        _error = _adminErrorMessage(e, '用户列表');
+        setState(() => _error = _adminErrorMessage(e, '用户列表'));
       }
     } finally {
-      if (mounted && !quiet) setState(() => _loading = false);
+      if (mounted && !quiet && loadSerial == _loadSerial) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -3033,6 +3399,189 @@ class _UsersTabState extends State<_UsersTab> {
           context,
         ).showSnackBar(const SnackBar(content: Text('密码已重置，该用户需重新登录')));
       }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  Future<void> _editAdminPermissions(Map<String, dynamic> u) async {
+    final userId = u['user_id'].toString();
+    final username = u['username'].toString();
+    final isAdmin = u['is_admin'] == true;
+    if (!isAdmin) {
+      final ok = await _confirmAdminDangerAction(
+        context: context,
+        title: '授予管理员身份？',
+        message: '设置管理权限前需要先将“$username”设为管理员。',
+        confirmLabel: '授予',
+      );
+      if (!ok) return;
+      if (!mounted) return;
+    }
+    var selected = _adminUserPermissions(
+      u['admin_permissions'],
+      isAdmin: isAdmin,
+    ).toSet();
+    if (selected.contains(_adminAllPermission)) {
+      selected = _adminPermissionLabels.keys.toSet();
+    }
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text('设置 $username 的管理权限'),
+          icon: const Icon(Icons.admin_panel_settings_outlined),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.length == _adminPermissionLabels.length,
+                    title: const Text('全部权限'),
+                    onChanged: (value) => setSt(() {
+                      selected = value == true
+                          ? _adminPermissionLabels.keys.toSet()
+                          : <String>{};
+                    }),
+                  ),
+                  const Divider(height: 12),
+                  for (final entry in _adminPermissionLabels.entries)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      value: selected.contains(entry.key),
+                      title: Text(entry.value),
+                      onChanged: (value) => setSt(() {
+                        if (value == true) {
+                          selected.add(entry.key);
+                        } else {
+                          selected.remove(entry.key);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存权限'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final permissions = selected.isEmpty
+        ? const [_adminNoPermission]
+        : (selected.length == _adminPermissionLabels.length
+              ? const [_adminAllPermission]
+              : selected.toList());
+    try {
+      if (!isAdmin) {
+        await widget.api.updateUser(userId, isAdmin: true);
+      }
+      await widget.api.setUserAdminPermissions(
+        userId,
+        permissions: permissions,
+      );
+      await _load(quiet: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('管理权限已更新')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  Future<void> _adjustCoins(Map<String, dynamic> u) async {
+    final deltaCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    final username = u['username'].toString();
+    final balance = _adminIntValue(u['coin_balance']);
+    final lifetime = _adminIntValue(u['lifetime_coins']);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: Text('调整 $username 的时光币'),
+        icon: const Icon(Icons.toll_outlined),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('当前 $balance · 累计 $lifetime'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: deltaCtrl,
+              decoration: const InputDecoration(
+                labelText: '调整数量',
+                helperText: '正数增加，负数扣减',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(signed: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(labelText: '原因 (可选)'),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('提交调整'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final delta = int.tryParse(deltaCtrl.text.trim()) ?? 0;
+    if (delta == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('调整数量不能为 0')));
+      }
+      return;
+    }
+    try {
+      await widget.api.adjustUserCoins(
+        u['user_id'].toString(),
+        delta: delta,
+        reason: reasonCtrl.text,
+      );
+      await _load(quiet: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('时光币已调整')));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -3283,6 +3832,10 @@ class _UsersTabState extends State<_UsersTab> {
                   ),
                 ),
               ],
+              _AdminInlineLoadingIndicator(
+                visible: _loading && _page != null,
+                label: '正在更新当前页',
+              ),
             ],
           ),
         ),
@@ -3330,6 +3883,16 @@ class _UsersTabState extends State<_UsersTab> {
                   final disabled = u['is_disabled'] == true;
                   final admin = u['is_admin'] == true;
                   final online = u['online'] == true;
+                  final permissions = _adminUserPermissions(
+                    u['admin_permissions'],
+                    isAdmin: admin,
+                  );
+                  final permissionsText = _adminPermissionsLabel(
+                    permissions,
+                    isAdmin: admin,
+                  );
+                  final coinBalance = _adminIntValue(u['coin_balance']);
+                  final lifetimeCoins = _adminIntValue(u['lifetime_coins']);
                   final selected = _selectedUserIds.contains(userId);
                   final registeredAt = _formatServerTime(u['created_at']);
                   final lastLoginAt = _formatLastLogin(u['last_login_at']);
@@ -3343,6 +3906,8 @@ class _UsersTabState extends State<_UsersTab> {
                       '邮箱: $email${emailVerified ? ' (已验证)' : ' (未验证)'}'
                     else
                       '未绑定邮箱',
+                    '权限: $permissionsText',
+                    '时光币: $coinBalance / 累计 $lifetimeCoins',
                     '排序: ${_adminUserSortLabel(_sort)}',
                   ];
                   return AppListTileCard(
@@ -3403,6 +3968,13 @@ class _UsersTabState extends State<_UsersTab> {
                             label: '管理员',
                             color: Colors.deepOrange,
                           ),
+                          if (!permissions.contains(_adminAllPermission)) ...[
+                            const SizedBox(width: 6),
+                            const AppStatusBadge(
+                              label: '细分权限',
+                              color: Colors.indigo,
+                            ),
+                          ],
                         ],
                         if (disabled) ...[
                           const SizedBox(width: 6),
@@ -3421,6 +3993,12 @@ class _UsersTabState extends State<_UsersTab> {
                         switch (action) {
                           case 'admin':
                             await _toggleAdmin(u);
+                            break;
+                          case 'permissions':
+                            await _editAdminPermissions(u);
+                            break;
+                          case 'coins':
+                            await _adjustCoins(u);
                             break;
                           case 'disable':
                             await _toggleDisable(u);
@@ -3448,6 +4026,14 @@ class _UsersTabState extends State<_UsersTab> {
                         PopupMenuItem(
                           value: 'admin',
                           child: Text(admin ? '撤销管理员权限' : '授予管理员权限'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'permissions',
+                          child: Text('设置管理权限'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'coins',
+                          child: Text('调整时光币'),
                         ),
                         PopupMenuItem(
                           value: 'disable',
@@ -3525,6 +4111,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
+  int _loadSerial = 0;
   final _searchCtrl = TextEditingController();
 
   @override
@@ -3547,6 +4134,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     String? sort,
     int? pageSize,
   }) async {
+    final loadSerial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextQuery = query ?? _query;
     final nextStatus = status ?? _status;
@@ -3572,17 +4160,18 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _items = page.items;
       });
     } catch (e) {
+      if (!mounted || loadSerial != _loadSerial) return;
       if (mounted) {
         setState(() => _error = _adminErrorMessage(e, '公告列表'));
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
   void _applySearch() {
@@ -3756,6 +4345,10 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
               onChanged: (value) =>
                   _load(sort: value ?? 'created_desc', offset: 0),
             ),
+          ),
+          _AdminInlineLoadingIndicator(
+            visible: _loading && _page != null,
+            label: '正在更新公告列表',
           ),
           if (loadingFirstPage)
             const Expanded(
@@ -3965,6 +4558,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
+  int _loadSerial = 0;
   final _searchCtrl = TextEditingController();
 
   @override
@@ -3985,6 +4579,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     String? sort,
     int? pageSize,
   }) async {
+    final loadSerial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextQuery = query ?? _query;
     final nextSort = sort ?? _sort;
@@ -4006,17 +4601,18 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _items = page.items;
       });
     } catch (e) {
+      if (!mounted || loadSerial != _loadSerial) return;
       if (mounted) {
         setState(() => _error = _adminErrorMessage(e, '反馈列表'));
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
   void _applySearch() {
@@ -4277,6 +4873,10 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                   _load(sort: value ?? 'created_desc', offset: 0),
             ),
           ),
+          _AdminInlineLoadingIndicator(
+            visible: _loading && _page != null,
+            label: '正在更新反馈列表',
+          ),
           if (!loadingFirstPage && _error == null && _items.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -4418,6 +5018,20 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                     final f = _items[i];
                     final status = (f['status'] ?? 'open').toString();
                     final category = (f['category'] ?? '').toString();
+                    final username = (f['username'] ?? '').toString();
+                    final displayName = (f['display_name'] ?? '').toString();
+                    final email = (f['email'] ?? '').toString();
+                    final emailVerified = f['email_verified'] == true;
+                    final feedbackUserLabel = displayName.trim().isNotEmpty
+                        ? displayName.trim()
+                        : username;
+                    final feedbackIdentity = [
+                      if (username.trim().isNotEmpty &&
+                          username.trim() != feedbackUserLabel)
+                        '@${username.trim()}',
+                      if (email.trim().isNotEmpty)
+                        '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
+                    ].join(' · ');
                     final statusColor = switch (status) {
                       'resolved' => Colors.green,
                       'closed' => Colors.grey,
@@ -4426,13 +5040,17 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                     };
                     final reply = (f['admin_reply'] ?? '').toString();
                     final createdAt = (f['created_at'] ?? '').toString();
+                    final metaLine = [
+                      if (createdAt.isNotEmpty) createdAt,
+                      if (feedbackIdentity.isNotEmpty) feedbackIdentity,
+                    ].join(' · ');
                     return AppListTileCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       title: Row(
                         children: [
                           Expanded(
                             child: Text(
-                              '${f['username']} · ${_feedbackCategoryLabel(category)}',
+                              '$feedbackUserLabel · ${_feedbackCategoryLabel(category)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyMedium?.copyWith(
@@ -4451,11 +5069,11 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (createdAt.isNotEmpty)
+                          if (metaLine.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
-                                createdAt,
+                                metaLine,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.52),
                                 ),
@@ -4523,7 +5141,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                               final confirmed = await _confirmAdminDangerAction(
                                 context: context,
                                 title: '删除反馈？',
-                                message: '将删除 ${f['username']} 的这条反馈，删除后无法恢复。',
+                                message:
+                                    '将删除 $feedbackUserLabel 的这条反馈，删除后无法恢复。',
                               );
                               if (!confirmed) return;
                               try {
@@ -4624,6 +5243,7 @@ class _InvitesTabState extends State<_InvitesTab> {
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
+  int _loadSerial = 0;
   final _searchCtrl = TextEditingController();
 
   @override
@@ -4645,6 +5265,7 @@ class _InvitesTabState extends State<_InvitesTab> {
     String? sort,
     int? pageSize,
   }) async {
+    final loadSerial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextStatus = status ?? _status;
     final nextQuery = query ?? _query;
@@ -4667,17 +5288,18 @@ class _InvitesTabState extends State<_InvitesTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _codes = page.items;
       });
     } catch (e) {
+      if (!mounted || loadSerial != _loadSerial) return;
       if (mounted) {
         setState(() => _error = _adminErrorMessage(e, '邀请码列表'));
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
   void _applySearch() {
@@ -4833,6 +5455,10 @@ class _InvitesTabState extends State<_InvitesTab> {
               onChanged: (value) =>
                   _load(sort: value ?? 'created_desc', offset: 0),
             ),
+          ),
+          _AdminInlineLoadingIndicator(
+            visible: _loading && _page != null,
+            label: '正在更新邀请码列表',
           ),
           if (loadingFirstPage)
             const Expanded(
@@ -5001,6 +5627,7 @@ class _AuditLogTabState extends State<_AuditLogTab> {
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
+  int _loadSerial = 0;
   final _searchCtrl = TextEditingController();
 
   @override
@@ -5022,6 +5649,7 @@ class _AuditLogTabState extends State<_AuditLogTab> {
     String? sort,
     int? pageSize,
   }) async {
+    final loadSerial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextAction = action ?? _action;
     final nextQuery = query ?? _query;
@@ -5044,17 +5672,18 @@ class _AuditLogTabState extends State<_AuditLogTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _items = page.items;
       });
     } catch (e) {
+      if (!mounted || loadSerial != _loadSerial) return;
       if (mounted) {
         setState(() => _error = _adminErrorMessage(e, '审计日志'));
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
   void _applySearch() {
@@ -5125,6 +5754,10 @@ class _AuditLogTabState extends State<_AuditLogTab> {
             onChanged: (value) =>
                 _load(sort: value ?? 'created_desc', offset: 0),
           ),
+        ),
+        _AdminInlineLoadingIndicator(
+          visible: _loading && _page != null,
+          label: '正在更新审计日志',
         ),
         if (loadingFirstPage)
           const Expanded(

@@ -66,6 +66,7 @@ class AchievementProvider extends ChangeNotifier {
   DateTime? _lastEventAt;
   int _coinBalance = 0;
   int _lifetimeCoins = 0;
+  int _persistedRevision = 0;
 
   AchievementProvider({AchievementEngine? engine, DomainEventBus? bus})
     : _engine = engine ?? AchievementEngine(),
@@ -81,6 +82,7 @@ class AchievementProvider extends ChangeNotifier {
   DateTime? get lastEventAt => _lastEventAt;
   int get coinBalance => _coinBalance;
   int get lifetimeCoins => _lifetimeCoins;
+  int get persistedRevision => _persistedRevision;
   GrowthLevel get growthLevel => GrowthLevels.fromLifetimeCoins(_lifetimeCoins);
   List<RewardLedgerEntry> get rewardLedger =>
       List<RewardLedgerEntry>.unmodifiable(_rewardLedger);
@@ -120,6 +122,7 @@ class AchievementProvider extends ChangeNotifier {
       _rewardLedger.removeRange(50, _rewardLedger.length);
     }
     await _saveRewards();
+    _persistedRevision++;
     notifyListeners();
     return true;
   }
@@ -160,14 +163,15 @@ class AchievementProvider extends ChangeNotifier {
     _eventSub ??= _bus.events.listen((event) {
       _lastEventAt = event.occurredAt;
       final grant = VirtualRewardRules.forEvent(event);
+      var rewardsChanged = false;
       if (grant != null) {
-        _award(grant, awardedAt: event.occurredAt, notify: false);
+        rewardsChanged = _award(grant, awardedAt: event.occurredAt);
       }
-      _rebuildSnapshots();
+      _rebuildSnapshots(rewardsChanged: rewardsChanged);
     });
   }
 
-  void _rebuildSnapshots({bool notify = true}) {
+  void _rebuildSnapshots({bool notify = true, bool rewardsChanged = false}) {
     final context = _context;
     if (context == null) {
       _snapshots = [
@@ -211,47 +215,82 @@ class AchievementProvider extends ChangeNotifier {
           ),
         )
         .toList(growable: false);
-    _awardCompletedChallenges(context);
+    var shouldSaveRewards = rewardsChanged;
+    shouldSaveRewards |= _awardCompletedChallenges(context);
 
     if (newlyUnlocked.isNotEmpty) {
       _pendingUnlockedFeedback.addAll(newlyUnlocked);
       for (final achievement in newlyUnlocked) {
-        _award(
+        shouldSaveRewards |= _award(
           VirtualRewardRules.forAchievement(
             id: achievement.id,
             title: achievement.title,
             description: achievement.description,
           ),
           awardedAt: _unlockedAt[achievement.id] ?? DateTime.now(),
-          notify: false,
         );
       }
-      // ignore: discarded_futures
-      _save();
-      for (final achievement in newlyUnlocked) {
-        _notificationService?.notifyAchievementUnlocked(achievement);
-      }
     }
+
+    if (newlyUnlocked.isNotEmpty || shouldSaveRewards) {
+      unawaited(
+        _persistChangesThenNotify(
+          saveAchievements: newlyUnlocked.isNotEmpty,
+          saveRewards: shouldSaveRewards,
+          notify: notify,
+          achievementsToNotify: newlyUnlocked,
+        ),
+      );
+      return;
+    }
+
     if (notify) notifyListeners();
   }
 
-  void _awardCompletedChallenges(AchievementContext context) {
-    for (final challenge in ProductivityChallenges.build(context)) {
-      if (!challenge.completed) continue;
-      _award(
-        ProductivityChallenges.rewardGrant(challenge),
-        awardedAt: DateTime.now(),
-        notify: false,
-      );
+  Future<void> _persistChangesThenNotify({
+    required bool saveAchievements,
+    required bool saveRewards,
+    required bool notify,
+    required List<Achievement> achievementsToNotify,
+  }) async {
+    if (saveAchievements) {
+      await _save();
+    }
+    if (saveRewards) {
+      await _saveRewards();
+    }
+    if (saveAchievements || saveRewards) {
+      _persistedRevision++;
+    }
+    if (achievementsToNotify.isNotEmpty) {
+      for (final achievement in achievementsToNotify) {
+        _notificationService?.notifyAchievementUnlocked(achievement);
+      }
+    }
+    if (notify) {
+      notifyListeners();
     }
   }
 
-  void _award(
+  bool _awardCompletedChallenges(AchievementContext context) {
+    var changed = false;
+    for (final challenge in ProductivityChallenges.build(context)) {
+      if (!challenge.completed) continue;
+      changed |= _award(
+        ProductivityChallenges.rewardGrant(challenge),
+        awardedAt: DateTime.now(),
+      );
+    }
+    return changed;
+  }
+
+  bool _award(
     RewardGrant grant, {
     required DateTime awardedAt,
-    bool notify = true,
   }) {
-    if (grant.coins <= 0 || _rewardGrantIds.contains(grant.id)) return;
+    if (grant.coins <= 0 || _rewardGrantIds.contains(grant.id)) {
+      return false;
+    }
     _rewardGrantIds.add(grant.id);
     _coinBalance += grant.coins;
     _lifetimeCoins += grant.coins;
@@ -268,9 +307,7 @@ class AchievementProvider extends ChangeNotifier {
     if (_rewardLedger.length > 50) {
       _rewardLedger.removeRange(50, _rewardLedger.length);
     }
-    // ignore: discarded_futures
-    _saveRewards();
-    if (notify) notifyListeners();
+    return true;
   }
 
   void _loadRewardsFromPrefs(SharedPreferences prefs) {
@@ -321,6 +358,7 @@ class AchievementProvider extends ChangeNotifier {
         'lifetime': _lifetimeCoins,
         'grantIds': _rewardGrantIds.toList(growable: false),
         'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
+        'updatedAt': DateTime.now().toIso8601String(),
       }),
     );
   }

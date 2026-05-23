@@ -229,13 +229,17 @@ class MainActivity : FlutterActivity() {
                         ReminderRingtoneScheduler.cancelAll(this)
                         result.success(null)
                     }
+                    "stopActive" -> {
+                        ReminderRingtoneScheduler.stopActiveRingtone(this)
+                        result.success(null)
+                    }
                     "setVolumePercent" -> {
-                        val volume = call.argument<Int>("volumePercent") ?: 80
+                        val volume = call.argument<Int>("volumePercent") ?: 60
                         ReminderRingtoneService.setVolumePercent(this, volume)
                         result.success(null)
                     }
                     "setSoundName" -> {
-                        val soundName = call.argument<String>("soundName") ?: "alarm"
+                        val soundName = call.argument<String>("soundName") ?: "chime"
                         ReminderRingtoneService.setSoundName(this, soundName)
                         result.success(null)
                     }
@@ -420,7 +424,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopReminderRingtoneIfRequested(intent: Intent?) {
-        if (intent?.getBooleanExtra(ReminderRingtoneService.extraStopRingtone, false) == true) {
+        val explicitStop = intent?.getBooleanExtra(ReminderRingtoneService.extraStopRingtone, false) == true
+        val opensDuoyiReminderTarget = duoyiDeepLinkFrom(intent) != null
+        if (explicitStop || opensDuoyiReminderTarget) {
             stopReminderRingtone()
         }
     }

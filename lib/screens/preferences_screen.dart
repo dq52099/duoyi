@@ -16,7 +16,7 @@ import '../widgets/app_time_picker.dart';
 import '../widgets/notification_health_card.dart';
 import '../widgets/surface_components.dart';
 
-enum PreferencesInitialSection { notifications }
+enum PreferencesInitialSection { bottomNav, notifications }
 
 /// 偏好设置页。纯本地的用户习惯，与服务器/管理员配置无关。
 class PreferencesScreen extends StatefulWidget {
@@ -30,7 +30,9 @@ class PreferencesScreen extends StatefulWidget {
 
 class _PreferencesScreenState extends State<PreferencesScreen> {
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _bottomNavSectionKey = GlobalKey();
   final GlobalKey _notificationSectionKey = GlobalKey();
+  int _initialSectionScrollAttempts = 0;
 
   static const _dateFormats = [
     ['yyyy-MM-dd', '2026-05-07'],
@@ -58,7 +60,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialSection == PreferencesInitialSection.notifications) {
+    if (widget.initialSection != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToInitialSection();
       });
@@ -69,7 +71,8 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   void didUpdateWidget(covariant PreferencesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialSection != widget.initialSection &&
-        widget.initialSection == PreferencesInitialSection.notifications) {
+        widget.initialSection != null) {
+      _initialSectionScrollAttempts = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToInitialSection();
       });
@@ -83,8 +86,24 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   }
 
   void _scrollToInitialSection() {
-    final target = _notificationSectionKey.currentContext;
-    if (target == null) return;
+    if (!mounted) return;
+    if (widget.initialSection == null) return;
+    final target = switch (widget.initialSection) {
+      PreferencesInitialSection.bottomNav =>
+        _bottomNavSectionKey.currentContext,
+      PreferencesInitialSection.notifications =>
+        _notificationSectionKey.currentContext,
+      null => null,
+    };
+    if (target == null) {
+      if (_initialSectionScrollAttempts >= 2) return;
+      _initialSectionScrollAttempts++;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToInitialSection();
+      });
+      return;
+    }
+    _initialSectionScrollAttempts = 0;
     Scrollable.ensureVisible(
       target,
       duration: const Duration(milliseconds: 260),
@@ -310,21 +329,24 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          AppSettingsSection(
-            title: I18n.tr('preferences.section.bottom_nav'),
-            subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
-            children: [
-              for (final tab in p.bottomNavOrder)
-                _NavConfigTile(
-                  tab: tab,
-                  label: _tabLabel(tab),
-                  visible: p.bottomNavVisible.contains(tab),
-                  canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
-                  canMoveDown:
-                      p.bottomNavOrder.indexOf(tab) <
-                      p.bottomNavOrder.length - 1,
-                ),
-            ],
+          KeyedSubtree(
+            key: _bottomNavSectionKey,
+            child: AppSettingsSection(
+              title: I18n.tr('preferences.section.bottom_nav'),
+              subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
+              children: [
+                for (final tab in p.bottomNavOrder)
+                  _NavConfigTile(
+                    tab: tab,
+                    label: _tabLabel(tab),
+                    visible: p.bottomNavVisible.contains(tab),
+                    canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
+                    canMoveDown:
+                        p.bottomNavOrder.indexOf(tab) <
+                        p.bottomNavOrder.length - 1,
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           AppSettingsSection(

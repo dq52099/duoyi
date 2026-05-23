@@ -24,10 +24,12 @@ class CalendarProvider extends ChangeNotifier {
   final List<CalendarEvent> _localEvents = [];
   List<CalendarEvent> _externalEvents = const <CalendarEvent>[];
   Object? _lastRebuildSignature;
+  int _sourceRevision = 0;
   VoidCallback? onLocalEventsChanged;
 
   List<CalendarEvent> get events => _events;
   List<CalendarEvent> get localEvents => List.unmodifiable(_localEvents);
+  int get sourceRevision => _sourceRevision;
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -43,6 +45,7 @@ class CalendarProvider extends ChangeNotifier {
             .where((event) => event.type == CalendarEventType.event),
       );
     _lastRebuildSignature = null;
+    _sourceRevision++;
     notifyListeners();
   }
 
@@ -97,6 +100,7 @@ class CalendarProvider extends ChangeNotifier {
         .toList(growable: false);
     await prefs.setStringList(_localEventsKey, data);
     _lastRebuildSignature = null;
+    _sourceRevision++;
     onLocalEventsChanged?.call();
     _notifyListenersSafely();
   }
@@ -116,8 +120,12 @@ class CalendarProvider extends ChangeNotifier {
   /// 设置外部订阅事件（来自 ICS 订阅）。会触发下次 rebuild 时合并。
   // ignore: use_setters_to_change_properties
   void setExternalEvents(List<CalendarEvent> events) {
-    _externalEvents = List<CalendarEvent>.unmodifiable(events);
+    final next = List<CalendarEvent>.unmodifiable(events);
+    if (_eventsEqual(_externalEvents, next)) return;
+    _externalEvents = next;
     _lastRebuildSignature = null;
+    _sourceRevision++;
+    _notifyListenersSafely();
   }
 
   /// 重建所有事件索引。

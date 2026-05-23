@@ -48,6 +48,23 @@ void main() {
     },
   );
 
+  test('PomodoroConfig clamps corrupted stored durations on restore', () {
+    final restored = PomodoroConfig.fromJson(<String, dynamic>{
+      'focusDuration': 0,
+      'shortBreakDuration': '1',
+      'longBreakDuration': 999999999,
+      'sessionsPerLongBreak': 0,
+    });
+
+    expect(restored.focusDuration, PomodoroConfig.defaultFocusDuration);
+    expect(
+      restored.shortBreakDuration,
+      PomodoroConfig.defaultShortBreakDuration,
+    );
+    expect(restored.longBreakDuration, PomodoroConfig.defaultLongBreakDuration);
+    expect(restored.sessionsPerLongBreak, 4);
+  });
+
   test('PomodoroSession persists focus room attribution', () {
     final session = PomodoroSession(
       id: 'session-1',

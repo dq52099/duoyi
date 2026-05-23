@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.gradle.api.GradleException
 
 plugins {
     id("com.android.application")
@@ -59,7 +60,16 @@ android {
     buildTypes {
         release {
             val sc = signingConfigs.getByName("release")
-            signingConfig = if (sc.storeFile != null) sc else signingConfigs.getByName("debug")
+            val releaseTaskRequested = gradle.startParameter.taskNames.any {
+                it.contains("release", ignoreCase = true)
+            }
+            if (sc.storeFile != null) {
+                signingConfig = sc
+            } else if (releaseTaskRequested) {
+                throw GradleException(
+                    "Release signing is not configured. Set android/key.properties or DUOYI_KEYSTORE_* env vars; refusing to build a release APK with debug signing."
+                )
+            }
             isMinifyEnabled = false
             isShrinkResources = false
         }

@@ -41,4 +41,31 @@ void main() {
     expect(source, contains('scrollDirection: Axis.horizontal'));
     expect(source, contains('width: 340'));
   });
+
+  test('日历聚合不在 build 同步执行', () {
+    final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+    final buildStart = source.indexOf('Widget build(BuildContext context)');
+    final projectOptionsStart = source.indexOf(
+      'List<_CalendarProjectOption> _projectOptions',
+      buildStart,
+    );
+    expect(buildStart, greaterThanOrEqualTo(0));
+    expect(projectOptionsStart, greaterThan(buildStart));
+    final buildBody = source.substring(buildStart, projectOptionsStart);
+
+    expect(source, contains('void _scheduleCalendarRebuild({'));
+    expect(source, contains('Object? _lastCalendarInputSignature;'));
+    expect(source, contains('Object _calendarInputSignature({'));
+    expect(source, contains('calendarProvider.sourceRevision'));
+    expect(
+      source,
+      contains('if (_lastCalendarInputSignature == signature) return;'),
+    );
+    expect(source, contains('WidgetsBinding.instance.addPostFrameCallback'));
+    expect(source, contains('if (!mounted) return;'));
+    expect(buildBody, contains('_scheduleCalendarRebuild('));
+    expect(buildBody, contains('todoProvider: todoProvider'));
+    expect(buildBody, contains('timeAuditProvider: timeAuditProvider'));
+    expect(buildBody, isNot(contains('calendarProvider.rebuild(')));
+  });
 }

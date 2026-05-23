@@ -52,11 +52,6 @@ class FocusSoundCatalog {
       asset: 'sounds/white_noise/waves.mp3',
     ),
     FocusSoundTrack(
-      id: 'brown_noise',
-      label: '低频暖流',
-      asset: 'sounds/white_noise/brown_noise.mp3',
-    ),
-    FocusSoundTrack(
       id: 'night_rain',
       label: '静夜细雨',
       asset: 'sounds/white_noise/night_rain.mp3',
@@ -65,11 +60,6 @@ class FocusSoundCatalog {
       id: 'fan',
       label: '桌面风扇',
       asset: 'sounds/white_noise/fan.mp3',
-    ),
-    FocusSoundTrack(
-      id: 'pink_noise',
-      label: '柔和静流',
-      asset: 'sounds/white_noise/pink_noise.mp3',
     ),
     FocusSoundTrack(
       id: 'deep_stream',
@@ -115,11 +105,6 @@ class FocusSoundCatalog {
       id: 'crickets',
       label: '夏夜虫鸣',
       asset: 'sounds/white_noise/crickets.mp3',
-    ),
-    FocusSoundTrack(
-      id: 'white_stream',
-      label: '白色静流',
-      asset: 'sounds/white_noise/white_stream.mp3',
     ),
     FocusSoundTrack(
       id: 'clock',
@@ -199,21 +184,11 @@ class FocusSoundCatalog {
     FocusSoundOption(id: 'cafe', label: '午后咖啡馆', trackIds: <String>['cafe']),
     FocusSoundOption(id: 'waves', label: '海浪拍岸', trackIds: <String>['waves']),
     FocusSoundOption(
-      id: 'brown_noise',
-      label: '低频暖流',
-      trackIds: <String>['brown_noise'],
-    ),
-    FocusSoundOption(
       id: 'night_rain',
       label: '静夜细雨',
       trackIds: <String>['night_rain'],
     ),
     FocusSoundOption(id: 'fan', label: '桌面风扇', trackIds: <String>['fan']),
-    FocusSoundOption(
-      id: 'pink_noise',
-      label: '柔和静流',
-      trackIds: <String>['pink_noise'],
-    ),
     FocusSoundOption(
       id: 'deep_stream',
       label: '低频溪流',
@@ -250,11 +225,6 @@ class FocusSoundCatalog {
       id: 'crickets',
       label: '夏夜虫鸣',
       trackIds: <String>['crickets'],
-    ),
-    FocusSoundOption(
-      id: 'white_stream',
-      label: '白色静流',
-      trackIds: <String>['white_stream'],
     ),
     FocusSoundOption(id: 'clock', label: '机械钟摆', trackIds: <String>['clock']),
     FocusSoundOption(
@@ -316,10 +286,8 @@ class FocusSoundCatalog {
     'forest': 'sounds/white_noise/forest.mp3',
     'cafe': 'sounds/white_noise/cafe.mp3',
     'waves': 'sounds/white_noise/waves.mp3',
-    'brown_noise': 'sounds/white_noise/brown_noise.mp3',
     'night_rain': 'sounds/white_noise/night_rain.mp3',
     'fan': 'sounds/white_noise/fan.mp3',
-    'pink_noise': 'sounds/white_noise/pink_noise.mp3',
     'deep_stream': 'sounds/white_noise/deep_stream.mp3',
     'thunderstorm': 'sounds/white_noise/thunderstorm.mp3',
     'storm_rain': 'sounds/white_noise/storm_rain.mp3',
@@ -329,7 +297,6 @@ class FocusSoundCatalog {
     'brook': 'sounds/white_noise/brook.mp3',
     'river': 'sounds/white_noise/river.mp3',
     'crickets': 'sounds/white_noise/crickets.mp3',
-    'white_stream': 'sounds/white_noise/white_stream.mp3',
     'clock': 'sounds/white_noise/clock.mp3',
     'keyboard': 'sounds/white_noise/keyboard.mp3',
     'wind': 'sounds/white_noise/wind.mp3',

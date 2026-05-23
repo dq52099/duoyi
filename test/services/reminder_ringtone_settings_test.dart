@@ -44,6 +44,12 @@ void main() {
       ReminderRingtoneSettings.sounds.map((sound) => sound.id),
       containsAll(<String>['alarm', 'chime', 'bell', 'beep', 'classic']),
     );
+    expect(
+      ReminderRingtoneSettings.sounds
+          .firstWhere((sound) => sound.id == 'chime')
+          .label,
+      '经典轻铃',
+    );
     expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(5));
   });
 

@@ -150,9 +150,11 @@ jobs:
           } > android/key.properties
           echo "Keystore restored."
 
-      - name: Warn when signing with debug key
+      - name: Require release keystore
         if: env.HAS_KEYSTORE != 'true'
-        run: echo "::warning::DUOYI_KEYSTORE_BASE64 missing; APK will use debug signing."
+        run: |
+          echo "::error::DUOYI_KEYSTORE_BASE64 missing; refusing to build release artifacts with debug signing."
+          exit 1
 
       - name: Build APK (release, split per ABI)
         run: |

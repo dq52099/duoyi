@@ -28,10 +28,63 @@ class WorkspaceApiTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def _register(self, username: str) -> str:
+        db = api.get_db()
+        try:
+            api._setting_set(db, "registration_email_required", False)
+            db.commit()
+        finally:
+            db.close()
         res = api.register(
             api.RegisterRequest(username=username, password="pass123456")
         )
         return res["user_id"]
+
+    def _email_code(self, email: str, purpose: str = "bind", user_id=None) -> str:
+        db = api.get_db()
+        try:
+            result = api._create_email_code(
+                db,
+                email=email,
+                purpose=purpose,
+                user_id=user_id,
+            )
+            db.commit()
+            return result["code"]
+        finally:
+            db.close()
+
+    def _register_with_email(
+        self,
+        username: str,
+        email: str,
+        *,
+        password: str = "pass123456",
+        display_name: str = "",
+        invitation_code: str = "",
+    ) -> dict:
+        return api.register(
+            api.RegisterRequest(
+                username=username,
+                password=password,
+                email=email,
+                email_code=self._email_code(email),
+                display_name=display_name,
+                invitation_code=invitation_code,
+            )
+        )
+
+    def _make_admin(self, username: str, permissions: list[str]) -> str:
+        user_id = self._register(username)
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(permissions), user_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+        return user_id
 
     def test_api_title_uses_duoyi_brand(self):
         self.assertEqual(api.app.title, "多仪 Sync API")
@@ -63,13 +116,10 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(row["password_hash"], api._hash_password("pass123456"))
 
     def test_account_email_login_profile_update_and_uniqueness(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="profile-user",
-                password="pass123456",
-                email="profile@example.com",
-                display_name="资料同学",
-            )
+        registered = self._register_with_email(
+            "profile-user",
+            "profile@example.com",
+            display_name="资料同学",
         )
 
         self.assertEqual(registered["email"], "profile@example.com")
@@ -237,12 +287,10 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(bootstrap["allow_public_registration"])
         self.assertTrue(bootstrap["registration_invite_required"])
 
-        registered = api.register(
-            api.RegisterRequest(
-                username="re0-invite-user",
-                password="pass123456",
-                invitation_code="RE0INVITE",
-            )
+        registered = self._register_with_email(
+            "re0-invite-user",
+            "re0-invite-user@example.com",
+            invitation_code="RE0INVITE",
         )
 
         self.assertEqual(registered["username"], "re0-invite-user")
@@ -258,8 +306,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(row["used_by"], registered["user_id"])
 
     def test_re0_profile_email_and_avatar_alias_routes(self):
-        registered = api.register(
-            api.RegisterRequest(username="re0-profile", password="pass123456")
+        registered = self._register_with_email(
+            "re0-profile",
+            "re0-profile@example.com",
         )
         user_id = registered["user_id"]
 
@@ -338,6 +387,99 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertIn("***", settings["hermes_api_key"])
         self.assertTrue(settings["hermes_configured"])
 
+    def test_admin_force_update_settings_persist_to_public_config(self):
+        admin_id = self._make_admin("force-update-admin", ["settings"])
+
+        updated = api.admin_update_settings(
+            api.SettingsUpdate(
+                force_update_required=True,
+                latest_version="2.4.0",
+                minimum_supported_version="2.1.0",
+                update_notes="必须升级以继续同步",
+                update_download_url="https://example.test/duoyi-2.4.0.apk",
+            ),
+            actor=admin_id,
+        )
+
+        self.assertEqual(
+            updated["changed"],
+            {
+                "force_update_required": True,
+                "latest_version": "2.4.0",
+                "minimum_supported_version": "2.1.0",
+                "update_notes": "必须升级以继续同步",
+                "update_download_url": "https://example.test/duoyi-2.4.0.apk",
+            },
+        )
+        settings = api.admin_get_settings(admin_id)
+        self.assertTrue(settings["force_update_required"])
+        self.assertEqual(settings["latest_version"], "2.4.0")
+        self.assertEqual(settings["minimum_supported_version"], "2.1.0")
+        self.assertEqual(settings["update_notes"], "必须升级以继续同步")
+        self.assertEqual(
+            settings["update_download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+
+        config = api.public_config()
+        self.assertEqual(config["latest_version"], "2.4.0")
+        self.assertEqual(config["app_update"]["latest_version"], "2.4.0")
+        self.assertTrue(config["app_update"]["force_update_required"])
+        self.assertEqual(
+            config["app_update"]["minimum_supported_version"],
+            "2.1.0",
+        )
+        self.assertEqual(config["app_update"]["update_notes"], "必须升级以继续同步")
+        self.assertEqual(
+            config["app_update"]["update_download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+
+        disabled = api.admin_update_settings(
+            api.SettingsUpdate(force_update_required=False),
+            actor=admin_id,
+        )
+        self.assertEqual(disabled["changed"]["force_update_required"], False)
+        self.assertFalse(api.public_config()["app_update"]["force_update_required"])
+
+    def test_force_update_settings_require_settings_permission(self):
+        admin_id = self._make_admin("force-update-denied", ["users"])
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_update_settings(
+                api.SettingsUpdate(
+                    force_update_required=True,
+                    latest_version="9.9.9",
+                ),
+                actor=admin_id,
+            )
+
+        self.assertEqual(denied.exception.status_code, 403)
+
+    def test_update_policy_requires_notes(self):
+        admin_id = self._make_admin("force-update-notes", ["settings"])
+
+        for payload in (
+            api.SettingsUpdate(latest_version="9.9.9"),
+            api.SettingsUpdate(update_download_url="https://example.test/duoyi.apk"),
+            api.SettingsUpdate(force_update_required=True),
+            api.SettingsUpdate(minimum_supported_version="9.9.9"),
+        ):
+            with self.assertRaises(HTTPException) as denied:
+                api.admin_update_settings(payload, actor=admin_id)
+            self.assertEqual(denied.exception.status_code, 400)
+            self.assertIn("更新内容", denied.exception.detail)
+
+        result = api.admin_update_settings(
+            api.SettingsUpdate(
+                latest_version="9.9.9",
+                update_notes="修复关键问题并优化更新提示",
+            ),
+            actor=admin_id,
+        )
+        self.assertEqual(result["changed"]["latest_version"], "9.9.9")
+        self.assertEqual(result["changed"]["update_notes"], "修复关键问题并优化更新提示")
+
     def test_email_code_login_uses_verified_bound_email(self):
         db = api.get_db()
         try:
@@ -379,12 +521,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(logged_in["email"], "code-login@example.com")
 
     def test_password_reset_confirm_accepts_bound_email_code(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="reset-code-user",
-                password="pass123456",
-                email="reset-code@example.com",
-            )
+        registered = self._register_with_email(
+            "reset-code-user",
+            "reset-code@example.com",
         )
 
         sent = []
@@ -430,12 +569,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(logged_in["email_verified"])
 
     def test_password_reset_confirm_accepts_username_and_emailed_code(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="reset-code-by-user",
-                password="pass123456",
-                email="reset-code-by-user@example.com",
-            )
+        registered = self._register_with_email(
+            "reset-code-by-user",
+            "reset-code-by-user@example.com",
         )
 
         sent = []
@@ -473,8 +609,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(logged_in["user_id"], registered["user_id"])
 
     def test_change_password_requires_current_password_and_rotates_login(self):
-        registered = api.register(
-            api.RegisterRequest(username="change-password-user", password="pass123456")
+        registered = self._register_with_email(
+            "change-password-user",
+            "change-password-user@example.com",
         )
 
         with self.assertRaises(HTTPException) as wrong_current:
@@ -511,8 +648,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(logged_in["user_id"], registered["user_id"])
 
     def test_avatar_upload_updates_profile_and_serves_file(self):
-        registered = api.register(
-            api.RegisterRequest(username="avatar-user", password="pass123456")
+        registered = self._register_with_email(
+            "avatar-user",
+            "avatar-user@example.com",
         )
         old_avatar_dir = api.AVATAR_UPLOAD_DIR
         api.AVATAR_UPLOAD_DIR = os.path.join(self._tmp.name, "avatars")
@@ -558,12 +696,9 @@ class WorkspaceApiTest(unittest.TestCase):
             api.AVATAR_UPLOAD_DIR = old_avatar_dir
 
     def test_password_reset_request_returns_dev_code_without_mail_provider(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="reset-dev-user",
-                password="pass123456",
-                email="reset-dev@example.com",
-            )
+        registered = self._register_with_email(
+            "reset-dev-user",
+            "reset-dev@example.com",
         )
 
         result = api.request_password_reset(
@@ -594,12 +729,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(logged_in["user_id"], registered["user_id"])
 
     def test_password_reset_sends_email_and_changes_password(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="reset-user",
-                password="pass123456",
-                email="reset@example.com",
-            )
+        registered = self._register_with_email(
+            "reset-user",
+            "reset@example.com",
         )
         db = api.get_db()
         try:
@@ -1063,6 +1195,10 @@ class WorkspaceApiTest(unittest.TestCase):
         db = api.get_db()
         try:
             db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(["audit"]), owner_id),
+            )
+            db.execute(
                 "UPDATE users SET email=?, email_verified=1 WHERE id=?",
                 ("mention-fail-member@example.com", member_id),
             )
@@ -1232,6 +1368,248 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(round_trip["focus_rooms"]["activeRoomId"], "deep_work_room")
         self.assertEqual(round_trip["theme_shop_state"]["activeCardSkinId"], "paper_card")
 
+    def test_sync_preferences_changed_keys_merge_independent_device_edits(self):
+        user_id = self._register("sync-pref-keys")
+
+        api.sync(
+            api.SyncRequest(
+                preferences={
+                    "values": {
+                        "dailyReminderEnabled": False,
+                        "reminderVolumePercent": 40,
+                    },
+                    "updatedAt": "2026-05-20T00:00:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+
+        api.sync(
+            api.SyncRequest(
+                preferences={
+                    "values": {
+                        "dailyReminderEnabled": True,
+                        "reminderVolumePercent": 40,
+                    },
+                    "changedKeys": ["dailyReminderEnabled"],
+                    "updatedAt": "2026-05-20T00:01:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+
+        merged = api.sync(
+            api.SyncRequest(
+                preferences={
+                    "values": {
+                        "dailyReminderEnabled": False,
+                        "reminderVolumePercent": 80,
+                    },
+                    "changedKeys": ["reminderVolumePercent"],
+                    "updatedAt": "2026-05-20T00:02:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+
+        values = merged["preferences"]["values"]
+        self.assertTrue(values["dailyReminderEnabled"])
+        self.assertEqual(values["reminderVolumePercent"], 80)
+
+        round_trip = api.sync(api.SyncRequest(), user_id=user_id)
+        values = round_trip["preferences"]["values"]
+        self.assertTrue(values["dailyReminderEnabled"])
+        self.assertEqual(values["reminderVolumePercent"], 80)
+
+    def test_sync_quick_capture_templates_merge_by_id_and_tombstone(self):
+        user_id = self._register("sync-quick-templates")
+
+        api.sync(
+            api.SyncRequest(
+                quick_capture_templates={
+                    "items": [
+                        {
+                            "id": "template-a",
+                            "title": "模板 A",
+                            "content": "A",
+                            "createdAt": "2026-05-20T00:00:00Z",
+                            "updatedAt": "2026-05-20T00:00:00Z",
+                        },
+                        {
+                            "id": "template-shared",
+                            "title": "旧共享模板",
+                            "content": "old",
+                            "createdAt": "2026-05-20T00:00:00Z",
+                            "updatedAt": "2026-05-20T00:00:00Z",
+                        },
+                    ],
+                    "updatedAt": "2026-05-20T00:00:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+
+        merged = api.sync(
+            api.SyncRequest(
+                quick_capture_templates={
+                    "items": [
+                        {
+                            "id": "template-b",
+                            "title": "模板 B",
+                            "content": "B",
+                            "createdAt": "2026-05-20T00:01:00Z",
+                            "updatedAt": "2026-05-20T00:01:00Z",
+                        },
+                        {
+                            "id": "template-shared",
+                            "title": "新共享模板",
+                            "content": "new",
+                            "createdAt": "2026-05-20T00:00:00Z",
+                            "updatedAt": "2026-05-20T00:02:00Z",
+                        },
+                    ],
+                    "updatedAt": "2026-05-20T00:02:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+
+        templates = {item["id"]: item for item in merged["quick_capture_templates"]["items"]}
+        self.assertIn("template-a", templates)
+        self.assertIn("template-b", templates)
+        self.assertEqual(templates["template-shared"]["title"], "新共享模板")
+
+        stale = api.sync(
+            api.SyncRequest(
+                quick_capture_templates={
+                    "items": [
+                        {
+                            "id": "template-shared",
+                            "title": "过期共享模板",
+                            "content": "stale",
+                            "createdAt": "2026-05-20T00:00:00Z",
+                            "updatedAt": "2026-05-20T00:01:00Z",
+                        }
+                    ],
+                    "updatedAt": "2026-05-20T00:03:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+        templates = {item["id"]: item for item in stale["quick_capture_templates"]["items"]}
+        self.assertEqual(templates["template-shared"]["title"], "新共享模板")
+
+        deleted = api.sync(
+            api.SyncRequest(
+                deleted_items={
+                    "quick_capture_templates": {
+                        "template-a": "2026-05-20T00:04:00Z",
+                    },
+                },
+            ),
+            user_id=user_id,
+        )
+        templates = {
+            item["id"]: item for item in deleted["quick_capture_templates"]["items"]
+        }
+        self.assertNotIn("template-a", templates)
+        self.assertIn("template-b", templates)
+        self.assertEqual(
+            deleted["deleted_items"]["quick_capture_templates"]["template-a"],
+            "2026-05-20T00:04:00Z",
+        )
+
+        round_trip = api.sync(api.SyncRequest(), user_id=user_id)
+        templates = {
+            item["id"]: item for item in round_trip["quick_capture_templates"]["items"]
+        }
+        self.assertNotIn("template-a", templates)
+        self.assertIn("template-b", templates)
+        self.assertEqual(templates["template-shared"]["title"], "新共享模板")
+
+    def test_sync_round_trips_location_preferences_quick_capture_courses_time_entries(
+        self,
+    ):
+        user_id = self._register("sync-new-collections")
+
+        synced = api.sync(
+            api.SyncRequest(
+                location_reminders=[
+                    {
+                        "id": "location-1",
+                        "title": "到公司提醒",
+                        "latitude": 31.2304,
+                        "longitude": 121.4737,
+                        "radiusMeters": 200,
+                        "isEnabled": True,
+                        "triggerOnce": False,
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+                preferences={
+                    "values": {
+                        "firstDayOfWeek": 1,
+                        "reminderSound": "morning",
+                    },
+                    "updatedAt": "2026-05-20T00:01:00Z",
+                },
+                quick_capture_templates={
+                    "items": [
+                        {
+                            "id": "template-round-trip",
+                            "title": "灵感",
+                            "content": "记录一个想法",
+                            "createdAt": "2026-05-20T00:00:00Z",
+                            "updatedAt": "2026-05-20T00:02:00Z",
+                        }
+                    ],
+                    "updatedAt": "2026-05-20T00:02:00Z",
+                },
+                courses=[
+                    {
+                        "id": "course-1",
+                        "name": "高等数学",
+                        "teacher": "王老师",
+                        "location": "A101",
+                        "weekday": 1,
+                        "startTime": "08:00",
+                        "endTime": "09:40",
+                        "updatedAt": "2026-05-20T00:03:00Z",
+                    }
+                ],
+                time_entries=[
+                    {
+                        "id": "time-1",
+                        "title": "深度工作",
+                        "categoryId": "focus",
+                        "startedAt": "2026-05-20T09:00:00Z",
+                        "endedAt": "2026-05-20T10:00:00Z",
+                        "updatedAt": "2026-05-20T00:04:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        self.assertEqual(synced["location_reminders"][0]["id"], "location-1")
+        self.assertEqual(synced["preferences"]["values"]["reminderSound"], "morning")
+        self.assertEqual(
+            synced["quick_capture_templates"]["items"][0]["id"],
+            "template-round-trip",
+        )
+        self.assertEqual(synced["courses"][0]["name"], "高等数学")
+        self.assertEqual(synced["time_entries"][0]["title"], "深度工作")
+
+        round_trip = api.sync(api.SyncRequest(), user_id=user_id)
+        self.assertEqual(round_trip["location_reminders"][0]["title"], "到公司提醒")
+        self.assertEqual(round_trip["preferences"]["values"]["firstDayOfWeek"], 1)
+        self.assertEqual(
+            round_trip["quick_capture_templates"]["items"][0]["title"],
+            "灵感",
+        )
+        self.assertEqual(round_trip["courses"][0]["teacher"], "王老师")
+        self.assertEqual(round_trip["time_entries"][0]["categoryId"], "focus")
+
     def test_sync_tombstone_deletes_server_pomodoro_and_time_entry(self):
         user_id = self._register("sync-tombstone")
 
@@ -1302,6 +1680,72 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertEqual(synced["habits"][0]["id"], "habit-restore")
         self.assertNotIn("habits", synced["deleted_items"])
+
+    def test_sync_habit_undo_uses_completion_updated_at(self):
+        user_id = self._register("sync-habit-undo")
+
+        api.sync(
+            api.SyncRequest(
+                habits=[
+                    {
+                        "id": "habit-undo",
+                        "name": "撤回测试",
+                        "completions": {"2026-05-21": 2},
+                        "completionUpdatedAt": {
+                            "2026-05-21": "2026-05-20T00:01:00Z",
+                        },
+                        "updatedAt": "2026-05-20T00:01:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        undone = api.sync(
+            api.SyncRequest(
+                habits=[
+                    {
+                        "id": "habit-undo",
+                        "name": "撤回测试",
+                        "completions": {},
+                        "completionUpdatedAt": {
+                            "2026-05-21": "2026-05-20T00:02:00Z",
+                        },
+                        "updatedAt": "2026-05-20T00:02:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        self.assertNotIn("2026-05-21", undone["habits"][0]["completions"])
+        self.assertEqual(
+            undone["habits"][0]["completionUpdatedAt"]["2026-05-21"],
+            "2026-05-20T00:02:00Z",
+        )
+
+        stale = api.sync(
+            api.SyncRequest(
+                habits=[
+                    {
+                        "id": "habit-undo",
+                        "name": "撤回测试",
+                        "completions": {"2026-05-21": 2},
+                        "completionUpdatedAt": {
+                            "2026-05-21": "2026-05-20T00:01:00Z",
+                        },
+                        "updatedAt": "2026-05-20T00:03:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        self.assertNotIn("2026-05-21", stale["habits"][0]["completions"])
+        self.assertEqual(
+            stale["habits"][0]["completionUpdatedAt"]["2026-05-21"],
+            "2026-05-20T00:02:00Z",
+        )
 
     def test_sync_user_profile_uses_updated_at_conflict_resolution(self):
         user_id = self._register("sync-profile-updated-at")
@@ -1591,6 +2035,216 @@ class WorkspaceApiTest(unittest.TestCase):
             first["collection_hashes"]["habits"],
         )
 
+    def test_sync_item_delta_tombstone_only_deletes_existing_item(self):
+        user_id = self._register("sync-item-delta-tombstone-only")
+
+        first = api.sync(
+            api.SyncRequest(
+                todos=[
+                    {
+                        "id": "todo-tombstone-only-remove",
+                        "title": "仅墓碑删除",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    },
+                    {
+                        "id": "todo-tombstone-only-keep",
+                        "title": "保留待办",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    },
+                ],
+                notes=[
+                    {
+                        "id": "note-tombstone-only-keep",
+                        "title": "保留笔记",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        changed = api.sync_item_delta(
+            api.SyncItemDeltaRequest(
+                items={},
+                deleted_items={
+                    "todos": {
+                        "todo-tombstone-only-remove": "2026-05-20T00:01:00Z"
+                    }
+                },
+                collection_hashes=first["collection_hashes"],
+            ),
+            user_id=user_id,
+        )
+
+        todos = {item["id"]: item for item in changed["todos"]}
+        self.assertNotIn("todo-tombstone-only-remove", todos)
+        self.assertEqual(todos["todo-tombstone-only-keep"]["title"], "保留待办")
+        self.assertEqual(changed["notes"][0]["id"], "note-tombstone-only-keep")
+        self.assertNotEqual(
+            changed["collection_hashes"]["todos"],
+            first["collection_hashes"]["todos"],
+        )
+        self.assertEqual(
+            changed["collection_hashes"]["notes"],
+            first["collection_hashes"]["notes"],
+        )
+
+        round_trip = api.sync(api.SyncRequest(), user_id=user_id)
+        round_trip_todos = {item["id"]: item for item in round_trip["todos"]}
+        self.assertNotIn("todo-tombstone-only-remove", round_trip_todos)
+        self.assertIn("todo-tombstone-only-keep", round_trip_todos)
+
+    def test_sync_diaries_merge_same_date_by_newest_updated_at(self):
+        user_id = self._register("sync-diaries-same-date")
+
+        api.sync(
+            api.SyncRequest(
+                diaries=[
+                    {
+                        "id": "diary-old-id",
+                        "date": "2026-05-20",
+                        "content": "旧日记",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ]
+            ),
+            user_id=user_id,
+        )
+
+        merged = api.sync(
+            api.SyncRequest(
+                diaries=[
+                    {
+                        "id": "diary-new-id",
+                        "date": "2026-05-20T23:30:00+08:00",
+                        "content": "同一天的新日记",
+                        "updatedAt": "2026-05-20T00:01:00Z",
+                    }
+                ]
+            ),
+            user_id=user_id,
+        )
+
+        self.assertEqual(len(merged["diaries"]), 1)
+        self.assertEqual(merged["diaries"][0]["id"], "diary-new-id")
+        self.assertEqual(merged["diaries"][0]["content"], "同一天的新日记")
+
+        stale = api.sync(
+            api.SyncRequest(
+                diaries=[
+                    {
+                        "id": "diary-stale-id",
+                        "date": "2026-05-20",
+                        "content": "过期日记",
+                        "updatedAt": "2026-05-19T23:59:00Z",
+                    }
+                ]
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(len(stale["diaries"]), 1)
+        self.assertEqual(stale["diaries"][0]["id"], "diary-new-id")
+
+        round_trip = api.sync(api.SyncRequest(), user_id=user_id)
+        self.assertEqual(len(round_trip["diaries"]), 1)
+        self.assertEqual(round_trip["diaries"][0]["id"], "diary-new-id")
+
+    def test_sync_timestamped_schedule_collections_reject_stale_payloads(self):
+        user_id = self._register("sync-timestamped-schedule")
+
+        first = api.sync(
+            api.SyncRequest(
+                courses=[
+                    {
+                        "id": "course-shared",
+                        "name": "旧课程",
+                        "teacher": "旧老师",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+                anniversaries=[
+                    {
+                        "id": "anniversary-shared",
+                        "title": "旧纪念日",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+                location_reminders=[
+                    {
+                        "id": "location-shared",
+                        "title": "旧位置提醒",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(first["courses"][0]["name"], "旧课程")
+        self.assertEqual(first["anniversaries"][0]["title"], "旧纪念日")
+        self.assertEqual(first["location_reminders"][0]["title"], "旧位置提醒")
+
+        stale = api.sync(
+            api.SyncRequest(
+                courses=[
+                    {
+                        "id": "course-shared",
+                        "name": "过期课程",
+                        "teacher": "过期老师",
+                        "updatedAt": "2026-05-19T23:59:00Z",
+                    }
+                ],
+                anniversaries=[
+                    {
+                        "id": "anniversary-shared",
+                        "title": "过期纪念日",
+                        "updatedAt": "2026-05-19T23:59:00Z",
+                    }
+                ],
+                location_reminders=[
+                    {
+                        "id": "location-shared",
+                        "title": "过期位置提醒",
+                        "updatedAt": "2026-05-19T23:59:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(stale["courses"][0]["name"], "旧课程")
+        self.assertEqual(stale["anniversaries"][0]["title"], "旧纪念日")
+        self.assertEqual(stale["location_reminders"][0]["title"], "旧位置提醒")
+
+        newer = api.sync(
+            api.SyncRequest(
+                courses=[
+                    {
+                        "id": "course-shared",
+                        "name": "新课程",
+                        "teacher": "新老师",
+                        "updatedAt": "2026-05-20T00:01:00Z",
+                    }
+                ],
+                anniversaries=[
+                    {
+                        "id": "anniversary-shared",
+                        "title": "新纪念日",
+                        "updatedAt": "2026-05-20T00:01:00Z",
+                    }
+                ],
+                location_reminders=[
+                    {
+                        "id": "location-shared",
+                        "title": "新位置提醒",
+                        "updatedAt": "2026-05-20T00:01:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(newer["courses"][0]["name"], "新课程")
+        self.assertEqual(newer["anniversaries"][0]["title"], "新纪念日")
+        self.assertEqual(newer["location_reminders"][0]["title"], "新位置提醒")
+
     def test_sync_timestamp_merge_parses_timezone_offsets(self):
         user_id = self._register("sync-timezone-merge")
 
@@ -1632,6 +2286,72 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertEqual(newer["user_profile"]["displayName"], "UTC 新资料")
         self.assertEqual(newer["habits"][0]["name"], "新习惯")
+
+    def test_sync_object_merge_accepts_snake_case_and_modified_at(self):
+        user_id = self._register("sync-object-timestamps")
+
+        first = api.sync(
+            api.SyncRequest(
+                user_profile={
+                    "displayName": "旧资料",
+                    "updated_at": "2026-05-20T00:00:00Z",
+                },
+                pomodoro_config={
+                    "focusDuration": 1500,
+                    "modifiedAt": "2026-05-20T00:00:00Z",
+                },
+                focus_rooms={
+                    "activeRoomId": "old-room",
+                    "updated_at": "2026-05-20T00:00:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(first["user_profile"]["displayName"], "旧资料")
+        self.assertEqual(first["pomodoro_config"]["focusDuration"], 1500)
+        self.assertEqual(first["focus_rooms"]["activeRoomId"], "old-room")
+
+        stale = api.sync(
+            api.SyncRequest(
+                user_profile={
+                    "displayName": "过期资料",
+                    "updated_at": "2026-05-19T23:59:00Z",
+                },
+                pomodoro_config={
+                    "focusDuration": 1200,
+                    "modifiedAt": "2026-05-19T23:59:00Z",
+                },
+                focus_rooms={
+                    "activeRoomId": "stale-room",
+                    "updated_at": "2026-05-19T23:59:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(stale["user_profile"]["displayName"], "旧资料")
+        self.assertEqual(stale["pomodoro_config"]["focusDuration"], 1500)
+        self.assertEqual(stale["focus_rooms"]["activeRoomId"], "old-room")
+
+        newer = api.sync(
+            api.SyncRequest(
+                user_profile={
+                    "displayName": "snake 新资料",
+                    "updated_at": "2026-05-20T00:01:00Z",
+                },
+                pomodoro_config={
+                    "focusDuration": 1800,
+                    "modifiedAt": "2026-05-20T00:01:00Z",
+                },
+                focus_rooms={
+                    "activeRoomId": "new-room",
+                    "updated_at": "2026-05-20T00:01:00Z",
+                },
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(newer["user_profile"]["displayName"], "snake 新资料")
+        self.assertEqual(newer["pomodoro_config"]["focusDuration"], 1800)
+        self.assertEqual(newer["focus_rooms"]["activeRoomId"], "new-room")
 
     def test_sync_events_streams_revision_sse(self):
         user_id = self._register("sync-events")
@@ -1851,23 +2571,18 @@ class WorkspaceApiTest(unittest.TestCase):
         offline_user = self._register("segment-offline")
         feedback_user = self._register("segment-feedback")
         no_email_user = self._register("segment-no-email")
-        unverified_user = api.register(
-            api.RegisterRequest(
-                username="segment-unverified",
-                password="pass123456",
-                email="segment-unverified@example.com",
-            )
-        )["user_id"]
-        verified_user = api.register(
-            api.RegisterRequest(
-                username="segment-verified",
-                password="pass123456",
-                email="segment-verified@example.com",
-            )
+        unverified_user = self._register("segment-unverified")
+        verified_user = self._register_with_email(
+            "segment-verified",
+            "segment-verified@example.com",
         )["user_id"]
         db = api.get_db()
         try:
             db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET email=?, email_verified=0 WHERE id=?",
+                ("segment-unverified@example.com", unverified_user),
+            )
             db.execute(
                 "UPDATE users SET email_verified=1 WHERE id=?",
                 (verified_user,),
@@ -1978,6 +2693,152 @@ class WorkspaceApiTest(unittest.TestCase):
         )
         self.assertEqual(restored["updated"], 2)
 
+    def test_admin_coin_adjustment_updates_sync_revision_and_survives_client_sync(self):
+        admin_id = self._register("coin-admin")
+        user_id = self._register("coin-user")
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(["coins"]), admin_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        adjusted = api.admin_adjust_user_coins(
+            user_id,
+            api.UserCoinAdjustment(delta=30, reason="补发奖励"),
+            actor=admin_id,
+        )
+
+        self.assertEqual(adjusted["balance"], 30)
+        self.assertEqual(adjusted["lifetime"], 30)
+        self.assertEqual(adjusted["server_version"], 1)
+
+        stale_client = api.sync(
+            api.SyncRequest(
+                virtual_rewards={
+                    "balance": 0,
+                    "lifetime": 0,
+                    "grantIds": [],
+                    "ledger": [],
+                    "updatedAt": "2026-05-19T00:00:00Z",
+                }
+            ),
+            user_id=user_id,
+        )
+
+        self.assertEqual(stale_client["virtual_rewards"]["balance"], 30)
+        self.assertEqual(stale_client["virtual_rewards"]["lifetime"], 30)
+        self.assertEqual(
+            stale_client["virtual_rewards"]["ledger"][0]["id"],
+            adjusted["ledger_entry"]["id"],
+        )
+
+    def test_admin_without_coin_permission_cannot_mutate_sync_rewards(self):
+        admin_id = self._register("no-coin-admin")
+        user_id = self._register("no-coin-user")
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(["users"]), admin_id),
+            )
+            before = db.execute(
+                "SELECT virtual_rewards, sync_version, updated_at "
+                "FROM sync_data WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            db.commit()
+        finally:
+            db.close()
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_adjust_user_coins(
+                user_id,
+                api.UserCoinAdjustment(delta=10, reason="should fail"),
+                actor=admin_id,
+            )
+
+        self.assertEqual(denied.exception.status_code, 403)
+        db = api.get_db()
+        try:
+            after = db.execute(
+                "SELECT virtual_rewards, sync_version, updated_at "
+                "FROM sync_data WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+        finally:
+            db.close()
+        self.assertEqual(after["virtual_rewards"], before["virtual_rewards"])
+        self.assertEqual(after["sync_version"], before["sync_version"])
+        self.assertEqual(after["updated_at"], before["updated_at"])
+
+    def test_admin_granular_permissions_gate_feature_families(self):
+        denied_admin = self._make_admin("granular-denied", ["users"])
+        checks = [
+            (
+                "settings",
+                lambda actor: api.admin_get_settings(_=actor),
+            ),
+            (
+                "feedback",
+                lambda actor: api.list_all_feedback(_=actor, limit=10, offset=0),
+            ),
+            (
+                "announcements",
+                lambda actor: api.admin_list_announcements(
+                    _=actor, limit=10, offset=0
+                ),
+            ),
+            (
+                "invites",
+                lambda actor: api.list_invite_codes(_=actor, limit=10, offset=0),
+            ),
+            (
+                "audit",
+                lambda actor: api.admin_audit_log(_=actor, limit=10, offset=0),
+            ),
+            (
+                "backup",
+                lambda actor: api.admin_backups(_=actor, limit=10, offset=0),
+            ),
+        ]
+
+        for permission, call in checks:
+            with self.subTest(permission=permission, allowed=False):
+                with self.assertRaises(HTTPException) as denied:
+                    call(denied_admin)
+                self.assertEqual(denied.exception.status_code, 403)
+
+            allowed_admin = self._make_admin(
+                f"granular-{permission}", [permission]
+            )
+            with self.subTest(permission=permission, allowed=True):
+                result = call(allowed_admin)
+                self.assertIsInstance(result, dict)
+
+    def test_my_feedback_supports_pagination_without_breaking_legacy_list(self):
+        user_id = self._register("feedback-pagination")
+        for index in range(3):
+            api.create_feedback(
+                api.FeedbackCreate(category="bug", content=f"反馈 {index}"),
+                user_id=user_id,
+            )
+
+        legacy = api.my_feedback(user_id=user_id, page=None, page_size=None)
+        self.assertIsInstance(legacy, list)
+        self.assertEqual(len(legacy), 3)
+
+        page = api.my_feedback(user_id=user_id, page=2, page_size=2)
+        self.assertEqual(page["total"], 3)
+        self.assertEqual(page["page"], 2)
+        self.assertEqual(page["page_size"], 2)
+        self.assertEqual(page["total_pages"], 2)
+        self.assertEqual(len(page["items"]), 1)
+        self.assertEqual(page["items"][0]["content"], "反馈 0")
+
     def test_admin_large_data_lists_support_sort_contracts(self):
         admin_id = self._register("admin-sort")
         user_a = self._register("sort-user-a")
@@ -2067,21 +2928,15 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_admin_backups_searches_identity_and_uses_real_snapshot_status(self):
         admin_id = self._register("backup-search-admin")
-        empty_user = api.register(
-            api.RegisterRequest(
-                username="backup-empty",
-                password="pass123456",
-                email="backup-empty@example.com",
-                display_name="空备份",
-            )
+        empty_user = self._register_with_email(
+            "backup-empty",
+            "backup-empty@example.com",
+            display_name="空备份",
         )["user_id"]
-        synced_user = api.register(
-            api.RegisterRequest(
-                username="backup-synced",
-                password="pass123456",
-                email="backup-synced@example.com",
-                display_name="有备份",
-            )
+        synced_user = self._register_with_email(
+            "backup-synced",
+            "backup-synced@example.com",
+            display_name="有备份",
         )["user_id"]
         db = api.get_db()
         try:
@@ -2122,17 +2977,12 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_admin_backup_exports_use_filters_and_escape_formulas(self):
         admin_id = self._register("backup-export-admin")
-        user_id = api.register(
-            api.RegisterRequest(
-                username="=backup-export-user",
-                password="pass123456",
-                email="backup-export@example.com",
-                display_name="+导出用户",
-            )
+        user_id = self._register_with_email(
+            "=backup-export-user",
+            "backup-export@example.com",
+            display_name="+导出用户",
         )["user_id"]
-        api.register(
-            api.RegisterRequest(username="backup-export-empty", password="pass123456")
-        )
+        self._register("backup-export-empty")
         db = api.get_db()
         try:
             db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
@@ -2248,7 +3098,10 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(response.headers["x-total-count"], "1")
         self.assertEqual(response.headers["x-exported-count"], "1")
         text = response.content.decode("utf-8-sig")
-        self.assertIn("id,username,category,status,content,admin_reply", text)
+        self.assertIn(
+            "id,username,email,email_verified,display_name,category,status,content,admin_reply",
+            text,
+        )
         self.assertIn("feedback-export-a", text)
         self.assertIn("'=IMPORTXML", text)
         self.assertIn("'+handled", text)
@@ -2283,8 +3136,13 @@ class WorkspaceApiTest(unittest.TestCase):
                 "idx_users_last_active_at",
                 "idx_feedback_status_category_id",
                 "idx_feedback_user_id",
+                "idx_feedback_user_created_status",
+                "idx_feedback_created_at",
                 "idx_announcements_published_level_id",
+                "idx_announcements_created_at",
                 "idx_invite_codes_used_created",
+                "idx_invite_codes_created_at",
+                "idx_invite_codes_used_at",
                 "idx_audit_log_action_id",
                 "idx_server_backups_status_created",
                 "idx_sync_data_updated_at",
@@ -2800,11 +3658,9 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(payload["entries"][0]["display_name"], "实时同学")
 
     def test_focus_room_events_websocket_streams_and_responds_to_ping(self):
-        registered = api.register(
-            api.RegisterRequest(
-                username="focus-room-websocket",
-                password="pass123456",
-            )
+        registered = self._register_with_email(
+            "focus-room-websocket",
+            "focus-room-websocket@example.com",
         )
         user_id = registered["user_id"]
         token = registered["token"]
@@ -2873,11 +3729,9 @@ class WorkspaceApiTest(unittest.TestCase):
     def test_focus_global_leaderboard_events_websocket_streams_and_responds_to_ping(
         self,
     ):
-        registered = api.register(
-            api.RegisterRequest(
-                username="focus-global-websocket",
-                password="pass123456",
-            )
+        registered = self._register_with_email(
+            "focus-global-websocket",
+            "focus-global-websocket@example.com",
         )
         user_id = registered["user_id"]
         token = registered["token"]

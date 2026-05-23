@@ -49,6 +49,11 @@ void main() {
     expect(screen, contains('成就分享图已保存并打开系统分享面板'));
     expect(backup, contains("'duoyi_virtual_rewards'"));
     expect(cloudSync, contains("'duoyi_virtual_rewards': 'virtual_rewards'"));
-    expect(main, contains('achievementProvider.addListener(markDirty)'));
+    expect(main, contains('String _achievementPersistedSignature'));
+    expect(main, contains('void markAchievementDirtyOnPersistedChange()'));
+    expect(
+      main,
+      contains('achievementProvider.addListener(markAchievementDirtyOnPersistedChange)'),
+    );
   });
 }

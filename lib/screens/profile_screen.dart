@@ -122,7 +122,7 @@ class _ProfileActionField extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 360) {
+        if (constraints.maxWidth < 520) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -136,11 +136,73 @@ class _ProfileActionField extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: field),
-            const SizedBox(width: 10),
-            SizedBox(height: 56, child: action),
+            const SizedBox(width: 12),
+            SizedBox(width: 132, height: 56, child: action),
           ],
         );
       },
+    );
+  }
+}
+
+class _ProfileAvatarPicker extends StatelessWidget {
+  final Widget child;
+  final bool busy;
+  final VoidCallback? onTap;
+  final String tooltip;
+
+  const _ProfileAvatarPicker({
+    required this.child,
+    required this.busy,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: busy ? null : onTap,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              child,
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: cs.surface, width: 2),
+                  ),
+                  child: busy
+                      ? Padding(
+                          padding: const EdgeInsets.all(5),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimary,
+                          ),
+                        )
+                      : Icon(
+                          Icons.photo_camera_outlined,
+                          size: 13,
+                          color: cs.onPrimary,
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -185,6 +247,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     for (final controller in [
       _usernameCtrl,
       _emailCtrl,
+      _emailCodeCtrl,
       _displayNameCtrl,
       _avatarCtrl,
       _bioCtrl,
@@ -210,6 +273,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     for (final controller in [
       _usernameCtrl,
       _emailCtrl,
+      _emailCodeCtrl,
       _displayNameCtrl,
       _avatarCtrl,
       _bioCtrl,
@@ -276,6 +340,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   }
 
   Future<void> _sendBindEmailCode() async {
+    if (!_canSendBindEmailCode) return;
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
       setState(() => _error = I18n.tr('auth.error.email_required'));
@@ -332,10 +397,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   }
 
   Widget _bindEmailCodeButton() {
+    final canSend = _canSendBindEmailCode;
     return OutlinedButton(
-      onPressed: _sendingEmailCode || _emailCooldownSeconds > 0
-          ? null
-          : _sendBindEmailCode,
+      onPressed: canSend ? _sendBindEmailCode : null,
       child: _sendingEmailCode
           ? const SizedBox(
               width: 16,
@@ -344,13 +408,26 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             )
           : Text(
               _emailCooldownSeconds > 0
-                  ? '${_emailCooldownSeconds}s'
+                  ? '${_emailCooldownSeconds}s 后'
                   : I18n.tr('auth.send'),
+              textAlign: TextAlign.center,
             ),
     );
   }
 
+  bool get _canSendBindEmailCode {
+    if (_busy ||
+        _avatarBusy ||
+        _sendingEmailCode ||
+        _emailCooldownSeconds > 0) {
+      return false;
+    }
+    final email = _emailCtrl.text.trim();
+    return email.isNotEmpty && _looksLikeEmail(email);
+  }
+
   Future<void> _uploadAvatar() async {
+    if (_busy || _avatarBusy || _sendingEmailCode) return;
     final auth = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
     setState(() {
@@ -412,6 +489,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   }
 
   Future<void> _save() async {
+    if (_busy || _avatarBusy || _sendingEmailCode) return;
     final username = _usernameCtrl.text.trim();
     if (username.length < 3 || username.length > 64) {
       setState(() => _error = I18n.tr('auth.error.username_length'));
@@ -490,7 +568,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         title: Text(I18n.tr('profile.title')),
         actions: [
           TextButton(
-            onPressed: _busy ? null : _save,
+            onPressed: _busy || _avatarBusy || _sendingEmailCode ? null : _save,
             child: _busy
                 ? const SizedBox(
                     width: 16,
@@ -508,25 +586,33 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Container(
-                  width: 76,
-                  height: 76,
-                  padding: avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                      ? EdgeInsets.zero
-                      : const EdgeInsets.all(3),
-                  decoration:
-                      avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                      ? null
-                      : BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(colors: avatarFrame.colors),
-                        ),
-                  child: _ProfileAvatarPreview(
-                    avatar: _avatarCtrl.text.trim().isEmpty
-                        ? state.avatar
-                        : _avatarCtrl.text.trim(),
-                    displayName: displayName.isEmpty ? '我' : displayName,
-                    radius: 36,
+                _ProfileAvatarPicker(
+                  busy: _avatarBusy,
+                  tooltip: I18n.tr('profile.avatar.upload'),
+                  onTap: _uploadAvatar,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    padding:
+                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.all(3),
+                    decoration:
+                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                        ? null
+                        : BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: avatarFrame.colors,
+                            ),
+                          ),
+                    child: _ProfileAvatarPreview(
+                      avatar: _avatarCtrl.text.trim().isEmpty
+                          ? state.avatar
+                          : _avatarCtrl.text.trim(),
+                      displayName: displayName.isEmpty ? '我' : displayName,
+                      radius: 36,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -574,27 +660,27 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.email'),
-                    helperText: state.emailVerified
-                        ? I18n.tr('profile.email.verified')
-                        : I18n.tr('profile.email.unverified_or_pending'),
-                  ),
-                ),
-                const SizedBox(height: 12),
                 _ProfileActionField(
                   field: TextField(
-                    controller: _emailCodeCtrl,
-                    keyboardType: TextInputType.number,
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: I18n.tr('auth.email_code'),
-                      helperText: I18n.tr('profile.email_code.helper'),
+                      labelText: I18n.tr('auth.email'),
+                      helperText: state.emailVerified
+                          ? I18n.tr('profile.email.verified')
+                          : I18n.tr('profile.email.unverified_or_pending'),
                     ),
                   ),
                   action: _bindEmailCodeButton(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _emailCodeCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.email_code'),
+                    helperText: I18n.tr('profile.email_code.helper'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _ProfileActionField(
@@ -605,7 +691,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                     ),
                   ),
                   action: OutlinedButton.icon(
-                    onPressed: _avatarBusy ? null : _uploadAvatar,
+                    onPressed: _busy || _avatarBusy || _sendingEmailCode
+                        ? null
+                        : _uploadAvatar,
                     icon: _avatarBusy
                         ? const SizedBox(
                             width: 16,
@@ -724,6 +812,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
   }
 
   Future<void> _pickLocalAvatar() async {
+    if (_busy || _avatarBusy) return;
     setState(() {
       _avatarBusy = true;
       _error = null;
@@ -754,6 +843,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
   }
 
   Future<void> _save() async {
+    if (_busy || _avatarBusy) return;
     final username = _usernameCtrl.text.trim();
     if (username.isEmpty) {
       setState(() => _error = I18n.tr('profile.error.nickname_required'));
@@ -810,7 +900,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         title: Text(I18n.tr('profile.title')),
         actions: [
           TextButton(
-            onPressed: _busy ? null : _save,
+            onPressed: _busy || _avatarBusy ? null : _save,
             child: _busy
                 ? const SizedBox(
                     width: 16,
@@ -828,10 +918,15 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                _ProfileAvatarPreview(
-                  avatar: _avatarCtrl.text.trim(),
-                  displayName: displayName,
-                  radius: 36,
+                _ProfileAvatarPicker(
+                  busy: _avatarBusy,
+                  tooltip: I18n.tr('profile.avatar.choose'),
+                  onTap: _pickLocalAvatar,
+                  child: _ProfileAvatarPreview(
+                    avatar: _avatarCtrl.text.trim(),
+                    displayName: displayName,
+                    radius: 36,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -890,7 +985,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     ),
                   ),
                   action: OutlinedButton.icon(
-                    onPressed: _avatarBusy ? null : _pickLocalAvatar,
+                    onPressed: _busy || _avatarBusy ? null : _pickLocalAvatar,
                     icon: _avatarBusy
                         ? const SizedBox(
                             width: 16,

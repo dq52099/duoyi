@@ -909,7 +909,7 @@ class CompetitorTaskImporter {
       reminder: reminderEnabled
           ? ReminderConfig(
               enabled: true,
-              kind: ReminderKind.alarm,
+              kind: ReminderKind.push,
               hour: reminderAt?.hour ?? remindTime?.$1,
               minute: reminderAt?.minute ?? remindTime?.$2,
             )

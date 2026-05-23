@@ -94,7 +94,7 @@ void main() {
     expect(find.text('HyperOS/MIUI 后台与电池'), findsOneWidget);
     expect(find.text('HyperOS/MIUI 锁屏与横幅'), findsOneWidget);
     expect(find.text('HyperOS/MIUI 渠道声音'), findsOneWidget);
-    expect(find.text('立即响铃弹屏测试'), findsOneWidget);
+    expect(find.text('立即发送测试通知'), findsOneWidget);
     expect(find.text('30 秒后强提醒'), findsNothing);
     expect(find.text('疑难设置入口'), findsOneWidget);
     expect(find.textContaining('先按上方检查项逐项确认'), findsOneWidget);
@@ -106,8 +106,8 @@ void main() {
     await tester.ensureVisible(find.text('疑难设置入口'));
     await tester.tap(find.text('疑难设置入口'));
     await tester.pump();
-    await tester.ensureVisible(find.text('立即响铃弹屏测试'));
-    await tester.tap(find.text('立即响铃弹屏测试'));
+    await tester.ensureVisible(find.text('立即发送测试通知'));
+    await tester.tap(find.text('立即发送测试通知'));
     await tester.pump();
     await tester.ensureVisible(find.text('全部取消'));
     await tester.tap(find.text('全部取消'));

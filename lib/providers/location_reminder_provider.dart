@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/location_reminder.dart';
+import 'cloud_sync_provider.dart';
 
 class LocationFix {
   final double latitude;
@@ -54,7 +55,8 @@ class LocationReminderEngine {
     double rad(double d) => d * math.pi / 180.0;
     final dLat = rad(lat2 - lat1);
     final dLon = rad(lon2 - lon1);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(rad(lat1)) *
             math.cos(rad(lat2)) *
             math.sin(dLon / 2) *
@@ -96,11 +98,7 @@ class LocationReminderEngine {
           : prev && !nowInRange;
       if (triggered) {
         hits.add(
-          LocationReminderHit(
-            reminder: r,
-            triggeredBy: r.trigger,
-            fix: fix,
-          ),
+          LocationReminderHit(reminder: r, triggeredBy: r.trigger, fix: fix),
         );
       }
     }
@@ -127,10 +125,8 @@ class LocationReminderProvider extends ChangeNotifier {
         ..clear()
         ..addAll(
           list.whereType<Map>().map(
-                (m) => LocationReminder.fromJson(
-                  Map<String, dynamic>.from(m),
-                ),
-              ),
+            (m) => LocationReminder.fromJson(Map<String, dynamic>.from(m)),
+          ),
         );
     } catch (e) {
       debugPrint('[LocationReminder] load failed: $e');
@@ -147,12 +143,13 @@ class LocationReminderProvider extends ChangeNotifier {
   Future<void> update(LocationReminder reminder) async {
     final i = _reminders.indexWhere((r) => r.id == reminder.id);
     if (i < 0) return;
-    _reminders[i] = reminder;
+    _reminders[i] = reminder.copyWith(updatedAt: DateTime.now());
     await _save();
     notifyListeners();
   }
 
   Future<void> remove(String id) async {
+    await CloudSyncProvider.recordDeletedItem('location_reminders', id);
     _reminders.removeWhere((r) => r.id == id);
     _inRange.remove(id);
     await _save();
@@ -171,20 +168,32 @@ class LocationReminderProvider extends ChangeNotifier {
       ..addAll(nextRange);
     if (hits.isNotEmpty) {
       // 更新 lastFiredAt + oneShot 删除
+      final removedIds = <String>[];
       for (final hit in hits) {
         final i = _reminders.indexWhere((r) => r.id == hit.reminder.id);
         if (i < 0) continue;
         if (_reminders[i].oneShot) {
+          removedIds.add(_reminders[i].id);
           _reminders.removeAt(i);
         } else {
           _reminders[i] = _reminders[i].copyWith(lastFiredAt: fix.at);
         }
       }
       // ignore: discarded_futures
-      _save();
-      notifyListeners();
+      _saveTriggeredHits(removedIds);
     }
     return hits;
+  }
+
+  Future<void> _saveTriggeredHits(List<String> removedIds) async {
+    if (removedIds.isNotEmpty) {
+      await CloudSyncProvider.recordDeletedItems(
+        'location_reminders',
+        removedIds,
+      );
+    }
+    await _save();
+    notifyListeners();
   }
 
   Future<void> _save() async {

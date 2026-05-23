@@ -242,7 +242,7 @@ void main() {
 
     expect(
       source,
-      contains('enum PreferencesInitialSection { notifications }'),
+      contains('enum PreferencesInitialSection { bottomNav, notifications }'),
     );
     expect(
       source,
@@ -251,6 +251,9 @@ void main() {
     expect(source, contains("title: '提醒偏好 / 通知设置'"));
     expect(source, contains("subtitle: '管理每日提醒、通知权限、通知记录保留和提醒铃声'"));
     expect(source, contains('GlobalKey _notificationSectionKey'));
+    expect(source, contains('int _initialSectionScrollAttempts = 0;'));
+    expect(source, contains('if (!mounted) return;'));
+    expect(source, contains('if (_initialSectionScrollAttempts >= 2) return;'));
     expect(source, contains('Scrollable.ensureVisible'));
     expect(source, contains('key: _notificationSectionKey'));
     final notificationSectionStart = source.indexOf(
@@ -274,7 +277,7 @@ void main() {
     expect(notificationSection, contains('_DailyReminderSlotTile('));
   });
 
-  test('scheduled diagnostic test uses strong alarm path', () {
+  test('scheduled diagnostic test uses ordinary notification path', () {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
@@ -284,12 +287,12 @@ void main() {
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
 
-    expect(method, contains('AlarmService.instance.scheduleFullScreen'));
-    expect(method, contains('定时强提醒调度正常'));
-    expect(method, isNot(contains('LocalNotifications.instance.scheduleOnce')));
+    expect(method, contains('LocalNotifications.instance.scheduleOnce'));
+    expect(method, contains('定时通知调度正常'));
+    expect(method, isNot(contains('AlarmService.instance.scheduleFullScreen')));
   });
 
-  test('immediate diagnostic test uses built-in alarm path, not push only', () {
+  test('immediate diagnostic test uses ordinary notification path', () {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
@@ -299,10 +302,10 @@ void main() {
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
 
-    expect(method, contains('AlarmService.instance.showFullScreenTest'));
-    expect(method, contains('多仪 · 响铃弹屏测试'));
-    expect(method, contains('HapticFeedback.vibrate'));
-    expect(method, isNot(contains('LocalNotifications.instance.show')));
+    expect(method, contains('LocalNotifications.instance.show'));
+    expect(method, contains('多仪 · 通知测试'));
+    expect(method, isNot(contains('AlarmService.instance.showFullScreenTest')));
+    expect(method, isNot(contains('HapticFeedback.vibrate')));
     expect(method, isNot(contains('LocalNotifications.instance.scheduleOnce')));
   });
 

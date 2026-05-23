@@ -3,6 +3,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('FocusSoundCatalog', () {
+    const bannedGeneratedNoiseIds = <String>{
+      'brown_noise',
+      'pink_noise',
+      'white_stream',
+    };
+
     test('single tracks map to one asset', () {
       expect(FocusSoundCatalog.trackIdsFor('rain'), <String>['rain']);
       expect(FocusSoundCatalog.assetsFor('rain'), <String>[
@@ -50,6 +56,20 @@ void main() {
       expect(FocusSoundCatalog.trackIdsFor('rain+missing'), isEmpty);
       expect(FocusSoundCatalog.assetsFor('missing'), isEmpty);
       expect(FocusSoundCatalog.labelFor('missing'), '无白噪音');
+    });
+
+    test('generated noise ids are unpublished', () {
+      final trackIds = FocusSoundCatalog.tracks.map((track) => track.id);
+      final optionIds = FocusSoundCatalog.options.map((option) => option.id);
+
+      for (final id in bannedGeneratedNoiseIds) {
+        expect(trackIds, isNot(contains(id)));
+        expect(optionIds, isNot(contains(id)));
+        expect(FocusSoundCatalog.assetMap, isNot(contains(id)));
+        expect(FocusSoundCatalog.trackIdsFor(id), isEmpty);
+        expect(FocusSoundCatalog.assetsFor(id), isEmpty);
+        expect(FocusSoundCatalog.labelFor(id), '无白噪音');
+      }
     });
 
     test('published options are single track only', () {

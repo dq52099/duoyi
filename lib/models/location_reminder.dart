@@ -43,6 +43,9 @@ class LocationReminder {
   /// 创建时间。
   final DateTime createdAt;
 
+  /// 最近一次编辑时间，用于云同步冲突判断。
+  final DateTime updatedAt;
+
   /// 上次触发时间（用于 oneShot + 节流）。
   final DateTime? lastFiredAt;
 
@@ -58,9 +61,11 @@ class LocationReminder {
     this.linkedType,
     this.linkedId,
     DateTime? createdAt,
+    DateTime? updatedAt,
     this.lastFiredAt,
   })  : id = id ?? _locationUuid.v4(),
-        createdAt = createdAt ?? DateTime.now();
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   LocationReminder copyWith({
     String? title,
@@ -72,6 +77,7 @@ class LocationReminder {
     bool? oneShot,
     String? linkedType,
     String? linkedId,
+    DateTime? updatedAt,
     DateTime? lastFiredAt,
     bool clearLastFiredAt = false,
   }) =>
@@ -87,6 +93,7 @@ class LocationReminder {
         linkedType: linkedType ?? this.linkedType,
         linkedId: linkedId ?? this.linkedId,
         createdAt: createdAt,
+        updatedAt: updatedAt ?? DateTime.now(),
         lastFiredAt:
             clearLastFiredAt ? null : (lastFiredAt ?? this.lastFiredAt),
       );
@@ -103,6 +110,7 @@ class LocationReminder {
         'linkedType': linkedType,
         'linkedId': linkedId,
         'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
         'lastFiredAt': lastFiredAt?.toIso8601String(),
       };
 
@@ -122,6 +130,11 @@ class LocationReminder {
       linkedType: json['linkedType']?.toString(),
       linkedId: json['linkedId']?.toString(),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+          DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
       lastFiredAt: DateTime.tryParse(json['lastFiredAt']?.toString() ?? ''),
     );

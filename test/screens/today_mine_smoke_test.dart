@@ -340,7 +340,7 @@ void main() {
       '新',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, '邮箱（本地展示）'),
+      find.widgetWithText(TextField, '邮箱（仅本地展示，不用于登录或找回）'),
       'new@example.com',
     );
     await tester.enterText(find.widgetWithText(TextField, '简介'), '新的个人简介');

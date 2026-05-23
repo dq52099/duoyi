@@ -77,6 +77,7 @@ class Habit {
   int currentStreak;
   int bestStreak;
   Map<String, int> completions;
+  Map<String, DateTime> completionUpdatedAt;
   String? category;
   List<String> tags;
   int weeklyTarget;
@@ -103,6 +104,7 @@ class Habit {
     this.currentStreak = 0,
     this.bestStreak = 0,
     Map<String, int>? completions,
+    Map<String, DateTime>? completionUpdatedAt,
     this.category,
     List<String>? tags,
     this.weeklyTarget = 7,
@@ -118,6 +120,7 @@ class Habit {
     DateTime? updatedAt,
   }) : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
        completions = completions ?? {},
+       completionUpdatedAt = completionUpdatedAt ?? {},
        tags = tags ?? [],
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
@@ -133,6 +136,7 @@ class Habit {
     int? currentStreak,
     int? bestStreak,
     Map<String, int>? completions,
+    Map<String, DateTime>? completionUpdatedAt,
     String? category,
     List<String>? tags,
     int? weeklyTarget,
@@ -166,6 +170,9 @@ class Habit {
       completions: completions != null
           ? Map<String, int>.from(completions)
           : Map<String, int>.from(this.completions),
+      completionUpdatedAt: completionUpdatedAt != null
+          ? Map<String, DateTime>.from(completionUpdatedAt)
+          : Map<String, DateTime>.from(this.completionUpdatedAt),
       category: clearCategory ? null : category ?? this.category,
       tags: tags ?? List<String>.from(this.tags),
       weeklyTarget: weeklyTarget ?? this.weeklyTarget,
@@ -194,6 +201,9 @@ class Habit {
     'currentStreak': currentStreak,
     'bestStreak': bestStreak,
     'completions': completions,
+    'completionUpdatedAt': completionUpdatedAt.map(
+      (key, value) => MapEntry(key, value.toIso8601String()),
+    ),
     'category': category,
     'tags': tags,
     'weeklyTarget': weeklyTarget,
@@ -213,6 +223,7 @@ class Habit {
     final kindIndex = _readInt(json['kind'], 0);
     final weekdaysRaw = json['activeWeekdays'] as List<dynamic>?;
     final completionsRaw = json['completions'];
+    final completionUpdatedAtRaw = json['completionUpdatedAt'];
     final createdAtRaw = json['createdAt']?.toString();
     final updatedAtRaw = json['updatedAt']?.toString();
     final target = _readInt(json['targetCount'], 1);
@@ -241,6 +252,15 @@ class Habit {
               final count = _readInt(value, 0);
               return MapEntry(key.toString(), count < 0 ? 0 : count);
             })
+          : {},
+      completionUpdatedAt: completionUpdatedAtRaw is Map
+          ? {
+              for (final entry in completionUpdatedAtRaw.entries)
+                if (DateTime.tryParse(entry.value?.toString() ?? '') != null)
+                  entry.key.toString(): DateTime.parse(
+                    entry.value.toString(),
+                  ),
+            }
           : {},
       category: json['category']?.toString(),
       tags:

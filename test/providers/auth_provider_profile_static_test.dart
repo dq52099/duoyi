@@ -221,6 +221,58 @@ void main() {
     expect(source, isNot(contains('重置邮件已发送，请查收邮件中的 token。')));
   });
 
+  test('Profile and auth email-code UX is responsive and guarded', () {
+    final profile = File('lib/screens/profile_screen.dart').readAsStringSync();
+    final login = File('lib/screens/login_screen.dart').readAsStringSync();
+
+    for (final field in [
+      'class _ProfileAvatarPicker',
+      'Semantics(',
+      'button: true',
+      'onTap: _uploadAvatar',
+      'onTap: _pickLocalAvatar',
+      'if (constraints.maxWidth < 520)',
+      'SizedBox(width: 132, height: 56, child: action)',
+      'bool get _canSendBindEmailCode',
+      'return email.isNotEmpty && _looksLikeEmail(email);',
+      'final canSend = _canSendBindEmailCode',
+      'onPressed: canSend ? _sendBindEmailCode : null',
+      "'\${_emailCooldownSeconds}s 后'",
+      'if (_busy || _avatarBusy || _sendingEmailCode) return;',
+      'onPressed: _busy || _avatarBusy || _sendingEmailCode ? null : _save',
+      'onPressed: _busy || _avatarBusy ? null : _save',
+    ]) {
+      expect(profile, contains(field), reason: field);
+    }
+
+    expect(profile, isNot(contains('class _ProfileInlineActionField')));
+
+    for (final field in [
+      'class _LoginActionField',
+      'if (constraints.maxWidth < 520)',
+      'SizedBox(width: 132, height: 56, child: action)',
+      '_userCtrl.addListener(_refreshControls)',
+      '_emailCtrl.addListener(_refreshControls)',
+      'if (_busy || _sendingEmailCode) return;',
+      'if (!_canSendEmailCode) return;',
+      'bool get _canSendEmailCode',
+      'final canSend = _canSendEmailCode',
+      'onPressed: canSend ? _sendEmailCode : null',
+      "'\${_emailCooldownSeconds}s 后'",
+      'Widget _emailSendField({',
+      'Widget _emailCodeField({',
+      '_emailSendField(',
+      '_emailCodeField(',
+      'return email.isNotEmpty && _looksLikeEmail(email);',
+      '_sendingEmailCode ||',
+      "I18n.tr('auth.error.username_required')",
+    ]) {
+      expect(login, contains(field), reason: field);
+    }
+
+    expect(login, isNot(contains('class _LoginInlineActionField')));
+  });
+
   test('App startup refreshes account profile into local profile cache', () {
     final source = File('lib/main.dart').readAsStringSync();
 
@@ -254,8 +306,9 @@ void main() {
         'if (!auth.state.isLoggedIn) return;',
         'await auth.refreshMe();',
         'refresh account profile failed',
-        'cloudSyncProvider.onSynced = ()',
-        'await userProvider.loadFromStorage();',
+        'cloudSyncProvider.onSynced = (changedCollections)',
+        "changedCollections.contains('user_profile')",
+        'futures.add(userProvider.loadFromStorage())',
         'await authProvider.refreshMe();',
       ]) {
         expect(source, contains(field));

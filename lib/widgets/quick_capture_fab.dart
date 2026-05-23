@@ -637,7 +637,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
             rules: [
               ReminderRule(
                 type: ReminderRuleType.relativeToDue,
-                kind: ReminderKind.alarm,
+                kind: ReminderKind.push,
                 offsetMinutes: -15,
               ),
             ],

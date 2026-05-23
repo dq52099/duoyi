@@ -65,7 +65,7 @@ class SmartTodoDraftBuilder {
   static SmartTodoDraft fromText(
     String input, {
     DateTime? now,
-    ReminderKind defaultReminderKind = ReminderKind.alarm,
+    ReminderKind defaultReminderKind = ReminderKind.push,
   }) {
     final trimmed = _normalizeSpaces(input);
     final fallbackNow = now ?? DateTime.now();

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/quick_capture_template.dart';
+import 'cloud_sync_provider.dart';
 
 class QuickCaptureTemplateProvider extends ChangeNotifier {
   static const _storageKey = 'duoyi_quick_capture_templates_v1';
@@ -35,14 +36,15 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
     } else {
       _customTemplates[index] = custom;
     }
-    notifyListeners();
     await _persist();
+    notifyListeners();
   }
 
   Future<void> deleteTemplate(String id) async {
+    await CloudSyncProvider.recordDeletedItem('quick_capture_templates', id);
     _customTemplates.removeWhere((item) => item.id == id && !item.builtIn);
-    notifyListeners();
     await _persist();
+    notifyListeners();
   }
 
   Future<void> _persist() async {

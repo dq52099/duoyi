@@ -8,7 +8,7 @@ import 'package:duoyi/models/todo.dart';
 void main() {
   final now = DateTime(2026, 5, 15, 10, 0);
 
-  test('fromText strips date phrase and creates alarm reminder for time', () {
+  test('fromText strips date phrase and creates push reminder for time', () {
     final draft = SmartTodoDraftBuilder.fromText('明天下午3点开会', now: now);
 
     expect(draft.title, '开会');
@@ -17,11 +17,26 @@ void main() {
     expect(draft.reminderAt, DateTime(2026, 5, 16, 15, 0));
     expect(draft.hasReminder, isTrue);
     expect(draft.reminder.enabled, isTrue);
-    expect(draft.reminder.kind, ReminderKind.alarm);
+    expect(draft.reminder.kind, ReminderKind.push);
     expect(draft.reminder.hour, 15);
     expect(draft.reminder.minute, 0);
     expect(draft.reminderPlan.rules.single.type, ReminderRuleType.absolute);
   });
+
+  test(
+    'fromText can still create alarm reminder when explicitly requested',
+    () {
+      final draft = SmartTodoDraftBuilder.fromText(
+        '明天下午3点开会',
+        now: now,
+        defaultReminderKind: ReminderKind.alarm,
+      );
+
+      expect(draft.reminder.kind, ReminderKind.alarm);
+      expect(draft.reminder.fullScreen, isTrue);
+      expect(draft.reminderPlan.rules.single.kind, ReminderKind.alarm);
+    },
+  );
 
   test('fromText keeps date-only tasks without enabling reminder', () {
     final draft = SmartTodoDraftBuilder.fromText('后天买牛奶', now: now);

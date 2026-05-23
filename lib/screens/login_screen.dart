@@ -15,6 +15,39 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+class _LoginActionField extends StatelessWidget {
+  final Widget field;
+  final Widget action;
+
+  const _LoginActionField({required this.field, required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              field,
+              const SizedBox(height: 8),
+              SizedBox(height: 48, child: action),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: field),
+            const SizedBox(width: 12),
+            SizedBox(width: 132, height: 56, child: action),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _LoginScreenState extends State<LoginScreen> {
   final _userCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -33,8 +66,17 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _message;
 
   @override
+  void initState() {
+    super.initState();
+    _userCtrl.addListener(_refreshControls);
+    _emailCtrl.addListener(_refreshControls);
+  }
+
+  @override
   void dispose() {
     _emailCooldownTimer?.cancel();
+    _userCtrl.removeListener(_refreshControls);
+    _emailCtrl.removeListener(_refreshControls);
     _userCtrl.dispose();
     _emailCtrl.dispose();
     _emailCodeCtrl.dispose();
@@ -45,7 +87,12 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _refreshControls() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _submit() async {
+    if (_busy || _sendingEmailCode) return;
     final auth = context.read<AuthProvider>();
     final validationError = _validateSubmit(auth);
     if (validationError != null) {
@@ -89,6 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _sendEmailCode() async {
+    if (!_canSendEmailCode) return;
     final auth = context.read<AuthProvider>();
     final email = _isRegister ? _emailCtrl.text.trim() : _userCtrl.text.trim();
     if (email.isEmpty) {
@@ -109,10 +157,11 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         purpose: _isRegister ? 'bind' : 'login',
       );
-      _startEmailCooldown();
       final devCode = (result['dev_code'] ?? '').toString();
       final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
           .toString();
+      if (!mounted) return;
+      _startEmailCooldown();
       setState(() {
         _message = devCode.isEmpty
             ? message
@@ -125,6 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _sendingEmailCode = false);
     }
+  }
+
+  bool get _canSendEmailCode {
+    if (_busy || _sendingEmailCode || _emailCooldownSeconds > 0) return false;
+    final email = _isRegister ? _emailCtrl.text.trim() : _userCtrl.text.trim();
+    return email.isNotEmpty && _looksLikeEmail(email);
   }
 
   String? _validateSubmit(AuthProvider auth) {
@@ -190,10 +245,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _emailCodeButton() {
+    final canSend = _canSendEmailCode;
     return OutlinedButton(
-      onPressed: _sendingEmailCode || _emailCooldownSeconds > 0
-          ? null
-          : _sendEmailCode,
+      onPressed: canSend ? _sendEmailCode : null,
       child: _sendingEmailCode
           ? const SizedBox(
               width: 16,
@@ -202,9 +256,39 @@ class _LoginScreenState extends State<LoginScreen> {
             )
           : Text(
               _emailCooldownSeconds > 0
-                  ? '${_emailCooldownSeconds}s'
+                  ? '${_emailCooldownSeconds}s 后'
                   : I18n.tr('auth.send'),
+              textAlign: TextAlign.center,
             ),
+    );
+  }
+
+  Widget _emailSendField({
+    required TextEditingController controller,
+    required String labelText,
+    String? helperText,
+  }) {
+    return _LoginActionField(
+      field: TextField(
+        controller: controller,
+        keyboardType: TextInputType.emailAddress,
+        decoration: InputDecoration(
+          labelText: labelText,
+          helperText: helperText,
+        ),
+      ),
+      action: _emailCodeButton(),
+    );
+  }
+
+  Widget _emailCodeField({
+    required TextEditingController controller,
+    required String labelText,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: labelText),
     );
   }
 
@@ -301,48 +385,37 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
-              controller: _userCtrl,
-              decoration: InputDecoration(
-                labelText: _isRegister
-                    ? I18n.tr('auth.username')
-                    : (_emailLogin
-                          ? I18n.tr('auth.verified_email')
-                          : I18n.tr('auth.account')),
-              ),
-            ),
-            if (_isRegister) ...[
-              const SizedBox(height: 12),
+            if (!_isRegister && _emailLogin)
+              _emailSendField(
+                controller: _userCtrl,
+                labelText: I18n.tr('auth.verified_email'),
+              )
+            else
               TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
+                controller: _userCtrl,
                 decoration: InputDecoration(
-                  labelText: auth.registrationEmailRequired
-                      ? I18n.tr('auth.email')
-                      : I18n.tr('auth.email.optional'),
-                  helperText: auth.registrationEmailRequired
-                      ? I18n.tr('auth.email.required_helper')
-                      : null,
+                  labelText: _isRegister
+                      ? I18n.tr('auth.username')
+                      : I18n.tr('auth.account'),
                 ),
               ),
+            if (_isRegister) ...[
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _emailCodeCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: auth.registrationEmailRequired
-                            ? I18n.tr('auth.email_code')
-                            : I18n.tr('auth.email_code.optional'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(height: 56, child: _emailCodeButton()),
-                ],
+              _emailSendField(
+                controller: _emailCtrl,
+                labelText: auth.registrationEmailRequired
+                    ? I18n.tr('auth.email')
+                    : I18n.tr('auth.email.optional'),
+                helperText: auth.registrationEmailRequired
+                    ? I18n.tr('auth.email.required_helper')
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              _emailCodeField(
+                controller: _emailCodeCtrl,
+                labelText: auth.registrationEmailRequired
+                    ? I18n.tr('auth.email_code')
+                    : I18n.tr('auth.email_code.optional'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -354,21 +427,9 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
             if (!_isRegister && _emailLogin) ...[
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _emailCodeCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: I18n.tr('auth.email_code'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(height: 56, child: _emailCodeButton()),
-                ],
+              _emailCodeField(
+                controller: _emailCodeCtrl,
+                labelText: I18n.tr('auth.email_code'),
               ),
             ],
             if (!_isRegister) ...[
@@ -432,7 +493,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _busy || (_isRegister && !auth.registrationEnabled)
+              onPressed:
+                  _busy ||
+                      _sendingEmailCode ||
+                      (_isRegister && !auth.registrationEnabled)
                   ? null
                   : _submit,
               child: Padding(
@@ -452,15 +516,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 8),
             TextButton(
-              onPressed: () => setState(() {
-                _isRegister = !_isRegister;
-                _emailLogin = false;
-                _emailCodeCtrl.clear();
-                _pwdCtrl.clear();
-                _confirmPwdCtrl.clear();
-                _error = null;
-                _message = null;
-              }),
+              onPressed: _busy || _sendingEmailCode
+                  ? null
+                  : () => setState(() {
+                      _isRegister = !_isRegister;
+                      _emailLogin = false;
+                      _emailCodeCtrl.clear();
+                      _pwdCtrl.clear();
+                      _confirmPwdCtrl.clear();
+                      _error = null;
+                      _message = null;
+                    }),
               child: Text(
                 _isRegister
                     ? I18n.tr('auth.switch_to_login')

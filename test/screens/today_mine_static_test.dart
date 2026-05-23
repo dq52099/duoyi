@@ -128,6 +128,15 @@ void main() {
       ]) {
         expect(mine, contains(label));
       }
+      expect(
+        mine,
+        contains('class _UpdateAvailableBadge extends StatelessWidget'),
+      );
+      expect(mine, contains('_UpdateAvailableBadge('));
+      expect(mine, contains('version: updater.latestVersion'));
+      expect(mine, contains('width: 8'));
+      expect(mine, contains("'有更新'"));
+      expect(mine, contains("'新版 \$version'"));
 
       final tileLabels = RegExp(
         r"label: '([^']+)'",

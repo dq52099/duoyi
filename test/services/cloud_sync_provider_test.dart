@@ -19,6 +19,30 @@ void main() {
     expect(source, contains('_autoSyncTimer?.cancel();'));
     expect(source, contains("'user_profile': 'user_profile'"));
     expect(mainSource, contains('userProvider.addListener(markDirty);'));
+    expect(
+      mainSource,
+      contains('locationReminderProvider.addListener(markDirty);'),
+    );
+    expect(
+      mainSource,
+      contains(
+        'ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;',
+      ),
+    );
+    expect(
+      mainSource,
+      isNot(
+        contains(
+          'preferencesProvider.addListener(cloudSyncProvider.markPreferencesChanged);',
+        ),
+      ),
+    );
+    expect(
+      mainSource,
+      contains(
+        'preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;',
+      ),
+    );
   });
 
   test('登录后启用远端轮询拉取，登出或关闭自动同步会停止轮询', () {
@@ -221,6 +245,7 @@ void main() {
     expect(providerSource, contains('_decodeItemHashes('));
     expect(providerSource, contains('_itemDeltaCollections'));
     expect(providerSource, contains('_objectDeltaCollections'));
+    expect(providerSource, contains("'location_reminders'"));
     expect(providerSource, contains("_itemHashesStorageKey"));
 
     final syncBody = providerSource.substring(
@@ -252,13 +277,142 @@ void main() {
     ).readAsStringSync();
 
     expect(providerSource, contains("'user_profile': 'user_profile'"));
-    expect(mainSource, contains('cloudSyncProvider.onSynced = ()'));
+    expect(
+      mainSource,
+      contains('cloudSyncProvider.onSynced = (changedCollections)'),
+    );
     expect(
       mainSource,
       contains('cloudSyncProvider.suppressDirtyMarkWhile(() async {'),
     );
-    expect(mainSource, contains('await userProvider.loadFromStorage();'));
+    expect(mainSource, contains('futures.add(userProvider.loadFromStorage())'));
     expect(mainSource, contains('userProvider.addListener(markDirty);'));
+  });
+
+  test('同步回调携带实际变更集合，main 只刷新命中的 provider', () {
+    final mainSource = File('lib/main.dart').readAsStringSync();
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+
+    expect(providerSource, contains('typedef SyncChangedCollectionsCallback'));
+    expect(
+      providerSource,
+      contains('Future<void> Function(Set<String> changedCollections)'),
+    );
+    expect(providerSource, contains('class _SyncApplyResult'));
+    expect(
+      providerSource,
+      contains('Future<_SyncApplyResult> _applySyncResponse'),
+    );
+    expect(providerSource, contains('final skippedCollections = <String>{};'));
+    expect(providerSource, contains('final localChangedBeforeApply ='));
+    expect(providerSource, contains('skippedCollections.add(remoteKey);'));
+    expect(
+      providerSource,
+      contains('if (!localChangedBeforeApply && skippedCollections.isEmpty)'),
+    );
+    expect(providerSource, contains('final previousHashes ='));
+    expect(providerSource, contains('final nextHashes ='));
+    expect(
+      providerSource,
+      contains('if (applyResult.changedCollections.isNotEmpty)'),
+    );
+    expect(
+      providerSource,
+      contains('await onSynced?.call(applyResult.changedCollections);'),
+    );
+
+    expect(
+      mainSource,
+      contains('cloudSyncProvider.onSynced = (changedCollections)'),
+    );
+    expect(mainSource, contains("changedCollections.contains('todos')"));
+    expect(mainSource, contains('futures.add(todoProvider.loadFromStorage())'));
+    expect(mainSource, contains("changedCollections.contains('habits')"));
+    expect(
+      mainSource,
+      contains('futures.add(habitProvider.loadFromStorage())'),
+    );
+    expect(
+      mainSource,
+      contains("changedCollections.contains('pomodoro_sessions')"),
+    );
+    expect(
+      mainSource,
+      contains('futures.add(pomodoroProvider.loadFromStorage())'),
+    );
+    expect(mainSource, contains("changedCollections.contains('user_profile')"));
+    expect(mainSource, contains('await authProvider.refreshMe();'));
+    expect(
+      mainSource,
+      contains("changedCollections.contains('location_reminders')"),
+    );
+    expect(
+      mainSource,
+      contains('futures.add(locationReminderProvider.loadFromStorage())'),
+    );
+    expect(mainSource, contains('await syncLocationGeofences();'));
+    expect(
+      mainSource,
+      contains(
+        'await ReminderRingtoneSettings.applyPersistedSettingsToNative();',
+      ),
+    );
+    expect(
+      mainSource,
+      contains("changedCollections.contains('workspace_payloads')"),
+    );
+    expect(mainSource, contains('await shareProvider.load();'));
+
+    final onSyncedBody = mainSource.substring(
+      mainSource.indexOf('cloudSyncProvider.onSynced = (changedCollections)'),
+      mainSource.indexOf(
+        'authProvider.addListener(() {',
+        mainSource.indexOf('cloudSyncProvider.onSynced = (changedCollections)'),
+      ),
+    );
+    expect(
+      onSyncedBody,
+      isNot(contains('await todoProvider.loadFromStorage();')),
+    );
+    expect(onSyncedBody, contains('await Future.wait(futures);'));
+  });
+
+  test('同步回写内容相同时跳过 SharedPreferences 写入，降低无效 IO', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+
+    expect(providerSource, contains('Future<void> _writeLocalList('));
+    expect(providerSource, contains('Map<String, dynamic> _readLocalObject('));
+    expect(providerSource, contains('Future<void> _writeLocalObject('));
+    expect(
+      providerSource,
+      contains('_syncPayloadHash(_readLocalList(prefs, localKey))'),
+    );
+    expect(
+      providerSource,
+      contains('_syncPayloadHash(_readLocalObject(prefs, localKey))'),
+    );
+    expect(
+      providerSource,
+      contains('await _writeLocalList(prefs, localKey, filteredValue);'),
+    );
+    expect(
+      providerSource,
+      contains('await _writeLocalObject(prefs, localKey, value);'),
+    );
+
+    final applyBody = providerSource.substring(
+      providerSource.indexOf('Future<_SyncApplyResult> _applySyncResponse'),
+      providerSource.indexOf('Future<void> _persistServerRevision'),
+    );
+    expect(applyBody, isNot(contains('await prefs.setString(localKey')));
+    expect(
+      applyBody,
+      isNot(contains('await prefs.setStringList(\n          localKey')),
+    );
   });
 
   test('个人资料带更新时间，服务端可以按 updatedAt 合并新资料', () {
@@ -275,7 +429,14 @@ void main() {
       backendSource,
       contains('def _merge_dict(server: dict, client: dict)'),
     );
-    expect(backendSource, contains('client_ts = client.get("updatedAt")'));
+    expect(backendSource, contains('def _item_updated_at(item: dict)'));
+    expect(
+      backendSource,
+      contains(
+        'for key in ("updatedAt", "updated_at", "modifiedAt", "endTime", "createdAt")',
+      ),
+    );
+    expect(backendSource, contains('client_ts = _item_updated_at(client)'));
     expect(backendSource, contains('def _timestamp_gt(left: str, right: str)'));
     expect(backendSource, contains('_timestamp_gt(client_ts, server_ts)'));
   });
@@ -322,6 +483,15 @@ void main() {
     expect(source, contains('_changedWorkspaceFields(prior, item)'));
     expect(source, contains("'id', 'workspaceId', 'createdAt', 'updatedAt'"));
     expect(source, contains("winner: remoteWins ? 'remote' : 'local'"));
+    expect(source, contains('final oldTs = _remoteItemUpdatedAt(prior);'));
+    expect(source, contains('final newTs = _remoteItemUpdatedAt(item);'));
+    expect(
+      source,
+      contains(
+        'final remoteWins = oldTs.isEmpty || !_timestampGt(oldTs, newTs);',
+      ),
+    );
+    expect(source, isNot(contains('newTs.compareTo(oldTs)')));
     expect(source, contains('云端更新时间不早于本地'));
     expect(source, contains('本地更新时间更新'));
   });
@@ -361,7 +531,7 @@ void main() {
     expect(
       source,
       contains(
-        'return updatedAt.isNotEmpty && updatedAt.compareTo(deletedAt) > 0',
+        'return updatedAt.isNotEmpty && _timestampGt(updatedAt, deletedAt);',
       ),
     );
     expect(source, contains('prefs.setString('));
@@ -382,6 +552,12 @@ void main() {
     ).readAsStringSync();
     final calendar = File(
       'lib/providers/calendar_provider.dart',
+    ).readAsStringSync();
+    final locationReminders = File(
+      'lib/providers/location_reminder_provider.dart',
+    ).readAsStringSync();
+    final quickCaptureTemplates = File(
+      'lib/providers/quick_capture_template_provider.dart',
     ).readAsStringSync();
     final course = File(
       'lib/providers/course_provider.dart',
@@ -413,6 +589,14 @@ void main() {
       calendar,
       contains("CloudSyncProvider.recordDeletedItem('calendar_events'"),
     );
+    expect(
+      locationReminders,
+      contains("CloudSyncProvider.recordDeletedItem('location_reminders'"),
+    );
+    expect(
+      quickCaptureTemplates,
+      contains("CloudSyncProvider.recordDeletedItem('quick_capture_templates'"),
+    );
     expect(course, contains("CloudSyncProvider.recordDeletedItem('courses'"));
     expect(diary, contains("CloudSyncProvider.recordDeletedItem('diaries'"));
     expect(
@@ -421,4 +605,301 @@ void main() {
     );
     expect(goal, contains("CloudSyncProvider.recordDeletedItem('goals'"));
   });
+
+  test('偏好、位置提醒和共享空间漏项纳入同步链路', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+    final mainSource = File('lib/main.dart').readAsStringSync();
+    final backendSource = File('backend/main.py').readAsStringSync();
+
+    for (final field in const [
+      "'duoyi_location_reminders_v1': 'location_reminders'",
+      "'location_reminders'",
+      "'pref_reminder_ringtone_volume_percent'",
+      "'pref_reminder_ringtone_sound'",
+      "'courses': _WorkspacePayloadSpec(",
+      "'time_entries': _WorkspacePayloadSpec(",
+      "localKey: 'duoyi_courses'",
+      "localKey: 'duoyi_time_entries'",
+    ]) {
+      expect(providerSource, contains(field), reason: field);
+    }
+
+    for (final field in const [
+      'locationReminderProvider.addListener(markDirty);',
+      "changedCollections.contains('location_reminders')",
+      'futures.add(locationReminderProvider.loadFromStorage())',
+      'await syncLocationGeofences();',
+      'preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;',
+      'ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;',
+      'await ReminderRingtoneSettings.applyPersistedSettingsToNative();',
+    ]) {
+      expect(mainSource, contains(field), reason: field);
+    }
+
+    expect(
+      mainSource,
+      isNot(
+        contains(
+          'preferencesProvider.addListener(cloudSyncProvider.markPreferencesChanged);',
+        ),
+      ),
+    );
+
+    for (final field in const [
+      'static const _preferencesChangedKeysStorageKey',
+      'void markPreferencesChanged([Iterable<String>? keys])',
+      'if (keys != null && normalizedKeys.isEmpty) return;',
+      'final changedKeys = _readPendingPreferenceChangedKeys(prefs);',
+      "if (changedKeys.isNotEmpty) 'changedKeys': changedKeys",
+      'await prefs.remove(_preferencesChangedKeysStorageKey);',
+      'normalized.remove(\'changedKeys\');',
+      'normalized.remove(\'changed_keys\');',
+    ]) {
+      expect(providerSource, contains(field), reason: field);
+    }
+
+    final preferencesProvider = File(
+      'lib/providers/preferences_provider.dart',
+    ).readAsStringSync();
+    final ringtoneSettings = File(
+      'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
+    for (final field in const [
+      'void Function(Iterable<String> keys)? onChangedKeys;',
+      'onChangedKeys?.call(cleanKeys);',
+      '_notifyPreferenceKeys(const [_kFirstDayOfWeek]);',
+      '_notifyPreferenceKeys(_dailyReminderSlotKeys(index));',
+      '_notifyPreferenceKeys(const [_kBottomNavVisible]);',
+      '_notifyPreferenceKeys(const [_kBottomNavOrder]);',
+    ]) {
+      expect(preferencesProvider, contains(field), reason: field);
+    }
+    for (final field in const [
+      'static void Function(Iterable<String> keys)? onChanged;',
+      'onChanged?.call(const [volumePreferenceKey]);',
+      'onChanged?.call(const [soundPreferenceKey]);',
+    ]) {
+      expect(ringtoneSettings, contains(field), reason: field);
+    }
+
+    for (final field in const [
+      'location_reminders TEXT DEFAULT',
+      '("sync_data", "location_reminders", "\'[]\'")',
+      'location_reminders: list = []',
+      '"location_reminders"',
+      'server_location_reminders = _list("location_reminders")',
+      'merged_location_reminders = _merge_by_timestamp(',
+      'req.location_reminders',
+      'json.dumps(merged_location_reminders, ensure_ascii=False)',
+      'merged_diaries = _merge_diaries_by_date(',
+      'def _apply_tombstones_to_list(',
+      'next_payload[collection_key] = _apply_tombstones_to_list(',
+      'raw_changed_keys = client.get("changedKeys") or client.get("changed_keys")',
+      'if changed_keys:',
+      'result.pop("changedKeys", None)',
+    ]) {
+      expect(backendSource, contains(field), reason: field);
+    }
+  });
+
+  test('课表、纪念日和位置提醒携带 updatedAt 防止旧同步覆盖', () {
+    final courseModel = File(
+      'lib/models/course_schedule.dart',
+    ).readAsStringSync();
+    final courseProvider = File(
+      'lib/providers/course_provider.dart',
+    ).readAsStringSync();
+    final anniversaryModel = File(
+      'lib/models/anniversary.dart',
+    ).readAsStringSync();
+    final anniversaryProvider = File(
+      'lib/providers/anniversary_provider.dart',
+    ).readAsStringSync();
+    final locationModel = File(
+      'lib/models/location_reminder.dart',
+    ).readAsStringSync();
+    final locationProvider = File(
+      'lib/providers/location_reminder_provider.dart',
+    ).readAsStringSync();
+
+    for (final field in const [
+      'DateTime updatedAt;',
+      "'updatedAt': updatedAt.toIso8601String()",
+      "DateTime.tryParse(json['updatedAt']?.toString() ?? '')",
+      "DateTime.tryParse(json['updated_at']?.toString() ?? '')",
+    ]) {
+      expect(courseModel, contains(field), reason: 'course $field');
+      expect(anniversaryModel, contains(field), reason: 'anniversary $field');
+    }
+
+    for (final field in const [
+      'final DateTime updatedAt;',
+      "'updatedAt': updatedAt.toIso8601String()",
+      "DateTime.tryParse(json['updatedAt']?.toString() ?? '')",
+      "DateTime.tryParse(json['updated_at']?.toString() ?? '')",
+    ]) {
+      expect(locationModel, contains(field), reason: 'location $field');
+    }
+
+    expect(courseProvider, contains('course.updatedAt = DateTime.now();'));
+    expect(anniversaryProvider, contains('item.updatedAt = DateTime.now();'));
+    expect(
+      anniversaryProvider,
+      contains('_items[idx].updatedAt = DateTime.now();'),
+    );
+    expect(
+      locationProvider,
+      contains('reminder.copyWith(updatedAt: DateTime.now())'),
+    );
+
+    final backendSource = File('backend/main.py').readAsStringSync();
+    for (final field in const [
+      'merged_annis = _merge_by_timestamp(',
+      'server_annis,',
+      'req.anniversaries,',
+      'merged_courses = _merge_by_timestamp(',
+      'server_courses,',
+      'req.courses,',
+      'merged_location_reminders = _merge_by_timestamp(',
+      'server_location_reminders,',
+      'req.location_reminders,',
+    ]) {
+      expect(backendSource, contains(field), reason: field);
+    }
+  });
+
+  test('会触发云同步的本地修改必须先落盘再通知监听', () {
+    final habit = File('lib/providers/habit_provider.dart').readAsStringSync();
+    final locationReminders = File(
+      'lib/providers/location_reminder_provider.dart',
+    ).readAsStringSync();
+    final quickCaptureTemplates = File(
+      'lib/providers/quick_capture_template_provider.dart',
+    ).readAsStringSync();
+
+    final addHabitBody = _methodBody(habit, 'Future<void> addHabit(');
+    expect(addHabitBody, contains('await _save();'));
+    expect(addHabitBody, contains('notifyListeners();'));
+    _expectBefore(addHabitBody, 'await _save();', 'notifyListeners();');
+
+    final importHabitsBody = _methodBody(
+      habit,
+      'Future<HabitImportSummary> importHabits(',
+    );
+    _expectBefore(importHabitsBody, 'await _save();', 'notifyListeners();');
+
+    final incrementBody = _methodBody(
+      habit,
+      'Future<void> incrementHabitForDate(',
+    );
+    _expectBefore(incrementBody, 'await _save();', 'notifyListeners();');
+
+    final decrementBody = _methodBody(
+      habit,
+      'Future<void> decrementHabitForDate(',
+    );
+    _expectBefore(decrementBody, 'await _save();', 'notifyListeners();');
+
+    final locationRemoveBody = _methodBody(
+      locationReminders,
+      'Future<void> remove(String id)',
+    );
+    _expectBefore(
+      locationRemoveBody,
+      "await CloudSyncProvider.recordDeletedItem('location_reminders', id);",
+      'notifyListeners();',
+    );
+    _expectBefore(locationRemoveBody, 'await _save();', 'notifyListeners();');
+
+    final saveTriggeredHitsBody = _methodBody(
+      locationReminders,
+      'Future<void> _saveTriggeredHits(',
+    );
+    expect(
+      saveTriggeredHitsBody,
+      contains(
+        "CloudSyncProvider.recordDeletedItems(\n        'location_reminders',",
+      ),
+    );
+    _expectBefore(
+      saveTriggeredHitsBody,
+      "await CloudSyncProvider.recordDeletedItems(",
+      'await _save();',
+    );
+    _expectBefore(
+      saveTriggeredHitsBody,
+      'await _save();',
+      'notifyListeners();',
+    );
+
+    final ingestFixBody = _methodBody(
+      locationReminders,
+      'List<LocationReminderHit> ingestFix(',
+    );
+    expect(ingestFixBody, contains('_saveTriggeredHits(removedIds);'));
+    expect(
+      ingestFixBody,
+      isNot(contains('_save();\n      notifyListeners();')),
+    );
+
+    final saveTemplateBody = _methodBody(
+      quickCaptureTemplates,
+      'Future<void> saveTemplate(',
+    );
+    _expectBefore(saveTemplateBody, 'await _persist();', 'notifyListeners();');
+
+    final deleteTemplateBody = _methodBody(
+      quickCaptureTemplates,
+      'Future<void> deleteTemplate(String id)',
+    );
+    _expectBefore(
+      deleteTemplateBody,
+      "await CloudSyncProvider.recordDeletedItem('quick_capture_templates', id);",
+      'notifyListeners();',
+    );
+    _expectBefore(
+      deleteTemplateBody,
+      'await _persist();',
+      'notifyListeners();',
+    );
+  });
+}
+
+String _methodBody(String source, String signature) {
+  final start = source.indexOf(signature);
+  expect(start, isNonNegative, reason: signature);
+  var parenDepth = 0;
+  var open = -1;
+  for (var i = start; i < source.length; i++) {
+    final char = source.codeUnitAt(i);
+    if (char == 40) parenDepth++;
+    if (char == 41 && parenDepth > 0) parenDepth--;
+    if (char == 123 && parenDepth == 0) {
+      open = i;
+      break;
+    }
+  }
+  expect(open, isNonNegative, reason: signature);
+  var depth = 0;
+  for (var i = open; i < source.length; i++) {
+    final char = source.codeUnitAt(i);
+    if (char == 123) depth++;
+    if (char == 125) depth--;
+    if (depth == 0) return source.substring(open, i + 1);
+  }
+  fail('未找到方法结束：$signature');
+}
+
+void _expectBefore(String source, String first, String second) {
+  final firstIndex = source.indexOf(first);
+  final secondIndex = source.indexOf(second);
+  expect(firstIndex, isNonNegative, reason: first);
+  expect(secondIndex, isNonNegative, reason: second);
+  expect(
+    firstIndex,
+    lessThan(secondIndex),
+    reason: '$first should precede $second',
+  );
 }

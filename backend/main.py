@@ -116,6 +116,19 @@ EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp"
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
 DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
+ADMIN_ALL_PERMISSION = "*"
+ADMIN_NO_PERMISSION = "__none__"
+ADMIN_PERMISSION_KEYS = {
+    "settings",
+    "users",
+    "coins",
+    "backup",
+    "ai",
+    "announcements",
+    "feedback",
+    "invites",
+    "audit",
+}
 
 
 def _env_any(*names: str, default: str = "") -> str:
@@ -294,9 +307,11 @@ _BACKUP_BYTES_SQL = """
  + length(sd.pomodoro_config) + length(sd.user_profile)
  + length(sd.notes) + length(sd.countdowns) + length(sd.anniversaries)
  + length(sd.diaries) + length(sd.goals) + length(sd.calendar_events)
- + length(sd.courses) + length(sd.time_entries) + length(sd.course_settings)
+ + length(sd.courses) + length(sd.time_entries) + length(sd.location_reminders)
+ + length(sd.course_settings)
  + length(sd.achievement_states) + length(sd.virtual_rewards)
- + length(sd.focus_rooms) + length(sd.theme_shop_state))
+ + length(sd.focus_rooms) + length(sd.theme_shop_state)
+ + length(sd.preferences) + length(sd.quick_capture_templates))
 """
 
 
@@ -418,6 +433,7 @@ def init_db():
             display_name TEXT DEFAULT '',
             bio TEXT DEFAULT '',
             is_admin INTEGER DEFAULT 0,
+            admin_permissions TEXT DEFAULT '[]',
             is_disabled INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
             last_login_at TEXT,
@@ -439,11 +455,14 @@ def init_db():
             calendar_events TEXT DEFAULT '[]',
             courses TEXT DEFAULT '[]',
             time_entries TEXT DEFAULT '[]',
+            location_reminders TEXT DEFAULT '[]',
             course_settings TEXT DEFAULT '{}',
             achievement_states TEXT DEFAULT '{}',
             virtual_rewards TEXT DEFAULT '{}',
             focus_rooms TEXT DEFAULT '{}',
             theme_shop_state TEXT DEFAULT '{}',
+            preferences TEXT DEFAULT '{}',
+            quick_capture_templates TEXT DEFAULT '{}',
             deleted_items TEXT DEFAULT '{}',
             sync_version INTEGER DEFAULT 0,
             updated_at TEXT DEFAULT (datetime('now')),
@@ -692,11 +711,14 @@ def init_db():
         ("sync_data", "calendar_events", "'[]'"),
         ("sync_data", "courses", "'[]'"),
         ("sync_data", "time_entries", "'[]'"),
+        ("sync_data", "location_reminders", "'[]'"),
         ("sync_data", "course_settings", "'{}'"),
         ("sync_data", "achievement_states", "'{}'"),
         ("sync_data", "virtual_rewards", "'{}'"),
         ("sync_data", "focus_rooms", "'{}'"),
         ("sync_data", "theme_shop_state", "'{}'"),
+        ("sync_data", "preferences", "'{}'"),
+        ("sync_data", "quick_capture_templates", "'{}'"),
         ("sync_data", "deleted_items", "'{}'"),
         ("sync_data", "sync_version", "0"),
         ("workspace_data", "calendar_events", "'[]'"),
@@ -707,6 +729,7 @@ def init_db():
         ("users", "email_verified", "0"),
         ("users", "display_name", "''"),
         ("users", "bio", "''"),
+        ("users", "admin_permissions", "'[]'"),
         ("invite_codes", "note", "''"),
         ("announcements", "updated_at", "datetime('now')"),
         ("focus_room_presence", "display_name", "''"),
@@ -791,12 +814,32 @@ def init_db():
         "ON feedback(user_id)"
     )
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_feedback_user_created_status "
+        "ON feedback(user_id, created_at, status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_feedback_created_at "
+        "ON feedback(created_at)"
+    )
+    conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_announcements_published_level_id "
         "ON announcements(published, level, id)"
     )
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_announcements_created_at "
+        "ON announcements(created_at)"
+    )
+    conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_invite_codes_used_created "
         "ON invite_codes(used_by, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_invite_codes_created_at "
+        "ON invite_codes(created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_invite_codes_used_at "
+        "ON invite_codes(used_at)"
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_audit_log_action_id "
@@ -845,9 +888,15 @@ def init_db():
             default=default_invite_code_required,
         ),
         "registration_enabled": default_registration_enabled,
-        "registration_email_required": _env_bool("REGISTRATION_EMAIL_REQUIRED", default=False),
+        "registration_email_required": _env_bool("REGISTRATION_EMAIL_REQUIRED", default=True),
         "maintenance_mode": False,
         "maintenance_message": "",
+        # App update policy exposed through /api/config.
+        "force_update_required": False,
+        "latest_version": "",
+        "minimum_supported_version": "",
+        "update_notes": "",
+        "update_download_url": "",
         # AI 由管理员统一在服务端配置，用户端仅调用 /api/ai/chat 代理
         "ai_enabled": False,
         "ai_base_url": os.getenv("AI_BASE_URL", "https://www.boxying.com"),
@@ -913,6 +962,26 @@ def init_db():
             "INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)",
             (k, json.dumps(v)),
         )
+    if os.getenv("REGISTRATION_EMAIL_REQUIRED") is None:
+        migrated = conn.execute(
+            "SELECT value FROM settings WHERE key=?",
+            ("registration_email_required_default_on_migrated",),
+        ).fetchone()
+        if migrated is None:
+            conn.execute(
+                "INSERT INTO settings(key, value) VALUES(?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                ("registration_email_required", json.dumps(True)),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)",
+                ("registration_email_required_default_on_migrated", json.dumps(True)),
+            )
+    conn.execute(
+        "UPDATE users SET admin_permissions=? "
+        "WHERE is_admin=1 AND (admin_permissions IS NULL OR admin_permissions='' OR admin_permissions='[]')",
+        (json.dumps([ADMIN_ALL_PERMISSION]),),
+    )
 
     # Bootstrap admin
     cur = conn.execute(
@@ -921,8 +990,15 @@ def init_db():
     if cur is None:
         admin_id = secrets.token_hex(16)
         conn.execute(
-            "INSERT INTO users(id, username, password_hash, is_admin) VALUES(?,?,?,1)",
-            (admin_id, ADMIN_BOOTSTRAP_USER, _hash_password(ADMIN_BOOTSTRAP_PASSWORD)),
+            "INSERT INTO users(id, username, password_hash, is_admin, admin_permissions) "
+            "VALUES(?,?,?,?,?)",
+            (
+                admin_id,
+                ADMIN_BOOTSTRAP_USER,
+                _hash_password(ADMIN_BOOTSTRAP_PASSWORD),
+                1,
+                json.dumps([ADMIN_ALL_PERMISSION]),
+            ),
         )
         conn.execute("INSERT INTO sync_data(user_id) VALUES(?)", (admin_id,))
     for row in conn.execute("SELECT id FROM users").fetchall():
@@ -1089,6 +1165,176 @@ def _ensure_account_unique(
     row = db.execute(sql, params).fetchone()
     if row is not None:
         raise HTTPException(status_code=409, detail="用户名或邮箱已被使用")
+
+
+def _admin_permissions_from_text(raw) -> list[str]:
+    try:
+        decoded = json.loads(raw or "[]")
+    except Exception:
+        decoded = []
+    if not isinstance(decoded, list):
+        return []
+    permissions: list[str] = []
+    for item in decoded:
+        text = str(item).strip()
+        if not text:
+            continue
+        if text in {ADMIN_ALL_PERMISSION, ADMIN_NO_PERMISSION}:
+            if text not in permissions:
+                permissions.append(text)
+            continue
+        if text in ADMIN_PERMISSION_KEYS and text not in permissions:
+            permissions.append(text)
+    return permissions
+
+
+def _normalize_admin_permissions(values: Optional[list[str]]) -> list[str]:
+    if values is None:
+        return []
+    normalized: list[str] = []
+    for item in values:
+        text = str(item).strip()
+        if not text:
+            continue
+        if text == ADMIN_NO_PERMISSION:
+            return [ADMIN_NO_PERMISSION]
+        if text == ADMIN_ALL_PERMISSION:
+            return [ADMIN_ALL_PERMISSION]
+        if text in ADMIN_PERMISSION_KEYS and text not in normalized:
+            normalized.append(text)
+    return normalized
+
+
+def _admin_permissions_for_response(raw, *, is_admin: bool) -> list[str]:
+    permissions = _admin_permissions_from_text(raw)
+    if ADMIN_NO_PERMISSION in permissions:
+        return []
+    if not permissions and is_admin:
+        return [ADMIN_ALL_PERMISSION]
+    return permissions
+
+
+def _admin_has_permission(row, permission: str) -> bool:
+    if row is None or not row["is_admin"] or row["is_disabled"]:
+        return False
+    permissions = _admin_permissions_from_text(row["admin_permissions"])
+    if not permissions:
+        return True
+    if ADMIN_NO_PERMISSION in permissions:
+        return False
+    return ADMIN_ALL_PERMISSION in permissions or permission in permissions
+
+
+def _ensure_admin_permission(db, user_id: str, permission: str) -> None:
+    row = db.execute(
+        "SELECT is_admin, is_disabled, admin_permissions FROM users WHERE id=?",
+        (user_id,),
+    ).fetchone()
+    if not _admin_has_permission(row, permission):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+
+def _json_object(raw) -> dict:
+    try:
+        value = json.loads(raw or "{}")
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _virtual_rewards_summary(raw) -> tuple[int, int]:
+    rewards = _json_object(raw)
+    balance = (rewards.get("balance") if isinstance(rewards, dict) else 0)
+    lifetime = (rewards.get("lifetime") if isinstance(rewards, dict) else balance)
+    return (
+        int(balance) if isinstance(balance, (int, float)) else 0,
+        int(lifetime) if isinstance(lifetime, (int, float)) else 0,
+    )
+
+
+def _merge_virtual_rewards(server: dict, client: dict) -> dict:
+    if not isinstance(server, dict):
+        server = {}
+    if not isinstance(client, dict):
+        client = {}
+    if not server:
+        return client
+    if not client:
+        return server
+
+    def _num(value, fallback=0) -> int:
+        return int(value) if isinstance(value, (int, float)) else fallback
+
+    def _ledger_items(value) -> list[dict]:
+        if not isinstance(value, list):
+            return []
+        return [dict(item) for item in value if isinstance(item, dict)]
+
+    server_ledger = _ledger_items(server.get("ledger"))
+    client_ledger = _ledger_items(client.get("ledger"))
+    server_ids = {str(item.get("id") or "") for item in server_ledger}
+    client_ids = {str(item.get("id") or "") for item in client_ledger}
+    server_unique = [
+        item for item in server_ledger if str(item.get("id") or "") not in client_ids
+    ]
+    client_unique = [
+        item for item in client_ledger if str(item.get("id") or "") not in server_ids
+    ]
+
+    server_balance = _num(server.get("balance"))
+    client_balance = _num(client.get("balance"))
+    if server_balance >= client_balance:
+        balance = server_balance + sum(_num(item.get("coins")) for item in client_unique)
+    else:
+        balance = client_balance + sum(_num(item.get("coins")) for item in server_unique)
+    balance = max(0, balance)
+
+    server_lifetime = _num(server.get("lifetime"), server_balance)
+    client_lifetime = _num(client.get("lifetime"), client_balance)
+    if server_lifetime >= client_lifetime:
+        lifetime = server_lifetime + sum(
+            max(0, _num(item.get("coins"))) for item in client_unique
+        )
+    else:
+        lifetime = client_lifetime + sum(
+            max(0, _num(item.get("coins"))) for item in server_unique
+        )
+    lifetime = max(lifetime, balance)
+
+    grant_ids = [
+        str(v)
+        for v in [*(server.get("grantIds") or []), *(client.get("grantIds") or [])]
+        if str(v)
+    ]
+    combined_ledger = []
+    seen = set()
+    for item in [*server_ledger, *client_ledger]:
+        item_id = str(item.get("id") or "")
+        if item_id and item_id in seen:
+            continue
+        if item_id:
+            seen.add(item_id)
+        combined_ledger.append(item)
+    combined_ledger.sort(
+        key=lambda item: str(item.get("awardedAt") or item.get("createdAt") or ""),
+        reverse=True,
+    )
+
+    server_ts = _item_updated_at(server)
+    client_ts = _item_updated_at(client)
+    updated_at = client_ts if _timestamp_gt(client_ts, server_ts) else server_ts
+    result = dict(server if not _timestamp_gt(client_ts, server_ts) else client)
+    result.update(
+        {
+            "balance": balance,
+            "lifetime": lifetime,
+            "grantIds": list(dict.fromkeys(grant_ids)),
+            "ledger": combined_ledger[:50],
+        }
+    )
+    if updated_at:
+        result["updatedAt"] = updated_at
+    return result
 
 
 def _user_response(row, *, token: Optional[str] = None) -> dict:
@@ -1403,11 +1649,14 @@ class SyncRequest(BaseModel):
     calendar_events: list = []
     courses: list = []
     time_entries: list = []
+    location_reminders: list = []
     course_settings: dict = {}
     achievement_states: dict = {}
     virtual_rewards: dict = {}
     focus_rooms: dict = {}
     theme_shop_state: dict = {}
+    preferences: dict = {}
+    quick_capture_templates: dict = {}
     deleted_items: dict = {}
     workspace_payloads: dict = {}
 
@@ -1543,6 +1792,12 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
     is_disabled: Optional[bool] = None
     new_password: Optional[str] = None
+    admin_permissions: Optional[list[str]] = None
+
+
+class UserCoinAdjustment(BaseModel):
+    delta: int
+    reason: Optional[str] = None
 
 
 class UserBulkStatus(BaseModel):
@@ -1562,6 +1817,12 @@ class SettingsUpdate(BaseModel):
     registration_email_required: Optional[bool] = None
     maintenance_mode: Optional[bool] = None
     maintenance_message: Optional[str] = None
+    # App update policy
+    force_update_required: Optional[bool] = None
+    latest_version: Optional[str] = None
+    minimum_supported_version: Optional[str] = None
+    update_notes: Optional[str] = None
+    update_download_url: Optional[str] = None
     # AI
     ai_enabled: Optional[bool] = None
     ai_base_url: Optional[str] = None
@@ -1623,6 +1884,39 @@ class SettingsUpdate(BaseModel):
     email_smtp_use_ssl: Optional[bool] = None
 
 
+AI_SETTING_KEYS = {
+    "ai_enabled",
+    "ai_base_url",
+    "ai_api_key",
+    "ai_model",
+    "ai_daily_quota",
+}
+
+BACKUP_SETTING_KEYS = {
+    "backup_enabled",
+    "backup_max_size_kb",
+    "backup_interval_minutes",
+    "backup_retain_days",
+    "server_backup_enabled",
+    "server_backup_interval_minutes",
+    "server_backup_retain_days",
+    "openlist_backup_enabled",
+    "openlist_webdav_url",
+    "openlist_public_url",
+    "openlist_username",
+    "openlist_password",
+    "openlist_backup_path",
+    "backup_email_enabled",
+    "backup_email_to",
+    "backup_email_from",
+    "backup_email_smtp_host",
+    "backup_email_smtp_port",
+    "backup_email_smtp_username",
+    "backup_email_smtp_password",
+    "backup_email_smtp_use_ssl",
+}
+
+
 class AiChatRequest(BaseModel):
     system: str = ""
     user: str
@@ -1677,9 +1971,21 @@ def public_config():
             "registration_invite_required": invite_required,
             "registration_enabled": registration_enabled,
             "allow_public_registration": registration_enabled,
-            "registration_email_required": _setting_get(db, "registration_email_required", False),
+            "registration_email_required": _setting_get(db, "registration_email_required", True),
             "maintenance_mode": _setting_get(db, "maintenance_mode", False),
             "maintenance_message": _setting_get(db, "maintenance_message", ""),
+            "force_update_required": _setting_get(db, "force_update_required", False),
+            "latest_version": _setting_get(db, "latest_version", ""),
+            "minimum_supported_version": _setting_get(db, "minimum_supported_version", ""),
+            "update_notes": _setting_get(db, "update_notes", ""),
+            "update_download_url": _setting_get(db, "update_download_url", ""),
+            "app_update": {
+                "force_update_required": _setting_get(db, "force_update_required", False),
+                "latest_version": _setting_get(db, "latest_version", ""),
+                "minimum_supported_version": _setting_get(db, "minimum_supported_version", ""),
+                "update_notes": _setting_get(db, "update_notes", ""),
+                "update_download_url": _setting_get(db, "update_download_url", ""),
+            },
             "ai_enabled": bool(
                 _setting_get(db, "ai_enabled", False)
                 and str(_setting_get(db, "ai_api_key", "")).strip() != ""
@@ -1809,13 +2115,14 @@ def ai_usage(user_id: str = Depends(_verify_token)):
 
 
 @app.post("/api/admin/ai/test")
-def admin_ai_test(_: str = Depends(_require_admin)):
+def admin_ai_test(actor: str = Depends(_require_admin)):
     """调一个极短 prompt 验证当前 AI 配置连通。"""
     import urllib.request
     import urllib.error
 
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "ai")
         if not _setting_get(db, "ai_enabled", False):
             raise HTTPException(status_code=503, detail="AI 未启用")
         api_key = str(_setting_get(db, "ai_api_key", "")).strip()
@@ -1869,6 +2176,7 @@ def admin_reminder_email_test(actor: str = Depends(_require_admin)):
     """发送一封极短测试邮件，验证邮件提醒 SMTP 配置可用。"""
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "settings")
         _send_reminder_email(
             db,
             actor,
@@ -1889,6 +2197,7 @@ def admin_account_email_test(actor: str = Depends(_require_admin)):
     """发送一封极短测试邮件，验证账号验证码邮件主备通道可用。"""
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "settings")
         recipient = _account_email_test_recipient(db, actor)
         if not recipient:
             raise HTTPException(
@@ -1947,6 +2256,8 @@ def admin_backups(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "backup")
         where, params = _backup_admin_filters(q=q, status=status)
         order_by = _backup_admin_order_by(sort)
         total = db.execute(
@@ -1996,6 +2307,7 @@ def export_backups_csv(
     limit, _offset = _admin_page_window(limit, 0, default_limit=5000, max_limit=20000)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "backup")
         where, params = _backup_admin_filters(q=q, status=status)
         order_by = _backup_admin_order_by(sort)
         total = db.execute(
@@ -2081,13 +2393,16 @@ def admin_backup_wipe(user_id: str, actor: str = Depends(_require_admin)):
     """清空某用户的所有云端备份(账号保留)。"""
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "backup")
         db.execute(
             "UPDATE sync_data SET todos='[]', habits='[]', pomodoro_sessions='[]', "
             "focus_penalties='[]', pomodoro_config='{}', user_profile='{}', "
             "notes='[]', countdowns='[]', "
             "anniversaries='[]', diaries='[]', goals='[]', calendar_events='[]', "
             "courses='[]', time_entries='[]', course_settings='{}', achievement_states='{}', "
-            "virtual_rewards='{}', focus_rooms='{}', theme_shop_state='{}', deleted_items='{}', "
+            "location_reminders='[]', "
+            "virtual_rewards='{}', focus_rooms='{}', theme_shop_state='{}', "
+            "preferences='{}', quick_capture_templates='{}', deleted_items='{}', "
             "updated_at=datetime('now') WHERE user_id=?",
             (user_id,),
         )
@@ -3081,6 +3396,8 @@ def admin_server_backups(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "backup")
         where, params = _server_backup_admin_filters(q=q, status=status)
         total = db.execute(
             f"SELECT COUNT(*) AS c FROM server_backups {where}", params
@@ -3107,6 +3424,7 @@ def export_server_backups_csv(
     limit, _offset = _admin_page_window(limit, 0, default_limit=5000, max_limit=20000)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "backup")
         where, params = _server_backup_admin_filters(q=q, status=status)
         order_by = _server_backup_admin_order_by(sort)
         total = db.execute(
@@ -3180,6 +3498,11 @@ def export_server_backups_csv(
 
 @app.post("/api/admin/server-backups/run")
 def admin_run_server_backup(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "backup")
+    finally:
+        db.close()
     return run_server_backup(actor)
 
 
@@ -5193,6 +5516,8 @@ TOMBSTONE_COLLECTIONS = {
     "calendar_events",
     "courses",
     "time_entries",
+    "location_reminders",
+    "quick_capture_templates",
 }
 
 
@@ -5235,11 +5560,14 @@ SYNC_PULL_COLLECTIONS = {
     "calendar_events",
     "courses",
     "time_entries",
+    "location_reminders",
     "course_settings",
     "achievement_states",
     "virtual_rewards",
     "focus_rooms",
     "theme_shop_state",
+    "preferences",
+    "quick_capture_templates",
     "deleted_items",
     "workspace_payloads",
 }
@@ -5252,6 +5580,8 @@ SYNC_OBJECT_COLLECTIONS = {
     "virtual_rewards",
     "focus_rooms",
     "theme_shop_state",
+    "preferences",
+    "quick_capture_templates",
 }
 
 SYNC_STATE_OBJECT_COLLECTIONS = {
@@ -5344,12 +5674,200 @@ def _merge_by_timestamp(
         if item_id not in merged:
             merged[item_id] = item
         else:
-            server_ts = merged[item_id].get("updatedAt", "")
-            client_ts = item.get("updatedAt", "")
+            server_ts = _item_updated_at(merged[item_id])
+            client_ts = _item_updated_at(item)
             if client_ts and (not server_ts or _timestamp_gt(client_ts, server_ts)):
                 merged[item_id] = item
     if collection and deleted_items:
         tombstones = deleted_items.get(collection, {})
+        if isinstance(tombstones, dict):
+            for item_id, deleted_at in tombstones.items():
+                item = merged.get(item_id)
+                if not isinstance(item, dict):
+                    continue
+                updated_at = _item_updated_at(item)
+                if not updated_at or _timestamp_gte(str(deleted_at), updated_at):
+                    merged.pop(item_id, None)
+    return list(merged.values())
+
+
+def _diary_date_key(item: dict) -> str:
+    raw = item.get("date") or item.get("day")
+    text = str(raw or "").strip()
+    parsed = _parse_server_time(text)
+    if parsed is not None:
+        return parsed.date().isoformat()
+    if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
+        return text[:10]
+    return text
+
+
+def _merge_diaries_by_date(
+    server: list,
+    client: list,
+    *,
+    deleted_items: Optional[dict] = None,
+) -> list:
+    by_id = _merge_by_timestamp(
+        server,
+        client,
+        collection="diaries",
+        deleted_items=deleted_items,
+    )
+    merged_by_date: dict[str, dict] = {}
+    for item in by_id:
+        if not isinstance(item, dict):
+            continue
+        date_key = _diary_date_key(item) or str(item.get("id") or "")
+        if not date_key:
+            continue
+        current = merged_by_date.get(date_key)
+        if current is None:
+            merged_by_date[date_key] = item
+            continue
+        current_ts = _item_updated_at(current)
+        item_ts = _item_updated_at(item)
+        if item_ts and (not current_ts or _timestamp_gt(item_ts, current_ts)):
+            merged_by_date[date_key] = item
+    return list(merged_by_date.values())
+
+
+def _apply_tombstones_to_list(
+    items: list,
+    collection: str,
+    deleted_items: Optional[dict],
+) -> list:
+    if not deleted_items:
+        return items
+    tombstones = deleted_items.get(collection, {})
+    if not isinstance(tombstones, dict):
+        return items
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            result.append(item)
+            continue
+        item_id = str(item.get("id") or "")
+        deleted_at = tombstones.get(item_id)
+        if not deleted_at:
+            result.append(item)
+            continue
+        updated_at = _item_updated_at(item)
+        if updated_at and _timestamp_gt(updated_at, str(deleted_at)):
+            result.append(item)
+    return result
+
+
+def _habit_completion_map(item: dict) -> dict[str, int]:
+    raw = item.get("completions")
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, value in raw.items():
+        date_key = str(key).strip()
+        if not date_key:
+            continue
+        try:
+            count = int(value)
+        except Exception:
+            continue
+        if count > 0:
+            result[date_key] = count
+    return result
+
+
+def _habit_completion_updated_at_map(item: dict) -> dict[str, str]:
+    raw = item.get("completionUpdatedAt") or item.get("completion_updated_at")
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key, value in raw.items():
+        date_key = str(key).strip()
+        stamp = str(value or "").strip()
+        if date_key and stamp:
+            result[date_key] = stamp
+    return result
+
+
+def _merge_habit_item(server_item: dict, client_item: dict) -> dict:
+    server_ts = _item_updated_at(server_item)
+    client_ts = _item_updated_at(client_item)
+    client_is_newer = client_ts and (
+        not server_ts or _timestamp_gt(client_ts, server_ts)
+    )
+    result = dict(client_item if client_is_newer else server_item)
+    server_completions = _habit_completion_map(server_item)
+    client_completions = _habit_completion_map(client_item)
+    server_completion_updated_at = _habit_completion_updated_at_map(server_item)
+    client_completion_updated_at = _habit_completion_updated_at_map(client_item)
+
+    completions: dict[str, int] = {}
+    completion_updated_at: dict[str, str] = {}
+    date_keys = (
+        set(server_completions.keys())
+        | set(client_completions.keys())
+        | set(server_completion_updated_at.keys())
+        | set(client_completion_updated_at.keys())
+    )
+    for date_key in sorted(date_keys):
+        server_completion_ts = server_completion_updated_at.get(date_key)
+        client_completion_ts = client_completion_updated_at.get(date_key)
+        if server_completion_ts or client_completion_ts:
+            client_wins = bool(client_completion_ts) and (
+                not server_completion_ts
+                or _timestamp_gt(client_completion_ts, server_completion_ts)
+            )
+            count = (
+                client_completions.get(date_key, 0)
+                if client_wins
+                else server_completions.get(date_key, 0)
+            )
+            stamp = client_completion_ts if client_wins else server_completion_ts
+            if stamp:
+                completion_updated_at[date_key] = stamp
+        else:
+            count = max(
+                server_completions.get(date_key, 0),
+                client_completions.get(date_key, 0),
+            )
+        if count > 0:
+            completions[date_key] = count
+    result["completions"] = completions
+    result["completionUpdatedAt"] = completion_updated_at
+    result["currentStreak"] = int(result.get("currentStreak") or 0)
+    result["bestStreak"] = max(
+        int(server_item.get("bestStreak") or 0),
+        int(client_item.get("bestStreak") or 0),
+    )
+    result["updatedAt"] = client_ts if client_is_newer else server_ts or client_ts
+    return result
+
+
+def _merge_habits_by_timestamp(
+    server: list,
+    client: list,
+    *,
+    deleted_items: Optional[dict] = None,
+) -> list:
+    merged = {
+        str(item.get("id")): item
+        for item in server
+        if isinstance(item, dict) and item.get("id") is not None
+    }
+    for item in client:
+        if not isinstance(item, dict):
+            continue
+        item_id = item.get("id")
+        if item_id is None:
+            continue
+        item_id = str(item_id)
+        prior = merged.get(item_id)
+        if not isinstance(prior, dict):
+            merged[item_id] = item
+        elif _payload_hash(prior) != _payload_hash(item):
+            merged[item_id] = _merge_habit_item(prior, item)
+    if deleted_items:
+        tombstones = deleted_items.get("habits", {})
         if isinstance(tombstones, dict):
             for item_id, deleted_at in tombstones.items():
                 item = merged.get(item_id)
@@ -5367,6 +5885,10 @@ def _prune_deleted_items(deleted_items: dict, collections: dict[str, list]) -> d
         tombstones = pruned.get(collection)
         if not tombstones:
             continue
+        if isinstance(items, dict):
+            items = items.get("items", [])
+        if not isinstance(items, list):
+            items = []
         by_id = {
             str(item.get("id")): item
             for item in items
@@ -5384,11 +5906,129 @@ def _prune_deleted_items(deleted_items: dict, collections: dict[str, list]) -> d
 
 
 def _merge_dict(server: dict, client: dict) -> dict:
-    server_ts = server.get("updatedAt") if isinstance(server, dict) else None
-    client_ts = client.get("updatedAt") if isinstance(client, dict) else None
+    server_ts = _item_updated_at(server) if isinstance(server, dict) else None
+    client_ts = _item_updated_at(client) if isinstance(client, dict) else None
     if client_ts and (not server_ts or _timestamp_gt(client_ts, server_ts)):
         return client
     return server or client
+
+
+def _latest_timestamp(*values: str) -> str:
+    latest = ""
+    for value in values:
+        text = str(value or "")
+        if text and (not latest or _timestamp_gt(text, latest)):
+            latest = text
+    return latest
+
+
+def _merge_preferences(server: dict, client: dict) -> dict:
+    if not isinstance(server, dict):
+        server = {}
+    if not isinstance(client, dict):
+        client = {}
+    if not server:
+        return client
+    if not client:
+        return server
+    server_ts = _item_updated_at(server)
+    client_ts = _item_updated_at(client)
+    client_is_newer = client_ts and (
+        not server_ts or _timestamp_gt(client_ts, server_ts)
+    )
+    result = dict(client if client_is_newer else server)
+    result.pop("changedKeys", None)
+    result.pop("changed_keys", None)
+    server_values = (
+        server.get("values") if isinstance(server.get("values"), dict) else {}
+    )
+    client_values = (
+        client.get("values") if isinstance(client.get("values"), dict) else {}
+    )
+    values = dict(server_values)
+    raw_changed_keys = client.get("changedKeys") or client.get("changed_keys")
+    changed_keys = {
+        str(key).strip()
+        for key in raw_changed_keys
+        if str(key).strip()
+    } if isinstance(raw_changed_keys, list) else set()
+    if changed_keys:
+        for key_text in changed_keys:
+            if key_text in client_values:
+                values[key_text] = client_values[key_text]
+            else:
+                values.pop(key_text, None)
+    else:
+        for key, value in client_values.items():
+            key_text = str(key)
+            if key_text not in values or client_is_newer:
+                values[key_text] = value
+    result["values"] = values
+    latest = _latest_timestamp(server_ts, client_ts)
+    if latest:
+        result["updatedAt"] = latest
+    return result
+
+
+def _merge_quick_capture_templates(
+    server: dict,
+    client: dict,
+    *,
+    deleted_items: Optional[dict] = None,
+) -> dict:
+    if not isinstance(server, dict):
+        server = {}
+    if not isinstance(client, dict):
+        client = {}
+    server_ts = _item_updated_at(server)
+    client_ts = _item_updated_at(client)
+    client_is_newer = client_ts and (
+        not server_ts or _timestamp_gt(client_ts, server_ts)
+    )
+    result = dict(client if client_is_newer else server)
+
+    merged: dict[str, dict] = {}
+    for source in (server, client):
+        raw_items = source.get("items") if isinstance(source, dict) else []
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items:
+            if not isinstance(item, dict) or item.get("id") is None:
+                continue
+            item_id = str(item.get("id"))
+            current = merged.get(item_id)
+            if current is None:
+                merged[item_id] = item
+                continue
+            current_ts = _item_updated_at(current)
+            item_ts = _item_updated_at(item)
+            if item_ts and (not current_ts or _timestamp_gt(item_ts, current_ts)):
+                merged[item_id] = item
+
+    tombstones = {}
+    if isinstance(deleted_items, dict):
+        raw_tombstones = deleted_items.get("quick_capture_templates", {})
+        if isinstance(raw_tombstones, dict):
+            tombstones = raw_tombstones
+    for item_id, deleted_at in tombstones.items():
+        item = merged.get(str(item_id))
+        if not isinstance(item, dict):
+            continue
+        updated_at = _item_updated_at(item)
+        if not updated_at or _timestamp_gte(str(deleted_at), updated_at):
+            merged.pop(str(item_id), None)
+
+    items = list(merged.values())
+    items.sort(key=lambda item: str(item.get("createdAt") or item.get("id") or ""))
+    result["items"] = items
+    latest = _latest_timestamp(
+        server_ts,
+        client_ts,
+        *(_item_updated_at(item) for item in items if isinstance(item, dict)),
+    )
+    if latest:
+        result["updatedAt"] = latest
+    return result
 
 
 def _merge_state_dict(server: dict, client: dict) -> dict:
@@ -5409,30 +6049,100 @@ def _apply_item_delta_to_payload(payload: dict, req: SyncItemDeltaRequest) -> di
         collection_key = str(collection)
         if collection_key not in TOMBSTONE_COLLECTIONS:
             continue
+        if collection_key in SYNC_OBJECT_COLLECTIONS:
+            continue
         if not isinstance(changes, list):
             continue
         current = next_payload.get(collection_key)
         current_list = current if isinstance(current, list) else []
-        next_payload[collection_key] = _merge_by_timestamp(
-            current_list,
-            changes,
-            collection=collection_key,
-            deleted_items=deleted_items,
-        )
+        if collection_key == "habits":
+            next_payload[collection_key] = _merge_habits_by_timestamp(
+                current_list,
+                changes,
+                deleted_items=deleted_items,
+            )
+        elif collection_key == "diaries":
+            next_payload[collection_key] = _merge_diaries_by_date(
+                current_list,
+                changes,
+                deleted_items=deleted_items,
+            )
+        else:
+            next_payload[collection_key] = _merge_by_timestamp(
+                current_list,
+                changes,
+                collection=collection_key,
+                deleted_items=deleted_items,
+            )
     for key, value in (req.objects or {}).items():
         key_text = str(key)
         if key_text not in SYNC_OBJECT_COLLECTIONS:
             continue
         current = next_payload.get(key_text)
-        if key_text in SYNC_STATE_OBJECT_COLLECTIONS:
+        if key_text == "virtual_rewards":
+            next_payload[key_text] = _merge_virtual_rewards(
+                current if isinstance(current, dict) else {},
+                value if isinstance(value, dict) else {},
+            )
+        elif key_text in SYNC_STATE_OBJECT_COLLECTIONS:
             next_payload[key_text] = _merge_state_dict(
                 current if isinstance(current, dict) else {},
                 value if isinstance(value, dict) else {},
+            )
+        elif key_text == "preferences":
+            next_payload[key_text] = _merge_preferences(
+                current if isinstance(current, dict) else {},
+                value if isinstance(value, dict) else {},
+            )
+        elif key_text == "quick_capture_templates":
+            next_payload[key_text] = _merge_quick_capture_templates(
+                current if isinstance(current, dict) else {},
+                value if isinstance(value, dict) else {},
+                deleted_items=deleted_items,
             )
         else:
             next_payload[key_text] = _merge_dict(
                 current if isinstance(current, dict) else {},
                 value if isinstance(value, dict) else {},
+            )
+    if "quick_capture_templates" in deleted_items:
+        current = next_payload.get("quick_capture_templates")
+        next_payload["quick_capture_templates"] = _merge_quick_capture_templates(
+            current if isinstance(current, dict) else {},
+            {},
+            deleted_items=deleted_items,
+        )
+    for collection, tombstones in deleted_items.items():
+        collection_key = str(collection)
+        if collection_key == "quick_capture_templates":
+            continue
+        if collection_key not in TOMBSTONE_COLLECTIONS:
+            continue
+        if collection_key in SYNC_OBJECT_COLLECTIONS:
+            continue
+        if collection_key in (req.items or {}):
+            continue
+        if not isinstance(tombstones, dict) or not tombstones:
+            continue
+        current = next_payload.get(collection_key)
+        current_list = current if isinstance(current, list) else []
+        if collection_key == "habits":
+            next_payload[collection_key] = _merge_habits_by_timestamp(
+                current_list,
+                [],
+                deleted_items=deleted_items,
+            )
+        elif collection_key == "diaries":
+            next_payload[collection_key] = _merge_diaries_by_date(
+                current_list,
+                [],
+                deleted_items=deleted_items,
+            )
+        else:
+            next_payload[collection_key] = _apply_tombstones_to_list(
+                current_list,
+                collection_key,
+                deleted_items,
             )
     next_payload["deleted_items"] = _prune_deleted_items(
         deleted_items,
@@ -5737,11 +6447,14 @@ def _sync_payload_from_row(db, user_id: str, row: Optional[sqlite3.Row]) -> dict
         "calendar_events": _list("calendar_events"),
         "courses": _list("courses"),
         "time_entries": _list("time_entries"),
+        "location_reminders": _list("location_reminders"),
         "course_settings": _obj("course_settings"),
         "achievement_states": _obj("achievement_states"),
         "virtual_rewards": _obj("virtual_rewards"),
         "focus_rooms": _obj("focus_rooms"),
         "theme_shop_state": _obj("theme_shop_state"),
+        "preferences": _obj("preferences"),
+        "quick_capture_templates": _obj("quick_capture_templates"),
         "deleted_items": _obj("deleted_items"),
         "workspace_payloads": _merge_workspace_payloads(db, user_id, {}),
     }
@@ -5794,8 +6507,9 @@ def _sync_impl(
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "
             "notes, countdowns, anniversaries, diaries, goals, calendar_events, "
-            "courses, time_entries, course_settings, achievement_states, virtual_rewards, focus_rooms, "
-            "focus_penalties, theme_shop_state, deleted_items, sync_version "
+            "courses, time_entries, location_reminders, course_settings, achievement_states, virtual_rewards, focus_rooms, "
+            "focus_penalties, theme_shop_state, preferences, quick_capture_templates, "
+            "deleted_items, sync_version "
             "FROM sync_data WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -5823,11 +6537,14 @@ def _sync_impl(
         server_calendar_events = _list("calendar_events")
         server_courses = _list("courses")
         server_time_entries = _list("time_entries")
+        server_location_reminders = _list("location_reminders")
         server_course_settings = _obj("course_settings")
         server_achievement_states = _obj("achievement_states")
         server_virtual_rewards = _obj("virtual_rewards")
         server_focus_rooms = _obj("focus_rooms")
         server_theme_shop_state = _obj("theme_shop_state")
+        server_preferences = _obj("preferences")
+        server_quick_capture_templates = _obj("quick_capture_templates")
         server_deleted_items = _obj("deleted_items")
         merged_deleted_items = _merge_deleted_items(
             server_deleted_items, req.deleted_items
@@ -5839,10 +6556,9 @@ def _sync_impl(
             collection="todos",
             deleted_items=merged_deleted_items,
         )
-        merged_habits = _merge_by_timestamp(
+        merged_habits = _merge_habits_by_timestamp(
             server_habits,
             req.habits,
-            collection="habits",
             deleted_items=merged_deleted_items,
         )
         merged_sessions = _merge_by_timestamp(
@@ -5877,10 +6593,9 @@ def _sync_impl(
             collection="anniversaries",
             deleted_items=merged_deleted_items,
         )
-        merged_diaries = _merge_by_timestamp(
+        merged_diaries = _merge_diaries_by_date(
             server_diaries,
             req.diaries,
-            collection="diaries",
             deleted_items=merged_deleted_items,
         )
         merged_goals = _merge_by_timestamp(
@@ -5907,18 +6622,30 @@ def _sync_impl(
             collection="time_entries",
             deleted_items=merged_deleted_items,
         )
+        merged_location_reminders = _merge_by_timestamp(
+            server_location_reminders,
+            req.location_reminders,
+            collection="location_reminders",
+            deleted_items=merged_deleted_items,
+        )
         merged_course_settings = _merge_dict(
             server_course_settings, req.course_settings
         )
         merged_achievement_states = _merge_state_dict(
             server_achievement_states, req.achievement_states
         )
-        merged_virtual_rewards = _merge_state_dict(
+        merged_virtual_rewards = _merge_virtual_rewards(
             server_virtual_rewards, req.virtual_rewards
         )
         merged_focus_rooms = _merge_dict(server_focus_rooms, req.focus_rooms)
         merged_theme_shop_state = _merge_dict(
             server_theme_shop_state, req.theme_shop_state
+        )
+        merged_preferences = _merge_preferences(server_preferences, req.preferences)
+        merged_quick_capture_templates = _merge_quick_capture_templates(
+            server_quick_capture_templates,
+            req.quick_capture_templates,
+            deleted_items=merged_deleted_items,
         )
         merged_workspace_payloads = _merge_workspace_payloads(
             db, user_id, req.workspace_payloads
@@ -5938,6 +6665,8 @@ def _sync_impl(
                 "calendar_events": merged_calendar_events,
                 "courses": merged_courses,
                 "time_entries": merged_time_entries,
+                "location_reminders": merged_location_reminders,
+                "quick_capture_templates": merged_quick_capture_templates,
             },
         )
 
@@ -5946,10 +6675,11 @@ def _sync_impl(
             INSERT OR REPLACE INTO sync_data
             (user_id, todos, habits, pomodoro_sessions, pomodoro_config, user_profile,
              notes, countdowns, anniversaries, diaries, goals, calendar_events,
-             courses, time_entries,
+             courses, time_entries, location_reminders,
              course_settings, achievement_states, virtual_rewards, focus_rooms,
-             focus_penalties, theme_shop_state, deleted_items, sync_version, updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             focus_penalties, theme_shop_state, preferences, quick_capture_templates,
+             deleted_items, sync_version, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 user_id,
@@ -5966,12 +6696,15 @@ def _sync_impl(
                 json.dumps(merged_calendar_events, ensure_ascii=False),
                 json.dumps(merged_courses, ensure_ascii=False),
                 json.dumps(merged_time_entries, ensure_ascii=False),
+                json.dumps(merged_location_reminders, ensure_ascii=False),
                 json.dumps(merged_course_settings, ensure_ascii=False),
                 json.dumps(merged_achievement_states, ensure_ascii=False),
                 json.dumps(merged_virtual_rewards, ensure_ascii=False),
                 json.dumps(merged_focus_rooms, ensure_ascii=False),
                 json.dumps(merged_focus_penalties, ensure_ascii=False),
                 json.dumps(merged_theme_shop_state, ensure_ascii=False),
+                json.dumps(merged_preferences, ensure_ascii=False),
+                json.dumps(merged_quick_capture_templates, ensure_ascii=False),
                 json.dumps(merged_deleted_items, ensure_ascii=False),
                 next_sync_version,
                 sync_updated_at,
@@ -5997,11 +6730,14 @@ def _sync_impl(
                 "calendar_events": merged_calendar_events,
                 "courses": merged_courses,
                 "time_entries": merged_time_entries,
+                "location_reminders": merged_location_reminders,
                 "course_settings": merged_course_settings,
                 "achievement_states": merged_achievement_states,
                 "virtual_rewards": merged_virtual_rewards,
                 "focus_rooms": merged_focus_rooms,
                 "theme_shop_state": merged_theme_shop_state,
+                "preferences": merged_preferences,
+                "quick_capture_templates": merged_quick_capture_templates,
                 "deleted_items": merged_deleted_items,
                 "workspace_payloads": merged_workspace_payloads,
             },
@@ -6024,8 +6760,9 @@ def sync_delta(req: SyncDeltaRequest, user_id: str = Depends(_verify_token)):
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "
             "notes, countdowns, anniversaries, diaries, goals, calendar_events, "
-            "courses, time_entries, course_settings, achievement_states, virtual_rewards, focus_rooms, "
-            "focus_penalties, theme_shop_state, deleted_items, sync_version "
+            "courses, time_entries, location_reminders, course_settings, achievement_states, virtual_rewards, focus_rooms, "
+            "focus_penalties, theme_shop_state, preferences, quick_capture_templates, "
+            "deleted_items, sync_version "
             "FROM sync_data WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -6052,8 +6789,9 @@ def sync_item_delta(req: SyncItemDeltaRequest, user_id: str = Depends(_verify_to
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "
             "notes, countdowns, anniversaries, diaries, goals, calendar_events, "
-            "courses, time_entries, course_settings, achievement_states, virtual_rewards, focus_rooms, "
-            "focus_penalties, theme_shop_state, deleted_items, sync_version "
+            "courses, time_entries, location_reminders, course_settings, achievement_states, virtual_rewards, focus_rooms, "
+            "focus_penalties, theme_shop_state, preferences, quick_capture_templates, "
+            "deleted_items, sync_version "
             "FROM sync_data WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -6081,8 +6819,9 @@ def sync_pull(req: SyncPullRequest, user_id: str = Depends(_verify_token)):
         row = db.execute(
             "SELECT todos, habits, pomodoro_sessions, pomodoro_config, user_profile, "
             "notes, countdowns, anniversaries, diaries, goals, calendar_events, "
-            "courses, time_entries, course_settings, achievement_states, virtual_rewards, focus_rooms, "
-            "focus_penalties, theme_shop_state, deleted_items, sync_version, updated_at "
+            "courses, time_entries, location_reminders, course_settings, achievement_states, virtual_rewards, focus_rooms, "
+            "focus_penalties, theme_shop_state, preferences, quick_capture_templates, "
+            "deleted_items, sync_version, updated_at "
             "FROM sync_data WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -6667,15 +7406,40 @@ def create_feedback(req: FeedbackCreate, user_id: str = Depends(_verify_token)):
 
 
 @app.get("/api/feedback/me")
-def my_feedback(user_id: str = Depends(_verify_token)):
+def my_feedback(
+    user_id: str = Depends(_verify_token),
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+):
     db = get_db()
     try:
+        if page is None and page_size is None:
+            rows = db.execute(
+                "SELECT id, category, content, status, admin_reply, created_at, updated_at "
+                "FROM feedback WHERE user_id=? ORDER BY id DESC",
+                (user_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        current_page = max(1, int(page or 1))
+        current_page_size = max(1, min(int(page_size or 20), 100))
+        offset = (current_page - 1) * current_page_size
+        total = db.execute(
+            "SELECT COUNT(*) AS c FROM feedback WHERE user_id=?",
+            (user_id,),
+        ).fetchone()["c"]
         rows = db.execute(
             "SELECT id, category, content, status, admin_reply, created_at, updated_at "
-            "FROM feedback WHERE user_id=? ORDER BY id DESC",
-            (user_id,),
+            "FROM feedback WHERE user_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (user_id, current_page_size, offset),
         ).fetchall()
-        return [dict(r) for r in rows]
+        total = int(total or 0)
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": current_page,
+            "page_size": current_page_size,
+            "total_pages": (total + current_page_size - 1) // current_page_size,
+        }
     finally:
         db.close()
 
@@ -6692,6 +7456,8 @@ def my_feedback(user_id: str = Depends(_verify_token)):
 def admin_stats(_: str = Depends(_require_admin)):
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "audit")
         online_ids = sorted(_online_user_ids())
         users_total = db.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
         users_admin = db.execute(
@@ -6786,6 +7552,8 @@ def admin_stats(_: str = Depends(_require_admin)):
 def admin_get_settings(_: str = Depends(_require_admin)):
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "settings")
         rows = db.execute("SELECT key, value FROM settings").fetchall()
         result: dict = {}
         for r in rows:
@@ -6825,8 +7593,67 @@ def admin_update_settings(
 ):
     db = get_db()
     try:
+        update_items = req.model_dump(exclude_none=True)
+        required_permissions = set()
+        if any(key in AI_SETTING_KEYS for key in update_items):
+            required_permissions.add("ai")
+        if any(key in BACKUP_SETTING_KEYS for key in update_items):
+            required_permissions.add("backup")
+        if any(
+            key not in AI_SETTING_KEYS and key not in BACKUP_SETTING_KEYS
+            for key in update_items
+        ) or not update_items:
+            required_permissions.add("settings")
+        for permission in sorted(required_permissions):
+            _ensure_admin_permission(db, actor, permission)
+        if any(
+            key in update_items
+            for key in (
+                "latest_version",
+                "minimum_supported_version",
+                "update_notes",
+                "update_download_url",
+                "force_update_required",
+            )
+        ):
+            latest_version = str(
+                update_items.get(
+                    "latest_version",
+                    _setting_get(db, "latest_version", ""),
+                )
+                or ""
+            ).strip()
+            minimum_supported_version = str(
+                update_items.get(
+                    "minimum_supported_version",
+                    _setting_get(db, "minimum_supported_version", ""),
+                )
+                or ""
+            ).strip()
+            update_download_url = str(
+                update_items.get(
+                    "update_download_url",
+                    _setting_get(db, "update_download_url", ""),
+                )
+                or ""
+            ).strip()
+            update_notes = str(
+                update_items.get("update_notes", _setting_get(db, "update_notes", ""))
+                or ""
+            ).strip()
+            has_update_policy = bool(
+                latest_version
+                or minimum_supported_version
+                or update_download_url
+                or update_items.get(
+                    "force_update_required",
+                    _setting_get(db, "force_update_required", False),
+                )
+            )
+            if has_update_policy and not update_notes:
+                raise HTTPException(status_code=400, detail="发布更新策略时必须填写更新内容")
         changed = {}
-        for key, value in req.model_dump(exclude_none=True).items():
+        for key, value in update_items.items():
             _setting_set(db, key, value)
             changed[key] = value
             if key == "allow_public_registration":
@@ -6870,6 +7697,8 @@ def admin_list_users(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "users")
         where, params = _user_admin_filters(q=q, status=status)
         if online is not None:
             online_ids = sorted(_online_user_ids())
@@ -6897,29 +7726,41 @@ def admin_list_users(
         ).fetchone()["c"]
         rows = db.execute(
             "SELECT u.id, u.username, u.email, u.email_verified, u.display_name, "
-            "u.is_admin, u.is_disabled, u.created_at, u.last_login_at, u.last_active_at, "
+            "u.is_admin, u.admin_permissions, u.is_disabled, "
+            "u.created_at, u.last_login_at, u.last_active_at, sd.virtual_rewards, "
             "(SELECT COUNT(*) FROM feedback WHERE user_id=u.id) AS fb_count "
-            f"FROM users u {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+            f"FROM users u LEFT JOIN sync_data sd ON sd.user_id=u.id {where} "
+            f"ORDER BY {order_by} LIMIT ? OFFSET ?",
             (*params, limit, offset),
         ).fetchall()
         online_user_ids = _online_user_ids(r["id"] for r in rows)
-        items = [
-            {
+        items = []
+        for r in rows:
+            coin_balance, lifetime_coins = _virtual_rewards_summary(
+                r["virtual_rewards"]
+            )
+            is_admin = bool(r["is_admin"])
+            items.append(
+                {
                 "user_id": r["id"],
                 "username": r["username"],
                 "email": r["email"],
                 "email_verified": bool(r["email_verified"]),
                 "display_name": r["display_name"],
-                "is_admin": bool(r["is_admin"]),
+                "is_admin": is_admin,
+                "admin_permissions": _admin_permissions_for_response(
+                    r["admin_permissions"], is_admin=is_admin
+                ),
                 "is_disabled": bool(r["is_disabled"]),
                 "created_at": r["created_at"],
                 "last_login_at": r["last_login_at"],
                 "last_active_at": r["last_active_at"],
                 "feedback_count": r["fb_count"],
                 "online": r["id"] in online_user_ids,
-            }
-            for r in rows
-        ]
+                "coin_balance": coin_balance,
+                "lifetime_coins": lifetime_coins,
+                }
+            )
         return _admin_page_response(items, total, limit, offset)
     finally:
         db.close()
@@ -6937,6 +7778,7 @@ def export_users_csv(
     limit, _offset = _admin_page_window(limit, 0, default_limit=5000, max_limit=20000)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "users")
         where, params = _user_admin_filters(q=q, status=status)
         if online is not None:
             online_ids = sorted(_online_user_ids())
@@ -7046,6 +7888,7 @@ def admin_bulk_update_user_status(
         raise HTTPException(status_code=400, detail="Cannot disable yourself")
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "users")
         placeholders = ",".join("?" for _ in user_ids)
         rows = db.execute(
             f"SELECT id, username, is_admin, is_disabled FROM users WHERE id IN ({placeholders})",
@@ -7102,8 +7945,10 @@ def admin_update_user(
 ):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "users")
         row = db.execute(
-            "SELECT id, username, is_admin FROM users WHERE id=?", (user_id,)
+            "SELECT id, username, is_admin, admin_permissions FROM users WHERE id=?",
+            (user_id,),
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
@@ -7126,10 +7971,27 @@ def admin_update_user(
                     status_code=400, detail="Cannot disable the last active admin"
                 )
 
+        next_is_admin = bool(row["is_admin"]) if req.is_admin is None else bool(req.is_admin)
+        next_permissions: Optional[list[str]] = None
+        if req.admin_permissions is not None:
+            next_permissions = _normalize_admin_permissions(req.admin_permissions)
+        elif req.is_admin is True and not _admin_permissions_from_text(row["admin_permissions"]):
+            next_permissions = [ADMIN_ALL_PERMISSION]
+        elif req.is_admin is False:
+            next_permissions = []
+
         if req.is_admin is not None:
             db.execute(
                 "UPDATE users SET is_admin=? WHERE id=?",
                 (1 if req.is_admin else 0, user_id),
+            )
+        if next_permissions is not None:
+            db.execute(
+                "UPDATE users SET admin_permissions=? WHERE id=?",
+                (
+                    json.dumps(next_permissions if next_is_admin else [], ensure_ascii=False),
+                    user_id,
+                ),
             )
         if req.is_disabled is not None:
             db.execute(
@@ -7159,12 +8021,109 @@ def admin_update_user(
         db.close()
 
 
+@app.post("/api/admin/users/{user_id}/coins")
+def admin_adjust_user_coins(
+    user_id: str, req: UserCoinAdjustment, actor: str = Depends(_require_admin)
+):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "coins")
+        delta = int(req.delta)
+        if delta == 0:
+            raise HTTPException(status_code=400, detail="调整数量不能为 0")
+        if abs(delta) > 1000000:
+            raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
+        user = db.execute(
+            "SELECT id, username FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
+        row = db.execute(
+            "SELECT virtual_rewards, sync_version FROM sync_data WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+        rewards = _json_object(row["virtual_rewards"] if row else "{}")
+
+        def _num(value, fallback=0) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return fallback
+
+        now = _utc_now_text()
+        old_balance = _num(rewards.get("balance"))
+        old_lifetime = _num(rewards.get("lifetime"), old_balance)
+        balance = max(0, old_balance + delta)
+        lifetime = old_lifetime + max(0, delta)
+        reason = (req.reason or "").strip() or "管理员调整"
+        ledger = rewards.get("ledger")
+        if not isinstance(ledger, list):
+            ledger = []
+        entry = {
+            "id": f"admin:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
+            "title": "管理员调整",
+            "coins": delta,
+            "reason": reason,
+            "awardedAt": now,
+        }
+        rewards.update(
+            {
+                "balance": balance,
+                "lifetime": max(lifetime, balance),
+                "ledger": [entry, *[item for item in ledger if isinstance(item, dict)]][:50],
+                "updatedAt": now,
+            }
+        )
+        next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
+        db.execute(
+            """
+            UPDATE sync_data
+            SET virtual_rewards=?, sync_version=?, updated_at=?
+            WHERE user_id=?
+            """,
+            (
+                json.dumps(rewards, ensure_ascii=False),
+                next_sync_version,
+                now,
+                user_id,
+            ),
+        )
+        _audit(
+            db,
+            actor,
+            _get_username(db, actor),
+            "user.coins_adjust",
+            target=user_id,
+            detail=json.dumps(
+                {
+                    "delta": delta,
+                    "reason": reason,
+                    "balance": balance,
+                    "lifetime": rewards["lifetime"],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.commit()
+        return {
+            "status": "ok",
+            "balance": balance,
+            "lifetime": rewards["lifetime"],
+            "ledger_entry": entry,
+            "server_version": next_sync_version,
+        }
+    finally:
+        db.close()
+
+
 @app.delete("/api/admin/users/{user_id}")
 def admin_delete_user(user_id: str, actor: str = Depends(_require_admin)):
     if user_id == actor:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "users")
         row = db.execute(
             "SELECT username, is_admin FROM users WHERE id=?", (user_id,)
         ).fetchone()
@@ -7206,6 +8165,8 @@ def admin_list_announcements(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "announcements")
         where_parts: list[str] = []
         params: list = []
         if q:
@@ -7243,6 +8204,7 @@ def admin_list_announcements(
 def create_announcement(req: AnnouncementCreate, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "announcements")
         cur = db.execute(
             "INSERT INTO announcements(title, body, level, published) VALUES(?,?,?,?)",
             (req.title, req.body, req.level, 1 if req.published else 0),
@@ -7263,6 +8225,7 @@ def update_announcement(
 ):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "announcements")
         data = req.model_dump(exclude_none=True)
         if not data:
             return {"status": "ok"}
@@ -7295,6 +8258,7 @@ def update_announcement(
 def delete_announcement(ann_id: int, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "announcements")
         cur = db.execute("DELETE FROM announcements WHERE id=?", (ann_id,))
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="公告不存在")
@@ -7324,6 +8288,8 @@ def list_all_feedback(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "feedback")
         where, params = _feedback_admin_filters(
             status=status,
             q=q,
@@ -7335,7 +8301,8 @@ def list_all_feedback(
         ).fetchone()["c"]
         order_by = _feedback_admin_order_by(sort)
         rows = db.execute(
-            "SELECT f.*, u.username FROM feedback f JOIN users u ON u.id=f.user_id "
+            "SELECT f.*, u.username, u.email, u.email_verified, u.display_name, u.avatar "
+            "FROM feedback f JOIN users u ON u.id=f.user_id "
             f"{where} ORDER BY {order_by} LIMIT ? OFFSET ?",
             (*params, limit, offset),
         ).fetchall()
@@ -7356,6 +8323,7 @@ def export_feedback_csv(
     limit, _offset = _admin_page_window(limit, 0, default_limit=5000, max_limit=20000)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "feedback")
         where, params = _feedback_admin_filters(
             status=status,
             q=q,
@@ -7369,7 +8337,8 @@ def export_feedback_csv(
         rows = db.execute(
             """
             SELECT
-                f.id, u.username, f.category, f.status, f.content,
+                f.id, u.username, u.email, u.email_verified, u.display_name,
+                f.category, f.status, f.content,
                 f.admin_reply, f.created_at, f.updated_at
             FROM feedback f
             JOIN users u ON u.id=f.user_id
@@ -7383,6 +8352,9 @@ def export_feedback_csv(
             [
                 "id",
                 "username",
+                "email",
+                "email_verified",
+                "display_name",
                 "category",
                 "status",
                 "content",
@@ -7396,6 +8368,9 @@ def export_feedback_csv(
                 [
                     row["id"],
                     _csv_safe(row["username"]),
+                    _csv_safe(row["email"]),
+                    1 if row["email_verified"] else 0,
+                    _csv_safe(row["display_name"]),
                     _csv_safe(row["category"]),
                     _csv_safe(row["status"]),
                     _csv_safe(row["content"]),
@@ -7444,6 +8419,7 @@ def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
     status = _clean_feedback_status(req.status)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "feedback")
         cur = db.execute(
             "UPDATE feedback SET admin_reply=?, status=?, updated_at=datetime('now') WHERE id=?",
             (reply, status, req.feedback_id),
@@ -7475,6 +8451,7 @@ def bulk_update_feedback_status(
     placeholders = ",".join("?" for _ in ids)
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "feedback")
         existing = db.execute(
             f"SELECT id FROM feedback WHERE id IN ({placeholders})",
             ids,
@@ -7508,6 +8485,7 @@ def bulk_update_feedback_status(
 def delete_feedback(fb_id: int, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "feedback")
         cur = db.execute("DELETE FROM feedback WHERE id=?", (fb_id,))
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="反馈不存在")
@@ -7528,6 +8506,7 @@ def delete_feedback(fb_id: int, actor: str = Depends(_require_admin)):
 def create_invite_codes(req: InviteCodeCreate, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "invites")
         codes: list[str] = []
         for _i in range(max(1, min(req.count, 100))):
             code = secrets.token_urlsafe(8)
@@ -7558,6 +8537,8 @@ def list_invite_codes(
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "invites")
         where_parts: list[str] = []
         params: list = []
         if q:
@@ -7595,6 +8576,7 @@ def list_invite_codes(
 def delete_invite_code(code: str, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
+        _ensure_admin_permission(db, actor, "invites")
         row = db.execute(
             "SELECT used_by FROM invite_codes WHERE code=?", (code,)
         ).fetchone()
@@ -7628,6 +8610,8 @@ def admin_audit_log(
     limit, offset = _admin_page_window(limit, offset, max_limit=500)
     db = get_db()
     try:
+        actor = _
+        _ensure_admin_permission(db, actor, "audit")
         where_parts: list[str] = []
         params: list = []
         if action:

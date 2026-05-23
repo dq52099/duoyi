@@ -15,7 +15,7 @@ import 'package:duoyi/models/recurrence.dart';
 ///   5. legacy category 数字字符串 "1" → GoalCategory.values[1]
 ///   6. 数字 category → 按 index 匹配
 ///   7. scheduling.mode 缺失 → SchedulingMode.fixed
-///   8. reminder.kind 缺失 → ReminderKind.alarm
+///   8. reminder.kind 缺失 → ReminderKind.push
 ///   9. 完整对象 toJson → fromJson → toJson 结构等价
 ///  10. focusLink.whiteNoise 缺失 → 'none'
 ///
@@ -87,7 +87,7 @@ void main() {
       expect(goal.scheduling.mode, SchedulingMode.fixed);
     });
 
-    test('8. reminder without kind defaults to ReminderKind.alarm', () {
+    test('8. reminder without kind defaults to ReminderKind.push', () {
       final goal = GoalItem.fromJson({
         'id': 'a',
         'title': 't',
@@ -99,7 +99,26 @@ void main() {
         },
       });
       expect(goal.reminder.enabled, isTrue);
-      expect(goal.reminder.kind, ReminderKind.alarm);
+      expect(goal.reminder.kind, ReminderKind.push);
+      expect(goal.reminder.fullScreen, isFalse);
+    });
+
+    test('8b. push reminder JSON cannot preserve dirty fullScreen=true', () {
+      final config = ReminderConfig.fromJson({
+        'enabled': true,
+        'kind': ReminderKind.push.index,
+        'fullScreen': true,
+      });
+      expect(config.kind, ReminderKind.push);
+      expect(config.fullScreen, isFalse);
+
+      final copied = const ReminderConfig(
+        enabled: true,
+        kind: ReminderKind.alarm,
+        fullScreen: true,
+      ).copyWith(kind: ReminderKind.push);
+      expect(copied.kind, ReminderKind.push);
+      expect(copied.fullScreen, isFalse);
     });
 
     test('10. focusLink without whiteNoise defaults to "none"', () {

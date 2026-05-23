@@ -54,6 +54,7 @@ backend/.venv/
 # Build artifacts
 build/
 dist/
+artifacts/
 
 # Release signing — keep keystore out of repo, CI restores from secrets
 android/app/keys/
@@ -62,3 +63,4 @@ android/key.properties
 # Local working dirs / generated backups
 tmp/
 backend/backups/
+backend/uploads/

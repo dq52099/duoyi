@@ -117,6 +117,7 @@ class CourseItem {
   List<int> weeks; // 上课周列表(1 基)
   int colorValue;
   String? note;
+  DateTime updatedAt;
 
   CourseItem({
     String? id,
@@ -129,8 +130,10 @@ class CourseItem {
     List<int>? weeks,
     this.colorValue = 0xFF4CAF50,
     this.note,
+    DateTime? updatedAt,
   }) : id = id ?? _uuid.v4(),
-       weeks = weeks ?? [];
+       weeks = weeks ?? [],
+       updatedAt = updatedAt ?? DateTime.now();
 
   bool activeInWeek(int week) => weeks.contains(week);
 
@@ -147,6 +150,7 @@ class CourseItem {
     'weeks': weeks,
     'colorValue': colorValue,
     'note': note,
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory CourseItem.fromJson(Map<String, dynamic> json) => CourseItem(
@@ -160,5 +164,10 @@ class CourseItem {
     weeks: (json['weeks'] as List<dynamic>?)?.cast<int>() ?? [],
     colorValue: json['colorValue'] ?? 0xFF4CAF50,
     note: json['note'],
+    updatedAt:
+        DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+        DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+        DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+        DateTime.now(),
   );
 }

@@ -37,21 +37,22 @@ class ReminderRingtoneSettings {
   static const String volumePreferenceKey =
       'pref_reminder_ringtone_volume_percent';
   static const String soundPreferenceKey = 'pref_reminder_ringtone_sound';
-  static const int defaultVolumePercent = 80;
-  static const String defaultSound = 'alarm';
+  static const int defaultVolumePercent = 60;
+  static const String defaultSound = 'chime';
 
   static const List<int> presets = <int>[40, 60, 80, 100];
   static const List<ReminderRingtoneOption> sounds = <ReminderRingtoneOption>[
-    ReminderRingtoneOption(id: 'alarm', label: '强提醒'),
-    ReminderRingtoneOption(id: 'chime', label: '清脆提示'),
+    ReminderRingtoneOption(id: 'chime', label: '经典轻铃'),
     ReminderRingtoneOption(id: 'bell', label: '铃铛'),
     ReminderRingtoneOption(id: 'beep', label: '电子提示'),
     ReminderRingtoneOption(id: 'classic', label: '经典闹铃'),
+    ReminderRingtoneOption(id: 'alarm', label: '强提醒闹钟'),
   ];
 
   static const MethodChannel _channel = MethodChannel(
     'duoyi/reminder_ringtone',
   );
+  static void Function(Iterable<String> keys)? onChanged;
 
   static ReminderRingtonePlatformPolicy get platformPolicy => platformPolicyFor(
     isAndroid: PlatformInfo.isAndroid,
@@ -129,27 +130,38 @@ class ReminderRingtoneSettings {
     final next = _normalizeVolume(value);
     final p = await SharedPreferences.getInstance();
     await p.setInt(volumePreferenceKey, next);
-    if (!_isAndroid) return;
-    try {
-      await _channel.invokeMethod<void>('setVolumePercent', <String, Object?>{
-        'volumePercent': next,
-      });
-    } catch (e, st) {
-      debugPrint('[ReminderRingtoneSettings] setVolumePercent failed: $e\n$st');
-    }
+    onChanged?.call(const [volumePreferenceKey]);
+    await applyPersistedSettingsToNative();
   }
 
   static Future<void> setSound(String value) async {
     final next = _normalizeSound(value);
     final p = await SharedPreferences.getInstance();
     await p.setString(soundPreferenceKey, next);
+    onChanged?.call(const [soundPreferenceKey]);
+    await applyPersistedSettingsToNative();
+  }
+
+  static Future<void> applyPersistedSettingsToNative() async {
     if (!_isAndroid) return;
+    final p = await SharedPreferences.getInstance();
+    final volumePercent = _normalizeVolume(
+      p.getInt(volumePreferenceKey) ?? defaultVolumePercent,
+    );
+    final soundName = _normalizeSound(
+      p.getString(soundPreferenceKey) ?? defaultSound,
+    );
     try {
+      await _channel.invokeMethod<void>('setVolumePercent', <String, Object?>{
+        'volumePercent': volumePercent,
+      });
       await _channel.invokeMethod<void>('setSoundName', <String, Object?>{
-        'soundName': next,
+        'soundName': soundName,
       });
     } catch (e, st) {
-      debugPrint('[ReminderRingtoneSettings] setSound failed: $e\n$st');
+      debugPrint(
+        '[ReminderRingtoneSettings] apply persisted settings failed: $e\n$st',
+      );
     }
   }
 

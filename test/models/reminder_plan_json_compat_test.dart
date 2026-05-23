@@ -75,6 +75,24 @@ void main() {
       expect(decoded.toJson(), equals(original.toJson()));
     });
 
+    test('push rule JSON and copyWith cannot keep dirty fullScreen=true', () {
+      final rule = ReminderRule.fromJson({
+        'id': 'dirty-push',
+        'enabled': true,
+        'kind': ReminderKind.push.index,
+        'fullScreen': true,
+      });
+      expect(rule.kind, ReminderKind.push);
+      expect(rule.fullScreen, isFalse);
+
+      final copied = ReminderRule(
+        kind: ReminderKind.alarm,
+        fullScreen: true,
+      ).copyWith(kind: ReminderKind.push);
+      expect(copied.kind, ReminderKind.push);
+      expect(copied.fullScreen, isFalse);
+    });
+
     test(
       'TodoItem and GoalItem persist reminderPlan together with legacy reminder',
       () {

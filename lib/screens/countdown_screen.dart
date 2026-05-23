@@ -276,6 +276,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
                 lastDate: DateTime(2100),
                 title: I18n.tr('countdown.field.target_date'),
               );
+              if (!mounted) return;
               if (picked != null) {
                 setState(() => _targetDate = picked);
               }
@@ -324,6 +325,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
                   title: I18n.tr('countdown.field.remind_time'),
                   minuteStep: 5,
                 );
+                if (!mounted) return;
                 if (picked != null) {
                   setState(() => _remindTime = picked);
                 }

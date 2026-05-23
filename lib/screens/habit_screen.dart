@@ -9,7 +9,6 @@ import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_audit_provider.dart';
-import '../services/alarm_service.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
@@ -48,10 +47,6 @@ class _HabitScreenState extends State<HabitScreen>
     final granted =
         notificationService == null ||
         await notificationService.requestPermission();
-    if (notificationService != null) {
-      await AlarmService.instance.requestExactAlarmPermission();
-      await AlarmService.instance.requestFullScreenIntentPermission();
-    }
     if (!granted) {
       messenger.showSnackBar(
         const SnackBar(
@@ -256,11 +251,12 @@ class _HabitScreenState extends State<HabitScreen>
                             title: '每日提醒时间',
                             minuteStep: 5,
                           );
-                          if (t != null) setSt(() => remindTime = t);
+                          if (t == null || !mounted || !ctx.mounted) return;
+                          setSt(() => remindTime = t);
                         }
                         if (remindTime == null) return;
                         final ready = await _ensureHabitReminderReady();
-                        if (!mounted) return;
+                        if (!mounted || !ctx.mounted) return;
                         setSt(() => remindEnabled = ready);
                       },
                     ),
@@ -282,7 +278,8 @@ class _HabitScreenState extends State<HabitScreen>
                         title: '每日提醒时间',
                         minuteStep: 5,
                       );
-                      if (t != null) setSt(() => remindTime = t);
+                      if (t == null || !mounted || !ctx.mounted) return;
+                      setSt(() => remindTime = t);
                     },
                   ),
                 const SizedBox(height: 4),
@@ -1102,18 +1099,23 @@ class _HabitCheckinCard extends StatelessWidget {
                           ),
                           if (todayCount > 0) ...[
                             const SizedBox(width: 4),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => _handleUndo(context),
-                              child: Padding(
-                                padding: const EdgeInsets.all(2),
-                                child: Icon(
+                            SizedBox.square(
+                              dimension: 48,
+                              child: IconButton(
+                                tooltip: '撤回一次',
+                                padding: const EdgeInsets.all(12),
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 48,
+                                  height: 48,
+                                ),
+                                icon: Icon(
                                   Icons.undo,
-                                  size: 15,
+                                  size: 22,
                                   color: hasNegativeOccurrence
                                       ? cs.error
                                       : Colors.grey.shade600,
                                 ),
+                                onPressed: () => _handleUndo(context),
                               ),
                             ),
                           ],

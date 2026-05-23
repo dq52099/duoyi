@@ -93,7 +93,7 @@ Future<void> showLocalCalendarEventEditor(
                       lastDate: DateTime(2100),
                       title: '开始日期',
                     );
-                    if (picked == null) return;
+                    if (picked == null || !dialogContext.mounted) return;
                     setDialogState(() {
                       startDate = _dateOnly(picked);
                       if (endDate.isBefore(startDate)) {
@@ -114,7 +114,7 @@ Future<void> showLocalCalendarEventEditor(
                       lastDate: DateTime(2100),
                       title: '结束日期',
                     );
-                    if (picked == null) return;
+                    if (picked == null || !dialogContext.mounted) return;
                     setDialogState(() => endDate = _dateOnly(picked));
                   },
                 ),
@@ -130,7 +130,7 @@ Future<void> showLocalCalendarEventEditor(
                         title: '开始时间',
                         minuteStep: 5,
                       );
-                      if (picked == null) return;
+                      if (picked == null || !dialogContext.mounted) return;
                       setDialogState(() => startTime = picked);
                     },
                   ),
@@ -145,7 +145,7 @@ Future<void> showLocalCalendarEventEditor(
                         title: '结束时间',
                         minuteStep: 5,
                       );
-                      if (picked == null) return;
+                      if (picked == null || !dialogContext.mounted) return;
                       setDialogState(() => endTime = picked);
                     },
                   ),
@@ -646,10 +646,10 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _startFocus(BuildContext context) async {
-    Navigator.pop(context);
-    if (!context.mounted) return;
-    await Navigator.push(
-      context,
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    if (!navigator.mounted) return;
+    await navigator.push(
       MaterialPageRoute(
         builder: (_) => const BrandRouteSurface(child: PomodoroScreen()),
       ),
@@ -659,54 +659,56 @@ class CalendarEventSheet extends StatelessWidget {
   Future<void> _openDetail(BuildContext context) async {
     final sourceId = event.sourceId;
     if (sourceId == null) return;
-    Navigator.pop(context);
-    if (!context.mounted) return;
+    final navigator = Navigator.of(context);
+    final navigationContext = navigator.context;
+    navigator.pop();
+    if (!navigationContext.mounted) return;
     switch (event.type) {
       case CalendarEventType.todo:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.todos,
           id: sourceId,
         );
       case CalendarEventType.habit:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.habits,
           id: sourceId,
         );
       case CalendarEventType.goal:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.goals,
           id: sourceId,
         );
       case CalendarEventType.anniversary:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.anniversaries,
           id: sourceId,
         );
       case CalendarEventType.course:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.courses,
           id: sourceId,
         );
       case CalendarEventType.diary:
         await TodayDetailRouter.open(
-          context,
+          navigationContext,
           TodaySectionKind.diary,
           id: sourceId,
         );
       case CalendarEventType.countdown:
-        await Navigator.push(
-          context,
+        if (!navigator.mounted) return;
+        await navigator.push(
           MaterialPageRoute(builder: (_) => const CountdownScreen()),
         );
       case CalendarEventType.timeEntry:
       case CalendarEventType.pomodoro:
-        await Navigator.push(
-          context,
+        if (!navigator.mounted) return;
+        await navigator.push(
           MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
         );
       case CalendarEventType.event:
@@ -880,14 +882,18 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _editLocalEvent(BuildContext context) async {
-    Navigator.pop(context);
-    if (!context.mounted) return;
-    await showLocalCalendarEventEditor(context, event: event);
+    final navigator = Navigator.of(context);
+    final navigationContext = navigator.context;
+    navigator.pop();
+    if (!navigationContext.mounted) return;
+    await showLocalCalendarEventEditor(navigationContext, event: event);
   }
 
   Future<void> _editSourceEvent(BuildContext context) async {
     final sourceId = event.sourceId;
     if (sourceId == null) return;
+    final navigator = Navigator.of(context);
+    final navigationContext = navigator.context;
     switch (event.type) {
       case CalendarEventType.anniversary:
         final item = context
@@ -896,9 +902,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((a) => a.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showAnniversaryEditor(context, item: item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showAnniversaryEditor(navigationContext, item: item);
       case CalendarEventType.countdown:
         final item = context
             .read<CountdownProvider>()
@@ -906,9 +912,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((c) => c.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showCountdownEditor(context, item: item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showCountdownEditor(navigationContext, item: item);
       case CalendarEventType.course:
         final item = context
             .read<CourseProvider>()
@@ -916,9 +922,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((c) => c.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showCourseEditor(context, course: item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showCourseEditor(navigationContext, course: item);
       case CalendarEventType.diary:
         final item = context
             .read<DiaryProvider>()
@@ -926,9 +932,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((d) => d.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showDiaryEditor(context, entry: item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showDiaryEditor(navigationContext, entry: item);
       case CalendarEventType.habit:
         final item = context
             .read<HabitProvider>()
@@ -936,9 +942,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((h) => h.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showHabitEditor(context, item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showHabitEditor(navigationContext, item);
       case CalendarEventType.pomodoro:
         final item = context
             .read<PomodoroProvider>()
@@ -946,9 +952,9 @@ class CalendarEventSheet extends StatelessWidget {
             .where((s) => s.id == sourceId)
             .firstOrNull;
         if (item == null) return;
-        Navigator.pop(context);
-        if (!context.mounted) return;
-        await showPomodoroSessionEditor(context, item);
+        navigator.pop();
+        if (!navigationContext.mounted) return;
+        await showPomodoroSessionEditor(navigationContext, item);
       default:
         break;
     }

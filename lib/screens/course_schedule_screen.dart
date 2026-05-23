@@ -487,6 +487,7 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
                 lastDate: DateTime(2099, 12, 31),
                 title: I18n.tr('course.field.term_start_picker'),
               );
+              if (!mounted) return;
               if (picked != null) {
                 final monday = picked.subtract(
                   Duration(days: picked.weekday - 1),
@@ -543,6 +544,7 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
                 subtitle: I18n.tr('course.field.first_session_time_subtitle'),
                 minuteStep: 5,
               );
+              if (!mounted) return;
               if (picked != null) {
                 setState(() => _firstSessionTime = picked);
               }

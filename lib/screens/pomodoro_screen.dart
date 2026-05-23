@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -313,7 +315,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       final rooms = context.read<FocusRoomProvider>();
       pomodoro.refreshFocusDndStatus();
       if (pomodoro.state.focusRoomId == null && rooms.activeRoomId != null) {
-        pomodoro.setFocusRoomId(rooms.activeRoomId);
+        unawaited(pomodoro.setFocusRoomId(rooms.activeRoomId));
       }
     });
   }
@@ -803,7 +805,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
     String roomId,
   ) async {
     await rooms.joinRoom(roomId);
-    pomodoro.setFocusRoomId(roomId);
+    await pomodoro.setFocusRoomId(roomId);
   }
 
   Future<void> _confirmStrictFocusExit(
@@ -895,12 +897,14 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                     labelText: '分心应用包名',
                     hintText: 'com.tencent.mm\ncom.ss.android.ugc.aweme',
                   ),
-                  onChanged: (value) => provider.setDistractingAppPackages(
-                    value
-                        .split(RegExp(r'[\n,， ]+'))
-                        .map((e) => e.trim())
-                        .where((e) => e.isNotEmpty)
-                        .toList(),
+                  onChanged: (value) => unawaited(
+                    provider.setDistractingAppPackages(
+                      value
+                          .split(RegExp(r'[\n,， ]+'))
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -991,7 +995,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           if (pomodoro.state.focusRoomId != null)
             TextButton(
               onPressed: () {
-                pomodoro.setFocusRoomId(null);
+                unawaited(pomodoro.setFocusRoomId(null));
                 rooms.setActiveRoom(null);
                 Navigator.pop(ctx);
               },
@@ -1062,7 +1066,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                 description: descCtrl.text,
                 weeklyTargetMinutes: target,
               );
-              pomodoro.setFocusRoomId(room.id);
+              await pomodoro.setFocusRoomId(room.id);
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('创建'),
@@ -1150,14 +1154,10 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return Icons.local_cafe;
       case 'waves':
         return Icons.waves;
-      case 'brown_noise':
-        return Icons.graphic_eq;
       case 'night_rain':
         return Icons.nights_stay_outlined;
       case 'fan':
         return Icons.air;
-      case 'pink_noise':
-        return Icons.blur_on;
       case 'deep_stream':
         return Icons.water;
       case 'thunderstorm':
@@ -1176,8 +1176,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         return Icons.water_outlined;
       case 'crickets':
         return Icons.cruelty_free_outlined;
-      case 'white_stream':
-        return Icons.blur_on;
       case 'clock':
         return Icons.schedule;
       case 'keyboard':
@@ -1223,14 +1221,16 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         actions: [
           TextButton.icon(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               final imported = await customProvider.importAudio();
               if (!ctx.mounted) return;
               if (imported == null) return;
-              provider.setWhiteNoiseSound(imported.id);
+              await provider.setWhiteNoiseSound(imported.id);
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('已导入 ${imported.label}')));
+              messenger.showSnackBar(
+                SnackBar(content: Text('已导入 ${imported.label}')),
+              );
             },
             icon: const Icon(Icons.upload_file_outlined),
             label: const Text('导入音频'),
@@ -1245,7 +1245,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                 icon: _soundIcon(option.id),
                 selected: currentSound == option.id,
                 onTap: () {
-                  provider.setWhiteNoiseSound(option.id);
+                  unawaited(provider.setWhiteNoiseSound(option.id));
                   Navigator.pop(ctx);
                 },
               ),
@@ -1258,13 +1258,13 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                   icon: _soundIcon(sound.id),
                   selected: currentSound == sound.id,
                   onTap: () {
-                    provider.setWhiteNoiseSound(sound.id);
+                    unawaited(provider.setWhiteNoiseSound(sound.id));
                     Navigator.pop(ctx);
                   },
                   onDelete: () async {
                     await customProvider.remove(sound.id);
                     if (provider.state.whiteNoiseSound == sound.id) {
-                      provider.setWhiteNoiseSound(FocusSoundCatalog.none);
+                      await provider.setWhiteNoiseSound(FocusSoundCatalog.none);
                     }
                     if (ctx.mounted) Navigator.pop(ctx);
                   },
@@ -1824,17 +1824,17 @@ class _FocusRoomTab extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(14),
             onTap: () async {
+              final pomodoroProvider = context.read<PomodoroProvider>();
+              final focusRoomProvider = context.read<FocusRoomProvider>();
               await rooms.joinRoom(room.id);
-              if (context.mounted) {
-                final pomodoroProvider = context.read<PomodoroProvider>();
-                pomodoroProvider.setFocusRoomId(room.id);
-                await context.read<FocusRoomProvider>().syncRemoteRankings(
-                  pomodoroProvider.sessions,
-                  displayName: displayName,
-                  active: true,
-                  force: true,
-                );
-              }
+              await pomodoroProvider.setFocusRoomId(room.id);
+              if (!context.mounted) return;
+              await focusRoomProvider.syncRemoteRankings(
+                pomodoroProvider.sessions,
+                displayName: displayName,
+                active: true,
+                force: true,
+              );
             },
             child: Row(
               children: [
@@ -2246,7 +2246,7 @@ class _FocusRoomTab extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final room = await rooms.acceptInviteCode(code, displayName: displayName);
-      pomodoro.setFocusRoomId(room.id);
+      await pomodoro.setFocusRoomId(room.id);
       if (dialogContext.mounted) Navigator.pop(dialogContext);
       messenger.showSnackBar(
         SnackBar(

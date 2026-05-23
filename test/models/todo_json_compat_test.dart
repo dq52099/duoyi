@@ -12,7 +12,7 @@ import 'package:duoyi/models/todo.dart';
 ///
 /// 覆盖场景（见 `.kiro/specs/app-alignment-overhaul/tasks.md` Task 5.2）：
 ///   1. 最小旧版 JSON（仅必需字段）填充安全默认值
-///   2. legacy `hasReminder + reminderAt` 迁移到新 ReminderConfig(alarm)
+///   2. legacy `hasReminder + reminderAt` 迁移到新 ReminderConfig(push)
 ///   3. 同时存在新 `reminder` 与 legacy `hasReminder`：新字段优先
 ///   4. PostponeRecord 往返：toJson → fromJson 字段一致
 ///   5. 完整 TodoItem 往返：encode → decode → fromJson → toJson 深度相等
@@ -48,7 +48,7 @@ void main() {
     });
 
     test(
-      '2. legacy hasReminder + reminderAt migrates to ReminderConfig(alarm)',
+      '2. legacy hasReminder + reminderAt migrates to ReminderConfig(push)',
       () {
         final today = DateTime(2025, 1, 15, 0, 0).toIso8601String();
         final reminderAt = DateTime(2025, 1, 15, 8, 30).toIso8601String();
@@ -66,7 +66,8 @@ void main() {
         });
 
         expect(todo.reminder.enabled, isTrue);
-        expect(todo.reminder.kind, ReminderKind.alarm);
+        expect(todo.reminder.kind, ReminderKind.push);
+        expect(todo.reminder.fullScreen, isFalse);
         expect(todo.reminder.hour, 8);
         expect(todo.reminder.minute, 30);
         // legacy getter 仍返回 true，保证旧代码读路径不破。

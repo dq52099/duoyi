@@ -131,12 +131,12 @@ class ReminderConfig {
 
   const ReminderConfig({
     this.enabled = false,
-    this.kind = ReminderKind.alarm,
+    this.kind = ReminderKind.push,
     this.hour,
     this.minute,
     this.daysBefore = 0,
     this.vibrate = true,
-    this.fullScreen = true,
+    this.fullScreen = false,
   });
 
   /// 未启用的默认值。
@@ -150,15 +150,20 @@ class ReminderConfig {
     int? daysBefore,
     bool? vibrate,
     bool? fullScreen,
-  }) => ReminderConfig(
-    enabled: enabled ?? this.enabled,
-    kind: kind ?? this.kind,
-    hour: hour ?? this.hour,
-    minute: minute ?? this.minute,
-    daysBefore: daysBefore ?? this.daysBefore,
-    vibrate: vibrate ?? this.vibrate,
-    fullScreen: fullScreen ?? this.fullScreen,
-  );
+  }) {
+    final nextKind = kind ?? this.kind;
+    return ReminderConfig(
+      enabled: enabled ?? this.enabled,
+      kind: nextKind,
+      hour: hour ?? this.hour,
+      minute: minute ?? this.minute,
+      daysBefore: daysBefore ?? this.daysBefore,
+      vibrate: vibrate ?? this.vibrate,
+      fullScreen: nextKind == ReminderKind.alarm
+          ? fullScreen ?? this.fullScreen
+          : false,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'enabled': enabled,
@@ -178,7 +183,7 @@ class ReminderConfig {
           ReminderKind.values,
           rawKind is num ? rawKind.toInt() : null,
         ) ??
-        ReminderKind.alarm;
+        ReminderKind.push;
     return ReminderConfig(
       enabled: json['enabled'] == true,
       kind: kind,
@@ -186,7 +191,9 @@ class ReminderConfig {
       minute: (json['minute'] as num?)?.toInt(),
       daysBefore: (json['daysBefore'] as num?)?.toInt() ?? 0,
       vibrate: json['vibrate'] ?? true,
-      fullScreen: json['fullScreen'] ?? true,
+      fullScreen:
+          kind == ReminderKind.alarm &&
+          (json['fullScreen'] ?? kind == ReminderKind.alarm),
     );
   }
 }
@@ -225,13 +232,13 @@ class ReminderRule {
     String? id,
     this.enabled = true,
     this.type = ReminderRuleType.absolute,
-    this.kind = ReminderKind.alarm,
+    this.kind = ReminderKind.push,
     this.hour,
     this.minute,
     this.offsetMinutes,
     List<int>? weekdays,
     this.vibrate = true,
-    this.fullScreen = true,
+    this.fullScreen = false,
     this.snoozeMinutes = 0,
     this.repeatCount = 0,
   }) : id = id ?? _uuid.v4(),
@@ -251,11 +258,12 @@ class ReminderRule {
     int? snoozeMinutes,
     int? repeatCount,
   }) {
+    final nextKind = kind ?? this.kind;
     return ReminderRule(
       id: identical(id, _reminderCopyUnset) ? this.id : id as String?,
       enabled: enabled ?? this.enabled,
       type: type ?? this.type,
-      kind: kind ?? this.kind,
+      kind: nextKind,
       hour: identical(hour, _reminderCopyUnset) ? this.hour : hour as int?,
       minute: identical(minute, _reminderCopyUnset)
           ? this.minute
@@ -267,7 +275,9 @@ class ReminderRule {
           ? this.weekdays
           : List<int>.unmodifiable((weekdays as List).cast<int>()),
       vibrate: vibrate ?? this.vibrate,
-      fullScreen: fullScreen ?? this.fullScreen,
+      fullScreen: nextKind == ReminderKind.alarm
+          ? fullScreen ?? this.fullScreen
+          : false,
       snoozeMinutes: snoozeMinutes ?? this.snoozeMinutes,
       repeatCount: repeatCount ?? this.repeatCount,
     );
@@ -297,7 +307,7 @@ class ReminderRule {
         ReminderRuleType.absolute;
     final kind =
         _enumFromIndex(ReminderKind.values, (json['kind'] as num?)?.toInt()) ??
-        ReminderKind.alarm;
+        ReminderKind.push;
     return ReminderRule(
       id: json['id']?.toString(),
       enabled: json['enabled'] != false,
@@ -313,7 +323,9 @@ class ReminderRule {
               .toList() ??
           const <int>[],
       vibrate: json['vibrate'] ?? true,
-      fullScreen: json['fullScreen'] ?? true,
+      fullScreen:
+          kind == ReminderKind.alarm &&
+          (json['fullScreen'] ?? kind == ReminderKind.alarm),
       snoozeMinutes: (json['snoozeMinutes'] as num?)?.toInt() ?? 0,
       repeatCount: (json['repeatCount'] as num?)?.toInt() ?? 0,
     );

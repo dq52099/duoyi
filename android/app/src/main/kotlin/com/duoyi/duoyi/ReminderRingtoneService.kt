@@ -53,6 +53,7 @@ class ReminderRingtoneService : Service() {
             return START_NOT_STICKY
         }
 
+        activeReminderId = id
         startForeground(notificationId(id), buildNotification(id, title, body, payload, snoozeMinutes))
         playRingtone()
         if (shouldVibrate) vibrate()
@@ -73,6 +74,7 @@ class ReminderRingtoneService : Service() {
             release()
         }
         player = null
+        activeReminderId = null
         super.onDestroy()
     }
 
@@ -134,7 +136,7 @@ class ReminderRingtoneService : Service() {
         val fullScreenIntent = PendingIntent.getActivity(
             this,
             id + 3_000_000,
-            openAppIntent(payload, stopRingtone = false),
+            openAppIntent(payload, stopRingtone = true),
             flags,
         )
         val stopIntent = PendingIntent.getService(
@@ -165,11 +167,12 @@ class ReminderRingtoneService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
-            .setOngoing(true)
-            .setAutoCancel(false)
+            .setOngoing(false)
+            .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setContentIntent(contentIntent)
+            .setDeleteIntent(stopIntent)
             .setFullScreenIntent(fullScreenIntent, true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(0, "停止响铃", stopIntent)
@@ -239,6 +242,16 @@ class ReminderRingtoneService : Service() {
         private const val prefsName = "FlutterSharedPreferences"
         private const val volumeKey = "flutter.pref_reminder_ringtone_volume_percent"
         private const val soundKey = "flutter.pref_reminder_ringtone_sound"
+        @Volatile
+        private var activeReminderId: Int? = null
+
+        fun stopActive(context: Context) {
+            context.stopService(Intent(context, ReminderRingtoneService::class.java))
+        }
+
+        fun stopIfActive(context: Context, id: Int) {
+            if (activeReminderId == id) stopActive(context)
+        }
 
         fun setVolumePercent(context: Context, value: Int) {
             val normalized = value.coerceIn(40, 100)
@@ -257,26 +270,27 @@ class ReminderRingtoneService : Service() {
 
         private fun volumePercent(context: Context): Int {
             return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                .getInt(volumeKey, 80)
+                .getInt(volumeKey, 60)
                 .coerceIn(40, 100)
         }
 
         private fun soundResId(context: Context): Int {
             val name = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                .getString(soundKey, "alarm") ?: "alarm"
+                .getString(soundKey, "chime") ?: "chime"
             return when (normalizeSoundName(name)) {
                 "chime" -> R.raw.duoyi_chime
                 "bell" -> R.raw.duoyi_bell
                 "beep" -> R.raw.duoyi_beep
                 "classic" -> R.raw.duoyi_classic
-                else -> R.raw.duoyi_alarm
+                "alarm" -> R.raw.duoyi_alarm
+                else -> R.raw.duoyi_chime
             }
         }
 
         private fun normalizeSoundName(value: String): String {
             return when (value) {
-                "chime", "bell", "beep", "classic" -> value
-                else -> "alarm"
+                "chime", "bell", "beep", "classic", "alarm" -> value
+                else -> "chime"
             }
         }
 

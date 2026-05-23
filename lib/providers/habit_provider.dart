@@ -71,8 +71,8 @@ class HabitProvider extends ChangeNotifier {
     DomainEventBus.instance.publish(
       DomainEvent(type: DomainEventType.habitCreated, objectId: habit.id),
     );
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<HabitImportSummary> importHabits(Iterable<Habit> habits) async {
@@ -96,8 +96,8 @@ class HabitProvider extends ChangeNotifier {
       );
     }
     if (inserted > 0) {
-      notifyListeners();
       await _save();
+      notifyListeners();
     }
     return HabitImportSummary(
       inserted: inserted,
@@ -120,11 +120,21 @@ class HabitProvider extends ChangeNotifier {
       if (!habit.activeForDate(date)) return;
       final key = _habits[idx].dateKey(date);
       final previousCount = habit.completions[key] ?? 0;
+      if (habit.kind == HabitKind.positive) {
+        if (habit.hasFlexRule) {
+          final progress = habit.flexProgressForDate(date);
+          if (progress?.isCompleted ?? false) return;
+        } else if (previousCount >= habit.targetCount) {
+          return;
+        }
+      }
       final increment = amount ?? _defaultCheckInAmount(habit, previousCount);
       if (increment <= 0) return;
+      final stamp = DateTime.now();
       habit.completions[key] = previousCount + increment;
+      habit.completionUpdatedAt[key] = stamp;
       _recalcStreak(idx);
-      habit.updatedAt = DateTime.now();
+      habit.updatedAt = stamp;
       DomainEventBus.instance.publish(
         DomainEvent(
           type: DomainEventType.habitCheckedIn,
@@ -136,7 +146,6 @@ class HabitProvider extends ChangeNotifier {
           },
         ),
       );
-      notifyListeners();
       await _save();
       await _timeAudit?.recordHabitCheckIn(
         habit,
@@ -144,6 +153,7 @@ class HabitProvider extends ChangeNotifier {
         amount: increment,
         at: _timeForHabitRecord(date),
       );
+      notifyListeners();
     }
   }
 
@@ -171,15 +181,17 @@ class HabitProvider extends ChangeNotifier {
         } else {
           _habits[idx].completions[key] = next;
         }
+        final stamp = DateTime.now();
+        _habits[idx].completionUpdatedAt[key] = stamp;
         _recalcStreak(idx);
-        _habits[idx].updatedAt = DateTime.now();
-        notifyListeners();
+        _habits[idx].updatedAt = stamp;
         await _save();
         await _timeAudit?.removeHabitCheckIn(
           _habits[idx],
           count: v,
           at: recordTime,
         );
+        notifyListeners();
       }
     }
   }
@@ -251,16 +263,16 @@ class HabitProvider extends ChangeNotifier {
     await CloudSyncProvider.recordDeletedItem('habits', id);
     await _timeAudit?.deleteBySource(TimeEntrySource.habit, id);
     _habits.removeWhere((h) => h.id == id);
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> updateHabit(String id, Habit updated) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx != -1) {
       _habits[idx] = updated.copyWith(updatedAt: DateTime.now());
-      notifyListeners();
       await _save();
+      notifyListeners();
     }
   }
 
@@ -321,8 +333,8 @@ class HabitProvider extends ChangeNotifier {
     }
     newList.addAll(map.values);
     _habits = newList;
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 }
 

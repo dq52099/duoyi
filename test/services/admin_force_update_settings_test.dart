@@ -1,0 +1,145 @@
+import 'dart:io';
+
+import 'package:test/test.dart';
+
+void main() {
+  test('admin settings expose force update policy through config', () {
+    final backend = File('backend/main.py').readAsStringSync();
+    final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
+    final adminScreen = File(
+      'lib/screens/admin_screen.dart',
+    ).readAsStringSync();
+    final updateService = File(
+      'lib/services/app_update_service.dart',
+    ).readAsStringSync();
+    final mainApp = File('lib/main.dart').readAsStringSync();
+
+    for (final key in [
+      'force_update_required',
+      'latest_version',
+      'minimum_supported_version',
+      'update_notes',
+      'update_download_url',
+    ]) {
+      expect(backend, contains(key));
+      expect(adminScreen, contains(key));
+    }
+
+    expect(backend, contains('"app_update": {'));
+    expect(backend, contains('@app.get("/api/config")'));
+    expect(adminApi, contains('forceUpdateRequired'));
+    expect(adminApi, contains('minimumSupportedVersion'));
+    expect(adminApi, contains('updateDownloadUrl'));
+    expect(adminApi, contains('client.patch'));
+    expect(adminScreen, contains("title: '应用更新'"));
+    expect(adminScreen, contains("labelText: '最新版本'"));
+    expect(adminScreen, contains("labelText: '最低支持版本'"));
+    expect(adminScreen, contains("labelText: '更新内容'"));
+    expect(adminScreen, contains("labelText: '下载地址'"));
+    expect(adminScreen, contains("label: const Text('保存更新配置')"));
+    expect(adminScreen, contains('Future<void> _saveUpdateConfig() async'));
+    expect(adminScreen, contains('Future<void> _saveForceUpdateRequired'));
+    expect(adminScreen, contains('_validateUpdatePolicy'));
+    expect(adminScreen, contains('发布新版本或设置最低支持版本时，必须填写更新内容。'));
+    expect(adminScreen, contains('强制更新未生效'));
+    expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
+
+    expect(updateService, contains("Uri.parse('/api/config')"));
+    expect(updateService, contains("decoded['app_update']"));
+    expect(updateService, contains('bool get forceUpdateRequired'));
+    expect(updateService, contains('bool get mustUpdate'));
+    expect(updateService, contains('if (_checking) return;'));
+    expect(updateService, contains("split('+').first"));
+
+    expect(mainApp, contains('void _checkUpdatePolicy({bool force = false})'));
+    expect(mainApp, contains('_checkUpdatePolicy(force: true)'));
+    expect(mainApp, contains('_checkUpdatePolicy();'));
+    expect(mainApp, contains('const _ForceUpdateGate()'));
+    expect(mainApp, contains('class _ForceUpdateGate extends StatelessWidget'));
+    expect(mainApp, contains('PopScope('));
+    expect(mainApp, contains('canPop: false'));
+    expect(mainApp, contains('必须更新后才能继续使用'));
+    expect(mainApp, contains('管理员未配置下载地址'));
+    expect(mainApp, contains('downloadAndInstallLatest()'));
+    expect(
+      mainApp,
+      contains('showUpdateBadge = updater.hasUpdate && !updater.mustUpdate'),
+    );
+    expect(
+      mainApp,
+      contains('class _BottomNavBadgeIcon extends StatelessWidget'),
+    );
+    expect(mainApp, contains('width: 8'));
+    expect(mainApp, contains("label: I18n.tr('nav.mine')"));
+    expect(mainApp, contains("'更新内容'"));
+    expect(backend, contains('发布更新策略时必须填写更新内容'));
+  });
+
+  test('release builds refuse debug signing fallback', () {
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    final workflow = File('.github/workflows/build-apk.yml').readAsStringSync();
+
+    expect(gradle, contains('Release signing is not configured'));
+    expect(gradle, contains('GradleException'));
+    expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
+    expect(workflow, contains('Require release keystore'));
+    expect(
+      workflow,
+      contains('refusing to build release artifacts with debug signing'),
+    );
+    expect(workflow, contains('exit 1'));
+    expect(workflow, isNot(contains('APK will use debug signing')));
+  });
+
+  test(
+    'registration email required toggle saves without global button flicker',
+    () {
+      final adminScreen = File(
+        'lib/screens/admin_screen.dart',
+      ).readAsStringSync();
+      final settingsTab = adminScreen.substring(
+        adminScreen.indexOf('class _SettingsTabState'),
+        adminScreen.indexOf('// AI 配置'),
+      );
+
+      expect(settingsTab, isNot(contains('bool _saving = false')));
+      expect(settingsTab, contains('final Set<String> _savingKeys'));
+      expect(
+        settingsTab,
+        contains("onChanged: _saving('registration_email_required')"),
+      );
+      expect(
+        settingsTab,
+        contains("onChanged: _saving('registration_enabled')"),
+      );
+      expect(
+        settingsTab,
+        contains("onChanged: _saving('invite_code_required')"),
+      );
+    },
+  );
+
+  test('admin user list keeps paginated API for large data sets', () {
+    final backend = File('backend/main.py').readAsStringSync();
+    final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
+    final adminScreen = File(
+      'lib/screens/admin_screen.dart',
+    ).readAsStringSync();
+
+    expect(backend, contains('@app.get("/api/admin/users")'));
+    expect(
+      backend,
+      contains('limit, offset = _admin_page_window(limit, offset)'),
+    );
+    expect(
+      backend,
+      contains('return _admin_page_response(items, total, limit, offset)'),
+    );
+    expect(adminApi, contains('Future<AdminPage> listUsersPage'));
+    expect(adminApi, contains("'/api/admin/users'"));
+    expect(adminScreen, contains('_AdminPaginationBar('));
+    expect(adminScreen, contains('widget.api.listUsersPage('));
+    expect(adminScreen, contains('limit: nextPageSize'));
+    expect(adminScreen, contains('offset: nextOffset'));
+  });
+}

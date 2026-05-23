@@ -119,10 +119,19 @@ class LunarCalendar {
 
   /// 公历 → 农历
   static LunarDate fromSolar(DateTime date) {
-    int offset = date.difference(_baseDate).inDays;
+    final solarDate = DateTime(date.year, date.month, date.day);
+    if (solarDate.isBefore(_baseDate)) {
+      return const LunarDate(_baseYear, 1, 1);
+    }
+
+    int offset = solarDate.difference(_baseDate).inDays;
     int year = _baseYear;
+    final lastYear = _baseYear + _lunarInfo.length - 1;
     int yearDays = _yearDays(year);
     while (offset >= yearDays) {
+      if (year >= lastYear) {
+        return _lastSupportedLunarDate();
+      }
       offset -= yearDays;
       year++;
       yearDays = _yearDays(year);
@@ -150,6 +159,14 @@ class LunarCalendar {
     if (month > 12) month = 12;
     final day = offset + 1;
     return LunarDate(year, month, day, isLeapMonth: isLeap);
+  }
+
+  static LunarDate _lastSupportedLunarDate() {
+    final year = _baseYear + _lunarInfo.length - 1;
+    if (_leapMonth(year) == 12) {
+      return LunarDate(year, 12, _leapDays(year), isLeapMonth: true);
+    }
+    return LunarDate(year, 12, _monthDays(year, 12));
   }
 
   /// 农历 → 公历
@@ -313,6 +330,7 @@ class LunarCalendar {
   }
 
   static String _dayName(int d) {
+    if (d < 1 || d > 30) return '';
     if (d <= 10) {
       const n = [
         '',

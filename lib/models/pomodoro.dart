@@ -1,6 +1,12 @@
 enum PomodoroType { focus, shortBreak, longBreak }
 
 class PomodoroConfig {
+  static const int defaultFocusDuration = 1500;
+  static const int defaultShortBreakDuration = 300;
+  static const int defaultLongBreakDuration = 900;
+  static const int _minStoredDurationSeconds = 60;
+  static const int _maxStoredDurationSeconds = 12 * 60 * 60;
+
   int focusDuration; // seconds, default 1500 (25min)
   int shortBreakDuration; // seconds, default 300 (5min)
   int longBreakDuration; // seconds, default 900 (15min)
@@ -13,15 +19,16 @@ class PomodoroConfig {
   bool monitorDistractingApps;
   List<String> distractingAppPackages;
   String? focusRoomId;
+  DateTime updatedAt;
 
   /// 休息阶段是否继续播放白噪音。默认 `false`，与 `design.md §3.7` 对齐
   /// （focus 播、break 可配置）。
   bool playSoundInBreak;
 
   PomodoroConfig({
-    this.focusDuration = 1500,
-    this.shortBreakDuration = 300,
-    this.longBreakDuration = 900,
+    this.focusDuration = defaultFocusDuration,
+    this.shortBreakDuration = defaultShortBreakDuration,
+    this.longBreakDuration = defaultLongBreakDuration,
     this.sessionsPerLongBreak = 4,
     this.whiteNoiseSound = 'none',
     this.autoStartBreaks = false,
@@ -32,7 +39,13 @@ class PomodoroConfig {
     List<String>? distractingAppPackages,
     this.focusRoomId,
     this.playSoundInBreak = false,
-  }) : distractingAppPackages = distractingAppPackages ?? const <String>[];
+    DateTime? updatedAt,
+  }) : distractingAppPackages = distractingAppPackages ?? const <String>[],
+       updatedAt = updatedAt ?? DateTime.now();
+
+  void touch() {
+    updatedAt = DateTime.now();
+  }
 
   Map<String, dynamic> toJson() => {
     'focusDuration': focusDuration,
@@ -48,6 +61,7 @@ class PomodoroConfig {
     'distractingAppPackages': distractingAppPackages,
     'focusRoomId': focusRoomId,
     'playSoundInBreak': playSoundInBreak,
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory PomodoroConfig.fromJson(Map<String, dynamic> json) {
@@ -59,10 +73,19 @@ class PomodoroConfig {
     }
 
     return PomodoroConfig(
-      focusDuration: json['focusDuration'] ?? 1500,
-      shortBreakDuration: json['shortBreakDuration'] ?? 300,
-      longBreakDuration: json['longBreakDuration'] ?? 900,
-      sessionsPerLongBreak: json['sessionsPerLongBreak'] ?? 4,
+      focusDuration: _storedDuration(
+        json['focusDuration'],
+        defaultFocusDuration,
+      ),
+      shortBreakDuration: _storedDuration(
+        json['shortBreakDuration'],
+        defaultShortBreakDuration,
+      ),
+      longBreakDuration: _storedDuration(
+        json['longBreakDuration'],
+        defaultLongBreakDuration,
+      ),
+      sessionsPerLongBreak: _intInRange(json['sessionsPerLongBreak'], 4, 1, 20),
       whiteNoiseSound: sound,
       autoStartBreaks: json['autoStartBreaks'] ?? false,
       autoStartFocus: json['autoStartFocus'] ?? false,
@@ -78,7 +101,34 @@ class PomodoroConfig {
           const <String>[],
       focusRoomId: json['focusRoomId']?.toString(),
       playSoundInBreak: json['playSoundInBreak'] ?? false,
+      updatedAt:
+          DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
     );
+  }
+
+  static int _storedDuration(Object? raw, int fallback) {
+    final value = switch (raw) {
+      final num n => n.toInt(),
+      final String s => int.tryParse(s.trim()),
+      _ => null,
+    };
+    if (value == null ||
+        value < _minStoredDurationSeconds ||
+        value > _maxStoredDurationSeconds) {
+      return fallback;
+    }
+    return value;
+  }
+
+  static int _intInRange(Object? raw, int fallback, int min, int max) {
+    final value = switch (raw) {
+      final num n => n.toInt(),
+      final String s => int.tryParse(s.trim()),
+      _ => null,
+    };
+    if (value == null || value < min || value > max) return fallback;
+    return value;
   }
 }
 

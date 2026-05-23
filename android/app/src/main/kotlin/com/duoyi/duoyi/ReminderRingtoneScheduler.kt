@@ -96,12 +96,18 @@ object ReminderRingtoneScheduler {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         manager.cancel(pendingIntent(context, id, baseIntent(context, id, "", "", null)))
         forgetId(context, id)
+        ReminderRingtoneService.stopIfActive(context, id)
     }
 
     fun cancelAll(context: Context) {
         val ids = prefs(context).getStringSet(idsKey, emptySet()).orEmpty()
         ids.mapNotNull { it.toIntOrNull() }.forEach { cancel(context, it) }
         prefs(context).edit().remove(idsKey).apply()
+        ReminderRingtoneService.stopActive(context)
+    }
+
+    fun stopActiveRingtone(context: Context) {
+        ReminderRingtoneService.stopActive(context)
     }
 
     fun restoreAll(context: Context) {

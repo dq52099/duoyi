@@ -720,6 +720,7 @@ class _WorkspaceCollaborationSheetState
         widget.workspace.id,
         text,
       );
+      if (!context.mounted) return;
       _commentCtrl.clear();
     } catch (e) {
       if (!context.mounted) return;

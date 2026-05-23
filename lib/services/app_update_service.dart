@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/app_config.dart';
 import 'app_update_installer.dart';
 
 /// Polls a GitHub repo's latest release and exposes update info.
@@ -15,6 +16,8 @@ class AppUpdateService extends ChangeNotifier {
   String? _latestUrl;
   String? _latestAssetName;
   String? _latestNotes;
+  String? _minimumSupportedVersion;
+  bool _forceUpdateRequired = false;
   bool _checking = false;
   bool _downloading = false;
   bool _installing = false;
@@ -26,6 +29,8 @@ class AppUpdateService extends ChangeNotifier {
   String? get latestUrl => _latestUrl;
   String? get latestAssetName => _latestAssetName;
   String? get latestNotes => _latestNotes;
+  String? get minimumSupportedVersion => _minimumSupportedVersion;
+  bool get forceUpdateRequired => _forceUpdateRequired;
   String get latestNotesForDisplay {
     final notes = _formatReleaseNotes(_latestNotes);
     if (notes.isNotEmpty) return notes;
@@ -50,15 +55,27 @@ class AppUpdateService extends ChangeNotifier {
         0;
   }
 
+  bool get mustUpdate {
+    if (_forceUpdateRequired && hasUpdate) return true;
+    final minimum = _minimumSupportedVersion;
+    if (minimum == null || minimum.trim().isEmpty) return false;
+    return _compareSemver(_normalize(currentVersion), _normalize(minimum)) < 0;
+  }
+
   Future<void> checkNow() async {
+    if (_checking) return;
     _checking = true;
     _error = null;
     _latestUrl = null;
     _latestAssetName = null;
     _latestNotes = null;
+    _minimumSupportedVersion = null;
+    _forceUpdateRequired = false;
     _downloadedFilePath = null;
     notifyListeners();
     try {
+      final configLoaded = await _checkServerConfig();
+      if (configLoaded && _latestVersion != null) return;
       final uri = Uri.parse(
         'https://api.github.com/repos/$repo/releases/latest',
       );
@@ -93,6 +110,56 @@ class AppUpdateService extends ChangeNotifier {
       _checking = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> _checkServerConfig() async {
+    try {
+      final base = AppConfig.bakedServerUrl;
+      if (base.isEmpty && !kIsWeb) return false;
+      final uri = base.isEmpty
+          ? Uri.parse('/api/config')
+          : Uri.parse('$base/api/config');
+      final resp = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return false;
+      final decoded = json.decode(utf8.decode(resp.bodyBytes));
+      if (decoded is! Map) return false;
+      final data = decoded['app_update'] is Map
+          ? Map<String, dynamic>.from(decoded['app_update'] as Map)
+          : Map<String, dynamic>.from(decoded);
+      final latest = _stringValue(data['latest_version']);
+      final downloadUrl = _stringValue(data['update_download_url']);
+      final notes = _stringValue(data['update_notes']);
+      final minimum = _stringValue(data['minimum_supported_version']);
+      final hasPolicy =
+          latest.isNotEmpty ||
+          downloadUrl.isNotEmpty ||
+          notes.isNotEmpty ||
+          minimum.isNotEmpty ||
+          data['force_update_required'] == true;
+      if (!hasPolicy) return false;
+      _latestVersion = latest.isEmpty ? null : latest;
+      _latestUrl = downloadUrl.isEmpty ? null : downloadUrl;
+      _latestAssetName = _assetNameFromUrl(downloadUrl);
+      _latestNotes = notes.isEmpty ? null : notes;
+      _minimumSupportedVersion = minimum.isEmpty ? null : minimum;
+      _forceUpdateRequired = data['force_update_required'] == true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _stringValue(dynamic value) => (value ?? '').toString().trim();
+
+  String? _assetNameFromUrl(String url) {
+    if (url.trim().isEmpty) return null;
+    final parsed = Uri.tryParse(url);
+    final segment = parsed == null || parsed.pathSegments.isEmpty
+        ? ''
+        : parsed.pathSegments.last.trim();
+    return segment.isEmpty ? null : Uri.decodeComponent(segment);
   }
 
   Future<void> downloadAndInstallLatest() async {
@@ -150,7 +217,7 @@ class AppUpdateService extends ChangeNotifier {
   }
 
   String _normalize(String v) =>
-      v.replaceFirst(RegExp(r'^v'), '').split('-').first;
+      v.replaceFirst(RegExp(r'^v'), '').split('-').first.split('+').first;
 
   int _compareSemver(String a, String b) {
     final pa = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();

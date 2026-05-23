@@ -14,7 +14,13 @@ import '../providers/goal_provider.dart';
 import '../providers/share_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../models/calendar_event.dart';
+import '../models/anniversary.dart';
+import '../models/countdown.dart';
+import '../models/course_schedule.dart';
+import '../models/diary_entry.dart';
 import '../models/goal.dart';
+import '../models/habit.dart';
+import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
 import '../models/workspace.dart';
@@ -45,6 +51,8 @@ class _CalendarScreenState extends State<CalendarScreen>
   Set<CalendarEventType>? _activeTypes;
   String? _activeProjectKey;
   String? _activeWorkspaceId;
+  bool _calendarRebuildScheduled = false;
+  Object? _lastCalendarInputSignature;
 
   @override
   void initState() {
@@ -59,16 +67,259 @@ class _CalendarScreenState extends State<CalendarScreen>
       _focusedMonth = DateTime(initialDate.year, initialDate.month);
     }
     _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
+    _tabController.addListener(_handleTabControllerChanged);
+  }
+
+  void _handleTabControllerChanged() {
+    if (!mounted || _tabController.indexIsChanging) return;
+    setState(() {});
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
     super.dispose();
   }
+
+  void _scheduleCalendarRebuild({
+    required TodoProvider todoProvider,
+    required HabitProvider habitProvider,
+    required PomodoroProvider pomodoroProvider,
+    required CalendarProvider calendarProvider,
+    required AnniversaryProvider anniversaryProvider,
+    required CourseProvider courseProvider,
+    required DiaryProvider diaryProvider,
+    required CountdownProvider countdownProvider,
+    required GoalProvider goalProvider,
+    required TimeAuditProvider timeAuditProvider,
+    required ColorScheme colorScheme,
+  }) {
+    if (_calendarRebuildScheduled) return;
+    final signature = _calendarInputSignature(
+      todoProvider: todoProvider,
+      habitProvider: habitProvider,
+      pomodoroProvider: pomodoroProvider,
+      calendarProvider: calendarProvider,
+      anniversaryProvider: anniversaryProvider,
+      courseProvider: courseProvider,
+      diaryProvider: diaryProvider,
+      countdownProvider: countdownProvider,
+      goalProvider: goalProvider,
+      timeAuditProvider: timeAuditProvider,
+      colorScheme: colorScheme,
+    );
+    if (_lastCalendarInputSignature == signature) return;
+    _calendarRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calendarRebuildScheduled = false;
+      if (!mounted) return;
+      final cs = Theme.of(context).colorScheme;
+      final todoProvider = context.read<TodoProvider>();
+      final habitProvider = context.read<HabitProvider>();
+      final pomodoroProvider = context.read<PomodoroProvider>();
+      final calendarProvider = context.read<CalendarProvider>();
+      final anniversaryProvider = context.read<AnniversaryProvider>();
+      final courseProvider = context.read<CourseProvider>();
+      final diaryProvider = context.read<DiaryProvider>();
+      final countdownProvider = context.read<CountdownProvider>();
+      final goalProvider = context.read<GoalProvider>();
+      final timeAuditProvider = context.read<TimeAuditProvider>();
+      _lastCalendarInputSignature = _calendarInputSignature(
+        todoProvider: todoProvider,
+        habitProvider: habitProvider,
+        pomodoroProvider: pomodoroProvider,
+        calendarProvider: calendarProvider,
+        anniversaryProvider: anniversaryProvider,
+        courseProvider: courseProvider,
+        diaryProvider: diaryProvider,
+        countdownProvider: countdownProvider,
+        goalProvider: goalProvider,
+        timeAuditProvider: timeAuditProvider,
+        colorScheme: cs,
+      );
+      calendarProvider.rebuild(
+        todoProvider.todos,
+        habitProvider.habits,
+        pomodoroProvider.sessions,
+        cs,
+        anniversaries: anniversaryProvider.items,
+        courses: courseProvider.courses,
+        courseSettings: courseProvider.settings,
+        diaries: diaryProvider.entries,
+        countdowns: countdownProvider.items,
+        goals: goalProvider.goals,
+        timeEntries: timeAuditProvider.entries,
+      );
+    });
+  }
+
+  Object _calendarInputSignature({
+    required TodoProvider todoProvider,
+    required HabitProvider habitProvider,
+    required PomodoroProvider pomodoroProvider,
+    required CalendarProvider calendarProvider,
+    required AnniversaryProvider anniversaryProvider,
+    required CourseProvider courseProvider,
+    required DiaryProvider diaryProvider,
+    required CountdownProvider countdownProvider,
+    required GoalProvider goalProvider,
+    required TimeAuditProvider timeAuditProvider,
+    required ColorScheme colorScheme,
+  }) {
+    final now = DateTime.now();
+    final todayKey = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).millisecondsSinceEpoch;
+    return Object.hashAll([
+      todayKey,
+      colorScheme.primary,
+      calendarProvider.sourceRevision,
+      _todoSignature(todoProvider.todos),
+      _habitSignature(habitProvider.habits),
+      _pomodoroSignature(pomodoroProvider.sessions),
+      _anniversarySignature(anniversaryProvider.items),
+      _courseSignature(courseProvider.courses, courseProvider.settings),
+      _diarySignature(diaryProvider.entries),
+      _countdownSignature(countdownProvider.items),
+      _goalSignature(goalProvider.goals),
+      _timeEntrySignature(timeAuditProvider.entries),
+    ]);
+  }
+
+  Object _todoSignature(List<TodoItem> todos) => Object.hashAll([
+    todos.length,
+    for (final item in todos)
+      Object.hash(
+        item.id,
+        item.title,
+        item.date.millisecondsSinceEpoch,
+        item.dueDate?.millisecondsSinceEpoch,
+        item.isCompleted,
+        item.listGroupId,
+        item.listGroupName,
+        item.workspaceId,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _habitSignature(List<Habit> habits) => Object.hashAll([
+    habits.length,
+    for (final item in habits)
+      Object.hash(
+        item.id,
+        item.name,
+        item.colorValue,
+        item.kind.index,
+        item.targetCount,
+        item.unit,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _pomodoroSignature(List<PomodoroSession> sessions) => Object.hashAll([
+    sessions.length,
+    for (final item in sessions)
+      Object.hash(
+        item.id,
+        item.startTime.millisecondsSinceEpoch,
+        item.endTime.millisecondsSinceEpoch,
+        item.durationSeconds,
+        item.type.index,
+        item.taskName,
+        item.whiteNoiseSound,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _anniversarySignature(List<Anniversary> items) => Object.hashAll([
+    items.length,
+    for (final item in items)
+      Object.hash(
+        item.id,
+        item.title,
+        item.originDate.millisecondsSinceEpoch,
+        item.type.index,
+        item.calendarType.index,
+        item.colorValue,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _courseSignature(
+    List<CourseItem> courses,
+    ScheduleSettings settings,
+  ) => Object.hashAll([
+    settings.termStart.millisecondsSinceEpoch,
+    settings.totalWeeks,
+    settings.sessionsPerDay,
+    settings.sessionMinutes,
+    settings.firstSessionHour,
+    settings.firstSessionMinute,
+    settings.breakMinutes,
+    courses.length,
+    for (final item in courses)
+      Object.hash(
+        item.id,
+        item.name,
+        item.weekday,
+        item.startSection,
+        item.sectionCount,
+        Object.hashAll(item.weeks),
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _diarySignature(List<DiaryEntry> entries) => Object.hashAll([
+    entries.length,
+    for (final item in entries)
+      Object.hash(item.id, item.dateKey, item.updatedAt.millisecondsSinceEpoch),
+  ]);
+
+  Object _countdownSignature(List<CountdownItem> items) => Object.hashAll([
+    items.length,
+    for (final item in items)
+      Object.hash(
+        item.id,
+        item.title,
+        item.targetDate.millisecondsSinceEpoch,
+        item.isPinned,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _goalSignature(List<GoalItem> goals) => Object.hashAll([
+    goals.length,
+    for (final item in goals)
+      Object.hash(
+        item.id,
+        item.title,
+        item.targetDate?.millisecondsSinceEpoch,
+        item.status.index,
+        item.colorValue,
+        item.autoProgress,
+        item.computedProgress,
+        item.workspaceId,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
+
+  Object _timeEntrySignature(List<TimeEntry> entries) => Object.hashAll([
+    entries.length,
+    for (final item in entries)
+      Object.hash(
+        item.id,
+        item.title,
+        item.startAt.millisecondsSinceEpoch,
+        item.endAt.millisecondsSinceEpoch,
+        item.category.index,
+        item.source.index,
+        item.sourceId,
+        item.updatedAt.millisecondsSinceEpoch,
+      ),
+  ]);
 
   void _showQuickAddTodo() {
     final s = context.read<ThemeProvider>().brand.strings;
@@ -204,6 +455,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       title: '选择日期',
       subtitle: '手动跳转到指定日期',
     );
+    if (!mounted) return;
     if (picked == null) return;
     setState(() {
       _selectedDay = picked;
@@ -227,19 +479,18 @@ class _CalendarScreenState extends State<CalendarScreen>
     final s = context.watch<ThemeProvider>().brand.strings;
     final cs = Theme.of(context).colorScheme;
 
-    // Rebuild calendar events
-    calendarProvider.rebuild(
-      todoProvider.todos,
-      habitProvider.habits,
-      pomodoroProvider.sessions,
-      cs,
-      anniversaries: anniversaryProvider.items,
-      courses: courseProvider.courses,
-      courseSettings: courseProvider.settings,
-      diaries: diaryProvider.entries,
-      countdowns: countdownProvider.items,
-      goals: goalProvider.goals,
-      timeEntries: timeAuditProvider.entries,
+    _scheduleCalendarRebuild(
+      todoProvider: todoProvider,
+      habitProvider: habitProvider,
+      pomodoroProvider: pomodoroProvider,
+      calendarProvider: calendarProvider,
+      anniversaryProvider: anniversaryProvider,
+      courseProvider: courseProvider,
+      diaryProvider: diaryProvider,
+      countdownProvider: countdownProvider,
+      goalProvider: goalProvider,
+      timeAuditProvider: timeAuditProvider,
+      colorScheme: cs,
     );
 
     final workspaceOptions = _workspaceOptions(
@@ -511,34 +762,40 @@ class _CalendarScreenState extends State<CalendarScreen>
               controller: _tabController,
               children: [
                 // Month
-                Column(
-                  children: [
-                    CalendarMonthGrid(
-                      focusedMonth: _focusedMonth,
-                      selectedDay: _selectedDay,
-                      dateEventTypes: dateTypes,
-                      onDaySelected: (d) => setState(() {
-                        _selectedDay = d;
-                        _focusedMonth = DateTime(d.year, d.month);
-                      }),
-                    ),
-                    Divider(
-                      height: 1,
-                      thickness: 0.5,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.35),
-                    ),
-                    Expanded(
-                      child: CalendarDayAgenda(
-                        date: _selectedDay,
-                        calendarProvider: calendarProvider,
-                        activeTypes: _activeTypes,
-                        projectKey: effectiveProjectKey,
-                        workspaceId: effectiveWorkspaceId,
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final showLunar = constraints.maxHeight >= 390;
+                    return Column(
+                      children: [
+                        CalendarMonthGrid(
+                          focusedMonth: _focusedMonth,
+                          selectedDay: _selectedDay,
+                          dateEventTypes: dateTypes,
+                          showLunar: showLunar,
+                          onDaySelected: (d) => setState(() {
+                            _selectedDay = d;
+                            _focusedMonth = DateTime(d.year, d.month);
+                          }),
+                        ),
+                        Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outlineVariant.withValues(alpha: 0.35),
+                        ),
+                        Expanded(
+                          child: CalendarDayAgenda(
+                            date: _selectedDay,
+                            calendarProvider: calendarProvider,
+                            activeTypes: _activeTypes,
+                            projectKey: effectiveProjectKey,
+                            workspaceId: effectiveWorkspaceId,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 // Week
                 CalendarWeekStrip(
@@ -1122,9 +1379,9 @@ class _CalendarNavigationHeader extends StatelessWidget {
     return Material(
       color: cs.surface,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
         child: SizedBox(
-          height: 48,
+          height: 52,
           child: Row(
             children: [
               _NavIconButton(
@@ -1132,24 +1389,41 @@ class _CalendarNavigationHeader extends StatelessWidget {
                 onPressed: previous,
                 tooltip: previousTooltip,
               ),
+              const SizedBox(width: 8),
               Expanded(
-                child: TextButton.icon(
-                  onPressed: onPickDate,
-                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                  label: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: cs.onSurface,
-                    textStyle: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w400,
+                flex: 8,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 180),
+                  child: FilledButton.tonalIcon(
+                    onPressed: onPickDate,
+                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                    label: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    style: FilledButton.styleFrom(
+                      foregroundColor: cs.onSecondaryContainer,
+                      backgroundColor: cs.secondaryContainer.withValues(
+                        alpha: 0.72,
+                      ),
+                      minimumSize: const Size.fromHeight(46),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: cs.outlineVariant.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
               _NavIconButton(
                 icon: Icons.chevron_right,
                 onPressed: next,

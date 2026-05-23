@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:duoyi/models/anniversary.dart';
 import 'package:duoyi/models/goal.dart';
@@ -158,6 +158,14 @@ class _FakeAlarmSink implements ReminderAlarmSink {
   }
 }
 
+int _idFor(String key) {
+  int h = 0;
+  for (final c in key.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return h;
+}
+
 void main() {
   late _FakeNotifSink notif;
   late _FakeAlarmSink alarm;
@@ -182,7 +190,7 @@ void main() {
       expect(alarm.scheduled, isEmpty);
     });
 
-    test('syncHabits 把启用提醒的习惯调度成 daily full-screen', () async {
+    test('syncHabits 把启用提醒的习惯调度成普通通知', () async {
       final habit = Habit(
         id: 'h1',
         name: '阅读',
@@ -191,10 +199,11 @@ void main() {
         remindMinute: 30,
       );
       await scheduler.syncHabits([habit]);
-      expect(alarm.scheduled.length, 1);
-      expect(alarm.scheduled.first['kind'], 'daily_fullscreen');
-      expect(alarm.scheduled.first['hour'], 21);
-      expect(alarm.scheduled.first['minute'], 30);
+      expect(alarm.scheduled, isEmpty);
+      expect(notif.scheduled.length, 1);
+      expect(notif.scheduled.first['kind'], 'habit');
+      expect(notif.scheduled.first['hour'], 21);
+      expect(notif.scheduled.first['minute'], 30);
     });
 
     test('syncHabits 关闭提醒后清理上一轮调度', () async {
@@ -206,11 +215,12 @@ void main() {
         remindMinute: 0,
       );
       await scheduler.syncHabits([h1]);
-      expect(alarm.scheduled.length, 1);
+      expect(notif.scheduled.length, 1);
+      expect(alarm.scheduled, isEmpty);
       final h1Off = Habit(id: 'h1', name: '阅读', remind: false);
       await scheduler.syncHabits([h1Off]);
-      // 第二轮再写入是空集
       expect(notif.cancelledHabits, contains('h1'));
+      expect(alarm.cancelled, contains(_idFor('habit_h1')));
     });
 
     test('syncAnniversaries 默认走 push 通道', () async {

@@ -395,6 +395,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       title: '截止日期',
       subtitle: '使用统一日历选择任务日期',
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() => _todo = _todo.copyWith(dueDate: picked));
       _markEditing();
@@ -403,6 +404,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   Future<void> _pickRecurrence() async {
     final r = await RecurrencePicker.show(context, initial: _todo.recurrence);
+    if (!mounted) return;
     if (r != null) {
       setState(() => _todo = _todo.copyWith(recurrence: r));
       _markEditing();
@@ -773,7 +775,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               allowRelativeToDue: true,
               allowWeekly: true,
               hasAnchorDate: _todo.dueDate != null,
-              defaultKind: ReminderKind.alarm,
+              defaultKind: ReminderKind.push,
             ),
             const SizedBox(height: DesignTokens.spaceSm),
             Builder(
@@ -1858,6 +1860,7 @@ class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
         text,
         targetId: widget.todoId,
       );
+      if (!mounted) return;
       _ctrl.clear();
     } catch (e) {
       if (!mounted) return;

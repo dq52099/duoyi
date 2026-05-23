@@ -1,8 +1,18 @@
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:duoyi/models/pomodoro.dart';
+import 'package:duoyi/providers/pomodoro_provider.dart';
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   test('PomodoroProvider updates and deletes paired time audit records', () {
     final provider = File(
       'lib/providers/pomodoro_provider.dart',
@@ -52,4 +62,181 @@ void main() {
       contains('static String pomodoroDedupeKey(String sessionId)'),
     );
   });
+
+  test('PomodoroProvider start/completion code guards timer handoff', () {
+    final provider = File(
+      'lib/providers/pomodoro_provider.dart',
+    ).readAsStringSync();
+
+    expect(provider, contains('if (_timer?.isActive ?? false)'));
+    expect(provider, contains('final completedState = _state;'));
+    expect(provider, contains('final completedType = completedState.type;'));
+    expect(
+      provider,
+      contains(
+        'final shouldAutoStartNext = completedType == PomodoroType.focus',
+      ),
+    );
+    expect(provider, contains('? _config.autoStartBreaks'));
+    expect(provider, contains(': _config.autoStartFocus'));
+    expect(provider, contains('final lastDate = _lastDate ??= _todayKey();'));
+    expect(provider, isNot(contains('_lastDate!')));
+    expect(
+      provider,
+      isNot(
+        contains(
+          'isRunning: _config.autoStartBreaks || _config.autoStartFocus',
+        ),
+      ),
+    );
+  });
+
+  test('startIfIdle does not create duplicate active timers', () async {
+    final provider = PomodoroProvider();
+    await provider.setConfig(PomodoroConfig(focusDuration: 5));
+
+    fakeAsync((async) {
+      provider.startIfIdle();
+      provider.startIfIdle();
+
+      expect(provider.state.isRunning, isTrue);
+      expect(async.periodicTimerCount, 1);
+
+      async.elapse(const Duration(seconds: 1));
+      expect(provider.state.remainingSeconds, 4);
+      expect(async.periodicTimerCount, 1);
+
+      provider.dispose();
+      expect(async.periodicTimerCount, 0);
+    });
+  });
+
+  test('focus completion auto-starts break only when enabled', () async {
+    final provider = PomodoroProvider();
+    await provider.setConfig(
+      PomodoroConfig(
+        focusDuration: 1,
+        shortBreakDuration: 5,
+        autoStartBreaks: true,
+        autoStartFocus: false,
+      ),
+    );
+
+    fakeAsync((async) {
+      provider.startIfIdle();
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(provider.sessions, hasLength(1));
+      expect(provider.sessions.single.type, PomodoroType.focus);
+      expect(provider.state.type, PomodoroType.shortBreak);
+      expect(provider.state.isRunning, isTrue);
+      expect(provider.state.remainingSeconds, 5);
+      expect(async.periodicTimerCount, 1);
+
+      provider.dispose();
+      expect(async.periodicTimerCount, 0);
+    });
+  });
+
+  test(
+    'manual focus start does not bounce into break when break auto-start is off',
+    () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(
+        PomodoroConfig(
+          focusDuration: 1,
+          shortBreakDuration: 5,
+          autoStartBreaks: false,
+          autoStartFocus: true,
+        ),
+      );
+
+      fakeAsync((async) {
+        provider.startIfIdle();
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+
+        expect(provider.sessions, hasLength(1));
+        expect(provider.sessions.single.type, PomodoroType.focus);
+        expect(provider.state.type, PomodoroType.shortBreak);
+        expect(provider.state.isRunning, isFalse);
+        expect(async.periodicTimerCount, 0);
+
+        provider.dispose();
+      });
+    },
+  );
+
+  test('break completion auto-starts focus only when enabled', () async {
+    final provider = PomodoroProvider();
+    await provider.setConfig(
+      PomodoroConfig(
+        focusDuration: 1,
+        shortBreakDuration: 1,
+        autoStartBreaks: false,
+        autoStartFocus: true,
+      ),
+    );
+
+    fakeAsync((async) {
+      provider.startIfIdle();
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(provider.state.type, PomodoroType.shortBreak);
+      expect(provider.state.isRunning, isFalse);
+      expect(async.periodicTimerCount, 0);
+
+      provider.startIfIdle();
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(provider.sessions, hasLength(2));
+      expect(provider.sessions.last.type, PomodoroType.shortBreak);
+      expect(provider.state.type, PomodoroType.focus);
+      expect(provider.state.isRunning, isTrue);
+      expect(provider.state.remainingSeconds, 1);
+      expect(async.periodicTimerCount, 1);
+
+      provider.dispose();
+      expect(async.periodicTimerCount, 0);
+    });
+  });
+
+  test(
+    'break completion does not auto-start focus from stale autoStartBreaks flag',
+    () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(
+        PomodoroConfig(
+          focusDuration: 1,
+          shortBreakDuration: 1,
+          autoStartBreaks: true,
+          autoStartFocus: false,
+        ),
+      );
+
+      fakeAsync((async) {
+        provider.startIfIdle();
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+
+        expect(provider.state.type, PomodoroType.shortBreak);
+        expect(provider.state.isRunning, isTrue);
+        expect(async.periodicTimerCount, 1);
+
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+
+        expect(provider.sessions, hasLength(2));
+        expect(provider.sessions.last.type, PomodoroType.shortBreak);
+        expect(provider.state.type, PomodoroType.focus);
+        expect(provider.state.isRunning, isFalse);
+        expect(async.periodicTimerCount, 0);
+
+        provider.dispose();
+      });
+    },
+  );
 }

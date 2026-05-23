@@ -33,12 +33,17 @@ void main() {
       await provider.incrementHabitForDate(habit.id, backfillDate);
 
       expect(provider.habits.single.countForDate(backfillDate), 30);
+      final incrementStamp =
+          provider.habits.single.completionUpdatedAt['2026-05-12'];
+      expect(incrementStamp, isNotNull);
+      expect(provider.habits.single.updatedAt, incrementStamp);
       expect(provider.habits.single.todayCount(), 0);
       expect(audit.entries.single.source, TimeEntrySource.habit);
       expect(audit.entries.single.sourceId, habit.id);
       expect(audit.entries.single.dayKey, '2026-05-12');
       expect(audit.entries.single.durationSeconds, 30 * 60);
 
+      await Future<void>.delayed(const Duration(milliseconds: 1));
       await provider.decrementHabitForDate(habit.id, backfillDate);
 
       expect(provider.habits.single.countForDate(backfillDate), 0);
@@ -46,6 +51,11 @@ void main() {
         provider.habits.single.completions.containsKey('2026-05-12'),
         isFalse,
       );
+      final tombstoneStamp =
+          provider.habits.single.completionUpdatedAt['2026-05-12'];
+      expect(tombstoneStamp, isNotNull);
+      expect(tombstoneStamp!.isAfter(incrementStamp!), isTrue);
+      expect(provider.habits.single.updatedAt, tombstoneStamp);
       expect(audit.entries, isEmpty);
     },
   );

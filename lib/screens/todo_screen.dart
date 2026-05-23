@@ -160,7 +160,7 @@ class _TodoScreenState extends State<TodoScreen> {
       isScrollControlled: true,
       builder: (_) => _KanbanSettingsSheet(config: _kanbanConfig),
     );
-    if (next == null) return;
+    if (!mounted || next == null) return;
     await _saveKanbanConfig(next);
   }
 
@@ -485,7 +485,7 @@ class _TodoScreenState extends State<TodoScreen> {
                         context.read<TodoProvider>().addTodo(
                           SmartTodoDraftBuilder.fromText(
                             titleCtrl.text.trim(),
-                            defaultReminderKind: ReminderKind.alarm,
+                            defaultReminderKind: ReminderKind.push,
                           ).toTodo(
                             quadrant: quadrant,
                             priority: priority,

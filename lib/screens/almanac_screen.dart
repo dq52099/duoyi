@@ -21,27 +21,38 @@ class AlmanacScreen extends StatefulWidget {
 }
 
 class _AlmanacScreenState extends State<AlmanacScreen> {
+  static final DateTime _firstSupportedDate = DateTime(1900);
+  static final DateTime _lastSupportedDate = DateTime(2099, 12, 31);
+
   late DateTime _date;
 
   @override
   void initState() {
     super.initState();
-    _date = widget.initialDate ?? DateTime.now();
+    _date = _clampDate(widget.initialDate ?? DateTime.now());
   }
 
   void _shift(int days) {
-    setState(() => _date = _date.add(Duration(days: days)));
+    setState(() => _date = _clampDate(_date.add(Duration(days: days))));
+  }
+
+  DateTime _clampDate(DateTime value) {
+    final day = DateTime(value.year, value.month, value.day);
+    if (day.isBefore(_firstSupportedDate)) return _firstSupportedDate;
+    if (day.isAfter(_lastSupportedDate)) return _lastSupportedDate;
+    return day;
   }
 
   Future<void> _pickDate() async {
     final picked = await AppDatePicker.pickSolar(
       context,
-      initialDate: _date,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2099, 12, 31),
+      initialDate: _clampDate(_date),
+      firstDate: _firstSupportedDate,
+      lastDate: _lastSupportedDate,
       title: '万年历',
     );
-    if (picked != null) setState(() => _date = picked);
+    if (!mounted) return;
+    if (picked != null) setState(() => _date = _clampDate(picked));
   }
 
   @override
@@ -66,7 +77,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
           IconButton(
             icon: const Icon(Icons.today),
             tooltip: '回到今天',
-            onPressed: () => setState(() => _date = DateTime.now()),
+            onPressed: () => setState(() => _date = _clampDate(DateTime.now())),
           ),
         ],
       ),
@@ -92,7 +103,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.chevron_left, color: Colors.white),
-                      onPressed: () => _shift(-1),
+                      onPressed: _date == _firstSupportedDate
+                          ? null
+                          : () => _shift(-1),
                     ),
                     Expanded(
                       child: GestureDetector(
@@ -133,7 +146,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                         Icons.chevron_right,
                         color: Colors.white,
                       ),
-                      onPressed: () => _shift(1),
+                      onPressed: _date == _lastSupportedDate
+                          ? null
+                          : () => _shift(1),
                     ),
                   ],
                 ),
@@ -161,9 +176,15 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
           if (isAlmanac) ...[
             _yijiRow(suitable: suitable, avoid: avoid),
             const SizedBox(height: 16),
-            _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
+            _MiniMonth(
+              date: _date,
+              onPick: (d) => setState(() => _date = _clampDate(d)),
+            ),
           ] else ...[
-            _MiniMonth(date: _date, onPick: (d) => setState(() => _date = d)),
+            _MiniMonth(
+              date: _date,
+              onPick: (d) => setState(() => _date = _clampDate(d)),
+            ),
             const SizedBox(height: 16),
             _yijiRow(suitable: suitable, avoid: avoid),
           ],

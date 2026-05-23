@@ -445,7 +445,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                 allowRelativeToDue: true,
                 allowWeekly: true,
                 hasAnchorDate: _targetDate != null,
-                defaultKind: ReminderKind.alarm,
+                defaultKind: ReminderKind.push,
                 onChanged: (plan) => setState(() {
                   _reminderPlan = plan;
                   _reminder = plan.toLegacyReminderConfig(fallback: _reminder);
@@ -1794,6 +1794,7 @@ class _DateField extends StatelessWidget {
           lastDate: DateTime(2099, 12, 31),
           title: label,
         );
+        if (!context.mounted) return;
         if (picked != null) onPick(picked);
       },
       child: Container(

@@ -57,8 +57,8 @@ class TimeAuditProvider extends ChangeNotifier {
 
   Future<void> add(TimeEntry entry) async {
     _entries.add(entry);
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<TimeEntryImportSummary> importTimeEntries(
@@ -78,8 +78,8 @@ class TimeAuditProvider extends ChangeNotifier {
       inserted++;
     }
     if (inserted > 0) {
-      notifyListeners();
       await _save();
+      notifyListeners();
     }
     return TimeEntryImportSummary(
       inserted: inserted,
@@ -93,8 +93,8 @@ class TimeAuditProvider extends ChangeNotifier {
       final idx = _entries.indexWhere((e) => e.dedupeKey == key);
       if (idx >= 0) {
         _entries[idx] = entry.copyWith();
-        notifyListeners();
         await _save();
+        notifyListeners();
         return;
       }
     }
@@ -109,8 +109,8 @@ class TimeAuditProvider extends ChangeNotifier {
     if (removedIds.isEmpty) return;
     _entries.removeWhere((e) => e.dedupeKey == dedupeKey);
     await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
@@ -118,8 +118,8 @@ class TimeAuditProvider extends ChangeNotifier {
     if (removedIds.isEmpty) return;
     _entries.removeWhere(test);
     await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> deleteBySource(TimeEntrySource source, String sourceId) async {
@@ -141,8 +141,8 @@ class TimeAuditProvider extends ChangeNotifier {
     final idx = _entries.indexWhere((e) => e.id == entry.id);
     if (idx < 0) return;
     _entries[idx] = entry;
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> delete(String id) async {
@@ -150,8 +150,8 @@ class TimeAuditProvider extends ChangeNotifier {
     if (!exists) return;
     _entries.removeWhere((e) => e.id == id);
     await CloudSyncProvider.recordDeletedItem('time_entries', id);
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> recordPomodoroSession({

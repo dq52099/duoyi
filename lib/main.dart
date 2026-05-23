@@ -54,6 +54,7 @@ import 'services/holiday_calendar.dart';
 import 'services/local_notifications.dart';
 import 'services/location_geofence_service.dart';
 import 'services/notification_permission_exception.dart';
+import 'services/reminder_ringtone_settings.dart';
 import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
 import 'screens/todo_screen.dart';
@@ -69,7 +70,6 @@ import 'screens/note_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
-import 'widgets/public_token_notice.dart';
 import 'widgets/quick_capture_fab.dart';
 import 'widgets/todo_completion_flow.dart';
 import 'widgets/surface_components.dart';
@@ -99,6 +99,46 @@ Future<T?> _startupValue<T>(String label, Future<T?> Function() task) async {
     debugPrint('[startup] $label failed: $e\n$st');
     return null;
   }
+}
+
+String _pomodoroPersistedSignature(PomodoroProvider provider) {
+  return '${provider.persistedRevision}:${provider.sessions.length}:'
+      '${provider.penalties.length}:${provider.sessionCountToday}';
+}
+
+String _achievementPersistedSignature(AchievementProvider provider) {
+  return '${provider.persistedRevision}:${provider.unlockedCount}:'
+      '${provider.coinBalance}:${provider.lifetimeCoins}:'
+      '${provider.rewardLedger.length}';
+}
+
+String _pomodoroSessionsSignature(PomodoroProvider provider) {
+  final buffer = StringBuffer()
+    ..write(provider.sessions.length)
+    ..write(':')
+    ..write(provider.sessionCountToday)
+    ..write(':')
+    ..write(provider.totalFocusMinutes);
+  for (final session in provider.sessions) {
+    buffer
+      ..write('|')
+      ..write(session.id)
+      ..write(',')
+      ..write(session.type.index)
+      ..write(',')
+      ..write(session.durationSeconds)
+      ..write(',')
+      ..write(session.updatedAt.microsecondsSinceEpoch);
+  }
+  return buffer.toString();
+}
+
+String _pomodoroHomeWidgetSignature(PomodoroProvider provider) {
+  final state = provider.state;
+  final remaining = state.isRunning ? 'active' : state.remainingSeconds;
+  return '${provider.persistedRevision}:${provider.sessionCountToday}:'
+      '${state.isRunning}:${state.isCountUp}:${state.type.index}:'
+      '${state.totalSeconds}:$remaining';
 }
 
 void main() async {
@@ -361,14 +401,39 @@ void main() async {
   countdownProvider.addListener(markDirty);
   diaryProvider.addListener(markDirty);
   courseProvider.addListener(markDirty);
-  pomodoroProvider.addListener(markDirty);
+  var lastPomodoroDirtySignature = _pomodoroPersistedSignature(
+    pomodoroProvider,
+  );
+  void markPomodoroDirtyOnPersistedChange() {
+    final next = _pomodoroPersistedSignature(pomodoroProvider);
+    if (next == lastPomodoroDirtySignature) return;
+    lastPomodoroDirtySignature = next;
+    markDirty();
+  }
+
+  pomodoroProvider.addListener(markPomodoroDirtyOnPersistedChange);
   timeAuditProvider.addListener(markDirty);
   userProvider.addListener(markDirty);
-  achievementProvider.addListener(markDirty);
-  customFocusSoundProvider.addListener(markDirty);
-  focusRoomProvider.onLocalChanged = markDirty;
   locationReminderProvider.addListener(markDirty);
+  var lastAchievementDirtySignature = _achievementPersistedSignature(
+    achievementProvider,
+  );
+  void markAchievementDirtyOnPersistedChange() {
+    final next = _achievementPersistedSignature(achievementProvider);
+    if (next == lastAchievementDirtySignature) return;
+    lastAchievementDirtySignature = next;
+    markDirty();
+  }
+
+  achievementProvider.addListener(markAchievementDirtyOnPersistedChange);
+  focusRoomProvider.onLocalChanged = markDirty;
+  themeProvider.addListener(markDirty);
   calendarProvider.onLocalEventsChanged = markDirty;
+  preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;
+  ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;
+  quickCaptureTemplateProvider.addListener(
+    cloudSyncProvider.markQuickCaptureTemplatesChanged,
+  );
 
   void refreshUserStats() {
     userProvider.recalc(
@@ -381,7 +446,15 @@ void main() async {
 
   todoProvider.addListener(refreshUserStats);
   habitProvider.addListener(refreshUserStats);
-  pomodoroProvider.addListener(refreshUserStats);
+  var lastPomodoroStatsSignature = _pomodoroSessionsSignature(pomodoroProvider);
+  void refreshUserStatsOnPomodoroSummaryChange() {
+    final next = _pomodoroSessionsSignature(pomodoroProvider);
+    if (next == lastPomodoroStatsSignature) return;
+    lastPomodoroStatsSignature = next;
+    refreshUserStats();
+  }
+
+  pomodoroProvider.addListener(refreshUserStatsOnPomodoroSummaryChange);
 
   bool isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -487,7 +560,17 @@ void main() async {
 
   todoProvider.addListener(refreshAchievements);
   habitProvider.addListener(refreshAchievements);
-  pomodoroProvider.addListener(refreshAchievements);
+  var lastPomodoroAchievementSignature = _pomodoroSessionsSignature(
+    pomodoroProvider,
+  );
+  void refreshAchievementsOnPomodoroSummaryChange() {
+    final next = _pomodoroSessionsSignature(pomodoroProvider);
+    if (next == lastPomodoroAchievementSignature) return;
+    lastPomodoroAchievementSignature = next;
+    refreshAchievements();
+  }
+
+  pomodoroProvider.addListener(refreshAchievementsOnPomodoroSummaryChange);
   diaryProvider.addListener(refreshAchievements);
   goalProvider.addListener(refreshAchievements);
   anniversaryProvider.addListener(refreshAchievements);
@@ -538,7 +621,19 @@ void main() async {
   todoProvider.addListener(syncDailyDigestReminder);
   todoProvider.addListener(queueReportDigestReminderSync);
   habitProvider.addListener(queueReportDigestReminderSync);
-  pomodoroProvider.addListener(queueReportDigestReminderSync);
+  var lastPomodoroReportSignature = _pomodoroSessionsSignature(
+    pomodoroProvider,
+  );
+  void queueReportDigestReminderSyncOnPomodoroSummaryChange() {
+    final next = _pomodoroSessionsSignature(pomodoroProvider);
+    if (next == lastPomodoroReportSignature) return;
+    lastPomodoroReportSignature = next;
+    queueReportDigestReminderSync();
+  }
+
+  pomodoroProvider.addListener(
+    queueReportDigestReminderSyncOnPomodoroSummaryChange,
+  );
   timeAuditProvider.addListener(queueReportDigestReminderSync);
   await _startupGuard('daily digest reminder', syncDailyDigestReminder);
   await _startupGuard('report digest reminders', syncReportDigestReminders);
@@ -581,27 +676,98 @@ void main() async {
     aiService.updateFromServerConfig(authProvider.serverConfig);
   }
 
-  cloudSyncProvider.onSynced = () {
+  cloudSyncProvider.onSynced = (changedCollections) async {
     // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作"脏改动"。
-    // ignore: discarded_futures
-    cloudSyncProvider.suppressDirtyMarkWhile(() async {
-      await todoProvider.loadFromStorage();
-      await habitProvider.loadFromStorage();
-      await pomodoroProvider.loadFromStorage();
-      await countdownProvider.loadFromStorage();
-      await noteProvider.loadFromStorage();
-      await anniversaryProvider.loadFromStorage();
-      await diaryProvider.loadFromStorage();
-      await goalProvider.loadFromStorage();
-      await courseProvider.loadFromStorage();
-      await userProvider.loadFromStorage();
-      // 云同步回写本地资料后，再拉一次账号资料，保证其它设备改过的
-      // 昵称、头像、邮箱验证状态等账号字段能覆盖本地展示缓存。
-      await authProvider.refreshMe();
-      await timeAuditProvider.loadFromStorage();
-      await shareProvider.load();
+    await cloudSyncProvider.suppressDirtyMarkWhile(() async {
+      final futures = <Future<void>>[];
+      var shouldResyncReminders = false;
+
+      if (changedCollections.contains('todos')) {
+        futures.add(todoProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('habits')) {
+        futures.add(habitProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('pomodoro_sessions') ||
+          changedCollections.contains('focus_penalties') ||
+          changedCollections.contains('pomodoro_config')) {
+        futures.add(pomodoroProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('countdowns')) {
+        futures.add(countdownProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('notes')) {
+        futures.add(noteProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('anniversaries')) {
+        futures.add(anniversaryProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('diaries')) {
+        futures.add(diaryProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('goals')) {
+        futures.add(goalProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('courses') ||
+          changedCollections.contains('course_settings')) {
+        futures.add(courseProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('calendar_events')) {
+        futures.add(calendarProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('user_profile')) {
+        futures.add(userProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('time_entries')) {
+        futures.add(timeAuditProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('location_reminders')) {
+        futures.add(locationReminderProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('achievement_states') ||
+          changedCollections.contains('virtual_rewards')) {
+        futures.add(achievementProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('focus_rooms')) {
+        futures.add(focusRoomProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('theme_shop_state')) {
+        futures.add(themeProvider.loadFromStorage());
+      }
+      if (changedCollections.contains('preferences')) {
+        futures.add(preferencesProvider.loadFromStorage());
+        shouldResyncReminders = true;
+      }
+      if (changedCollections.contains('quick_capture_templates')) {
+        futures.add(quickCaptureTemplateProvider.loadFromStorage());
+      }
+
+      await Future.wait(futures);
+
+      if (changedCollections.contains('user_profile')) {
+        // 云同步回写本地资料后，再拉一次账号资料，保证其它设备改过的
+        // 昵称、头像、邮箱验证状态等账号字段能覆盖本地展示缓存。
+        await authProvider.refreshMe();
+      }
+      if (changedCollections.contains('workspace_payloads')) {
+        await shareProvider.load();
+      }
+      if (changedCollections.contains('preferences')) {
+        await ReminderRingtoneSettings.applyPersistedSettingsToNative();
+      }
+      if (changedCollections.contains('location_reminders')) {
+        await syncLocationGeofences();
+      }
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
-      await resyncReminders();
+      if (shouldResyncReminders) {
+        await resyncReminders();
+      }
     });
   };
 
@@ -624,30 +790,7 @@ void main() async {
     cloudSyncProvider.startRemotePolling();
   }
 
-  notificationService.setStrings(themeProvider.brand.strings);
-  themeProvider.addListener(() {
-    notificationService.setStrings(themeProvider.brand.strings);
-    _pushHomeWidget(
-      todoProvider,
-      habitProvider,
-      pomodoroProvider,
-      calendarProvider,
-      countdownProvider,
-      timeAuditProvider,
-      goalProvider,
-      anniversaryProvider,
-      courseProvider,
-      noteProvider,
-      diaryProvider,
-      themeProvider,
-    );
-  });
-
-  systemTray.onActivate.listen((action) {
-    if (action == 'pomodoro_quick_start') pomodoroProvider.toggleTimer();
-  });
-
-  void onDataChange() => _pushHomeWidget(
+  Future<void> pushHomeWidgetNow() => _pushHomeWidget(
     todoProvider,
     habitProvider,
     pomodoroProvider,
@@ -661,9 +804,40 @@ void main() async {
     diaryProvider,
     themeProvider,
   );
+
+  Timer? homeWidgetPushDebounce;
+  void queueHomeWidgetPush() {
+    homeWidgetPushDebounce?.cancel();
+    homeWidgetPushDebounce = Timer(const Duration(milliseconds: 800), () {
+      // ignore: discarded_futures
+      pushHomeWidgetNow();
+    });
+  }
+
+  notificationService.setStrings(themeProvider.brand.strings);
+  themeProvider.addListener(() {
+    notificationService.setStrings(themeProvider.brand.strings);
+    queueHomeWidgetPush();
+  });
+
+  systemTray.onActivate.listen((action) {
+    if (action == 'pomodoro_quick_start') pomodoroProvider.startIfIdle();
+  });
+
+  void onDataChange() => queueHomeWidgetPush();
+  var lastPomodoroHomeWidgetSignature = _pomodoroHomeWidgetSignature(
+    pomodoroProvider,
+  );
+  void onPomodoroHomeWidgetChange() {
+    final next = _pomodoroHomeWidgetSignature(pomodoroProvider);
+    if (next == lastPomodoroHomeWidgetSignature) return;
+    lastPomodoroHomeWidgetSignature = next;
+    queueHomeWidgetPush();
+  }
+
   todoProvider.addListener(onDataChange);
   habitProvider.addListener(onDataChange);
-  pomodoroProvider.addListener(onDataChange);
+  pomodoroProvider.addListener(onPomodoroHomeWidgetChange);
   countdownProvider.addListener(onDataChange);
   timeAuditProvider.addListener(onDataChange);
   goalProvider.addListener(onDataChange);
@@ -672,23 +846,7 @@ void main() async {
   noteProvider.addListener(onDataChange);
   diaryProvider.addListener(onDataChange);
 
-  await _startupGuard(
-    'initial home widget push',
-    () => _pushHomeWidget(
-      todoProvider,
-      habitProvider,
-      pomodoroProvider,
-      calendarProvider,
-      countdownProvider,
-      timeAuditProvider,
-      goalProvider,
-      anniversaryProvider,
-      courseProvider,
-      noteProvider,
-      diaryProvider,
-      themeProvider,
-    ),
-  );
+  await _startupGuard('initial home widget push', pushHomeWidgetNow);
 
   try {
     HomeWidgetService.widgetClickedStream.listen(
@@ -1786,6 +1944,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   bool? _lastExactAlarmGranted;
   AchievementProvider? _achievementProvider;
   FocusRoomProvider? _focusRoomProvider;
+  DateTime? _lastUpdatePolicyCheckAt;
 
   @override
   void initState() {
@@ -1795,6 +1954,10 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     _lastLifecycleDay = DateTime(now.year, now.month, now.day);
     _lastIana = LocalTimezoneResolver.currentIana;
     _lastExactAlarmGranted = _initialExactAlarmGranted;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _checkUpdatePolicy(force: true);
+    });
   }
 
   @override
@@ -1850,6 +2013,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       lock.onAppLifecycleInactive();
     } else if (state == AppLifecycleState.resumed) {
       lock.onAppLifecycleResume();
+      _checkUpdatePolicy();
       _refreshAccountProfileOnResume();
       // 先处理时区变更（可能影响调度），再做跨日 rollover。
       _maybeResyncOnTimezoneChange();
@@ -1876,6 +2040,21 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
         debugPrint('[DuoyiApp] refresh account profile failed: $e\n$st');
       }
     });
+  }
+
+  void _checkUpdatePolicy({bool force = false}) {
+    final now = DateTime.now();
+    final previous = _lastUpdatePolicyCheckAt;
+    if (!force &&
+        previous != null &&
+        now.difference(previous) < const Duration(minutes: 30)) {
+      return;
+    }
+    _lastUpdatePolicyCheckAt = now;
+    final updater = context.read<AppUpdateService>();
+    if (updater.checking) return;
+    // ignore: discarded_futures
+    updater.checkNow();
   }
 
   /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并触发
@@ -2026,6 +2205,214 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
           MainShell(key: mainShellKey),
           if (lock.isLocked)
             const Positioned.fill(child: Material(child: LockScreen())),
+          const _ForceUpdateGate(),
+        ],
+      ),
+    );
+  }
+}
+
+class _ForceUpdateGate extends StatelessWidget {
+  const _ForceUpdateGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final updater = context.watch<AppUpdateService>();
+    if (!updater.mustUpdate) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final notes = updater.latestNotesForDisplay;
+    final canInstall = updater.latestUrl != null;
+
+    return Positioned.fill(
+      child: PopScope(
+        canPop: false,
+        child: Material(
+          color: colorScheme.surface,
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(
+                        Icons.system_update_alt_outlined,
+                        size: 48,
+                        color: colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '必须更新后才能继续使用',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '管理员已要求当前版本升级。更新完成前，应用功能会暂时锁定。',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      AppSurfaceCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _ForceUpdateInfoRow(
+                              label: '当前版本',
+                              value: updater.currentVersion,
+                            ),
+                            _ForceUpdateInfoRow(
+                              label: '最新版本',
+                              value: updater.latestVersion ?? '未配置',
+                            ),
+                            if (updater.minimumSupportedVersion != null)
+                              _ForceUpdateInfoRow(
+                                label: '最低支持版本',
+                                value: updater.minimumSupportedVersion!,
+                              ),
+                            if (updater.latestAssetName != null)
+                              _ForceUpdateInfoRow(
+                                label: '安装包',
+                                value: updater.latestAssetName!,
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (notes.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          '更新内容',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 180),
+                          child: AppSurfaceCard(
+                            padding: const EdgeInsets.all(14),
+                            child: Scrollbar(
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                child: SelectableText(
+                                  notes,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (updater.error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          updater.error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colorScheme.error),
+                        ),
+                      ],
+                      if (!canInstall) ...[
+                        const SizedBox(height: 12),
+                        AppInfoBanner(
+                          icon: Icons.link_off_outlined,
+                          title: '管理员未配置下载地址',
+                          message: '请管理员在后台补充最新版本安装包地址，否则客户端无法完成强制更新。',
+                          color: colorScheme.error,
+                          margin: EdgeInsets.zero,
+                        ),
+                      ],
+                      if (updater.downloading) ...[
+                        const SizedBox(height: 16),
+                        LinearProgressIndicator(
+                          value: updater.downloadProgress,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          updater.downloadProgress == null
+                              ? '正在下载更新包'
+                              : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ] else if (updater.installing) ...[
+                        const SizedBox(height: 16),
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 6),
+                        Text(
+                          '正在打开安装器',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: canInstall && !updater.busy
+                            ? () async {
+                                await updater.downloadAndInstallLatest();
+                              }
+                            : null,
+                        icon: const Icon(Icons.download_for_offline_outlined),
+                        label: Text(
+                          updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ForceUpdateInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ForceUpdateInfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2040,8 +2427,6 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
-  static bool _startupNoticeShown = false;
-
   int _currentIndex = 0; // Today first
 
   static final GlobalKey todayKey = GlobalKey();
@@ -2052,22 +2437,37 @@ class MainShellState extends State<MainShell> {
   static final GlobalKey widgetKey = GlobalKey();
   static final GlobalKey mineKey = GlobalKey();
 
-  void navigateTo(int index) => setState(() => _currentIndex = index);
+  int _coerceTabIndex(int index) {
+    final visibleTabs = context
+        .read<PreferencesProvider>()
+        .enabledBottomNavTabs
+        .where((tab) => tab >= 0 && tab < 7)
+        .toList(growable: false);
+    if (index >= 0 &&
+        index < 7 &&
+        (visibleTabs.isEmpty || visibleTabs.contains(index))) {
+      return index;
+    }
+    if (visibleTabs.isNotEmpty) return visibleTabs.first;
+    return index.clamp(0, 6);
+  }
+
+  void navigateTo(int index) {
+    if (!mounted) return;
+    setState(() => _currentIndex = _coerceTabIndex(index));
+  }
 
   @override
   void initState() {
     super.initState();
     // 延迟一帧再读 PreferencesProvider，避免 initState 中 read 异常
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final prefs = context.read<PreferencesProvider>();
-      if (prefs.defaultTab != _currentIndex &&
-          prefs.defaultTab >= 0 &&
-          prefs.defaultTab < 7) {
-        setState(() => _currentIndex = prefs.defaultTab);
-      }
-      if (!_startupNoticeShown && mounted) {
-        _startupNoticeShown = true;
-        PublicTokenNotice.showStartupDialog(context);
+      if (!mounted) return;
+      final target = _coerceTabIndex(
+        context.read<PreferencesProvider>().defaultTab,
+      );
+      if (target != _currentIndex) {
+        setState(() => _currentIndex = target);
       }
     });
   }
@@ -2075,10 +2475,19 @@ class MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final prefs = context.watch<PreferencesProvider>();
-    final visibleTabs = prefs.enabledBottomNavTabs;
-    if (!visibleTabs.contains(_currentIndex)) {
+    final visibleTabs = prefs.enabledBottomNavTabs
+        .where((tab) => tab >= 0 && tab < 7)
+        .toList(growable: false);
+    final safeVisibleTabs = visibleTabs.isEmpty
+        ? const [0, 1, 2, 3, 4, 5, 6]
+        : visibleTabs;
+    var safeIndex = _currentIndex.clamp(0, 6);
+    if (!safeVisibleTabs.contains(safeIndex)) {
+      safeIndex = safeVisibleTabs.first;
+    }
+    if (safeIndex != _currentIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _currentIndex = visibleTabs.first);
+        if (mounted) setState(() => _currentIndex = safeIndex);
       });
     }
     final allDestinations = [
@@ -2118,14 +2527,26 @@ class MainShellState extends State<MainShell> {
         label: I18n.tr('nav.mine'),
       ),
     ];
-    final destinations = visibleTabs.map((i) => allDestinations[i]).toList();
-    final selectedNavIndex = visibleTabs.indexOf(_currentIndex);
+    final selectedNavIndex = safeVisibleTabs.indexOf(safeIndex);
+    final updater = context.watch<AppUpdateService>();
+    final showUpdateBadge = updater.hasUpdate && !updater.mustUpdate;
+    final navDestinations = safeVisibleTabs
+        .map((tab) {
+          final destination = allDestinations[tab];
+          if (tab != 6 || !showUpdateBadge) return destination;
+          return NavigationDestination(
+            icon: const _BottomNavBadgeIcon(child: Icon(Icons.person_outline)),
+            selectedIcon: const _BottomNavBadgeIcon(child: Icon(Icons.person)),
+            label: I18n.tr('nav.mine'),
+          );
+        })
+        .toList(growable: false);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BrandBackground(
         child: IndexedStack(
-          index: _currentIndex,
+          index: safeIndex,
           children: [
             TodayScreen(key: todayKey),
             TodoScreen(key: todoKey),
@@ -2137,10 +2558,10 @@ class MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      floatingActionButton: _currentIndex == 0 && prefs.quickCaptureFab
+      floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
           ? const QuickCaptureFab()
           : null,
-      appBar: _currentIndex == 0
+      appBar: safeIndex == 0
           ? AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -2159,9 +2580,46 @@ class MainShellState extends State<MainShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
         onDestinationSelected: (i) =>
-            setState(() => _currentIndex = visibleTabs[i]),
-        destinations: destinations,
+            setState(() => _currentIndex = safeVisibleTabs[i]),
+        destinations: navDestinations,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      ),
+    );
+  }
+}
+
+class _BottomNavBadgeIcon extends StatelessWidget {
+  final Widget child;
+
+  const _BottomNavBadgeIcon({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          child,
+          Positioned(
+            top: 3,
+            right: 3,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.surface,
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

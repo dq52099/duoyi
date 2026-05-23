@@ -64,6 +64,10 @@ void main() {
     expect(source, contains('HapticFeedback.mediumImpact()'));
     expect(source, contains('SystemSound.play(SystemSoundType.click)'));
     expect(source, contains('HapticFeedback.selectionClick()'));
+    expect(source, contains('dimension: 48'));
+    expect(source, contains('width: 48'));
+    expect(source, contains('height: 48'));
+    expect(source, contains('size: 22'));
     expect(source, contains('messenger.hideCurrentSnackBar()'));
     expect(source, contains('今日已达标'));
     expect(source, contains("label: '已达标'"));

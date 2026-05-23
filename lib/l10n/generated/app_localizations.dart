@@ -761,19 +761,19 @@ abstract class AppLocalizations {
   /// No description provided for @preferencesNotifyTestPermissionDenied.
   ///
   /// In zh, this message translates to:
-  /// **'系统通知权限未授权，无法发送响铃测试'**
+  /// **'系统通知权限未授权，无法发送测试通知'**
   String get preferencesNotifyTestPermissionDenied;
 
   /// No description provided for @preferencesNotifyTestFailed.
   ///
   /// In zh, this message translates to:
-  /// **'响铃测试发送失败：'**
+  /// **'测试通知发送失败：'**
   String get preferencesNotifyTestFailed;
 
   /// No description provided for @preferencesNotifyTestSent.
   ///
   /// In zh, this message translates to:
-  /// **'响铃弹屏测试已发送'**
+  /// **'测试通知已发送'**
   String get preferencesNotifyTestSent;
 
   /// No description provided for @preferencesNotifyPendingCleared.

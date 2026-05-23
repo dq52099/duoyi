@@ -29,8 +29,7 @@ class UserProvider extends ChangeNotifier {
     _profile.bestStreak = bestStreak;
     _profile.updatedAt = DateTime.now();
     // ignore: discarded_futures
-    _save();
-    _notifyListenersSafely();
+    _saveThenNotifySafely();
   }
 
   void _notifyListenersSafely() {
@@ -56,6 +55,11 @@ class UserProvider extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_profile', json.encode(_profile.toJson()));
+  }
+
+  Future<void> _saveThenNotifySafely() async {
+    await _save();
+    _notifyListenersSafely();
   }
 
   Future<void> updateProfile({
@@ -89,8 +93,8 @@ class UserProvider extends ChangeNotifier {
       _profile.bio = bio.trim();
     }
     _profile.updatedAt = DateTime.now();
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> clearAccountProfileCache() async {
@@ -102,8 +106,8 @@ class UserProvider extends ChangeNotifier {
     _profile.avatarUrl = '';
     _profile.bio = '';
     _profile.updatedAt = DateTime.now();
-    notifyListeners();
     await _save();
+    notifyListeners();
   }
 
   Future<void> setUsername(String name) async {
@@ -112,7 +116,8 @@ class UserProvider extends ChangeNotifier {
 
   void updateLastSyncTime(DateTime time) {
     _profile.lastSyncTime = time;
-    notifyListeners();
+    // ignore: discarded_futures
+    _saveThenNotifySafely();
   }
 
   String _firstCodePoint(String value) {

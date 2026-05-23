@@ -12,7 +12,6 @@ import '../models/goal.dart'
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
-import '../services/alarm_service.dart';
 import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/reminder_health_hint.dart';
@@ -108,10 +107,6 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
             final granted =
                 notificationService == null ||
                 await notificationService.requestPermission();
-            if (notificationService != null) {
-              await AlarmService.instance.requestExactAlarmPermission();
-              await AlarmService.instance.requestFullScreenIntentPermission();
-            }
             if (!granted) {
               messenger.showSnackBar(
                 SnackBar(
@@ -403,7 +398,7 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 allowSnooze: false,
                 hasAnchorDate: false,
                 maxRules: 1,
-                defaultKind: ReminderKind.alarm,
+                defaultKind: ReminderKind.push,
                 onChanged: (plan) => setSt(() => reminderPlan = plan),
               ),
               const SizedBox(height: DesignTokens.spaceSm),
@@ -412,20 +407,15 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                   final notif = context.watch<NotificationService?>();
                   if (notif == null) return const SizedBox.shrink();
                   return ReminderHealthHint(
-                    reminderKind: ReminderKind.alarm,
+                    reminderKind: ReminderKind.push,
                     onOpenSystemSettings: () => _openSystemSettings(context),
                     onRequestNotificationPermission: () async {
                       await context
                           .read<NotificationService>()
                           .requestPermission();
                     },
-                    onRequestExactAlarmPermission: () async {
-                      await AlarmService.instance.requestExactAlarmPermission();
-                    },
-                    onRequestFullScreenIntentPermission: () async {
-                      await AlarmService.instance
-                          .requestFullScreenIntentPermission();
-                    },
+                    onRequestExactAlarmPermission: () async {},
+                    onRequestFullScreenIntentPermission: () async {},
                   );
                 },
               ),
@@ -1043,7 +1033,7 @@ ReminderPlan _habitReminderPlan(Habit habit) {
         type: fullWeek
             ? ReminderRuleType.dailyTime
             : ReminderRuleType.weeklyTime,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: habit.remindHour,
         minute: habit.remindMinute,
         weekdays: fullWeek ? const <int>[] : weekdays,

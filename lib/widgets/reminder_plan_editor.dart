@@ -287,7 +287,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
     }
     _kind = widget.allowAlarm
         ? r?.kind ?? widget.defaultKind
-        : widget.defaultKind;
+        : ReminderKind.push;
     _time = TimeOfDay(
       hour: r?.hour ?? defaultTime.hour,
       minute: r?.minute ?? defaultTime.minute,
@@ -297,7 +297,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
         ? [...r!.weekdays]
         : [DateTime.now().weekday];
     _vibrate = r?.vibrate ?? true;
-    _fullScreen = r?.fullScreen ?? true;
+    _fullScreen = r?.fullScreen ?? false;
     _snoozeMinutes = r?.snoozeMinutes ?? 0;
     _repeatCount = r?.repeatCount ?? 0;
   }
@@ -487,7 +487,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       id: widget.initial?.id,
       enabled: _enabled,
       type: type,
-      kind: widget.allowAlarm ? _kind : widget.defaultKind,
+      kind: widget.allowAlarm ? _kind : ReminderKind.push,
       hour: _time.hour,
       minute: _time.minute,
       offsetMinutes: type == ReminderRuleType.relativeToDue
@@ -495,7 +495,8 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
           : null,
       weekdays: type == ReminderRuleType.weeklyTime ? _weekdays : const <int>[],
       vibrate: _vibrate,
-      fullScreen: _kind == ReminderKind.alarm && _fullScreen,
+      fullScreen:
+          widget.allowAlarm && _kind == ReminderKind.alarm && _fullScreen,
       snoozeMinutes: _snoozeMinutes,
       repeatCount: _repeatCount,
     );

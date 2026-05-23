@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:duoyi/core/focus_sound_catalog.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:test/test.dart';
 
 void main() {
@@ -13,10 +14,8 @@ void main() {
       'forest',
       'cafe',
       'waves',
-      'brown_noise',
       'night_rain',
       'fan',
-      'pink_noise',
       'deep_stream',
       'thunderstorm',
       'storm_rain',
@@ -26,7 +25,6 @@ void main() {
       'brook',
       'river',
       'crickets',
-      'white_stream',
       'clock',
       'keyboard',
       'wind',
@@ -41,6 +39,11 @@ void main() {
       'veranda_rain',
       'breeze_birds',
     ];
+    const bannedGeneratedNoiseIds = <String>{
+      'brown_noise',
+      'pink_noise',
+      'white_stream',
+    };
 
     test('播放服务、番茄钟和目标编辑器暴露同一组音轨', () {
       final catalog = File(
@@ -67,6 +70,9 @@ void main() {
 
       for (final id in ['none', ...tracks]) {
         expect(catalog, contains("'$id'"), reason: 'FocusSoundCatalog 缺少 $id');
+      }
+      for (final id in bannedGeneratedNoiseIds) {
+        expect(catalog, isNot(contains("'$id'")), reason: '$id 不应再发布');
       }
 
       expect(focusService, contains('FocusSoundCatalog.assetMap'));
@@ -208,8 +214,65 @@ void main() {
         contains('File:Gentle_breeze_and_birds_singing.ogg'),
         reason: 'breeze_birds.mp3 必须记录单个可追溯来源',
       );
+      for (final id in bannedGeneratedNoiseIds) {
+        expect(readme, isNot(contains('$id.mp3')), reason: '$id 来源不应回归');
+      }
+      expect(readme, contains('禁止新增或恢复'));
+      expect(readme, contains('纯合成/纯噪声资源'));
       expect(readme, isNot(contains('待复核')));
       expect(readme, isNot(contains('禁止组合来源')));
+    });
+
+    test('纯合成噪声资源和生成脚本不得回归', () {
+      expect(File('tool/generate_white_noise.py').existsSync(), isFalse);
+
+      for (final id in bannedGeneratedNoiseIds) {
+        expect(
+          FocusSoundCatalog.assetMap.keys,
+          isNot(contains(id)),
+          reason: '$id 不应留在资源映射',
+        );
+        expect(
+          FocusSoundCatalog.tracks.map((track) => track.id),
+          isNot(contains(id)),
+          reason: '$id 不应留在音轨列表',
+        );
+        expect(
+          FocusSoundCatalog.options.map((option) => option.id),
+          isNot(contains(id)),
+          reason: '$id 不应留在选择列表',
+        );
+        expect(FocusSoundCatalog.trackIdsFor(id), isEmpty, reason: '$id 不应可播放');
+        expect(FocusSoundCatalog.assetsFor(id), isEmpty, reason: '$id 不应有资源');
+        expect(
+          File('assets/sounds/white_noise/$id.mp3').existsSync(),
+          isFalse,
+          reason: '$id.mp3 不应留在资源目录',
+        );
+      }
+    });
+
+    test('纯合成噪声 id 不留 UI 死分支', () {
+      final uiFiles = [
+        File('lib/screens/pomodoro_screen.dart'),
+        File('lib/widgets/pomodoro_session_card.dart'),
+      ];
+
+      for (final file in uiFiles) {
+        final source = file.readAsStringSync();
+        for (final id in bannedGeneratedNoiseIds) {
+          expect(
+            source,
+            isNot(contains("'$id'")),
+            reason: '${file.path} 残留 $id',
+          );
+          expect(
+            source,
+            isNot(contains('"$id"')),
+            reason: '${file.path} 残留 $id',
+          );
+        }
+      }
     });
 
     test('白噪音文案、资源和 README 来源一一对应', () {
@@ -244,6 +307,111 @@ void main() {
           contains(track.label.replaceAll('低频棕噪', '棕噪')),
           reason: 'README 来源说明应能对应 ${track.label}',
         );
+      }
+    });
+
+    test('白噪音 manifest 固定真实录音来源、许可和文件哈希', () {
+      final manifest = _readWhiteNoiseManifest();
+      final readme = File(
+        'assets/sounds/white_noise/README.md',
+      ).readAsStringSync();
+      final processing = Map<String, dynamic>.from(
+        manifest['processing'] as Map,
+      );
+      final manifestTracks = _manifestTracks(manifest);
+      final manifestIds = manifestTracks
+          .map((track) => track['id']?.toString())
+          .toSet();
+      final catalogIds = FocusSoundCatalog.tracks
+          .map((track) => track.id)
+          .toSet();
+
+      expect(manifest['schemaVersion'], 1);
+      expect(manifestIds, catalogIds);
+      expect(processing['format'], 'mp3');
+      expect(processing['durationSeconds'], closeTo(60.029388, 0.001));
+      expect(processing['bitRate'], 112054);
+
+      for (final rule in manifest['rules'] as List<dynamic>) {
+        final text = rule.toString();
+        expect(text, isNot(contains('synthetic placeholder')));
+        expect(text.trim(), isNotEmpty);
+      }
+
+      final hashes = <String>{};
+      for (final track in manifestTracks) {
+        final id = track['id']?.toString() ?? '';
+        final fileName = track['file']?.toString() ?? '';
+        final sourceUrl = track['sourceUrl']?.toString() ?? '';
+        final author = track['author']?.toString() ?? '';
+        final license = track['license']?.toString() ?? '';
+        final expectedSha = track['sha256']?.toString() ?? '';
+        final file = File('assets/sounds/white_noise/$fileName');
+
+        expect(tracks, contains(id), reason: 'manifest 出现未发布 id: $id');
+        expect(fileName, '$id.mp3');
+        expect(
+          sourceUrl,
+          startsWith('https://commons.wikimedia.org/wiki/File:'),
+        );
+        expect(author.trim(), isNotEmpty, reason: '$id 缺少作者');
+        expect(license.trim(), isNotEmpty, reason: '$id 缺少许可');
+        expect(readme, contains(sourceUrl), reason: 'README 缺少 $id 来源链接');
+        expect(readme, contains(license), reason: 'README 缺少 $id 许可');
+        expect(expectedSha, hasLength(64), reason: '$id sha256 长度错误');
+        expect(hashes.add(expectedSha), isTrue, reason: '$id sha256 重复');
+        expect(file.existsSync(), isTrue, reason: '$fileName 不存在');
+        final actualSha = crypto.sha256
+            .convert(file.readAsBytesSync())
+            .toString();
+        expect(actualSha, expectedSha, reason: '$id 文件内容与 manifest 不一致');
+      }
+    });
+
+    test('白噪音 manifest 记录的编码规格与真实文件一致', () {
+      if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
+        return;
+      }
+      final ffprobe = Process.runSync('which', ['ffprobe']);
+      if (ffprobe.exitCode != 0) {
+        return;
+      }
+
+      final manifest = _readWhiteNoiseManifest();
+      final processing = Map<String, dynamic>.from(
+        manifest['processing'] as Map,
+      );
+      final expectedDuration = (processing['durationSeconds'] as num)
+          .toDouble();
+      final expectedBitRate = (processing['bitRate'] as num).toInt();
+
+      for (final track in _manifestTracks(manifest)) {
+        final id = track['id']?.toString() ?? '';
+        final fileName = track['file']?.toString() ?? '';
+        final result = Process.runSync('ffprobe', [
+          '-v',
+          'error',
+          '-show_entries',
+          'format=duration,bit_rate',
+          '-of',
+          'default=noprint_wrappers=1:nokey=1',
+          'assets/sounds/white_noise/$fileName',
+        ]);
+        expect(result.exitCode, 0, reason: '$id ffprobe 失败: ${result.stderr}');
+        final lines = result.stdout
+            .toString()
+            .split(RegExp(r'\s+'))
+            .where((line) => line.trim().isNotEmpty)
+            .toList();
+        expect(
+          lines.length,
+          greaterThanOrEqualTo(2),
+          reason: '$id ffprobe 输出异常',
+        );
+        final duration = double.parse(lines[0]);
+        final bitRate = int.parse(lines[1]);
+        expect(duration, closeTo(expectedDuration, 0.01), reason: '$id 时长异常');
+        expect(bitRate, expectedBitRate, reason: '$id 码率异常');
       }
     });
 
@@ -290,6 +458,19 @@ void main() {
       }
     });
   });
+}
+
+Map<String, dynamic> _readWhiteNoiseManifest() {
+  return jsonDecode(
+        File('assets/sounds/white_noise/manifest.json').readAsStringSync(),
+      )
+      as Map<String, dynamic>;
+}
+
+List<Map<String, dynamic>> _manifestTracks(Map<String, dynamic> manifest) {
+  return (manifest['tracks'] as List<dynamic>)
+      .map((track) => Map<String, dynamic>.from(track as Map))
+      .toList(growable: false);
 }
 
 _AudioFeature _readAudioFeature(File mp3) {

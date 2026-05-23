@@ -6,10 +6,7 @@ import 'package:duoyi/models/goal.dart' show ReminderKind;
 void main() {
   group('Anniversary reminderKind', () {
     test('默认值为 ReminderKind.push', () {
-      final a = Anniversary(
-        title: '测试',
-        originDate: DateTime(2026, 6, 1),
-      );
+      final a = Anniversary(title: '测试', originDate: DateTime(2026, 6, 1));
       expect(a.reminderKind, ReminderKind.push);
     });
 
@@ -64,14 +61,17 @@ void main() {
       expect(a.reminderKind, ReminderKind.alarm);
     });
 
-    test('roundtrip toJson → fromJson 保留 reminderKind', () {
+    test('roundtrip toJson → fromJson 保留 reminderKind 和 updatedAt', () {
+      final updatedAt = DateTime(2026, 6, 1, 10, 30);
       final original = Anniversary(
         title: '强提醒',
         originDate: DateTime(2026, 6, 1),
         reminderKind: ReminderKind.alarm,
+        updatedAt: updatedAt,
       );
       final decoded = Anniversary.fromJson(original.toJson());
       expect(decoded.reminderKind, ReminderKind.alarm);
+      expect(decoded.updatedAt, updatedAt);
     });
   });
 }

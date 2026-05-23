@@ -277,7 +277,7 @@ class TodoItem {
     } else if (legacyHasReminder) {
       reminder = ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: legacyReminderAt?.hour,
         minute: legacyReminderAt?.minute,
       );

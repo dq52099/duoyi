@@ -161,14 +161,10 @@ class PomodoroSessionCard extends StatelessWidget {
         return Icons.thunderstorm_outlined;
       case 'storm_rain':
         return Icons.storm_outlined;
-      case 'brown_noise':
-        return Icons.graphic_eq;
       case 'night_rain':
         return Icons.nights_stay_outlined;
       case 'fan':
         return Icons.air;
-      case 'pink_noise':
-        return Icons.blur_on;
       case 'deep_stream':
         return Icons.water;
       case 'campfire':
@@ -183,8 +179,6 @@ class PomodoroSessionCard extends StatelessWidget {
         return Icons.water_outlined;
       case 'crickets':
         return Icons.cruelty_free_outlined;
-      case 'white_stream':
-        return Icons.blur_on;
       case 'clock':
         return Icons.schedule;
       case 'keyboard':

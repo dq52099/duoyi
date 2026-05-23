@@ -74,6 +74,7 @@ class AnniversaryProvider extends ChangeNotifier {
   }
 
   Future<void> add(Anniversary item) async {
+    item.updatedAt = DateTime.now();
     _items.add(item);
     await _save();
   }
@@ -107,6 +108,7 @@ class AnniversaryProvider extends ChangeNotifier {
   Future<void> update(Anniversary item) async {
     final idx = _items.indexWhere((e) => e.id == item.id);
     if (idx != -1) {
+      item.updatedAt = DateTime.now();
       _items[idx] = item;
       await _save();
     }
@@ -122,6 +124,7 @@ class AnniversaryProvider extends ChangeNotifier {
     final idx = _items.indexWhere((e) => e.id == id);
     if (idx != -1) {
       _items[idx].isPinned = !_items[idx].isPinned;
+      _items[idx].updatedAt = DateTime.now();
       await _save();
     }
   }

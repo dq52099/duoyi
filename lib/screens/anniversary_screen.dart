@@ -754,6 +754,7 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
                     title: I18n.tr('countdown.field.remind_time'),
                     minuteStep: 5,
                   );
+                  if (!mounted) return;
                   if (picked != null) setState(() => _remindTime = picked);
                 },
               ),

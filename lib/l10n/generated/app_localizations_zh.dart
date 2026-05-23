@@ -342,13 +342,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesNotifyFullScreenDenied => '弹出屏幕权限未允许';
 
   @override
-  String get preferencesNotifyTestPermissionDenied => '系统通知权限未授权，无法发送响铃测试';
+  String get preferencesNotifyTestPermissionDenied => '系统通知权限未授权，无法发送测试通知';
 
   @override
-  String get preferencesNotifyTestFailed => '响铃测试发送失败：';
+  String get preferencesNotifyTestFailed => '测试通知发送失败：';
 
   @override
-  String get preferencesNotifyTestSent => '响铃弹屏测试已发送';
+  String get preferencesNotifyTestSent => '测试通知已发送';
 
   @override
   String get preferencesNotifyPendingCleared => '已取消全部待调度提醒';

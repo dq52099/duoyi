@@ -63,6 +63,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> add(CourseItem course) async {
+    course.updatedAt = DateTime.now();
     _courses.add(course);
     await _save();
   }
@@ -70,6 +71,7 @@ class CourseProvider extends ChangeNotifier {
   Future<void> update(CourseItem course) async {
     final idx = _courses.indexWhere((c) => c.id == course.id);
     if (idx != -1) {
+      course.updatedAt = DateTime.now();
       _courses[idx] = course;
       await _save();
     }

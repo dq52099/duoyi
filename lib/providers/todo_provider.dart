@@ -169,8 +169,8 @@ class TodoProvider extends ChangeNotifier {
     DomainEventBus.instance.publish(
       DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
     );
-    _notify();
     await _saveToStorage();
+    _notify();
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
@@ -208,8 +208,8 @@ class TodoProvider extends ChangeNotifier {
         skippedDuplicates: skippedDuplicates,
       );
     }
-    _notify();
     await _saveToStorage();
+    _notify();
     return TodoImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
@@ -236,8 +236,8 @@ class TodoProvider extends ChangeNotifier {
           DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
         );
       }
-      _notify();
       await _saveToStorage();
+      _notify();
       if (next.isCompleted) {
         await _timeAudit?.recordTodoCompletion(
           next,
@@ -284,8 +284,8 @@ class TodoProvider extends ChangeNotifier {
     }
 
     if (changed == 0) return 0;
-    _notify();
     await _saveToStorage();
+    _notify();
 
     if (recordCompletionTime) {
       for (final todo in completed) {
@@ -319,8 +319,8 @@ class TodoProvider extends ChangeNotifier {
     }
 
     if (changed == 0) return 0;
-    _notify();
     await _saveToStorage();
+    _notify();
 
     for (final todo in reopened) {
       await _timeAudit?.removeTodoCompletion(
@@ -360,8 +360,8 @@ class TodoProvider extends ChangeNotifier {
       if (recurring != null) _todos.add(recurring);
     }
 
-    _notify();
     await _saveToStorage();
+    _notify();
     if (nowCompleted && recordCompletionTime) {
       await _timeAudit?.recordTodoCompletion(
         _todos[idx],
@@ -382,8 +382,8 @@ class TodoProvider extends ChangeNotifier {
       await _timeAudit?.deleteBySource(TimeEntrySource.todo, id);
     }
     _todos.removeWhere((t) => t.id == id);
-    _notify();
     await _saveToStorage();
+    _notify();
   }
 
   Future<int> deleteTodos(Iterable<String> ids) async {
@@ -400,8 +400,8 @@ class TodoProvider extends ChangeNotifier {
       await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id);
     }
     _todos.removeWhere((t) => selected.contains(t.id));
-    _notify();
     await _saveToStorage();
+    _notify();
     return existing.length;
   }
 
@@ -419,8 +419,8 @@ class TodoProvider extends ChangeNotifier {
       changed++;
     }
     if (changed == 0) return 0;
-    _notify();
     await _saveToStorage();
+    _notify();
     return changed;
   }
 
@@ -438,8 +438,8 @@ class TodoProvider extends ChangeNotifier {
       changed++;
     }
     if (changed == 0) return 0;
-    _notify();
     await _saveToStorage();
+    _notify();
     return changed;
   }
 
@@ -491,8 +491,8 @@ class TodoProvider extends ChangeNotifier {
       changed++;
     }
     if (changed == 0) return 0;
-    _notify();
     await _saveToStorage();
+    _notify();
     for (final todo in completed) {
       await _timeAudit?.recordTodoCompletion(
         todo,
@@ -520,8 +520,8 @@ class TodoProvider extends ChangeNotifier {
     if (currentDay == today && !todo.isArchivedAfterRollover) return false;
 
     _todos[idx] = todo.copyWith(date: today, isArchivedAfterRollover: false);
-    _notify();
     await _saveToStorage();
+    _notify();
     return true;
   }
 
@@ -537,8 +537,8 @@ class TodoProvider extends ChangeNotifier {
     }
     newList.addAll(map.values);
     _todos = newList;
-    _notify();
     await _saveToStorage();
+    _notify();
   }
 
   Future<int> reorderVisibleTodos(List<String> orderedIds) async {
@@ -583,8 +583,8 @@ class TodoProvider extends ChangeNotifier {
       }
     }
     _todos = rebuilt;
-    _notify();
     await _saveToStorage();
+    _notify();
     return changed;
   }
 
@@ -672,8 +672,8 @@ class TodoProvider extends ChangeNotifier {
       mutated = true;
     }
     if (!mutated) return;
-    _notify();
     await _saveToStorage();
+    _notify();
   }
 
   // --- Subtask operations ---
@@ -684,8 +684,8 @@ class TodoProvider extends ChangeNotifier {
       final newSubtasks = List<Subtask>.from(_todos[idx].subtasks)
         ..add(Subtask(title: title, sortOrder: _todos[idx].subtasks.length));
       _todos[idx] = _todos[idx].copyWith(subtasks: newSubtasks);
-      _notify();
       await _saveToStorage();
+      _notify();
     }
   }
 
@@ -727,8 +727,8 @@ class TodoProvider extends ChangeNotifier {
       }
     }
 
-    _notify();
     await _saveToStorage();
+    _notify();
     if (completedTodo != null) {
       await _timeAudit?.recordTodoCompletion(
         completedTodo,
@@ -746,8 +746,8 @@ class TodoProvider extends ChangeNotifier {
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       _todos[idx].subtasks.removeWhere((s) => s.id == subtaskId);
-      _notify();
       await _saveToStorage();
+      _notify();
     }
   }
 
@@ -766,8 +766,8 @@ class TodoProvider extends ChangeNotifier {
     }
     newList.addAll(map.values);
     _todos[idx] = _todos[idx].copyWith(subtasks: newList);
-    _notify();
     await _saveToStorage();
+    _notify();
   }
 
   // --- Daily rollover ---

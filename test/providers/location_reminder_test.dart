@@ -120,7 +120,8 @@ void main() {
   });
 
   group('LocationReminder JSON', () {
-    test('roundtrip 保留字段', () {
+    test('roundtrip 保留字段和 updatedAt', () {
+      final updatedAt = DateTime(2026, 5, 15, 12, 30);
       final r = LocationReminder(
         id: 'r1',
         title: '到公司',
@@ -129,6 +130,7 @@ void main() {
         radiusMeters: 250,
         trigger: LocationTrigger.enter,
         oneShot: true,
+        updatedAt: updatedAt,
       );
       final json = r.toJson();
       final decoded = LocationReminder.fromJson(json);
@@ -139,6 +141,7 @@ void main() {
       expect(decoded.radiusMeters, r.radiusMeters);
       expect(decoded.trigger, r.trigger);
       expect(decoded.oneShot, r.oneShot);
+      expect(decoded.updatedAt, updatedAt);
     });
   });
 }

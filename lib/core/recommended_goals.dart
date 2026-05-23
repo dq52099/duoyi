@@ -244,10 +244,9 @@ class RecommendedGoalsLibrary {
       skipHolidays: false,
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 22,
         minute: 30,
-        fullScreen: true,
       ),
     ),
     RecommendedGoal(
@@ -271,7 +270,7 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 7,
         minute: 0,
       ),
@@ -376,11 +375,10 @@ class RecommendedGoalsLibrary {
       skipHolidays: false,
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 9,
         minute: 0,
         daysBefore: 3,
-        fullScreen: true,
       ),
     ),
     RecommendedGoal(
@@ -503,7 +501,7 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 20,
         minute: 0,
       ),
@@ -530,7 +528,7 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 20,
         minute: 30,
       ),
@@ -558,7 +556,7 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 19,
         minute: 30,
       ),
@@ -588,10 +586,9 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 19,
         minute: 0,
-        fullScreen: true,
       ),
       timeTargetSeconds: 1800,
     ),
@@ -637,7 +634,7 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 20,
         minute: 0,
       ),
@@ -684,10 +681,9 @@ class RecommendedGoalsLibrary {
       ),
       reminder: ReminderConfig(
         enabled: true,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.push,
         hour: 9,
         minute: 0,
-        fullScreen: true,
       ),
       timeTargetSeconds: 3600,
     ),

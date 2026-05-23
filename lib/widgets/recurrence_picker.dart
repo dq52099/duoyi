@@ -37,6 +37,7 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
   late int _interval;
   late List<int> _weekdays;
   late final TextEditingController _intervalCtrl;
+  late final TextEditingController _byMonthDayCtrl;
   late final TextEditingController _maxOccurrencesCtrl;
   int? _byMonthDay;
   DateTime? _endDate;
@@ -49,17 +50,21 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
     _interval = widget.initial.interval;
     _weekdays = [...?widget.initial.byWeekdays];
     _intervalCtrl = TextEditingController(text: '$_interval');
+    _byMonthDay = widget.initial.byMonthDay;
+    _byMonthDayCtrl = TextEditingController(
+      text: _byMonthDay?.toString() ?? '',
+    );
     _maxOccurrences = widget.initial.maxOccurrences;
     _maxOccurrencesCtrl = TextEditingController(
       text: _maxOccurrences?.toString() ?? '',
     );
-    _byMonthDay = widget.initial.byMonthDay;
     _endDate = widget.initial.endDate;
   }
 
   @override
   void dispose() {
     _intervalCtrl.dispose();
+    _byMonthDayCtrl.dispose();
     _maxOccurrencesCtrl.dispose();
     super.dispose();
   }
@@ -182,18 +187,16 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                   child: TextField(
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
-                    controller: TextEditingController(
-                      text: _byMonthDay?.toString() ?? '',
-                    ),
+                    controller: _byMonthDayCtrl,
                     decoration: const InputDecoration(
                       isDense: true,
                       hintText: '留空=同日',
                     ),
-                    onChanged: (v) {
+                    onChanged: (v) => setState(() {
                       final n = int.tryParse(v);
                       if (n != null && n >= 1 && n <= 31) _byMonthDay = n;
                       if (v.isEmpty) _byMonthDay = null;
-                    },
+                    }),
                   ),
                 ),
                 const Text(' 日'),
@@ -225,6 +228,7 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                   lastDate: DateTime(2099, 12, 31),
                   title: '结束日期',
                 );
+                if (!mounted) return;
                 if (picked != null) setState(() => _endDate = picked);
               },
             ),

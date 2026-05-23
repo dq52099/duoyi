@@ -22,8 +22,8 @@ class LocalNotifications {
   static const RawResourceAndroidNotificationSound _alarmSound =
       RawResourceAndroidNotificationSound('duoyi_alarm');
   static const RawResourceAndroidNotificationSound _defaultSound =
-      RawResourceAndroidNotificationSound('duoyi_alarm');
-  static const String _defaultChannelId = 'duoyi_general_alerts_v7';
+      RawResourceAndroidNotificationSound('duoyi_chime');
+  static const String _defaultChannelId = 'duoyi_general_alerts_v9';
   static const String _alarmChannelId = 'duoyi_alarm_fullscreen_v6';
   static const String _quickAddChannelId = 'duoyi_quick_add_ongoing_v1';
   static const int quickAddNotificationId = 880016;
@@ -33,6 +33,8 @@ class LocalNotifications {
     'duoyi_general_alerts_v4',
     'duoyi_general_alerts_v5',
     'duoyi_general_alerts_v6',
+    'duoyi_general_alerts_v7',
+    'duoyi_general_alerts_v8',
     'duoyi_alarm',
     'duoyi_alarm_fullscreen_v3',
     'duoyi_alarm_fullscreen_v4',
@@ -125,8 +127,8 @@ class LocalNotifications {
           const AndroidNotificationChannel(
             _defaultChannelId,
             '多仪 · 通知提醒',
-            description: '日常提醒会发声、震动并尽量弹出横幅',
-            importance: Importance.max,
+            description: '日常提醒使用柔和提示音、震动并尽量显示横幅',
+            importance: Importance.high,
             playSound: true,
             sound: _defaultSound,
             enableVibration: true,
@@ -273,9 +275,11 @@ class LocalNotifications {
       android: AndroidNotificationDetails(
         channelId,
         isAlarm ? '多仪 · 强提醒' : '多仪 · 通知提醒',
-        channelDescription: isAlarm ? '重要提醒会响铃、震动并弹出确认界面' : '日常提醒会发声、震动并尽量弹出横幅',
-        importance: Importance.max,
-        priority: Priority.max,
+        channelDescription: isAlarm
+            ? '重要提醒会响铃、震动并弹出确认界面'
+            : '日常提醒使用柔和提示音、震动并尽量显示横幅',
+        importance: isAlarm ? Importance.max : Importance.high,
+        priority: isAlarm ? Priority.max : Priority.high,
         category: isAlarm
             ? AndroidNotificationCategory.alarm
             : AndroidNotificationCategory.reminder,

@@ -237,15 +237,23 @@ class CalendarAggregator {
 
   static List<CalendarEvent> _markConflicts(List<CalendarEvent> events) {
     final conflicts = <String, int>{};
-    for (var i = 0; i < events.length; i++) {
-      for (var j = i + 1; j < events.length; j++) {
-        final a = events[i];
-        final b = events[j];
-        if (a.dateKey != b.dateKey) continue;
-        if (!_canConflict(a) || !_canConflict(b)) continue;
-        if (!_overlaps(a, b)) continue;
-        conflicts[a.id] = (conflicts[a.id] ?? 0) + 1;
-        conflicts[b.id] = (conflicts[b.id] ?? 0) + 1;
+    final eventsByDate = <String, List<CalendarEvent>>{};
+    for (final event in events) {
+      if (!_canConflict(event)) continue;
+      eventsByDate.putIfAbsent(event.dateKey, () => []).add(event);
+    }
+
+    for (final sameDayEvents in eventsByDate.values) {
+      for (var i = 0; i < sameDayEvents.length; i++) {
+        final a = sameDayEvents[i];
+        final aEnd = _endOf(a);
+        for (var j = i + 1; j < sameDayEvents.length; j++) {
+          final b = sameDayEvents[j];
+          if (!_startOf(b).isBefore(aEnd)) break;
+          if (!_overlaps(a, b)) continue;
+          conflicts[a.id] = (conflicts[a.id] ?? 0) + 1;
+          conflicts[b.id] = (conflicts[b.id] ?? 0) + 1;
+        }
       }
     }
     if (conflicts.isEmpty) return events;

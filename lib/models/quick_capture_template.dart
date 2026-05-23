@@ -82,7 +82,7 @@ class QuickCaptureTemplate {
           ReminderRule(
             id: 'builtin-work-meeting-before-15',
             type: ReminderRuleType.relativeToDue,
-            kind: ReminderKind.alarm,
+            kind: ReminderKind.push,
             offsetMinutes: -15,
           ),
         ],

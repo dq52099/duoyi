@@ -34,6 +34,7 @@ class Anniversary {
   int? lunarDay;
   bool lunarIsLeap;
   DateTime createdAt;
+  DateTime updatedAt;
 
   Anniversary({
     String? id,
@@ -54,8 +55,10 @@ class Anniversary {
     this.lunarDay,
     this.lunarIsLeap = false,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) : id = id ?? _uuid.v4(),
-       createdAt = createdAt ?? DateTime.now();
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   /// 从一个公历日期 + 是否按农历循环 构造
   factory Anniversary.create({
@@ -73,6 +76,7 @@ class Anniversary {
     int remindMinute = 0,
     ReminderKind reminderKind = ReminderKind.push,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     int? ly, lm, ld;
     bool leap = false;
@@ -102,6 +106,7 @@ class Anniversary {
       lunarDay: ld,
       lunarIsLeap: leap,
       createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 
@@ -192,6 +197,7 @@ class Anniversary {
     'lunarDay': lunarDay,
     'lunarIsLeap': lunarIsLeap,
     'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory Anniversary.fromJson(Map<String, dynamic> json) => Anniversary(
@@ -217,5 +223,10 @@ class Anniversary {
     createdAt: json['createdAt'] != null
         ? DateTime.parse(json['createdAt'])
         : DateTime.now(),
+    updatedAt:
+        DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+        DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+        DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+        DateTime.now(),
   );
 }

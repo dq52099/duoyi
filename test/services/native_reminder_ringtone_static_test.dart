@@ -22,9 +22,6 @@ void main() {
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync();
-    final notificationService = File(
-      'lib/providers/notification_service.dart',
-    ).readAsStringSync();
 
     expect(manifest, contains('android:name=".ReminderRingtoneService"'));
     expect(manifest, contains('android:name=".ReminderRingtoneReceiver"'));
@@ -66,10 +63,11 @@ void main() {
     expect(alarmService, contains('NativeReminderRingtone.showNow'));
     expect(alarmService, contains('NativeReminderRingtone.scheduleOnce'));
     expect(alarmService, contains('NativeReminderRingtone.scheduleDaily'));
-    expect(
-      notificationService,
-      contains('AlarmService.instance.showFullScreenTest'),
-    );
+    expect(service, contains('setDeleteIntent(stopIntent)'));
+    expect(service, contains('setOngoing(false)'));
+    expect(service, contains('setAutoCancel(true)'));
+    expect(scheduler, contains('ReminderRingtoneService.stopIfActive'));
+    expect(scheduler, contains('ReminderRingtoneService.stopActive'));
 
     for (final name in ['alarm', 'chime', 'bell', 'beep', 'classic']) {
       expect(
@@ -110,10 +108,14 @@ void main() {
     expect(mainActivity, contains('override fun onCreate'));
     expect(mainActivity, contains('override fun onNewIntent'));
     expect(service, contains('openAppIntent(payload, stopRingtone = true)'));
-    expect(service, contains('openAppIntent(payload, stopRingtone = false)'));
+    expect(
+      service,
+      isNot(contains('openAppIntent(payload, stopRingtone = false)')),
+    );
     expect(service, contains('extraStopRingtone'));
     expect(mainActivity, contains('stopReminderRingtoneIfRequested(intent)'));
     expect(mainActivity, contains('ReminderRingtoneService.extraStopRingtone'));
+    expect(mainActivity, contains('opensDuoyiReminderTarget'));
     expect(mainActivity, isNot(contains('override fun onResume')));
     expect(
       mainActivity,

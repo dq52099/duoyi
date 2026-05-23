@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
@@ -16,7 +16,7 @@ import 'package:duoyi/services/reminder_sinks.dart';
 /// Feature: app-alignment-overhaul
 /// Property 14 (P14): ∀ `ReminderConfig r`,
 ///   `r.kind = push  ⟹ 调度最终落到 ReminderNotificationSink.scheduleOnce`
-///                     (NotificationService，channel = `duoyi_general_alerts_v7`)；
+///                     (NotificationService，channel = `duoyi_general_alerts_v9`)；
 ///   `r.kind = alarm ⟹ 调度最终落到 ReminderAlarmSink.scheduleFullScreen`
 ///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v6`)。
 ///
@@ -41,7 +41,7 @@ void main() {
   test('channel id 常量与设计 §2.4 / §3.6 保持一致', () {
     // P14 的其中一半约束是"用对通道 id"：由 NotificationService / AlarmService
     // 的类级常量承载，Scheduler 不重复传递。这里显式断言，防止后续被误改。
-    expect(NotificationService.channelId, 'duoyi_general_alerts_v7');
+    expect(NotificationService.channelId, 'duoyi_general_alerts_v9');
     expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v6');
   });
 
@@ -583,8 +583,8 @@ void main() {
     });
   });
 
-  group('P14 - Habit 路径走强提醒', () {
-    test('syncHabits 下发全屏闹钟并携带确认打卡 payload', () async {
+  group('P14 - Habit 默认走普通通知', () {
+    test('syncHabits 下发普通通知，不默认全屏响铃', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
       final scheduler = ReminderScheduler(notif, alarm: alarm);
@@ -599,20 +599,11 @@ void main() {
 
       await scheduler.syncHabits([habit]);
 
-      expect(notif.scheduleHabitReminderCalls, isEmpty);
-      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
-      final call = alarm.scheduleDailyFullScreenCalls.single;
-      expect(call.id, _idFor('habit_${habit.id}'));
-      expect(call.title, contains('习惯打卡'));
-      expect(call.body, contains(habit.name));
-      expect(call.hour, 8);
-      expect(call.minute, 30);
-      expect(call.weekdays, [1, 3, 5]);
-      expect(call.payload, 'duoyi://habit/${habit.id}?confirm=1');
-      expect(call.fullScreen, isTrue);
+      expect(notif.scheduleHabitReminderCalls, [habit.id]);
+      expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
     });
 
-    test('alarm 权限失败时回退到 push，避免习惯提醒丢失', () async {
+    test('syncHabits 关闭提醒时同时清理旧版 alarm 遗留调度', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
       final scheduler = ReminderScheduler(notif, alarm: alarm);
@@ -623,12 +614,13 @@ void main() {
         remindHour: 7,
         remindMinute: 15,
       );
-      alarm.failDailyFullScreenIds.add(_idFor('habit_${habit.id}'));
 
       await scheduler.syncHabits([habit]);
+      await scheduler.syncHabits([habit.copyWith(remind: false)]);
 
       expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
-      expect(notif.scheduleHabitReminderCalls, [habit.id]);
+      expect(notif.cancelHabitReminderCalls, [habit.id]);
+      expect(alarm.cancelCalls, contains(_idFor('habit_${habit.id}')));
     });
   });
 }

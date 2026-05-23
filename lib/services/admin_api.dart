@@ -112,6 +112,11 @@ class AdminApi {
     bool? registrationEmailRequired,
     bool? maintenanceMode,
     String? maintenanceMessage,
+    bool? forceUpdateRequired,
+    String? latestVersion,
+    String? minimumSupportedVersion,
+    String? updateNotes,
+    String? updateDownloadUrl,
   }) {
     final body = <String, dynamic>{};
     if (inviteCodeRequired != null) {
@@ -126,6 +131,17 @@ class AdminApi {
     if (maintenanceMode != null) body['maintenance_mode'] = maintenanceMode;
     if (maintenanceMessage != null) {
       body['maintenance_message'] = maintenanceMessage;
+    }
+    if (forceUpdateRequired != null) {
+      body['force_update_required'] = forceUpdateRequired;
+    }
+    if (latestVersion != null) body['latest_version'] = latestVersion;
+    if (minimumSupportedVersion != null) {
+      body['minimum_supported_version'] = minimumSupportedVersion;
+    }
+    if (updateNotes != null) body['update_notes'] = updateNotes;
+    if (updateDownloadUrl != null) {
+      body['update_download_url'] = updateDownloadUrl;
     }
     return client.patch('/api/admin/settings', body);
   }
@@ -162,6 +178,27 @@ class AdminApi {
       body['new_password'] = newPassword;
     }
     await client.patch('/api/admin/users/$userId', body);
+  }
+
+  Future<void> setUserAdminPermissions(
+    String userId, {
+    required List<String> permissions,
+  }) async {
+    await client.patch('/api/admin/users/$userId', {
+      'admin_permissions': permissions,
+    });
+  }
+
+  Future<Map<String, dynamic>> adjustUserCoins(
+    String userId, {
+    required int delta,
+    String? reason,
+  }) async {
+    final body = <String, dynamic>{'delta': delta};
+    if (reason != null && reason.trim().isNotEmpty) {
+      body['reason'] = reason.trim();
+    }
+    return client.post('/api/admin/users/$userId/coins', body);
   }
 
   Future<String> exportUsersCsv({

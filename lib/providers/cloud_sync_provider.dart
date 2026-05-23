@@ -87,6 +87,24 @@ class _WorkspaceMergeResult {
   const _WorkspaceMergeResult(this.items, this.decisions);
 }
 
+class _SyncApplyResult {
+  final Set<String> changedCollections;
+  final Set<String> skippedCollections;
+  final bool localChangedBeforeApply;
+
+  const _SyncApplyResult({
+    required this.changedCollections,
+    required this.skippedCollections,
+    required this.localChangedBeforeApply,
+  });
+
+  bool get hasSkippedLocalChanges =>
+      skippedCollections.isNotEmpty || localChangedBeforeApply;
+}
+
+typedef SyncChangedCollectionsCallback =
+    Future<void> Function(Set<String> changedCollections);
+
 /// 云同步：服务器地址与 token 直接复用 AuthProvider(普通用户无需感知)。
 /// 登录后和本地数据变更后自动同步。
 class CloudSyncProvider extends ChangeNotifier {
@@ -98,6 +116,16 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _serverVersionStorageKey = 'sync_server_version';
   static const _collectionHashesStorageKey = 'sync_collection_hashes';
   static const _itemHashesStorageKey = 'sync_item_hashes';
+  static const _preferencesUpdatedAtStorageKey = 'sync_preferences_updated_at';
+  static const _preferencesValuesSnapshotStorageKey =
+      'sync_preferences_values_snapshot';
+  static const _preferencesChangedKeysStorageKey =
+      'sync_preferences_changed_keys';
+  static const _preferencesFullSyncSentinel = '*';
+  static const _quickCaptureTemplatesStorageKey =
+      'duoyi_quick_capture_templates_v1';
+  static const _quickCaptureTemplatesUpdatedAtStorageKey =
+      'sync_quick_capture_templates_updated_at';
 
   SyncConfig _config = SyncConfig(
     lastSync: DateTime.fromMillisecondsSinceEpoch(0),
@@ -116,8 +144,12 @@ class CloudSyncProvider extends ChangeNotifier {
   int? _lastServerVersion;
   Map<String, String> _lastCollectionHashes = const {};
   Map<String, Map<String, String>> _lastItemHashes = const {};
+  String? _pendingPreferencesUpdatedAt;
+  final Set<String> _pendingPreferenceKeys = <String>{};
+  bool _pendingPreferencesFullSync = false;
+  String? _pendingQuickCaptureTemplatesUpdatedAt;
 
-  VoidCallback? onSynced;
+  SyncChangedCollectionsCallback? onSynced;
 
   // 由 main.dart 注入(通过 AuthProvider 取活跃的 ApiClient)
   ApiClient? Function()? apiClientGetter;
@@ -136,6 +168,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   /// 是否有未同步到后端的本地改动（由 Provider 写入时打上时间戳；本次同步成功后清零）。
   bool _hasPendingChanges = false;
+  int _localChangeGeneration = 0;
   bool get hasPendingChanges => _hasPendingChanges;
 
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
@@ -146,12 +179,57 @@ class CloudSyncProvider extends ChangeNotifier {
   /// 误报 badge，本方法仅在 [_suppressDirtyMark] = false 时生效。
   void markPendingLocalChange() {
     if (_suppressDirtyMark) return;
+    _localChangeGeneration++;
     if (!_hasPendingChanges) {
       _hasPendingChanges = true;
       notifyListeners();
     }
     _remotePollTimer?.cancel();
     _scheduleAutoSync();
+  }
+
+  void markPreferencesChanged([Iterable<String>? keys]) {
+    if (_suppressDirtyMark) return;
+    final normalizedKeys = _normalizePreferenceChangedKeys(keys);
+    if (keys != null && normalizedKeys.isEmpty) return;
+    final stamp = DateTime.now().toUtc().toIso8601String();
+    _pendingPreferencesUpdatedAt = stamp;
+    unawaited(_persistSyncStamp(_preferencesUpdatedAtStorageKey, stamp));
+    if (keys == null) {
+      _pendingPreferencesFullSync = true;
+      _pendingPreferenceKeys.clear();
+    } else if (!_pendingPreferencesFullSync) {
+      _pendingPreferenceKeys.addAll(normalizedKeys);
+    }
+    unawaited(_persistPreferenceChangedKeys());
+    markPendingLocalChange();
+  }
+
+  void markQuickCaptureTemplatesChanged() {
+    if (_suppressDirtyMark) return;
+    final stamp = DateTime.now().toUtc().toIso8601String();
+    _pendingQuickCaptureTemplatesUpdatedAt = stamp;
+    unawaited(
+      _persistSyncStamp(_quickCaptureTemplatesUpdatedAtStorageKey, stamp),
+    );
+    markPendingLocalChange();
+  }
+
+  Future<void> _persistSyncStamp(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+
+  Future<void> _persistPreferenceChangedKeys() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_pendingPreferencesFullSync) {
+      await prefs.setStringList(_preferencesChangedKeysStorageKey, const [
+        _preferencesFullSyncSentinel,
+      ]);
+      return;
+    }
+    final keys = _pendingPreferenceKeys.toList()..sort();
+    await prefs.setStringList(_preferencesChangedKeysStorageKey, keys);
   }
 
   void _scheduleAutoSync([Duration delay = _autoSyncDelay]) {
@@ -304,20 +382,23 @@ class CloudSyncProvider extends ChangeNotifier {
   /// });
   /// ```
   Future<void> suppressDirtyMarkWhile(Future<void> Function() body) async {
-    _suppressDirtyMark = true;
+    _dirtyMarkSuppressDepth++;
     try {
       await body();
     } finally {
-      _suppressDirtyMark = false;
+      _dirtyMarkSuppressDepth--;
     }
   }
 
-  bool _suppressDirtyMark = true; // 初始 true，等 main.dart 显式放开
+  bool _dirtyMarkEnabled = false; // 初始 false，等 main.dart 显式放开
+  int _dirtyMarkSuppressDepth = 0;
+  bool get _suppressDirtyMark =>
+      !_dirtyMarkEnabled || _dirtyMarkSuppressDepth > 0;
 
   /// 让外部显式放开 dirty 抑制。`main.dart` 在所有冷启动 `loadFromStorage`
   /// 完成、即将 `runApp` 之前调一次 `setDirtyMarkEnabled(true)`。
   set dirtyMarkEnabled(bool value) {
-    _suppressDirtyMark = !value;
+    _dirtyMarkEnabled = value;
   }
 
   /// cloud_sync_v2 特性开关：关闭时 [syncNow] 直接返回，不发出网络请求。
@@ -369,6 +450,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'habits',
     'pomodoro_sessions',
     'pomodoro_focus_penalties',
+    'duoyi_location_reminders_v1',
   };
 
   static const _listPayloads = <String, String>{
@@ -384,6 +466,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'duoyi_local_calendar_events_v1': 'calendar_events',
     'duoyi_time_entries': 'time_entries',
     'duoyi_courses': 'courses',
+    'duoyi_location_reminders_v1': 'location_reminders',
   };
 
   static const _objectPayloads = <String, String>{
@@ -394,6 +477,82 @@ class CloudSyncProvider extends ChangeNotifier {
     'duoyi_virtual_rewards': 'virtual_rewards',
     'duoyi_focus_rooms': 'focus_rooms',
     'theme_shop_state': 'theme_shop_state',
+  };
+
+  static const _preferenceBoolKeys = <String>{
+    'pref_haptic_feedback',
+    'pref_show_lunar',
+    'pref_show_completed_todos',
+    'pref_quick_capture_fab',
+    'pref_notification_quick_add',
+    'pref_daily_reminder_enabled',
+    'pref_daily_reminder_today_tasks',
+    'pref_daily_reminder_tomorrow_plan',
+    'pref_daily_reminder_overdue',
+    'pref_daily_reminder_pause_holidays',
+    'pref_daily_reminder_slot2_enabled',
+    'pref_daily_reminder_slot2_today',
+    'pref_daily_reminder_slot2_tomorrow',
+    'pref_daily_reminder_slot2_overdue',
+    'pref_daily_reminder_slot2_pause_holidays',
+    'pref_daily_reminder_slot3_enabled',
+    'pref_daily_reminder_slot3_today',
+    'pref_daily_reminder_slot3_tomorrow',
+    'pref_daily_reminder_slot3_overdue',
+    'pref_daily_reminder_slot3_pause_holidays',
+    'pref_daily_report_reminder',
+    'pref_weekly_report_reminder',
+    'pref_monthly_report_reminder',
+    'pref_yearly_report_reminder',
+  };
+
+  static const _preferenceIntKeys = <String>{
+    'pref_first_day_of_week',
+    'pref_default_tab',
+    'pref_default_pomodoro_minutes',
+    'pref_notification_history_limit',
+    'pref_auto_archive_completed_days',
+    'pref_daily_reminder_hour',
+    'pref_daily_reminder_minute',
+    'pref_daily_reminder_slot2_hour',
+    'pref_daily_reminder_slot2_minute',
+    'pref_daily_reminder_slot3_hour',
+    'pref_daily_reminder_slot3_minute',
+    'pref_daily_report_reminder_hour',
+    'pref_daily_report_reminder_minute',
+    'pref_weekly_report_reminder_weekday',
+    'pref_weekly_report_reminder_hour',
+    'pref_weekly_report_reminder_minute',
+    'pref_monthly_report_reminder_day',
+    'pref_monthly_report_reminder_hour',
+    'pref_monthly_report_reminder_minute',
+    'pref_yearly_report_reminder_month',
+    'pref_yearly_report_reminder_day',
+    'pref_yearly_report_reminder_hour',
+    'pref_yearly_report_reminder_minute',
+    'pref_reminder_ringtone_volume_percent',
+  };
+
+  static const _preferenceStringKeys = <String>{
+    'pref_date_format',
+    'pref_app_timezone_iana',
+    'pref_app_timezone_mode',
+    'pref_reminder_ringtone_sound',
+  };
+
+  static const _preferenceStringListKeys = <String>{
+    'pref_daily_reminder_repeat_days',
+    'pref_daily_reminder_slot2_repeat_days',
+    'pref_daily_reminder_slot3_repeat_days',
+    'pref_bottom_nav_order',
+    'pref_bottom_nav_visible',
+  };
+
+  static final Set<String> _preferenceKeys = {
+    ..._preferenceBoolKeys,
+    ..._preferenceIntKeys,
+    ..._preferenceStringKeys,
+    ..._preferenceStringListKeys,
   };
 
   static const _syncPullCollections = <String>{
@@ -409,6 +568,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'calendar_events',
     'time_entries',
     'courses',
+    'location_reminders',
     'pomodoro_config',
     'user_profile',
     'course_settings',
@@ -416,6 +576,8 @@ class CloudSyncProvider extends ChangeNotifier {
     'virtual_rewards',
     'focus_rooms',
     'theme_shop_state',
+    'preferences',
+    'quick_capture_templates',
     'deleted_items',
     'workspace_payloads',
   };
@@ -433,6 +595,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'calendar_events',
     'time_entries',
     'courses',
+    'location_reminders',
   };
 
   static const _objectDeltaCollections = <String>{
@@ -443,6 +606,8 @@ class CloudSyncProvider extends ChangeNotifier {
     'virtual_rewards',
     'focus_rooms',
     'theme_shop_state',
+    'preferences',
+    'quick_capture_templates',
   };
 
   static Future<void> recordDeletedItem(
@@ -518,8 +683,37 @@ class CloudSyncProvider extends ChangeNotifier {
       final deletedAt = tombstones[item['id'].toString()];
       if (deletedAt == null || deletedAt.isEmpty) return true;
       final updatedAt = _remoteItemUpdatedAt(item);
-      return updatedAt.isNotEmpty && updatedAt.compareTo(deletedAt) > 0;
+      return updatedAt.isNotEmpty && _timestampGt(updatedAt, deletedAt);
     }).toList();
+  }
+
+  static bool _timestampGt(String left, String right) {
+    final leftDt = DateTime.tryParse(left);
+    final rightDt = DateTime.tryParse(right);
+    if (leftDt != null && rightDt != null) {
+      return leftDt.toUtc().isAfter(rightDt.toUtc());
+    }
+    return left.compareTo(right) > 0;
+  }
+
+  static Map<String, Map<String, String>> _mergeDeletedItemMaps(
+    Map<String, Map<String, String>> a,
+    Map<String, Map<String, String>> b,
+  ) {
+    final merged = <String, Map<String, String>>{
+      for (final entry in a.entries)
+        entry.key: Map<String, String>.from(entry.value),
+    };
+    for (final entry in b.entries) {
+      final bucket = merged.putIfAbsent(entry.key, () => <String, String>{});
+      for (final item in entry.value.entries) {
+        final current = bucket[item.key];
+        if (current == null || _timestampGt(item.value, current)) {
+          bucket[item.key] = item.value;
+        }
+      }
+    }
+    return merged;
   }
 
   static String _remoteItemUpdatedAt(Map<dynamic, dynamic> item) {
@@ -549,6 +743,14 @@ class CloudSyncProvider extends ChangeNotifier {
       prefs.getString(_collectionHashesStorageKey),
     );
     _lastItemHashes = _decodeItemHashes(prefs.getString(_itemHashesStorageKey));
+    final preferenceChangedKeys = prefs.getStringList(
+      _preferencesChangedKeysStorageKey,
+    );
+    _pendingPreferencesFullSync =
+        preferenceChangedKeys?.contains(_preferencesFullSyncSentinel) ?? false;
+    _pendingPreferenceKeys
+      ..clear()
+      ..addAll(_normalizePreferenceChangedKeys(preferenceChangedKeys));
     _config = SyncConfig(lastSync: lastSync, autoSync: autoSync);
     _lastWorkspaceMergeDecisions =
         (prefs.getStringList('sync_merge_decisions') ?? const [])
@@ -610,6 +812,7 @@ class CloudSyncProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      final syncGeneration = _localChangeGeneration;
       final payload = _buildLocalSyncPayload(prefs);
       final localHashes = _buildCollectionHashes(payload);
       final localItemHashes = _buildItemHashes(payload);
@@ -629,10 +832,15 @@ class CloudSyncProvider extends ChangeNotifier {
           _itemHashesStorageKey,
           json.encode(localItemHashes),
         );
-        _hasPendingChanges = false;
+        await _persistPreferencesSnapshot(prefs, payload['preferences']);
+        _hasPendingChanges = _localChangeGeneration != syncGeneration;
         _lastError = null;
         _isSyncing = false;
-        _scheduleRemotePoll();
+        if (_hasPendingChanges) {
+          _scheduleAutoSync();
+        } else {
+          _scheduleRemotePoll();
+        }
         notifyListeners();
         return;
       } else if (itemDelta != null && itemDelta.isNotEmpty) {
@@ -646,9 +854,10 @@ class CloudSyncProvider extends ChangeNotifier {
           'collection_hashes': localHashes,
         });
       }
-      await _applySyncResponse(
+      final applyResult = await _applySyncResponse(
         prefs,
         response,
+        requestCollectionHashes: localHashes,
         fallbackDeletedItems:
             payload['deleted_items'] as Map<String, Map<String, String>>,
       );
@@ -656,9 +865,13 @@ class CloudSyncProvider extends ChangeNotifier {
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
-      _hasPendingChanges = false;
+      _hasPendingChanges =
+          _localChangeGeneration != syncGeneration ||
+          applyResult.hasSkippedLocalChanges;
 
-      onSynced?.call();
+      if (applyResult.changedCollections.isNotEmpty) {
+        await onSynced?.call(applyResult.changedCollections);
+      }
     } catch (e) {
       _lastError = e.toString();
     }
@@ -666,6 +879,8 @@ class CloudSyncProvider extends ChangeNotifier {
     _isSyncing = false;
     if (_lastError != null && _hasPendingChanges) {
       _scheduleAutoSync(_autoRetryDelay);
+    } else if (_lastError == null && _hasPendingChanges) {
+      _scheduleAutoSync();
     } else if (_lastError == null && !_hasPendingChanges) {
       _scheduleRemotePoll();
     }
@@ -693,20 +908,28 @@ class CloudSyncProvider extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      final syncGeneration = _localChangeGeneration;
       final payload = _buildLocalSyncPayload(prefs);
+      final localHashes = _buildCollectionHashes(payload);
       final response = await client.post('/api/sync/pull', {
-        'collection_hashes': _buildCollectionHashes(payload),
+        'collection_hashes': localHashes,
       });
-      await _applySyncResponse(
+      final applyResult = await _applySyncResponse(
         prefs,
         response,
+        requestCollectionHashes: localHashes,
         fallbackDeletedItems:
             payload['deleted_items'] as Map<String, Map<String, String>>,
       );
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
-      onSynced?.call();
+      _hasPendingChanges =
+          _localChangeGeneration != syncGeneration ||
+          applyResult.hasSkippedLocalChanges;
+      if (applyResult.changedCollections.isNotEmpty) {
+        await onSynced?.call(applyResult.changedCollections);
+      }
     } catch (e) {
       _lastError = e.toString();
     }
@@ -714,6 +937,8 @@ class CloudSyncProvider extends ChangeNotifier {
     _isSyncing = false;
     if (_lastError == null && !_hasPendingChanges) {
       _scheduleRemotePoll();
+    } else if (_lastError == null && _hasPendingChanges) {
+      _scheduleAutoSync();
     } else if (_lastError != null) {
       _scheduleRemotePoll(_autoRetryDelay);
     }
@@ -768,6 +993,10 @@ class CloudSyncProvider extends ChangeNotifier {
       }
     });
 
+    payload['preferences'] = _buildPreferencesPayload(prefs);
+    payload['quick_capture_templates'] = _buildQuickCaptureTemplatesPayload(
+      prefs,
+    );
     payload['deleted_items'] = _decodeDeletedItems(
       prefs.getString(deletedItemsStorageKey),
     );
@@ -775,10 +1004,86 @@ class CloudSyncProvider extends ChangeNotifier {
     return payload;
   }
 
+  Map<String, dynamic> _buildPreferencesPayload(SharedPreferences prefs) {
+    final values = _readPreferenceValues(prefs);
+    final changedKeys = _readPendingPreferenceChangedKeys(prefs);
+    return {
+      'updatedAt':
+          _pendingPreferencesUpdatedAt ??
+          prefs.getString(_preferencesUpdatedAtStorageKey) ??
+          '',
+      'values': values,
+      if (changedKeys.isNotEmpty) 'changedKeys': changedKeys,
+    };
+  }
+
+  Map<String, dynamic> _readPreferenceValues(SharedPreferences prefs) {
+    final values = <String, dynamic>{};
+    for (final key in _preferenceBoolKeys) {
+      if (prefs.containsKey(key)) values[key] = prefs.getBool(key);
+    }
+    for (final key in _preferenceIntKeys) {
+      if (prefs.containsKey(key)) values[key] = prefs.getInt(key);
+    }
+    for (final key in _preferenceStringKeys) {
+      if (prefs.containsKey(key)) values[key] = prefs.getString(key);
+    }
+    for (final key in _preferenceStringListKeys) {
+      if (prefs.containsKey(key)) values[key] = prefs.getStringList(key);
+    }
+    return values;
+  }
+
+  List<String> _readPendingPreferenceChangedKeys(SharedPreferences prefs) {
+    final stored = prefs.getStringList(_preferencesChangedKeysStorageKey);
+    if (_pendingPreferencesFullSync ||
+        (stored?.contains(_preferencesFullSyncSentinel) ?? false)) {
+      return const <String>[];
+    }
+    final keys = <String>{
+      ..._pendingPreferenceKeys,
+      ..._normalizePreferenceChangedKeys(stored),
+    }.toList()..sort();
+    return keys;
+  }
+
+  Set<String> _normalizePreferenceChangedKeys(Iterable<String>? keys) {
+    if (keys == null) return <String>{};
+    return keys
+        .map((key) => key.trim())
+        .where((key) => key.isNotEmpty && key != _preferencesFullSyncSentinel)
+        .where(_preferenceKeys.contains)
+        .toSet();
+  }
+
+  Map<String, dynamic> _buildQuickCaptureTemplatesPayload(
+    SharedPreferences prefs,
+  ) {
+    final raw = prefs.getString(_quickCaptureTemplatesStorageKey);
+    var items = <dynamic>[];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = json.decode(raw);
+        if (decoded is List) items = decoded;
+      } catch (_) {
+        items = <dynamic>[];
+      }
+    }
+    return {
+      'updatedAt':
+          _pendingQuickCaptureTemplatesUpdatedAt ??
+          prefs.getString(_quickCaptureTemplatesUpdatedAtStorageKey) ??
+          '',
+      'items': items,
+    };
+  }
+
   Map<String, String> _buildCollectionHashes(Map<String, dynamic> payload) {
     final result = <String, String>{};
     for (final key in _syncPullCollections) {
-      result[key] = _syncPayloadHash(payload[key]);
+      result[key] = _syncPayloadHash(
+        _hashableCollectionValue(key, payload[key]),
+      );
     }
     return result;
   }
@@ -800,9 +1105,21 @@ class CloudSyncProvider extends ChangeNotifier {
       result[key] = bucket;
     }
     for (final key in _objectDeltaCollections) {
-      result[key] = {'_': _syncPayloadHash(payload[key])};
+      result[key] = {
+        '_': _syncPayloadHash(_hashableCollectionValue(key, payload[key])),
+      };
     }
     return result;
+  }
+
+  Object? _hashableCollectionValue(String key, Object? value) {
+    if (key == 'preferences' && value is Map) {
+      final normalized = Map<String, dynamic>.from(value);
+      normalized.remove('changedKeys');
+      normalized.remove('changed_keys');
+      return normalized;
+    }
+    return value;
   }
 
   Map<String, dynamic>? _buildSyncItemDelta(
@@ -888,23 +1205,43 @@ class CloudSyncProvider extends ChangeNotifier {
     return value;
   }
 
-  Future<void> _applySyncResponse(
+  Future<_SyncApplyResult> _applySyncResponse(
     SharedPreferences prefs,
     Map<String, dynamic> response, {
+    required Map<String, String> requestCollectionHashes,
     required Map<String, Map<String, String>> fallbackDeletedItems,
   }) async {
-    await _persistServerRevision(prefs, response);
+    final previousHashes = _buildCollectionHashes(
+      _buildLocalSyncPayload(prefs),
+    );
+    final localChangedBeforeApply = !_collectionHashesEqual(
+      previousHashes,
+      requestCollectionHashes,
+    );
+    final skippedCollections = <String>{};
 
     final responseDeletedItems = response['deleted_items'];
     var mergedDeletedItems = fallbackDeletedItems;
     if (responseDeletedItems is Map) {
-      mergedDeletedItems = _decodeDeletedItems(
+      final remoteDeletedItems = _decodeDeletedItems(
         json.encode(responseDeletedItems),
       );
-      await prefs.setString(
-        deletedItemsStorageKey,
-        json.encode(mergedDeletedItems),
+      final currentDeletedItems = _decodeDeletedItems(
+        prefs.getString(deletedItemsStorageKey),
       );
+      final expectedDeletedHash = requestCollectionHashes['deleted_items'];
+      mergedDeletedItems =
+          expectedDeletedHash != null &&
+              _syncPayloadHash(currentDeletedItems) != expectedDeletedHash
+          ? _mergeDeletedItemMaps(remoteDeletedItems, currentDeletedItems)
+          : remoteDeletedItems;
+      if (_syncPayloadHash(currentDeletedItems) !=
+          _syncPayloadHash(mergedDeletedItems)) {
+        await prefs.setString(
+          deletedItemsStorageKey,
+          json.encode(mergedDeletedItems),
+        );
+      }
     }
 
     for (final entry in _listPayloads.entries) {
@@ -917,21 +1254,58 @@ class CloudSyncProvider extends ChangeNotifier {
         items: value,
         deletedItems: mergedDeletedItems,
       );
-      if (_stringEncodedListKeys.contains(localKey)) {
-        await prefs.setString(localKey, json.encode(filteredValue));
-      } else {
-        await prefs.setStringList(
-          localKey,
-          filteredValue.map((e) => json.encode(e)).toList(),
-        );
+      if (!_collectionStillMatchesRequest(
+        prefs,
+        localKey,
+        remoteKey,
+        requestCollectionHashes,
+      )) {
+        skippedCollections.add(remoteKey);
+        continue;
       }
+      await _writeLocalList(prefs, localKey, filteredValue);
     }
     for (final entry in _objectPayloads.entries) {
       final remoteKey = entry.value;
       final localKey = entry.key;
       final value = response[remoteKey];
       if (value is! Map) continue;
-      await prefs.setString(localKey, json.encode(value));
+      if (!_collectionStillMatchesRequest(
+        prefs,
+        localKey,
+        remoteKey,
+        requestCollectionHashes,
+      )) {
+        skippedCollections.add(remoteKey);
+        continue;
+      }
+      await _writeLocalObject(prefs, localKey, value);
+    }
+    final preferences = response['preferences'];
+    if (preferences is Map) {
+      final current = _buildPreferencesPayload(prefs);
+      if (!_customCollectionStillMatchesRequest(
+        current,
+        'preferences',
+        requestCollectionHashes,
+      )) {
+        skippedCollections.add('preferences');
+      } else {
+        await _writePreferencesPayload(prefs, preferences);
+      }
+    }
+    final quickCaptureTemplates = response['quick_capture_templates'];
+    if (quickCaptureTemplates is Map) {
+      final current = _buildQuickCaptureTemplatesPayload(prefs);
+      if (!_customCollectionStillMatchesRequest(
+        current,
+        'quick_capture_templates',
+        requestCollectionHashes,
+      )) {
+        skippedCollections.add('quick_capture_templates');
+      } else {
+        await _writeQuickCaptureTemplatesPayload(prefs, quickCaptureTemplates);
+      }
     }
 
     final workspacePayloads = response['workspace_payloads'];
@@ -939,6 +1313,8 @@ class CloudSyncProvider extends ChangeNotifier {
       _lastWorkspaceMergeDecisions = await _mergeWorkspacePayloads(
         prefs,
         workspacePayloads,
+        requestCollectionHashes,
+        skippedCollections,
       );
       await prefs.setStringList(
         'sync_merge_decisions',
@@ -949,8 +1325,65 @@ class CloudSyncProvider extends ChangeNotifier {
       );
     }
     final nextPayload = _buildLocalSyncPayload(prefs);
-    _lastItemHashes = _buildItemHashes(nextPayload);
-    await prefs.setString(_itemHashesStorageKey, json.encode(_lastItemHashes));
+    final nextHashes = _buildCollectionHashes(nextPayload);
+    final changedCollections = {
+      for (final key in _syncPullCollections)
+        if (previousHashes[key] != nextHashes[key]) key,
+    };
+    if (!localChangedBeforeApply && skippedCollections.isEmpty) {
+      await _persistServerRevision(prefs, response);
+      await _persistPreferencesSnapshot(prefs, nextPayload['preferences']);
+      _lastItemHashes = _buildItemHashes(nextPayload);
+      await prefs.setString(
+        _itemHashesStorageKey,
+        json.encode(_lastItemHashes),
+      );
+    }
+    return _SyncApplyResult(
+      changedCollections: changedCollections,
+      skippedCollections: skippedCollections,
+      localChangedBeforeApply: localChangedBeforeApply,
+    );
+  }
+
+  bool _collectionHashesEqual(
+    Map<String, String> left,
+    Map<String, String> right,
+  ) {
+    for (final key in _syncPullCollections) {
+      if (left[key] != right[key]) return false;
+    }
+    return true;
+  }
+
+  bool _customCollectionStillMatchesRequest(
+    Object? currentValue,
+    String remoteKey,
+    Map<String, String> requestCollectionHashes,
+  ) {
+    final expectedHash = requestCollectionHashes[remoteKey];
+    if (expectedHash == null || expectedHash.isEmpty) return true;
+    return _syncPayloadHash(
+          _hashableCollectionValue(remoteKey, currentValue),
+        ) ==
+        expectedHash;
+  }
+
+  bool _collectionStillMatchesRequest(
+    SharedPreferences prefs,
+    String localKey,
+    String remoteKey,
+    Map<String, String> requestCollectionHashes,
+  ) {
+    final expectedHash = requestCollectionHashes[remoteKey];
+    if (expectedHash == null || expectedHash.isEmpty) return true;
+    final currentValue = _listPayloads.containsKey(localKey)
+        ? _readLocalList(prefs, localKey)
+        : _readLocalObject(prefs, localKey);
+    return _syncPayloadHash(
+          _hashableCollectionValue(remoteKey, currentValue),
+        ) ==
+        expectedHash;
   }
 
   Future<void> _persistServerRevision(
@@ -1041,6 +1474,8 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<List<SyncMergeDecision>> _mergeWorkspacePayloads(
     SharedPreferences prefs,
     Map<dynamic, dynamic> payloads,
+    Map<String, String> requestCollectionHashes,
+    Set<String> skippedCollections,
   ) async {
     final decisions = <SyncMergeDecision>[];
     final remoteByCollection = <String, List<Map<String, dynamic>>>{};
@@ -1079,6 +1514,15 @@ class CloudSyncProvider extends ChangeNotifier {
       final spec = entry.value;
       final remoteItems = remoteByCollection[collection]!;
       if (remoteItems.isEmpty) continue;
+      if (!_collectionStillMatchesRequest(
+        prefs,
+        spec.localKey,
+        collection,
+        requestCollectionHashes,
+      )) {
+        skippedCollections.add('workspace_payloads');
+        continue;
+      }
       final merge = _mergeRemoteWorkspaceItems(
         current: _readLocalList(prefs, spec.localKey),
         remote: remoteItems,
@@ -1121,6 +1565,10 @@ class CloudSyncProvider extends ChangeNotifier {
     Iterable<dynamic> items,
   ) async {
     final list = items.toList(growable: false);
+    if (_syncPayloadHash(_readLocalList(prefs, localKey)) ==
+        _syncPayloadHash(list)) {
+      return;
+    }
     if (_stringEncodedListKeys.contains(localKey)) {
       await prefs.setString(localKey, json.encode(list));
       return;
@@ -1129,6 +1577,127 @@ class CloudSyncProvider extends ChangeNotifier {
       localKey,
       list.map((item) => json.encode(item)).toList(growable: false),
     );
+  }
+
+  Map<String, dynamic> _readLocalObject(
+    SharedPreferences prefs,
+    String localKey,
+  ) {
+    final raw = prefs.getString(localKey);
+    if (raw == null || raw.isEmpty) return <String, dynamic>{};
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      // Treat corrupt local object payloads as empty so a valid remote payload
+      // can repair them.
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<void> _writeLocalObject(
+    SharedPreferences prefs,
+    String localKey,
+    Map<dynamic, dynamic> value,
+  ) async {
+    if (_syncPayloadHash(_readLocalObject(prefs, localKey)) ==
+        _syncPayloadHash(value)) {
+      return;
+    }
+    await prefs.setString(localKey, json.encode(value));
+  }
+
+  Future<void> _writePreferencesPayload(
+    SharedPreferences prefs,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final normalized = Map<String, dynamic>.from(payload);
+    final values = normalized['values'];
+    if (values is Map) {
+      final remoteKeys = values.keys
+          .map((key) => key.toString())
+          .where(_preferenceKeys.contains)
+          .toSet();
+      if (_syncPayloadHash(_readPreferenceValues(prefs)) ==
+          _syncPayloadHash({for (final key in remoteKeys) key: values[key]})) {
+        // Values already match. Still fall through to update the sync stamp.
+      } else {
+        for (final key in _preferenceKeys) {
+          if (!remoteKeys.contains(key) && prefs.containsKey(key)) {
+            await prefs.remove(key);
+          }
+        }
+      }
+      for (final entry in values.entries) {
+        final key = entry.key.toString();
+        final value = entry.value;
+        if (_preferenceBoolKeys.contains(key) && value is bool) {
+          await prefs.setBool(key, value);
+        } else if (_preferenceIntKeys.contains(key) && value is num) {
+          await prefs.setInt(key, value.toInt());
+        } else if (_preferenceStringKeys.contains(key) && value is String) {
+          await prefs.setString(key, value);
+        } else if (_preferenceStringListKeys.contains(key) && value is List) {
+          await prefs.setStringList(
+            key,
+            value.map((item) => item.toString()).toList(growable: false),
+          );
+        }
+      }
+    }
+    final updatedAt = normalized['updatedAt']?.toString() ?? '';
+    if (updatedAt.isNotEmpty) {
+      _pendingPreferencesUpdatedAt = null;
+      await prefs.setString(_preferencesUpdatedAtStorageKey, updatedAt);
+    }
+  }
+
+  Future<void> _persistPreferencesSnapshot(
+    SharedPreferences prefs,
+    Object? preferencesPayload,
+  ) async {
+    final values = preferencesPayload is Map
+        ? preferencesPayload['values']
+        : null;
+    if (values is! Map) return;
+    await prefs.setString(
+      _preferencesValuesSnapshotStorageKey,
+      json.encode(Map<String, dynamic>.from(values)),
+    );
+    final updatedAt = preferencesPayload is Map
+        ? preferencesPayload['updatedAt']?.toString() ?? ''
+        : '';
+    if (updatedAt.isNotEmpty) {
+      _pendingPreferencesUpdatedAt = null;
+      await prefs.setString(_preferencesUpdatedAtStorageKey, updatedAt);
+    }
+    _pendingPreferenceKeys.clear();
+    _pendingPreferencesFullSync = false;
+    await prefs.remove(_preferencesChangedKeysStorageKey);
+  }
+
+  Future<void> _writeQuickCaptureTemplatesPayload(
+    SharedPreferences prefs,
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final normalized = Map<String, dynamic>.from(payload);
+    if (_syncPayloadHash(_buildQuickCaptureTemplatesPayload(prefs)) ==
+        _syncPayloadHash(normalized)) {
+      return;
+    }
+    final items = normalized['items'];
+    await prefs.setString(
+      _quickCaptureTemplatesStorageKey,
+      json.encode(items is List ? items : const <dynamic>[]),
+    );
+    final updatedAt = normalized['updatedAt']?.toString() ?? '';
+    if (updatedAt.isNotEmpty) {
+      _pendingQuickCaptureTemplatesUpdatedAt = null;
+      await prefs.setString(
+        _quickCaptureTemplatesUpdatedAtStorageKey,
+        updatedAt,
+      );
+    }
   }
 
   _WorkspaceMergeResult _mergeRemoteWorkspaceItems({
@@ -1148,10 +1717,10 @@ class CloudSyncProvider extends ChangeNotifier {
       final id = item['id'].toString();
       final prior = merged[id];
       if (prior is Map) {
-        final oldTs = prior['updatedAt']?.toString() ?? '';
-        final newTs = item['updatedAt']?.toString() ?? '';
+        final oldTs = _remoteItemUpdatedAt(prior);
+        final newTs = _remoteItemUpdatedAt(item);
         if (json.encode(prior) != json.encode(item)) {
-          final remoteWins = newTs.compareTo(oldTs) >= 0;
+          final remoteWins = oldTs.isEmpty || !_timestampGt(oldTs, newTs);
           final changedFields = _changedWorkspaceFields(prior, item);
           decisions.add(
             SyncMergeDecision(
@@ -1178,7 +1747,7 @@ class CloudSyncProvider extends ChangeNotifier {
             winner: 'remote',
             reason: '本地不存在该共享${_itemTypeLabel(itemType)}',
             localUpdatedAt: '',
-            remoteUpdatedAt: item['updatedAt']?.toString() ?? '',
+            remoteUpdatedAt: _remoteItemUpdatedAt(item),
             decidedAt: DateTime.now(),
           ),
         );
@@ -1210,6 +1779,14 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _workspacePayloadCollections = <String, _WorkspacePayloadSpec>{
     'todos': _WorkspacePayloadSpec(localKey: 'todos', itemType: 'todo'),
     'goals': _WorkspacePayloadSpec(localKey: 'duoyi_goals', itemType: 'goal'),
+    'courses': _WorkspacePayloadSpec(
+      localKey: 'duoyi_courses',
+      itemType: 'course',
+    ),
+    'time_entries': _WorkspacePayloadSpec(
+      localKey: 'duoyi_time_entries',
+      itemType: 'time_entry',
+    ),
     'calendar_events': _WorkspacePayloadSpec(
       localKey: 'duoyi_local_calendar_events_v1',
       itemType: 'calendar_event',
@@ -1246,6 +1823,8 @@ class CloudSyncProvider extends ChangeNotifier {
   static String _itemTypeLabel(String itemType) {
     return switch (itemType) {
       'goal' => '目标',
+      'course' => '课程',
+      'time_entry' => '时间记录',
       'calendar_event' => '日程',
       _ => '任务',
     };
