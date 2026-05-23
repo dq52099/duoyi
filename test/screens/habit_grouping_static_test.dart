@@ -64,14 +64,32 @@ void main() {
     expect(source, contains('HapticFeedback.mediumImpact()'));
     expect(source, contains('SystemSound.play(SystemSoundType.click)'));
     expect(source, contains('HapticFeedback.selectionClick()'));
-    expect(source, contains('dimension: 48'));
-    expect(source, contains('width: 48'));
-    expect(source, contains('height: 48'));
-    expect(source, contains('size: 22'));
+    expect(source, contains("key: const ValueKey('habit-undo-inline-button')"));
+    expect(source, contains('OutlinedButton.icon('));
+    expect(source, contains("label: const Text('撤回一次')"));
+    expect(source, isNot(contains('dimension: 48')));
     expect(source, contains('messenger.hideCurrentSnackBar()'));
     expect(source, contains('今日已达标'));
     expect(source, contains("label: '已达标'"));
     expect(source, contains("label: '已记录'"));
+  });
+
+  test('习惯达标状态与任务名同一行靠右展示', () {
+    final source = File('lib/screens/habit_screen.dart').readAsStringSync();
+    final cardStart = source.indexOf('class _HabitCheckinCard');
+    final cardSource = source.substring(cardStart);
+    final nameIndex = cardSource.indexOf('habit.name');
+    final badgeIndex = cardSource.indexOf('_HabitFeedbackBadge');
+    final streakIndex = cardSource.indexOf("\${habit.currentStreak}");
+
+    expect(nameIndex, greaterThanOrEqualTo(0));
+    expect(badgeIndex, greaterThan(nameIndex));
+    expect(streakIndex, greaterThan(badgeIndex));
+    expect(cardSource, contains("key: ValueKey('habit-completed-feedback')"));
+    expect(
+      cardSource,
+      contains("key: const ValueKey('habit-warning-feedback')"),
+    );
   });
 
   test('习惯详情提供长期趋势范围切换和区间明细', () {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
+import '../models/anniversary.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
@@ -96,13 +97,20 @@ class TodayDetailRouter {
         return _brandRoute(const CourseScheduleScreen());
 
       case TodaySectionKind.anniversaries:
+        AnniversaryType? anniversaryType;
         if (id != null) {
-          final exists = context.read<AnniversaryProvider>().items.any(
-            (a) => a.id == id,
-          );
-          if (!exists) return _emptyRoute(kind, '这个纪念日不存在或已被删除');
+          final items = context.read<AnniversaryProvider>().items;
+          final index = items.indexWhere((a) => a.id == id);
+          if (index < 0) return _emptyRoute(kind, '这个纪念日不存在或已被删除');
+          anniversaryType = items[index].type;
         }
-        return _brandRoute(const AnniversaryScreen());
+        return switch (anniversaryType) {
+          AnniversaryType.birthday => _brandRoute(const BirthdayScreen()),
+          AnniversaryType.memorial => _brandRoute(
+            const MemorialAnniversaryScreen(),
+          ),
+          _ => _brandRoute(const MemorialAnniversaryScreen()),
+        };
 
       case TodaySectionKind.goals:
         if (id == null) {

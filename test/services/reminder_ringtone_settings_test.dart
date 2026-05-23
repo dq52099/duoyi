@@ -14,6 +14,7 @@ void main() {
       await ReminderRingtoneSettings.loadVolumePercent(),
       ReminderRingtoneSettings.defaultVolumePercent,
     );
+    expect(ReminderRingtoneSettings.defaultVolumePercent, 40);
     expect(
       await ReminderRingtoneSettings.loadSound(),
       ReminderRingtoneSettings.defaultSound,

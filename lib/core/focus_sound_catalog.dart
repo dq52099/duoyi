@@ -316,6 +316,16 @@ class FocusSoundCatalog {
     return optionFor(sound)?.label ?? '无白噪音';
   }
 
+  static String normalizeForPlayback(String sound) {
+    final clean = sound.trim();
+    if (clean.isEmpty || clean == none) return none;
+    if (trackIdsFor(clean).isNotEmpty) return clean;
+    if (clean.endsWith('_noise') || clean == ['white', 'stream'].join('_')) {
+      return 'night_rain';
+    }
+    return none;
+  }
+
   static FocusSoundOption? optionFor(String sound) {
     for (final option in options) {
       if (option.id == sound) return option;

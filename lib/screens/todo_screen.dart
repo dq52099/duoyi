@@ -10,9 +10,12 @@ import '../core/smart_todo_draft.dart';
 import '../core/todo_filters.dart';
 import '../core/todo_kanban.dart';
 import '../models/goal.dart' show ReminderKind;
+import '../models/habit.dart';
 import '../models/todo.dart';
 import '../models/workspace.dart';
 import '../providers/auth_provider.dart';
+import '../providers/goal_provider.dart';
+import '../providers/habit_provider.dart';
 import '../providers/share_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/theme_provider.dart';
@@ -531,6 +534,8 @@ class _TodoScreenState extends State<TodoScreen> {
   @override
   Widget build(BuildContext context) {
     final todoProvider = context.watch<TodoProvider>();
+    final habitProvider = context.watch<HabitProvider>();
+    final goalProvider = context.watch<GoalProvider>();
     final shareProvider = context.watch<ShareProvider>();
     final s = context.watch<ThemeProvider>().brand.strings;
     final now = DateTime.now();
@@ -650,6 +655,13 @@ class _TodoScreenState extends State<TodoScreen> {
                   _TodoViewSwitcher(
                     selected: _viewMode,
                     onChanged: (mode) => setState(() => _viewMode = mode),
+                  ),
+                if (!_batchMode)
+                  _TodoTodaySummaryCard(
+                    todos: baseTodos,
+                    habits: habitProvider.habits,
+                    activeGoalCount: goalProvider.activeGoals.length,
+                    now: now,
                   ),
                 _TodoFilterBar(
                   filter: _filter,
@@ -812,6 +824,92 @@ class _TodoViewSwitcher extends StatelessWidget {
         selected: {selected},
         showSelectedIcon: false,
         onSelectionChanged: (values) => onChanged(values.first),
+      ),
+    );
+  }
+}
+
+class _TodoTodaySummaryCard extends StatelessWidget {
+  final List<TodoItem> todos;
+  final List<Habit> habits;
+  final int activeGoalCount;
+  final DateTime now;
+
+  const _TodoTodaySummaryCard({
+    required this.todos,
+    required this.habits,
+    required this.activeGoalCount,
+    required this.now,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final today = DateTime(now.year, now.month, now.day);
+    var todayTotal = 0;
+    var todayDone = 0;
+    for (final todo in todos) {
+      final due = todo.dueDate;
+      final date = due ?? todo.date;
+      final day = DateTime(date.year, date.month, date.day);
+      if (day != today) continue;
+      todayTotal++;
+      if (todo.isCompleted) todayDone++;
+    }
+    final remaining = (todayTotal - todayDone).clamp(0, todayTotal);
+    final dailyCount = habits.where((habit) => habit.isActiveToday()).length;
+    final representativeCount = todos
+        .where(
+          (todo) =>
+              todo.priority == TodoPriority.urgent ||
+              todo.priority == TodoPriority.high ||
+              todo.quadrant == EisenhowerQuadrant.urgentImportant,
+        )
+        .length;
+
+    return AppSurfaceCard(
+      key: const ValueKey('todo_today_summary_card'),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      borderRadius: BorderRadius.circular(16),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.today_outlined, color: cs.primary, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '今日还要完成 $remaining',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '日常$dailyCount 代表$representativeCount 目标$activeGoalCount',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -76,8 +76,8 @@ void main() {
     expect(find.text('待办'), findsWidgets);
     expect(find.text('习惯'), findsWidgets);
     expect(find.text('日历'), findsWidgets);
-    expect(find.text('专注'), findsWidgets);
     expect(find.text('小组件'), findsWidgets);
     expect(find.text('我的'), findsWidgets);
+    expect(find.text('专注'), findsNothing);
   });
 }

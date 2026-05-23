@@ -208,14 +208,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'In v2, common terms such as actions, navigation, reminders, and sharing have English translations. Untranslated page copy falls back to Chinese while coverage expands.';
 
   @override
-  String get preferencesTitle => 'Preferences';
+  String get preferencesTitle => 'Personal settings';
 
   @override
-  String get preferencesLocalTitle => 'Local preferences';
+  String get preferencesLocalTitle => 'Local personal settings';
 
   @override
   String get preferencesLocalSubtitle =>
-      'Adjust dates, default entry, interaction feedback, and local notifications';
+      'Manage notifications, navigation, dates, interactions, and local behavior by feature';
 
   @override
   String get preferencesSectionDate => 'Date and calendar';
@@ -287,7 +287,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesSectionBottomNavSubtitle =>
-      'Configure visible tabs and order; keep at least two entries';
+      'Show up to five bottom tabs; Widgets and Me are fixed';
 
   @override
   String get preferencesSectionInteraction => 'Interaction';

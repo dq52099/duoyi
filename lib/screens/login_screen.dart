@@ -292,6 +292,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _emailCodeSendField({
+    required TextEditingController controller,
+    required String labelText,
+  }) {
+    return _LoginActionField(
+      field: _emailCodeField(controller: controller, labelText: labelText),
+      action: _emailCodeButton(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
@@ -401,17 +411,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             if (_isRegister) ...[
               const SizedBox(height: 12),
-              _emailSendField(
+              TextField(
                 controller: _emailCtrl,
-                labelText: auth.registrationEmailRequired
-                    ? I18n.tr('auth.email')
-                    : I18n.tr('auth.email.optional'),
-                helperText: auth.registrationEmailRequired
-                    ? I18n.tr('auth.email.required_helper')
-                    : null,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: auth.registrationEmailRequired
+                      ? I18n.tr('auth.email')
+                      : I18n.tr('auth.email.optional'),
+                  helperText: auth.registrationEmailRequired
+                      ? I18n.tr('auth.email.required_helper')
+                      : null,
+                ),
               ),
               const SizedBox(height: 12),
-              _emailCodeField(
+              _emailCodeSendField(
                 controller: _emailCodeCtrl,
                 labelText: auth.registrationEmailRequired
                     ? I18n.tr('auth.email_code')

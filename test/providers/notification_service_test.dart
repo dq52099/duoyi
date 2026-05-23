@@ -1,8 +1,16 @@
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:duoyi/providers/notification_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   test('clearHistory only clears notification history and refreshes UI', () {
     final source = File(
       'lib/providers/notification_service.dart',
@@ -14,8 +22,10 @@ void main() {
     final method = source.substring(start, end);
 
     expect(method, contains('_history.clear();'));
+    expect(method, contains('_historyLastSeenAt = DateTime.now();'));
     expect(method, isNot(contains('_pendingNotifications = 0;')));
     expect(method, contains('await _saveHistory();'));
+    expect(method, contains('await _saveHistorySeen();'));
     expect(method, contains('notifyListeners();'));
     expect(
       method.indexOf('_history.clear();'),
@@ -54,6 +64,8 @@ void main() {
     expect(end, greaterThan(start));
     final entry = source.substring(start, end);
 
+    expect(entry, contains('notifService.hasUnreadHistory'));
+    expect(entry, contains('const _UnreadDot()'));
     expect(entry, contains('notifService.historyCount == 0'));
     expect(entry, contains('? null'));
     expect(entry, contains(r"'${notifService.historyCount} 条'"));
@@ -71,7 +83,7 @@ void main() {
 
       expect(group, contains("label: '通知记录'"));
       expect(group, contains('onTap: () => _openNotificationHistory(context)'));
-      expect(group, contains("label: s.mineNotificationsLabel"));
+      expect(group, contains("label: '通知设置'"));
       expect(group, contains("subtitle: '管理提醒时间、通知权限和铃声'"));
       expect(
         group,
@@ -79,9 +91,10 @@ void main() {
       );
       expect(
         group.indexOf("label: '通知记录'"),
-        lessThan(group.indexOf("label: s.mineNotificationsLabel")),
+        lessThan(group.indexOf("label: '通知设置'")),
       );
-      expect(group, isNot(contains("label: '通知设置'")));
+      expect(group, contains("label: '更多应用'"));
+      expect(group, contains('onTap: () => _showMoreApplications(context)'));
     },
   );
 
@@ -101,9 +114,90 @@ void main() {
       contains('void _openNotificationHistory(BuildContext context)'),
     );
     expect(source, contains('const _NotificationHistoryScreen()'));
+    final historyStart = source.indexOf(
+      'void _openNotificationHistory(BuildContext context)',
+    );
+    final historyEnd = source.indexOf('void _openFeedback', historyStart);
+    expect(historyStart, greaterThanOrEqualTo(0));
+    expect(historyEnd, greaterThan(historyStart));
+    final historyMethod = source.substring(historyStart, historyEnd);
+    expect(historyMethod, contains('markHistorySeen()'));
+    expect(
+      historyMethod.indexOf('markHistorySeen()'),
+      lessThan(historyMethod.indexOf('Navigator.push')),
+    );
+    expect(source, contains('markHistorySeen()'));
     expect(source, isNot(contains('void _notifDialog')));
     expect(source, isNot(contains('onTap: () => _notifDialog')));
   });
+
+  test('Mine password dialog opts into scoped keyboard shifting', () {
+    final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+    final surface = File(
+      'lib/widgets/surface_components.dart',
+    ).readAsStringSync();
+
+    expect(surface, contains('final bool shiftForKeyboard'));
+    expect(surface, contains('this.shiftForKeyboard = false'));
+    expect(surface, contains('if (!shiftForKeyboard) return scopedDialog;'));
+    expect(surface, contains('MediaQuery.removeViewInsets'));
+
+    final start = mine.indexOf('class _ChangePasswordDialog');
+    final end = mine.indexOf('class _TileGroup', start);
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final dialog = mine.substring(start, end);
+    expect(dialog, contains('return AppDialog('));
+    expect(dialog, contains('shiftForKeyboard: true'));
+    expect(dialog, contains('AutofillGroup('));
+    expect(dialog, isNot(contains('return AlertDialog(')));
+  });
+
+  test('notification service tracks unread history for red dot badges', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("static const _kHistorySeenKey"));
+    expect(source, contains('DateTime? _historyLastSeenAt'));
+    expect(source, contains('bool get hasUnreadHistory'));
+    expect(source, contains('_history.first.scheduledTime.isAfter'));
+    expect(source, contains('void markHistorySeen()'));
+    expect(source, contains('unawaited(_saveHistorySeen())'));
+  });
+
+  test(
+    'unread notification history turns off after history page marks seen',
+    () async {
+      final service = NotificationService();
+      await service.loadHistoryForTest();
+
+      service.addHistoryForTest(
+        NotificationItem(
+          id: 'n1',
+          title: '新通知',
+          body: '内容',
+          scheduledTime: DateTime(2026, 5, 23, 8),
+          type: NotificationType.general,
+        ),
+      );
+      expect(service.hasUnreadHistory, isTrue);
+
+      service.markHistorySeen();
+      expect(service.hasUnreadHistory, isFalse);
+
+      service.addHistoryForTest(
+        NotificationItem(
+          id: 'n2',
+          title: '更新通知',
+          body: '内容',
+          scheduledTime: DateTime(2026, 5, 23, 9),
+          type: NotificationType.todo,
+        ),
+      );
+      expect(service.hasUnreadHistory, isTrue);
+    },
+  );
 
   test('notification history is a dedicated scrollable page', () {
     final source = File('lib/screens/mine_screen.dart').readAsStringSync();
@@ -248,8 +342,16 @@ void main() {
       source,
       contains('final PreferencesInitialSection? initialSection;'),
     );
-    expect(source, contains("title: '提醒偏好 / 通知设置'"));
-    expect(source, contains("subtitle: '管理每日提醒、通知权限、通知记录保留和提醒铃声'"));
+    expect(source, contains("title: '通知设置'"));
+    expect(source, contains("subtitle: '管理提醒时间、系统权限、通知记录保留和提醒铃声'"));
+    expect(
+      source,
+      contains('class _PreferenceSectionMenu extends StatelessWidget'),
+    );
+    expect(source, contains("label: '通知设置'"));
+    expect(source, contains("label: '导航入口'"));
+    expect(source, contains("label: '日期日历'"));
+    expect(source, contains("label: '默认行为'"));
     expect(source, contains('GlobalKey _notificationSectionKey'));
     expect(source, contains('int _initialSectionScrollAttempts = 0;'));
     expect(source, contains('if (!mounted) return;'));

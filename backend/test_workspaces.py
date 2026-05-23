@@ -148,7 +148,7 @@ class WorkspaceApiTest(unittest.TestCase):
             ),
             user_id=registered["user_id"],
         )
-        self.assertEqual(updated["username"], "profile-new")
+        self.assertEqual(updated["username"], "profile-user")
         self.assertEqual(updated["email"], "profile-new@example.com")
         self.assertFalse(updated["email_verified"])
         self.assertEqual(updated["avatar"], "https://example.com/avatar.png")
@@ -201,7 +201,7 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(code_logged_in["user_id"], registered["user_id"])
 
         me = api.me(user_id=registered["user_id"])
-        self.assertEqual(me["username"], "profile-new")
+        self.assertEqual(me["username"], "profile-user")
         self.assertEqual(me["display_name"], "新昵称")
         self.assertEqual(me["email"], "profile-new@example.com")
         self.assertTrue(me["email_verified"])
@@ -223,6 +223,7 @@ class WorkspaceApiTest(unittest.TestCase):
             runtime = api._account_mail_runtime(db)
             self.assertEqual(runtime["email_code_primary_provider"], "claw163")
             self.assertEqual(runtime["email_code_backup_provider"], "resend")
+            self.assertTrue(api._setting_get(db, "registration_email_required", None))
             api._setting_set(db, "registration_email_required", True)
             code_result = api._create_email_code(
                 db,
@@ -320,7 +321,7 @@ class WorkspaceApiTest(unittest.TestCase):
             ),
             user_id=user_id,
         )
-        self.assertEqual(updated["username"], "re0-profile-new")
+        self.assertEqual(updated["username"], "re0-profile")
         self.assertEqual(updated["user"]["display_name"], "RE0 用户")
 
         db = api.get_db()
@@ -386,6 +387,39 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(settings["hermes_api_key_set"])
         self.assertIn("***", settings["hermes_api_key"])
         self.assertTrue(settings["hermes_configured"])
+
+    def test_admin_settings_scope_uses_feature_permissions(self):
+        ai_admin = self._make_admin("ai-settings-admin", ["ai"])
+        backup_admin = self._make_admin("backup-settings-admin", ["backup"])
+
+        ai_settings = api.admin_get_settings(ai_admin, scope="ai")
+        self.assertIn("ai_model", ai_settings)
+        self.assertIn("ai_api_key_set", ai_settings)
+        self.assertNotIn("backup_enabled", ai_settings)
+        self.assertNotIn("email_service_enabled", ai_settings)
+
+        backup_settings = api.admin_get_settings(backup_admin, scope="backup")
+        self.assertIn("backup_enabled", backup_settings)
+        self.assertIn("reminder_email_enabled", backup_settings)
+        self.assertIn("email_service_enabled", backup_settings)
+        self.assertNotIn("ai_model", backup_settings)
+        backup_updated = api.admin_update_settings(
+            api.SettingsUpdate(
+                backup_enabled=False,
+                reminder_email_enabled=True,
+                email_service_enabled=False,
+            ),
+            actor=backup_admin,
+        )
+        self.assertEqual(backup_updated["changed"]["backup_enabled"], False)
+        self.assertEqual(
+            backup_updated["changed"]["reminder_email_enabled"], True
+        )
+        self.assertEqual(backup_updated["changed"]["email_service_enabled"], False)
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_get_settings(ai_admin)
+        self.assertEqual(denied.exception.status_code, 403)
 
     def test_admin_force_update_settings_persist_to_public_config(self):
         admin_id = self._make_admin("force-update-admin", ["settings"])
@@ -670,6 +704,8 @@ class WorkspaceApiTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertIn("/api/uploads/avatars/", payload["avatar"])
+                self.assertEqual(payload["coin_balance"], 0)
+                self.assertEqual(payload["lifetime_coins"], 0)
                 avatar_path = api._avatar_file_path_from_url(payload["avatar"])
                 self.assertIsNotNone(avatar_path)
                 self.assertTrue(avatar_path.exists())

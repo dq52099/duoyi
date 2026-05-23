@@ -15,6 +15,7 @@ void main() {
     final timerTabSource = source.split('// History tab').first;
 
     expect(timerTabSource, contains('LayoutBuilder('));
+    expect(source, contains('BrandBackground('));
     expect(timerTabSource, contains('availableHeight < 660'));
     expect(timerTabSource, contains('availableHeight < 560'));
     expect(timerTabSource, contains('FittedBox('));

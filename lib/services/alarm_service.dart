@@ -33,7 +33,7 @@ class AlarmPermissionDeniedException implements Exception {
 /// 闹钟通道服务（与 [LocalNotifications] 平行）。
 ///
 /// 用于"到点必须处理"的强提醒场景：
-/// - Android：`duoyi_alarm_fullscreen_v6` 渠道，`Importance.max`，可按提醒配置启用
+/// - Android：`duoyi_alarm_fullscreen_v7` 渠道，`Importance.max`，可按提醒配置启用
 ///   `fullScreenIntent`，`category=alarm`，震动模式 `[0, 500, 500, 500]`。
 /// - iOS：`interruptionLevel=.timeSensitive`（避免使用 `.critical`，
 ///   后者需要 Apple 单独批准的 entitlement）。
@@ -63,17 +63,18 @@ class AlarmService implements ReminderAlarmSink {
   /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
   /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
   /// 继续吞掉习惯提醒。
-  static const String channelId = 'duoyi_alarm_fullscreen_v6';
+  static const String channelId = 'duoyi_alarm_fullscreen_v7';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_alarm',
     'duoyi_alarm_fullscreen_v3',
     'duoyi_alarm_fullscreen_v4',
     'duoyi_alarm_fullscreen_v5',
+    'duoyi_alarm_fullscreen_v6',
   };
   static const String _channelName = '多仪 · 强提醒';
   static const String _channelDesc = '到点响铃、震动并弹出确认界面的提醒';
   static const RawResourceAndroidNotificationSound _alarmSound =
-      RawResourceAndroidNotificationSound('duoyi_alarm');
+      RawResourceAndroidNotificationSound('duoyi_chime');
 
   /// 震动模式：静 0 → 震 500 → 静 500 → 震 500（毫秒）。
   /// `Int64List` 无法 const 化，使用 late final 缓存。

@@ -162,6 +162,10 @@ class AppUpdateService extends ChangeNotifier {
     return segment.isEmpty ? null : Uri.decodeComponent(segment);
   }
 
+  @visibleForTesting
+  String debugFormatReleaseNotesForTest(String? notes) =>
+      _formatReleaseNotes(notes);
+
   Future<void> downloadAndInstallLatest() async {
     if (_latestUrl == null) {
       _error = '没有可下载的 APK';
@@ -267,6 +271,15 @@ class AppUpdateService extends ChangeNotifier {
           (match) => match.group(1) ?? '',
         )
         .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
+        .split('\n')
+        .where((line) {
+          final normalized = line
+              .trim()
+              .replaceFirst(RegExp(r'^[*_\\s]+'), '')
+              .toLowerCase();
+          return !normalized.startsWith('full changelog');
+        })
+        .join('\n')
         .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }

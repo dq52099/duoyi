@@ -32,7 +32,15 @@ class FocusSoundService with WidgetsBindingObserver {
 
   String _currentSound = 'none';
   bool _isPlaying = false;
-  double _volume = 1.0;
+  int _playbackGeneration = 0;
+  static const double defaultVolume = 0.6;
+  double _volume = defaultVolume;
+
+  static final AudioContext _focusAudioContext = AudioContextConfig(
+    focus: AudioContextConfigFocus.gain,
+    respectSilence: false,
+    stayAwake: true,
+  ).build();
 
   /// 当前正在播放的音轨 id（`'none'` 表示未播）。
   String get currentSound => _currentSound;
@@ -58,28 +66,39 @@ class FocusSoundService with WidgetsBindingObserver {
   Future<void> play(String sound) async {
     final customPath = _customTrackPaths[sound];
     if (customPath != null && customPath.isNotEmpty) {
-      await _playSources(sound, <Source>[DeviceFileSource(customPath)]);
+      final generation = ++_playbackGeneration;
+      await _playSources(sound, <Source>[
+        DeviceFileSource(customPath),
+      ], generation);
       return;
     }
-    final assets = FocusSoundCatalog.assetsFor(sound);
+    final normalizedInput = FocusSoundCatalog.normalizeForPlayback(sound);
+    if (normalizedInput == FocusSoundCatalog.none) {
+      await stop();
+      return;
+    }
+    final generation = ++_playbackGeneration;
+    final assets = FocusSoundCatalog.assetsFor(normalizedInput);
     if (assets.isEmpty) {
-      if (sound == FocusSoundCatalog.none) {
-        await stop();
-      }
       return;
     }
-    final normalizedSound = FocusSoundCatalog.trackIdsFor(sound).join('+');
+    final normalizedSound = FocusSoundCatalog.trackIdsFor(
+      normalizedInput,
+    ).join('+');
     await _playSources(
       normalizedSound,
       assets.map<Source>((asset) => AssetSource(asset)).toList(growable: false),
+      generation,
     );
   }
 
   Future<void> _playSources(
     String normalizedSound,
     List<Source> sources,
+    int generation,
   ) async {
     if (_isPlaying && _currentSound == normalizedSound) {
+      await _applyVolumeToPlayers(_volume);
       return;
     }
     final nextPlayers = <AudioPlayer>[];
@@ -88,15 +107,25 @@ class FocusSoundService with WidgetsBindingObserver {
         final player = AudioPlayer();
         nextPlayers.add(player);
         _attachCompletionHook(player, source);
+        await player.setAudioContext(_focusAudioContext);
         await player.setReleaseMode(ReleaseMode.loop);
         await player.setPlayerMode(PlayerMode.mediaPlayer);
-        await player.setVolume(_volume);
-        await player.play(source);
+        await player.play(
+          source,
+          volume: _volume,
+          ctx: _focusAudioContext,
+          mode: PlayerMode.mediaPlayer,
+        );
+      }
+      if (generation != _playbackGeneration) {
+        await _disposePlayers(nextPlayers);
+        return;
       }
       await _stopPlayers();
       _players.addAll(nextPlayers);
       _currentSound = normalizedSound;
       _isPlaying = true;
+      await _applyVolumeToPlayers(_volume);
       await _startForegroundService();
     } catch (e, st) {
       debugPrint(
@@ -109,6 +138,7 @@ class FocusSoundService with WidgetsBindingObserver {
 
   /// 停止播放并把状态复位到 `'none'`。
   Future<void> stop() async {
+    _playbackGeneration++;
     if (!_isPlaying && _currentSound == 'none') {
       return;
     }
@@ -121,7 +151,11 @@ class FocusSoundService with WidgetsBindingObserver {
   /// 设置音量，自动 clamp 到 `[0, 1]`。
   Future<void> setVolume(double v) async {
     _volume = v.clamp(0.0, 1.0).toDouble();
-    await Future.wait(_players.map((player) => player.setVolume(_volume)));
+    await _applyVolumeToPlayers(_volume);
+  }
+
+  Future<void> _applyVolumeToPlayers(double volume) async {
+    await Future.wait(_players.map((player) => player.setVolume(volume)));
   }
 
   void _attachCompletionHook(AudioPlayer player, Source source) {
@@ -150,19 +184,20 @@ class FocusSoundService with WidgetsBindingObserver {
     if (!_isPlaying) {
       return;
     }
+    final generation = _playbackGeneration;
     const int steps = 10;
     final double target = _volume;
     final int stepMs = d.inMilliseconds <= 0 ? 0 : d.inMilliseconds ~/ steps;
     for (int i = 0; i <= steps; i++) {
-      await Future.wait(
-        _players.map((player) => player.setVolume(target * (i / steps))),
-      );
+      if (generation != _playbackGeneration) return;
+      await _applyVolumeToPlayers(target * (i / steps));
       if (stepMs > 0) {
         await Future<void>.delayed(Duration(milliseconds: stepMs));
       }
     }
+    if (generation != _playbackGeneration) return;
     // ramp 结束后恢复目标音量，避免浮点误差
-    await Future.wait(_players.map((player) => player.setVolume(target)));
+    await _applyVolumeToPlayers(target);
   }
 
   /// 淡出：从当前 [volume] 线性降至 0，结束后调用 [stop]。
@@ -173,16 +208,23 @@ class FocusSoundService with WidgetsBindingObserver {
     if (!_isPlaying) {
       return;
     }
+    final generation = _playbackGeneration;
     const int steps = 10;
     final double start = _volume;
     final int stepMs = d.inMilliseconds <= 0 ? 0 : d.inMilliseconds ~/ steps;
     for (int i = steps; i >= 0; i--) {
-      await Future.wait(
-        _players.map((player) => player.setVolume(start * (i / steps))),
-      );
+      if (generation != _playbackGeneration) {
+        await _applyVolumeToPlayers(_volume);
+        return;
+      }
+      await _applyVolumeToPlayers(start * (i / steps));
       if (stepMs > 0) {
         await Future<void>.delayed(Duration(milliseconds: stepMs));
       }
+    }
+    if (generation != _playbackGeneration) {
+      await _applyVolumeToPlayers(_volume);
+      return;
     }
     await stop();
     _volume = start;

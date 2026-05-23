@@ -67,6 +67,7 @@ enum NotificationType { todo, habit, pomodoro, anniversary, general, location }
 class NotificationService extends ChangeNotifier
     implements ReminderNotificationSink {
   static const _kHistoryKey = 'duoyi_notif_history';
+  static const _kHistorySeenKey = 'duoyi_notif_history_seen_at';
 
   /// 本服务使用的唯一通道 id。
   ///
@@ -87,6 +88,7 @@ class NotificationService extends ChangeNotifier
   int _pendingNotifications = 0;
   int _historyLimit = NotificationHistoryPolicy.defaultLimit;
   final List<NotificationItem> _history = [];
+  DateTime? _historyLastSeenAt;
   final DesktopNotification _desktop = DesktopNotification();
   bool _desktopReady = false;
   BrandStrings _strings = BrandStrings.defaultBrand;
@@ -95,6 +97,10 @@ class NotificationService extends ChangeNotifier
   int get historyCount => _history.length;
   int get historyLimit => _historyLimit;
   List<NotificationItem> get history => List.unmodifiable(_history);
+  bool get hasUnreadHistory =>
+      _history.isNotEmpty &&
+      (_historyLastSeenAt == null ||
+          _history.first.scheduledTime.isAfter(_historyLastSeenAt!));
   bool get desktopReady => _desktopReady;
   bool get permissionGranted => LocalNotifications.instance.permissionGranted;
 
@@ -131,6 +137,16 @@ class NotificationService extends ChangeNotifier
     );
   }
 
+  Future<void> _saveHistorySeen() async {
+    final p = await SharedPreferences.getInstance();
+    final seenAt = _historyLastSeenAt;
+    if (seenAt == null) {
+      await p.remove(_kHistorySeenKey);
+    } else {
+      await p.setString(_kHistorySeenKey, seenAt.toIso8601String());
+    }
+  }
+
   Future<void> _loadHistory() async {
     final p = await SharedPreferences.getInstance();
     _historyLimit = NotificationHistoryPolicy.normalize(
@@ -152,11 +168,15 @@ class NotificationService extends ChangeNotifier
       _history.removeRange(_historyLimit, _history.length);
       await _saveHistory();
     }
+    _historyLastSeenAt = DateTime.tryParse(p.getString(_kHistorySeenKey) ?? '');
     notifyListeners();
   }
 
   @visibleForTesting
   Future<void> loadHistoryForTest() => _loadHistory();
+
+  @visibleForTesting
+  void addHistoryForTest(NotificationItem item) => _addToHistory(item);
 
   Future<void> setHistoryLimit(int value) async {
     final next = NotificationHistoryPolicy.normalize(value);
@@ -166,6 +186,14 @@ class NotificationService extends ChangeNotifier
       _history.removeRange(_historyLimit, _history.length);
       await _saveHistory();
     }
+    notifyListeners();
+  }
+
+  void markHistorySeen() {
+    _historyLastSeenAt = _history.isEmpty
+        ? DateTime.now()
+        : _history.first.scheduledTime;
+    unawaited(_saveHistorySeen());
     notifyListeners();
   }
 
@@ -681,7 +709,9 @@ class NotificationService extends ChangeNotifier
 
   Future<void> clearHistory() async {
     _history.clear();
+    _historyLastSeenAt = DateTime.now();
     await _saveHistory();
+    await _saveHistorySeen();
     notifyListeners();
   }
 

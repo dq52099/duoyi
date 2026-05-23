@@ -497,19 +497,19 @@ abstract class AppLocalizations {
   /// No description provided for @preferencesTitle.
   ///
   /// In zh, this message translates to:
-  /// **'偏好设置'**
+  /// **'个性设置'**
   String get preferencesTitle;
 
   /// No description provided for @preferencesLocalTitle.
   ///
   /// In zh, this message translates to:
-  /// **'本地偏好'**
+  /// **'本地个性设置'**
   String get preferencesLocalTitle;
 
   /// No description provided for @preferencesLocalSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'调整日期、默认入口、交互反馈和本机通知行为'**
+  /// **'按功能管理通知、导航入口、日期、交互和本机行为'**
   String get preferencesLocalSubtitle;
 
   /// No description provided for @preferencesSectionDate.
@@ -641,7 +641,7 @@ abstract class AppLocalizations {
   /// No description provided for @preferencesSectionBottomNavSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'配置显示菜单和顺序，至少保留两个入口'**
+  /// **'底部导航最多显示 5 个入口，小组件和我的固定显示'**
   String get preferencesSectionBottomNavSubtitle;
 
   /// No description provided for @preferencesSectionInteraction.

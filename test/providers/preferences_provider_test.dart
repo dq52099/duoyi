@@ -12,7 +12,7 @@ void main() {
     LocalTimezoneResolver.debugNativeSystemTimeZoneReader = null;
   });
 
-  test('旧版底部导航偏好升级后保留我的并加入小组件', () async {
+  test('旧版底部导航偏好升级后保留我的和小组件并限制 5 个', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'pref_default_tab': 5,
       'pref_bottom_nav_order': <String>['0', '1', '2', '3', '4', '5'],
@@ -26,6 +26,7 @@ void main() {
     expect(provider.bottomNavOrder, <int>[0, 1, 2, 3, 4, 5, 6]);
     expect(provider.bottomNavVisible.contains(5), isTrue);
     expect(provider.bottomNavVisible.contains(6), isTrue);
+    expect(provider.bottomNavVisible.length, lessThanOrEqualTo(5));
   });
 
   test('小组件和我的入口不能被隐藏', () async {
@@ -39,6 +40,7 @@ void main() {
 
     expect(provider.bottomNavVisible.contains(5), isTrue);
     expect(provider.bottomNavVisible.contains(6), isTrue);
+    expect(provider.bottomNavVisible.length, lessThanOrEqualTo(5));
 
     await provider.setBottomNavVisible(5, false);
     await provider.setBottomNavVisible(6, false);
@@ -47,7 +49,25 @@ void main() {
     expect(provider.bottomNavVisible.contains(6), isTrue);
   });
 
-  test('偏好设置页将小组件和我的标记为固定显示', () {
+  test('底部导航最多显示 5 个入口，新增入口超过上限时不生效', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'pref_bottom_nav_order': <String>['0', '1', '2', '3', '4', '5', '6'],
+      'pref_bottom_nav_visible': <String>['0', '1', '2', '5', '6'],
+    });
+
+    final provider = PreferencesProvider();
+    await provider.loadFromStorage();
+
+    expect(provider.bottomNavVisible, <int>{0, 1, 2, 5, 6});
+    await provider.setBottomNavVisible(3, true);
+    expect(provider.bottomNavVisible, <int>{0, 1, 2, 5, 6});
+
+    await provider.setBottomNavVisible(2, false);
+    await provider.setBottomNavVisible(3, true);
+    expect(provider.bottomNavVisible, <int>{0, 1, 3, 5, 6});
+  });
+
+  test('个性设置页将小组件和我的标记为固定显示并提示上限', () {
     final source = File(
       'lib/screens/preferences_screen.dart',
     ).readAsStringSync();
@@ -55,7 +75,37 @@ void main() {
     expect(source, contains('lockedVisible = tab == 5 || tab == 6'));
     expect(source, contains("I18n.tr('preferences.nav.fixed')"));
     expect(source, contains('onChanged: lockedVisible'));
+    expect(source, contains('PreferencesProvider.maxBottomNavTabs'));
+    expect(source, contains('reachedLimit'));
     expect(source, contains('? null'));
+  });
+
+  test('主导航兜底也限制最多 5 个入口', () {
+    final source = File('lib/main.dart').readAsStringSync();
+
+    expect(
+      source,
+      contains('static const _fallbackVisibleTabs = <int>[1, 2, 3, 5, 6]'),
+    );
+    expect(source, contains('List<int> _visibleBottomNavTabs'));
+    expect(source, contains('PreferencesProvider.maxBottomNavTabs'));
+    expect(source, isNot(contains('const [0, 1, 2, 3, 4, 5, 6]')));
+  });
+
+  test('个性设置页二级菜单按场景分组', () {
+    final source = File(
+      'lib/screens/preferences_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('class _PreferenceMenuGroup'));
+    expect(source, contains('_PreferenceSectionMenu('));
+    expect(source, contains("title: '入口提醒'"));
+    expect(source, contains("title: '显示默认'"));
+    expect(source, contains("label: '通知设置'"));
+    expect(source, contains("label: '导航入口'"));
+    expect(source, contains("label: '日期日历'"));
+    expect(source, contains("label: '默认行为'"));
+    expect(source, contains("label: '交互归档'"));
   });
 
   test('通知记录保留数量可配置并按范围归一化', () async {

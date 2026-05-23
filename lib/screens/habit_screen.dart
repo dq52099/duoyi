@@ -963,35 +963,30 @@ class _HabitCheckinCard extends StatelessWidget {
                           fontSize: 12,
                         ),
                       ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: isDone && !isNegative
-                            ? const Padding(
-                                key: ValueKey('habit-completed-feedback'),
-                                padding: EdgeInsets.only(top: 6),
-                                child: _HabitFeedbackBadge(
-                                  icon: Icons.check_circle,
-                                  label: '已达标',
-                                  color: Color(0xFF4CAF50),
-                                ),
-                              )
-                            : hasNegativeOccurrence
-                            ? Padding(
-                                key: const ValueKey('habit-warning-feedback'),
-                                padding: const EdgeInsets.only(top: 6),
-                                child: _HabitFeedbackBadge(
-                                  icon: Icons.info_outline,
-                                  label: '已记录',
-                                  color: cs.error,
-                                ),
-                              )
-                            : const SizedBox.shrink(
-                                key: ValueKey('habit-no-feedback'),
-                              ),
-                      ),
                     ],
                   ),
                 ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: isDone && !isNegative
+                      ? const _HabitFeedbackBadge(
+                          key: ValueKey('habit-completed-feedback'),
+                          icon: Icons.check_circle,
+                          label: '已达标',
+                          color: Color(0xFF4CAF50),
+                        )
+                      : hasNegativeOccurrence
+                      ? _HabitFeedbackBadge(
+                          key: const ValueKey('habit-warning-feedback'),
+                          icon: Icons.info_outline,
+                          label: '已记录',
+                          color: cs.error,
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey('habit-no-feedback'),
+                        ),
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1081,49 +1076,48 @@ class _HabitCheckinCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            countText,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w400,
-                              fontSize: 12,
-                              color: hasNegativeOccurrence
-                                  ? cs.error
-                                  : (isDone
-                                        ? const Color(0xFF4CAF50)
-                                        : Colors.grey.shade700),
-                            ),
-                          ),
-                          if (todayCount > 0) ...[
-                            const SizedBox(width: 4),
-                            SizedBox.square(
-                              dimension: 48,
-                              child: IconButton(
-                                tooltip: '撤回一次',
-                                padding: const EdgeInsets.all(12),
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 48,
-                                  height: 48,
-                                ),
-                                icon: Icon(
-                                  Icons.undo,
-                                  size: 22,
-                                  color: hasNegativeOccurrence
-                                      ? cs.error
-                                      : Colors.grey.shade600,
-                                ),
-                                onPressed: () => _handleUndo(context),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
                     ],
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    countText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      color: hasNegativeOccurrence
+                          ? cs.error
+                          : (isDone
+                                ? const Color(0xFF4CAF50)
+                                : Colors.grey.shade700),
+                    ),
+                  ),
+                ),
+                if (todayCount > 0)
+                  OutlinedButton.icon(
+                    key: const ValueKey('habit-undo-inline-button'),
+                    onPressed: () => _handleUndo(context),
+                    icon: Icon(
+                      Icons.undo,
+                      size: 16,
+                      color: hasNegativeOccurrence
+                          ? cs.error
+                          : cs.onSurfaceVariant,
+                    ),
+                    label: const Text('撤回一次'),
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      foregroundColor: hasNegativeOccurrence
+                          ? cs.error
+                          : cs.onSurfaceVariant,
+                    ),
+                  ),
               ],
             ),
           ],
@@ -1191,6 +1185,7 @@ class _HabitFeedbackBadge extends StatelessWidget {
   final Color color;
 
   const _HabitFeedbackBadge({
+    super.key,
     required this.icon,
     required this.label,
     required this.color,

@@ -299,6 +299,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download Android artifact
         uses: actions/download-artifact@v4
         with:
@@ -315,9 +317,22 @@ jobs:
       - name: List artifacts
         run: ls -R dist
 
+      - name: Resolve release notes
+        id: release_notes
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="docs/releases/${TAG}.md"
+          if [ -f "$NOTES" ]; then
+            echo "body_path=$NOTES" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release notes found for $TAG; generated notes will be used."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/**/*
+          body_path: ${{ steps.release_notes.outputs.body_path }}
           generate_release_notes: true
           fail_on_unmatched_files: false

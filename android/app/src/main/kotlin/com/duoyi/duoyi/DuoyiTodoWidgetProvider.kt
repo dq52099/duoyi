@@ -75,12 +75,12 @@ class DuoyiTodoWidgetProvider : AppWidgetProvider() {
             bindTodoRow(context, views, prefs, 3, R.id.widget_todo_item_3, R.id.widget_todo_done_3)
             val secondRowVisibility = DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
             val thirdRowVisibility = DuoyiWidgetDisplayMode.detailedVisibility(prefs)
-            views.setViewVisibility(R.id.widget_todo_item_2, secondRowVisibility)
+            views.setViewVisibility(R.id.widget_todo_row_2, secondRowVisibility)
             views.setViewVisibility(
                 R.id.widget_todo_done_2,
                 if ((prefs.getString("todo_top3_2_id", "") ?: "").isBlank()) View.GONE else secondRowVisibility
             )
-            views.setViewVisibility(R.id.widget_todo_item_3, thirdRowVisibility)
+            views.setViewVisibility(R.id.widget_todo_row_3, thirdRowVisibility)
             views.setViewVisibility(
                 R.id.widget_todo_done_3,
                 if ((prefs.getString("todo_top3_3_id", "") ?: "").isBlank()) View.GONE else thirdRowVisibility

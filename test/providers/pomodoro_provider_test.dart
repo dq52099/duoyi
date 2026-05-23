@@ -111,6 +111,44 @@ void main() {
     });
   });
 
+  test(
+    'strict focus switch notifies before async persistence completes',
+    () async {
+      final provider = PomodoroProvider();
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      final future = provider.setStrictFocusMode(true);
+
+      expect(provider.config.strictFocusMode, isTrue);
+      expect(notifications, 1);
+
+      await future;
+      provider.dispose();
+    },
+  );
+
+  test(
+    'focus room selection is idempotent to avoid room-tab flicker',
+    () async {
+      final provider = PomodoroProvider();
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      await provider.setFocusRoomId('deep_work_room');
+      final firstRevision = provider.persistedRevision;
+
+      await provider.setFocusRoomId('deep_work_room');
+
+      expect(provider.state.focusRoomId, 'deep_work_room');
+      expect(provider.config.focusRoomId, 'deep_work_room');
+      expect(provider.persistedRevision, firstRevision);
+      expect(notifications, 1);
+
+      provider.dispose();
+    },
+  );
+
   test('focus completion auto-starts break only when enabled', () async {
     final provider = PomodoroProvider();
     await provider.setConfig(

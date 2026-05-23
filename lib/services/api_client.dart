@@ -13,8 +13,11 @@ class ApiClient {
     : _httpClient = httpClient ?? http.Client();
 
   Future<Map<String, dynamic>> get(String path) => _send('GET', path);
-  Future<Map<String, dynamic>> post(String path, [Object? body]) =>
-      _send('POST', path, body: body);
+  Future<Map<String, dynamic>> post(
+    String path, [
+    Object? body,
+    Duration? timeout,
+  ]) => _send('POST', path, body: body, timeout: timeout);
   Future<Map<String, dynamic>> patch(String path, [Object? body]) =>
       _send('PATCH', path, body: body);
   Future<Map<String, dynamic>> delete(String path) => _send('DELETE', path);
@@ -24,6 +27,8 @@ class ApiClient {
     if (res is List) return res;
     return const [];
   }
+
+  Future<dynamic> getRaw(String path) => _sendRaw('GET', path);
 
   Future<String> getText(String path) async {
     if (baseUrl.isEmpty && !kIsWeb) {
@@ -153,13 +158,19 @@ class ApiClient {
     String method,
     String path, {
     Object? body,
+    Duration? timeout,
   }) async {
-    final raw = await _sendRaw(method, path, body: body);
+    final raw = await _sendRaw(method, path, body: body, timeout: timeout);
     if (raw is Map<String, dynamic>) return raw;
     return <String, dynamic>{};
   }
 
-  Future<dynamic> _sendRaw(String method, String path, {Object? body}) async {
+  Future<dynamic> _sendRaw(
+    String method,
+    String path, {
+    Object? body,
+    Duration? timeout,
+  }) async {
     // baseUrl 为空时走相对路径(web 前后端同域反代)；
     // 移动端固定构建时注入的 url。
     if (baseUrl.isEmpty && !kIsWeb) {
@@ -175,27 +186,28 @@ class ApiClient {
 
     http.Response resp;
     final encoded = body == null ? null : json.encode(body);
+    final requestTimeout = timeout ?? const Duration(seconds: 12);
     try {
       switch (method) {
         case 'GET':
           resp = await _httpClient
               .get(uri, headers: headers)
-              .timeout(const Duration(seconds: 12));
+              .timeout(requestTimeout);
           break;
         case 'POST':
           resp = await _httpClient
               .post(uri, headers: headers, body: encoded)
-              .timeout(const Duration(seconds: 12));
+              .timeout(requestTimeout);
           break;
         case 'PATCH':
           resp = await _httpClient
               .patch(uri, headers: headers, body: encoded)
-              .timeout(const Duration(seconds: 12));
+              .timeout(requestTimeout);
           break;
         case 'DELETE':
           resp = await _httpClient
               .delete(uri, headers: headers, body: encoded)
-              .timeout(const Duration(seconds: 12));
+              .timeout(requestTimeout);
           break;
         default:
           throw ApiException('不支持的方法: $method');

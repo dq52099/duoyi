@@ -1,3 +1,5 @@
+import '../core/focus_sound_catalog.dart';
+
 enum PomodoroType { focus, shortBreak, longBreak }
 
 class PomodoroConfig {
@@ -86,7 +88,7 @@ class PomodoroConfig {
         defaultLongBreakDuration,
       ),
       sessionsPerLongBreak: _intInRange(json['sessionsPerLongBreak'], 4, 1, 20),
-      whiteNoiseSound: sound,
+      whiteNoiseSound: _normalizeStoredFocusSound(sound),
       autoStartBreaks: json['autoStartBreaks'] ?? false,
       autoStartFocus: json['autoStartFocus'] ?? false,
       autoEnableDnd: json['autoEnableDnd'] ?? false,
@@ -308,7 +310,7 @@ class PomodoroSession {
       durationSeconds: json['durationSeconds'],
       type: PomodoroType.values[json['type']],
       taskName: json['taskName'],
-      whiteNoiseSound: sound,
+      whiteNoiseSound: _normalizeStoredFocusSound(sound),
       tag: json['tag']?.toString(),
       focusRoomId: json['focusRoomId']?.toString(),
       updatedAt:
@@ -374,4 +376,10 @@ class PomodoroState {
     tag: clearTag ? null : (tag ?? this.tag),
     focusRoomId: clearFocusRoom ? null : (focusRoomId ?? this.focusRoomId),
   );
+}
+
+String _normalizeStoredFocusSound(String sound) {
+  final clean = sound.trim();
+  if (clean.startsWith('custom:')) return clean;
+  return FocusSoundCatalog.normalizeForPlayback(clean);
 }

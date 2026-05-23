@@ -57,6 +57,9 @@ class DailyReminderSlot {
 
 /// 用户个性化偏好(本地)。不涉及服务器配置，每个设备独立。
 class PreferencesProvider extends ChangeNotifier {
+  static const maxBottomNavTabs = 5;
+  static const fixedBottomNavTabs = <int>{5, 6};
+
   static const _kFirstDayOfWeek = 'pref_first_day_of_week';
   static const _kDateFormat = 'pref_date_format';
   static const _kDefaultTab = 'pref_default_tab';
@@ -153,7 +156,7 @@ class PreferencesProvider extends ChangeNotifier {
   int _yearlyReportReminderHour = 9;
   int _yearlyReportReminderMinute = 0;
   List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
-  Set<int> _bottomNavVisible = const {0, 1, 2, 3, 4, 5, 6};
+  Set<int> _bottomNavVisible = const {1, 2, 3, 5, 6};
   String _appTimeZone = LocalTimezoneResolver.defaultIana;
   bool _followSystemTimeZone = true;
 
@@ -372,10 +375,14 @@ class PreferencesProvider extends ChangeNotifier {
     );
     _bottomNavVisible = _normalizeNavVisible(
       storedVisible?.map(int.tryParse).whereType<int>(),
+      order: _bottomNavOrder,
     );
     if (isOldBottomNavConfig &&
         (storedVisible == null || storedVisible.contains('5'))) {
-      _bottomNavVisible = Set.unmodifiable({..._bottomNavVisible, 6});
+      _bottomNavVisible = _normalizeNavVisible({
+        ..._bottomNavVisible,
+        6,
+      }, order: _bottomNavOrder);
     }
     notifyListeners();
   }
@@ -601,14 +608,14 @@ class PreferencesProvider extends ChangeNotifier {
 
   Future<void> setBottomNavVisible(int tab, bool visible) async {
     if (tab < 0 || tab > 6) return;
-    if ((tab == 5 || tab == 6) && !visible) return;
+    if (fixedBottomNavTabs.contains(tab) && !visible) return;
     final next = {..._bottomNavVisible};
     if (visible) {
       next.add(tab);
     } else if (next.length > 2) {
       next.remove(tab);
     }
-    _bottomNavVisible = _normalizeNavVisible(next);
+    _bottomNavVisible = _normalizeNavVisible(next, order: _bottomNavOrder);
     final p = await SharedPreferences.getInstance();
     await p.setStringList(
       _kBottomNavVisible,
@@ -645,15 +652,30 @@ class PreferencesProvider extends ChangeNotifier {
     return List.unmodifiable(result);
   }
 
-  static Set<int> _normalizeNavVisible(Iterable<int>? source) {
+  static Set<int> _normalizeNavVisible(
+    Iterable<int>? source, {
+    Iterable<int>? order,
+  }) {
+    final orderList = _normalizeNavOrder(order);
     final result = <int>{};
     for (final tab in source ?? const <int>[]) {
       if (tab >= 0 && tab <= 6) result.add(tab);
     }
-    if (result.length < 2) return const {0, 1, 2, 3, 4, 5, 6};
-    result.add(5);
-    result.add(6);
-    return Set.unmodifiable(result);
+    if (source == null || result.length < fixedBottomNavTabs.length) {
+      result.addAll(orderList);
+    }
+    result.addAll(fixedBottomNavTabs);
+
+    final visible = <int>{};
+    for (final tab in orderList) {
+      if (fixedBottomNavTabs.contains(tab) || !result.contains(tab)) continue;
+      if (visible.length >= maxBottomNavTabs - fixedBottomNavTabs.length) {
+        break;
+      }
+      visible.add(tab);
+    }
+    visible.addAll(fixedBottomNavTabs);
+    return Set.unmodifiable(visible);
   }
 
   Future<void> setDateFormat(String format) async {

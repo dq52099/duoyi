@@ -38,6 +38,8 @@ void main() {
     expect(backend, contains('_ensure_admin_permission(db, actor, "ai")'));
     expect(backend, contains('AI_SETTING_KEYS'));
     expect(backend, contains('BACKUP_SETTING_KEYS'));
+    expect(backend, contains('BACKUP_ADMIN_SETTING_KEYS'));
+    expect(backend, contains('ADMIN_SETTINGS_SCOPES'));
   });
 
   test('backend feedback history exposes optional pagination', () {
@@ -97,6 +99,8 @@ void main() {
     expect(adminScreen, contains("child: Text('调整时光币')"));
     expect(adminScreen, contains('widget.api.setUserAdminPermissions('));
     expect(adminScreen, contains('widget.api.adjustUserCoins('));
+    expect(adminScreen, contains("u['coin_balance'] = adjusted['balance'];"));
+    expect(adminScreen, contains("u['lifetime_coins'] = adjusted['lifetime'];"));
     expect(adminScreen, contains("helperText: '正数增加，负数扣减'"));
     expect(adminScreen, contains("SnackBar(content: Text('管理权限已更新'))"));
     expect(adminScreen, contains("SnackBar(content: Text('时光币已调整'))"));

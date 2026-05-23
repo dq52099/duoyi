@@ -16,6 +16,24 @@ enum DuoyiWidgetKind {
   diary,
 }
 
+enum AndroidWidgetPinResult {
+  requested,
+  unsupported,
+  permissionDenied,
+  invalidKind,
+  unavailable;
+
+  static AndroidWidgetPinResult fromId(String? id) {
+    return switch (id) {
+      'requested' => AndroidWidgetPinResult.requested,
+      'unsupported' => AndroidWidgetPinResult.unsupported,
+      'permission_denied' => AndroidWidgetPinResult.permissionDenied,
+      'invalid_kind' => AndroidWidgetPinResult.invalidKind,
+      _ => AndroidWidgetPinResult.unavailable,
+    };
+  }
+}
+
 class AndroidWidgetManager {
   AndroidWidgetManager._();
 
@@ -31,28 +49,19 @@ class AndroidWidgetManager {
     }
   }
 
-  static Future<bool> requestPinWidget(DuoyiWidgetKind kind) async {
-    if (!_isAndroid) return false;
+  static Future<AndroidWidgetPinResult> requestPinWidget(
+    DuoyiWidgetKind kind,
+  ) async {
+    if (!_isAndroid) return AndroidWidgetPinResult.unsupported;
     try {
-      return await _channel
-              .invokeMethod<bool>('requestPinWidget', <String, Object?>{
-                'kind': switch (kind) {
-                  DuoyiWidgetKind.todo => 'todo',
-                  DuoyiWidgetKind.focus => 'focus',
-                  DuoyiWidgetKind.habit => 'habit',
-                  DuoyiWidgetKind.calendar => 'calendar',
-                  DuoyiWidgetKind.schedule => 'schedule',
-                  DuoyiWidgetKind.goal => 'goal',
-                  DuoyiWidgetKind.course => 'course',
-                  DuoyiWidgetKind.note => 'note',
-                  DuoyiWidgetKind.anniversary => 'anniversary',
-                  DuoyiWidgetKind.diary => 'diary',
-                },
-              }) ??
-          false;
+      final status = await _channel.invokeMethod<String>(
+        'requestPinWidget',
+        <String, Object?>{'kind': kind.id},
+      );
+      return AndroidWidgetPinResult.fromId(status);
     } catch (e, st) {
       debugPrint('[AndroidWidgetManager] requestPinWidget failed: $e\n$st');
-      return false;
+      return AndroidWidgetPinResult.unavailable;
     }
   }
 
@@ -73,5 +82,22 @@ class AndroidWidgetManager {
     } catch (_) {
       return false;
     }
+  }
+}
+
+extension DuoyiWidgetKindId on DuoyiWidgetKind {
+  String get id {
+    return switch (this) {
+      DuoyiWidgetKind.todo => 'todo',
+      DuoyiWidgetKind.focus => 'focus',
+      DuoyiWidgetKind.habit => 'habit',
+      DuoyiWidgetKind.calendar => 'calendar',
+      DuoyiWidgetKind.schedule => 'schedule',
+      DuoyiWidgetKind.goal => 'goal',
+      DuoyiWidgetKind.course => 'course',
+      DuoyiWidgetKind.note => 'note',
+      DuoyiWidgetKind.anniversary => 'anniversary',
+      DuoyiWidgetKind.diary => 'diary',
+    };
   }
 }

@@ -55,6 +55,19 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     if (picked != null) setState(() => _date = _clampDate(picked));
   }
 
+  void _toggleMode() {
+    final nextMode = widget.initialMode == AlmanacEntryMode.almanac
+        ? AlmanacEntryMode.calendar
+        : AlmanacEntryMode.almanac;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            AlmanacScreen(initialDate: _date, initialMode: nextMode),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAlmanac = widget.initialMode == AlmanacEntryMode.almanac;
@@ -74,6 +87,15 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
       appBar: AppBar(
         title: Text(pageTitle),
         actions: [
+          IconButton(
+            icon: Icon(
+              isAlmanac
+                  ? Icons.calendar_month_outlined
+                  : Icons.wb_sunny_outlined,
+            ),
+            tooltip: isAlmanac ? '切换到万年历' : '切换到黄历',
+            onPressed: _toggleMode,
+          ),
           IconButton(
             icon: const Icon(Icons.today),
             tooltip: '回到今天',

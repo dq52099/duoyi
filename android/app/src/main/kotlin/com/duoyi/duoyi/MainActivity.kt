@@ -3,6 +3,7 @@ package com.duoyi.duoyi
 import android.appwidget.AppWidgetManager
 import android.app.Activity
 import android.app.AppOpsManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
@@ -461,10 +462,10 @@ class MainActivity : FlutterActivity() {
         return manager?.isRequestPinAppWidgetSupported == true
     }
 
-    private fun requestPinWidget(kind: String): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
-        val manager = getSystemService(AppWidgetManager::class.java) ?: return false
-        if (!manager.isRequestPinAppWidgetSupported) return false
+    private fun requestPinWidget(kind: String): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unsupported"
+        val manager = getSystemService(AppWidgetManager::class.java) ?: return "unavailable"
+        if (!manager.isRequestPinAppWidgetSupported) return "unsupported"
         val provider = when (kind) {
             "todo" -> ComponentName(this, DuoyiTodoWidgetProvider::class.java)
             "focus" -> ComponentName(this, DuoyiFocusHabitWidgetProvider::class.java)
@@ -476,13 +477,25 @@ class MainActivity : FlutterActivity() {
             "note" -> ComponentName(this, DuoyiNoteWidgetProvider::class.java)
             "anniversary" -> ComponentName(this, DuoyiAnniversaryWidgetProvider::class.java)
             "diary" -> ComponentName(this, DuoyiDiaryWidgetProvider::class.java)
-            else -> return false
+            else -> return "invalid_kind"
         }
         return try {
-            manager.requestPinAppWidget(provider, null, null)
-            true
+            val callback = PendingIntent.getBroadcast(
+                this,
+                kind.hashCode(),
+                Intent(this, DuoyiWidgetPinResultReceiver::class.java)
+                    .putExtra(DuoyiWidgetPinResultReceiver.extraKind, kind),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            if (manager.requestPinAppWidget(provider, null, callback)) {
+                "requested"
+            } else {
+                "permission_denied"
+            }
+        } catch (e: SecurityException) {
+            "permission_denied"
         } catch (e: Exception) {
-            false
+            "unavailable"
         }
     }
 

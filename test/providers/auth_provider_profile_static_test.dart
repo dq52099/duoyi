@@ -11,6 +11,10 @@ void main() {
       'final String? displayName;',
       'final String? avatar;',
       'final String? bio;',
+      'final int coinBalance;',
+      'final int lifetimeCoins;',
+      "'coin_balance': coinBalance",
+      "'lifetime_coins': lifetimeCoins",
       "'display_name': displayName",
       "'avatar': avatar",
       "'bio': bio",
@@ -20,6 +24,14 @@ void main() {
 
     expect(source, contains("'/api/auth/profile'"));
     expect(source, contains('Future<void> updateProfile'));
+    final updateProfileBody = source.substring(
+      source.indexOf('Future<void> updateProfile({'),
+      source.indexOf('Future<void> changePassword'),
+    );
+    expect(updateProfileBody, isNot(contains('String? username')));
+    expect(updateProfileBody, isNot(contains("'username'")));
+    expect(updateProfileBody, isNot(contains('String? avatar')));
+    expect(updateProfileBody, isNot(contains("'avatar'")));
     expect(source, contains('Future<void> changePassword'));
     expect(source, contains("'/api/auth/change-password'"));
     expect(source, contains('Future<void> uploadAvatarBytes'));
@@ -42,10 +54,14 @@ void main() {
     expect(source, contains("'/api/auth/password-reset/confirm'"));
     expect(source, contains('Future<void> confirmPasswordReset'));
     expect(source, contains('bool get registrationEmailRequired'));
+    expect(
+      source,
+      contains("_serverConfig['registration_email_required'] != false"),
+    );
     expect(source, contains('_stateFromAuthResponse'));
   });
 
-  test('Profile screen supports editing profile, avatar upload and password', () {
+  test('Profile screen supports RE0-style profile, avatar and email binding UX', () {
     final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
     final source = File('lib/screens/profile_screen.dart').readAsStringSync();
 
@@ -65,11 +81,17 @@ void main() {
       "package:file_selector/file_selector.dart",
       'class ProfileScreen',
       'class _AccountProfileEditor',
+      'class _ProfileMetricChip',
+      'class _ProfileSectionHeader',
       "I18n.tr('profile.nickname')",
       "I18n.tr('auth.username')",
+      "I18n.tr('profile.username.locked')",
+      'readOnly: true',
       "I18n.tr('auth.email')",
       "I18n.tr('auth.email_code')",
-      "I18n.tr('profile.avatar.url_or_text')",
+      "I18n.tr('profile.email.binding')",
+      "I18n.tr('profile.coins')",
+      "I18n.tr('profile.account_id')",
       'addListener(_refreshPreview)',
       'removeListener(_refreshPreview)',
       'AuthProvider? _authProvider',
@@ -89,6 +111,7 @@ void main() {
       'XTypeGroup(',
       "extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif']",
       'uploadAvatarBytes(',
+      "I18n.tr('profile.avatar.saved')",
       "purpose: 'bind'",
       'emailCode: _emailCodeCtrl.text.trim()',
       'final userProvider = context.read<UserProvider>()',
@@ -101,22 +124,23 @@ void main() {
       'class _LocalProfileEditor',
       "I18n.tr('profile.display_name')",
       "I18n.tr('profile.local_nickname')",
-      "I18n.tr('profile.avatar.url_file_or_text')",
-      "I18n.tr('profile.avatar.helper')",
       "I18n.tr('profile.email.local_display')",
       "I18n.tr('profile.bio')",
       'Future<void> _pickLocalAvatar()',
       '_copyLocalAvatarFile(file)',
+      'await _save(showSnackBar: false)',
       "I18n.tr('profile.avatar.choose')",
       'await context.read<UserProvider>().updateProfile(',
       'final avatarIsLocalFile = _localAvatarPath(avatar) != null',
       'final avatarIsImage = avatarIsUrl || avatarIsLocalFile',
-      'avatarUrl: avatarIsImage ? avatar',
+      'final avatarInitials = avatarIsImage',
+      "avatarUrl: avatarIsImage ? avatar : ''",
       'bool _isHttpAvatar(String value)',
       'String? _localAvatarPath(String value)',
       'Future<String> _copyLocalAvatarFile(XFile file)',
       "final dir = Directory('\${root.path}/profile_avatars')",
       "I18n.tr('profile.local.updated')",
+      "I18n.tr('profile.account_security')",
       "I18n.tr('profile.change_password')",
       'class _ChangePasswordDialog',
       'changePassword(',
@@ -126,6 +150,26 @@ void main() {
     ]) {
       expect(source, contains(field));
     }
+
+    final accountBody = source.substring(
+      source.indexOf('class _AccountProfileEditor'),
+      source.indexOf('class _LocalProfileEditor'),
+    );
+    expect(
+      accountBody,
+      isNot(contains("I18n.tr('profile.avatar.url_or_text')")),
+    );
+    expect(
+      accountBody,
+      isNot(contains("I18n.tr('profile.avatar.url_file_or_text')")),
+    );
+    expect(
+      accountBody,
+      isNot(contains('username: username')),
+      reason: '账号唯一标识不能通过资料保存路径编辑',
+    );
+    expect(accountBody, isNot(contains('OutlinedButton.icon(')));
+    expect(accountBody, isNot(contains('ListTile(')));
   });
 
   test('UserProvider persists editable local profile fields', () {
@@ -263,6 +307,8 @@ void main() {
       'Widget _emailCodeField({',
       '_emailSendField(',
       '_emailCodeField(',
+      'Widget _emailCodeSendField({',
+      '_emailCodeSendField(',
       'return email.isNotEmpty && _looksLikeEmail(email);',
       '_sendingEmailCode ||',
       "I18n.tr('auth.error.username_required')",

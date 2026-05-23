@@ -208,13 +208,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '说明：当前 v2 阶段已迁移高频公共词条（按钮、导航、提醒、共享）。剩余页面文案随后续迭代逐步翻译，未翻译部分会回退到中文显示。';
 
   @override
-  String get preferencesTitle => '偏好设置';
+  String get preferencesTitle => '个性设置';
 
   @override
-  String get preferencesLocalTitle => '本地偏好';
+  String get preferencesLocalTitle => '本地个性设置';
 
   @override
-  String get preferencesLocalSubtitle => '调整日期、默认入口、交互反馈和本机通知行为';
+  String get preferencesLocalSubtitle => '按功能管理通知、导航入口、日期、交互和本机行为';
 
   @override
   String get preferencesSectionDate => '日期与日历';
@@ -281,7 +281,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesSectionBottomNav => '底部导航栏';
 
   @override
-  String get preferencesSectionBottomNavSubtitle => '配置显示菜单和顺序，至少保留两个入口';
+  String get preferencesSectionBottomNavSubtitle => '底部导航最多显示 5 个入口，小组件和我的固定显示';
 
   @override
   String get preferencesSectionInteraction => '交互';

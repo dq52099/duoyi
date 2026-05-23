@@ -3,9 +3,14 @@ package com.duoyi.duoyi
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 
 class DuoyiFocusBlockerAccessibilityService : AccessibilityService() {
+    private var lastBouncePackage: String? = null
+    private var lastBounceAt: Long = 0L
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event?.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
@@ -14,16 +19,37 @@ class DuoyiFocusBlockerAccessibilityService : AccessibilityService() {
         val blockedPackage = event?.packageName?.toString() ?: return
         if (blockedPackage == packageName) return
         if (!FocusBlockerStore.isBlocked(this, blockedPackage)) return
+        if (isDuplicateBounce(blockedPackage)) return
         FocusBlockerStore.recordBlockedPackage(this, blockedPackage)
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra("duoyi_focus_blocked_package", blockedPackage)
-            .setData(android.net.Uri.parse("duoyi://tab/focus?blocked=$blockedPackage"))
-        startActivity(intent)
+            .setData(
+                Uri.Builder()
+                    .scheme("duoyi")
+                    .authority("tab")
+                    .appendPath("focus")
+                    .appendQueryParameter("blocked", blockedPackage)
+                    .build(),
+            )
+        runCatching { startActivity(intent) }
     }
 
     override fun onInterrupt() = Unit
+
+    private fun isDuplicateBounce(blockedPackage: String): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val duplicate = blockedPackage == lastBouncePackage &&
+            now - lastBounceAt < bounceDebounceMillis
+        lastBouncePackage = blockedPackage
+        lastBounceAt = now
+        return duplicate
+    }
+
+    companion object {
+        private const val bounceDebounceMillis = 1500L
+    }
 }
 
 object FocusBlockerStore {

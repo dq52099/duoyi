@@ -69,8 +69,26 @@ void main() {
         expect(FocusSoundCatalog.trackIdsFor(id), isEmpty);
         expect(FocusSoundCatalog.assetsFor(id), isEmpty);
         expect(FocusSoundCatalog.labelFor(id), '无白噪音');
+        expect(FocusSoundCatalog.normalizeForPlayback(id), 'night_rain');
       }
     });
+
+    test(
+      'legacy generated-noise configs fall back to a smooth real recording',
+      () {
+        expect(
+          FocusSoundCatalog.normalizeForPlayback('white_stream'),
+          'night_rain',
+        );
+        expect(
+          FocusSoundCatalog.assetsFor(
+            FocusSoundCatalog.normalizeForPlayback('white_stream'),
+          ),
+          <String>['sounds/white_noise/night_rain.mp3'],
+        );
+        expect(FocusSoundCatalog.normalizeForPlayback('missing'), 'none');
+      },
+    );
 
     test('published options are single track only', () {
       final ids = FocusSoundCatalog.options.map((option) => option.id).toSet();

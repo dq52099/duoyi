@@ -21,6 +21,7 @@ class AiService extends ChangeNotifier {
   List<AiReviewEntry> get reviewHistory => List.unmodifiable(_reviewHistory);
 
   static const _kReviewHistory = 'ai_review_history';
+  static const weeklyReviewKind = 'weekly_review';
 
   void attachClient(ApiClient client) {
     _client = client;
@@ -81,7 +82,7 @@ class AiService extends ChangeNotifier {
         'user': userPrompt,
         'temperature': temperature,
         'max_tokens': maxTokens,
-      });
+      }, const Duration(seconds: 75));
       final content = (res['content'] ?? '').toString();
       return content;
     } on ApiException catch (e) {
@@ -111,10 +112,11 @@ class AiService extends ChangeNotifier {
     required int totalTodos,
     required int weeklyFocusMinutes,
     required int habitStreak,
+    String periodLabel = '本周',
   }) async {
     final summary =
-        '本周数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
-    return _runReview(summary, '本周');
+        '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
+    return _runReview(summary, periodLabel, kind: weeklyReviewKind);
   }
 
   /// 基于 ReportEngine 的 PeriodReport 生成自然语言周/月/年报。
@@ -171,7 +173,7 @@ class AiService extends ChangeNotifier {
       prompt.systemPrompt,
       prompt.userPrompt,
       temperature: 0.55,
-      maxTokens: 1200,
+      maxTokens: 900,
     );
     final entry = AiReviewEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -189,7 +191,20 @@ class AiService extends ChangeNotifier {
     return out;
   }
 
-  Future<String> _runReview(String summary, String periodLabel) async {
+  AiReviewEntry? weeklyReviewForDay(DateTime day) {
+    for (final entry in _reviewHistory) {
+      if (_looksLikeWeeklyReview(entry) && _sameDay(entry.createdAt, day)) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  Future<String> _runReview(
+    String summary,
+    String periodLabel, {
+    String kind = '',
+  }) async {
     final out = await _chat(
       '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
       '语气积极不空洞，先肯定 1-2 点亮点，再提 1-2 个具体可执行的下周建议。',
@@ -203,6 +218,7 @@ class AiService extends ChangeNotifier {
       content: out,
       summary: summary,
       model: _model,
+      kind: kind,
     );
     _reviewHistory.insert(0, entry);
     if (_reviewHistory.length > 50) {
@@ -211,6 +227,14 @@ class AiService extends ChangeNotifier {
     await _saveHistory();
     notifyListeners();
     return out;
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _looksLikeWeeklyReview(AiReviewEntry entry) {
+    if (entry.kind == weeklyReviewKind) return true;
+    return RegExp(r'^(本周|上周)数据：').hasMatch(entry.summary);
   }
 }
 
@@ -221,6 +245,7 @@ class AiReviewEntry {
   final String content;
   final String summary;
   final String model;
+  final String kind;
 
   const AiReviewEntry({
     required this.id,
@@ -228,6 +253,7 @@ class AiReviewEntry {
     required this.content,
     required this.summary,
     this.model = '',
+    this.kind = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -236,6 +262,7 @@ class AiReviewEntry {
     'content': content,
     'summary': summary,
     'model': model,
+    'kind': kind,
   };
 
   factory AiReviewEntry.fromJson(Map<String, dynamic> j) => AiReviewEntry(
@@ -244,6 +271,7 @@ class AiReviewEntry {
     content: (j['content'] ?? '').toString(),
     summary: (j['summary'] ?? '').toString(),
     model: (j['model'] ?? '').toString(),
+    kind: (j['kind'] ?? '').toString(),
   );
 }
 

@@ -10,11 +10,30 @@ void main() {
     expect(source, contains('Future<void> _showProjectDetail'));
     expect(source, contains('class _ProjectStat'));
     expect(source, contains("label: const Text('打开待办')"));
-    expect(source, contains('const TodoScreen()'));
+    expect(source, contains('const BrandRouteSurface(child: TodoScreen())'));
 
     expect(source, isNot(contains("title: '\${option.name} · 项目详情'")));
     expect(source, contains("title: '项目详情'"));
     expect(source, contains('subtitle: option.name'));
+  });
+
+  test('calendar detail area and paging are widened for dense views', () {
+    final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+
+    expect(source, contains('isScrollable: true'));
+    expect(source, contains('tabAlignment: TabAlignment.start'));
+    expect(
+      source,
+      contains('labelPadding: const EdgeInsets.symmetric(horizontal: 18)'),
+    );
+    expect(
+      source,
+      contains("key: const ValueKey('calendar_month_detail_agenda')"),
+    );
+    expect(source, contains('constraints.maxHeight >= 520'));
+    expect(source, contains('maxWidth: 920'));
+    expect(source, contains('width: 380'));
+    expect(source, contains('workspaceId: workspaceId'));
   });
 
   test('calendar exposes shared workspace filters', () {

@@ -30,6 +30,7 @@ import '../widgets/calendar_day_agenda.dart';
 import '../widgets/calendar_event_sheet.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import 'todo_screen.dart';
 
@@ -597,7 +598,10 @@ class _CalendarScreenState extends State<CalendarScreen>
             color: cs.surface,
             child: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 18),
               tabs: [
                 Tab(text: s.calendarTabMonth),
                 Tab(text: s.calendarTabWeek),
@@ -764,7 +768,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                 // Month
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final showLunar = constraints.maxHeight >= 390;
+                    final showLunar = constraints.maxHeight >= 520;
                     return Column(
                       children: [
                         CalendarMonthGrid(
@@ -785,6 +789,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                           ).colorScheme.outlineVariant.withValues(alpha: 0.35),
                         ),
                         Expanded(
+                          key: const ValueKey('calendar_month_detail_agenda'),
                           child: CalendarDayAgenda(
                             date: _selectedDay,
                             calendarProvider: calendarProvider,
@@ -1002,24 +1007,41 @@ class _CalendarScreenState extends State<CalendarScreen>
       builder: (_) => AppModalSheet(
         title: '项目详情',
         subtitle: option.name,
+        maxWidth: 920,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _ProjectStat(label: '总数', value: '${todos.length}'),
-                ),
-                Expanded(
-                  child: _ProjectStat(label: '完成', value: '$completed'),
-                ),
-                Expanded(
-                  child: _ProjectStat(label: '逾期', value: '$overdue'),
-                ),
-                Expanded(
-                  child: _ProjectStat(label: '今日', value: '$todayCount'),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth >= 640
+                    ? (constraints.maxWidth - 36) / 4
+                    : (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProjectStat(
+                        label: '总数',
+                        value: '${todos.length}',
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProjectStat(label: '完成', value: '$completed'),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProjectStat(label: '逾期', value: '$overdue'),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProjectStat(label: '今日', value: '$todayCount'),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
             if (todos.isEmpty)
@@ -1059,7 +1081,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                   Navigator.pop(context);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const TodoScreen()),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const BrandRouteSurface(child: TodoScreen()),
+                    ),
                   );
                 },
                 icon: const Icon(Icons.open_in_new),
@@ -1276,19 +1301,27 @@ class _ProjectStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w400,
-            color: cs.primary,
+    return AppSurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+              color: cs.primary,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1392,33 +1425,30 @@ class _CalendarNavigationHeader extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 flex: 8,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 180),
-                  child: FilledButton.tonalIcon(
-                    onPressed: onPickDate,
-                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    label: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                child: FilledButton.tonalIcon(
+                  onPressed: onPickDate,
+                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  label: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  style: FilledButton.styleFrom(
+                    foregroundColor: cs.onSecondaryContainer,
+                    backgroundColor: cs.secondaryContainer.withValues(
+                      alpha: 0.72,
                     ),
-                    style: FilledButton.styleFrom(
-                      foregroundColor: cs.onSecondaryContainer,
-                      backgroundColor: cs.secondaryContainer.withValues(
-                        alpha: 0.72,
+                    minimumSize: const Size(0, 46),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(
+                        color: cs.outlineVariant.withValues(alpha: 0.55),
                       ),
-                      minimumSize: const Size.fromHeight(46),
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color: cs.outlineVariant.withValues(alpha: 0.55),
-                        ),
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -1518,7 +1548,7 @@ class _CalendarThreeDayView extends StatelessWidget {
             children: [
               for (final day in days)
                 SizedBox(
-                  width: 340,
+                  width: 380,
                   child: _ThreeDayLane(
                     date: day,
                     calendarProvider: calendarProvider,
@@ -1599,6 +1629,7 @@ class _ThreeDayLane extends StatelessWidget {
             calendarProvider: calendarProvider,
             activeTypes: activeTypes,
             projectKey: projectKey,
+            workspaceId: workspaceId,
           ),
         ),
       ],

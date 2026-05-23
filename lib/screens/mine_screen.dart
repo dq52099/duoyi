@@ -10,6 +10,7 @@ import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../services/ai_service.dart';
 import '../services/api_client.dart';
 import '../services/app_update_service.dart';
@@ -24,7 +25,12 @@ import 'note_screen.dart';
 import 'statistics_screen.dart';
 import 'time_audit_screen.dart';
 import 'pomodoro_screen.dart';
+import 'today_screen.dart';
+import 'todo_screen.dart';
+import 'habit_screen.dart';
+import 'calendar_screen.dart';
 import 'anniversary_screen.dart';
+import 'countdown_screen.dart';
 import 'diary_screen.dart';
 import 'goal_screen.dart';
 import 'course_schedule_screen.dart';
@@ -102,6 +108,16 @@ class MineScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(s.mineTitle),
         backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: '全局搜索',
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         children: [
@@ -426,7 +442,7 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AnniversaryScreen(initialTab: 2),
+                    builder: (_) => const MemorialAnniversaryScreen(),
                   ),
                 ),
               ),
@@ -436,9 +452,7 @@ class MineScreen extends StatelessWidget {
                 color: Colors.purple,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const AnniversaryScreen(initialTab: 1),
-                  ),
+                  MaterialPageRoute(builder: (_) => const BirthdayScreen()),
                 ),
               ),
               _Tile(
@@ -447,9 +461,7 @@ class MineScreen extends StatelessWidget {
                 color: Colors.deepOrange,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const AnniversaryScreen(initialTab: 3),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CountdownScreen()),
                 ),
               ),
             ],
@@ -457,15 +469,6 @@ class MineScreen extends StatelessWidget {
           _TileGroup(
             title: '智能工具',
             children: [
-              _Tile(
-                icon: Icons.search,
-                label: '全局搜索',
-                color: Colors.blueGrey,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SearchScreen()),
-                ),
-              ),
               if (ai.enabled)
                 _Tile(
                   icon: Icons.history,
@@ -512,7 +515,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.tune,
-                label: '偏好设置',
+                label: '个性设置',
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
                   context,
@@ -624,21 +627,30 @@ class MineScreen extends StatelessWidget {
               _Tile(
                 icon: Icons.history_toggle_off_outlined,
                 label: '通知记录',
+                subtitle: notifService.historyCount == 0
+                    ? '暂无通知记录'
+                    : '${notifService.historyCount} 条',
                 color: Colors.blueGrey,
                 trailing: notifService.historyCount == 0
                     ? null
-                    : Text(
-                        '${notifService.historyCount} 条',
-                        style: const TextStyle(fontSize: 11),
-                      ),
+                    : notifService.hasUnreadHistory
+                    ? const _UnreadDot()
+                    : null,
                 onTap: () => _openNotificationHistory(context),
               ),
               _Tile(
                 icon: Icons.notifications_outlined,
-                label: s.mineNotificationsLabel,
+                label: '通知设置',
                 subtitle: '管理提醒时间、通知权限和铃声',
                 color: Colors.orange,
                 onTap: () => _openNotificationSettings(context),
+              ),
+              _Tile(
+                icon: Icons.apps_outlined,
+                label: '更多应用',
+                subtitle: '查看底部导航隐藏的功能',
+                color: Colors.blueGrey,
+                onTap: () => _showMoreApplications(context),
               ),
               if (auth.state.isLoggedIn && auth.state.isAdmin)
                 _Tile(
@@ -662,22 +674,11 @@ class MineScreen extends StatelessWidget {
                 ),
               ),
               _Tile(
-                icon: Icons.lightbulb_outline,
-                label: '功能建议',
+                icon: Icons.forum_outlined,
+                label: '许愿与反馈',
+                subtitle: '反馈记录、功能建议、问题反馈和许愿池',
                 color: Colors.indigo,
                 onTap: () => _openFeedback(context, auth, 'feature'),
-              ),
-              _Tile(
-                icon: Icons.report_problem_outlined,
-                label: '问题反馈',
-                color: Colors.red.shade400,
-                onTap: () => _openFeedback(context, auth, 'bug'),
-              ),
-              _Tile(
-                icon: Icons.auto_awesome_outlined,
-                label: '许愿池',
-                color: Colors.purple,
-                onTap: () => _openFeedback(context, auth, 'wish'),
               ),
               _Tile(
                 icon: Icons.system_update,
@@ -883,7 +884,55 @@ class MineScreen extends StatelessWidget {
     );
   }
 
+  void _showMoreApplications(BuildContext context) {
+    final prefs = context.read<PreferencesProvider>();
+    final hiddenApps = _hiddenBottomNavApps(prefs);
+    showAppModalSheet<void>(
+      context: context,
+      builder: (sheetContext) => _MoreApplicationsSheet(apps: hiddenApps),
+    );
+  }
+
+  List<_MoreAppItem> _hiddenBottomNavApps(PreferencesProvider prefs) {
+    final visible = prefs.bottomNavVisible;
+    final apps = <_MoreAppItem>[
+      _MoreAppItem(
+        tab: 0,
+        icon: Icons.today_outlined,
+        label: '今日',
+        color: Colors.blue,
+        builder: (_) =>
+            const _BottomTabStandaloneScreen(title: '今日', child: TodayScreen()),
+      ),
+      _MoreAppItem(
+        tab: 1,
+        icon: Icons.checklist,
+        label: '待办',
+        color: Colors.green,
+        builder: (_) => const TodoScreen(),
+      ),
+      _MoreAppItem(
+        tab: 2,
+        icon: Icons.repeat,
+        label: '习惯',
+        color: Colors.teal,
+        builder: (_) => const HabitScreen(),
+      ),
+      _MoreAppItem(
+        tab: 3,
+        icon: Icons.calendar_month_outlined,
+        label: '日历',
+        color: Colors.indigo,
+        builder: (_) => const CalendarScreen(),
+      ),
+    ];
+    return apps
+        .where((app) => !visible.contains(app.tab))
+        .toList(growable: false);
+  }
+
   void _openNotificationHistory(BuildContext context) {
+    context.read<NotificationService>().markHistorySeen();
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const _NotificationHistoryScreen()),
@@ -1052,6 +1101,15 @@ class _NotificationHistoryScreenState
   final _searchCtrl = TextEditingController();
   NotificationType? _typeFilter;
   int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<NotificationService>().markHistorySeen();
+    });
+  }
 
   @override
   void dispose() {
@@ -1457,34 +1515,41 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('修改登录密码'),
+      icon: const Icon(Icons.password_outlined),
+      shiftForKeyboard: true,
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _currentCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '当前密码'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _newCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '新密码'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _confirmCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '确认新密码'),
-            ),
-            if (_error != null) ...[
+        child: AutofillGroup(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _currentCtrl,
+                obscureText: true,
+                autofillHints: const [AutofillHints.password],
+                decoration: const InputDecoration(labelText: '当前密码'),
+              ),
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              TextField(
+                controller: _newCtrl,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: const InputDecoration(labelText: '新密码'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmCtrl,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: const InputDecoration(labelText: '确认新密码'),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [
@@ -1524,7 +1589,18 @@ class _AiWeeklyReviewCard extends StatefulWidget {
 class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   bool _busy = false;
   String? _result;
+  String? _summary;
   String? _error;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cached = context.read<AiService>().weeklyReviewForDay(DateTime.now());
+    if (cached != null && _result == null) {
+      _result = cached.content;
+      _summary = cached.summary;
+    }
+  }
 
   Future<void> _run() async {
     setState(() {
@@ -1534,23 +1610,31 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
     try {
       final ai = context.read<AiService>();
       final now = DateTime.now();
-      final weekAgo = now.subtract(const Duration(days: 7));
-      final completed = widget.todoProvider.completedTodos.length;
-      final total = widget.todoProvider.todos.length;
+      final range = _reviewRange(now);
+      final completed = widget.todoProvider.completedTodos
+          .where((t) => _inRange(t.completedAt ?? t.updatedAt, range))
+          .length;
+      final total = widget.todoProvider.todos
+          .where((t) => _inRange(t.date, range))
+          .length;
       final focus =
           widget.pomodoroProvider.sessions
               .where(
-                (s) => s.type.name == 'focus' && s.startTime.isAfter(weekAgo),
+                (s) => s.type.name == 'focus' && _inRange(s.startTime, range),
               )
               .fold(0, (sum, s) => sum + s.durationSeconds) ~/
           60;
       final streak = widget.habitProvider.longestCurrentStreak;
+      final label = _reviewRangeLabel(now);
       _result = await ai.weeklyReview(
         completedTodos: completed,
         totalTodos: total,
         weeklyFocusMinutes: focus,
         habitStreak: streak,
+        periodLabel: label,
       );
+      _summary =
+          '$label数据：完成 $completed / $total 项待办，专注 $focus 分钟，习惯连续打卡 $streak 天。';
     } on AiException catch (e) {
       _error = e.message;
     } catch (e) {
@@ -1558,6 +1642,22 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  ({DateTime start, DateTime end}) _reviewRange(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
+    final start = now.weekday == DateTime.monday
+        ? thisMonday.subtract(const Duration(days: 7))
+        : thisMonday;
+    return (start: start, end: start.add(const Duration(days: 7)));
+  }
+
+  String _reviewRangeLabel(DateTime now) =>
+      now.weekday == DateTime.monday ? '上周' : '本周';
+
+  bool _inRange(DateTime at, ({DateTime start, DateTime end}) range) {
+    return !at.isBefore(range.start) && at.isBefore(range.end);
   }
 
   @override
@@ -1608,16 +1708,31 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
           else if (_result != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                _result!,
-                style: const TextStyle(fontSize: 13, height: 1.6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_summary != null) ...[
+                    Text(
+                      _summary!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Text(
+                    _result!,
+                    style: const TextStyle(fontSize: 13, height: 1.6),
+                  ),
+                ],
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                '点击"生成"让 AI 根据本周完成数据写一段总结与建议',
+                '点击"生成"让 AI 根据${_reviewRangeLabel(DateTime.now())}完成数据写一段总结与建议，当天会保留结果',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ),
@@ -1720,6 +1835,137 @@ class _UpdateAvailableBadge extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _UnreadDot extends StatelessWidget {
+  const _UnreadDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.error,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _MoreAppItem {
+  final int tab;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final WidgetBuilder builder;
+
+  const _MoreAppItem({
+    required this.tab,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.builder,
+  });
+}
+
+class _MoreApplicationsSheet extends StatelessWidget {
+  final List<_MoreAppItem> apps;
+
+  const _MoreApplicationsSheet({required this.apps});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: AppSurfaceCard(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '更多应用',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (apps.isEmpty)
+                Text(
+                  '当前没有被隐藏的底部导航功能',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurface.withValues(alpha: 0.62),
+                  ),
+                )
+              else
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  childAspectRatio: 3.8,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  children: [
+                    for (final app in apps) _MoreApplicationButton(app: app),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreApplicationButton extends StatelessWidget {
+  final _MoreAppItem app;
+
+  const _MoreApplicationButton({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      icon: Icon(app.icon, color: app.color, size: 18),
+      label: Text(app.label, overflow: TextOverflow.ellipsis),
+      onPressed: () {
+        final navigator = Navigator.of(context);
+        navigator.pop();
+        navigator.push(MaterialPageRoute(builder: app.builder));
+      },
+    );
+  }
+}
+
+class _BottomTabStandaloneScreen extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _BottomTabStandaloneScreen({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: child,
     );
   }
 }

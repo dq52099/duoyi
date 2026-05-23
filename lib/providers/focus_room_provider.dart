@@ -236,6 +236,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
   Future<void> joinRoom(String id) async {
     if (roomById(id) == null) return;
+    if (_joinedRoomIds.contains(id) && _activeRoomId == id) return;
     _joinedRoomIds.add(id);
     _activeRoomId = id;
     await _save();
@@ -259,6 +260,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
   Future<void> setActiveRoom(String? id) async {
     if (id != null && !_joinedRoomIds.contains(id)) return;
+    if (_activeRoomId == id) return;
     _activeRoomId = id;
     await _save();
     onLocalChanged?.call();

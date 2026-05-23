@@ -25,6 +25,7 @@ class ReminderRingtoneService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == actionStop) {
+            intent.getIntExtra("id", 0).takeIf { it != 0 }?.let { cancelStatusNotification(it) }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -54,7 +55,18 @@ class ReminderRingtoneService : Service() {
         }
 
         activeReminderId = id
-        startForeground(notificationId(id), buildNotification(id, title, body, payload, snoozeMinutes))
+        startForeground(
+            notificationId(id),
+            buildNotification(
+                id = id,
+                title = title,
+                body = body,
+                payload = payload,
+                shouldVibrate = shouldVibrate,
+                snoozeMinutes = snoozeMinutes,
+                repeatRemaining = repeatRemaining,
+            ),
+        )
         playRingtone()
         if (shouldVibrate) vibrate()
         stopRunnable?.let { handler.removeCallbacks(it) }
@@ -123,7 +135,9 @@ class ReminderRingtoneService : Service() {
         title: String,
         body: String,
         payload: String?,
+        shouldVibrate: Boolean,
         snoozeMinutes: Int,
+        repeatRemaining: Int,
     ): android.app.Notification {
         ensureChannel()
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -142,7 +156,9 @@ class ReminderRingtoneService : Service() {
         val stopIntent = PendingIntent.getService(
             this,
             id + 1_000_000,
-            Intent(this, ReminderRingtoneService::class.java).setAction(actionStop),
+            Intent(this, ReminderRingtoneService::class.java)
+                .setAction(actionStop)
+                .putExtra("id", id),
             flags,
         )
         val snoozeIntent = if (snoozeMinutes > 0) {
@@ -155,8 +171,10 @@ class ReminderRingtoneService : Service() {
                     .putExtra("title", title)
                     .putExtra("body", body)
                     .putExtra("payload", payload)
+                    .putExtra("vibrate", shouldVibrate)
                     .putExtra("snoozeMinutes", snoozeMinutes)
-                    .putExtra("delayMinutes", snoozeMinutes),
+                    .putExtra("delayMinutes", snoozeMinutes)
+                    .putExtra("repeatRemaining", repeatRemaining),
                 flags,
             )
         } else {
@@ -234,6 +252,11 @@ class ReminderRingtoneService : Service() {
 
     private fun notificationId(id: Int) = 940_000 + kotlin.math.abs(id % 10_000)
 
+    private fun cancelStatusNotification(id: Int) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(notificationId(id))
+    }
+
     companion object {
         private const val channelId = "duoyi_builtin_ringtone_status_v2"
         private const val actionStop = "com.duoyi.duoyi.REMINDER_RING_STOP"
@@ -270,7 +293,7 @@ class ReminderRingtoneService : Service() {
 
         private fun volumePercent(context: Context): Int {
             return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                .getInt(volumeKey, 60)
+                .getInt(volumeKey, 40)
                 .coerceIn(40, 100)
         }
 

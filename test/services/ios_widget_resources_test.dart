@@ -127,8 +127,8 @@ void main() {
         project,
         contains('PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi.DuoyiWidgets;'),
       );
-      expect(project, contains('MARKETING_VERSION = 1.1.4;'));
-      expect(project, contains('CURRENT_PROJECT_VERSION = 110004;'));
+      expect(project, contains('MARKETING_VERSION = 1.1.9;'));
+      expect(project, contains('CURRENT_PROJECT_VERSION = 110009;'));
       expect(project, contains('APPLICATION_EXTENSION_API_ONLY = YES;'));
       expect(project, contains('INFOPLIST_FILE = DuoyiWidgets/Info.plist;'));
     });

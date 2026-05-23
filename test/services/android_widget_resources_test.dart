@@ -40,6 +40,9 @@ void main() {
           '@+id/widget_todo_nav_habit',
           '@+id/widget_todo_nav_calendar',
           '@+id/widget_todo_nav_focus',
+          '@+id/widget_todo_row_1',
+          '@+id/widget_todo_row_2',
+          '@+id/widget_todo_row_3',
           '@+id/widget_todo_today_summary',
           '@+id/widget_todo_quick_add',
         ],
@@ -431,11 +434,80 @@ void main() {
       expect(widgetScreen, contains('HomeWidgetService.setDisplayMode'));
       expect(helper, contains('standardOrDetailedVisibility'));
       expect(helper, contains('detailedVisibility'));
+      final todoLayout = File(
+        'android/app/src/main/res/layout/duoyi_todo_widget.xml',
+      ).readAsStringSync();
+      final todoProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiTodoWidgetProvider.kt',
+      ).readAsStringSync();
+      expect(todoLayout, contains('@+id/widget_todo_row_2'));
+      expect(todoLayout, contains('@+id/widget_todo_row_3'));
+      expect(
+        todoProvider,
+        contains('views.setViewVisibility(R.id.widget_todo_row_2'),
+      );
+      expect(
+        todoProvider,
+        contains('views.setViewVisibility(R.id.widget_todo_row_3'),
+      );
       for (final widget in widgets) {
         final source = File(
           'android/app/src/main/kotlin/com/duoyi/duoyi/${widget.receiver}.kt',
         ).readAsStringSync();
         expect(source, contains('DuoyiWidgetDisplayMode'));
+      }
+    });
+
+    test('桌面快捷创建失败会返回明确原因并接入成功回调', () {
+      final manager = File(
+        'lib/services/android_widget_manager.dart',
+      ).readAsStringSync();
+      final widgetScreen = File(
+        'lib/screens/widget_screen.dart',
+      ).readAsStringSync();
+      final mainActivity = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+      ).readAsStringSync();
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final callbackReceiver = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultReceiver.kt',
+      ).readAsStringSync();
+
+      expect(manager, contains('enum AndroidWidgetPinResult'));
+      expect(manager, contains('permissionDenied'));
+      expect(manager, contains('invalidKind'));
+      expect(manager, contains('invokeMethod<String>'));
+      expect(manager, contains("'requestPinWidget'"));
+      expect(widgetScreen, contains('AndroidWidgetPinResult.unsupported'));
+      expect(widgetScreen, contains('AndroidWidgetPinResult.permissionDenied'));
+      expect(widgetScreen, contains('当前桌面不支持应用内直接添加小组件'));
+      expect(widgetScreen, contains('系统没有允许本次添加到桌面'));
+      expect(mainActivity, contains('PendingIntent.getBroadcast'));
+      expect(
+        mainActivity,
+        contains('DuoyiWidgetPinResultReceiver::class.java'),
+      );
+      expect(
+        mainActivity,
+        contains('requestPinAppWidget(provider, null, callback)'),
+      );
+      expect(mainActivity, contains('return "unsupported"'));
+      expect(mainActivity, contains('"permission_denied"'));
+      expect(mainActivity, contains('return "invalid_kind"'));
+      expect(mainActivity, contains('"unavailable"'));
+      expect(
+        manifest,
+        contains('android:name=".DuoyiWidgetPinResultReceiver"'),
+      );
+      expect(callbackReceiver, contains('class DuoyiWidgetPinResultReceiver'));
+      for (final widget in widgets) {
+        expect(
+          callbackReceiver,
+          contains('${widget.receiver}.requestUpdate(context)'),
+          reason: '${widget.receiver} should refresh after pin callback',
+        );
       }
     });
 

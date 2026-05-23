@@ -111,6 +111,9 @@
             android:name=".LocationGeofenceReceiver"
             android:exported="false" />
         <receiver
+            android:name=".DuoyiWidgetPinResultReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".ReminderRingtoneBootReceiver"
             android:exported="false">
             <intent-filter>

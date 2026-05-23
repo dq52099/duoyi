@@ -65,6 +65,21 @@ void main() {
     expect(restored.sessionsPerLongBreak, 4);
   });
 
+  test(
+    'PomodoroConfig migrates generated noise without dropping custom audio',
+    () {
+      final generated = PomodoroConfig.fromJson(<String, dynamic>{
+        'whiteNoiseSound': 'brown_noise',
+      });
+      expect(generated.whiteNoiseSound, 'night_rain');
+
+      final custom = PomodoroConfig.fromJson(<String, dynamic>{
+        'whiteNoiseSound': 'custom:focus-loop',
+      });
+      expect(custom.whiteNoiseSound, 'custom:focus-loop');
+    },
+  );
+
   test('PomodoroSession persists focus room attribution', () {
     final session = PomodoroSession(
       id: 'session-1',

@@ -51,6 +51,28 @@ void main() {
     expect(source, contains('清空筛选'));
   });
 
+  test('任务页展示今日摘要和日常代表目标计数', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(source, contains("import '../providers/habit_provider.dart';"));
+    expect(source, contains("import '../providers/goal_provider.dart';"));
+    expect(
+      source,
+      contains('class _TodoTodaySummaryCard extends StatelessWidget'),
+    );
+    expect(source, contains("key: const ValueKey('todo_today_summary_card')"));
+    expect(source, contains("'今日还要完成 \$remaining'"));
+    expect(
+      source,
+      contains("'日常\$dailyCount 代表\$representativeCount 目标\$activeGoalCount'"),
+    );
+    expect(source, contains('habitProvider.habits'));
+    expect(source, contains('goalProvider.activeGoals.length'));
+    expect(source, contains('TodoPriority.urgent'));
+    expect(source, contains('TodoPriority.high'));
+    expect(source, contains('EisenhowerQuadrant.urgentImportant'));
+  });
+
   test('四象限详情继承外层自定义视图条件', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 

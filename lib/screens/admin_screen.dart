@@ -158,6 +158,76 @@ class _AdminTabLabel extends StatelessWidget {
   }
 }
 
+Border _adminSubtleSectionBorder(BuildContext context) {
+  final theme = Theme.of(context);
+  final alpha = theme.brightness == Brightness.dark ? 0.08 : 0.035;
+  return Border.all(color: theme.colorScheme.outline.withValues(alpha: alpha));
+}
+
+Border _adminSubtleListBorder(BuildContext context) {
+  final theme = Theme.of(context);
+  final alpha = theme.brightness == Brightness.dark ? 0.1 : 0.045;
+  return Border.all(color: theme.colorScheme.outline.withValues(alpha: alpha));
+}
+
+class _AdminListTileCard extends StatelessWidget {
+  final Widget? leading;
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final EdgeInsetsGeometry margin;
+  final bool dense;
+  final bool isThreeLine;
+
+  const _AdminListTileCard({
+    required this.title,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.margin = EdgeInsets.zero,
+    this.dense = false,
+    this.isThreeLine = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppListTileCard(
+      title: title,
+      leading: leading,
+      subtitle: subtitle,
+      trailing: trailing,
+      margin: margin,
+      dense: dense,
+      isThreeLine: isThreeLine,
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+    );
+  }
+}
+
+class _AdminSettingsSection extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final List<Widget> children;
+
+  const _AdminSettingsSection({
+    required this.title,
+    required this.children,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSettingsSection(
+      title: title,
+      subtitle: subtitle,
+      border: _adminSubtleSectionBorder(context),
+      elevation: 0,
+      children: children,
+    );
+  }
+}
+
 // ====================================================================
 // 概览
 // ====================================================================
@@ -439,6 +509,11 @@ class _GridCards extends StatelessWidget {
 
 const int _adminPageSize = 20;
 const List<int> _adminPageSizeOptions = [20, 50, 100];
+const String _adminUpdatePresetCurrent = 'current';
+const String _adminUpdatePresetNextPatch = 'next_patch';
+const String _adminUpdatePresetNextMinor = 'next_minor';
+const String _adminUpdatePresetForceCurrent = 'force_current';
+const String _adminUpdatePresetCustom = 'custom';
 const String _adminAllPermission = '*';
 const String _adminNoPermission = '__none__';
 const Map<String, String> _adminPermissionLabels = {
@@ -867,12 +942,15 @@ class _AdminPaginationBar extends StatelessWidget {
         : (page!.offset ~/ (page!.limit <= 0 ? pageSize : page!.limit)) + 1;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final topBorderColor = cs.outlineVariant.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.32 : 0.38,
+    );
     return Container(
       key: barKey,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
+        color: cs.surfaceContainerLowest,
+        border: Border(top: BorderSide(color: topBorderColor)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -896,9 +974,9 @@ class _AdminPaginationBar extends StatelessWidget {
             ],
           );
           final compactButtonStyle = ButtonStyle(
-            minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+            minimumSize: const WidgetStatePropertyAll(Size(0, 46)),
             padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 8),
+              EdgeInsets.symmetric(horizontal: 12),
             ),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           );
@@ -1043,7 +1121,7 @@ class _AdminPaginationBar extends StatelessWidget {
             );
           }
 
-          final isCompact = constraints.maxWidth < 640;
+          final isCompact = constraints.maxWidth < 720;
           if (isCompact) {
             final controls = [?pageJump, ?pageSizePicker];
             return Column(
@@ -1056,7 +1134,7 @@ class _AdminPaginationBar extends StatelessWidget {
                   Wrap(
                     spacing: 12,
                     runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
+                    alignment: WrapAlignment.start,
                     children: controls,
                   ),
                 ],
@@ -1095,25 +1173,32 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark
+        ? cs.surfaceContainerHighest.withValues(alpha: 0.34)
+        : cs.surfaceContainerHighest.withValues(alpha: 0.48);
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.68),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 136, minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.68),
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            child,
-          ],
+              const SizedBox(width: 6),
+              child,
+            ],
+          ),
         ),
       ),
     );
@@ -1141,6 +1226,7 @@ class _SettingsTabState extends State<_SettingsTab> {
   final _minimumVersionCtrl = TextEditingController();
   final _updateNotesCtrl = TextEditingController();
   final _downloadUrlCtrl = TextEditingController();
+  String _updateVersionPreset = _adminUpdatePresetCurrent;
 
   @override
   void initState() {
@@ -1168,9 +1254,20 @@ class _SettingsTabState extends State<_SettingsTab> {
       if (!mounted) return;
       _data = data;
       _msgCtrl.text = (_data['maintenance_message'] ?? '').toString();
-      _latestVersionCtrl.text = (_data['latest_version'] ?? '').toString();
-      _minimumVersionCtrl.text = (_data['minimum_supported_version'] ?? '')
-          .toString();
+      final latestVersion = (_data['latest_version'] ?? '').toString().trim();
+      final minimumVersion = (_data['minimum_supported_version'] ?? '')
+          .toString()
+          .trim();
+      _latestVersionCtrl.text = latestVersion.isEmpty
+          ? AppVersion.name
+          : latestVersion;
+      _minimumVersionCtrl.text = minimumVersion.isEmpty
+          ? AppVersion.name
+          : minimumVersion;
+      _updateVersionPreset = _presetForVersions(
+        latestVersion: _latestVersionCtrl.text,
+        minimumSupportedVersion: _minimumVersionCtrl.text,
+      );
       _updateNotesCtrl.text = (_data['update_notes'] ?? '').toString();
       _downloadUrlCtrl.text = (_data['update_download_url'] ?? '').toString();
     } catch (e) {
@@ -1235,9 +1332,102 @@ class _SettingsTabState extends State<_SettingsTab> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String get _nextPatchVersion {
+    final parts = _normalizedVersionParts(AppVersion.name);
+    return '${parts[0]}.${parts[1]}.${parts[2] + 1}';
+  }
+
+  String get _nextMinorVersion {
+    final parts = _normalizedVersionParts(AppVersion.name);
+    return '${parts[0]}.${parts[1] + 1}.0';
+  }
+
+  String get _forceCurrentMinimumVersion => _nextPatchVersion;
+
+  bool _isCurrentAppVersion(String value) {
+    final normalized = value.trim();
+    return normalized == AppVersion.name || normalized == AppVersion.display;
+  }
+
+  String _latestVersionForSave() {
+    final value = _latestVersionCtrl.text.trim();
+    return _isCurrentAppVersion(value) ? '' : value;
+  }
+
+  String _minimumSupportedVersionForSave() {
+    final value = _minimumVersionCtrl.text.trim();
+    return _isCurrentAppVersion(value) ? '' : value;
+  }
+
+  void _syncUpdateVersionPreset() {
+    final preset = _presetForVersions(
+      latestVersion: _latestVersionCtrl.text,
+      minimumSupportedVersion: _minimumVersionCtrl.text,
+    );
+    if (_updateVersionPreset != preset) {
+      setState(() => _updateVersionPreset = preset);
+    }
+  }
+
+  List<int> _normalizedVersionParts(String value) {
+    final parts = _versionParts(value);
+    return [
+      parts.isNotEmpty ? parts[0] : 0,
+      parts.length > 1 ? parts[1] : 0,
+      parts.length > 2 ? parts[2] : 0,
+    ];
+  }
+
+  String _presetForVersions({
+    required String latestVersion,
+    required String minimumSupportedVersion,
+  }) {
+    final latest = latestVersion.trim();
+    final minimum = minimumSupportedVersion.trim();
+    if (latest == AppVersion.name && minimum == AppVersion.name) {
+      return _adminUpdatePresetCurrent;
+    }
+    if (latest == _nextPatchVersion && minimum == AppVersion.name) {
+      return _adminUpdatePresetNextPatch;
+    }
+    if (latest == _nextMinorVersion && minimum == AppVersion.name) {
+      return _adminUpdatePresetNextMinor;
+    }
+    if (latest == _nextPatchVersion && minimum == _forceCurrentMinimumVersion) {
+      return _adminUpdatePresetForceCurrent;
+    }
+    return _adminUpdatePresetCustom;
+  }
+
+  void _applyUpdateVersionPreset(String value) {
+    setState(() {
+      _updateVersionPreset = value;
+      switch (value) {
+        case _adminUpdatePresetCurrent:
+          _latestVersionCtrl.text = AppVersion.name;
+          _minimumVersionCtrl.text = AppVersion.name;
+          break;
+        case _adminUpdatePresetNextPatch:
+          _latestVersionCtrl.text = _nextPatchVersion;
+          _minimumVersionCtrl.text = AppVersion.name;
+          break;
+        case _adminUpdatePresetNextMinor:
+          _latestVersionCtrl.text = _nextMinorVersion;
+          _minimumVersionCtrl.text = AppVersion.name;
+          break;
+        case _adminUpdatePresetForceCurrent:
+          _latestVersionCtrl.text = _nextPatchVersion;
+          _minimumVersionCtrl.text = _forceCurrentMinimumVersion;
+          break;
+        case _adminUpdatePresetCustom:
+          break;
+      }
+    });
+  }
+
   Future<void> _saveUpdateConfig() async {
-    final latestVersion = _latestVersionCtrl.text.trim();
-    final minimumSupportedVersion = _minimumVersionCtrl.text.trim();
+    final latestVersion = _latestVersionForSave();
+    final minimumSupportedVersion = _minimumSupportedVersionForSave();
     final updateDownloadUrl = _downloadUrlCtrl.text.trim();
     final updateNotes = _updateNotesCtrl.text.trim();
     final forceUpdateRequired = _data['force_update_required'] == true;
@@ -1271,6 +1461,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data['minimum_supported_version'] = minimumSupportedVersion;
       _data['update_download_url'] = updateDownloadUrl;
       _data['update_notes'] = updateNotes;
+      _syncUpdateVersionPreset();
       _showSettingsSnack('更新配置已保存');
     } on ApiException catch (e) {
       _showSettingsSnack(e.message);
@@ -1280,8 +1471,8 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Future<void> _saveForceUpdateRequired(bool value) async {
-    final latestVersion = _latestVersionCtrl.text.trim();
-    final minimumSupportedVersion = _minimumVersionCtrl.text.trim();
+    final latestVersion = _latestVersionForSave();
+    final minimumSupportedVersion = _minimumSupportedVersionForSave();
     final updateDownloadUrl = _downloadUrlCtrl.text.trim();
     final updateNotes = _updateNotesCtrl.text.trim();
     final message = _validateUpdatePolicy(
@@ -1317,6 +1508,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data['minimum_supported_version'] = minimumSupportedVersion;
       _data['update_download_url'] = updateDownloadUrl;
       _data['update_notes'] = updateNotes;
+      _syncUpdateVersionPreset();
     } on ApiException catch (e) {
       _showSettingsSnack(e.message);
     } finally {
@@ -1384,7 +1576,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: '账户与注册',
           subtitle: '控制新用户入口与邀请码策略',
           children: [
@@ -1421,7 +1613,7 @@ class _SettingsTabState extends State<_SettingsTab> {
           ],
         ),
         const SizedBox(height: 12),
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: '维护模式',
           subtitle: '控制同步服务与客户端提示',
           children: [
@@ -1449,7 +1641,7 @@ class _SettingsTabState extends State<_SettingsTab> {
           ],
         ),
         const SizedBox(height: 12),
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: '应用更新',
           subtitle: '通过 /api/config 下发版本、更新内容与强制更新策略',
           children: [
@@ -1473,24 +1665,70 @@ class _SettingsTabState extends State<_SettingsTab> {
               margin: EdgeInsets.zero,
             ),
             const SizedBox(height: 10),
+            AppDropdownField<String>(
+              key: ValueKey(_updateVersionPreset),
+              initialValue: _updateVersionPreset,
+              labelText: '版本策略',
+              prefixIcon: const Icon(Icons.rule_folder_outlined),
+              items: [
+                DropdownMenuItem(
+                  value: _adminUpdatePresetCurrent,
+                  child: Text('当前版本 ${AppVersion.name}'),
+                ),
+                DropdownMenuItem(
+                  value: _adminUpdatePresetNextPatch,
+                  child: Text('下一补丁 $_nextPatchVersion'),
+                ),
+                DropdownMenuItem(
+                  value: _adminUpdatePresetNextMinor,
+                  child: Text('下一小版本 $_nextMinorVersion'),
+                ),
+                DropdownMenuItem(
+                  value: _adminUpdatePresetForceCurrent,
+                  child: Text('强制低于 $_forceCurrentMinimumVersion'),
+                ),
+                const DropdownMenuItem(
+                  value: _adminUpdatePresetCustom,
+                  child: Text('自定义版本'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) _applyUpdateVersionPreset(value);
+              },
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _latestVersionCtrl,
               decoration: const InputDecoration(
                 labelText: '最新版本',
-                hintText: '例如 1.2.0',
+                hintText: '默认当前版本',
                 prefixIcon: Icon(Icons.new_releases_outlined),
               ),
               textInputAction: TextInputAction.next,
+              onChanged: (_) {
+                if (_updateVersionPreset != _adminUpdatePresetCustom) {
+                  setState(
+                    () => _updateVersionPreset = _adminUpdatePresetCustom,
+                  );
+                }
+              },
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _minimumVersionCtrl,
               decoration: const InputDecoration(
                 labelText: '最低支持版本',
-                hintText: '低于该版本时视为需要强制更新',
+                hintText: '默认当前版本，低于该版本时强制更新',
                 prefixIcon: Icon(Icons.priority_high_outlined),
               ),
               textInputAction: TextInputAction.next,
+              onChanged: (_) {
+                if (_updateVersionPreset != _adminUpdatePresetCustom) {
+                  setState(
+                    () => _updateVersionPreset = _adminUpdatePresetCustom,
+                  );
+                }
+              },
             ),
             const SizedBox(height: 10),
             TextField(
@@ -1583,7 +1821,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       _error = null;
     });
     try {
-      final data = await widget.api.getSettings();
+      final data = await widget.api.getSettings(scope: 'ai');
       if (!mounted) return;
       _enabled = data['ai_enabled'] == true;
       _baseCtrl.text = (data['ai_base_url'] ?? '').toString();
@@ -1640,8 +1878,9 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     try {
       final res = await widget.api.testAi();
       if (!mounted) return;
+      final content = (res['content'] ?? res['sample'] ?? '').toString();
       setState(() {
-        _testResult = '✅ 模型 ${res['model']} 可达，回复: ${res['sample']}';
+        _testResult = '✅ 模型 ${res['model']} 可达，回复: $content';
         _testColor = Colors.green;
       });
     } on ApiException catch (e) {
@@ -1669,7 +1908,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: 'AI 功能',
           subtitle: '所有请求经后端代理，前端不暴露密钥',
           children: [
@@ -1962,7 +2201,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       _error = null;
     });
     try {
-      final data = await widget.api.getSettings();
+      final data = await widget.api.getSettings(scope: 'backup');
       if (!mounted) return;
       _backupEnabled = data['backup_enabled'] != false;
       _maxSizeCtrl.text =
@@ -2421,7 +2660,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: '云端备份',
           subtitle: '限制同步体积、频率与服务开关',
           children: [
@@ -2475,7 +2714,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           ],
         ),
         const SizedBox(height: 12),
-        AppSettingsSection(
+        _AdminSettingsSection(
           title: '服务器备份',
           subtitle: '定期打包后台数据库，上传到 OpenList，并可邮件通知',
           children: [
@@ -3055,7 +3294,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           ),
         ..._serverBackups.map((b) {
           final status = (b['status'] ?? '-').toString();
-          return AppListTileCard(
+          return _AdminListTileCard(
             margin: const EdgeInsets.only(bottom: 8),
             dense: true,
             leading: Icon(Icons.backup_outlined, color: cs.primary),
@@ -3167,7 +3406,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           final updated = hasSnapshot
               ? (b['updated_at'] ?? '尚无同步时间').toString()
               : '尚无同步快照';
-          return AppListTileCard(
+          return _AdminListTileCard(
             margin: const EdgeInsets.only(bottom: 8),
             dense: true,
             leading: Icon(Icons.cloud_done_outlined, color: cs.primary),
@@ -3682,11 +3921,13 @@ class _UsersTabState extends State<_UsersTab> {
       return;
     }
     try {
-      await widget.api.adjustUserCoins(
+      final adjusted = await widget.api.adjustUserCoins(
         u['user_id'].toString(),
         delta: delta,
         reason: reasonCtrl.text,
       );
+      u['coin_balance'] = adjusted['balance'];
+      u['lifetime_coins'] = adjusted['lifetime'];
       await _load(quiet: true);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -4020,7 +4261,7 @@ class _UsersTabState extends State<_UsersTab> {
                     '时光币: $coinBalance / 累计 $lifetimeCoins',
                     '排序: ${_adminUserSortLabel(_sort)}',
                   ];
-                  return AppListTileCard(
+                  return _AdminListTileCard(
                     leading: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -4515,7 +4756,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                       'warning' => Colors.orange,
                       _ => cs.primary,
                     };
-                    return AppListTileCard(
+                    return _AdminListTileCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       isThreeLine: true,
                       title: Row(
@@ -5160,7 +5401,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                       if (createdAt.isNotEmpty) createdAt,
                       if (feedbackIdentity.isNotEmpty) feedbackIdentity,
                     ].join(' · ');
-                    return AppListTileCard(
+                    return _AdminListTileCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       title: Row(
                         children: [
@@ -5624,7 +5865,7 @@ class _InvitesTabState extends State<_InvitesTab> {
                   itemBuilder: (_, i) {
                     final c = _codes[i];
                     final used = (c['used_by'] ?? '').toString().isNotEmpty;
-                    return AppListTileCard(
+                    return _AdminListTileCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       leading: Container(
                         width: 40,
@@ -5923,7 +6164,7 @@ class _AuditLogTabState extends State<_AuditLogTab> {
                   final target = (item['target'] ?? '').toString();
                   final detail = (item['detail'] ?? '').toString();
                   final createdAt = (item['created_at'] ?? '').toString();
-                  return AppListTileCard(
+                  return _AdminListTileCard(
                     margin: const EdgeInsets.only(bottom: 8),
                     leading: Icon(
                       Icons.receipt_long_outlined,

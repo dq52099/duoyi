@@ -46,12 +46,17 @@ void main() {
     expect(service, contains('setFullScreenIntent(fullScreenIntent, true)'));
     expect(service, contains('NotificationCompat.VISIBILITY_PUBLIC'));
     expect(service, contains('addAction(0, "停止响铃"'));
+    expect(service, contains('.setAction(actionStop)'));
+    expect(service, contains('.putExtra("id", id)'));
+    expect(service, contains('cancelStatusNotification'));
     expect(service, contains(r'addAction(0, "稍后 $snoozeMinutes 分钟"'));
     expect(service, contains('REMINDER_RING_SNOOZE'));
     expect(service, contains('ReminderRingtoneScheduler.scheduleOnce'));
     expect(service, contains('delayMinutes * 60_000L'));
     expect(service, contains('snoozeMinutes > 0'));
+    expect(service, contains('putExtra("vibrate", shouldVibrate)'));
     expect(service, contains('putExtra("delayMinutes", snoozeMinutes)'));
+    expect(service, contains('putExtra("repeatRemaining", repeatRemaining)'));
     expect(service, contains('scheduleAutoRepeat'));
     expect(service, contains('repeatRemaining - 1'));
     expect(service, contains('putExtra("repeatRemaining"'));
@@ -66,8 +71,15 @@ void main() {
     expect(service, contains('setDeleteIntent(stopIntent)'));
     expect(service, contains('setOngoing(false)'));
     expect(service, contains('setAutoCancel(true)'));
+    expect(alarmService, contains("channelId = 'duoyi_alarm_fullscreen_v7'"));
+    expect(
+      alarmService,
+      contains("RawResourceAndroidNotificationSound('duoyi_chime')"),
+    );
+    expect(alarmService, contains("'duoyi_alarm_fullscreen_v6'"));
     expect(scheduler, contains('ReminderRingtoneService.stopIfActive'));
     expect(scheduler, contains('ReminderRingtoneService.stopActive'));
+    expect(service, contains('.getInt(volumeKey, 40)'));
 
     for (final name in ['alarm', 'chime', 'bell', 'beep', 'classic']) {
       expect(

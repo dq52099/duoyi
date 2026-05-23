@@ -65,7 +65,6 @@ import 'screens/widget_screen.dart';
 import 'screens/mine_screen.dart';
 import 'screens/integrations_screen.dart';
 import 'screens/lock_screen.dart';
-import 'screens/search_screen.dart';
 import 'screens/note_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'screens/today_detail_router.dart';
@@ -2431,6 +2430,9 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
+  static const _tabCount = 7;
+  static const _fallbackVisibleTabs = <int>[1, 2, 3, 5, 6];
+
   int _currentIndex = 0; // Today first
 
   static final GlobalKey todayKey = GlobalKey();
@@ -2441,19 +2443,59 @@ class MainShellState extends State<MainShell> {
   static final GlobalKey widgetKey = GlobalKey();
   static final GlobalKey mineKey = GlobalKey();
 
-  int _coerceTabIndex(int index) {
-    final visibleTabs = context
-        .read<PreferencesProvider>()
-        .enabledBottomNavTabs
-        .where((tab) => tab >= 0 && tab < 7)
+  List<int> _visibleBottomNavTabs(PreferencesProvider prefs) {
+    final rawTabs = prefs.enabledBottomNavTabs
+        .where((tab) => tab >= 0 && tab < _tabCount)
         .toList(growable: false);
+    if (rawTabs.isEmpty) return _fallbackVisibleTabs;
+
+    final fixedTabs = PreferencesProvider.fixedBottomNavTabs;
+    final flexibleBudget =
+        PreferencesProvider.maxBottomNavTabs - fixedTabs.length;
+    final selected = <int>{};
+    for (final tab in rawTabs) {
+      if (fixedTabs.contains(tab)) continue;
+      if (selected.length >= flexibleBudget) break;
+      selected.add(tab);
+    }
+    selected.addAll(fixedTabs);
+
+    final result = <int>[];
+    for (final tab in rawTabs) {
+      if (selected.contains(tab) && !result.contains(tab)) result.add(tab);
+    }
+    for (final tab in fixedTabs) {
+      if (!result.contains(tab)) result.add(tab);
+    }
+    while (result.length > PreferencesProvider.maxBottomNavTabs) {
+      final removeAt = result.indexWhere((tab) => !fixedTabs.contains(tab));
+      if (removeAt < 0) break;
+      result.removeAt(removeAt);
+    }
+    if (result.isEmpty) {
+      return _fallbackVisibleTabs;
+    }
+    for (final tab in fixedTabs) {
+      if (result.length >= PreferencesProvider.maxBottomNavTabs ||
+          result.contains(tab)) {
+        continue;
+      }
+      result.add(tab);
+    }
+    return List.unmodifiable(result);
+  }
+
+  int _coerceTabIndex(int index) {
+    final visibleTabs = _visibleBottomNavTabs(
+      context.read<PreferencesProvider>(),
+    );
     if (index >= 0 &&
-        index < 7 &&
+        index < _tabCount &&
         (visibleTabs.isEmpty || visibleTabs.contains(index))) {
       return index;
     }
     if (visibleTabs.isNotEmpty) return visibleTabs.first;
-    return index.clamp(0, 6);
+    return index.clamp(0, _tabCount - 1);
   }
 
   void navigateTo(int index) {
@@ -2479,13 +2521,8 @@ class MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final prefs = context.watch<PreferencesProvider>();
-    final visibleTabs = prefs.enabledBottomNavTabs
-        .where((tab) => tab >= 0 && tab < 7)
-        .toList(growable: false);
-    final safeVisibleTabs = visibleTabs.isEmpty
-        ? const [0, 1, 2, 3, 4, 5, 6]
-        : visibleTabs;
-    var safeIndex = _currentIndex.clamp(0, 6);
+    final safeVisibleTabs = _visibleBottomNavTabs(prefs);
+    var safeIndex = _currentIndex.clamp(0, _tabCount - 1);
     if (!safeVisibleTabs.contains(safeIndex)) {
       safeIndex = safeVisibleTabs.first;
     }
@@ -2534,10 +2571,12 @@ class MainShellState extends State<MainShell> {
     final selectedNavIndex = safeVisibleTabs.indexOf(safeIndex);
     final updater = context.watch<AppUpdateService>();
     final showUpdateBadge = updater.hasUpdate && !updater.mustUpdate;
+    final notification = context.watch<NotificationService>();
+    final showMineBadge = showUpdateBadge || notification.hasUnreadHistory;
     final navDestinations = safeVisibleTabs
         .map((tab) {
           final destination = allDestinations[tab];
-          if (tab != 6 || !showUpdateBadge) return destination;
+          if (tab != 6 || !showMineBadge) return destination;
           return NavigationDestination(
             icon: const _BottomNavBadgeIcon(child: Icon(Icons.person_outline)),
             selectedIcon: const _BottomNavBadgeIcon(child: Icon(Icons.person)),
@@ -2564,22 +2603,6 @@ class MainShellState extends State<MainShell> {
       ),
       floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
           ? const QuickCaptureFab()
-          : null,
-      appBar: safeIndex == 0
-          ? AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              toolbarHeight: 0,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SearchScreen()),
-                  ),
-                ),
-              ],
-            )
           : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,

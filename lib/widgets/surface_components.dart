@@ -541,6 +541,8 @@ class AppSettingsSection extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsetsGeometry margin;
   final EdgeInsetsGeometry padding;
+  final Border? border;
+  final double elevation;
 
   const AppSettingsSection({
     super.key,
@@ -549,6 +551,8 @@ class AppSettingsSection extends StatelessWidget {
     this.subtitle,
     this.margin = EdgeInsets.zero,
     this.padding = const EdgeInsets.all(16),
+    this.border,
+    this.elevation = 0,
   });
 
   @override
@@ -556,6 +560,8 @@ class AppSettingsSection extends StatelessWidget {
     return AppSurfaceCard(
       margin: margin,
       padding: padding,
+      border: border,
+      elevation: elevation,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -666,6 +672,8 @@ class AppListTileCard extends StatelessWidget {
   final EdgeInsetsGeometry contentPadding;
   final bool dense;
   final bool isThreeLine;
+  final Border? border;
+  final double elevation;
 
   const AppListTileCard({
     super.key,
@@ -681,6 +689,8 @@ class AppListTileCard extends StatelessWidget {
     ),
     this.dense = false,
     this.isThreeLine = false,
+    this.border,
+    this.elevation = 0,
   });
 
   @override
@@ -689,6 +699,8 @@ class AppListTileCard extends StatelessWidget {
       margin: margin,
       padding: EdgeInsets.zero,
       onTap: onTap,
+      border: border,
+      elevation: elevation,
       child: ListTile(
         dense: dense,
         isThreeLine: isThreeLine,
@@ -807,6 +819,7 @@ class AppDialog extends StatelessWidget {
   final Widget? icon;
   final EdgeInsetsGeometry? contentPadding;
   final double maxWidth;
+  final bool shiftForKeyboard;
 
   const AppDialog({
     super.key,
@@ -816,13 +829,14 @@ class AppDialog extends StatelessWidget {
     this.icon,
     this.contentPadding,
     this.maxWidth = 420,
+    this.shiftForKeyboard = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return AlertDialog(
+    final dialog = AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       constraints: BoxConstraints(minWidth: 320, maxWidth: maxWidth),
       titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
@@ -871,6 +885,20 @@ class AppDialog extends StatelessWidget {
               child: content,
             ),
       actions: actions,
+    );
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final scopedDialog = MediaQuery.removeViewInsets(
+      context: context,
+      removeBottom: true,
+      child: dialog,
+    );
+    if (!shiftForKeyboard) return scopedDialog;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: scopedDialog,
     );
   }
 }

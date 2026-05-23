@@ -37,7 +37,7 @@ class ReminderRingtoneSettings {
   static const String volumePreferenceKey =
       'pref_reminder_ringtone_volume_percent';
   static const String soundPreferenceKey = 'pref_reminder_ringtone_sound';
-  static const int defaultVolumePercent = 60;
+  static const int defaultVolumePercent = 40;
   static const String defaultSound = 'chime';
 
   static const List<int> presets = <int>[40, 60, 80, 100];

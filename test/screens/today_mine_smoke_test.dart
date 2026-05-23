@@ -31,6 +31,7 @@ import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
 import 'package:duoyi/core/app_version.dart';
 import 'package:duoyi/screens/anniversary_screen.dart';
+import 'package:duoyi/screens/countdown_screen.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -102,20 +103,23 @@ void main() {
     expect(mine, contains("label: '生日'"));
     expect(mine, contains("label: '纪念日'"));
     expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains('const MemorialAnniversaryScreen()'));
+    expect(mine, contains('const BirthdayScreen()'));
+    expect(mine, contains('const CountdownScreen()'));
     expect(mine, contains("label: '备份'"));
     expect(mine, contains("label: '恢复数据'"));
-    expect(mine, contains("label: '功能建议'"));
-    expect(mine, contains("label: '问题反馈'"));
-    expect(mine, contains("label: '许愿池'"));
+    expect(mine, contains("label: '许愿与反馈'"));
+    expect(mine, contains('FeedbackScreen(initialCategory: category)'));
     expect(mine, contains('AlmanacEntryMode.almanac'));
     expect(mine, contains('AlmanacEntryMode.calendar'));
     expect(mine, contains('BackupEntryMode.backup'));
     expect(mine, contains('BackupEntryMode.restore'));
-    expect(mine, contains("FeedbackScreen(initialCategory: category)"));
     expect(mine, isNot(contains("label: '纪念日 · 生日 · 倒数'")));
     expect(mine, isNot(contains("label: '黄历 · 万年历'")));
     expect(mine, isNot(contains("label: '备份 · 恢复'")));
-    expect(mine, isNot(contains("label: '反馈与许愿'")));
+    expect(mine, isNot(contains("label: '功能建议'")));
+    expect(mine, isNot(contains("label: '问题反馈'")));
+    expect(mine, isNot(contains("label: '许愿池'")));
 
     expect(
       mine.indexOf("title: '行动计划'"),
@@ -174,13 +178,13 @@ void main() {
     expect(find.text('导出为日历 (.ics)'), findsOneWidget);
     expect(find.text('备份'), findsOneWidget);
     expect(find.text('恢复数据'), findsOneWidget);
-    expect(find.text('功能建议'), findsOneWidget);
-    expect(find.text('问题反馈'), findsOneWidget);
-    expect(find.text('许愿池'), findsOneWidget);
+    expect(find.text('许愿与反馈'), findsOneWidget);
     expect(find.text('纪念日 · 生日 · 倒数'), findsNothing);
     expect(find.text('黄历 · 万年历'), findsNothing);
     expect(find.text('备份 · 恢复'), findsNothing);
-    expect(find.text('反馈与许愿'), findsNothing);
+    expect(find.text('功能建议'), findsNothing);
+    expect(find.text('问题反馈'), findsNothing);
+    expect(find.text('许愿池'), findsNothing);
   });
 
   testWidgets('AnniversaryScreen can open a specific tab directly', (
@@ -193,6 +197,22 @@ void main() {
     expect(tabBar.controller?.index, 1);
     expect(find.text('生日'), findsWidgets);
     expect(find.text('纪念日 · 生日 · 倒数'), findsNothing);
+  });
+
+  testWidgets('Birthday and countdown entries use independent pages', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const BirthdayScreen()));
+    await tester.pumpAndSettle();
+    expect(find.byType(BirthdayScreen), findsOneWidget);
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('生日'), findsWidgets);
+
+    await tester.pumpWidget(_wrap(const CountdownScreen()));
+    await tester.pumpAndSettle();
+    expect(find.byType(CountdownScreen), findsOneWidget);
+    expect(find.text('倒数日'), findsWidgets);
+    expect(find.byType(AnniversaryScreen), findsNothing);
   });
 
   testWidgets(
@@ -265,10 +285,12 @@ void main() {
         scrollable: find.byType(Scrollable).last,
       );
       expect(find.text('通知记录'), findsOneWidget);
-      expect(find.text('提醒偏好'), findsOneWidget);
-      expect(find.text('55 条'), findsOneWidget);
+      expect(find.text('通知设置'), findsOneWidget);
+      expect(find.text('55 条'), findsWidgets);
 
-      await tester.tap(find.text('通知记录'));
+      await tester.ensureVisible(find.text('通知记录'));
+      final historyLabelCenter = tester.getCenter(find.text('通知记录').first);
+      await tester.tapAt(historyLabelCenter + const Offset(0, 28));
       await tester.pumpAndSettle();
 
       expect(find.text('通知记录'), findsWidgets);
@@ -336,10 +358,6 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '显示名'), '新显示名');
     await tester.enterText(find.widgetWithText(TextField, '本地昵称'), '新昵称');
     await tester.enterText(
-      find.widgetWithText(TextField, '头像 URL、本地文件或文字'),
-      '新',
-    );
-    await tester.enterText(
       find.widgetWithText(TextField, '邮箱（仅本地展示，不用于登录或找回）'),
       'new@example.com',
     );
@@ -350,7 +368,7 @@ void main() {
     expect(userProvider.profile.username, '新昵称');
     expect(userProvider.profile.displayName, '新显示名');
     expect(userProvider.profile.avatarInitials, '新');
-    expect(userProvider.profile.avatarUrl, isEmpty);
+    expect(userProvider.profile.avatarUrl, 'https://example.com/old.png');
     expect(userProvider.profile.email, 'new@example.com');
     expect(userProvider.profile.bio, '新的个人简介');
     expect(find.text('本地资料已更新'), findsWidgets);
@@ -375,6 +393,8 @@ void main() {
         avatar: 'https://example.com/old.png',
         bio: '旧简介',
         token: 'token-1',
+        coinBalance: 88,
+        lifetimeCoins: 144,
       ),
       client: ApiClient(
         baseUrl: 'https://duoyi.test',
@@ -389,13 +409,15 @@ void main() {
             return http.Response(
               json.encode({
                 'user_id': 'u-1',
-                'username': body['username'],
+                'username': 'old-user',
                 'email': body['email'],
                 'email_verified': false,
                 'display_name': body['display_name'],
-                'avatar': body['avatar'],
+                'avatar': 'https://example.com/old.png',
                 'bio': body['bio'],
                 'is_admin': false,
+                'coin_balance': 88,
+                'lifetime_coins': 144,
               }),
               200,
               headers: {'content-type': 'application/json'},
@@ -423,42 +445,42 @@ void main() {
     expect(find.text('个人资料'), findsOneWidget);
     expect(find.text('修改登录密码'), findsOneWidget);
     expect(find.text('old@example.com · 已验证'), findsOneWidget);
+    expect(find.textContaining('时光币 88'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '昵称'), '新昵称');
-    await tester.enterText(find.widgetWithText(TextField, '用户名'), 'new-user');
+    final usernameField = tester.widget<TextField>(
+      find.widgetWithText(TextField, '用户名'),
+    );
+    expect(usernameField.readOnly, isTrue);
     await tester.enterText(
       find.widgetWithText(TextField, '邮箱'),
       'new@example.com',
     );
     await tester.enterText(find.widgetWithText(TextField, '邮箱验证码'), '123456');
-    await tester.enterText(
-      find.widgetWithText(TextField, '头像 URL 或文字'),
-      'https://example.com/new.png',
-    );
     await tester.enterText(find.widgetWithText(TextField, '简介'), '新的账号简介');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
     expect(requests, contains('PATCH /api/auth/profile'));
     expect(requestBodies.single, {
-      'username': 'new-user',
       'email': 'new@example.com',
       'email_code': '123456',
       'display_name': '新昵称',
-      'avatar': 'https://example.com/new.png',
       'bio': '新的账号简介',
     });
-    expect(auth.state.username, 'new-user');
+    expect(auth.state.username, 'old-user');
     expect(auth.state.email, 'new@example.com');
     expect(auth.state.emailVerified, isFalse);
     expect(auth.state.displayName, '新昵称');
-    expect(auth.state.avatar, 'https://example.com/new.png');
+    expect(auth.state.avatar, 'https://example.com/old.png');
     expect(auth.state.bio, '新的账号简介');
+    expect(auth.state.coinBalance, 88);
+    expect(auth.state.lifetimeCoins, 144);
     expect(userProvider.profile.username, '新昵称');
     expect(userProvider.profile.displayName, '新昵称');
     expect(userProvider.profile.email, 'new@example.com');
     expect(userProvider.profile.emailVerified, isFalse);
-    expect(userProvider.profile.avatarUrl, 'https://example.com/new.png');
+    expect(userProvider.profile.avatarUrl, 'https://example.com/old.png');
     expect(userProvider.profile.bio, '新的账号简介');
     expect(find.text('资料已更新'), findsWidgets);
   });

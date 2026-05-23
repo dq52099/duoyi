@@ -84,4 +84,27 @@ void main() {
           'anniversary_screen.dart should not contain hardcoded Chinese UI strings',
     );
   });
+
+  test('纪念日和生日提供独立入口页面，倒数日使用独立倒数页', () {
+    final anniversary = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+
+    expect(anniversary, contains('final AnniversaryType? fixedType;'));
+    expect(
+      anniversary,
+      contains('class BirthdayScreen extends StatelessWidget'),
+    );
+    expect(
+      anniversary,
+      contains('class MemorialAnniversaryScreen extends StatelessWidget'),
+    );
+    expect(anniversary, contains('fixedType == null'));
+    expect(anniversary, contains("ValueKey('anniversary_fixed_\$name')"));
+    expect(mine, contains('const MemorialAnniversaryScreen()'));
+    expect(mine, contains('const BirthdayScreen()'));
+    expect(mine, contains('const CountdownScreen()'));
+    expect(mine, isNot(contains('const AnniversaryScreen(initialTab: 3)')));
+  });
 }

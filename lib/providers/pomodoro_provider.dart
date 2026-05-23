@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
+import '../core/focus_sound_catalog.dart';
 import '../models/pomodoro.dart';
 import '../services/focus_distraction_service.dart';
 import '../services/focus_dnd_service.dart';
@@ -583,8 +584,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setAutoEnableDnd(bool enabled) async {
     if (_config.autoEnableDnd == enabled) return;
     _config.autoEnableDnd = enabled;
-    await _touchAndSaveConfig();
     _persistedRevision++;
+    notifyListeners();
+    await _touchAndSaveConfig();
     if (enabled) {
       await refreshFocusDndStatus();
     } else {
@@ -597,9 +599,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setStrictFocusMode(bool enabled) async {
     if (_config.strictFocusMode == enabled) return;
     _config.strictFocusMode = enabled;
-    await _touchAndSaveConfig();
     _persistedRevision++;
     notifyListeners();
+    await _touchAndSaveConfig();
     _syncDistractionMonitorToState();
   }
 
@@ -694,7 +696,11 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> setFocusRoomId(String? roomId) async {
     final clean = roomId?.trim();
-    _config.focusRoomId = clean?.isEmpty == true ? null : clean;
+    final nextRoomId = clean == null || clean.isEmpty ? null : clean;
+    if (_config.focusRoomId == nextRoomId && _state.focusRoomId == nextRoomId) {
+      return;
+    }
+    _config.focusRoomId = nextRoomId;
     _state = _state.copyWith(
       focusRoomId: _config.focusRoomId,
       clearFocusRoom: _config.focusRoomId == null,
@@ -720,9 +726,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setMonitorDistractingApps(bool enabled) async {
     if (_config.monitorDistractingApps == enabled) return;
     _config.monitorDistractingApps = enabled;
-    await _touchAndSaveConfig();
     _persistedRevision++;
     notifyListeners();
+    await _touchAndSaveConfig();
     // ignore: discarded_futures
     refreshFocusDistractionStatus();
     _syncDistractionMonitorToState();
@@ -748,11 +754,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> setWhiteNoiseSound(String sound) async {
-    if (_config.whiteNoiseSound == sound && _state.whiteNoiseSound == sound) {
+    final normalized = sound.startsWith('custom:')
+        ? sound
+        : FocusSoundCatalog.normalizeForPlayback(sound);
+    if (_config.whiteNoiseSound == normalized &&
+        _state.whiteNoiseSound == normalized) {
       return;
     }
-    _state = _state.copyWith(whiteNoiseSound: sound);
-    _config.whiteNoiseSound = sound;
+    _state = _state.copyWith(whiteNoiseSound: normalized);
+    _config.whiteNoiseSound = normalized;
     await _touchAndSaveConfig();
     _persistedRevision++;
     notifyListeners();

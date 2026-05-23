@@ -39,7 +39,7 @@ void main() {
     expect(source, contains('VerticalDivider('));
     expect(source, contains('SingleChildScrollView('));
     expect(source, contains('scrollDirection: Axis.horizontal'));
-    expect(source, contains('width: 340'));
+    expect(source, contains('width: 380'));
   });
 
   test('日历聚合不在 build 同步执行', () {
@@ -67,5 +67,18 @@ void main() {
     expect(buildBody, contains('todoProvider: todoProvider'));
     expect(buildBody, contains('timeAuditProvider: timeAuditProvider'));
     expect(buildBody, isNot(contains('calendarProvider.rebuild(')));
+  });
+
+  test('日历日期导航头避免窄屏固定最小宽度溢出', () {
+    final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+    final headerSource = source.substring(
+      source.indexOf('class _CalendarNavigationHeader'),
+      source.indexOf('class _NavIconButton'),
+    );
+
+    expect(headerSource, contains('minimumSize: const Size(0, 46)'));
+    expect(headerSource, contains('label: Text('));
+    expect(headerSource, contains('TextOverflow.ellipsis'));
+    expect(headerSource, isNot(contains('minWidth: 180')));
   });
 }

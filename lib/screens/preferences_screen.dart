@@ -18,7 +18,7 @@ import '../widgets/surface_components.dart';
 
 enum PreferencesInitialSection { bottomNav, notifications }
 
-/// 偏好设置页。纯本地的用户习惯，与服务器/管理员配置无关。
+/// 个性设置页。纯本地的用户习惯，与服务器/管理员配置无关。
 class PreferencesScreen extends StatefulWidget {
   final PreferencesInitialSection? initialSection;
 
@@ -30,7 +30,11 @@ class PreferencesScreen extends StatefulWidget {
 
 class _PreferencesScreenState extends State<PreferencesScreen> {
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _dateSectionKey = GlobalKey();
+  final GlobalKey _defaultsSectionKey = GlobalKey();
   final GlobalKey _bottomNavSectionKey = GlobalKey();
+  final GlobalKey _interactionSectionKey = GlobalKey();
+  final GlobalKey _archiveSectionKey = GlobalKey();
   final GlobalKey _notificationSectionKey = GlobalKey();
   int _initialSectionScrollAttempts = 0;
 
@@ -104,12 +108,22 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
       return;
     }
     _initialSectionScrollAttempts = 0;
+    _scrollToContext(target);
+  }
+
+  void _scrollToContext(BuildContext target) {
     Scrollable.ensureVisible(
       target,
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
       alignment: 0.04,
     );
+  }
+
+  void _scrollToMenuTarget(GlobalKey key) {
+    final target = key.currentContext;
+    if (target == null) return;
+    _scrollToContext(target);
   }
 
   @override
@@ -168,165 +182,217 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          AppSettingsSection(
-            title: I18n.tr('preferences.section.date'),
-            subtitle: I18n.tr('preferences.section.date.subtitle'),
-            children: [
-              AppSettingsTile(
-                icon: Icons.calendar_view_week_outlined,
-                color: cs.primary,
-                title: I18n.tr('preferences.first_day.title'),
-                subtitle: p.firstDayOfWeek == 1
-                    ? I18n.tr('preferences.first_day.current_monday')
-                    : I18n.tr('preferences.first_day.current_sunday'),
-                trailing: _compactDropdown<int>(
-                  value: p.firstDayOfWeek,
-                  items: [
-                    DropdownMenuItem(
-                      value: 1,
-                      child: Text(I18n.tr('weekday.mon')),
-                    ),
-                    DropdownMenuItem(
-                      value: 7,
-                      child: Text(I18n.tr('weekday.sun')),
-                    ),
-                  ],
-                  onChanged: (v) => v == null
-                      ? null
-                      : context.read<PreferencesProvider>().setFirstDayOfWeek(
-                          v,
-                        ),
-                ),
+          _PreferenceSectionMenu(
+            groups: [
+              _PreferenceMenuGroup(
+                title: '入口提醒',
+                items: [
+                  _PreferenceMenuItem(
+                    icon: Icons.notifications_active_outlined,
+                    label: '通知设置',
+                    onTap: () => _scrollToMenuTarget(_notificationSectionKey),
+                  ),
+                  _PreferenceMenuItem(
+                    icon: Icons.space_dashboard_outlined,
+                    label: '导航入口',
+                    onTap: () => _scrollToMenuTarget(_bottomNavSectionKey),
+                  ),
+                ],
               ),
-              AppSettingsTile(
-                icon: Icons.date_range_outlined,
-                color: Colors.teal,
-                title: I18n.tr('preferences.date_format.title'),
-                subtitle: _dateFormats.firstWhere(
-                  (f) => f[0] == p.dateFormat,
-                  orElse: () => _dateFormats.first,
-                )[1],
-                trailing: _compactDropdown<String>(
-                  width: 138,
-                  value: p.dateFormat,
-                  items: [
-                    for (final f in _dateFormats)
-                      DropdownMenuItem(
-                        value: f[0],
-                        child: Text(f[1], style: const TextStyle(fontSize: 13)),
-                      ),
-                  ],
-                  onChanged: (v) => v == null
-                      ? null
-                      : context.read<PreferencesProvider>().setDateFormat(v),
-                ),
-              ),
-              AppSettingsTile(
-                icon: Icons.public_outlined,
-                color: Colors.deepOrange,
-                title: I18n.tr('preferences.timezone.title'),
-                subtitle: p.followSystemTimeZone
-                    ? '${I18n.tr('preferences.timezone.follow_system')}：${p.appTimeZone}'
-                    : p.appTimeZone,
-                trailing: _compactDropdown<String>(
-                  width: 156,
-                  value: p.appTimeZoneSelection,
-                  items: [
-                    for (final z in _timeZones)
-                      DropdownMenuItem(
-                        value: z[0],
-                        child: Text(z[1], style: const TextStyle(fontSize: 13)),
-                      ),
-                  ],
-                  onChanged: (v) => v == null
-                      ? null
-                      : context.read<PreferencesProvider>().setAppTimeZone(v),
-                ),
-              ),
-              AppSwitchTile(
-                icon: Icons.brightness_2_outlined,
-                color: Colors.indigo,
-                value: p.showLunar,
-                title: I18n.tr('preferences.lunar.title'),
-                subtitle: I18n.tr('preferences.lunar.subtitle'),
-                onChanged: (v) =>
-                    context.read<PreferencesProvider>().setShowLunar(v),
+              _PreferenceMenuGroup(
+                title: '显示默认',
+                items: [
+                  _PreferenceMenuItem(
+                    icon: Icons.calendar_month_outlined,
+                    label: '日期日历',
+                    onTap: () => _scrollToMenuTarget(_dateSectionKey),
+                  ),
+                  _PreferenceMenuItem(
+                    icon: Icons.tune_outlined,
+                    label: '默认行为',
+                    onTap: () => _scrollToMenuTarget(_defaultsSectionKey),
+                  ),
+                  _PreferenceMenuItem(
+                    icon: Icons.touch_app_outlined,
+                    label: '交互归档',
+                    onTap: () => _scrollToMenuTarget(_interactionSectionKey),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 12),
-          AppSettingsSection(
-            title: I18n.tr('preferences.section.defaults'),
-            subtitle: I18n.tr('preferences.section.defaults.subtitle'),
-            children: [
-              AppSettingsTile(
-                icon: Icons.open_in_new,
-                color: Colors.blue,
-                title: I18n.tr('preferences.default_tab.title'),
-                subtitle: _tabLabel(p.defaultTab),
-                trailing: _compactDropdown<int>(
-                  value: p.defaultTab,
-                  items: [
-                    DropdownMenuItem(value: 0, child: Text(_tabLabel(0))),
-                    DropdownMenuItem(value: 1, child: Text(_tabLabel(1))),
-                    DropdownMenuItem(value: 2, child: Text(_tabLabel(2))),
-                    DropdownMenuItem(value: 3, child: Text(_tabLabel(3))),
-                    DropdownMenuItem(value: 4, child: Text(_tabLabel(4))),
-                    DropdownMenuItem(value: 5, child: Text(_tabLabel(5))),
-                    DropdownMenuItem(value: 6, child: Text(_tabLabel(6))),
-                  ],
-                  onChanged: (v) => v == null
-                      ? null
-                      : context.read<PreferencesProvider>().setDefaultTab(v),
+          KeyedSubtree(
+            key: _dateSectionKey,
+            child: AppSettingsSection(
+              title: I18n.tr('preferences.section.date'),
+              subtitle: I18n.tr('preferences.section.date.subtitle'),
+              children: [
+                AppSettingsTile(
+                  icon: Icons.calendar_view_week_outlined,
+                  color: cs.primary,
+                  title: I18n.tr('preferences.first_day.title'),
+                  subtitle: p.firstDayOfWeek == 1
+                      ? I18n.tr('preferences.first_day.current_monday')
+                      : I18n.tr('preferences.first_day.current_sunday'),
+                  trailing: _compactDropdown<int>(
+                    value: p.firstDayOfWeek,
+                    items: [
+                      DropdownMenuItem(
+                        value: 1,
+                        child: Text(I18n.tr('weekday.mon')),
+                      ),
+                      DropdownMenuItem(
+                        value: 7,
+                        child: Text(I18n.tr('weekday.sun')),
+                      ),
+                    ],
+                    onChanged: (v) => v == null
+                        ? null
+                        : context.read<PreferencesProvider>().setFirstDayOfWeek(
+                            v,
+                          ),
+                  ),
                 ),
-              ),
-              AppSwitchTile(
-                icon: Icons.add_circle_outline,
-                color: cs.primary,
-                value: p.quickCaptureFab,
-                title: I18n.tr('preferences.quick_capture.title'),
-                subtitle: I18n.tr('preferences.quick_capture.subtitle'),
-                onChanged: (v) =>
-                    context.read<PreferencesProvider>().setQuickCaptureFab(v),
-              ),
-              AppSwitchTile(
-                icon: Icons.notifications_active_outlined,
-                color: Colors.deepOrange,
-                value: p.notificationQuickAdd,
-                title: I18n.tr('preferences.notification_quick_add.title'),
-                subtitle: I18n.tr(
-                  'preferences.notification_quick_add.subtitle',
+                AppSettingsTile(
+                  icon: Icons.date_range_outlined,
+                  color: Colors.teal,
+                  title: I18n.tr('preferences.date_format.title'),
+                  subtitle: _dateFormats.firstWhere(
+                    (f) => f[0] == p.dateFormat,
+                    orElse: () => _dateFormats.first,
+                  )[1],
+                  trailing: _compactDropdown<String>(
+                    width: 138,
+                    value: p.dateFormat,
+                    items: [
+                      for (final f in _dateFormats)
+                        DropdownMenuItem(
+                          value: f[0],
+                          child: Text(
+                            f[1],
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => v == null
+                        ? null
+                        : context.read<PreferencesProvider>().setDateFormat(v),
+                  ),
                 ),
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setNotificationQuickAdd(v),
-              ),
-              AppSwitchTile(
-                icon: Icons.done_all,
-                color: Colors.green,
-                value: p.showCompletedTodos,
-                title: I18n.tr('preferences.show_completed.title'),
-                subtitle: I18n.tr('preferences.show_completed.subtitle'),
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setShowCompletedTodos(v),
-              ),
-              _SliderSetting(
-                icon: Icons.timer_outlined,
-                color: Colors.red,
-                title: I18n.tr('preferences.pomodoro_length.title'),
-                subtitle:
-                    '${p.defaultPomodoroMinutes} ${I18n.tr('unit.minute')}',
-                value: p.defaultPomodoroMinutes.toDouble(),
-                min: 5,
-                max: 90,
-                divisions: 17,
-                label: '${p.defaultPomodoroMinutes} ${I18n.tr('unit.min')}',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setDefaultPomodoroMinutes(v.toInt()),
-              ),
-            ],
+                AppSettingsTile(
+                  icon: Icons.public_outlined,
+                  color: Colors.deepOrange,
+                  title: I18n.tr('preferences.timezone.title'),
+                  subtitle: p.followSystemTimeZone
+                      ? '${I18n.tr('preferences.timezone.follow_system')}：${p.appTimeZone}'
+                      : p.appTimeZone,
+                  trailing: _compactDropdown<String>(
+                    width: 156,
+                    value: p.appTimeZoneSelection,
+                    items: [
+                      for (final z in _timeZones)
+                        DropdownMenuItem(
+                          value: z[0],
+                          child: Text(
+                            z[1],
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => v == null
+                        ? null
+                        : context.read<PreferencesProvider>().setAppTimeZone(v),
+                  ),
+                ),
+                AppSwitchTile(
+                  icon: Icons.brightness_2_outlined,
+                  color: Colors.indigo,
+                  value: p.showLunar,
+                  title: I18n.tr('preferences.lunar.title'),
+                  subtitle: I18n.tr('preferences.lunar.subtitle'),
+                  onChanged: (v) =>
+                      context.read<PreferencesProvider>().setShowLunar(v),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          KeyedSubtree(
+            key: _defaultsSectionKey,
+            child: AppSettingsSection(
+              title: I18n.tr('preferences.section.defaults'),
+              subtitle: I18n.tr('preferences.section.defaults.subtitle'),
+              children: [
+                AppSettingsTile(
+                  icon: Icons.open_in_new,
+                  color: Colors.blue,
+                  title: I18n.tr('preferences.default_tab.title'),
+                  subtitle: _tabLabel(p.defaultTab),
+                  trailing: _compactDropdown<int>(
+                    value: p.defaultTab,
+                    items: [
+                      DropdownMenuItem(value: 0, child: Text(_tabLabel(0))),
+                      DropdownMenuItem(value: 1, child: Text(_tabLabel(1))),
+                      DropdownMenuItem(value: 2, child: Text(_tabLabel(2))),
+                      DropdownMenuItem(value: 3, child: Text(_tabLabel(3))),
+                      DropdownMenuItem(value: 4, child: Text(_tabLabel(4))),
+                      DropdownMenuItem(value: 5, child: Text(_tabLabel(5))),
+                      DropdownMenuItem(value: 6, child: Text(_tabLabel(6))),
+                    ],
+                    onChanged: (v) => v == null
+                        ? null
+                        : context.read<PreferencesProvider>().setDefaultTab(v),
+                  ),
+                ),
+                AppSwitchTile(
+                  icon: Icons.add_circle_outline,
+                  color: cs.primary,
+                  value: p.quickCaptureFab,
+                  title: I18n.tr('preferences.quick_capture.title'),
+                  subtitle: I18n.tr('preferences.quick_capture.subtitle'),
+                  onChanged: (v) =>
+                      context.read<PreferencesProvider>().setQuickCaptureFab(v),
+                ),
+                AppSwitchTile(
+                  icon: Icons.notifications_active_outlined,
+                  color: Colors.deepOrange,
+                  value: p.notificationQuickAdd,
+                  title: I18n.tr('preferences.notification_quick_add.title'),
+                  subtitle: I18n.tr(
+                    'preferences.notification_quick_add.subtitle',
+                  ),
+                  onChanged: (v) => context
+                      .read<PreferencesProvider>()
+                      .setNotificationQuickAdd(v),
+                ),
+                AppSwitchTile(
+                  icon: Icons.done_all,
+                  color: Colors.green,
+                  value: p.showCompletedTodos,
+                  title: I18n.tr('preferences.show_completed.title'),
+                  subtitle: I18n.tr('preferences.show_completed.subtitle'),
+                  onChanged: (v) => context
+                      .read<PreferencesProvider>()
+                      .setShowCompletedTodos(v),
+                ),
+                _SliderSetting(
+                  icon: Icons.timer_outlined,
+                  color: Colors.red,
+                  title: I18n.tr('preferences.pomodoro_length.title'),
+                  subtitle:
+                      '${p.defaultPomodoroMinutes} ${I18n.tr('unit.minute')}',
+                  value: p.defaultPomodoroMinutes.toDouble(),
+                  min: 5,
+                  max: 90,
+                  divisions: 17,
+                  label: '${p.defaultPomodoroMinutes} ${I18n.tr('unit.min')}',
+                  onChanged: (v) => context
+                      .read<PreferencesProvider>()
+                      .setDefaultPomodoroMinutes(v.toInt()),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           KeyedSubtree(
@@ -349,52 +415,64 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          AppSettingsSection(
-            title: I18n.tr('preferences.section.interaction'),
-            subtitle: I18n.tr('preferences.section.interaction.subtitle'),
-            children: [
-              AppSwitchTile(
-                icon: Icons.vibration,
-                color: Colors.purple,
-                value: p.haptic,
-                title: I18n.tr('preferences.haptic.title'),
-                subtitle: I18n.tr('preferences.haptic.subtitle'),
-                onChanged: (v) =>
-                    context.read<PreferencesProvider>().setHaptic(v),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          AppSettingsSection(
-            title: I18n.tr('preferences.section.auto_archive'),
-            subtitle: I18n.tr('preferences.section.auto_archive.subtitle'),
-            children: [
-              _SliderSetting(
-                icon: Icons.inventory_2_outlined,
-                color: Colors.brown,
-                title: I18n.tr('preferences.auto_archive.title'),
-                subtitle: p.autoArchiveCompletedDays == 0
-                    ? I18n.tr('preferences.auto_archive.never')
-                    : '${p.autoArchiveCompletedDays} ${I18n.tr('preferences.auto_archive.after_days')}',
-                value: p.autoArchiveCompletedDays.toDouble(),
-                min: 0,
-                max: 30,
-                divisions: 30,
-                label: p.autoArchiveCompletedDays == 0
-                    ? I18n.tr('action.off')
-                    : '${p.autoArchiveCompletedDays} ${I18n.tr('unit.day')}',
-                onChanged: (v) => context
-                    .read<PreferencesProvider>()
-                    .setAutoArchiveCompletedDays(v.toInt()),
-              ),
-            ],
+          KeyedSubtree(
+            key: _interactionSectionKey,
+            child: Column(
+              children: [
+                AppSettingsSection(
+                  title: I18n.tr('preferences.section.interaction'),
+                  subtitle: I18n.tr('preferences.section.interaction.subtitle'),
+                  children: [
+                    AppSwitchTile(
+                      icon: Icons.vibration,
+                      color: Colors.purple,
+                      value: p.haptic,
+                      title: I18n.tr('preferences.haptic.title'),
+                      subtitle: I18n.tr('preferences.haptic.subtitle'),
+                      onChanged: (v) =>
+                          context.read<PreferencesProvider>().setHaptic(v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                KeyedSubtree(
+                  key: _archiveSectionKey,
+                  child: AppSettingsSection(
+                    title: I18n.tr('preferences.section.auto_archive'),
+                    subtitle: I18n.tr(
+                      'preferences.section.auto_archive.subtitle',
+                    ),
+                    children: [
+                      _SliderSetting(
+                        icon: Icons.inventory_2_outlined,
+                        color: Colors.brown,
+                        title: I18n.tr('preferences.auto_archive.title'),
+                        subtitle: p.autoArchiveCompletedDays == 0
+                            ? I18n.tr('preferences.auto_archive.never')
+                            : '${p.autoArchiveCompletedDays} ${I18n.tr('preferences.auto_archive.after_days')}',
+                        value: p.autoArchiveCompletedDays.toDouble(),
+                        min: 0,
+                        max: 30,
+                        divisions: 30,
+                        label: p.autoArchiveCompletedDays == 0
+                            ? I18n.tr('action.off')
+                            : '${p.autoArchiveCompletedDays} ${I18n.tr('unit.day')}',
+                        onChanged: (v) => context
+                            .read<PreferencesProvider>()
+                            .setAutoArchiveCompletedDays(v.toInt()),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           KeyedSubtree(
             key: _notificationSectionKey,
             child: AppSettingsSection(
-              title: '提醒偏好 / 通知设置',
-              subtitle: '管理每日提醒、通知权限、通知记录保留和提醒铃声',
+              title: '通知设置',
+              subtitle: '管理提醒时间、系统权限、通知记录保留和提醒铃声',
               children: [
                 AppSettingsTile(
                   icon: Icons.history_outlined,
@@ -501,6 +579,68 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     ];
     if (day < 1 || day > 7) return I18n.tr('weekday.unknown');
     return I18n.tr(keys[day - 1]);
+  }
+}
+
+class _PreferenceMenuItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PreferenceMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _PreferenceMenuGroup {
+  final String title;
+  final List<_PreferenceMenuItem> items;
+
+  const _PreferenceMenuGroup({required this.title, required this.items});
+}
+
+class _PreferenceSectionMenu extends StatelessWidget {
+  final List<_PreferenceMenuGroup> groups;
+
+  const _PreferenceSectionMenu({required this.groups});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final group in groups) ...[
+            Text(
+              group.title,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.58),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final item in group.items)
+                  ActionChip(
+                    avatar: Icon(item.icon, size: 16, color: cs.primary),
+                    label: Text(item.label),
+                    onPressed: item.onTap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+            if (group != groups.last) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -1206,12 +1346,18 @@ class _NavConfigTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lockedVisible = tab == 5 || tab == 6;
+    final p = context.watch<PreferencesProvider>();
+    final visibleCount = p.bottomNavVisible.length;
+    final reachedLimit =
+        !visible && visibleCount >= PreferencesProvider.maxBottomNavTabs;
     return AppSettingsTile(
       icon: _icon,
       color: Theme.of(context).colorScheme.primary,
       title: label,
       subtitle: lockedVisible
           ? I18n.tr('preferences.nav.fixed')
+          : reachedLimit
+          ? '最多显示 ${PreferencesProvider.maxBottomNavTabs} 个入口'
           : visible
           ? I18n.tr('preferences.nav.visible')
           : I18n.tr('preferences.nav.hidden'),
@@ -1240,7 +1386,7 @@ class _NavConfigTile extends StatelessWidget {
           ),
           Switch(
             value: visible,
-            onChanged: lockedVisible
+            onChanged: lockedVisible || reachedLimit
                 ? null
                 : (v) => context
                       .read<PreferencesProvider>()

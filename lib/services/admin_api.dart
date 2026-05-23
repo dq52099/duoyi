@@ -103,8 +103,8 @@ class AdminApi {
   Future<Map<String, dynamic>> stats() => client.get('/api/admin/stats');
 
   // ---- Settings ----
-  Future<Map<String, dynamic>> getSettings() =>
-      client.get('/api/admin/settings');
+  Future<Map<String, dynamic>> getSettings({String? scope}) =>
+      client.get(_path('/api/admin/settings', {'scope': scope}));
 
   Future<Map<String, dynamic>> updateSettings({
     bool? inviteCodeRequired,
@@ -393,7 +393,8 @@ class AdminApi {
   }
 
   // ---- AI diagnostic ----
-  Future<Map<String, dynamic>> testAi() => client.post('/api/admin/ai/test');
+  Future<Map<String, dynamic>> testAi() =>
+      client.post('/api/admin/ai/test', null, const Duration(seconds: 75));
 
   // ---- Reminder email diagnostic ----
   Future<Map<String, dynamic>> testReminderEmail() =>

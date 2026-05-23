@@ -112,7 +112,7 @@ void main() {
         "label: '日记'",
         "label: '随手记'",
         "label: '成就墙'",
-        "label: '全局搜索'",
+        "label: '个性设置'",
         "label: '底部导航栏'",
         "label: '共享空间'",
         "label: '扩展集成'",
@@ -121,9 +121,8 @@ void main() {
         "label: '备份'",
         "label: '恢复数据'",
         "label: '公告'",
-        "label: '功能建议'",
-        "label: '问题反馈'",
-        "label: '许愿池'",
+        "label: '许愿与反馈'",
+        "label: '更多应用'",
         "label: '检查更新'",
       ]) {
         expect(mine, contains(label));
@@ -137,6 +136,21 @@ void main() {
       expect(mine, contains('width: 8'));
       expect(mine, contains("'有更新'"));
       expect(mine, contains("'新版 \$version'"));
+      expect(mine, contains("tooltip: '全局搜索'"));
+      expect(mine, isNot(contains("label: '全局搜索'")));
+      expect(
+        mine,
+        contains("class _MoreApplicationsSheet extends StatelessWidget"),
+      );
+      expect(mine, contains('class _UnreadDot extends StatelessWidget'));
+      expect(mine, contains('notifService.hasUnreadHistory'));
+      expect(mine, contains('_hiddenBottomNavApps'));
+      expect(mine, contains("label: '更多应用'"));
+      expect(mine, contains("label: '通知设置'"));
+      expect(mine, isNot(contains("label: '偏好设置'")));
+      expect(mine, isNot(contains("label: '功能建议'")));
+      expect(mine, isNot(contains("label: '问题反馈'")));
+      expect(mine, isNot(contains("label: '许愿池'")));
 
       final tileLabels = RegExp(
         r"label: '([^']+)'",
@@ -158,6 +172,41 @@ void main() {
       expect(mine, contains("Text('习惯')"));
       expect(mine, contains("Text('日历')"));
       expect(mine, contains("Text('番茄专注')"));
+    });
+
+    test('全局搜索入口在我的顶部右上角，今日页不再放顶部搜索', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+
+      expect(mine, contains("tooltip: '全局搜索'"));
+      expect(
+        mine,
+        contains('MaterialPageRoute(builder: (_) => const SearchScreen())'),
+      );
+      expect(
+        main,
+        isNot(
+          contains("MaterialPageRoute(builder: (_) => const SearchScreen())"),
+        ),
+      );
+    });
+
+    test('更多应用只展示隐藏的主导航功能且不包含番茄专注', () {
+      final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+      final start = mine.indexOf('List<_MoreAppItem> _hiddenBottomNavApps');
+      final end = mine.indexOf('void _openNotificationHistory', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
+      final method = mine.substring(start, end);
+
+      expect(method, contains('final visible = prefs.bottomNavVisible'));
+      expect(method, contains("label: '今日'"));
+      expect(method, contains("label: '待办'"));
+      expect(method, contains("label: '习惯'"));
+      expect(method, contains("label: '日历'"));
+      expect(method, isNot(contains("label: '番茄专注'")));
+      expect(method, isNot(contains('PomodoroScreen')));
+      expect(method, contains('!visible.contains(app.tab)'));
     });
   });
 }

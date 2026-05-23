@@ -1337,7 +1337,12 @@ def _merge_virtual_rewards(server: dict, client: dict) -> dict:
     return result
 
 
-def _user_response(row, *, token: Optional[str] = None) -> dict:
+def _user_response(
+    row,
+    *,
+    token: Optional[str] = None,
+    db=None,
+) -> dict:
     result = {
         "user_id": row["id"],
         "username": row["username"],
@@ -1351,6 +1356,16 @@ def _user_response(row, *, token: Optional[str] = None) -> dict:
         "created_at": row["created_at"],
         "last_login_at": row["last_login_at"],
     }
+    if db is not None:
+        rewards = db.execute(
+            "SELECT virtual_rewards FROM sync_data WHERE user_id=?",
+            (row["id"],),
+        ).fetchone()
+        coin_balance, lifetime_coins = _virtual_rewards_summary(
+            rewards["virtual_rewards"] if rewards else "{}"
+        )
+        result["coin_balance"] = coin_balance
+        result["lifetime_coins"] = lifetime_coins
     if token is not None:
         result["token"] = token
     return result
@@ -1914,6 +1929,41 @@ BACKUP_SETTING_KEYS = {
     "backup_email_smtp_username",
     "backup_email_smtp_password",
     "backup_email_smtp_use_ssl",
+}
+
+EMAIL_SETTING_KEYS = {
+    "reminder_email_enabled",
+    "reminder_email_to",
+    "reminder_email_from",
+    "reminder_email_smtp_host",
+    "reminder_email_smtp_port",
+    "reminder_email_smtp_username",
+    "reminder_email_smtp_password",
+    "email_service_enabled",
+    "email_sender_name",
+    "email_code_primary_provider",
+    "email_code_backup_provider",
+    "email_code_active_slot",
+    "email_auto_switch_enabled",
+    "openclaw_mail_enabled",
+    "openclaw_mail_user",
+    "openclaw_mail_api_key",
+    "resend_base_url",
+    "resend_api_key",
+    "resend_from",
+    "system_notice_email_to",
+    "email_smtp_host",
+    "email_smtp_port",
+    "email_smtp_username",
+    "email_smtp_password",
+    "email_smtp_use_ssl",
+}
+
+BACKUP_ADMIN_SETTING_KEYS = BACKUP_SETTING_KEYS | EMAIL_SETTING_KEYS
+
+ADMIN_SETTINGS_SCOPES = {
+    "ai": AI_SETTING_KEYS,
+    "backup": BACKUP_ADMIN_SETTING_KEYS,
 }
 
 
@@ -3769,7 +3819,7 @@ def _issue_login_session(db, row, *, action: str) -> dict:
     _audit(db, row["id"], row["username"], action)
     db.commit()
     fresh = db.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
-    return _auth_payload(_user_response(fresh, token=token))
+    return _auth_payload(_user_response(fresh, token=token, db=db))
 
 
 def _public_avatar_url(filename: str) -> str:
@@ -3879,7 +3929,7 @@ def register(req: RegisterRequest):
         TOKENS[user_id] = token
         TOKEN_LAST_ACTIVE[user_id] = _utc_now()
         row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        return _auth_payload(_user_response(row, token=token))
+        return _auth_payload(_user_response(row, token=token, db=db))
     finally:
         db.close()
 
@@ -3988,7 +4038,7 @@ def me(user_id: str = Depends(_verify_token)):
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
-        return _user_response(row)
+        return _user_response(row, db=db)
     finally:
         db.close()
 
@@ -4005,11 +4055,7 @@ def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
         current = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         if current is None:
             raise HTTPException(status_code=404, detail="User not found")
-        username = (
-            _clean_username(req.username)
-            if req.username is not None
-            else current["username"]
-        )
+        username = current["username"]
         email = (
             _clean_email(req.email)
             if req.email is not None
@@ -4053,7 +4099,6 @@ def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
         )
         _ensure_account_unique(
             db,
-            username=username,
             email=email,
             exclude_user_id=user_id,
         )
@@ -4064,7 +4109,7 @@ def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
         _audit(db, user_id, username, "profile.update", user_id)
         db.commit()
         row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        return _user_response(row)
+        return _user_response(row, db=db)
     finally:
         db.close()
 
@@ -4286,7 +4331,7 @@ async def upload_avatar(
             except FileNotFoundError:
                 pass
         fresh = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        return _auth_payload(_user_response(fresh))
+        return _auth_payload(_user_response(fresh, db=db))
     finally:
         db.close()
 
@@ -7549,24 +7594,40 @@ def admin_stats(_: str = Depends(_require_admin)):
 
 
 @app.get("/api/admin/settings")
-def admin_get_settings(_: str = Depends(_require_admin)):
+def admin_get_settings(
+    _: str = Depends(_require_admin),
+    scope: Optional[str] = None,
+):
     db = get_db()
     try:
         actor = _
-        _ensure_admin_permission(db, actor, "settings")
+        scope_key = (scope or "").strip().lower()
+        allowed_keys = ADMIN_SETTINGS_SCOPES.get(scope_key)
+        if allowed_keys is None:
+            _ensure_admin_permission(db, actor, "settings")
+        else:
+            _ensure_admin_permission(db, actor, scope_key)
         rows = db.execute("SELECT key, value FROM settings").fetchall()
         result: dict = {}
         for r in rows:
+            if allowed_keys is not None and r["key"] not in allowed_keys:
+                continue
             try:
                 result[r["key"]] = json.loads(r["value"])
             except Exception:
                 result[r["key"]] = r["value"]
         # 敏感信息脱敏：只返回是否已配置 + 掩码
-        raw_key = str(result.get("ai_api_key") or "")
-        result["ai_api_key_set"] = bool(raw_key)
-        result["ai_api_key"] = (
-            f"{raw_key[:3]}***{raw_key[-3:]}" if len(raw_key) > 6 else ("***" if raw_key else "")
-        )
+        def include_key(key: str) -> bool:
+            return allowed_keys is None or key in allowed_keys
+
+        if include_key("ai_api_key"):
+            raw_key = str(result.get("ai_api_key") or "")
+            result["ai_api_key_set"] = bool(raw_key)
+            result["ai_api_key"] = (
+                f"{raw_key[:3]}***{raw_key[-3:]}"
+                if len(raw_key) > 6
+                else ("***" if raw_key else "")
+            )
         for secret_key in (
             "openlist_password",
             "backup_email_smtp_password",
@@ -7576,12 +7637,15 @@ def admin_get_settings(_: str = Depends(_require_admin)):
             "hermes_api_key",
             "email_smtp_password",
         ):
+            if not include_key(secret_key):
+                continue
             raw = str(result.get(secret_key) or "")
             result[f"{secret_key}_set"] = bool(raw)
             result[secret_key] = (
                 f"{raw[:2]}***{raw[-2:]}" if len(raw) > 4 else ("***" if raw else "")
             )
-        result.update(_account_email_runtime_status(_account_mail_runtime(db)))
+        if allowed_keys is None or scope_key == "backup":
+            result.update(_account_email_runtime_status(_account_mail_runtime(db)))
         return result
     finally:
         db.close()
@@ -7597,10 +7661,10 @@ def admin_update_settings(
         required_permissions = set()
         if any(key in AI_SETTING_KEYS for key in update_items):
             required_permissions.add("ai")
-        if any(key in BACKUP_SETTING_KEYS for key in update_items):
+        if any(key in BACKUP_ADMIN_SETTING_KEYS for key in update_items):
             required_permissions.add("backup")
         if any(
-            key not in AI_SETTING_KEYS and key not in BACKUP_SETTING_KEYS
+            key not in AI_SETTING_KEYS and key not in BACKUP_ADMIN_SETTING_KEYS
             for key in update_items
         ) or not update_items:
             required_permissions.add("settings")

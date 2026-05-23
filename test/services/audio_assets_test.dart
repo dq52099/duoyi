@@ -77,7 +77,13 @@ void main() {
 
       expect(focusService, contains('FocusSoundCatalog.assetMap'));
       expect(focusService, contains('AssetSource(asset)'));
-      expect(focusService, contains('await player.play(source)'));
+      expect(focusService, contains('await player.play('));
+      expect(focusService, contains('volume: _volume'));
+      expect(focusService, contains('ctx: _focusAudioContext'));
+      expect(focusService, contains('AudioContextConfig('));
+      expect(focusService, contains('stayAwake: true'));
+      expect(focusService, contains('defaultVolume = 0.6'));
+      expect(focusService, contains('_playbackGeneration'));
       expect(focusService, isNot(contains('Random(')));
       expect(focusService, isNot(contains('sin(')));
       expect(focusService, isNot(contains('Float32List')));

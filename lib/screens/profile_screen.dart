@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../core/i18n.dart';
+import '../providers/achievement_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
@@ -207,6 +208,77 @@ class _ProfileAvatarPicker extends StatelessWidget {
   }
 }
 
+class _ProfileMetricChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ProfileMetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Semantics(
+      label: '$label $value',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: cs.primaryContainer.withValues(alpha: 0.52),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '$label $value',
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: cs.onPrimaryContainer),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _ProfileSectionHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: cs.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.62),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _AccountProfileEditor extends StatefulWidget {
   const _AccountProfileEditor();
 
@@ -331,6 +403,17 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     _refreshPreview();
   }
 
+  void _applyUploadedAvatar(AuthState state) {
+    _syncingControllers = true;
+    try {
+      _setControllerText(_avatarCtrl, state.avatar ?? '');
+    } finally {
+      _syncingControllers = false;
+    }
+    _lastAccountSnapshot = _accountProfileSnapshot(state);
+    _refreshPreview();
+  }
+
   void _setControllerText(TextEditingController controller, String value) {
     if (controller.text == value) return;
     controller.value = TextEditingValue(
@@ -415,6 +498,20 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     );
   }
 
+  Widget _emailCodeField() {
+    return _ProfileActionField(
+      field: TextField(
+        controller: _emailCodeCtrl,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: I18n.tr('auth.email_code'),
+          helperText: I18n.tr('profile.email_code.helper'),
+        ),
+      ),
+      action: _bindEmailCodeButton(),
+    );
+  }
+
   bool get _canSendBindEmailCode {
     if (_busy ||
         _avatarBusy ||
@@ -455,13 +552,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       }
       await auth.uploadAvatarBytes(filename: file.name, bytes: bytes);
       final state = auth.state;
-      _lastAccountSnapshot = _accountProfileSnapshot(state);
-      _syncingControllers = true;
-      try {
-        _setControllerText(_avatarCtrl, state.avatar ?? '');
-      } finally {
-        _syncingControllers = false;
-      }
+      _applyUploadedAvatar(state);
       await userProvider.updateProfile(
         username: _firstNonEmptyProfileText([
           state.displayName,
@@ -476,9 +567,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         bio: state.bio ?? '',
       );
       if (!mounted) return;
-      setState(() {
-        _message = I18n.tr('profile.avatar.uploaded');
-      });
+      setState(() => _message = I18n.tr('profile.avatar.saved'));
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -513,11 +602,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       final auth = context.read<AuthProvider>();
       final userProvider = context.read<UserProvider>();
       await auth.updateProfile(
-        username: username,
         email: email,
         emailCode: _emailCodeCtrl.text.trim(),
         displayName: _displayNameCtrl.text.trim(),
-        avatar: _avatarCtrl.text.trim(),
         bio: _bioCtrl.text.trim(),
       );
       final state = auth.state;
@@ -554,6 +641,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   Widget build(BuildContext context) {
     final state = context.watch<AuthProvider>().state;
     final themeProvider = context.watch<ThemeProvider>();
+    final achievements = context.watch<AchievementProvider?>();
     final avatarFrame = themeProvider.activeAvatarFrame;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
@@ -635,6 +723,25 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                           color: cs.onSurface.withValues(alpha: 0.62),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _ProfileMetricChip(
+                            icon: Icons.savings_outlined,
+                            label: I18n.tr('profile.coins'),
+                            value:
+                                '${state.coinBalance != 0 ? state.coinBalance : achievements?.coinBalance ?? 0}',
+                          ),
+                          if (state.username?.trim().isNotEmpty == true)
+                            _ProfileMetricChip(
+                              icon: Icons.badge_outlined,
+                              label: I18n.tr('profile.account_id'),
+                              value: state.username!.trim(),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -655,56 +762,70 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _usernameCtrl,
+                  readOnly: true,
                   decoration: InputDecoration(
                     labelText: I18n.tr('auth.username'),
+                    helperText: I18n.tr('profile.username.locked'),
                   ),
                 ),
-                const SizedBox(height: 12),
-                _ProfileActionField(
-                  field: TextField(
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('auth.email'),
-                      helperText: state.emailVerified
-                          ? I18n.tr('profile.email.verified')
-                          : I18n.tr('profile.email.unverified_or_pending'),
-                    ),
-                  ),
-                  action: _bindEmailCodeButton(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProfileSectionHeader(
+                  icon: Icons.alternate_email_outlined,
+                  title: I18n.tr('profile.email.binding'),
+                  subtitle: state.emailVerified
+                      ? I18n.tr('profile.email.verified')
+                      : I18n.tr('profile.email.unverified_or_pending'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: _emailCodeCtrl,
-                  keyboardType: TextInputType.number,
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: I18n.tr('auth.email_code'),
-                    helperText: I18n.tr('profile.email_code.helper'),
+                    labelText: I18n.tr('auth.email'),
+                    helperText: state.emailVerified
+                        ? I18n.tr('profile.email.verified')
+                        : I18n.tr('profile.email.unverified_or_pending'),
                   ),
                 ),
                 const SizedBox(height: 12),
-                _ProfileActionField(
-                  field: TextField(
-                    controller: _avatarCtrl,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('profile.avatar.url_or_text'),
-                    ),
-                  ),
-                  action: OutlinedButton.icon(
+                _emailCodeField(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProfileSectionHeader(
+                  icon: Icons.security_outlined,
+                  title: I18n.tr('profile.account_security'),
+                  subtitle: I18n.tr('profile.account_security.subtitle'),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
                     onPressed: _busy || _avatarBusy || _sendingEmailCode
                         ? null
-                        : _uploadAvatar,
-                    icon: _avatarBusy
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.upload_file_outlined),
-                    label: Text(I18n.tr('profile.avatar.upload')),
+                        : () => showDialog(
+                            context: context,
+                            builder: (_) => const _ChangePasswordDialog(),
+                          ),
+                    icon: const Icon(Icons.password_outlined),
+                    label: Text(I18n.tr('profile.change_password')),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
                 TextField(
                   controller: _bioCtrl,
                   minLines: 3,
@@ -734,20 +855,6 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
               color: Colors.red,
             ),
           ],
-          const SizedBox(height: 12),
-          AppSurfaceCard(
-            padding: EdgeInsets.zero,
-            child: ListTile(
-              leading: const Icon(Icons.password_outlined),
-              title: Text(I18n.tr('profile.change_password')),
-              subtitle: Text(I18n.tr('profile.change_password.subtitle')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => showDialog(
-                context: context,
-                builder: (_) => const _ChangePasswordDialog(),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -778,11 +885,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     final profile = context.read<UserProvider>().profile;
     _usernameCtrl = TextEditingController(text: profile.username);
     _displayNameCtrl = TextEditingController(text: profile.displayName);
-    _avatarCtrl = TextEditingController(
-      text: profile.avatarUrl.isNotEmpty
-          ? profile.avatarUrl
-          : profile.avatarInitials,
-    );
+    _avatarCtrl = TextEditingController(text: profile.avatarUrl);
     _emailCtrl = TextEditingController(text: profile.email);
     _bioCtrl = TextEditingController(text: profile.bio);
     _usernameCtrl.addListener(_refreshPreview);
@@ -833,8 +936,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       if (!mounted) return;
       setState(() {
         _avatarCtrl.text = storedPath;
-        _message = I18n.tr('profile.avatar.selected');
+        _avatarBusy = false;
       });
+      await _save(showSnackBar: false);
+      if (!mounted) return;
+      setState(() => _message = I18n.tr('profile.avatar.saved'));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -842,7 +948,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool showSnackBar = true}) async {
     if (_busy || _avatarBusy) return;
     final username = _usernameCtrl.text.trim();
     if (username.isEmpty) {
@@ -854,6 +960,9 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     final avatarIsUrl = _isHttpAvatar(avatar);
     final avatarIsLocalFile = _localAvatarPath(avatar) != null;
     final avatarIsImage = avatarIsUrl || avatarIsLocalFile;
+    final avatarInitials = avatarIsImage
+        ? _firstNonEmptyProfileText([displayName, username])
+        : avatar;
     setState(() {
       _busy = true;
       _error = null;
@@ -862,9 +971,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     try {
       await context.read<UserProvider>().updateProfile(
         username: username,
-        avatarInitials: avatarIsImage
-            ? _firstNonEmptyProfileText([displayName, username])
-            : avatar,
+        avatarInitials: avatarInitials,
         displayName: displayName,
         email: _emailCtrl.text.trim(),
         avatarUrl: avatarIsImage ? avatar : '',
@@ -872,9 +979,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       );
       if (!mounted) return;
       setState(() => _message = I18n.tr('profile.local.updated'));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.local.updated'))));
+      if (showSnackBar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(I18n.tr('profile.local.updated'))),
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -973,27 +1082,6 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                   controller: _usernameCtrl,
                   decoration: InputDecoration(
                     labelText: I18n.tr('profile.local_nickname'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _ProfileActionField(
-                  field: TextField(
-                    controller: _avatarCtrl,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('profile.avatar.url_file_or_text'),
-                      helperText: I18n.tr('profile.avatar.helper'),
-                    ),
-                  ),
-                  action: OutlinedButton.icon(
-                    onPressed: _busy || _avatarBusy ? null : _pickLocalAvatar,
-                    icon: _avatarBusy
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.photo_library_outlined),
-                    label: Text(I18n.tr('profile.avatar.choose')),
                   ),
                 ),
                 const SizedBox(height: 12),

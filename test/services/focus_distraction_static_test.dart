@@ -55,6 +55,14 @@ void main() {
     expect(blocker, contains('TYPE_WINDOW_STATE_CHANGED'));
     expect(blocker, contains('FocusBlockerStore.isBlocked'));
     expect(blocker, contains('FocusBlockerStore.recordBlockedPackage'));
+    expect(blocker, contains('isDuplicateBounce'));
+    expect(blocker, contains('bounceDebounceMillis = 1500L'));
+    expect(blocker, contains('Uri.Builder()'));
+    expect(
+      blocker,
+      contains('appendQueryParameter("blocked", blockedPackage)'),
+    );
+    expect(blocker, contains('runCatching { startActivity(intent) }'));
     expect(blocker, contains('MainActivity::class.java'));
     expect(blockerXml, contains('typeWindowStateChanged'));
 

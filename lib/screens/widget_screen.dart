@@ -288,16 +288,42 @@ class _AddWidgetButton extends StatelessWidget {
 
   Future<void> _request(BuildContext context) async {
     final supported = await AndroidWidgetManager.canRequestPinWidget();
-    if (supported) {
-      final ok = await AndroidWidgetManager.requestPinWidget(kind);
-      if (ok || !context.mounted) return;
-    }
     if (!context.mounted) return;
+    if (!supported) {
+      await _showPinWidgetHelp(context, AndroidWidgetPinResult.unsupported);
+      return;
+    }
+
+    final result = await AndroidWidgetManager.requestPinWidget(kind);
+    if (!context.mounted) return;
+    if (result == AndroidWidgetPinResult.requested) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已发起添加请求，请在桌面确认小组件。')));
+      return;
+    }
+    await _showPinWidgetHelp(context, result);
+  }
+
+  Future<void> _showPinWidgetHelp(
+    BuildContext context,
+    AndroidWidgetPinResult result,
+  ) async {
+    final message = switch (result) {
+      AndroidWidgetPinResult.unsupported =>
+        '当前桌面不支持应用内直接添加小组件。请在系统桌面长按空白处，选择“小组件”，找到“多仪”后手动拖到桌面。',
+      AndroidWidgetPinResult.permissionDenied =>
+        '系统没有允许本次添加到桌面。请检查桌面/系统设置中的小组件或桌面快捷方式权限，开启后再添加。',
+      AndroidWidgetPinResult.invalidKind => '当前小组件类型暂不支持添加，请更新应用后重试。',
+      AndroidWidgetPinResult.unavailable =>
+        '无法发起添加到桌面。请确认当前桌面支持固定小组件，并在系统设置中允许创建桌面小组件。',
+      AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面确认小组件。',
+    };
     await showDialog<void>(
       context: context,
       builder: (ctx) => AppDialog(
         title: const Text('开启桌面小组件'),
-        content: const Text('当前桌面不支持应用内直接添加，或系统未开放小组件创建权限。请到桌面/系统设置里开启后再添加。'),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

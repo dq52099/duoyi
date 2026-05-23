@@ -12,6 +12,8 @@ class AuthState {
   final String? displayName;
   final String? avatar;
   final String? bio;
+  final int coinBalance;
+  final int lifetimeCoins;
   final String? token;
   final bool isAdmin;
 
@@ -23,6 +25,8 @@ class AuthState {
     this.displayName,
     this.avatar,
     this.bio,
+    this.coinBalance = 0,
+    this.lifetimeCoins = 0,
     this.token,
     this.isAdmin = false,
   });
@@ -37,6 +41,8 @@ class AuthState {
     'display_name': displayName,
     'avatar': avatar,
     'bio': bio,
+    'coin_balance': coinBalance,
+    'lifetime_coins': lifetimeCoins,
     'token': token,
     'is_admin': isAdmin,
   };
@@ -49,6 +55,8 @@ class AuthState {
     displayName: j['display_name'] as String?,
     avatar: j['avatar'] as String?,
     bio: j['bio'] as String?,
+    coinBalance: _intFromJson(j['coin_balance']),
+    lifetimeCoins: _intFromJson(j['lifetime_coins']),
     token: j['token'] as String?,
     isAdmin: j['is_admin'] == true,
   );
@@ -61,6 +69,8 @@ class AuthState {
     String? displayName,
     String? avatar,
     String? bio,
+    int? coinBalance,
+    int? lifetimeCoins,
     String? token,
     bool? isAdmin,
   }) => AuthState(
@@ -71,6 +81,8 @@ class AuthState {
     displayName: displayName ?? this.displayName,
     avatar: avatar ?? this.avatar,
     bio: bio ?? this.bio,
+    coinBalance: coinBalance ?? this.coinBalance,
+    lifetimeCoins: lifetimeCoins ?? this.lifetimeCoins,
     token: token ?? this.token,
     isAdmin: isAdmin ?? this.isAdmin,
   );
@@ -248,19 +260,15 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> updateProfile({
-    required String username,
     String? email,
     String? emailCode,
     String? displayName,
-    String? avatar,
     String? bio,
   }) async {
     final res = await _client.patch('/api/auth/profile', {
-      'username': username,
       'email': email,
       if (emailCode != null && emailCode.isNotEmpty) 'email_code': emailCode,
       'display_name': displayName,
-      'avatar': avatar,
       'bio': bio,
     });
     _state = _stateFromAuthResponse(res, keepToken: true);
@@ -362,6 +370,16 @@ class AuthProvider extends ChangeNotifier {
         _stringField(payload, 'avatar_url', _state.avatar),
       ),
       bio: _stringField(payload, 'bio', _state.bio),
+      coinBalance: _intField(
+        payload,
+        'coin_balance',
+        _intField(payload, 'coinBalance', _state.coinBalance),
+      ),
+      lifetimeCoins: _intField(
+        payload,
+        'lifetime_coins',
+        _intField(payload, 'lifetimeCoins', _state.lifetimeCoins),
+      ),
       token: keepToken
           ? _state.token
           : _stringField(payload, 'token', _state.token),
@@ -378,6 +396,15 @@ class AuthProvider extends ChangeNotifier {
   ) {
     if (!data.containsKey(key)) return fallback;
     return data[key] as String?;
+  }
+
+  int _intField(Map<String, dynamic> data, String key, int fallback) {
+    if (!data.containsKey(key)) return fallback;
+    final value = data[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
   }
 
   Future<void> _notifyAccountProfileChanged() async {
@@ -400,6 +427,13 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('[auth] account logout cleanup failed: $e\n$st');
     }
   }
+}
+
+int _intFromJson(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
 }
 
 bool _looksLikeEmail(String value) {

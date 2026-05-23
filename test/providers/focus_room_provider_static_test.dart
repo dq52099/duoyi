@@ -15,8 +15,15 @@ void main() {
     expect(provider, contains("static const storageKey = 'duoyi_focus_rooms'"));
     expect(provider, contains("static const defaultRoomId = 'deep_work_room'"));
     expect(provider, contains('Future<void> joinRoom'));
+    expect(
+      provider,
+      contains(
+        'if (_joinedRoomIds.contains(id) && _activeRoomId == id) return;',
+      ),
+    );
     expect(provider, contains('Future<void> leaveRoom'));
     expect(provider, contains('Future<void> setActiveRoom'));
+    expect(provider, contains('if (_activeRoomId == id) return;'));
     expect(provider, contains('Future<FocusRoom> createRoom'));
     expect(provider, contains('Future<FocusRoomInvite> createInviteForRoom'));
     expect(provider, contains('int? maxUses'));

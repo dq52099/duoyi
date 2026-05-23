@@ -17,11 +17,11 @@ Future<void> showAnniversaryEditor(BuildContext context, {Anniversary? item}) {
   );
 }
 
-/// 纪念日 / 生日 / 倒数日 聚合页
 class AnniversaryScreen extends StatefulWidget {
   final int initialTab;
+  final AnniversaryType? fixedType;
 
-  const AnniversaryScreen({super.key, this.initialTab = 0});
+  const AnniversaryScreen({super.key, this.initialTab = 0, this.fixedType});
 
   @override
   State<AnniversaryScreen> createState() => _AnniversaryScreenState();
@@ -35,11 +35,16 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(
-      length: 4,
-      initialIndex: widget.initialTab.clamp(0, 3),
-      vsync: this,
-    );
+    final fixedType = widget.fixedType;
+    final initialIndex = fixedType == null
+        ? widget.initialTab.clamp(0, 3)
+        : switch (fixedType) {
+            AnniversaryType.birthday => 1,
+            AnniversaryType.memorial => 2,
+            AnniversaryType.normal => 3,
+            AnniversaryType.custom => 0,
+          };
+    _tabs = TabController(length: 4, initialIndex: initialIndex, vsync: this);
     _tabIndex = _tabs.index;
     _tabs.addListener(_handleTabChanged);
   }
@@ -92,19 +97,33 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
   Widget build(BuildContext context) {
     final provider = context.watch<AnniversaryProvider>();
     final cs = Theme.of(context).colorScheme;
+    final fixedType = widget.fixedType;
+    final fixedList = fixedType == null
+        ? null
+        : provider.items.where((e) => e.type == fixedType).toList();
+    final fixedTitle = fixedType == null
+        ? _title
+        : switch (fixedType) {
+            AnniversaryType.birthday => I18n.tr('anniversary.birthday'),
+            AnniversaryType.memorial => I18n.tr('anniversary.title'),
+            AnniversaryType.normal => I18n.tr('countdown.title'),
+            AnniversaryType.custom => I18n.tr('anniversary.custom'),
+          };
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: [
-            Tab(text: I18n.tr('anniversary.tab.all')),
-            Tab(text: I18n.tr('anniversary.birthday')),
-            Tab(text: I18n.tr('anniversary.title')),
-            Tab(text: I18n.tr('anniversary.countdown_short')),
-          ],
-        ),
+        title: Text(fixedTitle),
+        bottom: fixedType == null
+            ? TabBar(
+                controller: _tabs,
+                tabs: [
+                  Tab(text: I18n.tr('anniversary.tab.all')),
+                  Tab(text: I18n.tr('anniversary.birthday')),
+                  Tab(text: I18n.tr('anniversary.title')),
+                  Tab(text: I18n.tr('anniversary.countdown_short')),
+                ],
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.today),
@@ -113,25 +132,21 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
           ),
         ],
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: List.generate(4, (i) {
-          final list = _filter(provider, i);
-          return list.isEmpty
-              ? EmptyState(
-                  icon: Icons.event,
-                  message: I18n.tr('anniversary.empty'),
-                  actionLabel: I18n.tr('action.add'),
-                  onAction: () => _showAddDialog(context),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: list.length,
-                  itemBuilder: (context, index) =>
-                      _AnniversaryCard(item: list[index]),
+      body: fixedList == null
+          ? TabBarView(
+              controller: _tabs,
+              children: List.generate(4, (i) {
+                return _AnniversaryList(
+                  items: _filter(provider, i),
+                  onAdd: () => _showAddDialog(context),
                 );
-        }),
-      ),
+              }),
+            )
+          : _AnniversaryList(
+              items: fixedList,
+              onAdd: () => _showAddDialog(context),
+              fixedType: fixedType,
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(context),
         icon: const Icon(Icons.add),
@@ -188,6 +203,56 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
 
   void _showAddDialog(BuildContext context) {
     showAnniversaryEditor(context);
+  }
+}
+
+class BirthdayScreen extends StatelessWidget {
+  const BirthdayScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AnniversaryScreen(fixedType: AnniversaryType.birthday);
+  }
+}
+
+class MemorialAnniversaryScreen extends StatelessWidget {
+  const MemorialAnniversaryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AnniversaryScreen(fixedType: AnniversaryType.memorial);
+  }
+}
+
+class _AnniversaryList extends StatelessWidget {
+  final List<Anniversary> items;
+  final VoidCallback onAdd;
+  final AnniversaryType? fixedType;
+
+  const _AnniversaryList({
+    required this.items,
+    required this.onAdd,
+    this.fixedType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = fixedType?.name ?? 'all';
+    return items.isEmpty
+        ? EmptyState(
+            key: ValueKey('anniversary_fixed_$name'),
+            icon: Icons.event,
+            message: I18n.tr('anniversary.empty'),
+            actionLabel: I18n.tr('action.add'),
+            onAction: onAdd,
+          )
+        : ListView.builder(
+            key: ValueKey('anniversary_fixed_$name'),
+            padding: const EdgeInsets.all(12),
+            itemCount: items.length,
+            itemBuilder: (context, index) =>
+                _AnniversaryCard(item: items[index]),
+          );
   }
 }
 
