@@ -165,9 +165,16 @@ void main() {
 
     expect(gradle, contains('Release signing is not configured'));
     expect(gradle, contains('GradleException'));
-    expect(gradle, contains('DUOYI_KEYSTORE_BASE64'));
-    expect(gradle, contains('Base64.getMimeDecoder().decode(encoded)'));
+    expect(gradle, contains('DUOYI_KEYSTORE_* env vars'));
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
+    expect(workflow, contains('DUOYI_KEYSTORE_BASE64'));
+    expect(workflow, contains('Restore release keystore'));
+    expect(
+      workflow,
+      contains('base64 -d > android/app/keys/duoyi-release.jks'),
+    );
+    expect(workflow, contains('storeFile=keys/duoyi-release.jks'));
+    expect(workflow, contains('android/key.properties'));
     expect(workflow, contains('Require release keystore'));
     expect(
       workflow,
