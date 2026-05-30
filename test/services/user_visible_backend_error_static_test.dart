@@ -8,14 +8,40 @@ void main() {
       'lib/providers/cloud_sync_provider.dart',
     ).readAsStringSync();
     final share = File('lib/providers/share_provider.dart').readAsStringSync();
+    final apiClient = File('lib/services/api_client.dart').readAsStringSync();
 
     expect(cloud, contains('云同步暂不可用，请稍后重试或联系管理员'));
     expect(cloud, contains('_userVisibleSyncError'));
+    expect(cloud, contains('userVisibleApiError('));
     expect(cloud, isNot(contains('_lastError = e.toString();')));
     expect(cloud, isNot(contains('_lastError = error.toString();')));
 
     expect(share, contains('共享空间服务暂不可用，请稍后重试或联系管理员'));
     expect(share, contains('_userVisibleWorkspaceError'));
+    expect(share, contains('userVisibleApiError('));
     expect(share, isNot(contains('_lastError = e.toString();')));
+
+    expect(apiClient, contains('isBackendCompatibilityDiagnosticMessage'));
+    expect(apiClient, contains('userVisibleApiError('));
+    expect(apiClient, contains('服务暂不可用，请稍后重试或联系管理员'));
+  });
+
+  test('screens do not show backend deployment diagnostics directly', () {
+    for (final path in const [
+      'lib/screens/login_screen.dart',
+      'lib/screens/profile_screen.dart',
+      'lib/screens/feedback_screen.dart',
+      'lib/screens/announcements_screen.dart',
+      'lib/screens/admin_screen.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, contains('userVisibleApiError('), reason: path);
+      expect(source, isNot(contains('e.message')), reason: path);
+      expect(
+        source,
+        isNot(contains('error is ApiException ? error.message')),
+        reason: path,
+      );
+    }
   });
 }

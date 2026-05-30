@@ -37,13 +37,10 @@ class ShareProvider extends ChangeNotifier {
 
   String _userVisibleWorkspaceError(Object error) {
     debugPrint('[ShareProvider] $error');
-    final message = error is ApiException ? error.message : error.toString();
-    if (message.contains('当前后端未部署本版本接口') ||
-        message.contains('缺少接口契约 api_contract_version') ||
-        message.contains('必备路由摘要')) {
-      return _serviceUnavailableMessage;
-    }
-    return message;
+    return userVisibleApiError(
+      error,
+      fallbackMessage: _serviceUnavailableMessage,
+    );
   }
 
   Workspace? workspaceById(String id) {

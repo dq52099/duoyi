@@ -549,7 +549,7 @@ class _DashboardTabState extends State<_DashboardTab> {
     try {
       _stats = await widget.api.stats();
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = userVisibleApiError(e);
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -1115,12 +1115,12 @@ int _lastAdminOffset({required int total, required int pageSize}) {
 }
 
 String _adminErrorMessage(Object error, String target) {
-  final text = error is ApiException ? error.message : error.toString();
+  final text = userVisibleApiError(error);
   return '无法加载$target：$text';
 }
 
 String _adminActionErrorMessage(Object error, String action) {
-  final text = error is ApiException ? error.message : error.toString();
+  final text = userVisibleApiError(error);
   return '$action失败：$text';
 }
 
@@ -1583,7 +1583,7 @@ class _GroupsTabState extends State<_GroupsTab> {
         ..addAll(page.items);
     } on ApiException catch (e) {
       if (!mounted) return;
-      _error = e.message;
+      _error = userVisibleApiError(e);
     } catch (e) {
       if (!mounted) return;
       _error = e.toString();
@@ -1776,7 +1776,7 @@ class _GroupsTabState extends State<_GroupsTab> {
       await _load(offset: _offset);
       _showSnack('用户组已保存');
     } on ApiException catch (e) {
-      _showSnack(e.message);
+      _showSnack(userVisibleApiError(e));
     }
   }
 
@@ -1994,7 +1994,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     } finally {
       if (mounted) setState(() => _savingKeys.remove(key));
@@ -2213,7 +2213,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       await _reloadGroupsRoles();
       _showSettingsSnack('用户组已保存');
     } on ApiException catch (e) {
-      _showSettingsSnack(e.message);
+      _showSettingsSnack(userVisibleApiError(e));
     }
   }
 
@@ -2317,7 +2317,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       await _reloadGroupsRoles();
       _showSettingsSnack('角色已保存');
     } on ApiException catch (e) {
-      _showSettingsSnack(e.message);
+      _showSettingsSnack(userVisibleApiError(e));
     }
   }
 
@@ -2571,7 +2571,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       _syncUpdateVersionPreset();
       _showSettingsSnack('更新配置已保存');
     } on ApiException catch (e) {
-      _showSettingsSnack(e.message);
+      _showSettingsSnack(userVisibleApiError(e));
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
@@ -2618,7 +2618,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
     } on ApiException catch (e) {
-      _showSettingsSnack(e.message);
+      _showSettingsSnack(userVisibleApiError(e));
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
@@ -3117,7 +3117,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _testResult = _adminAiFailureReason(e.message);
+        _testResult = _adminAiFailureReason(userVisibleApiError(e));
         _testColor = Theme.of(context).colorScheme.error;
       });
     } catch (e) {
@@ -3819,7 +3819,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     } finally {
       if (mounted) setState(() => _exportingBackups = false);
@@ -3845,7 +3845,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     } finally {
       if (mounted) setState(() => _exportingServerBackups = false);
@@ -5157,7 +5157,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5172,7 +5172,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5206,7 +5206,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     } catch (e) {
       if (mounted) {
@@ -5274,7 +5274,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5315,7 +5315,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5418,7 +5418,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5519,7 +5519,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5605,7 +5605,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -5647,7 +5647,7 @@ class _UsersTabState extends State<_UsersTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -6561,7 +6561,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -6983,7 +6983,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -7018,7 +7018,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     } catch (e) {
       if (mounted) {
@@ -7104,7 +7104,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }
@@ -7250,7 +7250,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
     }
   }
 
@@ -8099,7 +8099,7 @@ class _InvitesTabState extends State<_InvitesTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
     }
   }

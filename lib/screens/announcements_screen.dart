@@ -36,7 +36,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       _items = list.cast<Map<String, dynamic>>();
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = userVisibleApiError(e);
     } catch (e) {
       _error = '${I18n.tr('announcement.load_failed_prefix')}$e';
     } finally {

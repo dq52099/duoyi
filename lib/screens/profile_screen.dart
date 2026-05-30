@@ -415,7 +415,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -583,7 +583,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -617,7 +617,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -1001,7 +1001,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       if (!mounted) return;
       setState(() => _message = I18n.tr('profile.avatar.saved'));
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -1111,7 +1111,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         context,
       ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {

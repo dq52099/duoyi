@@ -122,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (mounted) Navigator.pop(context);
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -754,7 +754,7 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -792,7 +792,7 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
         SnackBar(content: Text(I18n.tr('auth.password_reset.done'))),
       );
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = userVisibleApiError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

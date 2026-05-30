@@ -87,7 +87,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       });
     } on ApiException catch (e) {
       if (mounted && loadSerial == _loadSerial) {
-        setState(() => _error = e.message);
+        setState(() => _error = userVisibleApiError(e));
       }
     } catch (e) {
       if (mounted && loadSerial == _loadSerial) {
@@ -450,7 +450,7 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
       ).showSnackBar(SnackBar(content: Text(I18n.tr('feedback.submitted'))));
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _submitError = e.message);
+      if (mounted) setState(() => _submitError = userVisibleApiError(e));
     } catch (e) {
       if (mounted) setState(() => _submitError = e.toString());
     } finally {

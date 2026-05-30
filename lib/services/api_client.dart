@@ -504,3 +504,23 @@ class ApiException implements Exception {
   @override
   String toString() => message;
 }
+
+const defaultUserVisibleBackendErrorMessage = '服务暂不可用，请稍后重试或联系管理员';
+
+bool isBackendCompatibilityDiagnosticMessage(String message) =>
+    message.contains('当前后端未部署本版本接口') ||
+    message.contains('缺少接口契约 api_contract_version') ||
+    message.contains('必备路由摘要') ||
+    message.contains('可能是旧后端') ||
+    message.contains('反向代理未转发 /api/*');
+
+String userVisibleApiError(
+  Object error, {
+  String fallbackMessage = defaultUserVisibleBackendErrorMessage,
+}) {
+  final message = error is ApiException ? error.message : error.toString();
+  if (isBackendCompatibilityDiagnosticMessage(message)) {
+    return fallbackMessage;
+  }
+  return message;
+}

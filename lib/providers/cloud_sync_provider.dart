@@ -174,13 +174,10 @@ class CloudSyncProvider extends ChangeNotifier {
 
   String _userVisibleSyncError(Object error) {
     debugPrint('[CloudSync] $error');
-    final message = error is ApiException ? error.message : error.toString();
-    if (message.contains('当前后端未部署本版本接口') ||
-        message.contains('缺少接口契约 api_contract_version') ||
-        message.contains('必备路由摘要')) {
-      return _serviceUnavailableMessage;
-    }
-    return message;
+    return userVisibleApiError(
+      error,
+      fallbackMessage: _serviceUnavailableMessage,
+    );
   }
 
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
