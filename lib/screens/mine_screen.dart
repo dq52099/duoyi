@@ -449,8 +449,9 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        const BrandRouteSurface(child: PomodoroScreen()),
+                    builder: (_) => const BrandRouteSurface(
+                      child: PomodoroScreen(useShellBackground: true),
+                    ),
                   ),
                 ),
               ),

@@ -32,6 +32,38 @@ void main() {
     expect(timerTabSource, isNot(contains('ListView(')));
   });
 
+  test('二级路由进入番茄钟时复用外层品牌背景', () {
+    for (final path in const [
+      'lib/main.dart',
+      'lib/screens/mine_screen.dart',
+      'lib/screens/today_screen.dart',
+      'lib/widgets/calendar_event_sheet.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source,
+        isNot(contains('BrandRouteSurface(child: PomodoroScreen()')),
+      );
+      expect(source, isNot(contains('child: PomodoroScreen()),')));
+    }
+
+    expect(
+      File('lib/main.dart').readAsStringSync(),
+      contains('PomodoroScreen(key: pomodoroKey, useShellBackground: true)'),
+    );
+    for (final path in const [
+      'lib/screens/mine_screen.dart',
+      'lib/screens/today_screen.dart',
+      'lib/widgets/calendar_event_sheet.dart',
+    ]) {
+      expect(
+        File(path).readAsStringSync(),
+        contains('PomodoroScreen(useShellBackground: true)'),
+        reason: path,
+      );
+    }
+  });
+
   test('专注输入弹窗随键盘滚动约束，避免黑屏卡死', () {
     final source = File('lib/screens/pomodoro_screen.dart').readAsStringSync();
 

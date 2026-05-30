@@ -218,7 +218,7 @@ class _ShareScreenState extends State<ShareScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('打开提及失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('打开提及失败: ${_shareError(e)}')));
     }
   }
 

@@ -687,7 +687,9 @@ class CalendarEventSheet extends StatelessWidget {
     if (!navigator.mounted) return;
     await navigator.push(
       MaterialPageRoute(
-        builder: (_) => const BrandRouteSurface(child: PomodoroScreen()),
+        builder: (_) => const BrandRouteSurface(
+          child: PomodoroScreen(useShellBackground: true),
+        ),
       ),
     );
   }

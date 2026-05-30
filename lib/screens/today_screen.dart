@@ -244,7 +244,10 @@ class TodayScreen extends StatelessWidget {
                     unit: I18n.tr('today.unit.times'),
                     icon: Icons.timer,
                     color: Colors.redAccent,
-                    onTap: () => _go(context, const PomodoroScreen()),
+                    onTap: () => _go(
+                      context,
+                      const PomodoroScreen(useShellBackground: true),
+                    ),
                   ),
                   AppMetricCard(
                     title: I18n.tr('today.diary'),

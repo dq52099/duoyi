@@ -43,5 +43,23 @@ void main() {
         reason: path,
       );
     }
+
+    final shareScreen = File(
+      'lib/screens/share_screen.dart',
+    ).readAsStringSync();
+    expect(shareScreen, contains('userVisibleApiError('));
+    expect(shareScreen, isNot(contains(r'打开提及失败: $e')));
+    expect(shareScreen, isNot(contains(r'创建失败: $e')));
+    expect(shareScreen, isNot(contains(r'加入失败: $e')));
+    expect(shareScreen, isNot(contains(r'生成失败: $e')));
+    expect(shareScreen, isNot(contains(r'发送失败: $e')));
+    expect(shareScreen, contains("打开提及失败: \${_shareError(e)}"));
+
+    final todoDetail = File(
+      'lib/screens/todo_detail_screen.dart',
+    ).readAsStringSync();
+    expect(todoDetail, contains('userVisibleApiError('));
+    expect(todoDetail, isNot(contains(r'评论发送失败: $e')));
+    expect(todoDetail, contains("评论发送失败: \${_shareError(e)}"));
   });
 }
