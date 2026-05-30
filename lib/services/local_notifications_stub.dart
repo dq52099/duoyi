@@ -4,6 +4,23 @@ class LocalNotifications {
   LocalNotifications._();
 
   static const int quickAddNotificationId = 880016;
+  static const int diagnosticNotificationId = 919003;
+  static const int scheduledDiagnosticNotificationId = 919004;
+  static const String quickAddChannelId = 'duoyi_quick_add_ongoing_v2';
+  static const Set<int> reservedNotificationIds = <int>{
+    quickAddNotificationId,
+    880017,
+    880018,
+    880019,
+    880020,
+    880021,
+    880022,
+    880023,
+    919001,
+    919002,
+    diagnosticNotificationId,
+    scheduledDiagnosticNotificationId,
+  };
 
   final bool _granted = false;
   bool get permissionGranted => _granted;
@@ -23,9 +40,11 @@ class LocalNotifications {
   }) async {}
 
   Future<void> showQuickAddOngoing({
-    String title = '多仪快捷记录',
-    String body = '下拉通知栏添加待办，或一键开始专注',
+    String? title,
+    String? body,
+    bool enableQuickActions = true,
   }) async {}
+  Future<void> cancelQuickAddOngoing() async {}
 
   Future<void> scheduleOnce({
     required int id,
@@ -51,6 +70,7 @@ class LocalNotifications {
   Future<void> cancelAll() async {}
   Future<List<int>> pendingIds() async => const [];
   Future<Set<String>?> notificationChannelIds() async => const <String>{};
+  Future<void> refreshAndroidRingtoneChannels() async {}
   String? takeLaunchPayload() => null;
 
   void Function(String payload)? onTap;

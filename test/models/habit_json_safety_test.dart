@@ -78,7 +78,7 @@ void main() {
       expect(progress?.isCompleted, isTrue);
       expect(habit.isCompletedForDate(DateTime(2026, 5, 11)), isTrue);
       expect(habit.streakUnitLabel, '周');
-      expect(habit.flexPeriodGoalLabel, '每周至少 5 次');
+      expect(habit.flexPeriodGoalLabel, '周期目标: 5 次/周');
       expect(habit.completionDatesInRange(DateTime(2026, 5, 11), friday), [
         DateTime(2026, 5, 15, 12),
       ]);
@@ -118,10 +118,7 @@ void main() {
       id: 'habit-completion-updated-at',
       name: '阅读',
       completions: {'2026-05-20': 1},
-      completionUpdatedAt: {
-        '2026-05-20': updatedAt,
-        '2026-05-21': tombstoneAt,
-      },
+      completionUpdatedAt: {'2026-05-20': updatedAt, '2026-05-21': tombstoneAt},
     );
 
     final json = habit.toJson();

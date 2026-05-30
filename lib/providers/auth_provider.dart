@@ -16,6 +16,7 @@ class AuthState {
   final int lifetimeCoins;
   final String? token;
   final bool isAdmin;
+  final List<String>? adminPermissions;
 
   const AuthState({
     this.userId,
@@ -29,6 +30,7 @@ class AuthState {
     this.lifetimeCoins = 0,
     this.token,
     this.isAdmin = false,
+    this.adminPermissions,
   });
 
   bool get isLoggedIn => token != null && token!.isNotEmpty;
@@ -45,6 +47,7 @@ class AuthState {
     'lifetime_coins': lifetimeCoins,
     'token': token,
     'is_admin': isAdmin,
+    if (adminPermissions != null) 'admin_permissions': adminPermissions,
   };
 
   factory AuthState.fromJson(Map<String, dynamic> j) => AuthState(
@@ -59,6 +62,9 @@ class AuthState {
     lifetimeCoins: _intFromJson(j['lifetime_coins']),
     token: j['token'] as String?,
     isAdmin: j['is_admin'] == true,
+    adminPermissions: j.containsKey('admin_permissions')
+        ? _stringListFromJson(j['admin_permissions'])
+        : null,
   );
 
   AuthState copyWith({
@@ -73,6 +79,7 @@ class AuthState {
     int? lifetimeCoins,
     String? token,
     bool? isAdmin,
+    List<String>? adminPermissions,
   }) => AuthState(
     userId: userId ?? this.userId,
     username: username ?? this.username,
@@ -85,6 +92,7 @@ class AuthState {
     lifetimeCoins: lifetimeCoins ?? this.lifetimeCoins,
     token: token ?? this.token,
     isAdmin: isAdmin ?? this.isAdmin,
+    adminPermissions: adminPermissions ?? this.adminPermissions,
   );
 }
 
@@ -198,11 +206,48 @@ class AuthProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> sendEmailCode({
     required String email,
     String purpose = 'login',
-  }) {
-    return _client.post('/api/auth/email-code', {
-      'email': email,
-      'purpose': purpose,
-    });
+  }) async {
+    final body = {'email': email, 'purpose': purpose};
+    final result = await _postFirstAvailable(const [
+      '/api/auth/email-code',
+      '/api/auth/email-code/send',
+      '/api/auth/email_code',
+      '/api/auth/email_code/send',
+      '/api/auth/email/send',
+      '/api/auth/email/send-code',
+      '/api/auth/send-email-code',
+      '/api/auth/send-email_code',
+      '/api/email-code',
+      '/api/email-code/send',
+      '/api/email_code',
+      '/api/email_code/send',
+      '/api/send-email-code',
+      '/api/send-email_code',
+    ], body);
+    _throwIfEmailCodeNotDelivered(result);
+    return result;
+  }
+
+  Future<Map<String, dynamic>> sendBindEmailCode({
+    required String email,
+  }) async {
+    final result = await _postFirstAvailable(
+      const [
+        '/api/me/email-code',
+        '/api/me/email-code/send',
+        '/api/me/email_code',
+        '/api/me/email_code/send',
+        '/api/me/email/send',
+        '/api/me/email/send-code',
+        '/api/email-code',
+        '/api/email-code/send',
+        '/api/account/email-code',
+        '/api/account/email-code/send',
+      ],
+      {'email': email, 'purpose': 'bind'},
+    );
+    _throwIfEmailCodeNotDelivered(result);
+    return result;
   }
 
   Future<void> login({
@@ -224,10 +269,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> emailLogin({required String email, required String code}) async {
-    final res = await _client.post('/api/auth/email-login', {
-      'email': email,
-      'code': code,
-    });
+    final res = await _postFirstAvailable(
+      const [
+        '/api/auth/email-login',
+        '/api/auth/email/login',
+        '/api/auth/login/email',
+        '/api/auth/email-code-login',
+        '/api/auth/login/email-code',
+        '/api/auth/email_code_login',
+        '/api/auth/login/email_code',
+        '/api/email-login',
+        '/api/email/login',
+        '/api/login/email',
+        '/api/email-code-login',
+        '/api/login/email-code',
+        '/api/email_code_login',
+        '/api/login/email_code',
+      ],
+      {'email': email, 'code': code, 'email_code': code},
+    );
     _state = _stateFromAuthResponse(res);
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
@@ -251,7 +311,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> refreshMe() async {
     if (!_state.isLoggedIn) return;
     try {
-      final me = await _client.get('/api/auth/me');
+      final me = await _getFirstAvailable(const ['/api/auth/me', '/api/me']);
       _state = _stateFromAuthResponse(me, keepToken: true);
       await _persistState();
       await _notifyAccountProfileChanged();
@@ -259,20 +319,51 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> updateProfile({
-    String? email,
-    String? emailCode,
-    String? displayName,
-    String? bio,
-  }) async {
-    final res = await _client.patch('/api/auth/profile', {
-      'email': ?email,
-      'email_code': ?(emailCode != null && emailCode.isNotEmpty
-          ? emailCode
-          : null),
-      'display_name': ?displayName,
-      'bio': ?bio,
-    });
+  Future<void> updateProfile({String? displayName, String? bio}) async {
+    final payload = <String, Object?>{};
+    if (displayName != null) payload['display_name'] = displayName;
+    if (bio != null) payload['bio'] = bio;
+    final res = await _sendFirstAvailable(
+      const ['PATCH', 'POST', 'PUT'],
+      const [
+        '/api/me/profile',
+        '/api/auth/profile',
+        '/api/profile',
+        '/api/user/profile',
+        '/api/account/profile',
+      ],
+      payload,
+      featureName: '个人资料',
+    );
+    _state = _stateFromAuthResponse(res, keepToken: true);
+    await _persistState();
+    await _notifyAccountProfileChanged();
+    notifyListeners();
+  }
+
+  Future<void> bindEmail({required String email, required String code}) async {
+    final body = {'email': email, 'code': code, 'email_code': code};
+    final res = await _sendFirstAvailable(
+      const ['POST', 'PATCH', 'PUT'],
+      const [
+        '/api/me/email',
+        '/api/me/email/bind',
+        '/api/me/bind-email',
+        '/api/auth/email',
+        '/api/auth/bind-email',
+        '/api/auth/email/bind',
+        '/api/email',
+        '/api/email/bind',
+        '/api/bind-email',
+        '/api/user/email',
+        '/api/user/email/bind',
+        '/api/user/bind-email',
+        '/api/account/email',
+        '/api/account/email/bind',
+      ],
+      body,
+      featureName: '邮箱绑定',
+    );
     _state = _stateFromAuthResponse(res, keepToken: true);
     await _persistState();
     await _notifyAccountProfileChanged();
@@ -283,21 +374,34 @@ class AuthProvider extends ChangeNotifier {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _client.post('/api/auth/change-password', {
-      'current_password': currentPassword,
-      'new_password': newPassword,
-    });
+    await _sendFirstAvailable(
+      const ['POST'],
+      const ['/api/me/password', '/api/auth/change-password'],
+      {'current_password': currentPassword, 'new_password': newPassword},
+    );
   }
 
   Future<void> uploadAvatarBytes({
     required String filename,
     required Uint8List bytes,
   }) async {
-    final res = await _client.uploadBytes(
-      '/api/auth/avatar',
+    final res = await _uploadFirstAvailable(
+      const [
+        '/api/me/avatar',
+        '/api/me/profile/avatar',
+        '/api/auth/profile/avatar',
+        '/api/auth/avatar',
+        '/api/profile/avatar',
+        '/api/avatar',
+        '/api/user/profile/avatar',
+        '/api/user/avatar',
+        '/api/account/profile/avatar',
+        '/api/account/avatar',
+      ],
       fieldName: 'avatar',
       filename: filename,
       bytes: bytes,
+      featureName: '头像上传',
     );
     _state = _stateFromAuthResponse(res, keepToken: true);
     await _persistState();
@@ -307,12 +411,24 @@ class AuthProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> requestPasswordReset({required String account}) {
     final trimmed = account.trim();
-    return _client.post('/api/auth/password-reset/request', {
-      'username': trimmed,
-      'account': trimmed,
-      'identifier': trimmed,
-      if (_looksLikeEmail(trimmed)) 'email': trimmed,
-    });
+    return _postFirstAvailable(
+      const [
+        '/api/auth/password-reset',
+        '/api/auth/password-reset/request',
+        '/api/auth/reset-password',
+        '/api/auth/reset-password/request',
+        '/api/auth/forgot-password',
+        '/api/auth/forgot-password/request',
+        '/api/password-reset',
+        '/api/password-reset/request',
+      ],
+      {
+        'username': trimmed,
+        'account': trimmed,
+        'identifier': trimmed,
+        if (_looksLikeEmail(trimmed)) 'email': trimmed,
+      },
+    );
   }
 
   Future<void> confirmPasswordReset({
@@ -341,7 +457,12 @@ class AuthProvider extends ChangeNotifier {
     } else {
       body['token'] = token ?? code ?? '';
     }
-    await _client.post('/api/auth/password-reset/confirm', body);
+    await _postFirstAvailable(const [
+      '/api/auth/password-reset/confirm',
+      '/api/auth/reset-password/confirm',
+      '/api/auth/forgot-password/confirm',
+      '/api/password-reset/confirm',
+    ], body);
   }
 
   AuthState _stateFromAuthResponse(
@@ -366,10 +487,10 @@ class AuthProvider extends ChangeNotifier {
           ? payload['email_verified'] == true
           : _state.emailVerified,
       displayName: _stringField(payload, 'display_name', _state.displayName),
-      avatar: _stringField(
+      avatar: _avatarField(
         payload,
         'avatar',
-        _stringField(payload, 'avatar_url', _state.avatar),
+        _avatarField(payload, 'avatar_url', _state.avatar),
       ),
       bio: _stringField(payload, 'bio', _state.bio),
       coinBalance: _intField(
@@ -388,6 +509,9 @@ class AuthProvider extends ChangeNotifier {
       isAdmin: payload.containsKey('is_admin')
           ? payload['is_admin'] == true
           : _state.isAdmin,
+      adminPermissions: payload.containsKey('admin_permissions')
+          ? _stringListFromJson(payload['admin_permissions'])
+          : _state.adminPermissions,
     );
   }
 
@@ -398,6 +522,130 @@ class AuthProvider extends ChangeNotifier {
   ) {
     if (!data.containsKey(key)) return fallback;
     return data[key] as String?;
+  }
+
+  String? _avatarField(
+    Map<String, dynamic> data,
+    String key,
+    String? fallback,
+  ) {
+    final value = _stringField(data, key, fallback);
+    if (value == null || value.isEmpty) return value;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return value;
+    if (uri.hasScheme || !value.startsWith('/')) return value;
+    if (_baseUrl.isEmpty) return value;
+    var normalizedBase = _baseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
+    var normalizedValue = value;
+    if (_hasBackendApiPrefix(normalizedValue) &&
+        normalizedBase.endsWith(
+          String.fromCharCodes(const [47, 97, 112, 105]),
+        )) {
+      normalizedValue = normalizedValue.substring(4);
+    }
+    return '$normalizedBase$normalizedValue';
+  }
+
+  bool _hasBackendApiPrefix(String value) {
+    if (value.length < 4) return false;
+    return value.codeUnitAt(0) == 47 &&
+        value.codeUnitAt(1) == 97 &&
+        value.codeUnitAt(2) == 112 &&
+        value.codeUnitAt(3) == 105 &&
+        (value.length == 4 || value.codeUnitAt(4) == 47);
+  }
+
+  Future<Map<String, dynamic>> _postFirstAvailable(
+    List<String> paths,
+    Object? body,
+  ) {
+    return _sendFirstAvailable(const ['POST'], paths, body, featureName: '账号');
+  }
+
+  Future<Map<String, dynamic>> _getFirstAvailable(List<String> paths) async {
+    ApiException? last404;
+    for (final path in paths) {
+      try {
+        return await _client.requestWithoutRouteDiagnosis('GET', path);
+      } on ApiException catch (e) {
+        if (!_isRouteMissing(e)) rethrow;
+        last404 = e;
+      }
+    }
+    throw last404 ?? const ApiException('404: 接口不存在');
+  }
+
+  Future<Map<String, dynamic>> _sendFirstAvailable(
+    List<String> methods,
+    List<String> paths,
+    Object? body, {
+    String featureName = '账号资料',
+  }) async {
+    ApiException? last404;
+    for (final path in paths) {
+      for (final method in methods) {
+        try {
+          return switch (method) {
+            'POST' => await _client.requestWithoutRouteDiagnosis(
+              'POST',
+              path,
+              body,
+            ),
+            'PUT' => await _client.requestWithoutRouteDiagnosis(
+              'PUT',
+              path,
+              body,
+            ),
+            'PATCH' => await _client.requestWithoutRouteDiagnosis(
+              'PATCH',
+              path,
+              body,
+            ),
+            _ => await _client.requestWithoutRouteDiagnosis(method, path, body),
+          };
+        } on ApiException catch (e) {
+          if (!_isRouteMissing(e)) rethrow;
+          last404 = e;
+        }
+      }
+    }
+    throw await _client.missingRoutesException(
+      featureName: featureName,
+      paths: paths,
+      fallback: last404,
+    );
+  }
+
+  Future<Map<String, dynamic>> _uploadFirstAvailable(
+    List<String> paths, {
+    required String fieldName,
+    required String filename,
+    required Uint8List bytes,
+    String featureName = '文件上传',
+  }) async {
+    ApiException? last404;
+    for (final path in paths) {
+      for (final method in const ['POST', 'PATCH', 'PUT']) {
+        try {
+          return await _client.uploadBytes(
+            path,
+            method: method,
+            fieldName: fieldName,
+            filename: filename,
+            bytes: bytes,
+            diagnoseMissingRoute: false,
+          );
+        } on ApiException catch (e) {
+          if (!_isRouteMissing(e)) rethrow;
+          last404 = e;
+        }
+      }
+    }
+    throw await _client.missingRoutesException(
+      featureName: featureName,
+      paths: paths,
+      fallback: last404,
+    );
   }
 
   int _intField(Map<String, dynamic> data, String key, int fallback) {
@@ -438,6 +686,47 @@ int _intFromJson(Object? value) {
   return 0;
 }
 
+List<String> _stringListFromJson(Object? value) {
+  if (value is List) {
+    return value
+        .map((item) => item.toString())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const <String>[];
+}
+
 bool _looksLikeEmail(String value) {
   return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+}
+
+bool _isRouteMissing(ApiException error) {
+  final message = error.message.trimLeft();
+  if (message.startsWith('405:')) {
+    final detail = message.substring(4).split('\n').first.trim().toLowerCase();
+    return detail == 'method not allowed' ||
+        detail == '{"detail":"method not allowed"}';
+  }
+  if (!message.startsWith('404:')) return false;
+  final detail = message.substring(4).split('\n').first.trim().toLowerCase();
+  return detail == 'not found' ||
+      detail == '{"detail":"not found"}' ||
+      detail == '接口不存在' ||
+      detail == 'route not found';
+}
+
+void _throwIfEmailCodeNotDelivered(Map<String, dynamic> result) {
+  if (result['sent'] != false || _nonEmptyString(result['dev_code']) != null) {
+    return;
+  }
+  final message =
+      _nonEmptyString(result['message']) ??
+      _nonEmptyString(result['detail']) ??
+      '验证码邮件发送失败，请稍后重试或联系管理员检查邮箱服务。';
+  throw ApiException(message);
+}
+
+String? _nonEmptyString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }

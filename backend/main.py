@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
@@ -27,6 +27,46 @@ from email.utils import formataddr
 from pathlib import Path
 
 app = FastAPI(title="多仪 Sync API", version="3.1.0")
+
+API_CONTRACT_VERSION = "2026-05-25.1"
+API_CONTRACT_FEATURES = {
+    "email_code": True,
+    "avatar_upload": True,
+    "profile_update": True,
+    "admin_coins": True,
+    "admin_groups": True,
+    "admin_ai_healthcheck": True,
+    "mobile_update": True,
+}
+API_CONTRACT_REQUIRED_ROUTES = [
+    "GET /api/config",
+    "GET /api/health",
+    "GET /api/mobile/apps/duoyi/update",
+    "POST /api/auth/email-code",
+    "POST /api/auth/email-login",
+    "PATCH /api/me/profile",
+    "POST /api/me/avatar",
+    "POST /api/me/email-code",
+    "PATCH /api/me/email",
+    "POST /api/admin/users/{user_id}/coins",
+    "PATCH /api/admin/users/{user_id}/coins",
+    "GET /api/admin/groups",
+    "POST /api/admin/provider-healthcheck",
+]
+API_CONTRACT_ROUTES_HASH = hashlib.sha256(
+    "\n".join(API_CONTRACT_REQUIRED_ROUTES).encode("utf-8")
+).hexdigest()[:16]
+
+
+def _api_contract_payload() -> dict:
+    return {
+        "api_contract_version": API_CONTRACT_VERSION,
+        "build_git_sha": os.getenv("GIT_SHA", os.getenv("BUILD_GIT_SHA", "")),
+        "build_time": os.getenv("BUILD_TIME", ""),
+        "required_routes_hash": API_CONTRACT_ROUTES_HASH,
+        "required_routes": API_CONTRACT_REQUIRED_ROUTES,
+        "features": API_CONTRACT_FEATURES,
+    }
 
 app.add_middleware(
     CORSMiddleware,
@@ -116,7 +156,14 @@ EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp"
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
 DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
-APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.9"))
+APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.10"))
+APP_PACKAGE_NAME = os.getenv("APP_PACKAGE_NAME", "com.duoyi.duoyi")
+APP_UPDATE_REPOSITORY = os.getenv("APP_UPDATE_REPOSITORY", "dq52099/duoyi")
+APP_UPDATE_DEFAULT_NOTES = os.getenv("APP_UPDATE_DEFAULT_NOTES", "包含最新修复与体验优化。")
+MOBILE_APK_DIR = os.getenv(
+    "DUOYI_MOBILE_APK_DIR",
+    os.path.join(os.path.dirname(__file__), "mobile_apps"),
+)
 ADMIN_ALL_PERMISSION = "*"
 ADMIN_NO_PERMISSION = "__none__"
 ADMIN_PERMISSION_KEYS = {
@@ -129,6 +176,37 @@ ADMIN_PERMISSION_KEYS = {
     "feedback",
     "invites",
     "audit",
+    "groups",
+    "roles",
+    "permissions",
+}
+ADMIN_PERMISSION_LABELS = {
+    "settings": "系统设置",
+    "users": "用户管理",
+    "coins": "时光币",
+    "backup": "备份",
+    "ai": "AI",
+    "announcements": "公告",
+    "feedback": "反馈",
+    "invites": "邀请码",
+    "audit": "审计日志",
+    "groups": "用户组",
+    "roles": "角色",
+    "permissions": "权限字典",
+}
+ADMIN_PERMISSION_DESCRIPTIONS = {
+    "settings": "查看和修改基础系统设置",
+    "users": "查看用户列表并修改账号状态",
+    "coins": "调整用户时光币额度",
+    "backup": "管理服务器和用户备份",
+    "ai": "管理 AI 服务配置和诊断",
+    "announcements": "发布和维护公告",
+    "feedback": "处理用户反馈",
+    "invites": "生成和删除邀请码",
+    "audit": "查看管理审计日志",
+    "groups": "管理默认用户组和额度模板",
+    "roles": "管理管理员角色模板",
+    "permissions": "查看权限字典",
 }
 
 
@@ -305,25 +383,488 @@ def _has_effective_update_policy(
     )
 
 
+def _version_to_code(value: str) -> int:
+    parts = _version_parts(value)
+    major = parts[0] if len(parts) > 0 else 0
+    minor = parts[1] if len(parts) > 1 else 0
+    patch = parts[2] if len(parts) > 2 else 0
+    return major * 100000 + minor * 10000 + patch
+
+
+def _next_patch_version(value: str) -> str:
+    parts = _version_parts(value)
+    while len(parts) < 3:
+        parts.append(0)
+    parts[2] += 1
+    return f"{parts[0]}.{parts[1]}.{parts[2]}"
+
+
+def _next_minor_version(value: str) -> str:
+    parts = _version_parts(value)
+    while len(parts) < 2:
+        parts.append(0)
+    return f"{parts[0]}.{parts[1] + 1}.0"
+
+
+def _update_version_options(
+    latest_version: str,
+    minimum_supported_version: str,
+) -> list[dict]:
+    current = APP_CURRENT_VERSION
+    next_patch = _next_patch_version(current)
+    next_minor = _next_minor_version(current)
+    options = [
+        {
+            "key": "current",
+            "label": "当前版本",
+            "latest_version": current,
+            "minimum_supported_version": current,
+        },
+        {
+            "key": "next_patch",
+            "label": "下一补丁",
+            "latest_version": next_patch,
+            "minimum_supported_version": current,
+        },
+        {
+            "key": "next_minor",
+            "label": "下一小版本",
+            "latest_version": next_minor,
+            "minimum_supported_version": current,
+        },
+        {
+            "key": "minimum_next_patch",
+            "label": "强制低于下一补丁",
+            "latest_version": next_patch,
+            "minimum_supported_version": next_patch,
+        },
+    ]
+    configured = {
+        "key": "configured",
+        "label": "已有配置",
+        "latest_version": (latest_version or current).strip() or current,
+        "minimum_supported_version": (
+            minimum_supported_version or current
+        ).strip() or current,
+    }
+    if not any(
+        item["latest_version"] == configured["latest_version"]
+        and item["minimum_supported_version"] == configured["minimum_supported_version"]
+        for item in options
+    ):
+        options.append(configured)
+    return options
+
+
+def _as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _update_release_defaults(db) -> dict:
+    latest_version = str(
+        _setting_get(db, "latest_version", "")
+        or _setting_get(db, "latest_version_name", "")
+        or ""
+    ).strip()
+    minimum_supported_version = str(
+        _setting_get(db, "minimum_supported_version", "") or ""
+    ).strip()
+    update_notes = str(
+        _setting_get(db, "update_notes", "")
+        or _setting_get(db, "release_notes", "")
+        or ""
+    ).strip()
+    update_download_url = str(
+        _setting_get(db, "update_download_url", "")
+        or _setting_get(db, "download_url", "")
+        or ""
+    ).strip()
+    force_update_required = _as_bool(
+        _setting_get(db, "force_update_required", False)
+    ) or _as_bool(_setting_get(db, "force_app_update_enabled", False))
+    latest_version = latest_version or APP_CURRENT_VERSION
+    minimum_supported_version = minimum_supported_version or APP_CURRENT_VERSION
+    if force_update_required:
+        if not update_notes:
+            update_notes = APP_UPDATE_DEFAULT_NOTES
+    return {
+        "current_version": APP_CURRENT_VERSION,
+        "current_version_name": APP_CURRENT_VERSION,
+        "current_version_code": _version_to_code(APP_CURRENT_VERSION),
+        "app_package_name": APP_PACKAGE_NAME,
+        "version_options": _update_version_options(
+            latest_version,
+            minimum_supported_version,
+        ),
+        "force_update_required": force_update_required,
+        "force_app_update_enabled": force_update_required,
+        "latest_version": latest_version,
+        "latest_version_name": latest_version,
+        "latest_version_code": _version_to_code(latest_version or APP_CURRENT_VERSION),
+        "minimum_supported_version": minimum_supported_version,
+        "update_notes": update_notes,
+        "release_notes": update_notes,
+        "update_download_url": update_download_url,
+        "download_url": update_download_url,
+    }
+
+
+def _coerce_update_settings(db, update_items: dict) -> None:
+    if "force_app_update_enabled" in update_items:
+        update_items["force_update_required"] = _as_bool(
+            update_items["force_app_update_enabled"]
+        )
+    if "force_update_required" in update_items:
+        update_items["force_app_update_enabled"] = _as_bool(
+            update_items["force_update_required"]
+        )
+    if "latest_version_name" in update_items and "latest_version" not in update_items:
+        update_items["latest_version"] = update_items["latest_version_name"]
+    if "latest_version" in update_items and "latest_version_name" not in update_items:
+        update_items["latest_version_name"] = update_items["latest_version"]
+    if "download_url" in update_items and "update_download_url" not in update_items:
+        update_items["update_download_url"] = update_items["download_url"]
+    if "update_download_url" in update_items and "download_url" not in update_items:
+        update_items["download_url"] = update_items["update_download_url"]
+    if "release_notes" in update_items and "update_notes" not in update_items:
+        update_items["update_notes"] = update_items["release_notes"]
+    if "update_notes" in update_items and "release_notes" not in update_items:
+        update_items["release_notes"] = update_items["update_notes"]
+    if "force_relogin_enabled" in update_items and _as_bool(
+        update_items["force_relogin_enabled"]
+    ):
+        current = _as_bool(_setting_get(db, "force_relogin_enabled", False))
+        if not current and "force_relogin_issued_at" not in update_items:
+            update_items["force_relogin_issued_at"] = _utc_now_text()
+
+    policy_keys = {
+        "latest_version",
+        "latest_version_name",
+        "minimum_supported_version",
+        "update_notes",
+        "release_notes",
+        "update_download_url",
+        "download_url",
+        "force_update_required",
+        "force_app_update_enabled",
+    }
+    if not any(key in update_items for key in policy_keys):
+        return
+
+    existing = _update_release_defaults(db)
+    force_update_required = _as_bool(
+        update_items.get(
+            "force_update_required",
+            update_items.get(
+                "force_app_update_enabled",
+                existing["force_update_required"],
+            ),
+        )
+    )
+    latest_version = str(
+        update_items.get(
+            "latest_version",
+            update_items.get("latest_version_name", existing["latest_version"]),
+        )
+        or ""
+    ).strip()
+    minimum_supported_version = str(
+        update_items.get(
+            "minimum_supported_version",
+            existing["minimum_supported_version"],
+        )
+        or ""
+    ).strip()
+    update_notes = str(
+        update_items.get(
+            "update_notes",
+            update_items.get("release_notes", existing["update_notes"]),
+        )
+        or ""
+    ).strip()
+
+    if force_update_required:
+        if not latest_version:
+            latest_version = APP_CURRENT_VERSION
+            update_items["latest_version"] = latest_version
+            update_items["latest_version_name"] = latest_version
+        if not minimum_supported_version:
+            minimum_supported_version = APP_CURRENT_VERSION
+            update_items["minimum_supported_version"] = minimum_supported_version
+    if (
+        _has_effective_update_policy(
+            latest_version=latest_version,
+            minimum_supported_version=minimum_supported_version,
+            update_download_url=str(
+                update_items.get(
+                    "update_download_url",
+                    update_items.get("download_url", existing["update_download_url"]),
+                )
+                or ""
+            ).strip(),
+            update_notes=update_notes,
+            force_update_required=force_update_required,
+        )
+        and not update_notes
+    ):
+        update_items["update_notes"] = APP_UPDATE_DEFAULT_NOTES
+        update_items["release_notes"] = APP_UPDATE_DEFAULT_NOTES
+
+
+def _github_latest_mobile_release() -> Optional[dict]:
+    repository = APP_UPDATE_REPOSITORY.strip()
+    if not repository:
+        return None
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repository}/releases/latest",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "duoyi-sync-api",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            release = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(release, dict):
+        return None
+    assets = release.get("assets") if isinstance(release.get("assets"), list) else []
+    apk_asset = None
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "").lower()
+        if name.endswith(".apk") and ("duoyi" in name or apk_asset is None):
+            apk_asset = asset
+    version_name = str(release.get("tag_name") or "").strip().removeprefix("v")
+    if not version_name:
+        return None
+    return {
+        "latest_version_name": version_name,
+        "latest_version_code": _version_to_code(version_name),
+        "download_url": str((apk_asset or {}).get("browser_download_url") or ""),
+        "file_size": int((apk_asset or {}).get("size") or 0),
+        "release_notes": str(release.get("body") or APP_UPDATE_DEFAULT_NOTES),
+        "release_url": str(release.get("html_url") or ""),
+        "updated_at": str(release.get("published_at") or release.get("created_at") or ""),
+    }
+
+
+def _local_mobile_release(request: Request, app_id: str) -> Optional[dict]:
+    resolved = _resolve_local_mobile_apk(app_id)
+    if resolved is None:
+        return None
+    apk_path, manifest = resolved
+    stat = apk_path.stat()
+    version_name = str(manifest.get("version_name") or APP_CURRENT_VERSION)
+    download_path = f"/api/mobile/apps/{app_id}/download"
+    return {
+        "latest_version_name": version_name,
+        "latest_version_code": int(
+            manifest.get("version_code") or _version_to_code(version_name)
+        ),
+        "download_url": str(request.base_url).rstrip("/") + download_path,
+        "download_path": download_path,
+        "file_size": stat.st_size,
+        "sha256": _file_sha256(apk_path),
+        "updated_at": _format_utc(datetime.fromtimestamp(stat.st_mtime, timezone.utc)),
+        "release_notes": str(manifest.get("release_notes") or APP_UPDATE_DEFAULT_NOTES),
+    }
+
+
+def _resolve_local_mobile_apk(app_id: str) -> Optional[tuple[Path, dict]]:
+    app_dir = (Path(MOBILE_APK_DIR) / app_id).resolve()
+    try:
+        app_dir.relative_to(Path(MOBILE_APK_DIR).resolve())
+    except ValueError:
+        return None
+    manifest_path = app_dir / "manifest.json"
+    manifest = {}
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            manifest = {}
+    apk_name = str(manifest.get("apk_name") or "app-release.apk")
+    apk_path = (app_dir / apk_name).resolve()
+    try:
+        apk_path.relative_to(app_dir)
+    except ValueError:
+        return None
+    if not apk_path.is_file():
+        return None
+    return apk_path, manifest
+
+
+def _is_local_mobile_download_url(value: str, app_id: str) -> bool:
+    clean = str(value or "").strip()
+    if not clean:
+        return False
+    parsed = urllib.parse.urlparse(clean)
+    path = parsed.path if parsed.scheme or parsed.netloc else clean.split("?", 1)[0]
+    normalized = path.rstrip("/")
+    return normalized == f"/api/mobile/apps/{app_id}/download"
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _mobile_update_response(
+    request: Request,
+    app_id: str,
+    current_version_code: int,
+    current_version: str = "",
+) -> dict:
+    normalized_app_id = (app_id or "").strip().lower()
+    allowed_ids = {"duoyi", APP_PACKAGE_NAME.lower()}
+    if normalized_app_id not in allowed_ids:
+        raise HTTPException(status_code=404, detail="Mobile app not found")
+
+    db = get_db()
+    try:
+        settings_payload = _update_release_defaults(db)
+    finally:
+        db.close()
+
+    release = _local_mobile_release(request, normalized_app_id)
+    if release is None:
+        release = _github_latest_mobile_release()
+    if release is None:
+        release = {}
+
+    configured_version_name = str(
+        settings_payload["latest_version_name"]
+        or settings_payload["minimum_supported_version"]
+        or ""
+    ).strip()
+    release_version_name = str(release.get("latest_version_name") or "").strip()
+    configured_version_is_newer = bool(
+        configured_version_name
+        and _version_gt(configured_version_name, APP_CURRENT_VERSION)
+    )
+    # 管理后台默认展示“当前版本”只是为了让开关能直接保存；它不能压掉
+    # GitHub/本地发布通道里的新安装包，否则强制更新开关打开后仍会显示无更新。
+    effective_release_version = (
+        "" if configured_version_is_newer else release_version_name
+    )
+    latest_version_name = str(
+        configured_version_name
+        if configured_version_is_newer
+        else effective_release_version or configured_version_name or APP_CURRENT_VERSION
+    ).strip()
+    latest_version_code = (
+        _version_to_code(latest_version_name)
+        if configured_version_is_newer or not effective_release_version
+        else int(release.get("latest_version_code") or _version_to_code(latest_version_name))
+    )
+    minimum_supported_version = str(
+        settings_payload["minimum_supported_version"] or APP_CURRENT_VERSION
+    ).strip()
+    minimum_supported_version_code = _version_to_code(minimum_supported_version)
+    if _version_gt(minimum_supported_version, latest_version_name):
+        latest_version_name = minimum_supported_version
+        latest_version_code = minimum_supported_version_code
+    download_url = str(
+        settings_payload["download_url"] or release.get("download_url") or ""
+    ).strip()
+    if (
+        _is_local_mobile_download_url(download_url, normalized_app_id)
+        and _resolve_local_mobile_apk(normalized_app_id) is None
+    ):
+        download_url = ""
+    configured_release_notes = str(settings_payload["release_notes"] or "").strip()
+    channel_release_notes = str(release.get("release_notes") or "").strip()
+    release_notes = (
+        configured_release_notes
+        if configured_release_notes
+        and configured_release_notes != APP_UPDATE_DEFAULT_NOTES
+        else channel_release_notes or configured_release_notes or APP_UPDATE_DEFAULT_NOTES
+    )
+    client_version_name = str(current_version or "").strip()
+    effective_current_version_code = int(current_version_code or 0)
+    if effective_current_version_code <= 0 and client_version_name:
+        effective_current_version_code = _version_to_code(client_version_name)
+    below_minimum = minimum_supported_version_code > effective_current_version_code
+    available = latest_version_code > effective_current_version_code
+    force_update_required = bool(
+        settings_payload.get("force_update_required")
+        or settings_payload["force_app_update_enabled"]
+    )
+    force_update = force_update_required and (available or below_minimum)
+    payload = {
+        "app_id": normalized_app_id,
+        "app_name": "多仪",
+        "package_name": APP_PACKAGE_NAME,
+        "current_version_code": effective_current_version_code,
+        "current_version_name": client_version_name or APP_CURRENT_VERSION,
+        "latest_version_code": latest_version_code,
+        "latest_version_name": latest_version_name,
+        "minimum_supported_version": minimum_supported_version,
+        "minimum_supported_version_code": minimum_supported_version_code,
+        "available": available,
+        "force_update": force_update,
+        "force_update_required": force_update_required,
+        "force_app_update_enabled": force_update_required,
+        "force_update_blocked_reason": (
+            "missing_download_url"
+            if force_update and not download_url
+            else ""
+        ),
+        "download_url": download_url,
+        "download_path": str(release.get("download_path") or ""),
+        "file_size": int(release.get("file_size") or 0),
+        "sha256": str(release.get("sha256") or ""),
+        "updated_at": str(release.get("updated_at") or ""),
+        "release_notes": release_notes,
+        "release_url": str(release.get("release_url") or download_url),
+    }
+    payload.update(_api_contract_payload())
+    return payload
+
+
 def _feedback_admin_filters(
     status: Optional[str] = None,
     q: Optional[str] = None,
     category: Optional[str] = None,
+    feedback_type: Optional[str] = None,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
 ) -> tuple[str, list]:
     where_parts: list[str] = []
     params: list = []
     if status:
+        status = FEEDBACK_STATUS_ALIASES.get(status, status)
         where_parts.append("f.status=?")
         params.append(status)
     if category:
+        category = _clean_feedback_category(category, feedback_type)
         where_parts.append("f.category=?")
         params.append(category)
+    elif feedback_type == "wish":
+        where_parts.append("f.category=?")
+        params.append("wish")
     if q:
         where_parts.append(
             "(f.content LIKE ? OR f.admin_reply LIKE ? OR u.username LIKE ?)"
         )
         like = f"%{q}%"
         params.extend([like, like, like])
+    if start_at:
+        where_parts.append("f.created_at>=?")
+        params.append(start_at)
+    if end_at:
+        where_parts.append("f.created_at<=?")
+        params.append(end_at)
     where = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
     return where, params
 
@@ -478,6 +1019,8 @@ def init_db():
             avatar TEXT DEFAULT '',
             display_name TEXT DEFAULT '',
             bio TEXT DEFAULT '',
+            group_id TEXT DEFAULT 'group_default',
+            role_id TEXT DEFAULT '',
             is_admin INTEGER DEFAULT 0,
             admin_permissions TEXT DEFAULT '[]',
             is_disabled INTEGER DEFAULT 0,
@@ -622,6 +1165,29 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS admin_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            default_time_coins INTEGER DEFAULT 100,
+            default_generate_quota INTEGER DEFAULT 100,
+            default_edit_quota INTEGER DEFAULT 100,
+            default_generate_history_retention INTEGER DEFAULT 50,
+            default_edit_history_retention INTEGER DEFAULT 20,
+            image_mode TEXT DEFAULT 'vip',
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS admin_roles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            permissions TEXT DEFAULT '[]',
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -775,9 +1341,24 @@ def init_db():
         ("users", "email_verified", "0"),
         ("users", "display_name", "''"),
         ("users", "bio", "''"),
+        ("users", "group_id", "'group_default'"),
+        ("users", "role_id", "''"),
         ("users", "admin_permissions", "'[]'"),
         ("invite_codes", "note", "''"),
         ("announcements", "updated_at", "datetime('now')"),
+        ("admin_groups", "default_time_coins", "100"),
+        ("admin_groups", "default_generate_quota", "100"),
+        ("admin_groups", "default_edit_quota", "100"),
+        ("admin_groups", "default_generate_history_retention", "50"),
+        ("admin_groups", "default_edit_history_retention", "20"),
+        ("admin_groups", "image_mode", "'vip'"),
+        ("admin_groups", "is_active", "1"),
+        ("admin_groups", "created_at", "datetime('now')"),
+        ("admin_groups", "updated_at", "datetime('now')"),
+        ("admin_roles", "permissions", "'[]'"),
+        ("admin_roles", "is_active", "1"),
+        ("admin_roles", "created_at", "datetime('now')"),
+        ("admin_roles", "updated_at", "datetime('now')"),
         ("focus_room_presence", "display_name", "''"),
         ("focus_room_presence", "raw_weekly_seconds", "0"),
         ("focus_room_presence", "weekly_seconds", "0"),
@@ -939,10 +1520,17 @@ def init_db():
         "maintenance_message": "",
         # App update policy exposed through /api/config.
         "force_update_required": False,
+        "force_app_update_enabled": False,
+        "force_relogin_enabled": False,
+        "force_relogin_issued_at": "",
         "latest_version": "",
+        "latest_version_name": "",
         "minimum_supported_version": "",
         "update_notes": "",
+        "release_notes": "",
         "update_download_url": "",
+        "default_registration_coins": 100,
+        "download_url": "",
         # AI 由管理员统一在服务端配置，用户端仅调用 /api/ai/chat 代理
         "ai_enabled": False,
         "ai_base_url": os.getenv("AI_BASE_URL", "https://www.boxying.com"),
@@ -1008,6 +1596,22 @@ def init_db():
             "INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)",
             (k, json.dumps(v)),
         )
+    registration_coins_row = conn.execute(
+        "SELECT value FROM settings WHERE key=?",
+        ("default_registration_coins",),
+    ).fetchone()
+    try:
+        registration_coins_value = int(json.loads(registration_coins_row["value"]))
+    except Exception:
+        registration_coins_value = 100
+    if registration_coins_value < 0:
+        registration_coins_value = 100
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES(?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            ("default_registration_coins", json.dumps(100)),
+        )
+    default_group_time_coins = max(0, min(registration_coins_value, 1000000))
     if os.getenv("REGISTRATION_EMAIL_REQUIRED") is None:
         migrated = conn.execute(
             "SELECT value FROM settings WHERE key=?",
@@ -1027,6 +1631,83 @@ def init_db():
         "UPDATE users SET admin_permissions=? "
         "WHERE is_admin=1 AND (admin_permissions IS NULL OR admin_permissions='' OR admin_permissions='[]')",
         (json.dumps([ADMIN_ALL_PERMISSION]),),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO admin_groups(
+            id, name, description, default_time_coins, default_generate_quota,
+            default_edit_quota, default_generate_history_retention,
+            default_edit_history_retention, image_mode, is_active
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "group_default",
+            "默认用户",
+            f"新注册用户默认分组，注册赠送 {default_group_time_coins} 时光币。",
+            default_group_time_coins,
+            100,
+            100,
+            50,
+            20,
+            "vip",
+            1,
+        ),
+    )
+    conn.execute(
+        """
+        UPDATE admin_groups
+        SET default_time_coins=?, updated_at=datetime('now')
+        WHERE id='group_default'
+          AND (default_time_coins IS NULL OR default_time_coins < 0)
+        """,
+        (default_group_time_coins,),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO admin_roles(id, name, description, permissions, is_active)
+        VALUES(?, ?, ?, ?, ?)
+        """,
+        (
+            "role_admin",
+            "超级管理员",
+            "拥有所有管理权限。",
+            json.dumps([ADMIN_ALL_PERMISSION], ensure_ascii=False),
+            1,
+        ),
+    )
+    conn.execute(
+        """
+        UPDATE admin_roles
+        SET permissions=?, updated_at=datetime('now')
+        WHERE id='role_admin'
+          AND (permissions IS NULL OR permissions='' OR permissions NOT LIKE ?)
+        """,
+        (
+            json.dumps([ADMIN_ALL_PERMISSION], ensure_ascii=False),
+            f'%"{ADMIN_ALL_PERMISSION}"%',
+        ),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO admin_roles(id, name, description, permissions, is_active)
+        VALUES(?, ?, ?, ?, ?)
+        """,
+        (
+            "role_user",
+            "普通用户",
+            "无后台管理权限。",
+            json.dumps([], ensure_ascii=False),
+            1,
+        ),
+    )
+    conn.execute(
+        "UPDATE users SET group_id='group_default' WHERE group_id IS NULL OR group_id=''"
+    )
+    conn.execute(
+        "UPDATE users SET role_id='role_admin' WHERE is_admin=1 AND (role_id IS NULL OR role_id='')"
+    )
+    conn.execute(
+        "UPDATE users SET role_id='role_user' WHERE is_admin=0 AND (role_id IS NULL OR role_id='')"
     )
 
     # Bootstrap admin
@@ -1251,6 +1932,47 @@ def _normalize_admin_permissions(values: Optional[list[str]]) -> list[str]:
     return normalized
 
 
+def _admin_role_permissions(db, role_id: Optional[str]) -> list[str]:
+    if not role_id:
+        return []
+    row = db.execute(
+        "SELECT permissions FROM admin_roles WHERE id=? AND is_active=1",
+        (role_id,),
+    ).fetchone()
+    if row is None:
+        return []
+    return _admin_permissions_from_text(row["permissions"])
+
+
+def _merged_admin_permissions(row, db=None) -> list[str]:
+    direct = _admin_permissions_for_response(
+        row["admin_permissions"], is_admin=bool(row["is_admin"])
+    )
+    if ADMIN_ALL_PERMISSION in direct:
+        return [ADMIN_ALL_PERMISSION]
+    merged = list(direct)
+    if db is not None:
+        for permission in _admin_role_permissions(db, _row_get(row, "role_id", "")):
+            if permission == ADMIN_ALL_PERMISSION:
+                return [ADMIN_ALL_PERMISSION]
+            if permission not in merged:
+                merged.append(permission)
+    return merged
+
+
+def _admin_permission_catalog() -> list[dict]:
+    return [
+        {
+            "code": key,
+            "id": key,
+            "name": ADMIN_PERMISSION_LABELS.get(key, key),
+            "description": ADMIN_PERMISSION_DESCRIPTIONS.get(key, ""),
+            "category": "后台管理",
+        }
+        for key in sorted(ADMIN_PERMISSION_KEYS)
+    ]
+
+
 def _admin_permissions_for_response(raw, *, is_admin: bool) -> list[str]:
     permissions = _admin_permissions_from_text(raw)
     if ADMIN_NO_PERMISSION in permissions:
@@ -1260,10 +1982,12 @@ def _admin_permissions_for_response(raw, *, is_admin: bool) -> list[str]:
     return permissions
 
 
-def _admin_has_permission(row, permission: str) -> bool:
+def _admin_has_permission(row, permission: str, db=None) -> bool:
     if row is None or not row["is_admin"] or row["is_disabled"]:
         return False
     permissions = _admin_permissions_from_text(row["admin_permissions"])
+    if not permissions and db is not None:
+        permissions = _admin_role_permissions(db, _row_get(row, "role_id", ""))
     if not permissions:
         return True
     if ADMIN_NO_PERMISSION in permissions:
@@ -1273,11 +1997,50 @@ def _admin_has_permission(row, permission: str) -> bool:
 
 def _ensure_admin_permission(db, user_id: str, permission: str) -> None:
     row = db.execute(
-        "SELECT is_admin, is_disabled, admin_permissions FROM users WHERE id=?",
+        "SELECT is_admin, is_disabled, admin_permissions, role_id FROM users WHERE id=?",
         (user_id,),
     ).fetchone()
-    if not _admin_has_permission(row, permission):
+    if not _admin_has_permission(row, permission, db=db):
         raise HTTPException(status_code=403, detail="Admin permission required")
+
+
+def _ensure_admin_any_permission(db, user_id: str, permissions: tuple[str, ...]) -> None:
+    row = db.execute(
+        "SELECT is_admin, is_disabled, admin_permissions, role_id FROM users WHERE id=?",
+        (user_id,),
+    ).fetchone()
+    if not any(_admin_has_permission(row, permission, db=db) for permission in permissions):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+
+def _ensure_admin_management_permission(db, user_id: str) -> None:
+    _ensure_admin_any_permission(db, user_id, ("roles", "permissions"))
+
+
+def _admin_has_all_permissions(db, user_id: str) -> bool:
+    row = db.execute(
+        "SELECT is_admin, is_disabled, admin_permissions, role_id FROM users WHERE id=?",
+        (user_id,),
+    ).fetchone()
+    return ADMIN_ALL_PERMISSION in _merged_admin_permissions(row, db=db)
+
+
+def _ensure_admin_can_assign_permissions(
+    db, actor: str, permissions: list[str]
+) -> None:
+    if ADMIN_ALL_PERMISSION not in permissions:
+        return
+    if _admin_has_all_permissions(db, actor):
+        return
+    raise HTTPException(status_code=403, detail="Admin permission required")
+
+
+def _ensure_admin_can_assign_role(db, actor: str, role_id: str) -> None:
+    if ADMIN_ALL_PERMISSION not in _admin_role_permissions(db, role_id):
+        return
+    if _admin_has_all_permissions(db, actor):
+        return
+    raise HTTPException(status_code=403, detail="Admin permission required")
 
 
 def _json_object(raw) -> dict:
@@ -1298,6 +2061,51 @@ def _virtual_rewards_summary(raw) -> tuple[int, int]:
     )
 
 
+def _quota_aliases_from_rewards(raw) -> dict:
+    rewards = _json_object(raw)
+
+    def _int_value(*keys, fallback=0) -> int:
+        for key in keys:
+            value = rewards.get(key)
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                try:
+                    return int(value)
+                except ValueError:
+                    pass
+        return fallback
+
+    generate_total = max(0, _int_value("generate_quota", "generate_quota_total"))
+    edit_total = max(0, _int_value("edit_quota", "edit_quota_total"))
+    generate_used = max(0, _int_value("generate_quota_used"))
+    edit_used = max(0, _int_value("edit_quota_used"))
+    generate_remaining = max(0, generate_total - generate_used)
+    edit_remaining = max(0, edit_total - edit_used)
+    return {
+        "generate_quota": generate_remaining,
+        "edit_quota": edit_remaining,
+        "generate_quota_total": generate_total,
+        "edit_quota_total": edit_total,
+        "generate_quota_used": generate_used,
+        "edit_quota_used": edit_used,
+        "quota_summary": {
+            "generate": {
+                "total": generate_total,
+                "used": generate_used,
+                "remaining": generate_remaining,
+                "is_unlimited": False,
+            },
+            "edit": {
+                "total": edit_total,
+                "used": edit_used,
+                "remaining": edit_remaining,
+                "is_unlimited": False,
+            },
+        },
+    }
+
+
 def _ai_chat_completions_url(base_url: str) -> str:
     base = (base_url or "https://api.openai.com").strip().rstrip("/")
     if base.endswith("/chat/completions"):
@@ -1305,6 +2113,62 @@ def _ai_chat_completions_url(base_url: str) -> str:
     if base.endswith("/v1"):
         return f"{base}/chat/completions"
     return f"{base}/v1/chat/completions"
+
+
+def _ai_chat_content_from_response(data: dict) -> str:
+    choices = data.get("choices") or []
+    if choices:
+        message = choices[0].get("message") or {}
+        return str(message.get("content") or "")
+    output_text = data.get("output_text")
+    if output_text is not None:
+        return str(output_text)
+    return ""
+
+
+def _call_ai_chat_upstream(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    timeout: int,
+) -> tuple[str, dict]:
+    import urllib.request
+    import urllib.error
+
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    upstream = urllib.request.Request(
+        _ai_chat_completions_url(base_url),
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(upstream, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            data = json.loads(body)
+    except urllib.error.HTTPError as e:
+        text = e.read().decode("utf-8", errors="replace")
+        raise HTTPException(status_code=e.code, detail=f"上游错误: {text[:200]}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"上游不可达: {e}")
+
+    return _ai_chat_content_from_response(data), data
 
 
 def _merge_virtual_rewards(server: dict, client: dict) -> dict:
@@ -1398,16 +2262,30 @@ def _user_response(
     token: Optional[str] = None,
     db=None,
 ) -> dict:
+    permissions = _merged_admin_permissions(row, db=db)
+    role_id = _row_get(row, "role_id", "") or ("role_admin" if row["is_admin"] else "role_user")
+    group_id = _row_get(row, "group_id", "") or "group_default"
     result = {
+        "id": row["id"],
         "user_id": row["id"],
         "username": row["username"],
+        "identifier": row["username"],
+        "can_edit_username": False,
         "email": row["email"] or "",
         "email_verified": bool(row["email_verified"]),
         "avatar": row["avatar"] or "",
+        "avatar_url": row["avatar"] or "",
         "display_name": row["display_name"] or "",
         "bio": row["bio"] or "",
         "is_admin": bool(row["is_admin"]),
+        "admin_permissions": permissions,
+        "permissions": permissions,
+        "group_id": group_id,
+        "role_id": role_id,
+        "group": {"id": group_id},
+        "role": {"id": role_id},
         "is_disabled": bool(row["is_disabled"]),
+        "is_active": not bool(row["is_disabled"]),
         "created_at": row["created_at"],
         "last_login_at": row["last_login_at"],
     }
@@ -1421,9 +2299,18 @@ def _user_response(
         )
         result["coin_balance"] = coin_balance
         result["lifetime_coins"] = lifetime_coins
+        result.update(_quota_aliases_from_rewards(rewards["virtual_rewards"] if rewards else "{}"))
     if token is not None:
         result["token"] = token
+    result.update(_quota_aliases_from_rewards(_row_get(row, "virtual_rewards", "{}")))
     return result
+
+
+def _row_get(row, key: str, default=None):
+    try:
+        return row[key]
+    except Exception:
+        return default
 
 
 def _setting_get(db, key: str, default=None):
@@ -1663,9 +2550,14 @@ class LoginRequest(BaseModel):
 class ProfileUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
+    code: Optional[str] = None
     email_code: Optional[str] = None
+    emailCode: Optional[str] = None
     display_name: Optional[str] = None
+    displayName: Optional[str] = None
     avatar: Optional[str] = None
+    avatar_url: Optional[str] = None
+    avatarUrl: Optional[str] = None
     bio: Optional[str] = None
 
 
@@ -1676,7 +2568,9 @@ class EmailCodeRequest(BaseModel):
 
 class EmailLoginRequest(BaseModel):
     email: str
-    code: str
+    code: Optional[str] = None
+    email_code: Optional[str] = None
+    emailCode: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -1796,8 +2690,10 @@ class WorkspaceCommentCreate(BaseModel):
 
 
 class FeedbackCreate(BaseModel):
-    category: str = "feature"
-    content: str
+    category: Optional[str] = None
+    type: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
 
 
 class FeedbackReply(BaseModel):
@@ -1812,19 +2708,39 @@ class FeedbackBulkStatus(BaseModel):
     status: str = "in_progress"
 
 
-FEEDBACK_CATEGORIES = {"feature", "bug", "wish", "other"}
+FEEDBACK_CATEGORIES = {
+    "feature",
+    "bug",
+    "wish",
+    "other",
+    "gallery",
+    "generate",
+    "edit",
+    "system",
+    "account",
+}
 FEEDBACK_STATUSES = {"open", "in_progress", "resolved", "closed"}
+FEEDBACK_STATUS_ALIASES = {
+    "collected": "open",
+    "accepted": "in_progress",
+    "rejected": "closed",
+}
 
 
-def _clean_feedback_category(value: str) -> str:
-    category = (value or "feature").strip()
+def _clean_feedback_category(value: Optional[str], feedback_type: Optional[str] = None) -> str:
+    raw_category = (value or "").strip()
+    raw_type = (feedback_type or "").strip()
+    category = raw_category or ("wish" if raw_type == "wish" else "feature")
     if category not in FEEDBACK_CATEGORIES:
-        raise HTTPException(status_code=400, detail="无效的反馈分类")
+        category = "other"
     return category
 
 
-def _clean_feedback_content(value: str) -> str:
+def _clean_feedback_content(value: Optional[str], title: Optional[str] = None) -> str:
     content = (value or "").strip()
+    clean_title = (title or "").strip()
+    if clean_title and not content:
+        content = clean_title
     if not content:
         raise HTTPException(status_code=400, detail="反馈内容不能为空")
     if len(content) > 2000:
@@ -1834,6 +2750,7 @@ def _clean_feedback_content(value: str) -> str:
 
 def _clean_feedback_status(value: str) -> str:
     status = (value or "resolved").strip()
+    status = FEEDBACK_STATUS_ALIASES.get(status, status)
     if status not in FEEDBACK_STATUSES:
         raise HTTPException(status_code=400, detail="无效的反馈状态")
     return status
@@ -1853,6 +2770,14 @@ class AnnouncementUpdate(BaseModel):
     published: Optional[bool] = None
 
 
+class WelfareGrantCreate(BaseModel):
+    title: str = "全员福利"
+    body: Optional[str] = ""
+    generate_bonus: int = 0
+    edit_bonus: int = 0
+    notify: bool = True
+
+
 class InviteCodeCreate(BaseModel):
     count: int = 1
     note: Optional[str] = ""
@@ -1862,12 +2787,90 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
     is_disabled: Optional[bool] = None
     new_password: Optional[str] = None
+    password: Optional[str] = None
+    admin_permissions: Optional[list[str]] = None
+    group_id: Optional[str] = None
+    role_id: Optional[str] = None
+    delta: Optional[int] = None
+    reason: Optional[str] = None
+    coins: Optional[int] = None
+    amount: Optional[int] = None
+    balance: Optional[int] = None
+    coin_balance: Optional[int] = None
+    target_balance: Optional[int] = None
+    quota: Optional[int] = None
+    time_coins: Optional[int] = None
+    time_coin_balance: Optional[int] = None
+    timeCoins: Optional[int] = None
+    timeCoinBalance: Optional[int] = None
+    credit_balance: Optional[int] = None
+    credits: Optional[int] = None
+    coin_delta: Optional[int] = None
+    coinDelta: Optional[int] = None
+    coinBalance: Optional[int] = None
+    time_coin_delta: Optional[int] = None
+    timeCoinDelta: Optional[int] = None
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: Optional[str] = None
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    group_id: Optional[str] = None
+    role_id: Optional[str] = None
+    is_admin: Optional[bool] = False
+    is_disabled: Optional[bool] = False
     admin_permissions: Optional[list[str]] = None
 
 
 class UserCoinAdjustment(BaseModel):
-    delta: int
+    delta: Optional[int] = None
     reason: Optional[str] = None
+    coins: Optional[int] = None
+    amount: Optional[int] = None
+    balance: Optional[int] = None
+    coin_balance: Optional[int] = None
+    target_balance: Optional[int] = None
+    quota: Optional[int] = None
+    time_coins: Optional[int] = None
+    time_coin_balance: Optional[int] = None
+    timeCoins: Optional[int] = None
+    timeCoinBalance: Optional[int] = None
+    credit_balance: Optional[int] = None
+    credits: Optional[int] = None
+    coin_delta: Optional[int] = None
+    coinDelta: Optional[int] = None
+    coinBalance: Optional[int] = None
+    time_coin_delta: Optional[int] = None
+    timeCoinDelta: Optional[int] = None
+
+
+class AdminGroupUpsert(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    default_time_coins: Optional[int] = None
+    defaultTimeCoins: Optional[int] = None
+    default_generate_quota: Optional[int] = None
+    defaultGenerateQuota: Optional[int] = None
+    default_edit_quota: Optional[int] = None
+    defaultEditQuota: Optional[int] = None
+    default_generate_history_retention: Optional[int] = None
+    defaultGenerateHistoryRetention: Optional[int] = None
+    default_edit_history_retention: Optional[int] = None
+    defaultEditHistoryRetention: Optional[int] = None
+    image_mode: Optional[str] = None
+    imageMode: Optional[str] = None
+    is_active: Optional[bool] = None
+    isActive: Optional[bool] = None
+
+
+class AdminRoleUpsert(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    permissions: Optional[list[str]] = None
+    permission_codes: Optional[list[str]] = None
+    is_active: Optional[bool] = True
 
 
 class UserBulkStatus(BaseModel):
@@ -1889,10 +2892,17 @@ class SettingsUpdate(BaseModel):
     maintenance_message: Optional[str] = None
     # App update policy
     force_update_required: Optional[bool] = None
+    force_app_update_enabled: Optional[bool] = None
+    force_relogin_enabled: Optional[bool] = None
+    force_relogin_issued_at: Optional[str] = None
     latest_version: Optional[str] = None
+    latest_version_name: Optional[str] = None
     minimum_supported_version: Optional[str] = None
     update_notes: Optional[str] = None
+    release_notes: Optional[str] = None
     update_download_url: Optional[str] = None
+    download_url: Optional[str] = None
+    default_registration_coins: Optional[int] = None
     # AI
     ai_enabled: Optional[bool] = None
     ai_base_url: Optional[str] = None
@@ -2029,6 +3039,14 @@ class AiChatRequest(BaseModel):
     max_tokens: int = 512
 
 
+class AdminAiTestRequest(BaseModel):
+    ai_enabled: Optional[bool] = None
+    ai_base_url: Optional[str] = None
+    ai_api_key: Optional[str] = None
+    ai_model: Optional[str] = None
+    apply_switch: Optional[bool] = None
+
+
 class ReminderEmailOnceRequest(BaseModel):
     id: int
     title: str
@@ -2054,13 +3072,15 @@ class ReminderEmailRepeatingRequest(BaseModel):
 def health():
     db = get_db()
     try:
-        return {
+        payload = {
             "status": "ok",
             "version": "3.1.0",
             "invite_required": _registration_invite_required(db),
             "maintenance": _setting_get(db, "maintenance_mode", False),
             "time": datetime.now(timezone.utc).isoformat(),
         }
+        payload.update(_api_contract_payload())
+        return payload
     finally:
         db.close()
 
@@ -2071,7 +3091,8 @@ def public_config():
     try:
         registration_enabled = _registration_enabled(db)
         invite_required = _registration_invite_required(db)
-        return {
+        update_policy = _update_release_defaults(db)
+        payload = {
             "invite_code_required": invite_required,
             "registration_invite_required": invite_required,
             "registration_enabled": registration_enabled,
@@ -2079,24 +3100,32 @@ def public_config():
             "registration_email_required": _setting_get(db, "registration_email_required", True),
             "maintenance_mode": _setting_get(db, "maintenance_mode", False),
             "maintenance_message": _setting_get(db, "maintenance_message", ""),
-            "force_update_required": _setting_get(db, "force_update_required", False),
-            "latest_version": _setting_get(db, "latest_version", ""),
-            "minimum_supported_version": _setting_get(db, "minimum_supported_version", ""),
-            "update_notes": _setting_get(db, "update_notes", ""),
-            "update_download_url": _setting_get(db, "update_download_url", ""),
-            "app_update": {
-                "force_update_required": _setting_get(db, "force_update_required", False),
-                "latest_version": _setting_get(db, "latest_version", ""),
-                "minimum_supported_version": _setting_get(db, "minimum_supported_version", ""),
-                "update_notes": _setting_get(db, "update_notes", ""),
-                "update_download_url": _setting_get(db, "update_download_url", ""),
-            },
+            "force_update_required": update_policy["force_update_required"],
+            "force_app_update_enabled": update_policy["force_app_update_enabled"],
+            "force_relogin_enabled": _setting_get(db, "force_relogin_enabled", False),
+            "force_relogin_issued_at": _setting_get(db, "force_relogin_issued_at", ""),
+            "current_version": update_policy["current_version"],
+            "current_version_name": update_policy["current_version_name"],
+            "current_version_code": update_policy["current_version_code"],
+            "app_package_name": update_policy["app_package_name"],
+            "version_options": update_policy["version_options"],
+            "latest_version": update_policy["latest_version"],
+            "latest_version_name": update_policy["latest_version_name"],
+            "latest_version_code": update_policy["latest_version_code"],
+            "minimum_supported_version": update_policy["minimum_supported_version"],
+            "update_notes": update_policy["update_notes"],
+            "release_notes": update_policy["release_notes"],
+            "update_download_url": update_policy["update_download_url"],
+            "download_url": update_policy["download_url"],
+            "app_update": update_policy,
             "ai_enabled": bool(
                 _setting_get(db, "ai_enabled", False)
                 and str(_setting_get(db, "ai_api_key", "")).strip() != ""
             ),
             "ai_model": _setting_get(db, "ai_model", ""),
         }
+        payload.update(_api_contract_payload())
+        return payload
     finally:
         db.close()
 
@@ -2111,6 +3140,32 @@ def bootstrap_config():
     }
 
 
+@app.get("/api/mobile/apps/{app_id}/update")
+def mobile_app_update(
+    request: Request,
+    app_id: str,
+    current_version_code: int = Query(0, ge=0),
+    current_version: str = "",
+):
+    return _mobile_update_response(request, app_id, current_version_code, current_version)
+
+
+@app.get("/api/mobile/apps/{app_id}/download")
+def mobile_app_download(app_id: str):
+    normalized_app_id = (app_id or "").strip().lower()
+    if normalized_app_id not in {"duoyi", APP_PACKAGE_NAME.lower()}:
+        raise HTTPException(status_code=404, detail="Mobile app not found")
+    resolved = _resolve_local_mobile_apk(normalized_app_id)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="Mobile app not found")
+    apk_path, _manifest = resolved
+    return FileResponse(
+        apk_path,
+        media_type="application/vnd.android.package-archive",
+        filename=apk_path.name,
+    )
+
+
 # ---- AI proxy ----
 
 
@@ -2120,9 +3175,6 @@ def _today_str():
 
 @app.post("/api/ai/chat")
 def ai_chat(req: AiChatRequest, user_id: str = Depends(_verify_token)):
-    import urllib.request
-    import urllib.error
-
     db = get_db()
     try:
         if not _setting_get(db, "ai_enabled", False):
@@ -2153,34 +3205,15 @@ def ai_chat(req: AiChatRequest, user_id: str = Depends(_verify_token)):
             messages.append({"role": "system", "content": req.system})
         messages.append({"role": "user", "content": req.user})
 
-        payload = json.dumps(
-            {
-                "model": model,
-                "messages": messages,
-                "temperature": req.temperature,
-                "max_tokens": req.max_tokens,
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-
-        upstream = urllib.request.Request(
-            _ai_chat_completions_url(base_url),
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            method="POST",
+        content, _ = _call_ai_chat_upstream(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            messages=messages,
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+            timeout=60,
         )
-        try:
-            with urllib.request.urlopen(upstream, timeout=60) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-                data = json.loads(body)
-        except urllib.error.HTTPError as e:
-            text = e.read().decode("utf-8", errors="replace")
-            raise HTTPException(status_code=e.code, detail=f"上游错误: {text[:200]}")
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"上游不可达: {e}")
 
         # 记录额度
         today = _today_str()
@@ -2191,10 +3224,6 @@ def ai_chat(req: AiChatRequest, user_id: str = Depends(_verify_token)):
         )
         db.commit()
 
-        content = ""
-        choices = data.get("choices") or []
-        if choices:
-            content = (choices[0].get("message") or {}).get("content", "")
         return {"content": content, "model": model}
     finally:
         db.close()
@@ -2220,64 +3249,67 @@ def ai_usage(user_id: str = Depends(_verify_token)):
 
 
 @app.post("/api/admin/ai/test")
-def admin_ai_test(actor: str = Depends(_require_admin)):
-    """调一个极短 prompt 验证当前 AI 配置连通。"""
-    import urllib.request
-    import urllib.error
-
+@app.post("/api/admin/provider-healthcheck")
+def admin_ai_test(
+    payload: Optional[AdminAiTestRequest] = None,
+    actor: str = Depends(_require_admin),
+):
+    """调一个极短 prompt 验证 AI 配置连通。支持用未保存的表单配置临时测试。"""
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "ai")
-        ai_enabled = bool(_setting_get(db, "ai_enabled", False))
-        api_key = str(_setting_get(db, "ai_api_key", "")).strip()
-        if not api_key:
-            raise HTTPException(status_code=503, detail="尚未配置 API Key")
-        base_url = str(
-            _setting_get(db, "ai_base_url", "https://api.openai.com")
+        ai_enabled = (
+            bool(payload.ai_enabled)
+            if payload is not None and payload.ai_enabled is not None
+            else bool(_setting_get(db, "ai_enabled", False))
+        )
+        base_url = (
+            str(payload.ai_base_url).strip()
+            if payload is not None
+            and payload.ai_base_url is not None
+            and str(payload.ai_base_url).strip()
+            else str(_setting_get(db, "ai_base_url", "https://api.openai.com"))
         ).rstrip("/")
-        model = str(_setting_get(db, "ai_model", "gpt-4o-mini"))
-        endpoint = _ai_chat_completions_url(base_url)
+        model = (
+            str(payload.ai_model).strip()
+            if payload is not None
+            and payload.ai_model is not None
+            and str(payload.ai_model).strip()
+            else str(_setting_get(db, "ai_model", "gpt-4o-mini"))
+        )
         if not ai_enabled:
             return {
-                "ok": True,
+                "ok": False,
                 "enabled": False,
+                "skipped": True,
                 "model": model,
-                "sample": "配置完整，AI 功能开关当前未启用，未发起上游请求。",
+                "message": "AI 未启用，未测试上游连接。",
+                "sample": "",
             }
-        payload = json.dumps(
-            {
-                "model": model,
-                "messages": [
-                    {"role": "user", "content": "回复一个 'ok' 即可"},
-                ],
-                "temperature": 0,
-                "max_tokens": 8,
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            method="POST",
+        saved_api_key = str(_setting_get(db, "ai_api_key", "")).strip()
+        submitted_key = (
+            str(payload.ai_api_key).strip()
+            if payload is not None and payload.ai_api_key is not None
+            else ""
         )
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-                data = json.loads(body)
-        except urllib.error.HTTPError as e:
-            text = e.read().decode("utf-8", errors="replace")
-            raise HTTPException(status_code=e.code, detail=text[:200])
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"不可达: {e}")
-
-        content = ""
-        choices = data.get("choices") or []
-        if choices:
-            content = (choices[0].get("message") or {}).get("content", "")
+        api_key = (
+            submitted_key
+            if submitted_key and "***" not in submitted_key
+            else saved_api_key
+        )
+        if not api_key:
+            raise HTTPException(status_code=503, detail="尚未配置 API Key")
+        content, _ = _call_ai_chat_upstream(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "user", "content": "回复一个 'ok' 即可"},
+            ],
+            temperature=0,
+            max_tokens=8,
+            timeout=20,
+        )
         return {"ok": True, "enabled": True, "model": model, "sample": content}
     finally:
         db.close()
@@ -3496,6 +4528,7 @@ async def _stop_server_backup_loop():
         REMINDER_EMAIL_TASK = None
 
 
+@app.get("/api/admin/local-backups")
 @app.get("/api/admin/server-backups")
 def admin_server_backups(
     _: str = Depends(_require_admin),
@@ -3608,6 +4641,7 @@ def export_server_backups_csv(
         db.close()
 
 
+@app.post("/api/admin/local-backups/run")
 @app.post("/api/admin/server-backups/run")
 def admin_run_server_backup(actor: str = Depends(_require_admin)):
     db = get_db()
@@ -3706,6 +4740,8 @@ def _create_email_code(
     ip_address: str = "",
 ) -> dict:
     purpose = (purpose or "login").strip().lower()
+    if purpose in {"register", "registration", "signup", "sign_up"}:
+        purpose = "bind"
     if purpose not in {"bind", "login", "reset"}:
         raise HTTPException(status_code=400, detail="验证码用途不受支持")
     normalized_email = _clean_email(email)
@@ -3960,8 +4996,8 @@ def register(req: RegisterRequest):
         now_text = _utc_now_text()
         try:
             db.execute(
-                "INSERT INTO users(id, username, email, email_verified, password_hash, display_name, last_login_at, last_active_at) "
-                "VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO users(id, username, email, email_verified, password_hash, display_name, group_id, role_id, last_login_at, last_active_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (
                     user_id,
                     username,
@@ -3969,6 +5005,8 @@ def register(req: RegisterRequest):
                     email_verified,
                     _hash_password(password),
                     display_name,
+                    "group_default",
+                    "role_user",
                     now_text,
                     now_text,
                 ),
@@ -3977,6 +5015,11 @@ def register(req: RegisterRequest):
             raise HTTPException(status_code=409, detail="用户名或邮箱已被使用")
 
         db.execute("INSERT INTO sync_data(user_id) VALUES(?)", (user_id,))
+        _grant_registration_coins(
+            db,
+            user_id,
+            _group_default_time_coins(db, "group_default"),
+        )
         _ensure_private_workspace(db, user_id)
 
         if _registration_invite_required(db):
@@ -3997,16 +5040,73 @@ def register(req: RegisterRequest):
 
 
 @app.post("/api/me/profile")
+@app.patch("/api/me/profile")
+@app.put("/api/me/profile")
+@app.post("/api/profile")
+@app.patch("/api/profile")
+@app.put("/api/profile")
+@app.post("/api/user/profile")
+@app.patch("/api/user/profile")
+@app.put("/api/user/profile")
+@app.post("/api/account/profile")
+@app.patch("/api/account/profile")
+@app.put("/api/account/profile")
 def update_my_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
     return _auth_payload(update_profile(req, user_id=user_id))
 
 
 @app.post("/api/me/email")
+@app.patch("/api/me/email")
+@app.put("/api/me/email")
+@app.post("/api/me/email/bind")
+@app.patch("/api/me/email/bind")
+@app.put("/api/me/email/bind")
+@app.post("/api/me/bind-email")
+@app.patch("/api/me/bind-email")
+@app.put("/api/me/bind-email")
+@app.post("/api/email")
+@app.patch("/api/email")
+@app.put("/api/email")
+@app.post("/api/email/bind")
+@app.patch("/api/email/bind")
+@app.put("/api/email/bind")
+@app.post("/api/bind-email")
+@app.patch("/api/bind-email")
+@app.put("/api/bind-email")
+@app.post("/api/auth/email")
+@app.patch("/api/auth/email")
+@app.put("/api/auth/email")
+@app.post("/api/auth/bind-email")
+@app.patch("/api/auth/bind-email")
+@app.put("/api/auth/bind-email")
+@app.post("/api/auth/email/bind")
+@app.patch("/api/auth/email/bind")
+@app.put("/api/auth/email/bind")
+@app.post("/api/user/email")
+@app.patch("/api/user/email")
+@app.put("/api/user/email")
+@app.post("/api/user/email/bind")
+@app.patch("/api/user/email/bind")
+@app.put("/api/user/email/bind")
+@app.post("/api/user/bind-email")
+@app.patch("/api/user/bind-email")
+@app.put("/api/user/bind-email")
+@app.post("/api/account/email")
+@app.patch("/api/account/email")
+@app.put("/api/account/email")
+@app.post("/api/account/email/bind")
+@app.patch("/api/account/email/bind")
+@app.put("/api/account/email/bind")
 def bind_my_email(req: EmailLoginRequest, user_id: str = Depends(_verify_token)):
-    return _auth_payload(update_profile(
-        ProfileUpdate(email=req.email, email_code=req.code),
-        user_id=user_id,
-    ))
+    return _auth_payload(
+        update_profile(
+            ProfileUpdate(
+                email=req.email,
+                email_code=req.code or req.email_code or req.emailCode,
+            ),
+            user_id=user_id,
+        )
+    )
 
 
 @app.post("/api/auth/login")
@@ -4032,6 +5132,39 @@ def login(req: LoginRequest):
 
 
 @app.post("/api/auth/email-code")
+@app.post("/api/auth/email-code/send")
+@app.post("/api/auth/email_code")
+@app.post("/api/auth/email_code/send")
+@app.post("/api/auth/email/send")
+@app.post("/api/auth/email/send-code")
+@app.post("/api/auth/send-email-code")
+@app.post("/api/auth/send-email_code")
+@app.post("/api/me/email-code")
+@app.post("/api/me/email-code/send")
+@app.post("/api/me/email_code")
+@app.post("/api/me/email_code/send")
+@app.post("/api/me/email/send")
+@app.post("/api/me/email/send-code")
+@app.post("/api/email-code")
+@app.post("/api/email-code/send")
+@app.post("/api/email_code")
+@app.post("/api/email_code/send")
+@app.post("/api/email/send")
+@app.post("/api/email/send-code")
+@app.post("/api/send-email-code")
+@app.post("/api/send-email_code")
+@app.post("/api/user/email-code")
+@app.post("/api/user/email-code/send")
+@app.post("/api/user/email_code")
+@app.post("/api/user/email_code/send")
+@app.post("/api/user/email/send")
+@app.post("/api/user/email/send-code")
+@app.post("/api/account/email-code")
+@app.post("/api/account/email-code/send")
+@app.post("/api/account/email_code")
+@app.post("/api/account/email_code/send")
+@app.post("/api/account/email/send")
+@app.post("/api/account/email/send-code")
 def auth_email_code(
     req: EmailCodeRequest,
     request: Request,
@@ -4065,8 +5198,28 @@ def auth_email_code(
 
 
 @app.post("/api/auth/email-login")
+@app.post("/api/auth/email/login")
+@app.post("/api/auth/login/email")
+@app.post("/api/auth/email-code-login")
+@app.post("/api/auth/login/email-code")
+@app.post("/api/auth/email_code_login")
+@app.post("/api/auth/login/email_code")
+@app.post("/api/user/email-login")
+@app.post("/api/user/login/email-code")
+@app.post("/api/user/email_code_login")
+@app.post("/api/user/login/email_code")
+@app.post("/api/account/email-login")
+@app.post("/api/account/email_code_login")
+@app.post("/api/email-login")
+@app.post("/api/email/login")
+@app.post("/api/login/email")
+@app.post("/api/email-code-login")
+@app.post("/api/login/email-code")
+@app.post("/api/email_code_login")
+@app.post("/api/login/email_code")
 def email_login(req: EmailLoginRequest):
     email = _clean_email(req.email)
+    code = req.code or req.email_code or req.emailCode or ""
     db = get_db()
     try:
         row = db.execute(
@@ -4082,7 +5235,7 @@ def email_login(req: EmailLoginRequest):
             db,
             email=email,
             purpose="login",
-            code=req.code,
+            code=code,
             user_id=row["id"],
         )
         return _issue_login_session(db, row, action="email_login")
@@ -4110,7 +5263,9 @@ def me_alias(user_id: str = Depends(_verify_token)):
     return me(user_id=user_id)
 
 
+@app.post("/api/auth/profile")
 @app.patch("/api/auth/profile")
+@app.put("/api/auth/profile")
 def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
     db = get_db()
     try:
@@ -4123,37 +5278,40 @@ def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
             if req.email is not None
             else (current["email"] or "")
         )
+        email_code = req.email_code or req.emailCode or req.code
         email_verified = int(current["email_verified"] or 0)
         if req.email is not None and email != (current["email"] or ""):
             email_verified = 0
-            if email and req.email_code:
+            if email and email_code:
                 _consume_email_code(
                     db,
                     email=email,
                     purpose="bind",
-                    code=req.email_code,
+                    code=email_code,
                     user_id=user_id,
                 )
                 email_verified = 1
-        elif req.email_code and email:
+        elif email_code and email:
             _consume_email_code(
                 db,
                 email=email,
                 purpose="bind",
-                code=req.email_code,
+                code=email_code,
                 user_id=user_id,
             )
             email_verified = 1
+        display_name_value = req.display_name
+        if display_name_value is None:
+            display_name_value = req.displayName
         display_name = (
-            _clean_short_text(req.display_name, 64, "昵称")
-            if req.display_name is not None
+            _clean_short_text(display_name_value, 64, "昵称")
+            if display_name_value is not None
             else (current["display_name"] or "")
         )
-        avatar = (
-            _clean_short_text(req.avatar, 1024, "头像")
-            if req.avatar is not None
-            else (current["avatar"] or "")
-        )
+        # Avatar changes must go through the multipart avatar upload endpoints.
+        # Profile PATCH ignores legacy avatar strings so old clients cannot
+        # reintroduce URL/text avatar editing.
+        avatar = current["avatar"] or ""
         bio = (
             _clean_short_text(req.bio, 280, "简介")
             if req.bio is not None
@@ -4178,6 +5336,12 @@ def update_profile(req: ProfileUpdate, user_id: str = Depends(_verify_token)):
 
 @app.post("/api/auth/password-reset")
 @app.post("/api/auth/password-reset/request")
+@app.post("/api/auth/reset-password")
+@app.post("/api/auth/reset-password/request")
+@app.post("/api/auth/forgot-password")
+@app.post("/api/auth/forgot-password/request")
+@app.post("/api/password-reset")
+@app.post("/api/password-reset/request")
 def request_password_reset(req: PasswordResetRequest):
     identifier = (req.email or req.identifier or req.account or req.username or "").strip()
     payload = {"ok": True}
@@ -4232,6 +5396,9 @@ def request_password_reset(req: PasswordResetRequest):
 
 
 @app.post("/api/auth/password-reset/confirm")
+@app.post("/api/auth/reset-password/confirm")
+@app.post("/api/auth/forgot-password/confirm")
+@app.post("/api/password-reset/confirm")
 def confirm_password_reset(req: PasswordResetConfirm):
     password = _clean_password(req.new_password or req.password or "")
     db = get_db()
@@ -4316,6 +5483,7 @@ def confirm_password_reset(req: PasswordResetConfirm):
 
 
 @app.post("/api/auth/change-password")
+@app.post("/api/me/password")
 def change_password(req: ChangePasswordRequest, user_id: str = Depends(_verify_token)):
     new_password = _clean_password(req.new_password or req.password or "")
     db = get_db()
@@ -4342,12 +5510,45 @@ def change_password(req: ChangePasswordRequest, user_id: str = Depends(_verify_t
 
 
 @app.post("/api/auth/avatar")
+@app.patch("/api/auth/avatar")
+@app.put("/api/auth/avatar")
+@app.post("/api/auth/profile/avatar")
+@app.patch("/api/auth/profile/avatar")
+@app.put("/api/auth/profile/avatar")
 @app.post("/api/me/avatar")
+@app.patch("/api/me/avatar")
+@app.put("/api/me/avatar")
+@app.post("/api/me/profile/avatar")
+@app.patch("/api/me/profile/avatar")
+@app.put("/api/me/profile/avatar")
+@app.post("/api/avatar")
+@app.patch("/api/avatar")
+@app.put("/api/avatar")
+@app.post("/api/profile/avatar")
+@app.patch("/api/profile/avatar")
+@app.put("/api/profile/avatar")
+@app.post("/api/user/avatar")
+@app.patch("/api/user/avatar")
+@app.put("/api/user/avatar")
+@app.post("/api/user/profile/avatar")
+@app.patch("/api/user/profile/avatar")
+@app.put("/api/user/profile/avatar")
+@app.post("/api/account/avatar")
+@app.patch("/api/account/avatar")
+@app.put("/api/account/avatar")
+@app.post("/api/account/profile/avatar")
+@app.patch("/api/account/profile/avatar")
+@app.put("/api/account/profile/avatar")
 async def upload_avatar(
     request: Request,
-    avatar: UploadFile = File(...),
+    avatar: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None),
+    image: Optional[UploadFile] = File(None),
     user_id: str = Depends(_verify_token),
 ):
+    avatar = avatar or file or image
+    if avatar is None:
+        raise HTTPException(status_code=400, detail="头像文件不能为空")
     raw = await avatar.read()
     if not raw:
         raise HTTPException(status_code=400, detail="头像文件不能为空")
@@ -4373,7 +5574,7 @@ async def upload_avatar(
     filename = f"{user_id}_{secrets.token_hex(12)}{suffix}"
     path = upload_dir / filename
     path.write_bytes(raw)
-    avatar_url = _external_avatar_url(request, filename)
+    avatar_url = _public_avatar_url(filename)
     db = get_db()
     try:
         row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
@@ -4550,9 +5751,9 @@ def _focus_room_ranking(db, room_id: str, current_user_id: str) -> dict:
         )
         entries.append(
             {
-                "room_id": row["room_id"],
-                "user_id": row["user_id"],
-                "display_name": row["display_name"] or row["username"],
+        "room_id": row["room_id"],
+        "user_id": row["user_id"],
+        "display_name": row["display_name"] or row["username"],
                 "raw_weekly_seconds": int(row["raw_weekly_seconds"] or 0),
                 "weekly_seconds": int(row["weekly_seconds"] or 0),
                 "session_count": int(row["session_count"] or 0),
@@ -4595,7 +5796,7 @@ def _focus_friend_payload(row) -> dict:
     return {
         "user_id": row["id"],
         "username": row["username"],
-        "status": row["status"] if "status" in row.keys() else "accepted",
+        "status": _row_get(row, "status", "accepted"),
         "online": _is_user_online(row),
         "last_active_at": row["last_active_at"],
         "created_at": row["created_at"],
@@ -6147,6 +7348,41 @@ def _merge_state_dict(server: dict, client: dict) -> dict:
     return result
 
 
+def _is_legacy_anniversary_countdown(item: dict) -> bool:
+    value = item.get("type")
+    if isinstance(value, (int, float)):
+        return int(value) == 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"0", "normal", "countdown"}
+    return False
+
+
+def _countdown_from_legacy_anniversary(item: dict) -> dict:
+    result = dict(item)
+    target_date = (
+        result.get("targetDate")
+        or result.get("target_date")
+        or result.get("date")
+        or result.get("originDate")
+        or result.get("origin_date")
+    )
+    if target_date:
+        result["targetDate"] = target_date
+    result.setdefault("category", "默认")
+    return result
+
+
+def _split_legacy_anniversary_countdowns(items: list) -> tuple[list, list]:
+    countdowns: list = []
+    anniversaries: list = []
+    for item in items:
+        if isinstance(item, dict) and _is_legacy_anniversary_countdown(item):
+            countdowns.append(_countdown_from_legacy_anniversary(item))
+        else:
+            anniversaries.append(item)
+    return countdowns, anniversaries
+
+
 def _apply_item_delta_to_payload(payload: dict, req: SyncItemDeltaRequest) -> dict:
     next_payload = dict(payload)
     deleted_items = _merge_deleted_items(
@@ -6539,6 +7775,11 @@ def _sync_payload_from_row(db, user_id: str, row: Optional[sqlite3.Row]) -> dict
         value = json.loads(row[col]) if row and row[col] else {}
         return value if isinstance(value, dict) else {}
 
+    legacy_countdowns, anniversaries = _split_legacy_anniversary_countdowns(
+        _list("anniversaries")
+    )
+    countdowns = _merge_by_timestamp(_list("countdowns"), legacy_countdowns)
+
     return {
         "todos": _list("todos"),
         "habits": _list("habits"),
@@ -6547,8 +7788,8 @@ def _sync_payload_from_row(db, user_id: str, row: Optional[sqlite3.Row]) -> dict
         "pomodoro_config": _obj("pomodoro_config"),
         "user_profile": _obj("user_profile"),
         "notes": _list("notes"),
-        "countdowns": _list("countdowns"),
-        "anniversaries": _list("anniversaries"),
+        "countdowns": countdowns,
+        "anniversaries": anniversaries,
         "diaries": _list("diaries"),
         "goals": _list("goals"),
         "calendar_events": _list("calendar_events"),
@@ -6637,8 +7878,15 @@ def _sync_impl(
         server_config = _obj("pomodoro_config")
         server_profile = _obj("user_profile")
         server_notes = _list("notes")
-        server_countdowns = _list("countdowns")
-        server_annis = _list("anniversaries")
+        legacy_server_countdowns, server_annis = _split_legacy_anniversary_countdowns(
+            _list("anniversaries")
+        )
+        legacy_client_countdowns, req_annis = _split_legacy_anniversary_countdowns(
+            req.anniversaries
+        )
+        server_countdowns = _merge_by_timestamp(
+            _list("countdowns"), legacy_server_countdowns
+        )
         server_diaries = _list("diaries")
         server_goals = _list("goals")
         server_calendar_events = _list("calendar_events")
@@ -6690,13 +7938,13 @@ def _sync_impl(
         )
         merged_countdowns = _merge_by_timestamp(
             server_countdowns,
-            req.countdowns,
+            [*req.countdowns, *legacy_client_countdowns],
             collection="countdowns",
             deleted_items=merged_deleted_items,
         )
         merged_annis = _merge_by_timestamp(
             server_annis,
-            req.anniversaries,
+            req_annis,
             collection="anniversaries",
             deleted_items=merged_deleted_items,
         )
@@ -7497,9 +8745,10 @@ def list_announcements(limit: int = Query(20, ge=1, le=100)):
 
 
 @app.post("/api/feedback")
+@app.post("/api/me/feedback")
 def create_feedback(req: FeedbackCreate, user_id: str = Depends(_verify_token)):
-    category = _clean_feedback_category(req.category)
-    content = _clean_feedback_content(req.content)
+    category = _clean_feedback_category(req.category, req.type)
+    content = _clean_feedback_content(req.content, req.title)
     db = get_db()
     try:
         cur = db.execute(
@@ -7512,32 +8761,72 @@ def create_feedback(req: FeedbackCreate, user_id: str = Depends(_verify_token)):
         db.close()
 
 
+@app.get("/api/me/feedback/{fb_id}")
+@app.get("/api/feedback/me/{fb_id}")
+def my_feedback_detail(fb_id: int, user_id: str = Depends(_verify_token)):
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT id, category, content, status, admin_reply, created_at, updated_at "
+            "FROM feedback WHERE id=? AND user_id=?",
+            (fb_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="反馈不存在")
+        return dict(row)
+    finally:
+        db.close()
+
+
 @app.get("/api/feedback/me")
+@app.get("/api/me/feedback")
 def my_feedback(
     user_id: str = Depends(_verify_token),
     page: Optional[int] = None,
     page_size: Optional[int] = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    type: Optional[str] = None,
+    keyword: Optional[str] = None,
+    q: Optional[str] = None,
 ):
     db = get_db()
     try:
+        where_parts = ["user_id=?"]
+        params: list = [user_id]
+        if status:
+            where_parts.append("status=?")
+            params.append(FEEDBACK_STATUS_ALIASES.get(status, status))
+        if category:
+            where_parts.append("category=?")
+            params.append(_clean_feedback_category(category, type))
+        elif type == "wish":
+            where_parts.append("category=?")
+            params.append("wish")
+        search = (keyword or q or "").strip()
+        if search:
+            where_parts.append("(content LIKE ? OR admin_reply LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like])
+        where = " AND ".join(where_parts)
         if page is None and page_size is None:
             rows = db.execute(
                 "SELECT id, category, content, status, admin_reply, created_at, updated_at "
-                "FROM feedback WHERE user_id=? ORDER BY id DESC",
-                (user_id,),
+                f"FROM feedback WHERE {where} ORDER BY id DESC",
+                params,
             ).fetchall()
             return [dict(r) for r in rows]
         current_page = max(1, int(page or 1))
         current_page_size = max(1, min(int(page_size or 20), 100))
         offset = (current_page - 1) * current_page_size
         total = db.execute(
-            "SELECT COUNT(*) AS c FROM feedback WHERE user_id=?",
-            (user_id,),
+            f"SELECT COUNT(*) AS c FROM feedback WHERE {where}",
+            params,
         ).fetchone()["c"]
         rows = db.execute(
             "SELECT id, category, content, status, admin_reply, created_at, updated_at "
-            "FROM feedback WHERE user_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
-            (user_id, current_page_size, offset),
+            f"FROM feedback WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (*params, current_page_size, offset),
         ).fetchall()
         total = int(total or 0)
         return {
@@ -7559,12 +8848,12 @@ def my_feedback(
 # ---- Dashboard / stats ----
 
 
+@app.get("/api/admin/overview")
 @app.get("/api/admin/stats")
 def admin_stats(_: str = Depends(_require_admin)):
     db = get_db()
     try:
         actor = _
-        _ensure_admin_permission(db, actor, "audit")
         online_ids = sorted(_online_user_ids())
         users_total = db.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
         users_admin = db.execute(
@@ -7708,11 +8997,70 @@ def admin_get_settings(
             )
         if allowed_keys is None or scope_key == "backup":
             result.update(_account_email_runtime_status(_account_mail_runtime(db)))
+        if allowed_keys is None:
+            result.update(_update_release_defaults(db))
+            result["force_relogin_enabled"] = _setting_get(
+                db, "force_relogin_enabled", False
+            )
+            result["force_relogin_issued_at"] = _setting_get(
+                db, "force_relogin_issued_at", ""
+            )
         return result
     finally:
         db.close()
 
 
+def _apply_settings_updates(db, update_items: dict, actor: str) -> dict:
+    _coerce_update_settings(db, update_items)
+    required_permissions = set()
+    if any(key in AI_SETTING_KEYS for key in update_items):
+        required_permissions.add("ai")
+    if any(key in BACKUP_ADMIN_SETTING_KEYS for key in update_items):
+        required_permissions.add("backup")
+    if any(
+        key not in AI_SETTING_KEYS and key not in BACKUP_ADMIN_SETTING_KEYS
+        for key in update_items
+    ) or not update_items:
+        required_permissions.add("settings")
+    for permission in sorted(required_permissions):
+        _ensure_admin_permission(db, actor, permission)
+
+    changed = {}
+    for key, value in update_items.items():
+        _setting_set(db, key, value)
+        changed[key] = value
+        if key == "allow_public_registration":
+            _setting_set(db, "registration_enabled", value)
+            changed["registration_enabled"] = value
+        elif key == "registration_enabled":
+            _setting_set(db, "allow_public_registration", value)
+            changed["allow_public_registration"] = value
+        elif key == "registration_invite_required":
+            _setting_set(db, "invite_code_required", value)
+            changed["invite_code_required"] = value
+        elif key == "invite_code_required":
+            _setting_set(db, "registration_invite_required", value)
+            changed["registration_invite_required"] = value
+        elif key == "default_registration_coins":
+            db.execute(
+                """
+                UPDATE admin_groups
+                SET default_time_coins=?, updated_at=datetime('now')
+                WHERE id='group_default'
+                """,
+                (_bounded_int(value, 100),),
+            )
+    _audit(
+        db,
+        actor,
+        _get_username(db, actor),
+        "settings.update",
+        detail=json.dumps(changed, ensure_ascii=False),
+    )
+    return changed
+
+
+@app.post("/api/admin/settings")
 @app.patch("/api/admin/settings")
 def admin_update_settings(
     req: SettingsUpdate, actor: str = Depends(_require_admin)
@@ -7720,106 +9068,469 @@ def admin_update_settings(
     db = get_db()
     try:
         update_items = req.model_dump(exclude_none=True)
-        required_permissions = set()
-        if any(key in AI_SETTING_KEYS for key in update_items):
-            required_permissions.add("ai")
-        if any(key in BACKUP_ADMIN_SETTING_KEYS for key in update_items):
-            required_permissions.add("backup")
-        if any(
-            key not in AI_SETTING_KEYS and key not in BACKUP_ADMIN_SETTING_KEYS
-            for key in update_items
-        ) or not update_items:
-            required_permissions.add("settings")
-        for permission in sorted(required_permissions):
-            _ensure_admin_permission(db, actor, permission)
-        if any(
-            key in update_items
-            for key in (
-                "latest_version",
-                "minimum_supported_version",
-                "update_notes",
-                "update_download_url",
-                "force_update_required",
-            )
-        ):
-            latest_version = str(
-                update_items.get(
-                    "latest_version",
-                    _setting_get(db, "latest_version", ""),
-                )
-                or ""
-            ).strip()
-            minimum_supported_version = str(
-                update_items.get(
-                    "minimum_supported_version",
-                    _setting_get(db, "minimum_supported_version", ""),
-                )
-                or ""
-            ).strip()
-            update_download_url = str(
-                update_items.get(
-                    "update_download_url",
-                    _setting_get(db, "update_download_url", ""),
-                )
-                or ""
-            ).strip()
-            update_notes = str(
-                update_items.get("update_notes", _setting_get(db, "update_notes", ""))
-                or ""
-            ).strip()
-            force_update_required = bool(
-                update_items.get(
-                    "force_update_required",
-                    _setting_get(db, "force_update_required", False),
-                )
-            )
-            has_update_policy = _has_effective_update_policy(
-                latest_version=latest_version,
-                minimum_supported_version=minimum_supported_version,
-                update_download_url=update_download_url,
-                update_notes=update_notes,
-                force_update_required=force_update_required,
-            )
-            if has_update_policy and not update_notes:
-                raise HTTPException(status_code=400, detail="发布更新策略时必须填写更新内容")
-            if force_update_required and not (
-                _version_gt(latest_version, APP_CURRENT_VERSION)
-                or _version_gt(minimum_supported_version, APP_CURRENT_VERSION)
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="强制更新需要高于当前版本的最新版本或最低支持版本",
-                )
-        changed = {}
-        for key, value in update_items.items():
-            _setting_set(db, key, value)
-            changed[key] = value
-            if key == "allow_public_registration":
-                _setting_set(db, "registration_enabled", value)
-                changed["registration_enabled"] = value
-            elif key == "registration_enabled":
-                _setting_set(db, "allow_public_registration", value)
-                changed["allow_public_registration"] = value
-            elif key == "registration_invite_required":
-                _setting_set(db, "invite_code_required", value)
-                changed["invite_code_required"] = value
-            elif key == "invite_code_required":
-                _setting_set(db, "registration_invite_required", value)
-                changed["registration_invite_required"] = value
-        _audit(
-            db,
-            actor,
-            _get_username(db, actor),
-            "settings.update",
-            detail=json.dumps(changed, ensure_ascii=False),
-        )
+        changed = _apply_settings_updates(db, update_items, actor)
         db.commit()
         return {"status": "ok", "changed": changed}
     finally:
         db.close()
 
 
+def _system_settings_payload(actor: str) -> dict:
+    settings_map = admin_get_settings(actor)
+    settings = [
+        {"key": key, "value": value, "category": "", "description": ""}
+        for key, value in sorted(settings_map.items())
+        if not key.endswith("_set")
+    ]
+    runtime_status = {
+        "current_version": settings_map.get("current_version", APP_CURRENT_VERSION),
+        "current_version_name": settings_map.get(
+            "current_version_name", APP_CURRENT_VERSION
+        ),
+        "current_version_code": settings_map.get(
+            "current_version_code", _version_to_code(APP_CURRENT_VERSION)
+        ),
+        "app_package_name": settings_map.get("app_package_name", APP_PACKAGE_NAME),
+        "version_options": settings_map.get("version_options", []),
+        "force_update_required": settings_map.get("force_update_required", False),
+        "force_app_update_enabled": settings_map.get(
+            "force_app_update_enabled", False
+        ),
+        "latest_version": settings_map.get("latest_version", ""),
+        "latest_version_name": settings_map.get("latest_version_name", ""),
+        "latest_version_code": settings_map.get("latest_version_code", 0),
+        "minimum_supported_version": settings_map.get(
+            "minimum_supported_version", ""
+        ),
+        "update_notes": settings_map.get("update_notes", ""),
+        "release_notes": settings_map.get("release_notes", ""),
+        "update_download_url": settings_map.get("update_download_url", ""),
+        "download_url": settings_map.get("download_url", ""),
+        "force_relogin_enabled": settings_map.get("force_relogin_enabled", False),
+        "force_relogin_issued_at": settings_map.get("force_relogin_issued_at", ""),
+        "registration_email_required": settings_map.get(
+            "registration_email_required", True
+        ),
+        "allow_public_registration": settings_map.get(
+            "allow_public_registration",
+            settings_map.get("registration_enabled", True),
+        ),
+        "registration_invite_required": settings_map.get(
+            "registration_invite_required",
+            settings_map.get("invite_code_required", False),
+        ),
+    }
+    return {
+        "settings": settings,
+        "runtime_status": runtime_status,
+        "local_backups": [],
+    }
+
+
+@app.get("/api/admin/system-settings")
+def admin_system_settings(actor: str = Depends(_require_admin)):
+    return _system_settings_payload(actor)
+
+
+@app.post("/api/admin/system-settings")
+@app.patch("/api/admin/system-settings")
+@app.put("/api/admin/system-settings")
+def admin_update_system_settings(
+    payload: dict = Body(default={}), actor: str = Depends(_require_admin)
+):
+    update_items = {
+        str(key): value
+        for key, value in (payload or {}).items()
+        if value is not None and not str(key).startswith("_")
+    }
+    db = get_db()
+    try:
+        _apply_settings_updates(db, update_items, actor)
+        db.commit()
+    finally:
+        db.close()
+    return _system_settings_payload(actor)
+
+
+# ---- Groups / roles / permissions ----
+
+
+def _clean_entity_id(value: Optional[str], fallback_prefix: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return f"{fallback_prefix}_{secrets.token_hex(6)}"
+    text = re.sub(r"[^a-zA-Z0-9_.:-]+", "_", text)
+    return text[:64] or f"{fallback_prefix}_{secrets.token_hex(6)}"
+
+
+def _bounded_int(value, default: int, minimum: int = 0, maximum: int = 1000000) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = default
+    return max(minimum, min(parsed, maximum))
+
+
+def _group_default_time_coins(db, group_id: Optional[str]) -> int:
+    clean_group_id = (group_id or "").strip() or "group_default"
+    row = db.execute(
+        "SELECT default_time_coins FROM admin_groups WHERE id=? AND is_active=1",
+        (clean_group_id,),
+    ).fetchone()
+    if row is not None:
+        return _bounded_int(row["default_time_coins"], 100)
+    return _bounded_int(_setting_get(db, "default_registration_coins", 100), 100)
+
+
+def _ensure_active_group(db, group_id: str):
+    row = db.execute(
+        "SELECT is_active FROM admin_groups WHERE id=?",
+        (group_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=400, detail="用户组不存在")
+    if not bool(row["is_active"]):
+        raise HTTPException(status_code=400, detail="用户组已停用")
+    return row
+
+
+def _admin_group_row(db, row) -> dict:
+    user_count = db.execute(
+        "SELECT COUNT(*) AS c FROM users WHERE group_id=?",
+        (row["id"],),
+    ).fetchone()["c"]
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"] or "",
+        "default_time_coins": int(row["default_time_coins"] or 0),
+        "default_generate_quota": int(row["default_generate_quota"] or 0),
+        "default_edit_quota": int(row["default_edit_quota"] or 0),
+        "default_generate_history_retention": int(row["default_generate_history_retention"] or 0),
+        "default_edit_history_retention": int(row["default_edit_history_retention"] or 0),
+        "image_mode": row["image_mode"] or "vip",
+        "is_active": bool(row["is_active"]),
+        "user_count": int(user_count or 0),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _admin_role_row(db, row) -> dict:
+    permissions = _admin_permissions_for_response(
+        row["permissions"], is_admin=row["id"] == "role_admin"
+    )
+    user_count = db.execute(
+        "SELECT COUNT(*) AS c FROM users WHERE role_id=?",
+        (row["id"],),
+    ).fetchone()["c"]
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"] or "",
+        "permissions": permissions,
+        "permission_codes": permissions,
+        "is_active": bool(row["is_active"]),
+        "user_count": int(user_count or 0),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@app.get("/api/admin/permissions")
+def admin_permissions(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "permissions")
+        return _admin_permission_catalog()
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/groups")
+@app.get("/api/admin/user-groups")
+@app.get("/api/admin/user_groups")
+def admin_groups(
+    actor: str = Depends(_require_admin),
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: Optional[int] = Query(None, ge=0),
+):
+    db = get_db()
+    try:
+        _ensure_admin_any_permission(db, actor, ("groups", "users"))
+        if limit is not None or offset is not None:
+            safe_limit, safe_offset = _admin_page_window(
+                limit if limit is not None else 50,
+                offset if offset is not None else 0,
+            )
+            total = db.execute("SELECT COUNT(*) AS c FROM admin_groups").fetchone()["c"]
+            rows = db.execute(
+                """
+                SELECT *
+                FROM admin_groups
+                ORDER BY is_active DESC, id='group_default' DESC, lower(name) ASC
+                LIMIT ? OFFSET ?
+                """,
+                (safe_limit, safe_offset),
+            ).fetchall()
+            return _admin_page_response(
+                [_admin_group_row(db, row) for row in rows],
+                total,
+                safe_limit,
+                safe_offset,
+            )
+        rows = db.execute(
+            "SELECT * FROM admin_groups ORDER BY is_active DESC, id='group_default' DESC, lower(name) ASC"
+        ).fetchall()
+        return [_admin_group_row(db, row) for row in rows]
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/groups")
+@app.post("/api/admin/user-groups")
+@app.post("/api/admin/user_groups")
+def admin_create_group(req: AdminGroupUpsert, actor: str = Depends(_require_admin)):
+    return _admin_save_group(None, req, actor)
+
+
+@app.put("/api/admin/groups/{group_id}")
+@app.patch("/api/admin/groups/{group_id}")
+@app.put("/api/admin/user-groups/{group_id}")
+@app.patch("/api/admin/user-groups/{group_id}")
+@app.put("/api/admin/user_groups/{group_id}")
+@app.patch("/api/admin/user_groups/{group_id}")
+def admin_update_group(
+    group_id: str, req: AdminGroupUpsert, actor: str = Depends(_require_admin)
+):
+    return _admin_save_group(group_id, req, actor)
+
+
+def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str):
+    name = _clean_short_text(req.name, 64, "用户组名称")
+    description = _clean_short_text(req.description or "", 280, "用户组描述")
+    image_mode_value = req.image_mode
+    if image_mode_value is None:
+        image_mode_value = req.imageMode
+    image_mode = ""
+    target_id = _clean_entity_id(group_id or name, "group")
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "groups")
+        existing_row = db.execute(
+            "SELECT * FROM admin_groups WHERE id=?", (target_id,)
+        ).fetchone()
+        exists = existing_row is not None
+        if image_mode_value is None and existing_row is not None:
+            image_mode_value = existing_row["image_mode"]
+        image_mode = (image_mode_value or "vip").strip()
+        if image_mode not in {"vip", "general"}:
+            image_mode = "vip"
+
+        def group_int(field: str, fallback: int, *aliases: str) -> int:
+            value = getattr(req, field)
+            if value is None:
+                for alias in aliases:
+                    value = getattr(req, alias)
+                    if value is not None:
+                        break
+            if value is not None:
+                return _bounded_int(value, fallback)
+            if existing_row is not None:
+                return _bounded_int(existing_row[field], fallback)
+            return fallback
+
+        default_time_coins = group_int("default_time_coins", 100, "defaultTimeCoins")
+        is_active_value = req.is_active
+        if is_active_value is None:
+            is_active_value = req.isActive
+        if is_active_value is None and existing_row is not None:
+            is_active_value = bool(existing_row["is_active"])
+        values = (
+            target_id,
+            name,
+            description,
+            default_time_coins,
+            group_int("default_generate_quota", 100, "defaultGenerateQuota"),
+            group_int("default_edit_quota", 100, "defaultEditQuota"),
+            group_int(
+                "default_generate_history_retention",
+                50,
+                "defaultGenerateHistoryRetention",
+            ),
+            group_int(
+                "default_edit_history_retention",
+                20,
+                "defaultEditHistoryRetention",
+            ),
+            image_mode,
+            1 if is_active_value is not False else 0,
+        )
+        if not exists:
+            db.execute(
+                """
+                INSERT INTO admin_groups(
+                    id, name, description, default_time_coins,
+                    default_generate_quota, default_edit_quota,
+                    default_generate_history_retention,
+                    default_edit_history_retention, image_mode, is_active
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                """,
+                values,
+            )
+        else:
+            db.execute(
+                """
+                UPDATE admin_groups
+                SET name=?, description=?, default_time_coins=?,
+                    default_generate_quota=?, default_edit_quota=?,
+                    default_generate_history_retention=?,
+                    default_edit_history_retention=?, image_mode=?,
+                    is_active=?, updated_at=datetime('now')
+                WHERE id=?
+                """,
+                (*values[1:], target_id),
+            )
+        if target_id == "group_default":
+            _setting_set(db, "default_registration_coins", default_time_coins)
+        _audit(db, actor, _get_username(db, actor), "group.save", target=target_id)
+        db.commit()
+        row = db.execute("SELECT * FROM admin_groups WHERE id=?", (target_id,)).fetchone()
+        return _admin_group_row(db, row)
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/roles")
+def admin_roles(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_any_permission(db, actor, ("roles", "users"))
+        rows = db.execute(
+            "SELECT * FROM admin_roles ORDER BY id='role_admin' DESC, id='role_user' DESC, lower(name) ASC"
+        ).fetchall()
+        return [_admin_role_row(db, row) for row in rows]
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/roles")
+def admin_create_role(req: AdminRoleUpsert, actor: str = Depends(_require_admin)):
+    return _admin_save_role(None, req, actor)
+
+
+@app.put("/api/admin/roles/{role_id}")
+@app.patch("/api/admin/roles/{role_id}")
+def admin_update_role(
+    role_id: str, req: AdminRoleUpsert, actor: str = Depends(_require_admin)
+):
+    return _admin_save_role(role_id, req, actor)
+
+
+def _admin_save_role(role_id: Optional[str], req: AdminRoleUpsert, actor: str):
+    name = _clean_short_text(req.name, 64, "角色名称")
+    description = _clean_short_text(req.description or "", 280, "角色描述")
+    target_id = _clean_entity_id(role_id or name, "role")
+    permissions = _normalize_admin_permissions(req.permission_codes or req.permissions or [])
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "roles")
+        _ensure_admin_can_assign_permissions(db, actor, permissions)
+        exists = db.execute(
+            "SELECT 1 FROM admin_roles WHERE id=?", (target_id,)
+        ).fetchone()
+        values = (
+            target_id,
+            name,
+            description,
+            json.dumps(permissions, ensure_ascii=False),
+            1 if req.is_active is not False else 0,
+        )
+        if exists is None:
+            db.execute(
+                "INSERT INTO admin_roles(id, name, description, permissions, is_active) VALUES(?,?,?,?,?)",
+                values,
+            )
+        else:
+            db.execute(
+                """
+                UPDATE admin_roles
+                SET name=?, description=?, permissions=?, is_active=?,
+                    updated_at=datetime('now')
+                WHERE id=?
+                """,
+                (*values[1:], target_id),
+            )
+        _audit(db, actor, _get_username(db, actor), "role.save", target=target_id)
+        db.commit()
+        row = db.execute("SELECT * FROM admin_roles WHERE id=?", (target_id,)).fetchone()
+        return _admin_role_row(db, row)
+    finally:
+        db.close()
+
+
 # ---- Users ----
+
+
+@app.post("/api/admin/users")
+def admin_create_user(req: UserCreate, actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "users")
+        username = _clean_username(req.username)
+        password = _clean_password(req.password or secrets.token_urlsafe(12))
+        email = _clean_email(req.email)
+        display_name = _clean_short_text(req.display_name, 64, "昵称")
+        group_id = (req.group_id or "").strip() or "group_default"
+        role_id = (req.role_id or "").strip() or ("role_admin" if req.is_admin else "role_user")
+        _ensure_active_group(db, group_id)
+        if db.execute("SELECT 1 FROM admin_roles WHERE id=?", (role_id,)).fetchone() is None:
+            raise HTTPException(status_code=400, detail="角色不存在")
+        if req.is_admin or req.admin_permissions is not None or role_id != "role_user":
+            _ensure_admin_management_permission(db, actor)
+        _ensure_account_unique(db, username=username, email=email)
+        user_id = secrets.token_hex(16)
+        permissions = _normalize_admin_permissions(req.admin_permissions)
+        if req.is_admin and not permissions:
+            permissions = _admin_role_permissions(db, role_id) or [ADMIN_ALL_PERMISSION]
+        _ensure_admin_can_assign_permissions(db, actor, permissions)
+        _ensure_admin_can_assign_role(db, actor, role_id)
+        db.execute(
+            """
+            INSERT INTO users(
+                id, username, email, email_verified, password_hash, display_name,
+                group_id, role_id, is_admin, admin_permissions, is_disabled
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                user_id,
+                username,
+                email,
+                1 if email else 0,
+                _hash_password(password),
+                display_name,
+                group_id,
+                role_id,
+                1 if req.is_admin else 0,
+                json.dumps(permissions, ensure_ascii=False),
+                1 if req.is_disabled else 0,
+            ),
+        )
+        db.execute("INSERT INTO sync_data(user_id) VALUES(?)", (user_id,))
+        _grant_registration_coins(
+            db,
+            user_id,
+            _group_default_time_coins(db, group_id),
+        )
+        _ensure_private_workspace(db, user_id)
+        _audit(db, actor, _get_username(db, actor), "user.create", target=user_id)
+        db.commit()
+        row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return _user_response(row, db=db)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="用户名或邮箱已被使用")
+    finally:
+        db.close()
 
 
 @app.get("/api/admin/users")
@@ -7864,7 +9575,7 @@ def admin_list_users(
         ).fetchone()["c"]
         rows = db.execute(
             "SELECT u.id, u.username, u.email, u.email_verified, u.display_name, "
-            "u.is_admin, u.admin_permissions, u.is_disabled, "
+            "u.group_id, u.role_id, u.is_admin, u.admin_permissions, u.is_disabled, "
             "u.created_at, u.last_login_at, u.last_active_at, sd.virtual_rewards, "
             "(SELECT COUNT(*) FROM feedback WHERE user_id=u.id) AS fb_count "
             f"FROM users u LEFT JOIN sync_data sd ON sd.user_id=u.id {where} "
@@ -7874,22 +9585,29 @@ def admin_list_users(
         online_user_ids = _online_user_ids(r["id"] for r in rows)
         items = []
         for r in rows:
+            rewards_text = r["virtual_rewards"] if r["virtual_rewards"] else "{}"
             coin_balance, lifetime_coins = _virtual_rewards_summary(
-                r["virtual_rewards"]
+                rewards_text
             )
+            quota_aliases = _quota_aliases_from_rewards(rewards_text)
             is_admin = bool(r["is_admin"])
             items.append(
                 {
+                "id": r["id"],
                 "user_id": r["id"],
                 "username": r["username"],
                 "email": r["email"],
                 "email_verified": bool(r["email_verified"]),
                 "display_name": r["display_name"],
+                "group_id": r["group_id"] or "group_default",
+                "role_id": r["role_id"] or ("role_admin" if is_admin else "role_user"),
+                "group": {"id": r["group_id"] or "group_default"},
+                "role": {"id": r["role_id"] or ("role_admin" if is_admin else "role_user")},
                 "is_admin": is_admin,
-                "admin_permissions": _admin_permissions_for_response(
-                    r["admin_permissions"], is_admin=is_admin
-                ),
+                "admin_permissions": _merged_admin_permissions(r, db=db),
+                "permissions": _merged_admin_permissions(r, db=db),
                 "is_disabled": bool(r["is_disabled"]),
+                "is_active": not bool(r["is_disabled"]),
                 "created_at": r["created_at"],
                 "last_login_at": r["last_login_at"],
                 "last_active_at": r["last_active_at"],
@@ -7897,6 +9615,7 @@ def admin_list_users(
                 "online": r["id"] in online_user_ids,
                 "coin_balance": coin_balance,
                 "lifetime_coins": lifetime_coins,
+                **quota_aliases,
                 }
             )
         return _admin_page_response(items, total, limit, offset)
@@ -8077,19 +9796,100 @@ def admin_bulk_update_user_status(
         db.close()
 
 
+@app.post("/api/admin/users/{user_id}")
 @app.patch("/api/admin/users/{user_id}")
+@app.put("/api/admin/users/{user_id}")
 def admin_update_user(
     user_id: str, req: UserUpdate, actor: str = Depends(_require_admin)
 ):
+    coin_payload = UserCoinAdjustment(
+        delta=req.delta,
+        reason=req.reason,
+        coins=req.coins,
+        amount=req.amount,
+        balance=req.balance,
+        coin_balance=req.coin_balance,
+        coinBalance=req.coinBalance,
+        target_balance=req.target_balance,
+        quota=req.quota,
+        time_coins=req.time_coins,
+        time_coin_balance=req.time_coin_balance,
+        timeCoins=req.timeCoins,
+        timeCoinBalance=req.timeCoinBalance,
+        credit_balance=req.credit_balance,
+        credits=req.credits,
+        coin_delta=req.coin_delta,
+        coinDelta=req.coinDelta,
+        time_coin_delta=req.time_coin_delta,
+        timeCoinDelta=req.timeCoinDelta,
+    )
+    has_coin_adjustment = any(
+        value is not None
+        for value in (
+            coin_payload.delta,
+            coin_payload.coins,
+            coin_payload.amount,
+            coin_payload.balance,
+            coin_payload.coin_balance,
+            coin_payload.coinBalance,
+            coin_payload.target_balance,
+            coin_payload.quota,
+            coin_payload.time_coins,
+            coin_payload.time_coin_balance,
+            coin_payload.timeCoins,
+            coin_payload.timeCoinBalance,
+            coin_payload.credit_balance,
+            coin_payload.credits,
+            coin_payload.coin_delta,
+            coin_payload.coinDelta,
+            coin_payload.time_coin_delta,
+            coin_payload.timeCoinDelta,
+        )
+    )
+    has_user_update = any(
+        value is not None
+        for value in (
+            req.is_admin,
+            req.is_disabled,
+            req.new_password,
+            req.password,
+            req.admin_permissions,
+            req.group_id,
+            req.role_id,
+        )
+    )
+    if has_coin_adjustment and not has_user_update:
+        return _admin_adjust_user_coins_impl(user_id, coin_payload, actor)
+
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "users")
         row = db.execute(
-            "SELECT id, username, is_admin, admin_permissions FROM users WHERE id=?",
+            "SELECT id, username, is_admin, admin_permissions, group_id, role_id FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
+
+        requested_role_id = (
+            (req.role_id or "").strip()
+            if req.role_id is not None
+            else (row["role_id"] or "")
+        )
+        touches_admin_management = (
+            req.is_admin is not None
+            or req.admin_permissions is not None
+            or (
+                req.role_id is not None
+                and (
+                    requested_role_id != "role_user"
+                    or bool(row["is_admin"])
+                    or bool(req.is_admin)
+                )
+            )
+        )
+        if touches_admin_management:
+            _ensure_admin_management_permission(db, actor)
 
         # Safeguard: can't demote or disable the last admin
         if req.is_admin is False and row["is_admin"]:
@@ -8117,12 +9917,19 @@ def admin_update_user(
             next_permissions = [ADMIN_ALL_PERMISSION]
         elif req.is_admin is False:
             next_permissions = []
+        if next_permissions is not None:
+            _ensure_admin_can_assign_permissions(db, actor, next_permissions)
 
         if req.is_admin is not None:
             db.execute(
                 "UPDATE users SET is_admin=? WHERE id=?",
                 (1 if req.is_admin else 0, user_id),
             )
+            if req.role_id is None:
+                db.execute(
+                    "UPDATE users SET role_id=? WHERE id=?",
+                    ("role_admin" if req.is_admin else "role_user", user_id),
+                )
         if next_permissions is not None:
             db.execute(
                 "UPDATE users SET admin_permissions=? WHERE id=?",
@@ -8138,10 +9945,24 @@ def admin_update_user(
             )
             if req.is_disabled:
                 _drop_session(user_id)
-        if req.new_password:
+        if req.group_id is not None:
+            group_id = (req.group_id or "").strip() or "group_default"
+            _ensure_active_group(db, group_id)
+            previous_group_id = row["group_id"] or "group_default"
+            db.execute("UPDATE users SET group_id=? WHERE id=?", (group_id, user_id))
+            if group_id != previous_group_id:
+                _grant_group_assignment_coins(db, user_id, group_id)
+        if req.role_id is not None:
+            role_id = (req.role_id or "").strip() or ("role_admin" if next_is_admin else "role_user")
+            if db.execute("SELECT 1 FROM admin_roles WHERE id=?", (role_id,)).fetchone() is None:
+                raise HTTPException(status_code=400, detail="角色不存在")
+            _ensure_admin_can_assign_role(db, actor, role_id)
+            db.execute("UPDATE users SET role_id=? WHERE id=?", (role_id, user_id))
+        next_password = req.new_password or req.password
+        if next_password:
             db.execute(
                 "UPDATE users SET password_hash=? WHERE id=?",
-                (_hash_password(req.new_password), user_id),
+                (_hash_password(next_password), user_id),
             )
             _drop_session(user_id)  # force re-login
 
@@ -8154,23 +9975,60 @@ def admin_update_user(
             detail=json.dumps(req.model_dump(exclude_none=True)),
         )
         db.commit()
-        return {"status": "ok"}
+        if has_coin_adjustment:
+            return _admin_adjust_user_coins_impl(user_id, coin_payload, actor)
+        fresh = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return _user_response(fresh, db=db)
     finally:
         db.close()
 
 
-@app.post("/api/admin/users/{user_id}/coins")
-def admin_adjust_user_coins(
-    user_id: str, req: UserCoinAdjustment, actor: str = Depends(_require_admin)
+def _coin_adjustment_delta(req: UserCoinAdjustment, current_balance: int) -> int:
+    if req.delta is not None:
+        return int(req.delta)
+    if req.coin_delta is not None:
+        return int(req.coin_delta)
+    if req.coinDelta is not None:
+        return int(req.coinDelta)
+    if req.time_coin_delta is not None:
+        return int(req.time_coin_delta)
+    if req.timeCoinDelta is not None:
+        return int(req.timeCoinDelta)
+    if req.coins is not None:
+        return int(req.coins)
+    if req.amount is not None:
+        return int(req.amount)
+    if req.balance is not None:
+        return int(req.balance) - current_balance
+    if req.coin_balance is not None:
+        return int(req.coin_balance) - current_balance
+    if req.coinBalance is not None:
+        return int(req.coinBalance) - current_balance
+    if req.target_balance is not None:
+        return int(req.target_balance) - current_balance
+    if req.quota is not None:
+        return int(req.quota) - current_balance
+    if req.time_coins is not None:
+        return int(req.time_coins) - current_balance
+    if req.time_coin_balance is not None:
+        return int(req.time_coin_balance) - current_balance
+    if req.timeCoins is not None:
+        return int(req.timeCoins) - current_balance
+    if req.timeCoinBalance is not None:
+        return int(req.timeCoinBalance) - current_balance
+    if req.credit_balance is not None:
+        return int(req.credit_balance) - current_balance
+    if req.credits is not None:
+        return int(req.credits) - current_balance
+    raise HTTPException(status_code=400, detail="调整数量不能为空")
+
+
+def _admin_adjust_user_coins_impl(
+    user_id: str, req: UserCoinAdjustment, actor: str
 ):
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "coins")
-        delta = int(req.delta)
-        if delta == 0:
-            raise HTTPException(status_code=400, detail="调整数量不能为 0")
-        if abs(delta) > 1000000:
-            raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
         user = db.execute(
             "SELECT id, username FROM users WHERE id=?", (user_id,)
         ).fetchone()
@@ -8191,6 +10049,11 @@ def admin_adjust_user_coins(
 
         now = _utc_now_text()
         old_balance = _num(rewards.get("balance"))
+        delta = _coin_adjustment_delta(req, old_balance)
+        if delta == 0:
+            raise HTTPException(status_code=400, detail="调整数量不能为 0")
+        if abs(delta) > 1000000:
+            raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
         old_lifetime = _num(rewards.get("lifetime"), old_balance)
         balance = max(0, old_balance + delta)
         lifetime = old_lifetime + max(0, delta)
@@ -8253,6 +10116,261 @@ def admin_adjust_user_coins(
         }
     finally:
         db.close()
+
+
+def _grant_registration_coins(db, user_id: str, coins: int) -> None:
+    _grant_default_coins(
+        db,
+        user_id,
+        coins,
+        entry_prefix="register",
+        title="新用户默认额度",
+        reason="默认用户组额度",
+    )
+
+
+def _grant_group_assignment_coins(db, user_id: str, group_id: str) -> None:
+    coins = _group_default_time_coins(db, group_id)
+    _grant_default_coins(
+        db,
+        user_id,
+        coins,
+        entry_prefix=f"group:{group_id}",
+        title="用户组默认额度",
+        reason="分配用户组额度",
+    )
+
+
+def _grant_default_coins(
+    db,
+    user_id: str,
+    coins: int,
+    *,
+    entry_prefix: str,
+    title: str,
+    reason: str,
+) -> None:
+    coins = max(0, min(int(coins or 0), 1000000))
+    if coins <= 0:
+        return
+    db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
+    row = db.execute(
+        "SELECT virtual_rewards, sync_version FROM sync_data WHERE user_id=?",
+        (user_id,),
+    ).fetchone()
+    rewards = _json_object(row["virtual_rewards"] if row else "{}")
+
+    def _num(value, fallback=0) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return fallback
+
+    now = _utc_now_text()
+    ledger = rewards.get("ledger")
+    if not isinstance(ledger, list):
+        ledger = []
+    entry = {
+        "id": f"{entry_prefix}:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
+        "title": title,
+        "coins": coins,
+        "reason": reason,
+        "awardedAt": now,
+    }
+    balance = max(0, _num(rewards.get("balance")) + coins)
+    lifetime = max(_num(rewards.get("lifetime"), balance), balance)
+    rewards.update(
+        {
+            "balance": balance,
+            "lifetime": lifetime,
+            "ledger": [entry, *[item for item in ledger if isinstance(item, dict)]][:50],
+            "updatedAt": now,
+        }
+    )
+    next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
+    db.execute(
+        """
+        UPDATE sync_data
+        SET virtual_rewards=?, sync_version=?, updated_at=?
+        WHERE user_id=?
+        """,
+        (json.dumps(rewards, ensure_ascii=False), next_sync_version, now, user_id),
+    )
+
+
+@app.post("/api/admin/welfare-grants")
+def admin_create_welfare_grant(
+    req: WelfareGrantCreate, actor: str = Depends(_require_admin)
+):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "coins")
+        generate_bonus = max(0, int(req.generate_bonus or 0))
+        edit_bonus = max(0, int(req.edit_bonus or 0))
+        coins = generate_bonus + edit_bonus
+        if coins <= 0:
+            raise HTTPException(status_code=400, detail="福利额度必须大于 0")
+        if coins > 1000000:
+            raise HTTPException(status_code=400, detail="单次福利不能超过 1000000")
+        title = (req.title or "").strip() or "全员福利"
+        body = (req.body or "").strip()
+        now = _utc_now_text()
+        grant_id = f"welfare:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}"
+        users = db.execute(
+            "SELECT id FROM users WHERE is_disabled=0 ORDER BY created_at ASC"
+        ).fetchall()
+        updated = 0
+        for user in users:
+            user_id = user["id"]
+            db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
+            row = db.execute(
+                "SELECT virtual_rewards, sync_version FROM sync_data WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            rewards = _json_object(row["virtual_rewards"] if row else "{}")
+
+            def _num(value, fallback=0) -> int:
+                try:
+                    return int(value)
+                except Exception:
+                    return fallback
+
+            ledger = rewards.get("ledger")
+            if not isinstance(ledger, list):
+                ledger = []
+            entry = {
+                "id": f"{grant_id}:{user_id}",
+                "title": title,
+                "body": body,
+                "coins": coins,
+                "generate_bonus": generate_bonus,
+                "edit_bonus": edit_bonus,
+                "reason": title,
+                "awardedAt": now,
+            }
+            balance = max(0, _num(rewards.get("balance")) + coins)
+            lifetime = max(_num(rewards.get("lifetime")), balance)
+            rewards.update(
+                {
+                    "balance": balance,
+                    "lifetime": lifetime,
+                    "ledger": [entry, *[item for item in ledger if isinstance(item, dict)]][:50],
+                    "updatedAt": now,
+                }
+            )
+            next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
+            db.execute(
+                """
+                UPDATE sync_data
+                SET virtual_rewards=?, sync_version=?, updated_at=?
+                WHERE user_id=?
+                """,
+                (
+                    json.dumps(rewards, ensure_ascii=False),
+                    next_sync_version,
+                    now,
+                    user_id,
+                ),
+            )
+            updated += 1
+        _audit(
+            db,
+            actor,
+            _get_username(db, actor),
+            "welfare.grant_create",
+            target=grant_id,
+            detail=json.dumps(
+                {
+                    "title": title,
+                    "body": body,
+                    "generate_bonus": generate_bonus,
+                    "edit_bonus": edit_bonus,
+                    "coins": coins,
+                    "notify": bool(req.notify),
+                    "users": updated,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.commit()
+        return {
+            "status": "ok",
+            "id": grant_id,
+            "title": title,
+            "body": body,
+            "generate_bonus": generate_bonus,
+            "edit_bonus": edit_bonus,
+            "coins": coins,
+            "users": updated,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/users/{user_id}/coins")
+@app.post("/api/admin/users/{user_id}/coin")
+@app.patch("/api/admin/users/{user_id}/coin")
+@app.put("/api/admin/users/{user_id}/coin")
+@app.post("/api/admin/users/{user_id}/coin-balance")
+@app.patch("/api/admin/users/{user_id}/coin-balance")
+@app.put("/api/admin/users/{user_id}/coin-balance")
+@app.post("/api/admin/users/{user_id}/coin_balance")
+@app.patch("/api/admin/users/{user_id}/coin_balance")
+@app.put("/api/admin/users/{user_id}/coin_balance")
+@app.patch("/api/admin/users/{user_id}/coins")
+@app.put("/api/admin/users/{user_id}/coins")
+@app.post("/api/admin/users/{user_id}/quota")
+@app.patch("/api/admin/users/{user_id}/quota")
+@app.put("/api/admin/users/{user_id}/quota")
+@app.post("/api/admin/users/{user_id}/time-coins")
+@app.patch("/api/admin/users/{user_id}/time-coins")
+@app.put("/api/admin/users/{user_id}/time-coins")
+@app.post("/api/admin/users/{user_id}/time-coin-balance")
+@app.patch("/api/admin/users/{user_id}/time-coin-balance")
+@app.put("/api/admin/users/{user_id}/time-coin-balance")
+@app.post("/api/admin/users/{user_id}/time_coins")
+@app.patch("/api/admin/users/{user_id}/time_coins")
+@app.put("/api/admin/users/{user_id}/time_coins")
+@app.post("/api/admin/users/{user_id}/time_coin_balance")
+@app.patch("/api/admin/users/{user_id}/time_coin_balance")
+@app.put("/api/admin/users/{user_id}/time_coin_balance")
+@app.post("/api/admin/users/{user_id}/credits")
+@app.patch("/api/admin/users/{user_id}/credits")
+@app.put("/api/admin/users/{user_id}/credits")
+@app.post("/api/admin/users/{user_id}/credit-balance")
+@app.patch("/api/admin/users/{user_id}/credit-balance")
+@app.put("/api/admin/users/{user_id}/credit-balance")
+@app.post("/api/admin/users/{user_id}/credit_balance")
+@app.patch("/api/admin/users/{user_id}/credit_balance")
+@app.put("/api/admin/users/{user_id}/credit_balance")
+@app.post("/api/admin/users/{user_id}/coins/adjust")
+@app.patch("/api/admin/users/{user_id}/coins/adjust")
+@app.put("/api/admin/users/{user_id}/coins/adjust")
+@app.post("/api/admin/users/{user_id}/time-coins/adjust")
+@app.patch("/api/admin/users/{user_id}/time-coins/adjust")
+@app.put("/api/admin/users/{user_id}/time-coins/adjust")
+@app.post("/api/admin/users/{user_id}/time_coins/adjust")
+@app.patch("/api/admin/users/{user_id}/time_coins/adjust")
+@app.put("/api/admin/users/{user_id}/time_coins/adjust")
+@app.post("/api/admin/users/{user_id}/time-coin-balance/adjust")
+@app.patch("/api/admin/users/{user_id}/time-coin-balance/adjust")
+@app.put("/api/admin/users/{user_id}/time-coin-balance/adjust")
+@app.post("/api/admin/users/{user_id}/time_coin_balance/adjust")
+@app.patch("/api/admin/users/{user_id}/time_coin_balance/adjust")
+@app.put("/api/admin/users/{user_id}/time_coin_balance/adjust")
+@app.post("/api/admin/users/{user_id}/quota/adjust")
+@app.patch("/api/admin/users/{user_id}/quota/adjust")
+@app.put("/api/admin/users/{user_id}/quota/adjust")
+@app.post("/api/admin/users/{user_id}/coin-adjustment")
+@app.patch("/api/admin/users/{user_id}/coin-adjustment")
+@app.put("/api/admin/users/{user_id}/coin-adjustment")
+@app.post("/api/admin/users/{user_id}/coin_adjustment")
+@app.patch("/api/admin/users/{user_id}/coin_adjustment")
+@app.put("/api/admin/users/{user_id}/coin_adjustment")
+def admin_adjust_user_coins(
+    user_id: str, req: UserCoinAdjustment, actor: str = Depends(_require_admin)
+):
+    return _admin_adjust_user_coins_impl(user_id, req, actor)
 
 
 @app.delete("/api/admin/users/{user_id}")
@@ -8418,11 +10536,20 @@ def list_all_feedback(
     _: str = Depends(_require_admin),
     status: Optional[str] = None,
     q: Optional[str] = None,
+    keyword: Optional[str] = None,
     category: Optional[str] = None,
+    type: Optional[str] = None,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
     sort: str = "created_desc",
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
+    if page is not None or page_size is not None:
+        limit = page_size or limit
+        offset = (max(1, int(page or 1)) - 1) * int(limit or 50)
     limit, offset = _admin_page_window(limit, offset)
     db = get_db()
     try:
@@ -8430,8 +10557,11 @@ def list_all_feedback(
         _ensure_admin_permission(db, actor, "feedback")
         where, params = _feedback_admin_filters(
             status=status,
-            q=q,
+            q=keyword or q,
             category=category,
+            feedback_type=type,
+            start_at=start_at,
+            end_at=end_at,
         )
         total = db.execute(
             f"SELECT COUNT(*) AS c FROM feedback f JOIN users u ON u.id=f.user_id {where}",
@@ -8454,7 +10584,11 @@ def export_feedback_csv(
     actor: str = Depends(_require_admin),
     status: Optional[str] = None,
     q: Optional[str] = None,
+    keyword: Optional[str] = None,
     category: Optional[str] = None,
+    type: Optional[str] = None,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
     sort: str = "created_desc",
     limit: int = Query(5000, ge=1, le=20000),
 ):
@@ -8464,8 +10598,11 @@ def export_feedback_csv(
         _ensure_admin_permission(db, actor, "feedback")
         where, params = _feedback_admin_filters(
             status=status,
-            q=q,
+            q=keyword or q,
             category=category,
+            feedback_type=type,
+            start_at=start_at,
+            end_at=end_at,
         )
         order_by = _feedback_admin_order_by(sort)
         total = db.execute(
@@ -8551,17 +10688,347 @@ def export_feedback_csv(
         db.close()
 
 
+@app.get("/api/admin/feedback/automation")
+def admin_feedback_automation(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        return {
+            "auto_enabled": _setting_get(db, "feedback_ai_auto_enabled", False),
+            "automation_limit": _setting_get(db, "feedback_ai_automation_limit", "20"),
+            "interval_minutes": int(
+                _setting_get(db, "feedback_ai_interval_minutes", 60) or 60
+            ),
+            "auto_reply_enabled": _setting_get(
+                db, "feedback_ai_auto_reply_enabled", False
+            ),
+            "auto_export_enabled": _setting_get(
+                db, "feedback_ai_auto_export_enabled", False
+            ),
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/feedback/automation")
+def admin_feedback_save_automation(
+    payload: Optional[dict] = Body(default=None),
+    actor: str = Depends(_require_admin),
+):
+    payload = payload or {}
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        updates = {
+            "feedback_ai_auto_enabled": _as_bool(payload.get("auto_enabled", False)),
+            "feedback_ai_automation_limit": str(
+                payload.get("automation_limit") or "20"
+            ),
+            "feedback_ai_interval_minutes": max(
+                5, int(payload.get("interval_minutes") or 60)
+            ),
+            "feedback_ai_auto_reply_enabled": _as_bool(
+                payload.get("auto_reply_enabled", False)
+            ),
+            "feedback_ai_auto_export_enabled": _as_bool(
+                payload.get("auto_export_enabled", False)
+            ),
+        }
+        for key, value in updates.items():
+            _setting_set(db, key, value)
+        _audit(db, actor, _get_username(db, actor), "feedback.ai_settings.update")
+        db.commit()
+        return admin_feedback_automation(actor)
+    finally:
+        db.close()
+
+
+def _feedback_insights_payload(db, period: str = "week") -> dict:
+    category_rows = db.execute(
+        """
+        SELECT category, COUNT(*) AS count
+        FROM feedback
+        GROUP BY category
+        ORDER BY count DESC, category ASC
+        """
+    ).fetchall()
+    status_rows = db.execute(
+        """
+        SELECT status, COUNT(*) AS count
+        FROM feedback
+        GROUP BY status
+        ORDER BY count DESC, status ASC
+        """
+    ).fetchall()
+    recent_rows = db.execute(
+        """
+        SELECT id, category, status, content, admin_reply, created_at, updated_at
+        FROM feedback
+        ORDER BY id DESC
+        LIMIT 20
+        """
+    ).fetchall()
+    return {
+        "period": period,
+        "categories": [dict(row) for row in category_rows],
+        "statuses": [dict(row) for row in status_rows],
+        "items": [dict(row) for row in recent_rows],
+        "summary": "按分类、状态和最近反馈生成的需求清单。",
+    }
+
+
+@app.get("/api/admin/feedback/insights")
+def admin_feedback_insights(
+    period: str = "week",
+    actor: str = Depends(_require_admin),
+):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        return _feedback_insights_payload(db, period)
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/feedback/export")
+def admin_feedback_export_insights(
+    period: str = "week",
+    actor: str = Depends(_require_admin),
+):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        payload = _feedback_insights_payload(db, period)
+        _audit(
+            db,
+            actor,
+            _get_username(db, actor),
+            "feedback.insights.export",
+            detail=json.dumps({"period": period, "items": len(payload["items"])}, ensure_ascii=False),
+        )
+        db.commit()
+        return {"ok": True, **payload}
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/feedback/auto-run")
+def admin_feedback_auto_run(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        rows = db.execute(
+            """
+            SELECT id, category, status, content
+            FROM feedback
+            WHERE status='open'
+            ORDER BY id DESC
+            LIMIT 20
+            """
+        ).fetchall()
+        ids = [int(row["id"]) for row in rows]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            db.execute(
+                f"""
+                UPDATE feedback
+                SET status='in_progress', updated_at=datetime('now')
+                WHERE id IN ({placeholders}) AND status='open'
+                """,
+                ids,
+            )
+            _audit(
+                db,
+                actor,
+                _get_username(db, actor),
+                "feedback.auto_run",
+                target=",".join(str(v) for v in ids),
+                detail=f"processed:{len(ids)}",
+            )
+            db.commit()
+        return {
+            "ok": True,
+            "processed": len(rows),
+            "items": [
+                {
+                    "id": row["id"],
+                    "category": row["category"],
+                    "status": row["status"],
+                    "summary": _feedback_summary_text(row["content"]),
+                }
+                for row in rows
+            ],
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/feedback/auto-reply")
+def admin_feedback_auto_reply(actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        enabled = _setting_get(db, "feedback_ai_auto_reply_enabled", False)
+        if not enabled:
+            return {
+                "ok": True,
+                "enabled": False,
+                "processed": 0,
+                "message": "自动回复开关未启用，未修改反馈。",
+            }
+        rows = db.execute(
+            """
+            SELECT id, category, status, content
+            FROM feedback
+            WHERE status IN ('open', 'in_progress')
+              AND TRIM(COALESCE(admin_reply, '')) = ''
+            ORDER BY id DESC
+            LIMIT 20
+            """
+        ).fetchall()
+        items = []
+        for row in rows:
+            reply = _feedback_auto_reply_text(row["category"], row["content"])
+            db.execute(
+                """
+                UPDATE feedback
+                SET admin_reply=?, status='in_progress', updated_at=datetime('now')
+                WHERE id=?
+                """,
+                (reply, row["id"]),
+            )
+            items.append(
+                {
+                    "id": row["id"],
+                    "status": "in_progress",
+                    "reply": reply,
+                    "summary": _feedback_summary_text(row["content"]),
+                }
+            )
+        if items:
+            _audit(
+                db,
+                actor,
+                _get_username(db, actor),
+                "feedback.auto_reply",
+                target=",".join(str(item["id"]) for item in items),
+                detail=f"processed:{len(items)}",
+            )
+            db.commit()
+        return {
+            "ok": True,
+            "enabled": True,
+            "processed": len(items),
+            "items": items,
+            "message": "已自动写入回复并标记为处理中。" if items else "没有待自动回复的反馈。",
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/feedback/{fb_id}")
+def admin_feedback_detail(fb_id: int, actor: str = Depends(_require_admin)):
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "feedback")
+        row = db.execute(
+            "SELECT f.*, u.username, u.email, u.email_verified, u.display_name, u.avatar "
+            "FROM feedback f JOIN users u ON u.id=f.user_id WHERE f.id=?",
+            (fb_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="反馈不存在")
+        return dict(row)
+    finally:
+        db.close()
+
+
+def _feedback_summary_text(content: str) -> str:
+    text = re.sub(r"\s+", " ", (content or "").strip())
+    if len(text) <= 80:
+        return text
+    return text[:77] + "..."
+
+
+def _feedback_auto_reply_text(category: str, content: str) -> str:
+    summary = _feedback_summary_text(content)
+    category_label = {
+        "bug": "问题反馈",
+        "feature": "功能建议",
+        "wish": "许愿",
+        "account": "账号问题",
+        "system": "系统问题",
+    }.get((category or "").strip(), "反馈")
+    return (
+        f"已收到你的{category_label}，我们会优先核查「{summary}」。"
+        "处理进度会在反馈记录中同步更新。"
+    )
+
+
+@app.post("/api/admin/feedback/{fb_id}/ai-summary")
+def admin_feedback_ai_summary(fb_id: int, actor: str = Depends(_require_admin)):
+    item = admin_feedback_detail(fb_id, actor)
+    summary = _feedback_summary_text(str(item.get("content") or ""))
+    return {
+        "ok": True,
+        "id": fb_id,
+        "summary": summary,
+        "category": item.get("category"),
+        "status": item.get("status"),
+        "suggested_status": "in_progress"
+        if item.get("status") == "open"
+        else item.get("status"),
+    }
+
+
+@app.post("/api/admin/feedback/{fb_id}/status")
+def admin_feedback_status_alias(
+    fb_id: int,
+    payload: Optional[dict] = Body(default=None),
+    actor: str = Depends(_require_admin),
+):
+    payload = payload or {}
+    status = str(payload.get("status") or "in_progress")
+    note = str(payload.get("note") or payload.get("reply") or "")
+    return reply_feedback(
+        FeedbackReply(feedback_id=fb_id, reply=note, status=status),
+        actor=actor,
+    )
+
+
+@app.post("/api/admin/feedback/{fb_id}/reply")
+def admin_feedback_reply_alias(
+    fb_id: int,
+    payload: Optional[dict] = Body(default=None),
+    actor: str = Depends(_require_admin),
+):
+    payload = payload or {}
+    reply = str(payload.get("reply") or payload.get("note") or "")
+    status = str(payload.get("status") or "resolved")
+    return reply_feedback(
+        FeedbackReply(feedback_id=fb_id, reply=reply, status=status),
+        actor=actor,
+    )
+
+
 @app.post("/api/admin/feedback/reply")
 def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
-    reply = _clean_feedback_content(req.reply)
+    raw_reply = (req.reply or "").strip()
+    reply = _clean_feedback_content(raw_reply) if raw_reply else ""
     status = _clean_feedback_status(req.status)
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "feedback")
-        cur = db.execute(
-            "UPDATE feedback SET admin_reply=?, status=?, updated_at=datetime('now') WHERE id=?",
-            (reply, status, req.feedback_id),
-        )
+        if reply:
+            cur = db.execute(
+                "UPDATE feedback SET admin_reply=?, status=?, updated_at=datetime('now') WHERE id=?",
+                (reply, status, req.feedback_id),
+            )
+        else:
+            cur = db.execute(
+                "UPDATE feedback SET status=?, updated_at=datetime('now') WHERE id=?",
+                (status, req.feedback_id),
+            )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="反馈不存在")
         _audit(
@@ -8584,7 +11051,8 @@ def bulk_update_feedback_status(
         raise HTTPException(status_code=400, detail="请选择要处理的反馈")
     if len(ids) > 100:
         raise HTTPException(status_code=400, detail="单次最多处理 100 条反馈")
-    reply = _clean_feedback_content(req.reply)
+    raw_reply = (req.reply or "").strip()
+    reply = _clean_feedback_content(raw_reply) if raw_reply else ""
     status = _clean_feedback_status(req.status)
     placeholders = ",".join("?" for _ in ids)
     db = get_db()
@@ -8597,14 +11065,24 @@ def bulk_update_feedback_status(
         existing_ids = [int(r["id"]) for r in existing]
         if len(existing_ids) != len(ids):
             raise HTTPException(status_code=404, detail="部分反馈不存在")
-        db.execute(
-            f"""
-            UPDATE feedback
-            SET admin_reply=?, status=?, updated_at=datetime('now')
-            WHERE id IN ({placeholders})
-            """,
-            (reply, status, *ids),
-        )
+        if reply:
+            db.execute(
+                f"""
+                UPDATE feedback
+                SET admin_reply=?, status=?, updated_at=datetime('now')
+                WHERE id IN ({placeholders})
+                """,
+                (reply, status, *ids),
+            )
+        else:
+            db.execute(
+                f"""
+                UPDATE feedback
+                SET status=?, updated_at=datetime('now')
+                WHERE id IN ({placeholders})
+                """,
+                (status, *ids),
+            )
         _audit(
             db,
             actor,
@@ -8641,6 +11119,7 @@ def delete_feedback(fb_id: int, actor: str = Depends(_require_admin)):
 
 
 @app.post("/api/admin/invite-codes")
+@app.post("/api/admin/invitation-codes")
 def create_invite_codes(req: InviteCodeCreate, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
@@ -8664,6 +11143,7 @@ def create_invite_codes(req: InviteCodeCreate, actor: str = Depends(_require_adm
 
 
 @app.get("/api/admin/invite-codes")
+@app.get("/api/admin/invitation-codes")
 def list_invite_codes(
     _: str = Depends(_require_admin),
     q: Optional[str] = None,
@@ -8711,6 +11191,7 @@ def list_invite_codes(
 
 
 @app.delete("/api/admin/invite-codes/{code}")
+@app.delete("/api/admin/invitation-codes/{code}")
 def delete_invite_code(code: str, actor: str = Depends(_require_admin)):
     db = get_db()
     try:

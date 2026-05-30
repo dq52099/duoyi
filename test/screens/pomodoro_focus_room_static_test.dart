@@ -10,6 +10,9 @@ void main() {
     final sync = File(
       'lib/providers/cloud_sync_provider.dart',
     ).readAsStringSync();
+    final provider = File(
+      'lib/providers/focus_room_provider.dart',
+    ).readAsStringSync();
 
     expect(screen, contains("const Tab(text: '自习室')"));
     expect(screen, contains('_FocusRoomTile'));
@@ -62,7 +65,7 @@ void main() {
     expect(screen, contains('服务端排行'));
     expect(screen, contains('本地排行'));
     expect(screen, contains("label: '在线 \${ranking.onlineCount}'"));
-    expect(screen, contains('服务端排行暂不可用'));
+    expect(screen, contains('服务端连接异常，已显示本地排行'));
     expect(screen, contains('输入邀请码'));
     expect(screen, contains('自习室邀请码'));
     expect(screen, contains('加入自习室'));
@@ -105,6 +108,16 @@ void main() {
     );
     expect(
       screen,
+      contains('with AutomaticKeepAliveClientMixin<_FocusRoomTab>'),
+      reason: '自习室 tab 切换后应保留状态，避免重新创建造成闪屏。',
+    );
+    expect(
+      screen,
+      contains("PageStorageKey<String>('focus_room_tab_scroll')"),
+      reason: '自习室列表滚动位置应保留，避免来回切 tab 时回到顶部。',
+    );
+    expect(
+      screen,
       isNot(contains('final pomodoro = context.watch<PomodoroProvider>()')),
     );
 
@@ -122,6 +135,11 @@ void main() {
       main,
       contains('ChangeNotifierProvider.value(value: focusRoomProvider)'),
     );
+    expect(provider, contains('Timer? _realtimeNotifyDebounce'));
+    expect(provider, contains('void _queueRealtimeNotify()'));
+    expect(provider, contains('const Duration(milliseconds: 120)'));
+    expect(provider, contains('_realtimeNotifyDebounce?.cancel()'));
+    expect(provider, contains('_queueRealtimeNotify();'));
     expect(backup, contains("'duoyi_focus_rooms'"));
     expect(sync, contains("'duoyi_focus_rooms': 'focus_rooms'"));
   });

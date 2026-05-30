@@ -3,29 +3,79 @@ import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import 'package:provider/provider.dart';
 import '../providers/countdown_provider.dart';
+import '../providers/notification_service.dart';
 import '../models/countdown.dart';
+import '../models/goal.dart' show ReminderKind;
+import '../models/goal.dart' show normalizeUserSelectableReminderKind;
+import '../services/alarm_service.dart';
+import '../services/local_notifications.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
-Future<void> showCountdownEditor(BuildContext context, {CountdownItem? item}) {
+Future<void> showCountdownEditor(
+  BuildContext context, {
+  required CountdownItem item,
+  bool showDelete = true,
+}) {
   return showAppModalSheet<void>(
     context: context,
-    builder: (_) => _CountdownEditSheet(item: item),
+    builder: (_) => _CountdownEditSheet(item: item, showDelete: showDelete),
   );
 }
 
-class CountdownScreen extends StatelessWidget {
-  const CountdownScreen({super.key});
+class CountdownScreen extends StatefulWidget {
+  final String? initialCountdownId;
 
-  void _showEditor(BuildContext context, {CountdownItem? item}) {
+  const CountdownScreen({super.key, this.initialCountdownId});
+
+  @override
+  State<CountdownScreen> createState() => _CountdownScreenState();
+}
+
+class _CountdownScreenState extends State<CountdownScreen> {
+  bool _openedInitialCountdown = false;
+
+  void _showEditor(BuildContext context, {required CountdownItem item}) {
     showCountdownEditor(context, item: item);
+  }
+
+  void _showNewEditor(BuildContext context) {
+    final now = DateTime.now();
+    showCountdownEditor(
+      context,
+      showDelete: false,
+      item: CountdownItem(
+        id: 'countdown-${now.microsecondsSinceEpoch}',
+        title: '',
+        targetDate: DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).add(const Duration(days: 1)),
+        category: I18n.tr('countdown.category.default'),
+      ),
+    );
+  }
+
+  void _openInitialCountdownIfNeeded(List<CountdownItem> items) {
+    if (_openedInitialCountdown) return;
+    final id = widget.initialCountdownId;
+    if (id == null || id.isEmpty) return;
+    final index = items.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    _openedInitialCountdown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showEditor(context, item: items[index]);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<CountdownProvider>();
+    final routeTitleStyle = appSecondaryRouteTitleTextStyle(context);
     final items = [...provider.items]
       ..sort((a, b) {
         if (a.isPinned != b.isPinned) {
@@ -33,122 +83,131 @@ class CountdownScreen extends StatelessWidget {
         }
         return a.daysRemaining.compareTo(b.daysRemaining);
       });
+    _openInitialCountdownIfNeeded(items);
     final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     final upcoming = items.where((item) => item.daysRemaining >= 0).toList()
       ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
     final nearest = upcoming.isNotEmpty ? upcoming.first : null;
     final soonCount = upcoming.where((item) => item.daysRemaining <= 7).length;
 
     return Scaffold(
-      appBar: AppBar(title: Text(I18n.tr('countdown.title'))),
-      body: items.isEmpty
-          ? EmptyState(
-              icon: Icons.event,
-              message: I18n.tr('countdown.empty'),
-              actionLabel: I18n.tr('countdown.add_record'),
-              onAction: () => _showEditor(context),
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-              children: [
-                AppSurfaceCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
+      backgroundColor: routeBackground,
+      appBar: AppBar(
+        title: Text(I18n.tr('countdown.title')),
+        titleTextStyle: routeTitleStyle,
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const ValueKey('countdown_add_button'),
+        tooltip: I18n.tr('countdown.title'),
+        onPressed: () => _showNewEditor(context),
+        icon: const Icon(Icons.add),
+        label: Text(I18n.tr('action.add')),
+        backgroundColor: cs.primary,
+      ),
+      body: AppSecondaryControlTheme(
+        child: items.isEmpty
+            ? EmptyState(
+                icon: Icons.event,
+                message: I18n.tr('countdown.empty'),
+                actionLabel: I18n.tr('action.add'),
+                onAction: () => _showNewEditor(context),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                children: [
+                  AppSurfaceCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(Icons.event, color: cs.primary, size: 26),
                         ),
-                        child: Icon(Icons.event, color: cs.primary, size: 26),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              I18n.tr('countdown.title'),
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w400,
-                                    color: cs.onSurface,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                I18n.tr('countdown.title'),
+                                style: routeTitleStyle,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                nearest == null
+                                    ? I18n.tr('countdown.nearest.empty')
+                                    : '${I18n.tr('countdown.nearest.prefix')}${nearest.title} · '
+                                          '${I18n.tr('countdown.nearest.days_prefix')}${nearest.daysRemaining} '
+                                          '${I18n.tr('unit.day')}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.68,
+                                      ),
+                                    ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  _SummaryStat(
+                                    label: I18n.tr('countdown.summary.total'),
+                                    value: '${items.length}',
+                                    color: cs.primary,
                                   ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              nearest == null
-                                  ? I18n.tr('countdown.nearest.empty')
-                                  : '${I18n.tr('countdown.nearest.prefix')}${nearest.title} · '
-                                        '${I18n.tr('countdown.nearest.days_prefix')}${nearest.daysRemaining} '
-                                        '${I18n.tr('unit.day')}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: cs.onSurface.withValues(alpha: 0.68),
+                                  const SizedBox(width: 14),
+                                  _SummaryStat(
+                                    label: I18n.tr(
+                                      'countdown.summary.within_7_days',
+                                    ),
+                                    value: '$soonCount',
+                                    color: cs.tertiary,
                                   ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                _SummaryStat(
-                                  label: I18n.tr('countdown.summary.total'),
-                                  value: '${items.length}',
-                                  color: cs.primary,
-                                ),
-                                const SizedBox(width: 14),
-                                _SummaryStat(
-                                  label: I18n.tr(
-                                    'countdown.summary.within_7_days',
-                                  ),
-                                  value: '$soonCount',
-                                  color: cs.tertiary,
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.tonalIcon(
-                        onPressed: () => _showEditor(context),
-                        icon: const Icon(Icons.add),
-                        label: Text(I18n.tr('action.add')),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                AppSectionHeader(
-                  title: I18n.tr('countdown.list.title'),
-                  subtitle: I18n.tr('countdown.list.subtitle'),
-                  padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-                ),
-                ...items.map(
-                  (item) => _CountdownCard(
-                    item: item,
-                    onTap: () => _showEditor(context, item: item),
-                    onTogglePin: () => provider.togglePin(item.id),
-                    onDismissed: () => provider.deleteItem(item.id),
+                  const SizedBox(height: 12),
+                  AppSectionHeader(
+                    title: I18n.tr('countdown.list.title'),
+                    subtitle: I18n.tr('countdown.list.subtitle'),
+                    padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
                   ),
-                ),
-              ],
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showEditor(context),
-        child: const Icon(Icons.add),
+                  ...items.map(
+                    (item) => _CountdownCard(
+                      item: item,
+                      onTap: () => _showEditor(context, item: item),
+                      onTogglePin: () => provider.togglePin(item.id),
+                      onDelete: () => provider.deleteItem(item.id),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
 }
 
 class _CountdownEditSheet extends StatefulWidget {
-  final CountdownItem? item;
+  final CountdownItem item;
+  final bool showDelete;
 
-  const _CountdownEditSheet({this.item});
+  const _CountdownEditSheet({required this.item, required this.showDelete});
 
   @override
   State<_CountdownEditSheet> createState() => _CountdownEditSheetState();
@@ -161,23 +220,23 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
   late bool _remind;
   late int _remindDaysBefore;
   late TimeOfDay _remindTime;
+  late ReminderKind _reminderKind;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     final item = widget.item;
-    _titleCtrl = TextEditingController(text: item?.title ?? '');
-    _categoryCtrl = TextEditingController(
-      text: item?.category ?? I18n.tr('countdown.category.default'),
-    );
-    _targetDate =
-        item?.targetDate ?? DateTime.now().add(const Duration(days: 1));
-    _remind = item?.remind ?? false;
-    _remindDaysBefore = item?.remindDaysBefore ?? 1;
-    _remindTime = TimeOfDay(
-      hour: item?.remindHour ?? 9,
-      minute: item?.remindMinute ?? 0,
-    );
+    _titleCtrl = TextEditingController(text: item.title);
+    _categoryCtrl = TextEditingController(text: item.category);
+    _targetDate = item.targetDate;
+    _remind = item.remind;
+    _remindDaysBefore = item.remindDaysBefore;
+    _remindTime = TimeOfDay(hour: item.remindHour, minute: item.remindMinute);
+    _reminderKind = normalizeUserSelectableReminderKind(item.reminderKind);
+    if (_reminderKind == ReminderKind.off) {
+      _remind = false;
+    }
   }
 
   @override
@@ -187,29 +246,214 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
     super.dispose();
   }
 
-  void _save() {
+  DateTime _remindAtFor(CountdownItem item) {
+    return DateTime(
+      item.targetDate.year,
+      item.targetDate.month,
+      item.targetDate.day,
+      item.remindHour,
+      item.remindMinute,
+    ).subtract(Duration(days: item.remindDaysBefore));
+  }
+
+  Future<_ReminderPreflightResult> _checkReminderBeforeSave(
+    CountdownItem item,
+    DateTime remindAt,
+  ) async {
+    final issueTitle = I18n.tr('countdown.reminder.register_failed');
+    try {
+      switch (item.reminderKind) {
+        case ReminderKind.push:
+          final notif = context.read<NotificationService?>();
+          final ready =
+              await notif?.ensureReadyForReminder(
+                scheduledTime: remindAt,
+                issueTitle: issueTitle,
+                relatedId: item.id,
+              ) ??
+              true;
+          if (ready) return const _ReminderPreflightResult.ok();
+          final issue = notif?.lastScheduleIssue;
+          return _ReminderPreflightResult.disabled(
+            issue == null
+                ? I18n.tr('countdown.reminder.not_registered')
+                : '${I18n.tr('countdown.reminder.not_registered_prefix')}${issue.message}',
+          );
+        case ReminderKind.popup:
+          final notif = context.read<NotificationService?>();
+          final ready =
+              await notif?.ensureReadyForReminder(
+                scheduledTime: remindAt,
+                issueTitle: I18n.tr('countdown.reminder.popup_fallback_failed'),
+                relatedId: item.id,
+              ) ??
+              await LocalNotifications.instance.ensurePermission();
+          if (!ready) {
+            final issue = notif?.lastScheduleIssue;
+            return _ReminderPreflightResult.disabled(
+              issue == null
+                  ? I18n.tr('countdown.reminder.popup_permission_denied')
+                  : '${I18n.tr('countdown.reminder.popup_not_registered_prefix')}${issue.message}',
+            );
+          }
+          return _ReminderPreflightResult.warning(
+            I18n.tr('countdown.reminder.popup_warning'),
+          );
+        case ReminderKind.alarm:
+          final notificationGranted = await LocalNotifications.instance
+              .ensurePermission();
+          if (!notificationGranted) {
+            return _ReminderPreflightResult.disabled(
+              I18n.tr('countdown.reminder.alarm_permission_denied'),
+            );
+          }
+          final warnings = <String>[];
+          final channelIds = await AlarmService.instance
+              .notificationChannelIds();
+          if (channelIds != null &&
+              channelIds.isNotEmpty &&
+              !channelIds.contains(AlarmService.channelId)) {
+            warnings.add(I18n.tr('countdown.reminder.alarm_channel_missing'));
+          }
+          final exactGranted = await AlarmService.instance
+              .hasExactAlarmPermission();
+          if (!exactGranted) {
+            warnings.add(I18n.tr('countdown.reminder.exact_alarm_missing'));
+          }
+          final fullScreenGranted = await AlarmService.instance
+              .hasFullScreenIntentPermission();
+          if (!fullScreenGranted) {
+            warnings.add(I18n.tr('countdown.reminder.fullscreen_missing'));
+          }
+          if (warnings.isEmpty) return const _ReminderPreflightResult.ok();
+          return _ReminderPreflightResult.warning(
+            '${I18n.tr('countdown.reminder.saved_with_warnings_prefix')}${warnings.join('; ')}。',
+          );
+        case ReminderKind.email:
+          return _ReminderPreflightResult.warning(
+            I18n.tr('countdown.reminder.email_warning'),
+          );
+        case ReminderKind.off:
+          return const _ReminderPreflightResult.ok();
+      }
+    } catch (e) {
+      return _ReminderPreflightResult.disabled(
+        '${I18n.tr('countdown.reminder.exception_prefix')}$e',
+      );
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
     final title = _titleCtrl.text.trim();
-    if (title.isEmpty) return;
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(I18n.tr('countdown.validation.title_required')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
     final category = _categoryCtrl.text.trim().isEmpty
         ? I18n.tr('countdown.category.default')
         : _categoryCtrl.text.trim();
     final provider = context.read<CountdownProvider>();
-    final next = CountdownItem(
-      id: widget.item?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+    var reminderWarning = '';
+    var next = CountdownItem(
+      id: widget.item.id,
       title: title,
       targetDate: _targetDate,
-      isPinned: widget.item?.isPinned ?? false,
+      isPinned: widget.item.isPinned,
       category: category,
       remind: _remind,
       remindDaysBefore: _remindDaysBefore,
       remindHour: _remindTime.hour,
       remindMinute: _remindTime.minute,
+      reminderKind: _remind ? _reminderKind : ReminderKind.off,
     );
-    if (widget.item == null) {
-      provider.addItem(next);
-    } else {
-      provider.updateItem(next);
+    if (next.remind) {
+      final remindAt = _remindAtFor(next);
+      if (!remindAt.isAfter(DateTime.now())) {
+        reminderWarning = I18n.tr('countdown.reminder.time_past');
+        next = next.copyWith(remind: false, reminderKind: ReminderKind.off);
+        setState(() => _remind = false);
+      }
     }
+    if (next.remind) {
+      final preflight = await _checkReminderBeforeSave(
+        next,
+        _remindAtFor(next),
+      );
+      if (!mounted) {
+        _saving = false;
+        return;
+      }
+      if (preflight.message.isNotEmpty) {
+        reminderWarning = preflight.message;
+      }
+      if (preflight.disableReminder) {
+        next = next.copyWith(remind: false, reminderKind: ReminderKind.off);
+        setState(() => _remind = false);
+      }
+    }
+    try {
+      await provider.updateItem(next);
+    } catch (e) {
+      if (!mounted) {
+        _saving = false;
+        return;
+      }
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${I18n.tr('countdown.save_failed_prefix')}$e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (!mounted) {
+      _saving = false;
+      return;
+    }
+    Navigator.pop(context);
+    if (reminderWarning.isNotEmpty && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(reminderWarning),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: Text(I18n.tr('anniversary.delete.title')),
+        content: Text(
+          '"${widget.item.title}" ${I18n.tr('anniversary.delete.content_suffix')}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(I18n.tr('action.delete')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    await context.read<CountdownProvider>().deleteItem(widget.item.id);
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -221,28 +465,34 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
       minute: _remindTime.minute,
     );
     return AppModalSheet(
-      title: widget.item == null
-          ? I18n.tr('countdown.editor.add_title')
+      title: widget.item.title.trim().isEmpty
+          ? I18n.tr('countdown.title')
           : I18n.tr('countdown.editor.edit_title'),
       subtitle: I18n.tr('countdown.editor.subtitle'),
-      leadingActions: widget.item == null
-          ? const []
-          : [
+      leadingActions: widget.showDelete
+          ? [
               TextButton(
-                onPressed: () {
-                  context.read<CountdownProvider>().deleteItem(widget.item!.id);
-                  Navigator.pop(context);
-                },
+                onPressed: _delete,
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: Text(I18n.tr('action.delete')),
               ),
-            ],
+            ]
+          : const [],
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(I18n.tr('action.cancel')),
         ),
-        FilledButton(onPressed: _save, child: Text(I18n.tr('action.save'))),
+        FilledButton(
+          key: const ValueKey('countdown_editor_save_button'),
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(I18n.tr('action.save')),
+        ),
       ],
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -252,7 +502,6 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             decoration: InputDecoration(
               labelText: I18n.tr('countdown.field.title'),
             ),
-            autofocus: widget.item == null,
           ),
           const SizedBox(height: 12),
           TextField(
@@ -295,6 +544,40 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             onChanged: (v) => setState(() => _remind = v),
           ),
           if (_remind) ...[
+            AppSecondaryControlTheme(
+              child: SegmentedButton<ReminderKind>(
+                segments: [
+                  ButtonSegment(
+                    value: ReminderKind.push,
+                    icon: const Icon(Icons.notifications_outlined),
+                    label: Text(I18n.tr('reminder.kind.push')),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.popup,
+                    icon: const Icon(Icons.open_in_new_outlined),
+                    label: Text(I18n.tr('reminder.kind.popup')),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.alarm,
+                    icon: const Icon(Icons.alarm_outlined),
+                    label: Text(I18n.tr('reminder.kind.alarm')),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.off,
+                    icon: const Icon(Icons.notifications_off_outlined),
+                    label: Text(I18n.tr('reminder.kind.off')),
+                  ),
+                ],
+                selected: {_reminderKind},
+                onSelectionChanged: (selected) => setState(() {
+                  _reminderKind = selected.first;
+                  if (_reminderKind == ReminderKind.off) {
+                    _remind = false;
+                  }
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 const SizedBox(width: 4),
@@ -338,6 +621,25 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
   }
 }
 
+class _ReminderPreflightResult {
+  final bool disableReminder;
+  final String message;
+
+  const _ReminderPreflightResult._({
+    required this.disableReminder,
+    required this.message,
+  });
+
+  const _ReminderPreflightResult.ok()
+    : this._(disableReminder: false, message: '');
+
+  const _ReminderPreflightResult.warning(String message)
+    : this._(disableReminder: false, message: message);
+
+  const _ReminderPreflightResult.disabled(String message)
+    : this._(disableReminder: true, message: message);
+}
+
 class _SummaryStat extends StatelessWidget {
   final String label;
   final String value;
@@ -368,10 +670,9 @@ class _SummaryStat extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w400,
-            color: cs.onSurface,
-          ),
+          style: appSecondaryRouteTitleTextStyle(
+            context,
+          ).copyWith(fontWeight: FontWeight.w400, color: cs.onSurface),
         ),
         const SizedBox(height: 2),
         Text(
@@ -386,21 +687,77 @@ class _SummaryStat extends StatelessWidget {
   }
 }
 
-class _CountdownCard extends StatelessWidget {
+class _CountdownCard extends StatefulWidget {
   final CountdownItem item;
   final VoidCallback onTap;
   final VoidCallback onTogglePin;
-  final VoidCallback onDismissed;
+  final Future<void> Function() onDelete;
 
   const _CountdownCard({
     required this.item,
     required this.onTap,
     required this.onTogglePin,
-    required this.onDismissed,
+    required this.onDelete,
   });
 
   @override
+  State<_CountdownCard> createState() => _CountdownCardState();
+}
+
+class _CountdownCardState extends State<_CountdownCard> {
+  static const double _swipeActionWidth = 82;
+  static const double _swipeOpenThreshold = 32;
+
+  double _swipeOffset = 0;
+  bool _dragging = false;
+
+  bool get _swipeOpen => _swipeOffset > 0;
+
+  @override
+  void didUpdateWidget(covariant _CountdownCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.id != oldWidget.item.id) {
+      _swipeOffset = 0;
+      _dragging = false;
+    }
+  }
+
+  void _closeSwipe() {
+    if (!_swipeOpen || !mounted) return;
+    setState(() => _swipeOffset = 0);
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: Text(I18n.tr('anniversary.delete.title')),
+        content: Text(
+          '"${widget.item.title}" ${I18n.tr('anniversary.delete.content_suffix')}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(I18n.tr('action.delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.onDelete();
+    } else {
+      _closeSwipe();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final cs = Theme.of(context).colorScheme;
     final isPast = item.daysRemaining < 0;
     final absDays = item.daysRemaining.abs();
@@ -414,160 +771,270 @@ class _CountdownCard extends StatelessWidget {
         : item.daysRemaining <= 3
         ? I18n.tr('countdown.status.soon')
         : I18n.tr('countdown.status.running');
+    final titleStyle = appSecondaryRouteTitleTextStyle(context);
+    final metaStyle = appSecondaryControlLabelStyle(
+      context,
+    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62));
 
-    return Dismissible(
-      key: ValueKey(item.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
+    final content = InkWell(
+      onTap: _swipeOpen ? _closeSwipe : widget.onTap,
+      onLongPress: widget.onTogglePin,
+      borderRadius: BorderRadius.circular(14),
+      child: AppSurfaceCard(
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: cs.error,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_outline, color: Colors.white),
-      ),
-      onDismissed: (_) => onDismissed(),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onTogglePin,
-        borderRadius: BorderRadius.circular(18),
-        child: AppSurfaceCard(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: EdgeInsets.zero,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: color.withValues(alpha: 0.18)),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 8,
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              right: null,
+              child: Container(
+                width: 5,
                 decoration: BoxDecoration(
-                  color: color,
+                  color: color.withValues(alpha: isPast ? 0.42 : 0.72),
                   borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(18),
+                    left: Radius.circular(14),
                   ),
                 ),
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                if (item.isPinned)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: Icon(
-                                      Icons.push_pin,
-                                      size: 16,
-                                      color: color,
-                                    ),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    item.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w400,
-                                          color: cs.onSurface,
-                                        ),
-                                  ),
+                            if (item.isPinned)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: Icon(
+                                  Icons.push_pin,
+                                  size: 14,
+                                  color: color,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${I18n.tr('countdown.target.prefix')}'
-                              '${I18nDateFormat.date(item.targetDate)}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: cs.onSurface.withValues(alpha: 0.62),
-                                  ),
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                _StatusPill(label: status, color: color),
-                                _StatusPill(
-                                  label: item.category,
-                                  color: cs.tertiary,
-                                ),
-                                if (item.remind)
-                                  _StatusPill(
-                                    label:
-                                        '${I18n.tr('countdown.reminder.before_prefix')}'
-                                        '${item.remindDaysBefore}'
-                                        '${I18n.tr('countdown.reminder.before_suffix')} '
-                                        '${I18nDateFormat.timeOfDay(hour: item.remindHour, minute: item.remindMinute)}',
-                                    color: cs.primary,
-                                    icon: Icons.notifications_active_outlined,
-                                  ),
-                              ],
+                              ),
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: titleStyle,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            isPast
-                                ? I18n.tr('countdown.days.elapsed')
-                                : I18n.tr('countdown.days.remaining'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurface.withValues(alpha: 0.54),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _StatusPill(label: status, color: color),
+                            _StatusPill(
+                              label: item.category,
+                              color: cs.tertiary,
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '$absDays',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w400,
-                                  color: color,
-                                  height: 1.0,
-                                ),
+                            if (item.remind)
+                              _StatusPill(
+                                label:
+                                    '${I18n.tr('countdown.reminder.before_prefix')}'
+                                    '${item.remindDaysBefore}'
+                                    '${I18n.tr('countdown.reminder.before_suffix')} '
+                                    '${I18nDateFormat.timeOfDay(hour: item.remindHour, minute: item.remindMinute)}',
+                                color: cs.primary,
+                                icon: Icons.notifications_active_outlined,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                I18n.tr('unit.day'),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: color,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${I18n.tr('countdown.target.prefix')}'
+                          '${I18nDateFormat.date(item.targetDate)}',
+                          style: metaStyle,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 54),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          isPast
+                              ? I18n.tr('countdown.days.elapsed')
+                              : I18n.tr('countdown.days.remaining'),
+                          style: metaStyle.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.54),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '$absDays',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w400,
+                                color: color,
+                                height: 1.0,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              I18n.tr('unit.day'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: color,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return GestureDetector(
+      key: ValueKey('countdown_card_${item.id}'),
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => setState(() => _dragging = true),
+      onHorizontalDragUpdate: (details) {
+        final next = (_swipeOffset - details.delta.dx).clamp(
+          0.0,
+          _swipeActionWidth,
+        );
+        if (next == _swipeOffset) return;
+        setState(() => _swipeOffset = next);
+      },
+      onHorizontalDragEnd: (_) {
+        final shouldOpen = _swipeOffset >= _swipeOpenThreshold;
+        setState(() {
+          _dragging = false;
+          _swipeOffset = shouldOpen ? _swipeActionWidth : 0;
+        });
+      },
+      onHorizontalDragCancel: () => setState(() {
+        _dragging = false;
+        _swipeOffset = _swipeOffset >= _swipeOpenThreshold
+            ? _swipeActionWidth
+            : 0;
+      }),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _CountdownInlineSwipeActions(
+              margin: const EdgeInsets.only(bottom: 12),
+              onDelete: () => _confirmDelete(context),
+            ),
           ),
+          AnimatedContainer(
+            duration: _dragging
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
+            child: content,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountdownInlineSwipeActions extends StatelessWidget {
+  final EdgeInsetsGeometry margin;
+  final VoidCallback onDelete;
+
+  const _CountdownInlineSwipeActions({
+    required this.margin,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: margin,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      alignment: Alignment.centerRight,
+      child: SizedBox(
+        width: _CountdownCardState._swipeActionWidth,
+        height: double.infinity,
+        child: _CountdownInlineSwipeButton(
+          key: const ValueKey('countdown_swipe_delete_button'),
+          icon: Icons.delete_outline,
+          label: I18n.tr('action.delete'),
+          background: cs.errorContainer.withValues(alpha: 0.86),
+          foreground: cs.onErrorContainer,
+          onTap: onDelete,
+        ),
+      ),
+    );
+  }
+}
+
+class _CountdownInlineSwipeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  const _CountdownInlineSwipeButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: foreground,
+      fontWeight: FontWeight.w400,
+      height: 1.1,
+    );
+    return Material(
+      color: background,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: foreground),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyle,
+            ),
+          ],
         ),
       ),
     );
@@ -584,10 +1051,11 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.10), width: 0.45),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -599,7 +1067,7 @@ class _StatusPill extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: color,
               fontWeight: FontWeight.w400,
             ),

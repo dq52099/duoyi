@@ -11,6 +11,7 @@ void main() {
         monitorDistractingApps: true,
         distractingAppPackages: ['com.tencent.mm', 'com.ss.android.ugc.aweme'],
         focusRoomId: 'deep_work_room',
+        focusSoundVolume: 0.8,
       );
 
       final json = config.toJson();
@@ -22,6 +23,7 @@ void main() {
         'com.ss.android.ugc.aweme',
       ]);
       expect(json['focusRoomId'], 'deep_work_room');
+      expect(json['focusSoundVolume'], 0.8);
 
       final restored = PomodoroConfig.fromJson(json);
       expect(restored.autoEnableDnd, isTrue);
@@ -32,6 +34,7 @@ void main() {
         'com.ss.android.ugc.aweme',
       ]);
       expect(restored.focusRoomId, 'deep_work_room');
+      expect(restored.focusSoundVolume, 0.8);
 
       final legacy = PomodoroConfig.fromJson(<String, dynamic>{
         'focusDuration': 1500,
@@ -45,8 +48,30 @@ void main() {
       expect(legacy.monitorDistractingApps, isFalse);
       expect(legacy.distractingAppPackages, isEmpty);
       expect(legacy.focusRoomId, isNull);
+      expect(legacy.focusSoundVolume, PomodoroConfig.defaultFocusSoundVolume);
     },
   );
+
+  test('PomodoroConfig clamps corrupted focus sound volume on restore', () {
+    expect(
+      PomodoroConfig.fromJson(<String, dynamic>{
+        'focusSoundVolume': 0.2,
+      }).focusSoundVolume,
+      PomodoroConfig.defaultFocusSoundVolume,
+    );
+    expect(
+      PomodoroConfig.fromJson(<String, dynamic>{
+        'focusSoundVolume': 1.2,
+      }).focusSoundVolume,
+      PomodoroConfig.defaultFocusSoundVolume,
+    );
+    expect(
+      PomodoroConfig.fromJson(<String, dynamic>{
+        'focusSoundVolume': '0.6',
+      }).focusSoundVolume,
+      0.6,
+    );
+  });
 
   test('PomodoroConfig clamps corrupted stored durations on restore', () {
     final restored = PomodoroConfig.fromJson(<String, dynamic>{

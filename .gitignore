@@ -62,5 +62,6 @@ android/key.properties
 
 # Local working dirs / generated backups
 tmp/
+.mindfs/
 backend/backups/
 backend/uploads/

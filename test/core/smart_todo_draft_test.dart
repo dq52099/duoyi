@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:duoyi/core/smart_todo_draft.dart';
 import 'package:duoyi/models/goal.dart' show ReminderKind, ReminderRuleType;
@@ -22,6 +22,20 @@ void main() {
     expect(draft.reminder.minute, 0);
     expect(draft.reminderPlan.rules.single.type, ReminderRuleType.absolute);
   });
+
+  test(
+    'fromText nudges same-minute reminders forward so they can be scheduled',
+    () {
+      final draft = SmartTodoDraftBuilder.fromText(
+        '10点提醒喝水',
+        now: DateTime(2026, 5, 15, 10, 0, 35),
+      );
+
+      expect(draft.hasReminder, isTrue);
+      expect(draft.reminderAt, DateTime(2026, 5, 15, 10, 1));
+      expect(draft.dueDate, DateTime(2026, 5, 15, 10, 1));
+    },
+  );
 
   test(
     'fromText can still create alarm reminder when explicitly requested',

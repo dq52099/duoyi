@@ -14,6 +14,7 @@ import '../providers/focus_room_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/focus_room_api.dart';
+import '../services/focus_sound_service.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/brand_background.dart';
@@ -63,6 +64,26 @@ Future<void> showPomodoroSessionEditor(
       context: context,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (sheetCtx, setSt) {
+          Future<void> previewSound(String value) async {
+            setSt(() => selectedSound = value);
+            if (value == FocusSoundCatalog.none) {
+              await FocusSoundService.instance.stop();
+              return;
+            }
+            await FocusSoundService.instance.setVolume(
+              provider.config.focusSoundVolume,
+            );
+            final started = await FocusSoundService.instance.preview(value);
+            if (!started && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+
           Future<void> save() async {
             final messenger = ScaffoldMessenger.of(context);
             final navigator = Navigator.of(sheetCtx);
@@ -227,7 +248,7 @@ Future<void> showPomodoroSessionEditor(
                       setSt(() => selectedType = value.first),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
+                AppDropdownField<String>(
                   initialValue: selectedSound,
                   decoration: const InputDecoration(
                     labelText: '白噪音',
@@ -261,12 +282,11 @@ Future<void> showPomodoroSessionEditor(
                         ),
                       ),
                   ],
-                  onChanged: (value) => setSt(
-                    () => selectedSound = value ?? FocusSoundCatalog.none,
-                  ),
+                  onChanged: (value) =>
+                      previewSound(value ?? FocusSoundCatalog.none),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
+                AppDropdownField<String>(
                   initialValue: selectedRoomId ?? '',
                   decoration: const InputDecoration(
                     labelText: '自习室',
@@ -386,9 +406,11 @@ class _PomodoroDialogBody extends StatelessWidget {
         .toDouble();
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: 420, maxHeight: maxHeight),
-      child: SingleChildScrollView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: child,
+      child: AppSecondaryControlTheme(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: child,
+        ),
       ),
     );
   }
@@ -1353,6 +1375,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     String currentSound,
   ) {
     final customProvider = context.read<CustomFocusSoundProvider>();
+    const volumeOptions = <double>[0.4, 0.6, 0.8, 1.0];
     showAppModalSheet(
       context: context,
       builder: (ctx) => AppModalSheet(
@@ -1365,52 +1388,161 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
               final imported = await customProvider.importAudio();
               if (!ctx.mounted) return;
               if (imported == null) return;
-              await provider.setWhiteNoiseSound(imported.id);
+              final previewStarted = await provider.setWhiteNoiseSound(
+                imported.id,
+              );
               if (!ctx.mounted) return;
               Navigator.pop(ctx);
               messenger.showSnackBar(
-                SnackBar(content: Text('已导入 ${imported.label}')),
+                SnackBar(
+                  content: Text(
+                    previewStarted
+                        ? '已导入 ${imported.label}'
+                        : '已导入 ${imported.label}，但声音预览启动失败，请检查音频文件或系统音量',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
             icon: const Icon(Icons.upload_file_outlined),
             label: const Text('导入音频'),
           ),
         ],
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final option in FocusSoundCatalog.options)
-              _SoundOptionTile(
-                title: option.label,
-                icon: _soundIcon(option.id),
-                selected: currentSound == option.id,
-                onTap: () {
-                  unawaited(provider.setWhiteNoiseSound(option.id));
-                  Navigator.pop(ctx);
-                },
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '点击声音会自动试听，也可以先点试听确认音量。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.58),
+                  ),
+                ),
               ),
-            if (customProvider.sounds.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in volumeOptions)
+                      ChoiceChip(
+                        label: Text('${(value * 100).round()}%'),
+                        selected: provider.config.focusSoundVolume == value,
+                        onSelected: (_) async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final previewStarted = await provider
+                              .setFocusSoundVolume(value);
+                          if (!ctx.mounted) return;
+                          setSheetState(() {});
+                          if (!previewStarted) {
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('专注音量预览启动失败，请先选择白噪音或检查系统音量'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                  ],
+                ),
+              ),
               const Divider(height: 18),
-              for (final sound in customProvider.sounds)
+              for (final option in FocusSoundCatalog.options)
                 _SoundOptionTile(
-                  title: sound.label,
-                  subtitle: '自定义音频',
-                  icon: _soundIcon(sound.id),
-                  selected: currentSound == sound.id,
-                  onTap: () {
-                    unawaited(provider.setWhiteNoiseSound(sound.id));
-                    Navigator.pop(ctx);
-                  },
-                  onDelete: () async {
-                    await customProvider.remove(sound.id);
-                    if (provider.state.whiteNoiseSound == sound.id) {
-                      await provider.setWhiteNoiseSound(FocusSoundCatalog.none);
+                  title: option.label,
+                  icon: _soundIcon(option.id),
+                  selected: currentSound == option.id,
+                  onPreview: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final previewStarted = await provider.setWhiteNoiseSound(
+                      option.id,
+                    );
+                    if (!ctx.mounted) return;
+                    if (!previewStarted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('专注声音试听启动失败，请检查系统音量或音频资源'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
                     }
-                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final previewStarted = await provider.setWhiteNoiseSound(
+                      option.id,
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    if (!previewStarted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   },
                 ),
+              if (customProvider.sounds.isNotEmpty) ...[
+                const Divider(height: 18),
+                for (final sound in customProvider.sounds)
+                  _SoundOptionTile(
+                    title: sound.label,
+                    subtitle: '自定义音频',
+                    icon: _soundIcon(sound.id),
+                    selected: currentSound == sound.id,
+                    onPreview: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final previewStarted = await provider.setWhiteNoiseSound(
+                        sound.id,
+                      );
+                      if (!ctx.mounted) return;
+                      if (!previewStarted) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('自定义专注声音试听启动失败，请检查音频文件或系统音量'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final previewStarted = await provider.setWhiteNoiseSound(
+                        sound.id,
+                      );
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (!previewStarted) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('自定义专注声音预览启动失败，请检查音频文件或系统音量'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    onDelete: () async {
+                      await customProvider.remove(sound.id);
+                      if (provider.state.whiteNoiseSound == sound.id) {
+                        await provider.setWhiteNoiseSound(
+                          FocusSoundCatalog.none,
+                        );
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1555,7 +1687,10 @@ class _FocusRoomTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.16),
+              width: 0.45,
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -1665,7 +1800,10 @@ class _StrictFocusTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.16),
+              width: 0.45,
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -1822,12 +1960,17 @@ class _FocusRoomTab extends StatefulWidget {
   State<_FocusRoomTab> createState() => _FocusRoomTabState();
 }
 
-class _FocusRoomTabState extends State<_FocusRoomTab> {
+class _FocusRoomTabState extends State<_FocusRoomTab>
+    with AutomaticKeepAliveClientMixin<_FocusRoomTab> {
   String? _lastRefreshKey;
   bool _refreshScheduled = false;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final rooms = context.watch<FocusRoomProvider>();
     final pomodoroRevision = context.select<PomodoroProvider, int>(
       (provider) => provider.persistedRevision,
@@ -1862,6 +2005,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
     _scheduleRoomRefresh(context, rooms, pomodoroRevision, displayName);
 
     return ListView(
+      key: const PageStorageKey<String>('focus_room_tab_scroll'),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
       children: [
         AppSurfaceCard(
@@ -1935,7 +2079,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: AppStatusBadge(
-                    label: '服务端排行暂不可用',
+                    label: '服务端连接异常，已显示本地排行',
                     color: Theme.of(context).colorScheme.outline,
                     icon: Icons.cloud_off_outlined,
                   ),
@@ -2218,7 +2362,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<int>(
+                AppDropdownField<int>(
                   initialValue: expiryDays,
                   decoration: const InputDecoration(
                     labelText: '有效期',
@@ -2233,7 +2377,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab> {
                   onChanged: (value) => setState(() => expiryDays = value ?? 0),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<int>(
+                AppDropdownField<int>(
                   initialValue: maxUses,
                   decoration: const InputDecoration(
                     labelText: '使用次数',
@@ -2791,7 +2935,10 @@ class _FocusFriendRequestTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.52)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Row(
         children: [
@@ -2882,7 +3029,10 @@ class _FocusFriendTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.52)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Row(
         children: [
@@ -2968,7 +3118,10 @@ class _FocusRoomInviteTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.52)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Row(
         children: [
@@ -3345,7 +3498,10 @@ class _FocusDndTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.16),
+              width: 0.45,
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -3444,7 +3600,10 @@ class _FocusControlTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.16),
+              width: 0.45,
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -3511,6 +3670,7 @@ class _SoundOptionTile extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onPreview;
   final VoidCallback? onDelete;
 
   const _SoundOptionTile({
@@ -3519,6 +3679,7 @@ class _SoundOptionTile extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.onPreview,
     this.onDelete,
   });
 
@@ -3542,6 +3703,12 @@ class _SoundOptionTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (onPreview != null)
+            IconButton(
+              tooltip: '试听',
+              onPressed: onPreview,
+              icon: const Icon(Icons.volume_up_outlined),
+            ),
           if (onDelete != null)
             IconButton(
               tooltip: '删除自定义音频',

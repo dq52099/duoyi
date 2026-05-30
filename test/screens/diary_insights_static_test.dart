@@ -23,6 +23,7 @@ void main() {
     expect(screen, contains('_runDeepDiaryReview(context, entries)'));
     expect(screen, contains('context.read<AiService>()'));
     expect(screen, contains('ai.deepDiaryReview(entries: entries)'));
+    expect(screen, contains('var dialogOpen = false'));
     expect(screen, contains("I18n.tr('diary.ai.deep_review.title')"));
     expect(screen, contains("I18n.tr('diary.ai.review_failed_prefix')"));
 

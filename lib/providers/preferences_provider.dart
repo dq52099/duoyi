@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/local_timezone_resolver.dart';
 import '../core/notification_history_policy.dart';
 import '../core/report_reminder_config.dart';
+import '../models/goal.dart' show ReminderKind;
 
 class DailyReminderSlot {
   final bool enabled;
+  final ReminderKind kind;
   final int hour;
   final int minute;
   final bool includeTodayTasks;
@@ -17,6 +19,7 @@ class DailyReminderSlot {
 
   const DailyReminderSlot({
     this.enabled = false,
+    this.kind = ReminderKind.push,
     this.hour = 20,
     this.minute = 0,
     this.includeTodayTasks = true,
@@ -28,6 +31,7 @@ class DailyReminderSlot {
 
   DailyReminderSlot copyWith({
     bool? enabled,
+    ReminderKind? kind,
     int? hour,
     int? minute,
     bool? includeTodayTasks,
@@ -36,8 +40,10 @@ class DailyReminderSlot {
     List<int>? repeatDays,
     bool? pauseHolidays,
   }) {
+    final nextKind = normalizeKind(kind ?? this.kind);
     return DailyReminderSlot(
-      enabled: enabled ?? this.enabled,
+      enabled: nextKind == ReminderKind.off ? false : enabled ?? this.enabled,
+      kind: nextKind,
       hour: (hour ?? this.hour).clamp(0, 23),
       minute: (minute ?? this.minute).clamp(0, 59),
       includeTodayTasks: includeTodayTasks ?? this.includeTodayTasks,
@@ -53,12 +59,84 @@ class DailyReminderSlot {
       ..sort();
     return normalized.isEmpty ? const [1, 2, 3, 4, 5, 6, 7] : normalized;
   }
+
+  static ReminderKind normalizeKind(ReminderKind kind) {
+    return switch (kind) {
+      ReminderKind.push || ReminderKind.popup || ReminderKind.alarm => kind,
+      ReminderKind.off => ReminderKind.off,
+      ReminderKind.email => ReminderKind.push,
+    };
+  }
+
+  static ReminderKind parseKind(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return ReminderKind.push;
+    for (final kind in ReminderKind.values) {
+      if (kind.name == raw) return normalizeKind(kind);
+    }
+    return ReminderKind.push;
+  }
+}
+
+bool _sameDailyReminderSlot(DailyReminderSlot a, DailyReminderSlot b) {
+  final left = a.copyWith();
+  final right = b.copyWith();
+  return left.enabled == right.enabled &&
+      left.kind == right.kind &&
+      left.hour == right.hour &&
+      left.minute == right.minute &&
+      left.includeTodayTasks == right.includeTodayTasks &&
+      left.includeTomorrowPlan == right.includeTomorrowPlan &&
+      left.includeOverdue == right.includeOverdue &&
+      listEquals(left.repeatDays, right.repeatDays) &&
+      left.pauseHolidays == right.pauseHolidays;
+}
+
+class DailyReminderScheduleSlot {
+  final int index;
+  final DailyReminderSlot slot;
+
+  const DailyReminderScheduleSlot({required this.index, required this.slot});
+}
+
+List<DailyReminderScheduleSlot> effectiveDailyReminderScheduleSlots(
+  List<DailyReminderSlot> slots,
+) {
+  final result = <DailyReminderScheduleSlot>[];
+  final claimedDaysByWallClock = <String, Set<int>>{};
+
+  for (var index = 0; index < slots.length; index++) {
+    final slot = slots[index];
+    final kind = DailyReminderSlot.normalizeKind(slot.kind);
+    if (!slot.enabled || kind == ReminderKind.off) continue;
+
+    final repeatDays = DailyReminderSlot._normalizeDays(slot.repeatDays);
+    final wallClockKey = '${slot.hour}:${slot.minute}';
+    final claimedDays = claimedDaysByWallClock.putIfAbsent(
+      wallClockKey,
+      () => <int>{},
+    );
+    final remainingDays = repeatDays
+        .where((day) => !claimedDays.contains(day))
+        .toList(growable: false);
+    if (remainingDays.isEmpty) continue;
+
+    claimedDays.addAll(remainingDays);
+    result.add(
+      DailyReminderScheduleSlot(
+        index: index,
+        slot: slot.copyWith(kind: kind, repeatDays: remainingDays),
+      ),
+    );
+  }
+
+  return result;
 }
 
 /// 用户个性化偏好(本地)。不涉及服务器配置，每个设备独立。
 class PreferencesProvider extends ChangeNotifier {
   static const maxBottomNavTabs = 5;
-  static const fixedBottomNavTabs = <int>{5, 6};
+  static const fixedBottomNavTabs = <int>{6};
+  static const defaultBottomNavTabs = <int>{0, 1, 2, 5, 6};
 
   static const _kFirstDayOfWeek = 'pref_first_day_of_week';
   static const _kDateFormat = 'pref_date_format';
@@ -69,10 +147,12 @@ class PreferencesProvider extends ChangeNotifier {
   static const _kDefaultPomodoroMinutes = 'pref_default_pomodoro_minutes';
   static const _kQuickCaptureFab = 'pref_quick_capture_fab';
   static const _kNotificationQuickAdd = 'pref_notification_quick_add';
+  static const _kNotificationTodayProgress = 'pref_notification_today_progress';
   static const _kNotificationHistoryLimit =
       NotificationHistoryPolicy.preferenceKey;
   static const _kAutoArchiveCompletedDays = 'pref_auto_archive_completed_days';
   static const _kDailyReminderEnabled = 'pref_daily_reminder_enabled';
+  static const _kDailyReminderKind = 'pref_daily_reminder_kind';
   static const _kDailyReminderHour = 'pref_daily_reminder_hour';
   static const _kDailyReminderMinute = 'pref_daily_reminder_minute';
   static const _kDailyReminderIncludeTodayTasks =
@@ -124,9 +204,11 @@ class PreferencesProvider extends ChangeNotifier {
   int _defaultPomodoroMinutes = 25;
   bool _quickCaptureFab = true;
   bool _notificationQuickAdd = false;
+  bool _notificationTodayProgress = false;
   int _notificationHistoryLimit = NotificationHistoryPolicy.defaultLimit;
   int _autoArchiveCompletedDays = 0; // 0=不归档
   bool _dailyReminderEnabled = false;
+  ReminderKind _dailyReminderKind = ReminderKind.push;
   int _dailyReminderHour = 20;
   int _dailyReminderMinute = 0;
   bool _dailyReminderIncludeTodayTasks = true;
@@ -156,7 +238,7 @@ class PreferencesProvider extends ChangeNotifier {
   int _yearlyReportReminderHour = 9;
   int _yearlyReportReminderMinute = 0;
   List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
-  Set<int> _bottomNavVisible = const {1, 2, 3, 5, 6};
+  Set<int> _bottomNavVisible = defaultBottomNavTabs;
   String _appTimeZone = LocalTimezoneResolver.defaultIana;
   bool _followSystemTimeZone = true;
 
@@ -169,6 +251,7 @@ class PreferencesProvider extends ChangeNotifier {
   int get defaultPomodoroMinutes => _defaultPomodoroMinutes;
   bool get quickCaptureFab => _quickCaptureFab;
   bool get notificationQuickAdd => _notificationQuickAdd;
+  bool get notificationTodayProgress => _notificationTodayProgress;
   int get notificationHistoryLimit => _notificationHistoryLimit;
   int get autoArchiveCompletedDays => _autoArchiveCompletedDays;
   bool get dailyReminderEnabled => _dailyReminderEnabled;
@@ -233,6 +316,48 @@ class PreferencesProvider extends ChangeNotifier {
   List<int> get enabledBottomNavTabs => _bottomNavOrder
       .where((tab) => _bottomNavVisible.contains(tab))
       .toList(growable: false);
+  List<int> get visibleBottomNavTabs => normalizedVisibleBottomNavTabs(
+    order: _bottomNavOrder,
+    visible: _bottomNavVisible,
+  );
+
+  static List<int> normalizedVisibleBottomNavTabs({
+    required Iterable<int> order,
+    required Iterable<int> visible,
+  }) {
+    final rawTabs = _normalizeNavOrder(
+      order,
+    ).where((tab) => visible.contains(tab)).toList(growable: false);
+    if (rawTabs.isEmpty ||
+        !rawTabs.any((tab) => !fixedBottomNavTabs.contains(tab))) {
+      return List.unmodifiable(defaultBottomNavTabs);
+    }
+
+    final flexibleBudget = maxBottomNavTabs - fixedBottomNavTabs.length;
+    final selected = <int>{};
+    for (final tab in rawTabs) {
+      if (fixedBottomNavTabs.contains(tab)) continue;
+      if (selected.length >= flexibleBudget) break;
+      selected.add(tab);
+    }
+    selected.addAll(fixedBottomNavTabs);
+
+    final result = <int>[];
+    for (final tab in rawTabs) {
+      if (selected.contains(tab) && !result.contains(tab)) result.add(tab);
+    }
+    for (final tab in fixedBottomNavTabs) {
+      if (!result.contains(tab)) result.add(tab);
+    }
+    while (result.length > maxBottomNavTabs) {
+      final removeAt = result.indexWhere(
+        (tab) => !fixedBottomNavTabs.contains(tab),
+      );
+      if (removeAt < 0) break;
+      result.removeAt(removeAt);
+    }
+    return List.unmodifiable(result);
+  }
 
   String formatDate(DateTime d) {
     final y = d.year.toString();
@@ -280,11 +405,19 @@ class PreferencesProvider extends ChangeNotifier {
     _defaultPomodoroMinutes = p.getInt(_kDefaultPomodoroMinutes) ?? 25;
     _quickCaptureFab = p.getBool(_kQuickCaptureFab) ?? true;
     _notificationQuickAdd = p.getBool(_kNotificationQuickAdd) ?? false;
+    _notificationTodayProgress =
+        p.getBool(_kNotificationTodayProgress) ?? false;
     _notificationHistoryLimit = NotificationHistoryPolicy.normalize(
       p.getInt(_kNotificationHistoryLimit),
     );
     _autoArchiveCompletedDays = p.getInt(_kAutoArchiveCompletedDays) ?? 0;
     _dailyReminderEnabled = p.getBool(_kDailyReminderEnabled) ?? false;
+    _dailyReminderKind = DailyReminderSlot.parseKind(
+      p.getString(_kDailyReminderKind),
+    );
+    if (_dailyReminderKind == ReminderKind.off) {
+      _dailyReminderEnabled = false;
+    }
     _dailyReminderHour = p.getInt(_kDailyReminderHour) ?? 20;
     _dailyReminderMinute = p.getInt(_kDailyReminderMinute) ?? 0;
     _dailyReminderIncludeTodayTasks =
@@ -310,6 +443,7 @@ class PreferencesProvider extends ChangeNotifier {
       if (i == 0) {
         return DailyReminderSlot(
           enabled: _dailyReminderEnabled,
+          kind: _dailyReminderKind,
           hour: _dailyReminderHour,
           minute: _dailyReminderMinute,
           includeTodayTasks: _dailyReminderIncludeTodayTasks,
@@ -320,20 +454,25 @@ class PreferencesProvider extends ChangeNotifier {
         );
       }
       final prefix = '$_kDailyReminderSlotPrefix${i + 1}';
+      final kind = DailyReminderSlot.parseKind(p.getString('${prefix}_kind'));
       return DailyReminderSlot(
-        enabled: p.getBool('${prefix}_enabled') ?? false,
+        enabled:
+            kind != ReminderKind.off &&
+            (p.getBool('${prefix}_enabled') ?? false),
+        kind: kind,
         hour: p.getInt('${prefix}_hour') ?? (i == 1 ? 8 : 22),
         minute: p.getInt('${prefix}_minute') ?? 0,
         includeTodayTasks: p.getBool('${prefix}_today') ?? true,
         includeTomorrowPlan: p.getBool('${prefix}_tomorrow') ?? true,
         includeOverdue: p.getBool('${prefix}_overdue') ?? true,
-        repeatDays:
-            p
-                .getStringList('${prefix}_repeat_days')
-                ?.map(int.tryParse)
-                .whereType<int>()
-                .toList() ??
-            const [1, 2, 3, 4, 5, 6, 7],
+        repeatDays: DailyReminderSlot._normalizeDays(
+          p
+                  .getStringList('${prefix}_repeat_days')
+                  ?.map(int.tryParse)
+                  .whereType<int>()
+                  .toList() ??
+              const [1, 2, 3, 4, 5, 6, 7],
+        ),
         pauseHolidays: p.getBool('${prefix}_pause_holidays') ?? false,
       );
     });
@@ -377,13 +516,6 @@ class PreferencesProvider extends ChangeNotifier {
       storedVisible?.map(int.tryParse).whereType<int>(),
       order: _bottomNavOrder,
     );
-    if (isOldBottomNavConfig &&
-        (storedVisible == null || storedVisible.contains('5'))) {
-      _bottomNavVisible = _normalizeNavVisible({
-        ..._bottomNavVisible,
-        6,
-      }, order: _bottomNavOrder);
-    }
     notifyListeners();
   }
 
@@ -402,6 +534,7 @@ class PreferencesProvider extends ChangeNotifier {
     if (index == 0) {
       return const [
         _kDailyReminderEnabled,
+        _kDailyReminderKind,
         _kDailyReminderHour,
         _kDailyReminderMinute,
         _kDailyReminderIncludeTodayTasks,
@@ -414,6 +547,7 @@ class PreferencesProvider extends ChangeNotifier {
     final prefix = '$_kDailyReminderSlotPrefix${index + 1}';
     return [
       '${prefix}_enabled',
+      '${prefix}_kind',
       '${prefix}_hour',
       '${prefix}_minute',
       '${prefix}_today',
@@ -446,56 +580,72 @@ class PreferencesProvider extends ChangeNotifier {
 
   Future<void> setDailyReminderSlot(int index, DailyReminderSlot slot) async {
     if (index < 0 || index >= 3) return;
+    final normalizedSlot = slot.copyWith();
+    if (_sameDailyReminderSlot(_dailyReminderSlots[index], normalizedSlot)) {
+      return;
+    }
     final next = [..._dailyReminderSlots];
-    next[index] = slot;
+    next[index] = normalizedSlot;
     _dailyReminderSlots = List.unmodifiable(next);
 
     if (index == 0) {
-      _dailyReminderEnabled = slot.enabled;
-      _dailyReminderHour = slot.hour;
-      _dailyReminderMinute = slot.minute;
-      _dailyReminderIncludeTodayTasks = slot.includeTodayTasks;
-      _dailyReminderIncludeTomorrowPlan = slot.includeTomorrowPlan;
-      _dailyReminderIncludeOverdue = slot.includeOverdue;
+      _dailyReminderEnabled = normalizedSlot.enabled;
+      _dailyReminderKind = normalizedSlot.kind;
+      _dailyReminderHour = normalizedSlot.hour;
+      _dailyReminderMinute = normalizedSlot.minute;
+      _dailyReminderIncludeTodayTasks = normalizedSlot.includeTodayTasks;
+      _dailyReminderIncludeTomorrowPlan = normalizedSlot.includeTomorrowPlan;
+      _dailyReminderIncludeOverdue = normalizedSlot.includeOverdue;
       _dailyReminderRepeatDays = DailyReminderSlot._normalizeDays(
-        slot.repeatDays,
+        normalizedSlot.repeatDays,
       );
-      _dailyReminderPauseHolidays = slot.pauseHolidays;
+      _dailyReminderPauseHolidays = normalizedSlot.pauseHolidays;
     }
 
     final p = await SharedPreferences.getInstance();
     final prefix = index == 0 ? null : '$_kDailyReminderSlotPrefix${index + 1}';
     if (index == 0) {
-      await p.setBool(_kDailyReminderEnabled, slot.enabled);
-      await p.setInt(_kDailyReminderHour, slot.hour);
-      await p.setInt(_kDailyReminderMinute, slot.minute);
-      await p.setBool(_kDailyReminderIncludeTodayTasks, slot.includeTodayTasks);
+      await p.setBool(_kDailyReminderEnabled, normalizedSlot.enabled);
+      await p.setString(_kDailyReminderKind, normalizedSlot.kind.name);
+      await p.setInt(_kDailyReminderHour, normalizedSlot.hour);
+      await p.setInt(_kDailyReminderMinute, normalizedSlot.minute);
+      await p.setBool(
+        _kDailyReminderIncludeTodayTasks,
+        normalizedSlot.includeTodayTasks,
+      );
       await p.setBool(
         _kDailyReminderIncludeTomorrowPlan,
-        slot.includeTomorrowPlan,
+        normalizedSlot.includeTomorrowPlan,
       );
-      await p.setBool(_kDailyReminderIncludeOverdue, slot.includeOverdue);
+      await p.setBool(
+        _kDailyReminderIncludeOverdue,
+        normalizedSlot.includeOverdue,
+      );
       await p.setStringList(
         _kDailyReminderRepeatDays,
         DailyReminderSlot._normalizeDays(
-          slot.repeatDays,
+          normalizedSlot.repeatDays,
         ).map((d) => d.toString()).toList(),
       );
-      await p.setBool(_kDailyReminderPauseHolidays, slot.pauseHolidays);
+      await p.setBool(
+        _kDailyReminderPauseHolidays,
+        normalizedSlot.pauseHolidays,
+      );
     } else {
-      await p.setBool('${prefix}_enabled', slot.enabled);
-      await p.setInt('${prefix}_hour', slot.hour);
-      await p.setInt('${prefix}_minute', slot.minute);
-      await p.setBool('${prefix}_today', slot.includeTodayTasks);
-      await p.setBool('${prefix}_tomorrow', slot.includeTomorrowPlan);
-      await p.setBool('${prefix}_overdue', slot.includeOverdue);
+      await p.setBool('${prefix}_enabled', normalizedSlot.enabled);
+      await p.setString('${prefix}_kind', normalizedSlot.kind.name);
+      await p.setInt('${prefix}_hour', normalizedSlot.hour);
+      await p.setInt('${prefix}_minute', normalizedSlot.minute);
+      await p.setBool('${prefix}_today', normalizedSlot.includeTodayTasks);
+      await p.setBool('${prefix}_tomorrow', normalizedSlot.includeTomorrowPlan);
+      await p.setBool('${prefix}_overdue', normalizedSlot.includeOverdue);
       await p.setStringList(
         '${prefix}_repeat_days',
         DailyReminderSlot._normalizeDays(
-          slot.repeatDays,
+          normalizedSlot.repeatDays,
         ).map((d) => d.toString()).toList(),
       );
-      await p.setBool('${prefix}_pause_holidays', slot.pauseHolidays);
+      await p.setBool('${prefix}_pause_holidays', normalizedSlot.pauseHolidays);
     }
     _notifyPreferenceKeys(_dailyReminderSlotKeys(index));
   }
@@ -515,9 +665,17 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setDailyReportReminderConfig(ReportReminderConfig config) async {
-    _dailyReportReminder = config.enabled;
-    _dailyReportReminderHour = config.hour.clamp(0, 23);
-    _dailyReportReminderMinute = config.minute.clamp(0, 59);
+    final nextEnabled = config.enabled;
+    final nextHour = config.hour.clamp(0, 23);
+    final nextMinute = config.minute.clamp(0, 59);
+    if (_dailyReportReminder == nextEnabled &&
+        _dailyReportReminderHour == nextHour &&
+        _dailyReportReminderMinute == nextMinute) {
+      return;
+    }
+    _dailyReportReminder = nextEnabled;
+    _dailyReportReminderHour = nextHour;
+    _dailyReportReminderMinute = nextMinute;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kDailyReportReminder, _dailyReportReminder);
     await p.setInt(_kDailyReportReminderHour, _dailyReportReminderHour);
@@ -532,10 +690,20 @@ class PreferencesProvider extends ChangeNotifier {
   Future<void> setWeeklyReportReminderConfig(
     ReportReminderConfig config,
   ) async {
-    _weeklyReportReminder = config.enabled;
-    _weeklyReportReminderWeekday = config.weekday.clamp(1, 7);
-    _weeklyReportReminderHour = config.hour.clamp(0, 23);
-    _weeklyReportReminderMinute = config.minute.clamp(0, 59);
+    final nextEnabled = config.enabled;
+    final nextWeekday = config.weekday.clamp(1, 7);
+    final nextHour = config.hour.clamp(0, 23);
+    final nextMinute = config.minute.clamp(0, 59);
+    if (_weeklyReportReminder == nextEnabled &&
+        _weeklyReportReminderWeekday == nextWeekday &&
+        _weeklyReportReminderHour == nextHour &&
+        _weeklyReportReminderMinute == nextMinute) {
+      return;
+    }
+    _weeklyReportReminder = nextEnabled;
+    _weeklyReportReminderWeekday = nextWeekday;
+    _weeklyReportReminderHour = nextHour;
+    _weeklyReportReminderMinute = nextMinute;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kWeeklyReportReminder, _weeklyReportReminder);
     await p.setInt(_kWeeklyReportReminderWeekday, _weeklyReportReminderWeekday);
@@ -559,10 +727,20 @@ class PreferencesProvider extends ChangeNotifier {
   Future<void> setMonthlyReportReminderConfig(
     ReportReminderConfig config,
   ) async {
-    _monthlyReportReminder = config.enabled;
-    _monthlyReportReminderDay = config.monthDay.clamp(1, 31);
-    _monthlyReportReminderHour = config.hour.clamp(0, 23);
-    _monthlyReportReminderMinute = config.minute.clamp(0, 59);
+    final nextEnabled = config.enabled;
+    final nextDay = config.monthDay.clamp(1, 31);
+    final nextHour = config.hour.clamp(0, 23);
+    final nextMinute = config.minute.clamp(0, 59);
+    if (_monthlyReportReminder == nextEnabled &&
+        _monthlyReportReminderDay == nextDay &&
+        _monthlyReportReminderHour == nextHour &&
+        _monthlyReportReminderMinute == nextMinute) {
+      return;
+    }
+    _monthlyReportReminder = nextEnabled;
+    _monthlyReportReminderDay = nextDay;
+    _monthlyReportReminderHour = nextHour;
+    _monthlyReportReminderMinute = nextMinute;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kMonthlyReportReminder, _monthlyReportReminder);
     await p.setInt(_kMonthlyReportReminderDay, _monthlyReportReminderDay);
@@ -586,11 +764,23 @@ class PreferencesProvider extends ChangeNotifier {
   Future<void> setYearlyReportReminderConfig(
     ReportReminderConfig config,
   ) async {
-    _yearlyReportReminder = config.enabled;
-    _yearlyReportReminderMonth = config.month.clamp(1, 12);
-    _yearlyReportReminderDay = config.monthDay.clamp(1, 31);
-    _yearlyReportReminderHour = config.hour.clamp(0, 23);
-    _yearlyReportReminderMinute = config.minute.clamp(0, 59);
+    final nextEnabled = config.enabled;
+    final nextMonth = config.month.clamp(1, 12);
+    final nextDay = config.monthDay.clamp(1, 31);
+    final nextHour = config.hour.clamp(0, 23);
+    final nextMinute = config.minute.clamp(0, 59);
+    if (_yearlyReportReminder == nextEnabled &&
+        _yearlyReportReminderMonth == nextMonth &&
+        _yearlyReportReminderDay == nextDay &&
+        _yearlyReportReminderHour == nextHour &&
+        _yearlyReportReminderMinute == nextMinute) {
+      return;
+    }
+    _yearlyReportReminder = nextEnabled;
+    _yearlyReportReminderMonth = nextMonth;
+    _yearlyReportReminderDay = nextDay;
+    _yearlyReportReminderHour = nextHour;
+    _yearlyReportReminderMinute = nextMinute;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kYearlyReportReminder, _yearlyReportReminder);
     await p.setInt(_kYearlyReportReminderMonth, _yearlyReportReminderMonth);
@@ -609,6 +799,11 @@ class PreferencesProvider extends ChangeNotifier {
   Future<void> setBottomNavVisible(int tab, bool visible) async {
     if (tab < 0 || tab > 6) return;
     if (fixedBottomNavTabs.contains(tab) && !visible) return;
+    if (visible &&
+        !_bottomNavVisible.contains(tab) &&
+        _bottomNavVisible.length >= maxBottomNavTabs) {
+      return;
+    }
     final next = {..._bottomNavVisible};
     if (visible) {
       next.add(tab);
@@ -661,7 +856,9 @@ class PreferencesProvider extends ChangeNotifier {
     for (final tab in source ?? const <int>[]) {
       if (tab >= 0 && tab <= 6) result.add(tab);
     }
-    if (source == null || result.length < fixedBottomNavTabs.length) {
+    if (source == null) {
+      result.addAll(defaultBottomNavTabs);
+    } else if (!result.any((tab) => !fixedBottomNavTabs.contains(tab))) {
       result.addAll(orderList);
     }
     result.addAll(fixedBottomNavTabs);
@@ -732,6 +929,13 @@ class PreferencesProvider extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kNotificationQuickAdd, value);
     _notifyPreferenceKeys(const [_kNotificationQuickAdd]);
+  }
+
+  Future<void> setNotificationTodayProgress(bool value) async {
+    _notificationTodayProgress = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kNotificationTodayProgress, value);
+    _notifyPreferenceKeys(const [_kNotificationTodayProgress]);
   }
 
   Future<void> setNotificationHistoryLimit(int value) async {

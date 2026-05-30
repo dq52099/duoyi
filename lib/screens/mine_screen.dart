@@ -1,8 +1,10 @@
-import 'dart:io' show File;
-
+import 'dart:io' show Directory, File;
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../core/app_version.dart';
+import '../core/i18n.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -10,11 +12,11 @@ import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/auth_provider.dart';
-import '../providers/preferences_provider.dart';
+import '../providers/achievement_provider.dart';
 import '../services/ai_service.dart';
-import '../services/api_client.dart';
+import '../services/app_update_installer.dart';
 import '../services/app_update_service.dart';
-import '../widgets/empty_state.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/stats_overview_cards.dart';
 import '../widgets/surface_components.dart';
 import 'theme_picker_screen.dart';
@@ -25,12 +27,7 @@ import 'note_screen.dart';
 import 'statistics_screen.dart';
 import 'time_audit_screen.dart';
 import 'pomodoro_screen.dart';
-import 'today_screen.dart';
-import 'todo_screen.dart';
-import 'habit_screen.dart';
-import 'calendar_screen.dart';
-import 'anniversary_screen.dart';
-import 'countdown_screen.dart';
+import 'anniversary_screen.dart' as anniversary;
 import 'diary_screen.dart';
 import 'goal_screen.dart';
 import 'course_schedule_screen.dart';
@@ -47,9 +44,18 @@ import 'integrations_screen.dart';
 import 'share_screen.dart';
 import 'sync_conflict_log_screen.dart';
 import 'profile_screen.dart';
+import 'more_apps_screen.dart';
+import 'notification_history_screen.dart';
 
 class MineScreen extends StatelessWidget {
-  const MineScreen({super.key});
+  final List<int>? visibleBottomNavTabs;
+  final bool useShellBackground;
+
+  const MineScreen({
+    super.key,
+    this.visibleBottomNavTabs,
+    this.useShellBackground = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -66,20 +72,20 @@ class MineScreen extends StatelessWidget {
     final auth = context.watch<AuthProvider>();
     final ai = context.watch<AiService>();
     final updater = context.watch<AppUpdateService>();
+    final achievements = context.watch<AchievementProvider>();
     final cs = Theme.of(context).colorScheme;
     final avatarFrame = themeProvider.activeAvatarFrame;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final scaffoldBackground = useShellBackground
+        ? Colors.transparent
+        : routeBackground;
+    final appBarBackground = useShellBackground
+        ? Colors.transparent
+        : routeBackground.withValues(alpha: 0.96);
 
     final p = userProvider.profile;
-    final hour = DateTime.now().hour;
-    final greeting = hour < 6
-        ? s.greetingEvening
-        : hour < 12
-        ? s.greetingMorning
-        : hour < 14
-        ? s.greetingNoon
-        : hour < 18
-        ? s.greetingAfternoon
-        : s.greetingEvening;
     final localDisplayName = _firstNonEmpty([p.displayName, p.username, '用户']);
     final displayName = auth.state.isLoggedIn
         ? _firstNonEmpty([
@@ -92,172 +98,236 @@ class MineScreen extends StatelessWidget {
     final avatarValue = auth.state.isLoggedIn
         ? _firstNonEmpty([auth.state.avatar, p.avatarUrl, p.avatarInitials])
         : _firstNonEmpty([p.avatarUrl, p.avatarInitials]);
-    final profileLine = auth.state.isLoggedIn
-        ? _firstNonEmpty([
-            auth.state.bio,
-            p.bio,
-            auth.state.email,
-            p.email,
-            auth.state.username,
-          ])
-        : _firstNonEmpty([
-            p.bio,
-            p.email,
-            '本地资料 · ${s.mineProductivityScore} ${p.productivityScore}',
-          ]);
-
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: scaffoldBackground,
       appBar: AppBar(
         title: Text(s.mineTitle),
-        backgroundColor: Colors.transparent,
+        backgroundColor: appBarBackground,
+        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             tooltip: '全局搜索',
             icon: const Icon(Icons.search),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SearchScreen()),
-            ),
+            onPressed: () => _openBrandedRoute(context, const SearchScreen()),
           ),
         ],
       ),
       body: ListView(
         children: [
-          // Profile header
           AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             padding: const EdgeInsets.all(16),
             color: cs.surface.withValues(alpha: 0.82),
             borderRadius: BorderRadius.circular(22),
-            child: Row(
-              children: [
-                Tooltip(
-                  message: '查看或编辑头像',
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => _showProfileDialog(context),
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      padding:
-                          avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                          ? EdgeInsets.zero
-                          : const EdgeInsets.all(3),
-                      decoration:
-                          avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                          ? null
-                          : BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: avatarFrame.colors,
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: avatarFrame.colors.first.withValues(
-                                    alpha: 0.22,
+            onTap: () => _openProfileEditor(context),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 360;
+                final avatarSize = compact ? 54.0 : 60.0;
+                final avatar = SizedBox(
+                  width: avatarSize + 10,
+                  height: avatarSize + 10,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        child: Tooltip(
+                          message: '查看头像',
+                          child: Semantics(
+                            button: true,
+                            label: '查看头像',
+                            child: InkWell(
+                              key: const ValueKey('mine_avatar_preview_button'),
+                              customBorder: const CircleBorder(),
+                              onTap: () => _showAvatarPreview(context),
+                              child: Container(
+                                width: avatarSize,
+                                height: avatarSize,
+                                padding:
+                                    avatarFrame.id ==
+                                        ThemeProvider.defaultAvatarFrameId
+                                    ? EdgeInsets.zero
+                                    : const EdgeInsets.all(3),
+                                decoration:
+                                    avatarFrame.id ==
+                                        ThemeProvider.defaultAvatarFrameId
+                                    ? null
+                                    : BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: avatarFrame.colors,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: avatarFrame.colors.first
+                                                .withValues(alpha: 0.20),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                child: Hero(
+                                  tag: 'mine-avatar-preview',
+                                  child: _ProfileAvatar(
+                                    avatar: avatarValue,
+                                    displayName: displayName,
+                                    radius: compact ? 26 : 30,
                                   ),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 5),
                                 ),
-                              ],
-                            ),
-                      child: _ProfileAvatar(
-                        avatar: avatarValue,
-                        displayName: displayName,
-                        radius: 30,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _showProfileDialog(context),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$greeting，$displayName',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w400,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            profileLine.isEmpty
-                                ? '${s.mineProductivityScore} ${p.productivityScore}'
-                                : profileLine,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: auth.state.isLoggedIn
-                                  ? cs.onSurface.withValues(alpha: 0.65)
-                                  : cs.primary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: SizedBox.square(
+                          key: const ValueKey('mine_avatar_edit_button'),
+                          dimension: 44,
+                          child: Tooltip(
+                            message: '修改头像',
+                            child: Semantics(
+                              button: true,
+                              label: '修改头像',
+                              child: Material(
+                                color: Colors.transparent,
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => _pickAndSaveAvatar(context),
+                                  child: Center(
+                                    child: Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: cs.primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: cs.surface.withValues(
+                                            alpha: 0.92,
+                                          ),
+                                          width: 0.45,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.edit_outlined,
+                                        size: 13,
+                                        color: cs.onPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                final username = auth.state.isLoggedIn
+                    ? _firstNonEmpty([auth.state.username, p.username])
+                    : p.username;
+                final coins = auth.state.isLoggedIn
+                    ? auth.state.coinBalance
+                    : achievements.coinBalance;
+                final loginAction = auth.state.isLoggedIn
+                    ? null
+                    : SizedBox(
+                        width: 58,
+                        height: 30,
+                        child: FilledButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
+                            ),
+                          ),
+                          style: appSecondaryFilledButtonStyle(context),
+                          child: const Text('登录'),
+                        ),
+                      );
+                final nameText = displayName.trim().isEmpty
+                    ? '用户'
+                    : displayName.trim();
+                final usernameText = username.trim();
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      key: const ValueKey('mine_avatar_row'),
+                      child: avatar,
+                    ),
+                    SizedBox(height: compact ? 10 : 12),
+                    Semantics(
+                      button: true,
+                      label: '查看个人资料',
+                      onTap: () => _openProfileEditor(context),
+                      child: Row(
+                        key: const ValueKey('mine_user_info_row'),
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: Text(
+                              nameText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                    color: cs.onSurface,
+                                    height: 1.2,
+                                  ),
+                            ),
+                          ),
+                          if (usernameText.isNotEmpty) ...[
+                            SizedBox(width: compact ? 6 : 8),
+                            Flexible(
+                              flex: 4,
+                              child: _MineUserLineChip(
+                                label: '@$usernameText',
+                                icon: Icons.badge_outlined,
+                                color: cs.primary,
+                              ),
+                            ),
+                          ],
+                          SizedBox(width: compact ? 6 : 8),
+                          Flexible(
+                            flex: 4,
+                            child: _MineUserLineChip(
+                              label: '时光币 $coins',
+                              icon: Icons.savings_outlined,
+                              color: Colors.amber.shade700,
                             ),
                           ),
                           if (auth.state.isLoggedIn && auth.state.isAdmin) ...[
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.deepOrange.withValues(
-                                  alpha: 0.15,
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                '管理员',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.deepOrange,
-                                ),
+                            SizedBox(width: compact ? 6 : 8),
+                            const Flexible(
+                              flex: 3,
+                              child: _MineUserLineChip(
+                                label: '管理员',
+                                color: Colors.deepOrange,
                               ),
                             ),
+                          ],
+                          if (loginAction != null) ...[
+                            SizedBox(width: compact ? 6 : 8),
+                            loginAction,
                           ],
                         ],
                       ),
                     ),
-                  ),
-                ),
-                if (auth.state.isLoggedIn)
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        onPressed: () => _showProfileDialog(context),
-                        icon: const Icon(Icons.edit_outlined),
-                        tooltip: '编辑资料',
-                      ),
-                      IconButton(
-                        onPressed: () async {
-                          await context.read<AuthProvider>().logout();
-                        },
-                        icon: const Icon(Icons.logout),
-                        tooltip: '退出登录',
-                      ),
-                    ],
-                  )
-                else
-                  FilledButton.tonal(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    ),
-                    child: const Text('登录'),
-                  ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
 
@@ -325,7 +395,8 @@ class MineScreen extends StatelessWidget {
                         ? () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AdminScreen(),
+                              builder: (_) =>
+                                  const BrandRouteSurface(child: AdminScreen()),
                             ),
                           )
                         : null,
@@ -342,7 +413,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.orange,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const GoalScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: GoalScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -351,8 +425,18 @@ class MineScreen extends StatelessWidget {
                 color: Colors.red,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: PomodoroScreen()),
+                  ),
                 ),
+              ),
+              _Tile(
+                icon: Icons.apps_outlined,
+                label: '更多应用',
+                subtitle: '查看隐藏功能和倒数日',
+                color: Colors.blueGrey,
+                onTap: () => _openMoreApplications(context),
               ),
             ],
           ),
@@ -365,7 +449,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.teal,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: TimeAuditScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -374,7 +461,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: StatisticsScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -383,7 +473,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.teal,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const DiaryScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: DiaryScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -392,7 +485,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.amber.shade700,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const NoteScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: NoteScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -401,85 +497,12 @@ class MineScreen extends StatelessWidget {
                 color: Colors.amber,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AchievementsScreen()),
-                ),
-              ),
-            ],
-          ),
-          _TileGroup(
-            title: '日程日期',
-            children: [
-              _Tile(
-                icon: Icons.school_outlined,
-                label: '课程表',
-                color: Colors.blue,
-                onTap: () => Navigator.push(
-                  context,
                   MaterialPageRoute(
-                    builder: (_) => const CourseScheduleScreen(),
+                    builder: (_) =>
+                        const BrandRouteSurface(child: AchievementsScreen()),
                   ),
                 ),
               ),
-              _Tile(
-                icon: Icons.calendar_month_outlined,
-                label: '万年历',
-                color: Colors.green,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AlmanacScreen(
-                      initialMode: AlmanacEntryMode.calendar,
-                    ),
-                  ),
-                ),
-              ),
-              _Tile(
-                icon: Icons.wb_sunny_outlined,
-                label: '黄历',
-                color: Colors.deepOrange,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AlmanacScreen(
-                      initialMode: AlmanacEntryMode.almanac,
-                    ),
-                  ),
-                ),
-              ),
-              _Tile(
-                icon: Icons.event_available_outlined,
-                label: '纪念日',
-                color: Colors.pink,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MemorialAnniversaryScreen(),
-                  ),
-                ),
-              ),
-              _Tile(
-                icon: Icons.cake_outlined,
-                label: '生日',
-                color: Colors.purple,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BirthdayScreen()),
-                ),
-              ),
-              _Tile(
-                icon: Icons.hourglass_bottom_outlined,
-                label: '倒数日',
-                color: Colors.deepOrange,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CountdownScreen()),
-                ),
-              ),
-            ],
-          ),
-          _TileGroup(
-            title: '智能工具',
-            children: [
               if (ai.enabled)
                 _Tile(
                   icon: Icons.history,
@@ -493,24 +516,75 @@ class MineScreen extends StatelessWidget {
                         ),
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const BrandRouteSurface(child: AiHistoryScreen()),
+                    ),
                   ),
                 ),
             ],
           ),
           _TileGroup(
-            title: '个性安全',
+            title: '日程日期',
             children: [
               _Tile(
-                icon: Icons.account_circle_outlined,
-                label: '个人资料',
+                icon: Icons.school_outlined,
+                label: '课程表',
                 color: Colors.blue,
-                trailing: Text(
-                  auth.state.isLoggedIn ? '账号' : '本地',
-                  style: TextStyle(color: cs.primary, fontSize: 11),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: CourseScheduleScreen()),
+                  ),
                 ),
-                onTap: () => _showProfileDialog(context),
               ),
+              _Tile(
+                icon: Icons.calendar_month_outlined,
+                label: '万年历',
+                color: Colors.green,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BrandRouteSurface(
+                      child: AlmanacScreen(
+                        initialMode: AlmanacEntryMode.calendar,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _Tile(
+                icon: Icons.event_available_outlined,
+                label: '纪念日',
+                color: Colors.pink,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BrandRouteSurface(
+                      child: anniversary.MemorialAnniversaryScreen(),
+                    ),
+                  ),
+                ),
+              ),
+              _Tile(
+                icon: Icons.cake_outlined,
+                label: '生日',
+                color: Colors.purple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BrandRouteSurface(
+                      child: anniversary.BirthdayScreen(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          _TileGroup(
+            title: '个性安全',
+            children: [
               _Tile(
                 icon: Icons.palette,
                 label: s.mineThemeLabel,
@@ -521,7 +595,10 @@ class MineScreen extends StatelessWidget {
                 ),
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ThemePickerScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: ThemePickerScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -530,17 +607,9 @@ class MineScreen extends StatelessWidget {
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PreferencesScreen()),
-                ),
-              ),
-              _Tile(
-                icon: Icons.space_dashboard_outlined,
-                label: '底部导航栏',
-                color: Colors.blueGrey,
-                onTap: () => Navigator.push(
-                  context,
                   MaterialPageRoute(
-                    builder: (_) => const BottomNavSettingsScreen(),
+                    builder: (_) =>
+                        const BrandRouteSurface(child: PreferencesScreen()),
                   ),
                 ),
               ),
@@ -550,16 +619,12 @@ class MineScreen extends StatelessWidget {
                 color: Colors.red.shade400,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LockSettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: LockSettingsScreen()),
+                  ),
                 ),
               ),
-              if (auth.state.isLoggedIn)
-                _Tile(
-                  icon: Icons.password_outlined,
-                  label: '修改登录密码',
-                  color: Colors.deepOrange,
-                  onTap: () => _showChangePasswordDialog(context),
-                ),
             ],
           ),
           _TileGroup(
@@ -571,16 +636,22 @@ class MineScreen extends StatelessWidget {
                 color: Colors.cyan,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ShareScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: ShareScreen()),
+                  ),
                 ),
               ),
               _Tile(
                 icon: Icons.extension_outlined,
-                label: '扩展集成',
+                label: '扩展功能',
                 color: Colors.deepPurple,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const IntegrationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: IntegrationsScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -590,7 +661,8 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const SyncConflictLogScreen(),
+                    builder: (_) =>
+                        const BrandRouteSurface(child: SyncConflictLogScreen()),
                   ),
                 ),
               ),
@@ -600,7 +672,10 @@ class MineScreen extends StatelessWidget {
                 color: Colors.lightBlue,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ExportScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: ExportScreen()),
+                  ),
                 ),
               ),
               _Tile(
@@ -610,8 +685,9 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        const BackupScreen(initialMode: BackupEntryMode.backup),
+                    builder: (_) => const BrandRouteSurface(
+                      child: BackupScreen(initialMode: BackupEntryMode.backup),
+                    ),
                   ),
                 ),
               ),
@@ -622,8 +698,8 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const BackupScreen(
-                      initialMode: BackupEntryMode.restore,
+                    builder: (_) => const BrandRouteSurface(
+                      child: BackupScreen(initialMode: BackupEntryMode.restore),
                     ),
                   ),
                 ),
@@ -652,17 +728,7 @@ class MineScreen extends StatelessWidget {
                 label: '通知设置',
                 subtitle: '提醒时间、权限、铃声和记录保留',
                 color: Colors.orange,
-                trailing: notifService.hasUnreadHistory
-                    ? const _UnreadDot()
-                    : null,
                 onTap: () => _openNotificationSettings(context),
-              ),
-              _Tile(
-                icon: Icons.apps_outlined,
-                label: '更多应用',
-                subtitle: '查看底部导航隐藏的功能',
-                color: Colors.blueGrey,
-                onTap: () => _showMoreApplications(context),
               ),
               if (auth.state.isLoggedIn && auth.state.isAdmin)
                 _Tile(
@@ -671,7 +737,10 @@ class MineScreen extends StatelessWidget {
                   color: Colors.deepOrange,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AdminScreen()),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const BrandRouteSurface(child: AdminScreen()),
+                    ),
                   ),
                 ),
               _Tile(
@@ -681,7 +750,8 @@ class MineScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AnnouncementsScreen(),
+                    builder: (_) =>
+                        const BrandRouteSurface(child: AnnouncementsScreen()),
                   ),
                 ),
               ),
@@ -690,7 +760,7 @@ class MineScreen extends StatelessWidget {
                 label: '许愿与反馈',
                 subtitle: '提交建议并分页查看处理记录',
                 color: Colors.indigo,
-                onTap: () => _openFeedback(context, auth, 'feature'),
+                onTap: () => _openFeedback(context, 'feature'),
               ),
               _Tile(
                 icon: Icons.system_update,
@@ -747,15 +817,104 @@ class MineScreen extends StatelessWidget {
     return '';
   }
 
-  void _showProfileDialog(BuildContext context) {
+  void _openProfileEditor(BuildContext context, {bool avatarOnly = false}) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+      MaterialPageRoute(
+        builder: (_) => BrandRouteSurface(
+          child: ProfileScreen(openAvatarSheetOnStart: avatarOnly),
+        ),
+      ),
     );
   }
 
-  void _showChangePasswordDialog(BuildContext context) {
-    showDialog(context: context, builder: (_) => const _ChangePasswordDialog());
+  Future<void> _pickAndSaveAvatar(BuildContext context) async {
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Image',
+            extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          ),
+        ],
+      );
+      if (file == null || !context.mounted) return;
+      final auth = context.read<AuthProvider>();
+      final userProvider = context.read<UserProvider>();
+      if (auth.state.isLoggedIn) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          throw Exception('头像文件为空');
+        }
+        if (bytes.length > 3 * 1024 * 1024) {
+          throw Exception(I18n.tr('profile.avatar.too_large'));
+        }
+        await auth.uploadAvatarBytes(filename: file.name, bytes: bytes);
+        final state = auth.state;
+        await userProvider.updateProfile(
+          username: _firstNonEmpty([
+            state.username,
+            userProvider.profile.username,
+            '用户',
+          ]),
+          displayName: state.displayName ?? '',
+          email: state.email ?? '',
+          emailVerified: state.emailVerified,
+          avatarUrl: state.avatar ?? '',
+          bio: state.bio ?? '',
+        );
+      } else {
+        final storedPath = await _copyLocalAvatarFile(file);
+        final profile = userProvider.profile;
+        await userProvider.updateProfile(
+          username: profile.username,
+          avatarInitials: profile.avatarInitials,
+          displayName: profile.displayName,
+          email: profile.email,
+          emailVerified: profile.emailVerified,
+          avatarUrl: storedPath,
+          bio: profile.bio,
+        );
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('头像已保存')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('头像保存失败：${_avatarErrorMessage(e)}')),
+      );
+    }
+  }
+
+  void _showAvatarPreview(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
+    final profile = userProvider.profile;
+    final displayName = auth.state.isLoggedIn
+        ? _firstNonEmpty([
+            auth.state.displayName,
+            auth.state.username,
+            profile.displayName,
+            profile.username,
+            '我',
+          ])
+        : _firstNonEmpty([profile.displayName, profile.username, '我']);
+    final avatar = auth.state.isLoggedIn
+        ? _firstNonEmpty([
+            auth.state.avatar,
+            profile.avatarUrl,
+            profile.avatarInitials,
+          ])
+        : _firstNonEmpty([profile.avatarUrl, profile.avatarInitials]);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _AvatarPreviewScreen(avatar: avatar, displayName: displayName),
+      ),
+    );
   }
 
   void _showUpdateDialog(BuildContext context, AppUpdateService u) async {
@@ -835,6 +994,19 @@ class MineScreen extends StatelessWidget {
                       style: const TextStyle(fontSize: 12),
                     ),
                   ],
+                  if ((updater.mustUpdate || updater.hasUpdate) &&
+                      updater.latestUrl == null) ...[
+                    const SizedBox(height: 12),
+                    AppInfoBanner(
+                      icon: Icons.link_off_outlined,
+                      title: '未配置安装包地址',
+                      message: updater.forceUpdateBlockedReason == null
+                          ? '更新策略已生效，但当前没有可下载的安装包地址。请管理员在发布通道补充安装包。'
+                          : '更新策略已生效，但安装包不可用：${updater.forceUpdateBlockedReason}。请管理员在发布通道补充安装包。',
+                      color: Theme.of(context).colorScheme.error,
+                      margin: EdgeInsets.zero,
+                    ),
+                  ],
                   if (updater.hasUpdate && updater.downloading) ...[
                     const SizedBox(height: 12),
                     LinearProgressIndicator(value: updater.downloadProgress),
@@ -859,7 +1031,9 @@ class MineScreen extends StatelessWidget {
                     onPressed: updater.busy ? null : () => Navigator.pop(ctx),
                     child: const Text('关闭'),
                   ),
-                if (updater.hasUpdate && updater.latestUrl != null)
+                if (updater.hasUpdate &&
+                    updater.latestUrl != null &&
+                    AppUpdateInstaller.supportsInstall)
                   FilledButton.icon(
                     onPressed: updater.busy
                         ? null
@@ -885,85 +1059,48 @@ class MineScreen extends StatelessWidget {
     );
   }
 
-  void _openNotificationSettings(BuildContext context) {
+  Future<void> _openNotificationSettings(BuildContext context) async {
+    _openBrandedRoute(context, const NotificationSettingsScreen());
+  }
+
+  void _openMoreApplications(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const PreferencesScreen(
-          initialSection: PreferencesInitialSection.notifications,
+        builder: (_) => BrandRouteSurface(
+          child: MoreApplicationsScreen(
+            visibleBottomNavTabs: visibleBottomNavTabs,
+          ),
         ),
       ),
     );
   }
 
-  void _showMoreApplications(BuildContext context) {
-    final prefs = context.read<PreferencesProvider>();
-    final hiddenApps = _hiddenBottomNavApps(prefs);
-    showAppModalSheet<void>(
-      context: context,
-      builder: (sheetContext) => _MoreApplicationsSheet(apps: hiddenApps),
-    );
-  }
-
-  List<_MoreAppItem> _hiddenBottomNavApps(PreferencesProvider prefs) {
-    final visible = prefs.bottomNavVisible;
-    final apps = <_MoreAppItem>[
-      _MoreAppItem(
-        tab: 0,
-        icon: Icons.today_outlined,
-        label: '今日',
-        color: Colors.blue,
-        builder: (_) =>
-            const _BottomTabStandaloneScreen(title: '今日', child: TodayScreen()),
-      ),
-      _MoreAppItem(
-        tab: 1,
-        icon: Icons.checklist,
-        label: '待办',
-        color: Colors.green,
-        builder: (_) => const TodoScreen(),
-      ),
-      _MoreAppItem(
-        tab: 2,
-        icon: Icons.repeat,
-        label: '习惯',
-        color: Colors.teal,
-        builder: (_) => const HabitScreen(),
-      ),
-      _MoreAppItem(
-        tab: 3,
-        icon: Icons.calendar_month_outlined,
-        label: '日历',
-        color: Colors.indigo,
-        builder: (_) => const CalendarScreen(),
-      ),
-    ];
-    return apps
-        .where((app) => !visible.contains(app.tab))
-        .toList(growable: false);
-  }
-
   void _openNotificationHistory(BuildContext context) {
-    context.read<NotificationService>().markHistorySeen();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const _NotificationHistoryScreen()),
-    );
-  }
-
-  void _openFeedback(BuildContext context, AuthProvider auth, String category) {
-    if (!auth.state.isLoggedIn) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-      return;
-    }
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FeedbackScreen(initialCategory: category),
+        builder: (_) => const BrandRouteSurface(
+          child: NotificationHistoryScreen(markReadOnOpen: true),
+        ),
       ),
+    );
+  }
+
+  void _openFeedback(BuildContext context, String category) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            BrandRouteSurface(child: FeedbackScreen(initialCategory: category)),
+      ),
+    );
+  }
+
+  void _openBrandedRoute(BuildContext context, Widget child) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BrandRouteSurface(child: child)),
     );
   }
 
@@ -1030,7 +1167,7 @@ class _ProfileAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => _ProfileAvatarLetter(
                   letter: letter,
-                  fontSize: 20,
+                  radius: radius,
                   color: cs.onPrimary,
                 ),
               ),
@@ -1044,7 +1181,7 @@ class _ProfileAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => _ProfileAvatarLetter(
                   letter: letter,
-                  fontSize: 20,
+                  radius: radius,
                   color: cs.onPrimary,
                 ),
               ),
@@ -1052,7 +1189,7 @@ class _ProfileAvatar extends StatelessWidget {
           : Text(
               letter,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: radius * 0.62,
                 color: cs.onPrimary,
                 fontWeight: FontWeight.w400,
               ),
@@ -1061,14 +1198,154 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
+class _MineUserLineChip extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color color;
+
+  const _MineUserLineChip({
+    required this.label,
+    required this.color,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Color.alphaBlend(
+                  color.withValues(alpha: 0.62),
+                  cs.onSurface,
+                ),
+                fontWeight: FontWeight.w400,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarPreviewScreen extends StatelessWidget {
+  final String? avatar;
+  final String displayName;
+
+  const _AvatarPreviewScreen({required this.avatar, required this.displayName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: appSecondaryRouteTitleTextStyle(
+          context,
+        ).copyWith(color: Colors.white),
+        title: const Text('头像'),
+      ),
+      body: Center(
+        child: Hero(
+          tag: 'mine-avatar-preview',
+          child: _ProfileAvatarFullImage(
+            avatar: avatar,
+            displayName: displayName,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatarFullImage extends StatelessWidget {
+  final String? avatar;
+  final String displayName;
+
+  const _ProfileAvatarFullImage({
+    required this.avatar,
+    required this.displayName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = avatar?.trim() ?? '';
+    final uri = Uri.tryParse(value);
+    final isUrl =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final localPath = _localAvatarPath(value);
+    final image = isUrl
+        ? Image.network(
+            value,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => _fallbackAvatar(context),
+          )
+        : localPath != null
+        ? Image.file(
+            File(localPath),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => _fallbackAvatar(context),
+          )
+        : null;
+
+    return SizedBox.expand(
+      child: InteractiveViewer(
+        minScale: 0.8,
+        maxScale: 4,
+        child: Center(child: image ?? _fallbackAvatar(context)),
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final radius = (size.shortestSide * 0.28).clamp(84.0, 150.0);
+    final fallback = (avatar?.trim().isNotEmpty ?? false)
+        ? avatar!.trim()
+        : displayName;
+    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      child: _ProfileAvatarLetter(
+        letter: letter,
+        radius: radius,
+        color: Theme.of(context).colorScheme.onPrimary,
+      ),
+    );
+  }
+}
+
 class _ProfileAvatarLetter extends StatelessWidget {
   final String letter;
-  final double fontSize;
+  final double radius;
   final Color color;
 
   const _ProfileAvatarLetter({
     required this.letter,
-    required this.fontSize,
+    required this.radius,
     required this.color,
   });
 
@@ -1077,7 +1354,7 @@ class _ProfileAvatarLetter extends StatelessWidget {
     return Text(
       letter,
       style: TextStyle(
-        fontSize: fontSize,
+        fontSize: radius * 0.62,
         color: color,
         fontWeight: FontWeight.w400,
       ),
@@ -1098,490 +1375,40 @@ String? _localAvatarPath(String value) {
   return null;
 }
 
-class _NotificationHistoryScreen extends StatefulWidget {
-  const _NotificationHistoryScreen();
-
-  @override
-  State<_NotificationHistoryScreen> createState() =>
-      _NotificationHistoryScreenState();
+Future<String> _copyLocalAvatarFile(XFile file) async {
+  final bytes = await file.readAsBytes();
+  if (bytes.isEmpty) {
+    throw Exception('头像文件为空');
+  }
+  if (bytes.length > 3 * 1024 * 1024) {
+    throw Exception('头像不能超过 3MB');
+  }
+  final root = await getApplicationDocumentsDirectory();
+  final dir = Directory('${root.path}/profile_avatars');
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  final filename =
+      'avatar_${DateTime.now().microsecondsSinceEpoch}${_avatarExtensionFor(file.name)}';
+  final target = File('${dir.path}/$filename');
+  await target.writeAsBytes(bytes, flush: true);
+  return target.path;
 }
 
-class _NotificationHistoryScreenState
-    extends State<_NotificationHistoryScreen> {
-  static const _pageSize = 50;
-
-  final _searchCtrl = TextEditingController();
-  NotificationType? _typeFilter;
-  int _page = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<NotificationService>().markHistorySeen();
-    });
+String _avatarExtensionFor(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.jpeg')) return '.jpg';
+  for (final extension in ['.jpg', '.png', '.webp', '.gif']) {
+    if (lower.endsWith(extension)) return extension;
   }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  List<NotificationItem> _filteredHistory(List<NotificationItem> history) {
-    final query = _searchCtrl.text.trim().toLowerCase();
-    return history
-        .where((item) {
-          if (_typeFilter != null && item.type != _typeFilter) return false;
-          if (query.isEmpty) return true;
-          return item.title.toLowerCase().contains(query) ||
-              item.body.toLowerCase().contains(query) ||
-              (item.relatedId ?? '').toLowerCase().contains(query) ||
-              _notificationTypeLabel(item.type).toLowerCase().contains(query);
-        })
-        .toList(growable: false);
-  }
-
-  void _resetPaging() {
-    _page = 0;
-  }
-
-  void _changePage(int page) {
-    setState(() => _page = page < 0 ? 0 : page);
-  }
-
-  Future<void> _confirmClearHistory(int count) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('清空通知记录？'),
-        icon: const Icon(Icons.delete_outline),
-        content: Text('将清空当前保留的 $count 条通知记录，已调度的提醒不会被取消。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!mounted) return;
-    await context.read<NotificationService>().clearHistory();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('通知记录已清空'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ns = context.watch<NotificationService>();
-    final history = ns.history;
-    final filteredHistory = _filteredHistory(history);
-    final cs = Theme.of(context).colorScheme;
-    final totalPages = filteredHistory.isEmpty
-        ? 1
-        : ((filteredHistory.length - 1) ~/ _pageSize) + 1;
-    final currentPage = _page >= totalPages ? totalPages - 1 : _page;
-    if (currentPage != _page) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _page = currentPage);
-      });
-    }
-    final pageStart = currentPage * _pageSize;
-    final pageEnd = (pageStart + _pageSize).clamp(0, filteredHistory.length);
-    final visibleHistory = filteredHistory.sublist(pageStart, pageEnd);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('通知记录'),
-        actions: [
-          TextButton.icon(
-            onPressed: history.isEmpty
-                ? null
-                : () => _confirmClearHistory(history.length),
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('清空'),
-          ),
-        ],
-      ),
-      body: history.isEmpty
-          ? const Center(child: Text('暂无通知记录'))
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                  child: AppSurfaceCard(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: _searchCtrl,
-                          decoration: InputDecoration(
-                            hintText: '搜索标题、内容或关联 ID',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchCtrl.text.trim().isEmpty
-                                ? null
-                                : IconButton(
-                                    tooltip: '清空搜索',
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () {
-                                      _searchCtrl.clear();
-                                      setState(_resetPaging);
-                                    },
-                                  ),
-                            isDense: true,
-                          ),
-                          textInputAction: TextInputAction.search,
-                          onChanged: (_) => setState(_resetPaging),
-                        ),
-                        const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _historyTypeChip('全部', null),
-                              for (final type in NotificationType.values)
-                                _historyTypeChip(
-                                  _notificationTypeLabel(type),
-                                  type,
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          filteredHistory.isEmpty
-                              ? '共 ${history.length} 条，当前筛选无结果'
-                              : filteredHistory.length == history.length
-                              ? '共 ${history.length} 条 · 支持搜索、筛选和分页浏览 · 第 ${currentPage + 1} / $totalPages 页 · 每页 $_pageSize 条'
-                              : '已筛出 ${filteredHistory.length} / ${history.length} 条 · 支持搜索、筛选和分页浏览 · 第 ${currentPage + 1} / $totalPages 页',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.58),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: filteredHistory.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.manage_search_outlined,
-                          message: '没有匹配的通知记录',
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
-                          itemCount: visibleHistory.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final item = visibleHistory[index];
-                            return AppSurfaceCard(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    decoration: BoxDecoration(
-                                      color: _notificationColor(
-                                        item.type,
-                                      ).withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      _notificationIcon(item.type),
-                                      size: 20,
-                                      color: _notificationColor(item.type),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 4,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            Text(
-                                              item.title,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w400,
-                                                    color: cs.onSurface,
-                                                  ),
-                                            ),
-                                            AppStatusBadge(
-                                              label: _notificationTypeLabel(
-                                                item.type,
-                                              ),
-                                              color: _notificationColor(
-                                                item.type,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (item.body.isNotEmpty) ...[
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            item.body,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: cs.onSurface
-                                                      .withValues(alpha: 0.66),
-                                                ),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          _formatNotificationTime(
-                                            item.scheduledTime,
-                                          ),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(
-                                                color: cs.onSurface.withValues(
-                                                  alpha: 0.48,
-                                                ),
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                if (filteredHistory.length > _pageSize)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${pageStart + 1}-$pageEnd / ${filteredHistory.length}',
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                        const Spacer(),
-                        IconButton.outlined(
-                          tooltip: '上一页',
-                          onPressed: currentPage == 0
-                              ? null
-                              : () => _changePage(currentPage - 1),
-                          icon: const Icon(Icons.chevron_left),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.outlined(
-                          tooltip: '下一页',
-                          onPressed: currentPage >= totalPages - 1
-                              ? null
-                              : () => _changePage(currentPage + 1),
-                          icon: const Icon(Icons.chevron_right),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-    );
-  }
-
-  Widget _historyTypeChip(String label, NotificationType? type) {
-    final selected = _typeFilter == type;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => setState(() {
-          _typeFilter = type;
-          _resetPaging();
-        }),
-      ),
-    );
-  }
-
-  Color _notificationColor(NotificationType type) {
-    return switch (type) {
-      NotificationType.todo => Colors.blue,
-      NotificationType.habit => Colors.green,
-      NotificationType.pomodoro => Colors.red,
-      NotificationType.anniversary => Colors.pink,
-      NotificationType.location => Colors.teal,
-      NotificationType.general => Colors.orange,
-    };
-  }
-
-  IconData _notificationIcon(NotificationType type) {
-    return switch (type) {
-      NotificationType.todo => Icons.checklist,
-      NotificationType.habit => Icons.repeat,
-      NotificationType.pomodoro => Icons.timer,
-      NotificationType.anniversary => Icons.event_available_outlined,
-      NotificationType.location => Icons.location_on_outlined,
-      NotificationType.general => Icons.notifications_active_outlined,
-    };
-  }
-
-  String _notificationTypeLabel(NotificationType type) {
-    return switch (type) {
-      NotificationType.todo => '待办',
-      NotificationType.habit => '习惯',
-      NotificationType.pomodoro => '番茄钟',
-      NotificationType.anniversary => '纪念日',
-      NotificationType.location => '位置',
-      NotificationType.general => '系统',
-    };
-  }
-
-  String _formatNotificationTime(DateTime value) {
-    final local = value.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
-  }
+  return '.png';
 }
 
-class _ChangePasswordDialog extends StatefulWidget {
-  const _ChangePasswordDialog();
-
-  @override
-  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
-}
-
-class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
-  final _currentCtrl = TextEditingController();
-  final _newCtrl = TextEditingController();
-  final _confirmCtrl = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _currentCtrl.dispose();
-    _newCtrl.dispose();
-    _confirmCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final newPassword = _newCtrl.text;
-    if (newPassword.length < 6) {
-      setState(() => _error = '新密码至少 6 位');
-      return;
-    }
-    if (newPassword != _confirmCtrl.text) {
-      setState(() => _error = '两次输入的新密码不一致');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await context.read<AuthProvider>().changePassword(
-        currentPassword: _currentCtrl.text,
-        newPassword: newPassword,
-      );
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('登录密码已更新')));
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppDialog(
-      title: const Text('修改登录密码'),
-      icon: const Icon(Icons.password_outlined),
-      shiftForKeyboard: true,
-      content: SingleChildScrollView(
-        child: AutofillGroup(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _currentCtrl,
-                obscureText: true,
-                autofillHints: const [AutofillHints.password],
-                decoration: const InputDecoration(labelText: '当前密码'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _newCtrl,
-                obscureText: true,
-                autofillHints: const [AutofillHints.newPassword],
-                decoration: const InputDecoration(labelText: '新密码'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _confirmCtrl,
-                obscureText: true,
-                autofillHints: const [AutofillHints.newPassword],
-                decoration: const InputDecoration(labelText: '确认新密码'),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _busy ? null : _save,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('保存'),
-        ),
-      ],
-    );
-  }
+String _avatarErrorMessage(Object error) {
+  final message = error.toString();
+  return message.startsWith('Exception: ')
+      ? message.substring('Exception: '.length)
+      : message;
 }
 
 class _AiWeeklyReviewCard extends StatefulWidget {
@@ -1603,6 +1430,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   String? _result;
   String? _summary;
   String? _error;
+  bool _generatedToday = false;
 
   @override
   void didChangeDependencies() {
@@ -1611,10 +1439,21 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
     if (cached != null && _result == null) {
       _result = cached.content;
       _summary = cached.summary;
+      _generatedToday = true;
     }
   }
 
   Future<void> _run() async {
+    final cached = context.read<AiService>().weeklyReviewForDay(DateTime.now());
+    if (cached != null) {
+      setState(() {
+        _result = cached.content;
+        _summary = cached.summary;
+        _generatedToday = true;
+        _error = null;
+      });
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -1647,6 +1486,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
       );
       _summary =
           '$label数据：完成 $completed / $total 项待办，专注 $focus 分钟，习惯连续打卡 $streak 天。';
+      _generatedToday = true;
     } on AiException catch (e) {
       _error = e.message;
     } catch (e) {
@@ -1698,14 +1538,14 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
               ),
               const Spacer(),
               TextButton(
-                onPressed: _busy ? null : _run,
+                onPressed: _busy || _generatedToday ? null : _run,
                 child: _busy
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('生成'),
+                    : Text(_generatedToday ? '今日已生成' : '生成'),
               ),
             ],
           ),
@@ -1790,8 +1630,9 @@ class _TileGroup extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: cs.outlineVariant.withValues(
-                  alpha: isDark ? 0.62 : 0.82,
+                  alpha: isDark ? 0.07 : 0.09,
                 ),
+                width: 0.45,
               ),
             ),
             padding: const EdgeInsets.all(8),
@@ -1867,121 +1708,6 @@ class _UnreadDot extends StatelessWidget {
   }
 }
 
-class _MoreAppItem {
-  final int tab;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final WidgetBuilder builder;
-
-  const _MoreAppItem({
-    required this.tab,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.builder,
-  });
-}
-
-class _MoreApplicationsSheet extends StatelessWidget {
-  final List<_MoreAppItem> apps;
-
-  const _MoreApplicationsSheet({required this.apps});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: AppSurfaceCard(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      '更多应用',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '关闭',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (apps.isEmpty)
-                Text(
-                  '当前没有被隐藏的底部导航功能',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: cs.onSurface.withValues(alpha: 0.62),
-                  ),
-                )
-              else
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  childAspectRatio: 3.8,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  children: [
-                    for (final app in apps) _MoreApplicationButton(app: app),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MoreApplicationButton extends StatelessWidget {
-  final _MoreAppItem app;
-
-  const _MoreApplicationButton({required this.app});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      icon: Icon(app.icon, color: app.color, size: 18),
-      label: Text(app.label, overflow: TextOverflow.ellipsis),
-      onPressed: () {
-        final navigator = Navigator.of(context);
-        navigator.pop();
-        navigator.push(MaterialPageRoute(builder: app.builder));
-      },
-    );
-  }
-}
-
-class _BottomTabStandaloneScreen extends StatelessWidget {
-  final String title;
-  final Widget child;
-
-  const _BottomTabStandaloneScreen({required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: child,
-    );
-  }
-}
-
 class _Tile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2012,15 +1738,16 @@ class _Tile extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             color: isDark
-                ? cs.surfaceContainerHighest.withValues(alpha: 0.34)
-                : cs.surface.withValues(alpha: 0.94),
+                ? cs.surfaceContainerHighest.withValues(alpha: 0.68)
+                : cs.surface.withValues(alpha: 0.86),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: isDark ? 0.76 : 1),
+              color: cs.outlineVariant.withValues(alpha: isDark ? 0.06 : 0.08),
+              width: 0.45,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.022),
+                color: Colors.black.withValues(alpha: isDark ? 0.05 : 0.012),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -2030,14 +1757,15 @@ class _Tile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
             child: Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: isDark ? 0.18 : 0.12),
-                    borderRadius: BorderRadius.circular(10),
+                SizedBox.square(
+                  dimension: 28,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(icon, color: color, size: 16),
                   ),
-                  child: Icon(icon, color: color, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2048,12 +1776,9 @@ class _Tile extends StatelessWidget {
                         label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 13.5,
-                          height: 1.2,
-                          fontWeight: FontWeight.w400,
-                          color: cs.onSurface,
-                        ),
+                        style: appSecondaryMenuItemTextStyle(
+                          context,
+                        ).copyWith(height: 1.2, color: cs.onSurface),
                       ),
                       if (subtitle != null && subtitle!.isNotEmpty) ...[
                         const SizedBox(height: 2),

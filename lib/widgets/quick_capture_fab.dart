@@ -17,8 +17,11 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/quick_capture_template_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ai_service.dart';
+import '../services/local_notifications.dart';
+import '../providers/notification_service.dart';
+import '../services/reminder_scheduler.dart';
+import '../screens/ai_schedule_screen.dart';
 import '../screens/diary_screen.dart';
-import '../screens/search_screen.dart';
 import 'surface_components.dart';
 
 /// 展开式快速捕获 FAB：3 个子按钮 + 一个搜索入口。
@@ -139,7 +142,10 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     if (ok == true && ctrl.text.trim().isNotEmpty) {
       if (!mounted) return;
       final draft = SmartTodoDraftBuilder.fromText(ctrl.text.trim());
-      context.read<TodoProvider>().addTodo(draft.toTodo());
+      await _createTodoWithReminderFeedback(
+        draft.toTodo(),
+        issueTitle: '待办提醒注册失败',
+      );
     }
   }
 
@@ -149,96 +155,11 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
 
   Future<void> _quickAiTodo() async {
     _toggle();
-    final ctrl = TextEditingController();
-    var busy = false;
-    var error = '';
-    var subtasks = <String>[];
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(I18n.tr('quick.ai.title')),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 360),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: ctrl,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: I18n.tr('quick.ai.hint'),
-                    ),
-                  ),
-                  if (error.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(error, style: const TextStyle(color: Colors.red)),
-                  ],
-                  if (subtasks.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    ...subtasks.map(
-                      (item) => ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.subdirectory_arrow_right),
-                        title: Text(item),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            TextButton.icon(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      if (ctrl.text.trim().isEmpty) return;
-                      setSt(() {
-                        busy = true;
-                        error = '';
-                      });
-                      try {
-                        final list = await context
-                            .read<AiService>()
-                            .breakDownTask(ctrl.text.trim());
-                        setSt(() => subtasks = list);
-                      } catch (_) {
-                        setSt(() => error = I18n.tr('quick.ai.error'));
-                      } finally {
-                        setSt(() => busy = false);
-                      }
-                    },
-              icon: busy
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_awesome),
-              label: Text(I18n.tr('action.generate')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(I18n.tr('action.create')),
-            ),
-          ],
-        ),
-      ),
+    if (!mounted) return;
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const AiScheduleScreen()),
     );
-    if (ok == true && ctrl.text.trim().isNotEmpty) {
-      if (!mounted) return;
-      final draft = SmartTodoDraftBuilder.fromText(ctrl.text.trim());
-      context.read<TodoProvider>().addTodo(
-        draft.toTodo(subtasks: subtasks.map((s) => Subtask(title: s)).toList()),
-      );
-    }
   }
 
   Future<void> _quickAiCommand() async {
@@ -311,48 +232,155 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
   }
 
   Future<void> _executeAiCommands(List<AiCommand> commands) async {
+    var executed = 0;
+    var reminderTodos = 0;
     for (final command in commands) {
-      await _executeAiCommand(command, showSnackBar: false);
+      final outcome = await _executeAiCommand(command, showSnackBar: false);
+      if (!outcome.executed) continue;
+      executed++;
+      if (outcome.createdReminderTodo) reminderTodos++;
     }
-    if (!mounted || commands.isEmpty) return;
-    final message = commands.length == 1
+    if (!mounted || executed == 0) return;
+    final baseMessage = executed == 1 && commands.length == 1
         ? '${commands.single.title}已执行'
-        : '已执行 ${commands.length} 条 AI 指令';
+        : executed == commands.length
+        ? '已执行 ${commands.length} 条 AI 指令'
+        : '已执行 $executed/${commands.length} 条 AI 指令';
+    final message = reminderTodos == 0
+        ? baseMessage
+        : '$baseMessage，$reminderTodos 条提醒状态可在通知设置/待办详情检查';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
-  Future<void> _executeAiCommand(
+  Future<_AiCommandOutcome> _executeAiCommand(
     AiCommand command, {
     bool showSnackBar = true,
   }) async {
     switch (command.type) {
       case AiCommandType.addTodo:
         final draft = command.todoDraft;
-        if (draft == null) return;
-        await context.read<TodoProvider>().addTodo(draft.toTodo());
+        if (draft == null) return const _AiCommandOutcome.skipped();
+        final outcome = await _createTodoWithReminderFeedback(
+          draft.toTodo(),
+          showSnackBar: showSnackBar,
+          issueTitle: '待办提醒注册失败',
+        );
+        return _AiCommandOutcome(
+          executed: outcome.created,
+          createdReminderTodo: outcome.created && outcome.hasReminder,
+        );
       case AiCommandType.addNote:
         final note = command.note;
-        if (note == null) return;
+        if (note == null) return const _AiCommandOutcome.skipped();
         context.read<NoteProvider>().addOrUpdateNote(note);
       case AiCommandType.addDiary:
         final diary = command.diary;
-        if (diary == null) return;
+        if (diary == null) return const _AiCommandOutcome.skipped();
         await context.read<DiaryProvider>().addOrUpdate(diary);
       case AiCommandType.startFocus:
         final pomodoro = context.read<PomodoroProvider>();
         if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
       case AiCommandType.unknown:
-        return;
+        return const _AiCommandOutcome.skipped();
     }
-    if (!mounted || !showSnackBar) return;
+    if (!mounted || !showSnackBar) {
+      return const _AiCommandOutcome(executed: true);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${command.title}已执行'),
         behavior: SnackBarBehavior.floating,
       ),
     );
+    return const _AiCommandOutcome(executed: true);
+  }
+
+  Future<_TodoCreateOutcome> _createTodoWithReminderFeedback(
+    TodoItem todo, {
+    bool showSnackBar = true,
+    String issueTitle = '待办提醒注册失败',
+  }) async {
+    final preflight = preflightTodoReminderPlan(todo);
+    final hasReminder = preflight.hasEnabledPlan;
+    if (hasReminder &&
+        !await _preflightTodoReminder(todo, preflight, issueTitle)) {
+      return _TodoCreateOutcome(created: false, hasReminder: hasReminder);
+    }
+    if (!mounted) {
+      return _TodoCreateOutcome(created: false, hasReminder: hasReminder);
+    }
+    await context.read<TodoProvider>().addTodo(todo);
+    if (!mounted) {
+      return _TodoCreateOutcome(created: true, hasReminder: hasReminder);
+    }
+    if (showSnackBar) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_todoCreatedMessage(hasReminder)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return _TodoCreateOutcome(created: true, hasReminder: hasReminder);
+  }
+
+  Future<bool> _preflightTodoReminder(
+    TodoItem todo,
+    TodoReminderPreflightResult preflight,
+    String issueTitle,
+  ) async {
+    final blocking = preflight.blockingIssue;
+    if (blocking != null) {
+      _showReminderFailure('${blocking.title}：${blocking.message}');
+      return false;
+    }
+
+    final usesPush = preflight.kinds.contains(ReminderKind.push);
+    final usesPopup = preflight.kinds.contains(ReminderKind.popup);
+    final usesAlarm = preflight.kinds.contains(ReminderKind.alarm);
+    if (!usesPush && !usesPopup && !usesAlarm) return true;
+    final notification = context.read<NotificationService?>();
+    if (notification != null && (usesPush || usesPopup)) {
+      final ready = await notification.ensureReadyForReminder(
+        scheduledTime: preflight.firstScheduledTime,
+        issueTitle: issueTitle,
+        relatedId: todo.id,
+      );
+      if (!mounted) return false;
+      if (ready) return true;
+      final issue = notification.lastScheduleIssue;
+      _showReminderFailure(
+        issue == null
+            ? '$issueTitle：提醒未注册，请检查通知权限、渠道声音和提醒时间。'
+            : '${issue.title}：${issue.message}',
+      );
+      return false;
+    }
+    if (usesAlarm) {
+      final granted = await LocalNotifications.instance.ensurePermission();
+      if (!mounted) return false;
+      if (granted) return true;
+      _showReminderFailure('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
+      return false;
+    }
+    return true;
+  }
+
+  void _showReminderFailure(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  String _todoCreatedMessage(bool hasReminder) {
+    return hasReminder ? '待办已创建，提醒状态可在通知设置/待办详情检查' : '待办已创建';
   }
 
   Future<void> _quickNote() async {
@@ -399,14 +427,6 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const DiaryEditScreen()),
-    );
-  }
-
-  void _openSearch() {
-    _toggle();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SearchScreen()),
     );
   }
 
@@ -490,127 +510,132 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
         builder: (dialogContext, setDialogState) => AppDialog(
           title: Text(I18n.tr('quick.template.save')),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: Text(I18n.tr('quick.template.kind.todo')),
-                        selected: kind == QuickCaptureTemplateKind.todo,
-                        onSelected: (_) => setDialogState(
-                          () => kind = QuickCaptureTemplateKind.todo,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: Text(I18n.tr('quick.template.kind.habit')),
-                        selected: kind == QuickCaptureTemplateKind.habit,
-                        onSelected: (_) => setDialogState(
-                          () => kind = QuickCaptureTemplateKind.habit,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('quick.template.name'),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: prefixCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('quick.template.prefix'),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: tagsCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('quick.template.tags'),
-                  ),
-                ),
-                if (kind == QuickCaptureTemplateKind.todo) ...[
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: listCtrl,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('quick.template.list'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<TodoPriority>(
-                    initialValue: priority,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('quick.template.priority'),
-                    ),
-                    items: [
-                      for (final item in TodoPriority.values)
-                        DropdownMenuItem(value: item, child: Text(item.label)),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => priority = value);
-                      }
-                    },
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: todoReminder,
-                    onChanged: (value) {
-                      setDialogState(() => todoReminder = value);
-                    },
-                    title: Text(I18n.tr('quick.template.reminder15')),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: habitCategoryCtrl,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('quick.template.habit_category'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+            child: AppSecondaryControlTheme(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: habitTargetCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: I18n.tr('quick.template.habit_target'),
+                        child: ChoiceChip(
+                          label: Text(I18n.tr('quick.template.kind.todo')),
+                          selected: kind == QuickCaptureTemplateKind.todo,
+                          onSelected: (_) => setDialogState(
+                            () => kind = QuickCaptureTemplateKind.todo,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox(
-                        width: 92,
-                        child: TextField(
-                          controller: habitUnitCtrl,
-                          decoration: InputDecoration(
-                            labelText: I18n.tr('quick.template.habit_unit'),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Text(I18n.tr('quick.template.kind.habit')),
+                          selected: kind == QuickCaptureTemplateKind.habit,
+                          onSelected: (_) => setDialogState(
+                            () => kind = QuickCaptureTemplateKind.habit,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: habitReminder,
-                    onChanged: (value) {
-                      setDialogState(() => habitReminder = value);
-                    },
-                    title: Text(I18n.tr('quick.template.habit_reminder')),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.name'),
+                    ),
                   ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: prefixCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.prefix'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: tagsCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('quick.template.tags'),
+                    ),
+                  ),
+                  if (kind == QuickCaptureTemplateKind.todo) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: listCtrl,
+                      decoration: InputDecoration(
+                        labelText: I18n.tr('quick.template.list'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    AppDropdownField<TodoPriority>(
+                      initialValue: priority,
+                      decoration: InputDecoration(
+                        labelText: I18n.tr('quick.template.priority'),
+                      ),
+                      items: [
+                        for (final item in TodoPriority.values)
+                          DropdownMenuItem(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => priority = value);
+                        }
+                      },
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: todoReminder,
+                      onChanged: (value) {
+                        setDialogState(() => todoReminder = value);
+                      },
+                      title: Text(I18n.tr('quick.template.reminder15')),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: habitCategoryCtrl,
+                      decoration: InputDecoration(
+                        labelText: I18n.tr('quick.template.habit_category'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: habitTargetCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: I18n.tr('quick.template.habit_target'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 92,
+                          child: TextField(
+                            controller: habitUnitCtrl,
+                            decoration: InputDecoration(
+                              labelText: I18n.tr('quick.template.habit_unit'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: habitReminder,
+                      onChanged: (value) {
+                        setDialogState(() => habitReminder = value);
+                      },
+                      title: Text(I18n.tr('quick.template.habit_reminder')),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
@@ -704,11 +729,20 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     final input = ctrl.text.trim();
     if (input.isEmpty && template.displayTitlePrefix.isEmpty) return;
     if (template.kind == QuickCaptureTemplateKind.todo) {
-      await context.read<TodoProvider>().addTodo(template.toTodo(input));
+      final outcome = await _createTodoWithReminderFeedback(
+        template.toTodo(input),
+        showSnackBar: false,
+        issueTitle: '待办提醒注册失败',
+      );
+      if (!outcome.created) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(I18n.tr('quick.template.todo_done')),
+          content: Text(
+            outcome.hasReminder
+                ? _todoCreatedMessage(true)
+                : I18n.tr('quick.template.todo_done'),
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -798,12 +832,6 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
               onTap: _quickAiTodo,
             ),
           _mini(
-            icon: Icons.search,
-            label: I18n.tr('quick.menu.search'),
-            color: Colors.grey,
-            onTap: _openSearch,
-          ),
-          _mini(
             icon: Icons.book_outlined,
             label: I18n.tr('quick.menu.diary'),
             color: const Color(0xFF26A69A),
@@ -837,6 +865,27 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       ],
     );
   }
+}
+
+class _TodoCreateOutcome {
+  final bool created;
+  final bool hasReminder;
+
+  const _TodoCreateOutcome({required this.created, required this.hasReminder});
+}
+
+class _AiCommandOutcome {
+  final bool executed;
+  final bool createdReminderTodo;
+
+  const _AiCommandOutcome({
+    required this.executed,
+    this.createdReminderTodo = false,
+  });
+
+  const _AiCommandOutcome.skipped()
+    : executed = false,
+      createdReminderTodo = false;
 }
 
 class _TemplateTile extends StatelessWidget {

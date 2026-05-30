@@ -9,17 +9,21 @@ import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.duoyi.duoyi.services.FocusSoundForegroundService
 import java.io.File
 import java.io.IOException
 import java.util.TimeZone
+import java.util.UUID
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -42,6 +46,7 @@ class MainActivity : FlutterActivity() {
     private var pendingInitialDeepLink: String? = null
     private var pendingInitialOAuthLink: String? = null
     private var pendingInitialSharedText: String? = null
+    private var focusSoundForegroundMethodChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +54,11 @@ class MainActivity : FlutterActivity() {
         pendingInitialDeepLink = duoyiDeepLinkFrom(intent)
         pendingInitialOAuthLink = oauthDeepLinkFrom(intent)
         pendingInitialSharedText = sharedTextFrom(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -164,6 +174,13 @@ class MainActivity : FlutterActivity() {
                         val channelId = call.argument<String>("channelId")
                         result.success(openNotificationChannelSettings(channelId))
                     }
+                    "notificationChannelStatuses" -> {
+                        val channelIds = call.argument<List<String>>("channelIds") ?: emptyList()
+                        result.success(notificationChannelStatuses(channelIds))
+                    }
+                    "systemAudioStatus" -> {
+                        result.success(systemAudioStatus())
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -173,30 +190,40 @@ class MainActivity : FlutterActivity() {
                 val title = call.argument<String>("title") ?: "多仪提醒"
                 val body = call.argument<String>("body") ?: "提醒时间到了"
                 val payload = call.argument<String>("payload")
+                val fullScreen = call.argument<Boolean>("fullScreen") ?: false
                 val vibrate = call.argument<Boolean>("vibrate") ?: true
                 val snoozeMinutes = call.argument<Int>("snoozeMinutes") ?: 0
                 val repeatCount = call.argument<Int>("repeatCount") ?: 0
                 when (call.method) {
                     "showNow" -> {
-                        ReminderRingtoneScheduler.showNow(this, id, title, body, payload, vibrate, snoozeMinutes, repeatCount)
-                        result.success(null)
+                        val ok = ReminderRingtoneScheduler.showNow(this, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatCount)
+                        if (ok) {
+                            result.success(true)
+                        } else {
+                            result.error("ringtone_show_failed", "内置提醒铃声启动失败", null)
+                        }
                     }
                     "scheduleOnce" -> {
                         val triggerAtMillis = call.argument<Long>("triggerAtMillis")
                             ?: call.argument<Int>("triggerAtMillis")?.toLong()
                             ?: 0L
-                        ReminderRingtoneScheduler.scheduleOnce(
+                        val ok = ReminderRingtoneScheduler.scheduleOnce(
                             this,
                             id,
                             title,
                             body,
                             triggerAtMillis,
                             payload,
+                            fullScreen,
                             vibrate,
                             snoozeMinutes,
                             repeatCount,
                         )
-                        result.success(null)
+                        if (ok) {
+                            result.success(true)
+                        } else {
+                            result.error("ringtone_schedule_failed", "内置提醒铃声注册失败", null)
+                        }
                     }
                     "scheduleDaily" -> {
                         val hour = call.argument<Int>("hour") ?: 9
@@ -206,7 +233,7 @@ class MainActivity : FlutterActivity() {
                             ?: intArrayOf()
                         val timezoneId = call.argument<String>("timezoneId")
                             ?: TimeZone.getDefault().id
-                        ReminderRingtoneScheduler.scheduleDaily(
+                        val ok = ReminderRingtoneScheduler.scheduleDaily(
                             this,
                             id,
                             title,
@@ -216,11 +243,16 @@ class MainActivity : FlutterActivity() {
                             weekdays,
                             timezoneId,
                             payload,
+                            fullScreen,
                             vibrate,
                             snoozeMinutes,
                             repeatCount,
                         )
-                        result.success(null)
+                        if (ok) {
+                            result.success(true)
+                        } else {
+                            result.error("ringtone_schedule_failed", "内置重复提醒铃声注册失败", null)
+                        }
                     }
                     "cancel" -> {
                         ReminderRingtoneScheduler.cancel(this, id)
@@ -228,6 +260,23 @@ class MainActivity : FlutterActivity() {
                     }
                     "cancelAll" -> {
                         ReminderRingtoneScheduler.cancelAll(this)
+                        result.success(null)
+                    }
+                    "pendingIds" -> {
+                        result.success(ReminderRingtoneScheduler.pendingIds(this))
+                    }
+                    "lastDeliveryIssue" -> {
+                        result.success(ReminderRingtoneScheduler.lastDeliveryIssue(this))
+                    }
+                    "clearLastDeliveryIssue" -> {
+                        ReminderRingtoneScheduler.clearLastDeliveryIssue(this)
+                        result.success(null)
+                    }
+                    "lastPlaybackStatus" -> {
+                        result.success(ReminderRingtoneScheduler.lastPlaybackStatus(this))
+                    }
+                    "clearLastPlaybackStatus" -> {
+                        ReminderRingtoneScheduler.clearLastPlaybackStatus(this)
                         result.success(null)
                     }
                     "stopActive" -> {
@@ -240,15 +289,19 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "setSoundName" -> {
-                        val soundName = call.argument<String>("soundName") ?: "chime"
+                        val soundName = call.argument<String>("soundName") ?: "soft"
                         ReminderRingtoneService.setSoundName(this, soundName)
                         result.success(null)
                     }
                     else -> result.notImplemented()
                 }
             }
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, focusSoundForegroundChannel)
-            .setMethodCallHandler { call, result ->
+        val focusChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, focusSoundForegroundChannel)
+        focusSoundForegroundMethodChannel = focusChannel
+        FocusSoundForegroundService.stopRequestCallback = {
+            focusSoundForegroundMethodChannel?.invokeMethod("stopRequested", null)
+        }
+        focusChannel.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "start" -> {
                         FocusSoundForegroundService.start(this)
@@ -317,11 +370,31 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "canRequestPinWidget" -> result.success(canRequestPinWidget())
+                    "canOpenWidgetSettings" -> result.success(canOpenWidgetSettings())
+                    "openWidgetSettings" -> result.success(openWidgetSettings())
                     "requestPinWidget" -> {
                         val kind = call.argument<String>("kind") ?: "todo"
-                        result.success(requestPinWidget(kind))
+                        val style = call.argument<String>("style") ?: "standard"
+                        result.success(requestPinWidget(kind, style))
                     }
-                    "openWidgetSettings" -> result.success(openWidgetSettings())
+                    "lastPinResult" -> {
+                        val requestId = call.argument<String>("requestId") ?: ""
+                        result.success(lastWidgetPinResult(requestId))
+                    }
+                    "clearPinResult" -> {
+                        val requestId = call.argument<String>("requestId") ?: ""
+                        clearWidgetPinResult(requestId)
+                        result.success(null)
+                    }
+                    "cancelPinRequest" -> {
+                        val requestId = call.argument<String>("requestId") ?: ""
+                        DuoyiWidgetProviderRegistry.cleanupPendingVariantProvider(this, requestId)
+                        result.success(null)
+                    }
+                    "applyWidgetDisplayMode" -> {
+                        val style = call.argument<String>("style") ?: "standard"
+                        result.success(DuoyiWidgetProviderRegistry.applyDisplayModeToExistingWidgets(this, style))
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -462,50 +535,117 @@ class MainActivity : FlutterActivity() {
         return manager?.isRequestPinAppWidgetSupported == true
     }
 
-    private fun requestPinWidget(kind: String): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unsupported"
+    private fun openWidgetSettings(): Boolean {
+        val intent = appWidgetSettingsIntent() ?: return false
+        return startSettingsActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun canOpenWidgetSettings(): Boolean {
+        return appWidgetSettingsIntent() != null
+    }
+
+    private fun appWidgetSettingsIntent(): Intent? {
+        val candidates = listOf(
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .putExtra("extra_pkgname", packageName),
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .setClassName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.permissions.PermissionsEditorActivity",
+                )
+                .putExtra("extra_pkgname", packageName),
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .setClassName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.permissions.AppPermissionsEditorActivity",
+                )
+                .putExtra("extra_pkgname", packageName),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:$packageName")),
+        )
+        return candidates.firstOrNull { it.resolveActivity(packageManager) != null }
+    }
+
+    private fun requestPinWidget(kind: String, styleId: String): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unsupported_platform"
         val manager = getSystemService(AppWidgetManager::class.java) ?: return "unavailable"
-        if (!manager.isRequestPinAppWidgetSupported) return "unsupported"
-        val provider = when (kind) {
-            "todo" -> ComponentName(this, DuoyiTodoWidgetProvider::class.java)
-            "focus" -> ComponentName(this, DuoyiFocusHabitWidgetProvider::class.java)
-            "habit" -> ComponentName(this, DuoyiHabitWidgetProvider::class.java)
-            "calendar" -> ComponentName(this, DuoyiCalendarWidgetProvider::class.java)
-            "schedule" -> ComponentName(this, DuoyiScheduleWidgetProvider::class.java)
-            "goal" -> ComponentName(this, DuoyiGoalWidgetProvider::class.java)
-            "course" -> ComponentName(this, DuoyiCourseWidgetProvider::class.java)
-            "note" -> ComponentName(this, DuoyiNoteWidgetProvider::class.java)
-            "anniversary" -> ComponentName(this, DuoyiAnniversaryWidgetProvider::class.java)
-            "diary" -> ComponentName(this, DuoyiDiaryWidgetProvider::class.java)
-            else -> return "invalid_kind"
-        }
+        if (!manager.isRequestPinAppWidgetSupported) return "unsupported_launcher"
+        val pinStyle = DuoyiWidgetPinStyle.fromId(styleId)
+        val provider = widgetProviderFor(kind, pinStyle.id) ?: return "invalid_kind"
+        val requestId = UUID.randomUUID().toString()
         return try {
+            enableWidgetProvider(provider)
+            val options = pinStyle.toOptions()
+            Log.i(
+                "DuoyiWidgetPin",
+                "request requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className} min=${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)}x${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)} max=${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)}x${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)}",
+            )
+            val callbackFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
             val callback = PendingIntent.getBroadcast(
                 this,
-                kind.hashCode(),
+                requestId.hashCode(),
                 Intent(this, DuoyiWidgetPinResultReceiver::class.java)
-                    .putExtra(DuoyiWidgetPinResultReceiver.extraKind, kind),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    .putExtra(DuoyiWidgetPinResultReceiver.extraKind, kind)
+                    .putExtra(DuoyiWidgetPinResultReceiver.extraStyle, pinStyle.id)
+                    .putExtra(DuoyiWidgetPinResultReceiver.extraRequestId, requestId),
+                callbackFlags,
             )
-            if (manager.requestPinAppWidget(provider, null, callback)) {
-                "requested"
+            if (manager.requestPinAppWidget(provider, options, callback)) {
+                DuoyiWidgetProviderRegistry.rememberPendingVariantProvider(this, requestId, provider)
+                "requested:$requestId"
             } else {
-                "permission_denied"
+                Log.w("DuoyiWidgetPin", "request_blocked requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}")
+                DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
+                "confirmation_blocked"
             }
         } catch (e: SecurityException) {
+            Log.w("DuoyiWidgetPin", "permission_denied requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
+            DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
             "permission_denied"
         } catch (e: Exception) {
+            Log.w("DuoyiWidgetPin", "unavailable requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
+            DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
             "unavailable"
         }
     }
 
-    private fun openWidgetSettings(): Boolean {
-        val intents = listOf(
-            Intent(Settings.ACTION_SETTINGS),
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(Uri.parse("package:$packageName")),
+    private fun lastWidgetPinResult(requestId: String): Map<String, Any?>? {
+        if (requestId.isBlank()) return null
+        val prefs = getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE)
+        if (prefs.getString(DuoyiWidgetPinResultReceiver.keyRequestId, "") != requestId) return null
+        return mapOf(
+            "requestId" to requestId,
+            "kind" to prefs.getString(DuoyiWidgetPinResultReceiver.keyKind, ""),
+            "style" to prefs.getString(DuoyiWidgetPinResultReceiver.keyStyle, ""),
+            "widgetId" to prefs.getInt(DuoyiWidgetPinResultReceiver.keyWidgetId, AppWidgetManager.INVALID_APPWIDGET_ID),
+            "status" to prefs.getString(DuoyiWidgetPinResultReceiver.keyStatus, ""),
+            "confirmedAt" to prefs.getLong(DuoyiWidgetPinResultReceiver.keyConfirmedAt, 0L),
         )
-        return intents.any { startSettingsActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    private fun clearWidgetPinResult(requestId: String) {
+        if (requestId.isBlank()) return
+        val prefs = getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE)
+        if (prefs.getString(DuoyiWidgetPinResultReceiver.keyRequestId, "") == requestId) {
+            prefs.edit().clear().apply()
+        }
+    }
+
+    private fun widgetProviderFor(kind: String, style: String): ComponentName? {
+        return DuoyiWidgetProviderRegistry.componentFor(this, kind, style)
+    }
+
+    private fun enableWidgetProvider(provider: ComponentName) {
+        packageManager.setComponentEnabledSetting(
+            provider,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP,
+        )
     }
 
     private fun openLocationSettings(): Boolean {
@@ -574,6 +714,46 @@ class MainActivity : FlutterActivity() {
             .putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return startSettingsActivity(intent)
+    }
+
+    private fun notificationChannelStatuses(channelIds: List<String>): Map<String, Map<String, Any?>> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyMap()
+        val manager = notificationManager()
+        return channelIds
+            .filter { it.isNotBlank() }
+            .associateWith { channelId ->
+                val channel = manager.getNotificationChannel(channelId)
+                mapOf(
+                    "exists" to (channel != null),
+                    "importance" to channel?.importance,
+                    "hasSound" to (channel?.sound != null),
+                    "canBypassDnd" to channel?.canBypassDnd(),
+                )
+            }
+    }
+
+    private fun systemAudioStatus(): Map<String, Any?> {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val manager = notificationManager()
+        return mapOf(
+            "alarmVolume" to audio.getStreamVolume(AudioManager.STREAM_ALARM),
+            "alarmMaxVolume" to audio.getStreamMaxVolume(AudioManager.STREAM_ALARM),
+            "notificationVolume" to audio.getStreamVolume(AudioManager.STREAM_NOTIFICATION),
+            "notificationMaxVolume" to audio.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION),
+            "ringVolume" to audio.getStreamVolume(AudioManager.STREAM_RING),
+            "ringMaxVolume" to audio.getStreamMaxVolume(AudioManager.STREAM_RING),
+            "dndSupported" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M),
+            "interruptionFilter" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                manager.currentInterruptionFilter
+            } else {
+                null
+            },
+            "notificationPolicyAccessGranted" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                manager.isNotificationPolicyAccessGranted
+            } else {
+                false
+            },
+        )
     }
 
     private fun notificationManager(): NotificationManager {

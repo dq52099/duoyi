@@ -81,7 +81,9 @@ void main() {
     expect(source, contains("_wrapNoteSelection('`')"));
     expect(
       source,
-      contains('_todo.copyWith(title: title, notes: _notesCtrl.text.trim())'),
+      contains(
+        "final nextTodo = _todo.copyWith(\n      title: title,\n      notes: _notesCtrl.text.trim(),\n    );",
+      ),
     );
   });
 }

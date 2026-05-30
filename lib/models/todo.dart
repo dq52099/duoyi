@@ -285,9 +285,16 @@ class TodoItem {
       reminder = const ReminderConfig.disabled();
     }
     final reminderPlanJson = json['reminderPlan'];
-    final reminderPlan = reminderPlanJson is Map
+    var reminderPlan = reminderPlanJson is Map
         ? ReminderPlan.fromJson(Map<String, dynamic>.from(reminderPlanJson))
         : ReminderPlan.fromLegacy(reminder);
+    // Some migrated/cloud-synced payloads can contain a disabled new
+    // reminderPlan with retained rules while the legacy reminder is still the
+    // only enabled source. Prefer the enabled legacy reminder in that conflict
+    // instead of silently dropping the system notification registration.
+    if (!reminderPlan.enabled && reminder.enabled) {
+      reminderPlan = ReminderPlan.fromLegacy(reminder);
+    }
     final effectiveReminder = reminderPlan.toLegacyReminderConfig(
       fallback: reminder,
     );

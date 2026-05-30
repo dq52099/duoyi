@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
+import 'surface_components.dart';
 
 /// Wraps any child with the active theme's background image and overlay.
 /// Default brand has no asset, so we just render the child on top of the
@@ -42,7 +43,17 @@ class BrandRouteSurface extends StatelessWidget {
   const BrandRouteSurface({super.key, required this.child});
 
   @override
-  Widget build(BuildContext context) => BrandBackground(child: child);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final routeBackground = theme.brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: AppSecondaryControlTheme(child: child)),
+    );
+  }
 }
 
 /// A scaffold that shows transparent surfaces on top of the brand background.
@@ -66,13 +77,23 @@ class BrandScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: extendBodyBehindAppBar,
-      appBar: appBar,
-      body: body,
-      floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigationBar,
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final routeBackground = theme.brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    return ColoredBox(
+      color: routeBackground,
+      child: BrandBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: extendBodyBehindAppBar,
+          appBar: appBar,
+          body: body,
+          floatingActionButton: floatingActionButton,
+          bottomNavigationBar: bottomNavigationBar,
+        ),
+      ),
     );
   }
 }

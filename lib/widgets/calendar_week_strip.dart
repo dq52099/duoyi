@@ -84,6 +84,15 @@ class CalendarWeekStrip extends StatelessWidget {
                   d.day == selectedDay.day && d.month == selectedDay.month;
               final isToday = d.day == today.day && d.month == today.month;
               final labels = ['一', '二', '三', '四', '五', '六', '日'];
+              final selectedBackground = Color.alphaBlend(
+                cs.primary.withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.20
+                      : 0.13,
+                ),
+                cs.surface,
+              );
+              final selectedForeground = cs.onSurface;
 
               return GestureDetector(
                 onTap: () => onDaySelected(d),
@@ -93,9 +102,15 @@ class CalendarWeekStrip extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? cs.primary
+                        ? selectedBackground
                         : (isToday ? cs.primary.withValues(alpha: 0.12) : null),
                     borderRadius: BorderRadius.circular(10),
+                    border: isSelected
+                        ? Border.all(
+                            color: cs.primary.withValues(alpha: 0.26),
+                            width: 0.45,
+                          )
+                        : null,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -105,16 +120,16 @@ class CalendarWeekStrip extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: isSelected
-                              ? cs.onPrimary
+                              ? selectedForeground.withValues(alpha: 0.70)
                               : Colors.grey.shade600,
                         ),
                       ),
                       Text(
                         '${d.day}',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w400,
-                          color: isSelected ? cs.onPrimary : null,
+                          color: isSelected ? selectedForeground : null,
                         ),
                       ),
                       if (types.isNotEmpty)
@@ -190,13 +205,15 @@ class _WeekAgendaList extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: visibleDays.length,
-      itemBuilder: (context, index) {
-        final day = visibleDays[index];
-        return _WeekDaySection(day: day, onDaySelected: onDaySelected);
-      },
+    return Scrollbar(
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        itemCount: visibleDays.length,
+        itemBuilder: (context, index) {
+          final day = visibleDays[index];
+          return _WeekDaySection(day: day, onDaySelected: onDaySelected);
+        },
+      ),
     );
   }
 }
@@ -293,7 +310,8 @@ class _WeekEventTile extends StatelessWidget {
             border: Border.all(
               color: event.hasConflict
                   ? cs.error.withValues(alpha: 0.35)
-                  : cs.outlineVariant.withValues(alpha: 0.55),
+                  : cs.outlineVariant.withValues(alpha: 0.12),
+              width: event.hasConflict ? 0.6 : 0.45,
             ),
           ),
           child: Row(

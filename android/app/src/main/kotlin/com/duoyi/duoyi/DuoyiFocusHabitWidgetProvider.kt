@@ -2,7 +2,6 @@ package com.duoyi.duoyi
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -16,12 +15,18 @@ import java.util.Date
 import java.util.Locale
 
 /** "专注" 小组件。类名保留用于兼容已安装的旧小组件。 */
-class DuoyiFocusHabitWidgetProvider : AppWidgetProvider() {
+open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             requestUpdate(context)
         }
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        appWidgetIds.forEach { DuoyiWidgetDisplayMode.clearForWidget(prefs, it) }
+        super.onDeleted(context, appWidgetIds)
     }
 
     override fun onUpdate(
@@ -32,6 +37,9 @@ class DuoyiFocusHabitWidgetProvider : AppWidgetProvider() {
         val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
 
         appWidgetIds.forEach { id ->
+            DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
+                DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
+            }
             val views = RemoteViews(context.packageName, R.layout.duoyi_focus_habit_widget)
             val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
 
@@ -102,15 +110,19 @@ class DuoyiFocusHabitWidgetProvider : AppWidgetProvider() {
             )
             views.setViewVisibility(
                 R.id.widget_focus_quick_start,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_focus_habit_summary,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_focus_streak_summary,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
+            )
+            views.setViewVisibility(
+                R.id.widget_focus_habit_bottom_nav,
+                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
@@ -141,11 +153,16 @@ class DuoyiFocusHabitWidgetProvider : AppWidgetProvider() {
             )
 
             views.setOnClickPendingIntent(R.id.widget_focus_habit_root, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_habit_title, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_habit_date, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_count, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_summary, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_quick_start, startFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_habit_progress, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_streak_count, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_timer_caption, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_habit_summary, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_streak_summary, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_nav_todo, openTodo)
             views.setOnClickPendingIntent(R.id.widget_focus_nav_habit, openHabit)
             views.setOnClickPendingIntent(R.id.widget_focus_nav_calendar, openCalendar)
@@ -210,15 +227,7 @@ class DuoyiFocusHabitWidgetProvider : AppWidgetProvider() {
     companion object {
         /** Trigger update from Flutter via HomeWidget.updateWidget or package upgrade. */
         fun requestUpdate(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, DuoyiFocusHabitWidgetProvider::class.java))
-            if (ids.isNotEmpty()) {
-                val intent = Intent(context, DuoyiFocusHabitWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                }
-                context.sendBroadcast(intent)
-            }
+            DuoyiWidgetProviderRegistry.requestUpdateForKind(context, "focus")
         }
     }
 }

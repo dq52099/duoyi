@@ -149,13 +149,17 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
             decoration: BoxDecoration(
               color: cs.primaryContainer.withValues(alpha: 0.42),
               borderRadius: DesignTokens.borderRadiusLg,
-              border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.12),
+                width: 0.45,
+              ),
             ),
             alignment: Alignment.center,
             child: Text(
               AppTimePicker.format(_value),
               style: theme.textTheme.headlineSmall?.copyWith(
-                fontSize: 34,
+                fontSize: 24,
+                fontWeight: FontWeight.w400,
                 fontFeatures: const [FontFeature.tabularFigures()],
                 color: cs.primary,
               ),

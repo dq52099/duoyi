@@ -15,6 +15,7 @@ import com.duoyi.duoyi.R
 class FocusSoundForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == actionStop) {
+            stopRequestCallback?.invoke()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -72,6 +73,7 @@ class FocusSoundForegroundService : Service() {
         private const val channelId = "duoyi_focus_sound_playback_v1"
         private const val notificationId = 951_001
         private const val actionStop = "com.duoyi.duoyi.FOCUS_SOUND_STOP"
+        var stopRequestCallback: (() -> Unit)? = null
 
         fun start(context: Context) {
             val intent = Intent(context, FocusSoundForegroundService::class.java)

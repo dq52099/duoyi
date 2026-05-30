@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -18,7 +20,9 @@ import '../core/focus_sound_catalog.dart';
 ///
 /// Requirements: 5.2, 5.3, 5.4, 5.9
 class FocusSoundService with WidgetsBindingObserver {
-  FocusSoundService._();
+  FocusSoundService._() {
+    _foregroundChannel.setMethodCallHandler(_handleForegroundMethodCall);
+  }
 
   /// 单例实例。
   static final FocusSoundService instance = FocusSoundService._();
@@ -29,11 +33,14 @@ class FocusSoundService with WidgetsBindingObserver {
   final List<AudioPlayer> _players = <AudioPlayer>[];
   final Map<String, String> _customTrackPaths = <String, String>{};
   WidgetsBinding? _lifecycleBinding;
+  Future<void> Function()? onForegroundStopRequested;
 
   String _currentSound = 'none';
   bool _isPlaying = false;
   int _playbackGeneration = 0;
-  static const double defaultVolume = 0.95;
+  static const double defaultVolume = 1.0;
+  static const double minimumAudibleVolume = 0.4;
+  static const double minimumPreviewVolume = minimumAudibleVolume;
   double _volume = defaultVolume;
 
   static final AudioContext _focusAudioContext = AudioContextConfig(
@@ -62,42 +69,68 @@ class FocusSoundService with WidgetsBindingObserver {
 
   /// 切换音轨；传入 `'none'` 等价于 [stop]。
   ///
-  /// 未知 id 静默忽略（不抛异常、不改变当前状态）。
-  Future<void> play(String sound) async {
+  /// 未知 id 不抛异常，但会返回 false，供 UI 提示用户当前选择没有发声。
+  Future<bool> play(String sound) async {
+    return _play(sound, ++_playbackGeneration);
+  }
+
+  Future<bool> preview(
+    String sound, {
+    Duration duration = const Duration(seconds: 3),
+  }) async {
+    _volume = _volume.clamp(minimumPreviewVolume, 1.0).toDouble();
+    final generation = ++_playbackGeneration;
+    final started = await _play(sound, generation);
+    if (!started || duration <= Duration.zero) return started;
+    unawaited(
+      Future<void>.delayed(duration).then((_) async {
+        if (generation == _playbackGeneration &&
+            _isPlaying &&
+            _currentSound != FocusSoundCatalog.none) {
+          await stop();
+        }
+      }),
+    );
+    return true;
+  }
+
+  Future<bool> _play(String sound, int generation) async {
     final customPath = _customTrackPaths[sound];
     if (customPath != null && customPath.isNotEmpty) {
-      final generation = ++_playbackGeneration;
-      await _playSources(sound, <Source>[
+      return _playSources(sound, <Source>[
         DeviceFileSource(customPath),
       ], generation);
-      return;
+    }
+    if (sound.startsWith('custom:')) {
+      return false;
     }
     final normalizedInput = FocusSoundCatalog.normalizeForPlayback(sound);
     if (normalizedInput == FocusSoundCatalog.none) {
       await stop();
-      return;
+      return true;
     }
-    final generation = ++_playbackGeneration;
     final assets = FocusSoundCatalog.assetsFor(normalizedInput);
-    if (assets.length != 1) {
-      return;
+    if (assets.isEmpty) {
+      return false;
     }
     final normalizedSound = FocusSoundCatalog.trackIdsFor(
       normalizedInput,
     ).join('+');
-    await _playSources(normalizedSound, <Source>[
-      AssetSource(assets.single),
-    ], generation);
+    return _playSources(
+      normalizedSound,
+      assets.map(AssetSource.new).toList(growable: false),
+      generation,
+    );
   }
 
-  Future<void> _playSources(
+  Future<bool> _playSources(
     String normalizedSound,
     List<Source> sources,
     int generation,
   ) async {
     if (_isPlaying && _currentSound == normalizedSound) {
       await _applyVolumeToPlayers(_volume);
-      return;
+      return true;
     }
     await _stopPlayers();
     final nextPlayers = <AudioPlayer>[];
@@ -117,19 +150,21 @@ class FocusSoundService with WidgetsBindingObserver {
       }
       if (generation != _playbackGeneration) {
         await _disposePlayers(nextPlayers);
-        return;
+        return false;
       }
       _players.addAll(nextPlayers);
       _currentSound = normalizedSound;
       _isPlaying = true;
       await _applyVolumeToPlayers(_volume);
       await _startForegroundService();
+      return true;
     } catch (e, st) {
       debugPrint(
         '[FocusSoundService] failed to play $normalizedSound: $e\n$st',
       );
       await _disposePlayers(nextPlayers);
       await stop();
+      return false;
     }
   }
 
@@ -145,9 +180,9 @@ class FocusSoundService with WidgetsBindingObserver {
     _isPlaying = false;
   }
 
-  /// 设置音量，自动 clamp 到 `[0, 1]`。
+  /// 设置目标音量，自动 clamp 到 `[minimumAudibleVolume, 1]`。
   Future<void> setVolume(double v) async {
-    _volume = v.clamp(0.0, 1.0).toDouble();
+    _volume = v.clamp(minimumAudibleVolume, 1.0).toDouble();
     await _applyVolumeToPlayers(_volume);
   }
 
@@ -259,10 +294,26 @@ class FocusSoundService with WidgetsBindingObserver {
   /// 释放底层播放器资源。
   Future<void> dispose() async {
     unbindLifecycle();
+    onForegroundStopRequested = null;
     await _stopPlayers();
     await _stopForegroundService();
     _isPlaying = false;
     _currentSound = 'none';
+  }
+
+  Future<void> _handleForegroundMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'stopRequested':
+        final handler = onForegroundStopRequested;
+        if (handler != null) {
+          await handler();
+        } else {
+          await stop();
+        }
+        return;
+      default:
+        throw MissingPluginException('No handler for ${call.method}');
+    }
   }
 
   Future<void> _startForegroundService() async {

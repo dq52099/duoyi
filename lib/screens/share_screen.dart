@@ -31,25 +31,40 @@ class _ShareScreenState extends State<ShareScreen> {
     final auth = context.watch<AuthProvider>();
     final provider = context.watch<ShareProvider>();
     final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
 
     if (!auth.state.isLoggedIn) {
       return Scaffold(
-        appBar: AppBar(title: const Text('共享空间')),
-        body: EmptyState(
-          icon: Icons.group_outlined,
-          message: '登录后可以创建共享空间并邀请成员',
-          actionLabel: '登录',
-          onAction: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+        backgroundColor: routeBackground,
+        appBar: AppBar(
+          title: const Text('共享空间'),
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+          backgroundColor: routeBackground.withValues(alpha: 0.96),
+          surfaceTintColor: Colors.transparent,
+        ),
+        body: AppSecondaryControlTheme(
+          child: EmptyState(
+            icon: Icons.group_outlined,
+            message: '登录后可以创建共享空间并邀请成员',
+            actionLabel: '登录',
+            onAction: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+            ),
           ),
         ),
       );
     }
 
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
         title: const Text('共享空间'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
         actions: [
           _MentionInboxButton(
             unreadCount: provider.unreadMentionCount,
@@ -67,90 +82,95 @@ class _ShareScreenState extends State<ShareScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => provider.load(),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              gradient: LinearGradient(
-                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(Icons.group_outlined, color: cs.primary),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '共享空间',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w400),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '创建空间后，把待办清单共享给家人、朋友或团队成员。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: () => _createWorkspace(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('新建'),
-                  ),
-                ],
-              ),
-            ),
-            if (provider.lastError != null) ...[
-              const SizedBox(height: 12),
+      body: AppSecondaryControlTheme(
+        child: RefreshIndicator(
+          onRefresh: () => provider.load(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+            children: [
               AppSurfaceCard(
-                padding: const EdgeInsets.all(12),
-                border: Border.all(color: cs.error.withValues(alpha: 0.32)),
-                child: Text(
-                  provider.lastError!,
-                  style: TextStyle(color: cs.error),
+                padding: const EdgeInsets.all(16),
+                gradient: LinearGradient(
+                  colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.group_outlined, color: cs.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '共享空间',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w400),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '创建空间后，把待办清单共享给家人、朋友或团队成员。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.66),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _createWorkspace(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('新建'),
+                    ),
+                  ],
                 ),
               ),
-            ],
-            const AppSectionHeader(
-              title: '我的空间',
-              subtitle: '拥有者可邀请成员，viewer 只读，editor 可编辑',
-            ),
-            if (provider.loading)
-              const Padding(
-                padding: EdgeInsets.all(28),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (provider.workspaces.isEmpty)
-              EmptyState(
-                icon: Icons.group_add_outlined,
-                message: '还没有共享空间',
-                actionLabel: '创建空间',
-                onAction: () => _createWorkspace(context),
-              )
-            else
-              ...provider.workspaces.map(
-                (workspace) => _WorkspaceCard(workspace: workspace),
+              if (provider.lastError != null) ...[
+                const SizedBox(height: 12),
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(12),
+                  border: Border.all(
+                    color: cs.error.withValues(alpha: 0.32),
+                    width: 0.45,
+                  ),
+                  child: Text(
+                    provider.lastError!,
+                    style: TextStyle(color: cs.error),
+                  ),
+                ),
+              ],
+              const AppSectionHeader(
+                title: '我的空间',
+                subtitle: '拥有者可邀请成员，viewer 只读，editor 可编辑',
               ),
-          ],
+              if (provider.loading)
+                const Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (provider.workspaces.isEmpty)
+                EmptyState(
+                  icon: Icons.group_add_outlined,
+                  message: '还没有共享空间',
+                  actionLabel: '创建空间',
+                  onAction: () => _createWorkspace(context),
+                )
+              else
+                ...provider.workspaces.map(
+                  (workspace) => _WorkspaceCard(workspace: workspace),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -421,7 +441,7 @@ class _WorkspaceCard extends StatelessWidget {
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      border: Border.all(color: color.withValues(alpha: 0.18)),
+      border: Border.all(color: color.withValues(alpha: 0.18), width: 0.45),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -752,7 +772,10 @@ class _MentionContextBlock extends StatelessWidget {
     return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
       color: cs.primary.withValues(alpha: 0.06),
-      border: Border.all(color: cs.primary.withValues(alpha: 0.22)),
+      border: Border.all(
+        color: cs.primary.withValues(alpha: 0.22),
+        width: 0.45,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -936,7 +959,10 @@ class _MemberChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1014,13 +1040,13 @@ class _WorkspaceMemberAvatar extends StatelessWidget {
     return Tooltip(
       message: '${_memberName(member)} · ${member.role.label}',
       child: Container(
-        padding: EdgeInsets.all(showRoleRing ? 2 : 1),
+        padding: EdgeInsets.all(showRoleRing ? 1.5 : 1),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: cs.surface,
           border: Border.all(
             color: showRoleRing ? ringColor : cs.surface,
-            width: showRoleRing ? 1.5 : 1,
+            width: 0.5,
           ),
           boxShadow: [
             BoxShadow(
@@ -1073,7 +1099,7 @@ class _IdentityAvatar extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: cs.surface,
-          border: Border.all(color: cs.surface),
+          border: Border.all(color: cs.surface, width: 0.45),
         ),
         child: CircleAvatar(
           radius: radius,
@@ -1109,7 +1135,10 @@ class _RankBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: highlighted ? Colors.amber.shade100 : cs.primaryContainer,
         shape: BoxShape.circle,
-        border: Border.all(color: cs.surface, width: 1.5),
+        border: Border.all(
+          color: cs.surface.withValues(alpha: 0.86),
+          width: 0.45,
+        ),
       ),
       child: Text(
         '$rank',
@@ -1136,7 +1165,7 @@ class _ExtraMemberAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: cs.surface,
-        border: Border.all(color: cs.surface),
+        border: Border.all(color: cs.surface, width: 0.45),
       ),
       child: CircleAvatar(
         radius: 14,

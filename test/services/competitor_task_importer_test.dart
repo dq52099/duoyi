@@ -206,7 +206,7 @@ void main() {
   });
 
   test(
-    'CompetitorTaskImporter supports mixed tasks, habits, notes, events and date modules',
+    'CompetitorTaskImporter supports mixed tasks, habits, notes, events and date modules with countdown creation',
     () {
       final source = File(
         'lib/services/competitor_task_importer.dart',
@@ -232,6 +232,18 @@ void main() {
       expect(source, contains('CountdownItem? _countdownFromMap('));
     },
   );
+
+  test('CompetitorTaskImporter parses explicit countdown rows', () {
+    final result = const CompetitorTaskImporter().parse(
+      'type,title,date\ncountdown,考试,2026-06-01\n',
+    );
+
+    expect(result.totalImported, 1);
+    expect(result.skippedRows, 0);
+    expect(result.warnings, isEmpty);
+    expect(result.countdowns.single.title, '考试');
+    expect(result.countdowns.single.targetDate, DateTime(2026, 6, 1));
+  });
 
   test('CompetitorTaskImporter parses time entries from CSV', () {
     const csv =

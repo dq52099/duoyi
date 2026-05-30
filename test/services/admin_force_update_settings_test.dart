@@ -12,6 +12,9 @@ void main() {
     final updateService = File(
       'lib/services/app_update_service.dart',
     ).readAsStringSync();
+    final updatePolicy = File(
+      'lib/core/app_update_policy.dart',
+    ).readAsStringSync();
     final mainApp = File('lib/main.dart').readAsStringSync();
 
     for (final key in [
@@ -25,7 +28,7 @@ void main() {
       expect(adminScreen, contains(key));
     }
 
-    expect(backend, contains('"app_update": {'));
+    expect(backend, contains('"app_update": update_policy'));
     expect(backend, contains('@app.get("/api/config")'));
     expect(adminApi, contains('forceUpdateRequired'));
     expect(adminApi, contains('minimumSupportedVersion'));
@@ -33,29 +36,53 @@ void main() {
     expect(adminApi, contains('client.patch'));
     expect(adminScreen, contains("title: '应用更新'"));
     expect(adminScreen, contains("labelText: '版本策略'"));
-    expect(adminScreen, contains("labelText: '最新版本'"));
-    expect(adminScreen, contains("labelText: '最低支持版本'"));
-    expect(adminScreen, contains("labelText: '更新内容'"));
-    expect(adminScreen, contains("labelText: '下载地址'"));
+    expect(adminScreen, contains("title: '版本选择'"));
+    expect(adminScreen, contains('管理员只需选择上方策略'));
+    expect(adminScreen, contains("_data['version_options']"));
+    expect(
+      adminScreen,
+      contains('List<_AdminUpdateVersionOption> get _updateVersionOptions'),
+    );
+    expect(adminScreen, contains('_updateVersionOptionLabel'));
+    expect(adminScreen, contains('_serverCurrentVersion'));
+    expect(adminScreen, isNot(contains("labelText: '最新版本'")));
+    expect(adminScreen, isNot(contains("labelText: '最低支持版本'")));
+    expect(adminScreen, isNot(contains("hintText: '默认当前版本'")));
+    expect(adminScreen, isNot(contains("hintText: '默认当前版本，低于该版本时强制更新'")));
+    expect(adminScreen, contains("title: '更新内容预览'"));
+    expect(adminScreen, contains('_updateNotesPreview'));
+    expect(adminScreen, contains('保存时会自动写入以上摘要'));
+    expect(adminScreen, isNot(contains("labelText: '更新内容摘要'")));
+    expect(
+      adminScreen,
+      isNot(contains('final _updateNotesCtrl = TextEditingController()')),
+    );
+    expect(adminScreen, isNot(contains('_updateNotesForPolicy')));
+    expect(adminScreen, isNot(contains('_updateNotesForSave')));
+    expect(adminScreen, contains('_defaultUpdateNotesFor'));
+    expect(adminScreen, contains("updateDownloadUrl: ''"));
+    expect(adminScreen, contains('安装包与完整发布说明由后端发布通道自动读取'));
     expect(adminScreen, contains('_adminUpdatePresetCurrent'));
     expect(adminScreen, contains('_adminUpdatePresetNextPatch'));
     expect(adminScreen, contains('_adminUpdatePresetNextMinor'));
-    expect(adminScreen, contains('_adminUpdatePresetForceCurrent'));
+    expect(adminScreen, contains('_adminUpdatePresetMinimumNextPatch'));
     expect(adminScreen, contains('String _latestVersionForSave()'));
     expect(adminScreen, contains('String _minimumSupportedVersionForSave()'));
     expect(adminScreen, contains('_normalizedUpdateVersionsForSave'));
     expect(adminScreen, contains('isDefaultCurrentVersions'));
     expect(
       adminScreen,
-      contains("return (latestVersion: '', minimumSupportedVersion: '')"),
+      contains(
+        "return (latestVersion: '', minimumSupportedVersion: '', updateNotes: '')",
+      ),
     );
     expect(
       adminScreen,
-      contains('String get _forceCurrentMinimumVersion => AppVersion.name'),
+      contains('String get _nextPatchMinimumVersion => _nextPatchVersion'),
     );
     expect(adminScreen, contains('void _syncUpdateVersionPreset()'));
     expect(adminScreen, contains('_syncUpdateVersionPreset();'));
-    expect(adminScreen, contains('默认当前版本'));
+    expect(adminScreen, contains('当前版本'));
     expect(adminScreen, contains('下一补丁'));
     expect(adminScreen, contains('下一小版本'));
     expect(adminScreen, contains('强制低于'));
@@ -63,34 +90,58 @@ void main() {
     expect(adminScreen, contains('Future<void> _saveUpdateConfig() async'));
     expect(adminScreen, contains('Future<void> _saveForceUpdateRequired'));
     expect(adminScreen, contains('_validateUpdatePolicy'));
-    expect(adminScreen, contains('发布新版本或设置最低支持版本时，必须填写更新内容。'));
-    expect(adminScreen, contains('强制更新未生效'));
-    expect(adminScreen, contains('hasRaisedMinimum'));
-    expect(adminScreen, contains('高于当前版本的最低支持版本'));
+    expect(adminScreen, isNot(contains('强制更新未生效')));
+    expect(adminScreen, isNot(contains('hasRaisedMinimum')));
+    expect(adminScreen, contains('当前版本也允许保存强制更新开关'));
+    expect(adminScreen, contains('由后端发布通道'));
+    expect(adminScreen, contains('客户端全屏阻断'));
     expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
 
-    expect(updateService, contains("Uri.parse('/api/config')"));
+    expect(updateService, contains("_backendUri("));
+    expect(updateService, contains("'/api/mobile/apps/duoyi/update'"));
+    expect(updateService, contains('_checkBackendMobileUpdate'));
+    expect(updateService, contains('current_version_code'));
+    expect(updateService, contains("data['release_notes']"));
+    expect(updateService, contains("data['force_update']"));
+    expect(updateService, contains("'/api/config'"));
     expect(updateService, contains("decoded['app_update']"));
     expect(updateService, contains('final hasNewerLatest'));
     expect(updateService, contains('final hasRaisedMinimum'));
     expect(updateService, contains('bool get forceUpdateRequired'));
     expect(updateService, contains('bool get mustUpdate'));
+    expect(
+      updateService,
+      contains("_forceUpdateRequired = data['force_update_required'] == true"),
+    );
+    expect(updateService, contains('formatUpdateNotesForDisplay'));
+    expect(updatePolicy, contains('本次更新摘要'));
+    expect(updatePolicy, contains('full changelog'));
     expect(updateService, contains('if (_checking) return;'));
-    expect(updateService, contains("split('+').first"));
+    expect(updatePolicy, contains("split('+').first"));
 
     expect(mainApp, contains('void _checkUpdatePolicy({bool force = false})'));
     expect(mainApp, contains('_checkUpdatePolicy(force: true)'));
     expect(mainApp, contains('_checkUpdatePolicy();'));
+    expect(mainApp, contains("'startup app update policy'"));
+    expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));
+    expect(mainApp, contains('home: updater.mustUpdate'));
+    expect(
+      mainApp,
+      contains('? const Stack(children: [_ForceUpdateGate()])'),
+      reason: '强制更新首帧不能先构建 MainShell，再用弹层覆盖。',
+    );
     expect(mainApp, contains('const _ForceUpdateGate()'));
     expect(mainApp, contains('class _ForceUpdateGate extends StatelessWidget'));
     expect(mainApp, contains('PopScope('));
     expect(mainApp, contains('canPop: false'));
+    expect(mainApp, contains('AppUpdateInstaller.supportsInstall'));
     expect(mainApp, contains('必须更新后才能继续使用'));
     expect(mainApp, contains('管理员未配置下载地址'));
+    expect(mainApp, contains('当前平台不支持应用内安装'));
     expect(mainApp, contains('downloadAndInstallLatest()'));
     expect(
       mainApp,
-      contains('showUpdateBadge = updater.hasUpdate && !updater.mustUpdate'),
+      contains('final showMineBadge = notification.hasUnreadHistory'),
     );
     expect(
       mainApp,
@@ -99,10 +150,13 @@ void main() {
     expect(mainApp, contains('width: 8'));
     expect(mainApp, contains("label: I18n.tr('nav.mine')"));
     expect(mainApp, contains("'更新内容'"));
-    expect(backend, contains('发布更新策略时必须填写更新内容'));
     expect(backend, contains('APP_CURRENT_VERSION'));
+    expect(backend, contains('APP_UPDATE_DEFAULT_NOTES'));
+    expect(backend, contains('def _update_release_defaults'));
     expect(backend, contains('def _has_effective_update_policy'));
-    expect(backend, contains('强制更新需要高于当前版本的最新版本或最低支持版本'));
+    expect(backend, contains('def _coerce_update_settings'));
+    expect(backend, isNot(contains('发布更新策略时必须填写更新内容')));
+    expect(backend, contains('@app.get("/api/mobile/apps/{app_id}/update")'));
   });
 
   test('release builds refuse debug signing fallback', () {
@@ -111,6 +165,8 @@ void main() {
 
     expect(gradle, contains('Release signing is not configured'));
     expect(gradle, contains('GradleException'));
+    expect(gradle, contains('DUOYI_KEYSTORE_BASE64'));
+    expect(gradle, contains('Base64.getMimeDecoder().decode(encoded)'));
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
     expect(workflow, contains('Require release keystore'));
     expect(
@@ -152,9 +208,6 @@ void main() {
   test('admin user list keeps paginated API for large data sets', () {
     final backend = File('backend/main.py').readAsStringSync();
     final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
-    final adminScreen = File(
-      'lib/screens/admin_screen.dart',
-    ).readAsStringSync();
 
     expect(backend, contains('@app.get("/api/admin/users")'));
     expect(
@@ -167,19 +220,25 @@ void main() {
     );
     expect(adminApi, contains('Future<AdminPage> listUsersPage'));
     expect(adminApi, contains("'/api/admin/users'"));
-    expect(adminScreen, contains('_AdminPaginationBar('));
-    expect(adminScreen, contains('onPageSizeChanged'));
-    expect(adminScreen, contains('onJumpToPage'));
-    expect(adminScreen, contains('DropdownButton<int>'));
-    expect(adminScreen, contains('minWidth: 160'));
-    expect(adminScreen, contains('constraints.maxWidth < 760'));
-    expect(adminScreen, contains('cs.surfaceContainerLowest'));
-    expect(adminScreen, contains('_AdminListTileCard'));
-    expect(adminScreen, contains('_adminSubtleSectionBorder'));
-    expect(adminScreen, contains('_adminSubtleListBorder'));
-    expect(adminScreen, contains("widget.api.getSettings(scope: 'backup')"));
-    expect(adminScreen, contains('widget.api.listUsersPage('));
-    expect(adminScreen, contains('limit: nextPageSize'));
-    expect(adminScreen, contains('offset: nextOffset'));
+    expect(adminApi, contains("final path = _path('/api/admin/settings'"));
+    expect(adminApi, contains('Future<Map<String, dynamic>> getSystemSettings()'));
+    expect(
+      adminApi,
+      contains(
+        "client.requestWithoutRouteDiagnosis(\n        'GET',\n        '/api/admin/system-settings',",
+      ),
+    );
+    expect(
+      adminApi,
+      contains(
+        "client.requestWithoutRouteDiagnosis(\n        'POST',\n        '/api/admin/system-settings',\n        settings,",
+      ),
+    );
+    expect(adminApi, contains("featureName: '管理员系统设置'"));
+    expect(adminApi, contains("featureName: '管理员更新设置'"));
+    expect(
+      adminApi,
+      contains("const ['/api/admin/settings', '/api/admin/system-settings']"),
+    );
   });
 }

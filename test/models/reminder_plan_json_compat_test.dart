@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/models/goal.dart';
+import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/todo.dart';
 
 void main() {
@@ -93,6 +94,37 @@ void main() {
       expect(copied.fullScreen, isFalse);
     });
 
+    test('off reminder kind preserves compatibility but disables delivery', () {
+      expect(
+        ReminderKind.off.index,
+        4,
+        reason:
+            'append-only enum value keeps existing saved kind indexes stable',
+      );
+
+      final rule = ReminderRule.fromJson({
+        'id': 'off-rule',
+        'enabled': true,
+        'kind': ReminderKind.off.index,
+        'fullScreen': true,
+      });
+      expect(rule.kind, ReminderKind.off);
+      expect(rule.enabled, isFalse);
+      expect(rule.fullScreen, isFalse);
+
+      final plan = ReminderPlan(enabled: true, rules: [rule]);
+      final legacy = plan.toLegacyReminderConfig();
+      expect(legacy.enabled, isFalse);
+      expect(legacy.kind, ReminderKind.off);
+
+      final config = ReminderConfig.fromJson({
+        'enabled': true,
+        'kind': ReminderKind.off.index,
+      });
+      expect(config.enabled, isFalse);
+      expect(config.kind, ReminderKind.off);
+    });
+
     test(
       'TodoItem and GoalItem persist reminderPlan together with legacy reminder',
       () {
@@ -155,5 +187,57 @@ void main() {
         expect(goalRoundTrip.reminder.kind, ReminderKind.alarm);
       },
     );
+
+    test('Habit persists reminderPlan and migrates legacy habit reminder', () {
+      final plan = ReminderPlan(
+        enabled: true,
+        rules: [
+          ReminderRule(
+            id: 'habit-popup',
+            enabled: true,
+            type: ReminderRuleType.weeklyTime,
+            kind: ReminderKind.popup,
+            hour: 8,
+            minute: 20,
+            weekdays: const [1, 3, 5],
+          ),
+        ],
+      );
+      final habit = Habit(
+        id: 'habit-plan',
+        name: '喝水',
+        remind: true,
+        remindHour: 8,
+        remindMinute: 20,
+        reminderPlan: plan,
+      );
+
+      final json = habit.toJson();
+      expect(json['reminderPlan'], isA<Map<String, dynamic>>());
+      expect(json['remind'], isTrue);
+      expect(json['remindHour'], 8);
+      expect(json['remindMinute'], 20);
+
+      final roundTrip = Habit.fromJson(
+        jsonDecode(jsonEncode(json)) as Map<String, dynamic>,
+      );
+      expect(roundTrip.reminderPlan.toJson(), equals(plan.toJson()));
+
+      final migrated = Habit.fromJson({
+        'id': 'legacy-habit',
+        'name': '阅读',
+        'remind': true,
+        'remindHour': 21,
+        'remindMinute': 30,
+        'activeWeekdays': [0, 2, 4],
+      });
+      expect(migrated.reminderPlan.enabled, isTrue);
+      expect(migrated.reminderPlan.primaryRule?.kind, ReminderKind.alarm);
+      expect(
+        migrated.reminderPlan.primaryRule?.type,
+        ReminderRuleType.weeklyTime,
+      );
+      expect(migrated.reminderPlan.primaryRule?.weekdays, <int>[1, 3, 5]);
+    });
   });
 }

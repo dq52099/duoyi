@@ -15,7 +15,9 @@ import '../models/note.dart' show NoteAttachment, NoteBlock, NoteBlockType;
 import '../models/todo.dart';
 import '../models/workspace.dart';
 import '../services/alarm_service.dart';
+import '../services/local_notifications.dart';
 import '../services/note_attachment_picker.dart';
+import '../services/reminder_scheduler.dart';
 import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/share_provider.dart';
@@ -194,11 +196,24 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       return;
     }
 
+    final nextTodo = _todo.copyWith(
+      title: title,
+      notes: _notesCtrl.text.trim(),
+    );
+    final reminderReady = await preflightTodoReminderSave(
+      context,
+      todo: nextTodo,
+      notificationService: context.read<NotificationService?>(),
+      issueTitle: '待办提醒注册失败',
+    );
+    if (!mounted) return;
+    if (!reminderReady) {
+      setState(() => _state = _EditState.editing);
+      return;
+    }
+
     try {
-      await provider.updateTodo(
-        widget.todoId,
-        _todo.copyWith(title: title, notes: _notesCtrl.text.trim()),
-      );
+      await provider.updateTodo(widget.todoId, nextTodo);
       if (!mounted) return;
 
       // 刷新本地 _todo 引用与基线，便于继续编辑。
@@ -208,6 +223,17 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       );
       _baseline = _snapshot(_todo);
       setState(() => _state = _EditState.clean);
+
+      final issue = context.read<NotificationService?>()?.lastScheduleIssue;
+      if (issue != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${issue.title}：${issue.message}'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
 
       Navigator.of(context).maybePop(true);
     } catch (e) {
@@ -1120,6 +1146,119 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   }
 }
 
+Future<bool> preflightTodoReminderSave(
+  BuildContext context, {
+  required TodoItem todo,
+  NotificationService? notificationService,
+  String issueTitle = '待办提醒注册失败',
+}) async {
+  final result = preflightTodoReminderPlan(todo);
+  if (!result.hasEnabledPlan) return true;
+
+  final messenger = ScaffoldMessenger.of(context);
+  final blocking = result.blockingIssue;
+  if (blocking != null) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${blocking.title}：${blocking.message}'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+    return false;
+  }
+
+  final usesPush = result.kinds.contains(ReminderKind.push);
+  final usesPopup = result.kinds.contains(ReminderKind.popup);
+  final usesAlarm = result.kinds.contains(ReminderKind.alarm);
+  final notif = notificationService ?? context.read<NotificationService?>();
+  if ((usesPush || usesPopup) && notif != null) {
+    final ready = await notif.ensureReadyForReminder(
+      scheduledTime: result.firstScheduledTime,
+      issueTitle: issueTitle,
+      relatedId: todo.id,
+    );
+    if (!context.mounted) return false;
+    if (!ready) {
+      final issue = notif.lastScheduleIssue;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            issue == null
+                ? '$issueTitle：提醒未注册，请检查通知权限、渠道声音和提醒时间。'
+                : '${issue.title}：${issue.message}',
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return false;
+    }
+  }
+
+  if (usesAlarm && !usesPush && !usesPopup) {
+    final notificationGranted = await LocalNotifications.instance
+        .ensurePermission();
+    if (!context.mounted) return false;
+    if (!notificationGranted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('闹钟提醒注册失败：系统通知权限未开启，提醒未注册。请开启通知权限后重新保存提醒。'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return false;
+    }
+  }
+
+  final warnings = <String>[];
+
+  if (usesPush || usesPopup) {
+    final channelIds = await LocalNotifications.instance
+        .notificationChannelIds();
+    if (!context.mounted) return false;
+    if (channelIds != null &&
+        channelIds.isNotEmpty &&
+        !channelIds.contains(NotificationService.channelId)) {
+      warnings.add('普通提醒渠道未就绪，到点可能不会弹出系统通知');
+    }
+  }
+
+  if (usesAlarm) {
+    final alarmChannelIds = await AlarmService.instance
+        .notificationChannelIds();
+    if (!context.mounted) return false;
+    if (alarmChannelIds != null &&
+        alarmChannelIds.isNotEmpty &&
+        !alarmChannelIds.contains(AlarmService.channelId)) {
+      warnings.add('强提醒渠道未就绪，到点可能不会弹出闹钟通知');
+    }
+    final exactGranted = await AlarmService.instance.hasExactAlarmPermission();
+    if (!context.mounted) return false;
+    if (!exactGranted) {
+      warnings.add('精准闹钟权限未开启，闹钟提醒可能延后或降级');
+    }
+    final fullScreenGranted = await AlarmService.instance
+        .hasFullScreenIntentPermission();
+    if (!context.mounted) return false;
+    if (!fullScreenGranted) {
+      warnings.add('全屏提醒权限未开启，锁屏弹窗可能不可用');
+    }
+  }
+
+  if (warnings.isNotEmpty) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$issueTitle：${warnings.join('；')}。'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+  return true;
+}
+
 Future<void> _openSystemSettings(BuildContext context) async {
   final opened = await openAppSettings();
   if (!context.mounted) return;
@@ -1276,7 +1415,10 @@ class _TodoMarkdownDescriptionEditor extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       padding: EdgeInsets.zero,
-      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1727,7 +1869,7 @@ class _AssignmentEditor extends StatelessWidget {
     final selected = members.any((member) => member.userId == assigneeId)
         ? assigneeId!
         : '';
-    return DropdownButtonFormField<String>(
+    return AppDropdownField<String>(
       initialValue: selected,
       decoration: InputDecoration(
         labelText: '负责人',
@@ -1745,9 +1887,9 @@ class _AssignmentEditor extends StatelessWidget {
             ),
           ),
       ],
-      onChanged: enabled
-          ? (value) => onChanged(value!.isEmpty ? null : value)
-          : null,
+      enabled: enabled,
+      onChanged: (value) =>
+          onChanged(value == null || value.isEmpty ? null : value),
     );
   }
 }
@@ -1781,7 +1923,10 @@ class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
-      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

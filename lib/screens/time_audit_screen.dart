@@ -16,7 +16,9 @@ enum _AuditRange { today, week, month, all }
 enum _AuditView { timeline, category, calendar, trend }
 
 class TimeAuditScreen extends StatefulWidget {
-  const TimeAuditScreen({super.key});
+  final String? initialEntryId;
+
+  const TimeAuditScreen({super.key, this.initialEntryId});
 
   @override
   State<TimeAuditScreen> createState() => _TimeAuditScreenState();
@@ -25,10 +27,29 @@ class TimeAuditScreen extends StatefulWidget {
 class _TimeAuditScreenState extends State<TimeAuditScreen> {
   _AuditRange _range = _AuditRange.today;
   _AuditView _view = _AuditView.timeline;
+  bool _openedInitialEntry = false;
+
+  void _openInitialEntryIfNeeded(TimeAuditProvider provider) {
+    if (_openedInitialEntry) return;
+    final id = widget.initialEntryId;
+    if (id == null || id.isEmpty) return;
+    final index = provider.entries.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    _openedInitialEntry = true;
+    if (_range != _AuditRange.all) {
+      _range = _AuditRange.all;
+      _view = _AuditView.timeline;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showEditor(context, entry: provider.entries[index]);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TimeAuditProvider>();
+    _openInitialEntryIfNeeded(provider);
     final entries = _entriesFor(provider);
     final totalSeconds = entries.fold<int>(
       0,

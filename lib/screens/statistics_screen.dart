@@ -3564,7 +3564,10 @@ class _ReportShareCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

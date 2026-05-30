@@ -3,6 +3,46 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
+  test('日历详情拥有独立滚动区域，避免长内容撑高底部弹层', () {
+    final source = File(
+      'lib/widgets/calendar_event_sheet.dart',
+    ).readAsStringSync();
+
+    final sheetStart = source.indexOf('class CalendarEventSheet');
+    final actionsStart = source.indexOf(
+      'List<Widget> _buildActions',
+      sheetStart,
+    );
+    expect(sheetStart, greaterThanOrEqualTo(0));
+    expect(actionsStart, greaterThan(sheetStart));
+    final sheet = source.substring(sheetStart, actionsStart);
+
+    expect(sheet, contains('maxWidth: 860'));
+    expect(sheet, contains('scrollable: false'));
+    expect(
+      sheet,
+      contains("key: const ValueKey('calendar_event_detail_scroll_region')"),
+    );
+    expect(sheet, contains('mainAxisSize: MainAxisSize.min'));
+    expect(sheet, isNot(contains('detailMaxHeight')));
+    expect(sheet, contains('SingleChildScrollView('));
+    expect(sheet, isNot(contains('Scrollbar(')));
+    expect(sheet, isNot(contains('ListView(')));
+    expect(sheet, isNot(contains('shrinkWrap: true')));
+    expect(
+      source,
+      contains('minimumSize: const WidgetStatePropertyAll(Size(0, 34))'),
+    );
+    expect(source, contains('tapTargetSize: MaterialTapTargetSize.shrinkWrap'));
+    expect(source, contains('visualDensity: VisualDensity.compact'));
+    expect(source, contains('appSecondaryControlTextStyle(context)'));
+    expect(source, contains('BrandRouteSurface('));
+    expect(
+      source,
+      contains('const BrandRouteSurface(child: TimeAuditScreen())'),
+    );
+  });
+
   test('日历详情对可回写类型暴露改期和删除动作', () {
     final source = File(
       'lib/widgets/calendar_event_sheet.dart',
@@ -34,6 +74,7 @@ void main() {
     }
 
     for (final type in [
+      'CalendarEventType.countdown',
       'CalendarEventType.course',
       'CalendarEventType.diary',
       'CalendarEventType.habit',
@@ -52,9 +93,6 @@ void main() {
     final anniversary = File(
       'lib/screens/anniversary_screen.dart',
     ).readAsStringSync();
-    final countdown = File(
-      'lib/screens/countdown_screen.dart',
-    ).readAsStringSync();
     final course = File(
       'lib/screens/course_schedule_screen.dart',
     ).readAsStringSync();
@@ -65,6 +103,7 @@ void main() {
 
     expect(sheet, contains("import '../screens/anniversary_screen.dart';"));
     expect(sheet, contains("import '../screens/countdown_screen.dart';"));
+    expect(sheet, contains("import '../providers/countdown_provider.dart';"));
     expect(sheet, contains("import '../screens/course_schedule_screen.dart';"));
     expect(sheet, contains("import '../screens/diary_screen.dart';"));
     expect(sheet, contains("import '../screens/habit_detail_screen.dart';"));
@@ -77,6 +116,15 @@ void main() {
     expect(
       sheet,
       contains('showCountdownEditor(navigationContext, item: item)'),
+    );
+    expect(sheet, contains('CountdownScreen(initialCountdownId: sourceId)'));
+    expect(
+      sheet,
+      contains('context.read<CountdownProvider>().deleteItem(sourceId)'),
+    );
+    expect(
+      sheet,
+      contains('await provider.updateItem(item.copyWith(targetDate: picked))'),
     );
     expect(
       sheet,
@@ -99,9 +147,10 @@ void main() {
     );
 
     expect(anniversary, contains('Future<void> showAnniversaryEditor'));
-    expect(anniversary, contains('_AnniversaryEditSheet(editing: item)'));
-    expect(countdown, contains('Future<void> showCountdownEditor'));
-    expect(countdown, contains('_CountdownEditSheet(item: item)'));
+    expect(
+      anniversary,
+      contains('_AnniversaryEditSheet(editing: item, fixedType: editorType)'),
+    );
     expect(course, contains('Future<void> showCourseEditor'));
     expect(
       course,

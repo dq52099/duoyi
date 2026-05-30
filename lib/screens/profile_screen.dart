@@ -15,15 +15,27 @@ import '../services/api_client.dart';
 import '../widgets/surface_components.dart';
 import 'login_screen.dart';
 
+const double _profileActionButtonHeight = 30;
+const double _profileActionButtonWidth = 58;
+const double _profileLongActionButtonWidth = 72;
+
+double _profileInlineActionWidth(BuildContext context) {
+  return MediaQuery.sizeOf(context).width < 360
+      ? _profileActionButtonWidth
+      : _profileLongActionButtonWidth;
+}
+
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  final bool openAvatarSheetOnStart;
+
+  const ProfileScreen({super.key, this.openAvatarSheetOnStart = false});
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     return auth.state.isLoggedIn
-        ? const _AccountProfileEditor()
-        : const _LocalProfileEditor();
+        ? _AccountProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart)
+        : _LocalProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart);
   }
 }
 
@@ -125,68 +137,169 @@ class _ProfileActionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: field),
-        const SizedBox(width: 12),
-        SizedBox(width: 112, height: 56, child: action),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: _profileInlineActionWidth(context),
+          height: _profileActionButtonHeight,
+          child: action,
+        ),
       ],
     );
   }
 }
 
-class _ProfileAvatarPicker extends StatelessWidget {
-  final Widget child;
+class _ProfileAvatarEditBadge extends StatelessWidget {
   final bool busy;
-  final VoidCallback? onTap;
-  final String tooltip;
 
-  const _ProfileAvatarPicker({
+  const _ProfileAvatarEditBadge({required this.busy});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: cs.primary,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: cs.surface.withValues(alpha: 0.90),
+          width: 0.45,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.16),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: busy
+          ? const Padding(
+              padding: EdgeInsets.all(6),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Icon(Icons.edit_outlined, color: cs.onPrimary, size: 14),
+    );
+  }
+}
+
+class _ProfileAvatarWithEdit extends StatelessWidget {
+  final Widget child;
+  final double size;
+  final bool busy;
+  final VoidCallback? onPreview;
+  final VoidCallback? onEdit;
+
+  const _ProfileAvatarWithEdit({
     required this.child,
+    required this.size,
     required this.busy,
-    required this.onTap,
-    required this.tooltip,
+    required this.onPreview,
+    required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: busy ? null : onTap,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              child,
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: cs.surface, width: 2),
-                  ),
-                  child: busy
-                      ? Padding(
-                          padding: const EdgeInsets.all(5),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onPrimary,
-                          ),
-                        )
-                      : Icon(
-                          Icons.photo_camera_outlined,
-                          size: 13,
-                          color: cs.onPrimary,
-                        ),
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Tooltip(
+              message: '查看头像',
+              child: Semantics(
+                button: true,
+                label: '查看头像',
+                child: InkWell(
+                  key: const ValueKey('profile_avatar_preview_button'),
+                  customBorder: const CircleBorder(),
+                  onTap: busy ? null : onPreview,
+                  child: Center(child: child),
                 ),
               ),
-            ],
+            ),
+          ),
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: Tooltip(
+              message: '修改头像',
+              child: Semantics(
+                button: true,
+                label: '修改头像',
+                child: SizedBox.square(
+                  key: const ValueKey('profile_avatar_edit_button'),
+                  dimension: 44,
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: busy ? null : onEdit,
+                      child: Center(child: _ProfileAvatarEditBadge(busy: busy)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (busy)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cs.surface.withValues(alpha: 0.54),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileAvatarFullScreen extends StatelessWidget {
+  final String? avatar;
+  final String displayName;
+
+  const _ProfileAvatarFullScreen({
+    required this.avatar,
+    required this.displayName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: appSecondaryRouteTitleTextStyle(
+          context,
+        ).copyWith(color: Colors.white),
+        title: const Text('头像'),
+      ),
+      body: Center(
+        child: Hero(
+          tag: 'profile-avatar-preview',
+          child: _ProfileAvatarFullImage(
+            avatar: avatar,
+            displayName: displayName,
           ),
         ),
       ),
@@ -194,79 +307,429 @@ class _ProfileAvatarPicker extends StatelessWidget {
   }
 }
 
-class _ProfileAvatarSheet extends StatelessWidget {
+class _ProfileAvatarFullImage extends StatelessWidget {
   final String? avatar;
   final String displayName;
-  final bool busy;
-  final VoidCallback? onChangeAvatar;
-  final VoidCallback? onSave;
 
-  const _ProfileAvatarSheet({
+  const _ProfileAvatarFullImage({
     required this.avatar,
     required this.displayName,
-    required this.busy,
-    required this.onChangeAvatar,
-    required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AppModalSheet(
-      title: '头像',
-      subtitle: '查看当前头像，或更换后保存到资料',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: _ProfileAvatarPreview(
-              avatar: avatar,
-              displayName: displayName,
-              radius: 84,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: busy || onChangeAvatar == null
-                      ? null
-                      : onChangeAvatar,
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('更换头像'),
-                ),
+    final value = avatar?.trim() ?? '';
+    final uri = Uri.tryParse(value);
+    final isUrl =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final localPath = _localAvatarPath(value);
+    final image = isUrl
+        ? Image.network(
+            value,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => _fallbackAvatar(context),
+          )
+        : localPath != null
+        ? Image.file(
+            File(localPath),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => _fallbackAvatar(context),
+          )
+        : null;
+
+    return SizedBox.expand(
+      child: InteractiveViewer(
+        minScale: 0.8,
+        maxScale: 4,
+        child: Center(child: image ?? _fallbackAvatar(context)),
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final radius = (size.shortestSide * 0.28).clamp(84.0, 150.0);
+    final fallback = (avatar?.trim().isNotEmpty ?? false)
+        ? avatar!.trim()
+        : displayName;
+    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      child: _ProfileAvatarLetter(
+        letter: letter,
+        radius: radius,
+        color: Theme.of(context).colorScheme.onPrimary,
+      ),
+    );
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final current = _currentCtrl.text;
+    final next = _newCtrl.text;
+    final confirm = _confirmCtrl.text;
+    if (current.isEmpty) {
+      setState(() => _error = I18n.tr('profile.current_password'));
+      return;
+    }
+    if (next.length < 6) {
+      setState(() => _error = I18n.tr('auth.error.new_password_short'));
+      return;
+    }
+    if (next != confirm) {
+      setState(() => _error = I18n.tr('auth.error.new_password_mismatch'));
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthProvider>().changePassword(
+        currentPassword: current,
+        newPassword: next,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialog(
+      title: Text(I18n.tr('profile.change_password')),
+      icon: const Icon(Icons.lock_reset_outlined),
+      content: AppSecondaryControlTheme(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _currentCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: I18n.tr('profile.current_password'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: busy || onSave == null ? null : onSave,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(I18n.tr('action.save')),
-                ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _newCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: I18n.tr('auth.new_password'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _confirmCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: I18n.tr('profile.confirm_new_password'),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.error_outline,
+                title: I18n.tr('profile.save_failed'),
+                message: _error!,
+                color: Theme.of(context).colorScheme.error,
+                margin: EdgeInsets.zero,
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: busy ? null : () => Navigator.pop(context),
-            child: Text(I18n.tr('action.close')),
-          ),
-          Text(
-            '用户名和账号标识不会随头像保存而改变',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.58),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        SizedBox(
+          width: _profileActionButtonWidth,
+          height: _profileActionButtonHeight,
+          child: FilledButton(
+            onPressed: _saving ? null : _submit,
+            style: appSecondaryFilledButtonStyle(context),
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(I18n.tr('action.save'), maxLines: 1),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmailBindingDialog extends StatefulWidget {
+  final String initialEmail;
+
+  const _EmailBindingDialog({required this.initialEmail});
+
+  @override
+  State<_EmailBindingDialog> createState() => _EmailBindingDialogState();
+}
+
+class _EmailBindingDialogState extends State<_EmailBindingDialog> {
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _emailCodeCtrl;
+  bool _sending = false;
+  bool _binding = false;
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: widget.initialEmail);
+    _emailCodeCtrl = TextEditingController();
+    _emailCtrl.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _cooldownTimer?.cancel();
+    _emailCtrl.removeListener(_refresh);
+    _emailCtrl.dispose();
+    _emailCodeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    setState(() => _cooldownSeconds = 60);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_cooldownSeconds <= 1) {
+        timer.cancel();
+        setState(() => _cooldownSeconds = 0);
+      } else {
+        setState(() => _cooldownSeconds -= 1);
+      }
+    });
+  }
+
+  Future<void> _sendEmailCode() async {
+    if (_sending || _binding || _cooldownSeconds > 0) return;
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = I18n.tr('auth.error.email_required'));
+      return;
+    }
+    if (!_looksLikeEmail(email)) {
+      setState(() => _error = I18n.tr('auth.error.email_invalid'));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final result = await context.read<AuthProvider>().sendBindEmailCode(
+        email: email,
+      );
+      final devCode = (result['dev_code'] ?? '').toString();
+      final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
+          .toString();
+      if (!mounted) return;
+      _startCooldown();
+      setState(() {
+        _message = devCode.isEmpty
+            ? message
+            : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
+      });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _bindEmail() async {
+    if (_sending || _binding) return;
+    final email = _emailCtrl.text.trim();
+    final code = _emailCodeCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = I18n.tr('auth.error.email_required'));
+      return;
+    }
+    if (!_looksLikeEmail(email)) {
+      setState(() => _error = I18n.tr('auth.error.email_invalid'));
+      return;
+    }
+    if (code.isEmpty) {
+      setState(() => _error = I18n.tr('auth.error.email_code_required'));
+      return;
+    }
+    setState(() {
+      _binding = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await context.read<AuthProvider>().bindEmail(email: email, code: code);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _binding = false);
+    }
+  }
+
+  Widget _sendButton(BuildContext context) {
+    final email = _emailCtrl.text.trim();
+    final canSend = email.isNotEmpty && _looksLikeEmail(email);
+    return SizedBox(
+      height: _profileActionButtonHeight,
+      child: FilledButton(
+        onPressed: (_sending || _binding || _cooldownSeconds > 0 || !canSend)
+            ? null
+            : _sendEmailCode,
+        style: appSecondaryFilledButtonStyle(context),
+        child: _sending
+            ? const SizedBox.square(
+                dimension: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _cooldownSeconds > 0
+                      ? '${_cooldownSeconds}s'
+                      : I18n.tr('auth.send'),
+                  maxLines: 1,
+                ),
+              ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialog(
+      title: Text(I18n.tr('profile.email.binding')),
+      icon: const Icon(Icons.alternate_email_outlined),
+      content: AppSecondaryControlTheme(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: I18n.tr('auth.email'),
+                prefixIcon: const Icon(Icons.mail_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _ProfileActionField(
+              field: TextField(
+                controller: _emailCodeCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('auth.email_code'),
+                  helperText: I18n.tr('profile.email_code.helper'),
+                ),
+              ),
+              action: _sendButton(context),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.check_circle_outline,
+                title: I18n.tr('profile.saved'),
+                message: _message!,
+                color: Colors.green,
+                margin: EdgeInsets.zero,
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.error_outline,
+                title: I18n.tr('profile.save_failed'),
+                message: _error!,
+                color: Theme.of(context).colorScheme.error,
+                margin: EdgeInsets.zero,
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: (_sending || _binding)
+              ? null
+              : () => Navigator.pop(context, false),
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        SizedBox(
+          width: _profileLongActionButtonWidth,
+          height: _profileActionButtonHeight,
+          child: FilledButton(
+            onPressed: (_sending || _binding) ? null : _bindEmail,
+            style: appSecondaryFilledButtonStyle(context),
+            child: _binding
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(I18n.tr('profile.email.binding')),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -293,11 +756,22 @@ class _ProfileMetricChip extends StatelessWidget {
           color: cs.primaryContainer.withValues(alpha: 0.52),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
-          '$label $value',
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: cs.onPrimaryContainer),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: cs.onPrimaryContainer),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                '$label $value',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: cs.onPrimaryContainer),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -343,7 +817,9 @@ class _ProfileSectionHeader extends StatelessWidget {
 }
 
 class _AccountProfileEditor extends StatefulWidget {
-  const _AccountProfileEditor();
+  final bool openAvatarSheetOnStart;
+
+  const _AccountProfileEditor({this.openAvatarSheetOnStart = false});
 
   @override
   State<_AccountProfileEditor> createState() => _AccountProfileEditorState();
@@ -379,6 +855,11 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       _bioCtrl,
     ]) {
       controller.addListener(_handleProfileFieldChanged);
+    }
+    if (widget.openAvatarSheetOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _uploadAvatar();
+      });
     }
   }
 
@@ -496,15 +977,20 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         }
         return;
       }
+      if (bytes.length > 3 * 1024 * 1024) {
+        if (mounted) {
+          setState(() => _error = I18n.tr('profile.avatar.too_large'));
+        }
+        return;
+      }
       await auth.uploadAvatarBytes(filename: file.name, bytes: bytes);
       final state = auth.state;
       _applyUploadedAvatar(state);
       await userProvider.updateProfile(
         username: _firstNonEmptyProfileText([
-          state.displayName,
           state.username,
-          _displayNameCtrl.text,
           _usernameCtrl.text,
+          userProvider.profile.username,
         ]),
         displayName: state.displayName ?? '',
         email: state.email ?? '',
@@ -523,8 +1009,8 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     }
   }
 
-  Future<void> _showAvatarSheet() async {
-    if (_busy) return;
+  void _showAvatarPreview() {
+    if (_busy || _avatarBusy) return;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
@@ -532,42 +1018,67 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       context.read<AuthProvider>().state.username,
       I18n.tr('profile.default_user'),
     ]);
-    await showAppModalSheet<void>(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          return _ProfileAvatarSheet(
-            avatar: _avatarCtrl.text.trim().isEmpty
-                ? context.read<AuthProvider>().state.avatar
-                : _avatarCtrl.text.trim(),
-            displayName: displayName,
-            busy: _avatarBusy || _busy,
-            onChangeAvatar: () async {
-              await _uploadAvatar();
-              setSheetState(() {});
-            },
-            onSave: () async {
-              await _save();
-              if (!sheetContext.mounted) return;
-              Navigator.pop(sheetContext);
-            },
-          );
-        },
+    final avatar = _avatarCtrl.text.trim().isEmpty
+        ? context.read<AuthProvider>().state.avatar
+        : _avatarCtrl.text.trim();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _ProfileAvatarFullScreen(avatar: avatar, displayName: displayName),
       ),
     );
   }
 
+  Future<void> _showChangePasswordDialog() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _ChangePasswordDialog(),
+    );
+    if (!mounted || changed != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(I18n.tr('profile.password.updated'))),
+    );
+  }
+
+  Future<void> _showEmailBindingDialog() async {
+    if (_busy || _avatarBusy) return;
+    final auth = context.read<AuthProvider>();
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _EmailBindingDialog(initialEmail: auth.state.email ?? ''),
+    );
+    if (!mounted || updated != true) return;
+    final userProvider = context.read<UserProvider>();
+    final state = auth.state;
+    if (_hasLocalProfileEdits) {
+      _lastAccountSnapshot = _accountProfileSnapshot(state);
+      _refreshPreview();
+    } else {
+      _applyAccountState(state);
+    }
+    await userProvider.updateProfile(
+      username: _firstNonEmptyProfileText([
+        state.username,
+        userProvider.profile.username,
+      ]),
+      displayName: state.displayName ?? '',
+      email: state.email ?? '',
+      emailVerified: state.emailVerified,
+      avatarUrl: state.avatar ?? '',
+      bio: state.bio ?? '',
+    );
+    if (!mounted) return;
+    setState(() {
+      _error = null;
+      _message = I18n.tr('profile.updated');
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
+  }
+
   Future<void> _save() async {
     if (_busy || _avatarBusy) return;
-    final username = _usernameCtrl.text.trim();
-    if (username.length < 3 || username.length > 64) {
-      setState(() => _error = I18n.tr('auth.error.username_length'));
-      return;
-    }
-    if (RegExp(r'\s').hasMatch(username)) {
-      setState(() => _error = I18n.tr('auth.error.username_no_space'));
-      return;
-    }
     setState(() {
       _busy = true;
       _error = null;
@@ -582,14 +1093,12 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       );
       final state = auth.state;
       _applyAccountState(state);
-      final localName = _firstNonEmptyProfileText([
-        state.displayName,
-        state.username,
-        _displayNameCtrl.text,
-        _usernameCtrl.text,
-      ]);
       await userProvider.updateProfile(
-        username: localName,
+        username: _firstNonEmptyProfileText([
+          state.username,
+          _usernameCtrl.text,
+          userProvider.profile.username,
+        ]),
         displayName: state.displayName ?? '',
         email: state.email ?? '',
         emailVerified: state.emailVerified,
@@ -610,6 +1119,30 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     }
   }
 
+  Widget _saveButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: SizedBox(
+        width: _profileActionButtonWidth,
+        height: _profileActionButtonHeight,
+        child: FilledButton(
+          onPressed: (_busy || _avatarBusy) ? null : _save,
+          style: appSecondaryFilledButtonStyle(context),
+          child: _busy
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(I18n.tr('action.save'), maxLines: 1),
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AuthProvider>().state;
@@ -623,34 +1156,31 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       state.username,
     ]);
     final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
 
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('profile.title')),
-        actions: [
-          TextButton(
-            onPressed: _busy || _avatarBusy ? null : _save,
-            child: _busy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(I18n.tr('action.save')),
-          ),
-        ],
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+        actions: [_saveButton(context)],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                _ProfileAvatarPicker(
+                _ProfileAvatarWithEdit(
+                  size: 76,
                   busy: _avatarBusy,
-                  tooltip: '查看或编辑头像',
-                  onTap: _showAvatarSheet,
+                  onPreview: _showAvatarPreview,
+                  onEdit: _uploadAvatar,
                   child: Container(
                     width: 76,
                     height: 76,
@@ -667,12 +1197,15 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                               colors: avatarFrame.colors,
                             ),
                           ),
-                    child: _ProfileAvatarPreview(
-                      avatar: _avatarCtrl.text.trim().isEmpty
-                          ? state.avatar
-                          : _avatarCtrl.text.trim(),
-                      displayName: displayName.isEmpty ? '我' : displayName,
-                      radius: 36,
+                    child: Hero(
+                      tag: 'profile-avatar-preview',
+                      child: _ProfileAvatarPreview(
+                        avatar: _avatarCtrl.text.trim().isEmpty
+                            ? state.avatar
+                            : _avatarCtrl.text.trim(),
+                        displayName: displayName.isEmpty ? '我' : displayName,
+                        radius: 36,
+                      ),
                     ),
                   ),
                 ),
@@ -685,13 +1218,17 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                         displayName.isEmpty
                             ? I18n.tr('profile.display_name.empty')
                             : displayName,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryRouteTitleTextStyle(context),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         state.email?.isNotEmpty == true
                             ? '${state.email}${state.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
                             : I18n.tr('profile.email.unbound'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.62),
                         ),
@@ -722,69 +1259,85 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             ),
           ),
           const SizedBox(height: 12),
-          AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _displayNameCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.nickname'),
+          AppSecondaryControlTheme(
+            child: AppSurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _displayNameCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.nickname'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _usernameCtrl,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.username'),
-                    helperText: I18n.tr('profile.username.locked'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _usernameCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('auth.username'),
+                      helperText: I18n.tr('profile.username.locked'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ProfileSectionHeader(
-                  icon: Icons.alternate_email_outlined,
-                  title: I18n.tr('profile.email.binding'),
-                  subtitle: state.emailVerified
-                      ? I18n.tr('profile.email.verified')
-                      : I18n.tr('profile.email.unverified_or_pending'),
-                ),
-                const SizedBox(height: 12),
-                AppListTileCard(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.mail_outline),
-                  title: Text(
-                    state.email?.isNotEmpty == true
-                        ? state.email!
-                        : I18n.tr('profile.email.unbound'),
-                  ),
-                  subtitle: Text(
-                    state.emailVerified
+          AppSecondaryControlTheme(
+            child: AppSurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ProfileSectionHeader(
+                    icon: Icons.alternate_email_outlined,
+                    title: I18n.tr('profile.email.binding'),
+                    subtitle: state.emailVerified
                         ? I18n.tr('profile.email.verified')
                         : I18n.tr('profile.email.unverified_or_pending'),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _busy || _avatarBusy
-                      ? null
-                      : () => showDialog(
-                          context: context,
-                          builder: (_) => const _EmailBindingDialog(),
+                  const SizedBox(height: 12),
+                  Text(
+                    state.email?.trim().isEmpty != false
+                        ? I18n.tr('profile.email.unbound')
+                        : state.email!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: cs.onSurface),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      height: _profileActionButtonHeight,
+                      child: TextButton.icon(
+                        onPressed: (_busy || _avatarBusy)
+                            ? null
+                            : _showEmailBindingDialog,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          textStyle: appSecondaryControlTextStyle(context),
                         ),
-                ),
-              ],
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: Text(I18n.tr('profile.email.binding')),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
           AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -796,24 +1349,35 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _busy || _avatarBusy
-                        ? null
-                        : () => showDialog(
-                            context: context,
-                            builder: (_) => const _ChangePasswordDialog(),
-                          ),
-                    icon: const Icon(Icons.password_outlined),
-                    label: Text(I18n.tr('profile.change_password')),
+                  child: SizedBox(
+                    height: _profileActionButtonHeight,
+                    child: TextButton.icon(
+                      onPressed: (_busy || _avatarBusy)
+                          ? null
+                          : _showChangePasswordDialog,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        textStyle: appSecondaryControlTextStyle(context),
+                      ),
+                      icon: const Icon(Icons.lock_reset_outlined, size: 16),
+                      label: Text(I18n.tr('profile.change_password')),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _bioCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.bio'),
+                const SizedBox(height: 8),
+                AppSecondaryControlTheme(
+                  child: TextField(
+                    controller: _bioCtrl,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.bio'),
+                    ),
                   ),
                 ),
               ],
@@ -844,7 +1408,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 }
 
 class _LocalProfileEditor extends StatefulWidget {
-  const _LocalProfileEditor();
+  final bool openAvatarSheetOnStart;
+
+  const _LocalProfileEditor({this.openAvatarSheetOnStart = false});
 
   @override
   State<_LocalProfileEditor> createState() => _LocalProfileEditorState();
@@ -875,6 +1441,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     _avatarCtrl.addListener(_refreshPreview);
     _emailCtrl.addListener(_refreshPreview);
     _bioCtrl.addListener(_refreshPreview);
+    if (widget.openAvatarSheetOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pickLocalAvatar();
+      });
+    }
   }
 
   @override
@@ -930,39 +1501,29 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     }
   }
 
-  Future<void> _showAvatarSheet() async {
-    if (_busy) return;
+  void _showAvatarPreview() {
+    if (_busy || _avatarBusy) return;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
       I18n.tr('profile.default_user'),
     ]);
-    await showAppModalSheet<void>(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          return _ProfileAvatarSheet(
-            avatar: _avatarCtrl.text.trim(),
-            displayName: displayName,
-            busy: _avatarBusy || _busy,
-            onChangeAvatar: () async {
-              await _pickLocalAvatar();
-              setSheetState(() {});
-            },
-            onSave: () async {
-              await _save();
-              if (!sheetContext.mounted) return;
-              Navigator.pop(sheetContext);
-            },
-          );
-        },
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _ProfileAvatarFullScreen(
+          avatar: _avatarCtrl.text.trim(),
+          displayName: displayName,
+        ),
       ),
     );
   }
 
   Future<void> _save({bool showSnackBar = true}) async {
     if (_busy || _avatarBusy) return;
-    final username = _usernameCtrl.text.trim();
+    final currentProfile = context.read<UserProvider>().profile;
+    final username = currentProfile.username.trim().isNotEmpty
+        ? currentProfile.username.trim()
+        : _usernameCtrl.text.trim();
     if (username.isEmpty) {
       setState(() => _error = I18n.tr('profile.error.nickname_required'));
       return;
@@ -1003,6 +1564,30 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     }
   }
 
+  Widget _saveButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: SizedBox(
+        width: _profileActionButtonWidth,
+        height: _profileActionButtonHeight,
+        child: FilledButton(
+          onPressed: _busy || _avatarBusy ? null : _save,
+          style: appSecondaryFilledButtonStyle(context),
+          child: _busy
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(I18n.tr('action.save'), maxLines: 1),
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName = _firstNonEmptyProfileText([
@@ -1015,38 +1600,39 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       _emailCtrl.text,
       I18n.tr('profile.local'),
     ]);
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
 
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('profile.title')),
-        actions: [
-          TextButton(
-            onPressed: _busy || _avatarBusy ? null : _save,
-            child: _busy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(I18n.tr('action.save')),
-          ),
-        ],
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+        actions: [_saveButton(context)],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                _ProfileAvatarPicker(
+                _ProfileAvatarWithEdit(
+                  size: 76,
                   busy: _avatarBusy,
-                  tooltip: '查看或编辑头像',
-                  onTap: _showAvatarSheet,
-                  child: _ProfileAvatarPreview(
-                    avatar: _avatarCtrl.text.trim(),
-                    displayName: displayName,
-                    radius: 36,
+                  onPreview: _showAvatarPreview,
+                  onEdit: _pickLocalAvatar,
+                  child: Hero(
+                    tag: 'profile-avatar-preview',
+                    child: _ProfileAvatarPreview(
+                      avatar: _avatarCtrl.text.trim(),
+                      displayName: displayName,
+                      radius: 36,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -1056,7 +1642,9 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     children: [
                       Text(
                         displayName,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryRouteTitleTextStyle(context),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -1068,52 +1656,65 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     ],
                   ),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                SizedBox(
+                  height: _profileActionButtonHeight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: appSecondaryControlTextStyle(context),
+                    ),
+                    onPressed: () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
+                    child: Text(I18n.tr('profile.login_account')),
                   ),
-                  child: Text(I18n.tr('profile.login_account')),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          AppSurfaceCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _displayNameCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.display_name'),
+          AppSecondaryControlTheme(
+            child: AppSurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _displayNameCtrl,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.display_name'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _usernameCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.local_nickname'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _usernameCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.local_nickname'),
+                      helperText: I18n.tr('profile.username.locked'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.email.local_display'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.email.local_display'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _bioCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('profile.bio'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _bioCtrl,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      labelText: I18n.tr('profile.bio'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           if (_error != null) ...[
@@ -1136,340 +1737,6 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _EmailBindingDialog extends StatefulWidget {
-  const _EmailBindingDialog();
-
-  @override
-  State<_EmailBindingDialog> createState() => _EmailBindingDialogState();
-}
-
-class _EmailBindingDialogState extends State<_EmailBindingDialog> {
-  late final TextEditingController _emailCtrl;
-  final _codeCtrl = TextEditingController();
-  bool _busy = false;
-  bool _sending = false;
-  int _cooldownSeconds = 0;
-  Timer? _cooldownTimer;
-  String? _error;
-  String? _message;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailCtrl = TextEditingController(
-      text: context.read<AuthProvider>().state.email ?? '',
-    )..addListener(_refresh);
-  }
-
-  @override
-  void dispose() {
-    _cooldownTimer?.cancel();
-    _emailCtrl.removeListener(_refresh);
-    _emailCtrl.dispose();
-    _codeCtrl.dispose();
-    super.dispose();
-  }
-
-  void _refresh() {
-    if (mounted) setState(() {});
-  }
-
-  bool get _canSend {
-    if (_busy || _sending || _cooldownSeconds > 0) return false;
-    return _looksLikeEmail(_emailCtrl.text.trim());
-  }
-
-  Future<void> _sendCode() async {
-    if (!_canSend) return;
-    setState(() {
-      _sending = true;
-      _error = null;
-      _message = null;
-    });
-    try {
-      final result = await context.read<AuthProvider>().sendEmailCode(
-        email: _emailCtrl.text.trim(),
-        purpose: 'bind',
-      );
-      final devCode = (result['dev_code'] ?? '').toString();
-      final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
-          .toString();
-      if (!mounted) return;
-      _startCooldown();
-      setState(() {
-        _message = devCode.isEmpty
-            ? message
-            : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
-      });
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  void _startCooldown() {
-    _cooldownTimer?.cancel();
-    setState(() => _cooldownSeconds = 60);
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_cooldownSeconds <= 1) {
-        timer.cancel();
-        setState(() => _cooldownSeconds = 0);
-      } else {
-        setState(() => _cooldownSeconds -= 1);
-      }
-    });
-  }
-
-  Widget _sendButton() {
-    return OutlinedButton(
-      onPressed: _canSend ? _sendCode : null,
-      child: _sending
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(
-              _cooldownSeconds > 0
-                  ? '${_cooldownSeconds}s 后'
-                  : I18n.tr('auth.send'),
-              textAlign: TextAlign.center,
-            ),
-    );
-  }
-
-  Future<void> _save() async {
-    final email = _emailCtrl.text.trim();
-    final code = _codeCtrl.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_required'));
-      return;
-    }
-    if (!_looksLikeEmail(email)) {
-      setState(() => _error = I18n.tr('auth.error.email_invalid'));
-      return;
-    }
-    if (code.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_code_required'));
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-      _message = null;
-    });
-    try {
-      final auth = context.read<AuthProvider>();
-      final userProvider = context.read<UserProvider>();
-      await auth.updateProfile(email: email, emailCode: code);
-      final state = auth.state;
-      await userProvider.updateProfile(
-        username: _firstNonEmptyProfileText([
-          state.displayName,
-          state.username,
-        ]),
-        displayName: state.displayName ?? '',
-        email: state.email ?? '',
-        emailVerified: state.emailVerified,
-        avatarUrl: state.avatar ?? '',
-        bio: state.bio ?? '',
-      );
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(I18n.tr('profile.email.binding')),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ProfileActionField(
-              field: TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: I18n.tr('auth.email')),
-              ),
-              action: _sendButton(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _codeCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: I18n.tr('auth.email_code'),
-                helperText: I18n.tr('profile.email_code.helper'),
-              ),
-            ),
-            if (_message != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _message!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy || _sending ? null : () => Navigator.pop(context),
-          child: Text(I18n.tr('action.cancel')),
-        ),
-        FilledButton(
-          onPressed: _busy || _sending ? null : _save,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(I18n.tr('action.save')),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChangePasswordDialog extends StatefulWidget {
-  const _ChangePasswordDialog();
-
-  @override
-  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
-}
-
-class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
-  final _currentCtrl = TextEditingController();
-  final _newCtrl = TextEditingController();
-  final _confirmCtrl = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _currentCtrl.dispose();
-    _newCtrl.dispose();
-    _confirmCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final newPassword = _newCtrl.text;
-    if (newPassword.length < 6) {
-      setState(() => _error = I18n.tr('auth.error.new_password_short'));
-      return;
-    }
-    if (newPassword != _confirmCtrl.text) {
-      setState(() => _error = I18n.tr('auth.error.new_password_mismatch'));
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await context.read<AuthProvider>().changePassword(
-        currentPassword: _currentCtrl.text,
-        newPassword: newPassword,
-      );
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(I18n.tr('profile.password.updated'))),
-      );
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(I18n.tr('profile.change_password')),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _currentCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: I18n.tr('profile.current_password'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _newCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: I18n.tr('auth.new_password'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _confirmCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: I18n.tr('profile.confirm_new_password'),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: Text(I18n.tr('action.cancel')),
-        ),
-        FilledButton(
-          onPressed: _busy ? null : _save,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(I18n.tr('action.save')),
-        ),
-      ],
     );
   }
 }

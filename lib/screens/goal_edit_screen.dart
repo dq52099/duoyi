@@ -14,8 +14,10 @@ import '../models/workspace.dart';
 import '../providers/custom_focus_sound_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/notification_service.dart';
+import '../providers/pomodoro_provider.dart';
 import '../providers/share_provider.dart';
 import '../services/alarm_service.dart';
+import '../services/focus_sound_service.dart';
 import '../services/recurrence_engine.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/recurrence_picker.dart';
@@ -231,6 +233,26 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     return true;
   }
 
+  Future<void> _pickFocusNoise(String id) async {
+    setState(() => _focus = _focus.copyWith(whiteNoise: id));
+    if (id == FocusSoundCatalog.none) {
+      await FocusSoundService.instance.stop();
+      return;
+    }
+    final volume =
+        context.read<PomodoroProvider?>()?.config.focusSoundVolume ??
+        FocusSoundService.defaultVolume;
+    await FocusSoundService.instance.setVolume(volume);
+    final started = await FocusSoundService.instance.preview(id);
+    if (!mounted || started) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _showSaved() {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -427,9 +449,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                 );
               });
             },
-            onPickNoise: (id) => setState(() {
-              _focus = _focus.copyWith(whiteNoise: id);
-            }),
+            onPickNoise: _pickFocusNoise,
             onSave: () => _persist(pop: false),
           ),
           _SectionCard(
@@ -729,63 +749,61 @@ class _WorkspaceSection extends StatelessWidget {
       subtitle: subtitle,
       onSave: canEdit ? onSave : null,
       children: [
-        DropdownButtonFormField<String>(
-          initialValue: current,
-          decoration: const InputDecoration(
-            labelText: '保存到',
-            border: OutlineInputBorder(),
-          ),
-          items: options.map((option) {
-            final optionRole = option.id == 'private'
-                ? WorkspaceRole.owner
-                : shareProvider?.roleFor(option.id) ?? WorkspaceRole.owner;
-            final enabled =
-                canEdit && (option.id == 'private' || optionRole.canEdit);
-            return DropdownMenuItem<String>(
-              value: option.id,
-              enabled: enabled,
-              child: Row(
-                children: [
-                  Icon(
-                    option.id == 'private'
-                        ? Icons.person_outline
-                        : Icons.groups_2_outlined,
-                    size: 18,
-                  ),
-                  const SizedBox(width: DesignTokens.spaceSm),
-                  Expanded(
-                    child: Text(
-                      option.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        AppSecondaryControlTheme(
+          child: AppDropdownField<String>(
+            initialValue: current,
+            decoration: const InputDecoration(labelText: '保存到'),
+            items: options.map((option) {
+              final optionRole = option.id == 'private'
+                  ? WorkspaceRole.owner
+                  : shareProvider?.roleFor(option.id) ?? WorkspaceRole.owner;
+              final enabled =
+                  canEdit && (option.id == 'private' || optionRole.canEdit);
+              return DropdownMenuItem<String>(
+                value: option.id,
+                enabled: enabled,
+                child: Row(
+                  children: [
+                    Icon(
+                      option.id == 'private'
+                          ? Icons.person_outline
+                          : Icons.groups_2_outlined,
+                      size: 18,
                     ),
-                  ),
-                  if (option.id != 'private') ...[
                     const SizedBox(width: DesignTokens.spaceSm),
-                    Text(
-                      optionRole.label,
-                      style: TextStyle(
-                        fontSize: DesignTokens.fontSizeXs,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.56),
+                    Expanded(
+                      child: Text(
+                        option.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (option.id != 'private') ...[
+                      const SizedBox(width: DesignTokens.spaceSm),
+                      Text(
+                        optionRole.label,
+                        style: TextStyle(
+                          fontSize: DesignTokens.fontSizeXs,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.56),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: canEdit
-              ? (value) {
-                  if (value == null) return;
-                  final nextRole = value == 'private'
-                      ? WorkspaceRole.owner
-                      : shareProvider?.roleFor(value) ?? WorkspaceRole.owner;
-                  if (!nextRole.canEdit) return;
-                  onChanged(value);
-                }
-              : null,
+                ),
+              );
+            }).toList(),
+            enabled: canEdit,
+            onChanged: (value) {
+              if (value == null) return;
+              final nextRole = value == 'private'
+                  ? WorkspaceRole.owner
+                  : shareProvider?.roleFor(value) ?? WorkspaceRole.owner;
+              if (!nextRole.canEdit) return;
+              onChanged(value);
+            },
+          ),
         ),
         if (!canEdit) ...[
           const SizedBox(height: DesignTokens.spaceSm),
@@ -1764,7 +1782,9 @@ class _SectionCard extends StatelessWidget {
                     color: cs.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
-          children: [...children],
+          children: [
+            AppSecondaryControlTheme(child: Column(children: children)),
+          ],
         ),
       ),
     );

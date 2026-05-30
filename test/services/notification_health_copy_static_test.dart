@@ -41,6 +41,17 @@ void main() {
       expect(service, isNot(contains('后台、锁屏和电池策略')));
       expect(card, contains('疑难设置入口'));
       expect(card, contains('先按上方检查项逐项确认'));
+      expect(card, contains('测试强提醒铃声'));
+      expect(card, contains('验证闹钟提醒、内置铃声和通知停止按钮'));
+      expect(card, contains('onSendStrongTest'));
+      expect(
+        File('lib/screens/notification_history_screen.dart').readAsStringSync(),
+        contains('AlarmService.instance.showFullScreenTest()'),
+      );
+      expect(
+        File('lib/screens/preferences_screen.dart').readAsStringSync(),
+        isNot(contains('showFullScreenTest')),
+      );
       expect(card, isNot(contains('系统通知设置')));
       expect(checklist, contains('这些检查项不出现重复的「去设置」按钮'));
 
@@ -55,6 +66,37 @@ void main() {
         ),
       );
       expect(service, contains("? '弹屏权限'"));
+      expect(service, contains('notification_channel_sound'));
+      expect(service, contains('NativeReminderRingtone.statusChannelId'));
+      expect(service, contains('NativeReminderRingtone.fallbackChannelId'));
+      expect(service, contains('闹钟兜底通知渠道均已创建'));
+      expect(service, contains('闹钟兜底通知'));
+      expect(service, contains('actionChannelIds: affectedChannels'));
+      expect(service, contains("title: '渠道声音'"));
+      expect(service, contains("actionLabel: '渠道设置'"));
+      expect(service, contains('SystemNotificationAudioStatus'));
+      expect(service, contains("title: '系统闹钟音量'"));
+      expect(service, contains("title: '勿扰模式'"));
+      expect(service, contains('通知音量为 0'));
+      expect(card, contains('系统闹钟音量和勿扰影响'));
+      expect(
+        service,
+        contains('NotificationSettings.notificationChannelStatuses'),
+      );
+      expect(card, contains('onOpenNotificationChannelSettings'));
+      expect(card, contains('check.actionChannelIds.first'));
+      expect(
+        File('lib/screens/notification_history_screen.dart').readAsStringSync(),
+        contains('NotificationSettings.openNotificationChannelSettings'),
+      );
+      expect(
+        File('lib/screens/notification_history_screen.dart').readAsStringSync(),
+        contains('_openSystemSettings(NotificationService.channelId)'),
+      );
+      expect(
+        File('lib/screens/notification_history_screen.dart').readAsStringSync(),
+        contains('_openSystemSettings([String? channelId])'),
+      );
       expect(hint, contains("actionLabel = '通知授权'"));
       expect(hint, contains("actionLabel = '精准闹钟'"));
       expect(hint, contains("actionLabel = '弹屏权限'"));

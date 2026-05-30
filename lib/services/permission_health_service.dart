@@ -2,6 +2,8 @@ import '../core/platform_info.dart';
 import '../providers/notification_service.dart';
 import 'alarm_service.dart';
 import 'local_notifications.dart';
+import 'native_reminder_ringtone.dart';
+import 'notification_settings.dart';
 
 enum PermissionHealthStatus { ok, warning, blocked, unknown }
 
@@ -20,6 +22,7 @@ class PermissionHealthCheck {
   final PermissionHealthStatus status;
   final PermissionHealthAction? action;
   final String? actionLabel;
+  final List<String> actionChannelIds;
   final bool manual;
 
   const PermissionHealthCheck({
@@ -29,6 +32,7 @@ class PermissionHealthCheck {
     required this.status,
     this.action,
     this.actionLabel,
+    this.actionChannelIds = const <String>[],
     this.manual = false,
   });
 }
@@ -38,6 +42,7 @@ class NotificationHealthReport {
   final bool exactAlarmGranted;
   final bool fullScreenIntentGranted;
   final Set<String>? channelIds;
+  final Map<String, NotificationChannelStatus>? channelStatuses;
   final AndroidDeviceInfoLite? androidDevice;
   final bool isAndroid;
   final bool isIOS;
@@ -49,6 +54,7 @@ class NotificationHealthReport {
     required this.exactAlarmGranted,
     required this.fullScreenIntentGranted,
     required this.channelIds,
+    this.channelStatuses,
     required this.androidDevice,
     required this.isAndroid,
     required this.isIOS,
@@ -108,7 +114,15 @@ class NotificationHealthReport {
 
 typedef BoolReader = Future<bool> Function();
 typedef ChannelIdsReader = Future<Set<String>?> Function();
+typedef ChannelStatusesReader =
+    Future<Map<String, NotificationChannelStatus>?> Function(
+      Iterable<String> channelIds,
+    );
 typedef AndroidDeviceReader = Future<AndroidDeviceInfoLite?> Function();
+typedef NativeReminderIssueReader =
+    Future<NativeReminderDeliveryIssue?> Function();
+typedef SystemAudioStatusReader =
+    Future<SystemNotificationAudioStatus?> Function();
 
 class PermissionHealthService {
   static final PermissionHealthService instance = PermissionHealthService._();
@@ -120,6 +134,9 @@ class PermissionHealthService {
   final bool Function() _isIOSReader;
   final AndroidDeviceReader _androidDeviceReader;
   final ChannelIdsReader _channelIdsReader;
+  final ChannelStatusesReader _channelStatusesReader;
+  final NativeReminderIssueReader _nativeReminderIssueReader;
+  final SystemAudioStatusReader _systemAudioStatusReader;
 
   PermissionHealthService({
     BoolReader? notificationGrantedReader,
@@ -129,6 +146,9 @@ class PermissionHealthService {
     bool Function()? isIOSReader,
     AndroidDeviceReader? androidDeviceReader,
     ChannelIdsReader? channelIdsReader,
+    ChannelStatusesReader? channelStatusesReader,
+    NativeReminderIssueReader? nativeReminderIssueReader,
+    SystemAudioStatusReader? systemAudioStatusReader,
   }) : _notificationGrantedReader =
            notificationGrantedReader ?? _defaultNotificationGranted,
        _exactAlarmGrantedReader =
@@ -139,7 +159,15 @@ class PermissionHealthService {
        _isIOSReader = isIOSReader ?? (() => PlatformInfo.isIOS),
        _androidDeviceReader =
            androidDeviceReader ?? PlatformInfo.getAndroidDeviceInfo,
-       _channelIdsReader = channelIdsReader ?? _defaultChannelIds;
+       _channelIdsReader = channelIdsReader ?? _defaultChannelIds,
+       _channelStatusesReader =
+           channelStatusesReader ??
+           NotificationSettings.notificationChannelStatuses,
+       _nativeReminderIssueReader =
+           nativeReminderIssueReader ??
+           NativeReminderRingtone.lastDeliveryIssue,
+       _systemAudioStatusReader =
+           systemAudioStatusReader ?? NotificationSettings.systemAudioStatus;
 
   PermissionHealthService._()
     : _notificationGrantedReader = _defaultNotificationGranted,
@@ -148,7 +176,10 @@ class PermissionHealthService {
       _isAndroidReader = (() => PlatformInfo.isAndroid),
       _isIOSReader = (() => PlatformInfo.isIOS),
       _androidDeviceReader = PlatformInfo.getAndroidDeviceInfo,
-      _channelIdsReader = _defaultChannelIds;
+      _channelIdsReader = _defaultChannelIds,
+      _channelStatusesReader = NotificationSettings.notificationChannelStatuses,
+      _nativeReminderIssueReader = NativeReminderRingtone.lastDeliveryIssue,
+      _systemAudioStatusReader = NotificationSettings.systemAudioStatus;
 
   static Future<bool> _defaultNotificationGranted() async {
     return LocalNotifications.instance.refreshPermission();
@@ -188,6 +219,7 @@ class PermissionHealthService {
         : true;
     final device = isAndroid ? await _androidDeviceReader() : null;
     final channelIds = isAndroid ? await _channelIdsReader() : const <String>{};
+    Map<String, NotificationChannelStatus>? channelStatuses;
 
     final checks = <PermissionHealthCheck>[
       PermissionHealthCheck(
@@ -255,10 +287,14 @@ class PermissionHealthService {
         final required = <String>{
           NotificationService.channelId,
           AlarmService.channelId,
+          NativeReminderRingtone.statusChannelId,
+          NativeReminderRingtone.fallbackChannelId,
+          LocalNotifications.quickAddChannelId,
         };
         final legacy = <String>{
           ...NotificationService.legacyChannelIds,
           ...AlarmService.legacyChannelIds,
+          ...NativeReminderRingtone.legacyChannelIds,
         };
         if (channelIds == null) {
           checks.add(
@@ -272,12 +308,13 @@ class PermissionHealthService {
         } else {
           final missing = required.difference(channelIds);
           final stale = channelIds.intersection(legacy);
+          channelStatuses = await _channelStatusesReader(required);
           checks.add(
             PermissionHealthCheck(
               id: 'notification_channels',
               title: '通知渠道',
               subtitle: missing.isEmpty
-                  ? '通知提醒 / 强提醒渠道均已创建'
+                  ? '通知提醒 / 强提醒 / 内置铃声状态 / 通知栏快捷入口渠道均已创建；闹钟兜底通知渠道均已创建'
                   : '缺少 ${missing.join('、')} 渠道；请先点测试通知让系统创建渠道',
               status: missing.isEmpty
                   ? PermissionHealthStatus.ok
@@ -292,17 +329,95 @@ class PermissionHealthService {
                 id: 'legacy_notification_channels',
                 title: '旧通知渠道',
                 subtitle:
-                    '检测到旧渠道 ${stale.join('、')}。新版本会改用新渠道并尝试清理旧渠道；若仍无声，请检查“多仪 · 通知提醒”和“多仪 · 强提醒”的声音、横幅和锁屏权限',
+                    '检测到旧渠道 ${stale.join('、')}。新版本会改用新渠道并尝试清理旧渠道；若仍无声，请检查“多仪 · 通知提醒”“多仪 · 强提醒”和“闹钟兜底通知”的声音、横幅和锁屏权限',
                 status: PermissionHealthStatus.warning,
                 action: PermissionHealthAction.none,
                 manual: true,
               ),
             );
           }
+          final muted = <String>[];
+          final blocked = <String>[];
+          final lowImportance = <String>[];
+          for (final entry in (channelStatuses ?? {}).entries) {
+            if (entry.key == LocalNotifications.quickAddChannelId) {
+              continue;
+            }
+            final status = entry.value;
+            if (!status.exists) continue;
+            if (status.isBlocked) {
+              blocked.add(entry.key);
+            } else if (status.isSilent &&
+                entry.key != NativeReminderRingtone.statusChannelId) {
+              muted.add(entry.key);
+            } else if (status.isLowImportance &&
+                entry.key != NativeReminderRingtone.statusChannelId) {
+              lowImportance.add(entry.key);
+            }
+          }
+          final affectedChannels = <String>{
+            ...blocked,
+            ...muted,
+            ...lowImportance,
+          }.toList(growable: false);
+          if (blocked.isNotEmpty ||
+              muted.isNotEmpty ||
+              lowImportance.isNotEmpty) {
+            checks.add(
+              PermissionHealthCheck(
+                id: 'notification_channel_sound',
+                title: '渠道声音',
+                subtitle: [
+                  if (blocked.isNotEmpty)
+                    '已关闭 ${_channelNames(blocked).join('、')}',
+                  if (muted.isNotEmpty) '已静音 ${_channelNames(muted).join('、')}',
+                  if (lowImportance.isNotEmpty)
+                    '优先级过低 ${_channelNames(lowImportance).join('、')}',
+                  '请打开对应渠道的声音、横幅和锁屏显示',
+                ].join('；'),
+                status: blocked.isNotEmpty
+                    ? PermissionHealthStatus.blocked
+                    : PermissionHealthStatus.warning,
+                action: PermissionHealthAction.openAppSettings,
+                actionLabel: '渠道设置',
+                actionChannelIds: affectedChannels,
+              ),
+            );
+          }
         }
       }
 
+      final audioStatus = await _systemAudioStatusReader();
+      if (audioStatus == null) {
+        checks.add(
+          const PermissionHealthCheck(
+            id: 'system_audio_status',
+            title: '系统音量与勿扰',
+            subtitle: '无法自动读取闹钟音量、通知音量或勿扰状态；若无声请在系统音量面板和勿扰模式中确认',
+            status: PermissionHealthStatus.unknown,
+            manual: true,
+          ),
+        );
+      } else {
+        checks.addAll(_audioHealthChecks(audioStatus));
+      }
+
       checks.addAll(_manualAndroidPolicyChecks(device));
+
+      final nativeIssue = await _nativeReminderIssueReader();
+      if (nativeIssue != null && nativeIssue.message.trim().isNotEmpty) {
+        checks.add(
+          PermissionHealthCheck(
+            id: 'native_reminder_delivery',
+            title: '闹钟响铃诊断',
+            subtitle: nativeIssue.message,
+            status: PermissionHealthStatus.warning,
+            action: PermissionHealthAction.openAppSettings,
+            actionLabel: '系统设置',
+            manual: true,
+          ),
+        );
+      }
     }
 
     return NotificationHealthReport(
@@ -310,12 +425,90 @@ class PermissionHealthService {
       exactAlarmGranted: exactAlarmGranted,
       fullScreenIntentGranted: fullScreenIntentGranted,
       channelIds: channelIds,
+      channelStatuses: channelStatuses,
       androidDevice: device,
       isAndroid: isAndroid,
       isIOS: isIOS,
       checkedAt: DateTime.now(),
       checks: checks,
     );
+  }
+
+  List<PermissionHealthCheck> _audioHealthChecks(
+    SystemNotificationAudioStatus status,
+  ) {
+    final checks = <PermissionHealthCheck>[];
+    if (status.alarmMuted) {
+      checks.add(
+        const PermissionHealthCheck(
+          id: 'system_alarm_volume',
+          title: '系统闹钟音量',
+          subtitle: '闹钟音量为 0，内置强提醒使用闹钟音频通道，可能只震动或完全无声',
+          status: PermissionHealthStatus.blocked,
+          action: PermissionHealthAction.openAppSettings,
+          actionLabel: '系统设置',
+          manual: true,
+        ),
+      );
+    } else if (status.alarmPercent <= 20) {
+      checks.add(
+        PermissionHealthCheck(
+          id: 'system_alarm_volume',
+          title: '系统闹钟音量',
+          subtitle: '当前闹钟音量约 ${status.alarmPercent}%，若提醒太轻请调高系统闹钟音量',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.none,
+          manual: true,
+        ),
+      );
+    }
+
+    if (status.notificationMuted || status.ringMuted) {
+      checks.add(
+        PermissionHealthCheck(
+          id: 'system_notification_volume',
+          title: '系统通知/铃声音量',
+          subtitle: [
+            if (status.notificationMuted) '通知音量为 0',
+            if (status.ringMuted) '铃声音量为 0',
+            '普通通知和兜底提示可能无声，请在系统音量面板调高',
+          ].join('；'),
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.openAppSettings,
+          actionLabel: '系统设置',
+          manual: true,
+        ),
+      );
+    }
+
+    if (status.dndActive) {
+      checks.add(
+        PermissionHealthCheck(
+          id: 'system_dnd_mode',
+          title: '勿扰模式',
+          subtitle: status.notificationPolicyAccessGranted
+              ? '系统勿扰模式正在开启，通知和闹钟渠道可能被拦截；请允许多仪绕过勿扰或临时关闭勿扰'
+              : '系统勿扰模式可能正在开启，且多仪没有勿扰策略访问权限；请检查勿扰模式、闹钟例外和通知例外',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.openAppSettings,
+          actionLabel: '勿扰设置',
+          manual: true,
+        ),
+      );
+    }
+
+    if (checks.isEmpty) {
+      checks.add(
+        PermissionHealthCheck(
+          id: 'system_audio_status',
+          title: '系统音量与勿扰',
+          subtitle:
+              '闹钟音量约 ${status.alarmPercent}%，通知音量约 ${status.notificationPercent}%，未检测到勿扰拦截',
+          status: PermissionHealthStatus.ok,
+        ),
+      );
+    }
+    return checks;
   }
 
   List<PermissionHealthCheck> _manualAndroidPolicyChecks(
@@ -367,5 +560,25 @@ class PermissionHealthService {
         manual: true,
       ),
     ];
+  }
+
+  List<String> _channelNames(Iterable<String> channelIds) {
+    return channelIds.map(_channelName).toList(growable: false);
+  }
+
+  String _channelName(String channelId) {
+    switch (channelId) {
+      case NotificationService.channelId:
+        return '普通提醒';
+      case AlarmService.channelId:
+        return '强提醒';
+      case NativeReminderRingtone.fallbackChannelId:
+        return '闹钟兜底通知';
+      case NativeReminderRingtone.statusChannelId:
+        return '内置铃声状态';
+      case LocalNotifications.quickAddChannelId:
+        return '通知栏快捷入口';
+    }
+    return channelId;
   }
 }

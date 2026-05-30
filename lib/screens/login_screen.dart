@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/api_client.dart';
 import '../widgets/brand_background.dart';
+import '../widgets/surface_components.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,13 +26,13 @@ class _LoginActionField extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final actionWidth = constraints.maxWidth < 360 ? 108.0 : 132.0;
+        final actionWidth = constraints.maxWidth < 360 ? 64.0 : 72.0;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: field),
-            const SizedBox(width: 12),
-            SizedBox(width: actionWidth, height: 56, child: action),
+            const SizedBox(width: 8),
+            SizedBox(width: actionWidth, height: 34, child: action),
           ],
         );
       },
@@ -49,14 +50,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _inviteCtrl = TextEditingController();
   bool _isRegister = false;
   bool _emailLogin = false;
+  bool _registerWithEmail = true;
   bool _busy = false;
   bool _sendingEmailCode = false;
   int _emailCooldownSeconds = 0;
   Timer? _emailCooldownTimer;
   String? _error;
   String? _message;
-
-  bool get _registrationEmailVerificationRequired => true;
 
   @override
   void initState() {
@@ -183,6 +183,8 @@ class _LoginScreenState extends State<LoginScreen> {
           : I18n.tr('auth.error.account_required');
     }
     if (_isRegister) {
+      final shouldBindEmail =
+          auth.registrationEmailRequired || _registerWithEmail;
       if (account.length < 3 || account.length > 64) {
         return I18n.tr('auth.error.username_length');
       }
@@ -190,14 +192,13 @@ class _LoginScreenState extends State<LoginScreen> {
         return I18n.tr('auth.error.username_no_space');
       }
       final email = _emailCtrl.text.trim();
-      if (_registrationEmailVerificationRequired && email.isEmpty) {
+      if (shouldBindEmail && email.isEmpty) {
         return I18n.tr('auth.error.email_required');
       }
       if (email.isNotEmpty && !_looksLikeEmail(email)) {
         return I18n.tr('auth.error.email_invalid');
       }
-      if ((_registrationEmailVerificationRequired || email.isNotEmpty) &&
-          _emailCodeCtrl.text.trim().isEmpty) {
+      if (shouldBindEmail && _emailCodeCtrl.text.trim().isEmpty) {
         return I18n.tr('auth.error.email_code_required');
       }
       if (_pwdCtrl.text.length < 6) return I18n.tr('auth.error.password_short');
@@ -239,38 +240,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _emailCodeButton() {
     final canSend = _canSendEmailCode;
-    return OutlinedButton(
+    return FilledButton(
       onPressed: canSend ? _sendEmailCode : null,
+      style: appSecondaryFilledButtonStyle(context),
       child: _sendingEmailCode
           ? const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Text(
-              _emailCooldownSeconds > 0
-                  ? '${_emailCooldownSeconds}s 后'
-                  : I18n.tr('auth.send'),
-              textAlign: TextAlign.center,
+          : FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                _emailCooldownSeconds > 0
+                    ? '${_emailCooldownSeconds}s 后'
+                    : I18n.tr('auth.send'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-    );
-  }
-
-  Widget _emailSendField({
-    required TextEditingController controller,
-    required String labelText,
-    String? helperText,
-  }) {
-    return _LoginActionField(
-      field: TextField(
-        controller: controller,
-        keyboardType: TextInputType.emailAddress,
-        decoration: InputDecoration(
-          labelText: labelText,
-          helperText: helperText,
-        ),
-      ),
-      action: _emailCodeButton(),
     );
   }
 
@@ -278,10 +267,12 @@ class _LoginScreenState extends State<LoginScreen> {
     required TextEditingController controller,
     required String labelText,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: labelText),
+    return AppSecondaryControlTheme(
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(labelText: labelText),
+      ),
     );
   }
 
@@ -300,7 +291,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final s = context.watch<ThemeProvider>().brand.strings;
     final auth = context.watch<AuthProvider>();
     final cs = Theme.of(context).colorScheme;
-    final registrationEmailRequired = _registrationEmailVerificationRequired;
+    final registrationEmailRequired = auth.registrationEmailRequired;
+    final shouldBindRegistrationEmail =
+        registrationEmailRequired || _registerWithEmail;
 
     return BrandBackground(
       child: Scaffold(
@@ -390,31 +383,63 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
             ],
             if (!_isRegister && _emailLogin)
-              _emailSendField(
-                controller: _userCtrl,
-                labelText: I18n.tr('auth.verified_email'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _userCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.verified_email'),
+                  ),
+                ),
               )
             else
-              TextField(
-                controller: _userCtrl,
-                decoration: InputDecoration(
-                  labelText: _isRegister
-                      ? I18n.tr('auth.username')
-                      : I18n.tr('auth.account'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _userCtrl,
+                  decoration: InputDecoration(
+                    labelText: _isRegister
+                        ? I18n.tr('auth.username')
+                        : I18n.tr('auth.account'),
+                  ),
                 ),
               ),
             if (_isRegister) ...[
+              if (!registrationEmailRequired) ...[
+                AppSecondaryControlTheme(
+                  child: SwitchListTile.adaptive(
+                    value: _registerWithEmail,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(I18n.tr('profile.email.binding')),
+                    subtitle: Text(I18n.tr('auth.email.optional')),
+                    onChanged: (_busy || _sendingEmailCode)
+                        ? null
+                        : (value) => setState(() {
+                            _registerWithEmail = value;
+                            _error = null;
+                            _message = null;
+                            if (!value) {
+                              _emailCtrl.clear();
+                              _emailCodeCtrl.clear();
+                            }
+                          }),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (shouldBindRegistrationEmail) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: registrationEmailRequired
-                      ? I18n.tr('auth.email')
-                      : I18n.tr('auth.email.optional'),
-                  helperText: registrationEmailRequired
-                      ? I18n.tr('auth.email.required_helper')
-                      : null,
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: registrationEmailRequired
+                        ? I18n.tr('auth.email')
+                        : I18n.tr('auth.email.optional'),
+                    helperText: registrationEmailRequired
+                        ? I18n.tr('auth.email.required_helper')
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -424,17 +449,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? I18n.tr('auth.email_code')
                     : I18n.tr('auth.email_code.optional'),
               ),
+              ],
               const SizedBox(height: 12),
-              TextField(
-                controller: _displayNameCtrl,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.display_name.optional'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _displayNameCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.display_name.optional'),
+                  ),
                 ),
               ),
             ],
             if (!_isRegister && _emailLogin) ...[
               const SizedBox(height: 12),
-              _emailCodeField(
+              _emailCodeSendField(
                 controller: _emailCodeCtrl,
                 labelText: I18n.tr('auth.email_code'),
               ),
@@ -454,29 +482,35 @@ class _LoginScreenState extends State<LoginScreen> {
             else
               const SizedBox(height: 4),
             if (!_emailLogin || _isRegister)
-              TextField(
-                controller: _pwdCtrl,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.password'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _pwdCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.password'),
+                  ),
+                  obscureText: true,
                 ),
-                obscureText: true,
               ),
             if (_isRegister) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _confirmPwdCtrl,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.confirm_password'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _confirmPwdCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.confirm_password'),
+                  ),
+                  obscureText: true,
                 ),
-                obscureText: true,
               ),
             ],
             if (_isRegister && auth.inviteCodeRequired) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _inviteCtrl,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.invite_code'),
+              AppSecondaryControlTheme(
+                child: TextField(
+                  controller: _inviteCtrl,
+                  decoration: InputDecoration(
+                    labelText: I18n.tr('auth.invite_code'),
+                  ),
                 ),
               ),
             ],
@@ -528,6 +562,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   : () => setState(() {
                       _isRegister = !_isRegister;
                       _emailLogin = false;
+                      _registerWithEmail = true;
                       _emailCodeCtrl.clear();
                       _pwdCtrl.clear();
                       _confirmPwdCtrl.clear();
@@ -673,8 +708,10 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: Text(I18n.tr('auth.password_reset.title')),
+      icon: const Icon(Icons.lock_reset_outlined),
+      shiftForKeyboard: true,
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

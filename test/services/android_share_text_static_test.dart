@@ -59,8 +59,14 @@ void main() {
     );
     expect(
       main,
-      contains('MaterialPageRoute(builder: (_) => const NoteScreen())'),
+      contains(
+        'MaterialPageRoute(\n        builder: (_) => const BrandRouteSurface(child: NoteScreen()),',
+      ),
     );
-    expect(main, contains('mainShellKey.currentState?.navigateTo(1)'));
+    expect(
+      main,
+      contains('mainShellKey.currentState?.navigateTo(1, allowHidden: true)'),
+      reason: '分享创建待办后，即使待办底部入口被隐藏也要打开待办页。',
+    );
   });
 }

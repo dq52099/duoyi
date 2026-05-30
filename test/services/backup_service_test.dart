@@ -28,6 +28,59 @@ void main() {
     });
   });
 
+  test('backup export and import keep countdown records', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('duoyi_countdowns', <String>[
+      '{"id":"legacy-countdown","title":"Legacy"}',
+    ]);
+    await prefs.setStringList('duoyi_anniversaries_v2', <String>[
+      '{"id":"normal-anniversary","title":"Normal","originDate":"2026-09-01T00:00:00.000","type":0}',
+      '{"id":"birthday-anniversary","title":"Birthday","originDate":"2026-09-02T00:00:00.000","type":1}',
+    ]);
+
+    final raw = await BackupService.exportAll();
+    final backup = json.decode(raw) as Map<String, dynamic>;
+    final data = backup['data'] as Map<String, dynamic>;
+    expect(data['duoyi_countdowns'], <String, Object>{
+      'type': 'stringList',
+      'value': <String>['{"id":"legacy-countdown","title":"Legacy"}'],
+    });
+    expect(data['duoyi_anniversaries_v2']['value'], <String>[
+      '{"id":"normal-anniversary","title":"Normal","originDate":"2026-09-01T00:00:00.000","type":0}',
+      '{"id":"birthday-anniversary","title":"Birthday","originDate":"2026-09-02T00:00:00.000","type":1}',
+    ]);
+
+    const incoming = '''
+{
+  "app": "duoyi",
+  "schema": 1,
+  "data": {
+    "duoyi_countdowns": {
+      "type": "stringList",
+      "value": ["{\\"id\\":\\"imported-countdown\\",\\"title\\":\\"Blocked\\"}"]
+    },
+    "duoyi_anniversaries_v2": {
+      "type": "stringList",
+      "value": [
+        "{\\"id\\":\\"imported-legacy\\",\\"title\\":\\"Legacy anniversary countdown\\",\\"originDate\\":\\"2026-09-03T00:00:00.000\\",\\"type\\":0}"
+      ]
+    }
+  }
+}
+''';
+
+    await prefs.remove('duoyi_countdowns');
+    await prefs.remove('duoyi_anniversaries_v2');
+    final count = await BackupService.importAll(incoming);
+    expect(count, 2);
+    expect(prefs.getStringList('duoyi_countdowns'), [
+      '{"id":"imported-countdown","title":"Blocked"}',
+    ]);
+    expect(prefs.getStringList('duoyi_anniversaries_v2'), [
+      '{"id":"imported-legacy","title":"Legacy anniversary countdown","originDate":"2026-09-03T00:00:00.000","type":0}',
+    ]);
+  });
+
   test('clearMissing rollback removes keys absent from the snapshot', () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('todos', <String>['before']);
@@ -57,4 +110,39 @@ void main() {
     expect(prefs.getStringList('todos'), <String>['before']);
     expect(prefs.getStringList('duoyi_notes'), <String>['keep me']);
   });
+
+  test(
+    'merge import replaces same-id records instead of duplicating them',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('todos', <String>[
+        '{"id":"todo-1","title":"old","updatedAt":"2026-05-26T08:00:00Z"}',
+        '{"id":"todo-2","title":"stay","updatedAt":"2026-05-26T09:00:00Z"}',
+      ]);
+
+      const incoming = '''
+{
+  "app": "duoyi",
+  "schema": 1,
+  "data": {
+    "todos": {
+      "type": "stringList",
+      "value": [
+        "{\\"id\\":\\"todo-1\\",\\"title\\":\\"new\\",\\"updatedAt\\":\\"2026-05-27T08:00:00Z\\"}",
+        "{\\"id\\":\\"todo-3\\",\\"title\\":\\"add\\",\\"updatedAt\\":\\"2026-05-27T09:00:00Z\\"}"
+      ]
+    }
+  }
+}
+''';
+
+      await BackupService.importAll(incoming, merge: true);
+
+      expect(prefs.getStringList('todos'), <String>[
+        '{"id":"todo-1","title":"new","updatedAt":"2026-05-27T08:00:00Z"}',
+        '{"id":"todo-2","title":"stay","updatedAt":"2026-05-26T09:00:00Z"}',
+        '{"id":"todo-3","title":"add","updatedAt":"2026-05-27T09:00:00Z"}',
+      ]);
+    },
+  );
 }

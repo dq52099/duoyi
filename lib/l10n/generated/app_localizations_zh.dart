@@ -269,6 +269,30 @@ class AppLocalizationsZh extends AppLocalizations {
       'Android 常驻通知：添加待办或开始专注';
 
   @override
+  String get preferencesNotificationTodayProgressTitle => '通知栏今日任务进展';
+
+  @override
+  String get preferencesNotificationTodayProgressSubtitle =>
+      '开启后在通知栏常驻显示今日任务摘要，可随任务变化刷新';
+
+  @override
+  String get preferencesNotificationStatusBarTitle => '通知栏快捷入口';
+
+  @override
+  String get preferencesNotificationStatusBarUnsupported =>
+      '通知栏常驻快捷入口和今日进展仅 Android 支持，当前平台保留普通通知提醒。';
+
+  @override
+  String get preferencesNotificationStatusBarEnabled => '通知栏入口已开启';
+
+  @override
+  String get preferencesNotificationStatusBarDisabled => '通知栏入口已关闭';
+
+  @override
+  String get preferencesNotificationStatusBarSyncFailed =>
+      '通知栏同步失败，已恢复原设置。请检查系统通知权限和通知渠道。';
+
+  @override
   String get preferencesShowCompletedTitle => '待办页显示已完成';
 
   @override
@@ -281,7 +305,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesSectionBottomNav => '底部导航栏';
 
   @override
-  String get preferencesSectionBottomNavSubtitle => '底部导航最多显示 5 个入口，小组件和我的固定显示';
+  String get preferencesSectionBottomNavSubtitle =>
+      '底部导航最多显示 5 个入口；我的固定显示，小组件可隐藏';
 
   @override
   String get preferencesSectionInteraction => '交互';
@@ -429,6 +454,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesDailyReminderTimePickerSubtitle => '设置提醒触发时间';
 
   @override
+  String get preferencesDailyReminderKindTitle => '提醒方式';
+
+  @override
+  String get preferencesDailyReminderKindPushDescription => '系统通知栏提醒';
+
+  @override
+  String get preferencesDailyReminderKindPopupDescription =>
+      '应用前台时弹出提醒，后台使用通知兜底';
+
+  @override
+  String get preferencesDailyReminderKindAlarmDescription => '按闹钟方式提醒，适合重要事项';
+
+  @override
+  String get preferencesDailyReminderKindOffDescription => '不注册系统通知、弹窗或闹钟';
+
+  @override
+  String get preferencesDailyReminderRegisterFailed => '每日提醒注册失败';
+
+  @override
+  String get preferencesDailyReminderNotReady => '系统通知未就绪，每日提醒没有开启。';
+
+  @override
   String get preferencesDailyReminderTodayTasks => '任务：今日任务';
 
   @override
@@ -454,6 +501,18 @@ class AppLocalizationsZh extends AppLocalizations {
       '遇到内置节假日时顺延到下一个提醒日';
 
   @override
+  String get preferencesDailyReminderChipTodayTasks => '今日任务';
+
+  @override
+  String get preferencesDailyReminderChipTomorrowPlan => '明日计划';
+
+  @override
+  String get preferencesDailyReminderChipOverdueTasks => '逾期事项';
+
+  @override
+  String get preferencesDailyReminderChipPauseHolidays => '节假日暂停';
+
+  @override
   String get preferencesDailyReminderScopeToday => '今日';
 
   @override
@@ -464,6 +523,69 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get preferencesDailyReminderScopeNone => '无任务范围';
+
+  @override
+  String get notificationChannelGeneralName => '多仪 · 通知提醒';
+
+  @override
+  String get notificationChannelGeneralDescription => '日常提醒使用柔和提示音、震动并尽量显示横幅';
+
+  @override
+  String get notificationChannelAlarmName => '多仪 · 柔和强提醒';
+
+  @override
+  String get notificationChannelAlarmDescription => '重要提醒使用柔和内置铃声，可在通知上手动停止';
+
+  @override
+  String get notificationChannelQuickAddName => '多仪 · 快捷入口';
+
+  @override
+  String get notificationChannelQuickAddDescription => '通知栏常驻快捷添加待办和开始专注';
+
+  @override
+  String get notificationTickerReminder => '多仪提醒';
+
+  @override
+  String get notificationTickerQuickAdd => '多仪快捷入口';
+
+  @override
+  String get notificationQuickAddTitle => '多仪快捷记录';
+
+  @override
+  String get notificationQuickAddBody => '下拉通知栏添加待办，或一键开始专注';
+
+  @override
+  String get notificationQuickAddActionAddTodo => '添加待办';
+
+  @override
+  String get notificationQuickAddActionOpenInput => '打开输入';
+
+  @override
+  String get notificationQuickAddActionStartFocus => '开始专注';
+
+  @override
+  String get notificationQuickAddInputLabel => '例如：明天下午3点开会';
+
+  @override
+  String get notificationStatusBarTodayProgressTitle => '今日任务进展';
+
+  @override
+  String get notificationStatusBarQuickHint => '下拉可快速添加待办';
+
+  @override
+  String get notificationStatusBarTodayRemainingPrefix => '今日还要完成 ';
+
+  @override
+  String get notificationStatusBarTodayRemainingSuffix => ' 项';
+
+  @override
+  String get notificationStatusBarDailyCount => '日常 ';
+
+  @override
+  String get notificationStatusBarRepresentativeCount => '代表 ';
+
+  @override
+  String get notificationStatusBarGoalCount => '目标 ';
 
   @override
   String get quickTodoTitle => '快速待办';
@@ -976,6 +1098,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitErrorNotificationPermission => '系统通知未授权，习惯提醒不会响铃或弹出';
 
   @override
+  String get habitErrorReminderRegisterFailed => '习惯提醒注册失败';
+
+  @override
   String get habitFlexRule => '弹性打卡规则';
 
   @override
@@ -988,7 +1113,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitFlexPeriodTarget => '周期目标';
 
   @override
-  String get habitFlexPeriodTargetHint => '例如本周至少 5 次';
+  String get habitFlexPeriodTargetHint => '例如周期目标 5 次/周';
 
   @override
   String get habitFlexDailyNote => '关闭时按每日目标连续统计';
@@ -997,10 +1122,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitFlexNegativeNote => '反向戒除按每日不发生统计';
 
   @override
-  String get habitFlexWeeklyGoalPrefix => '每周至少 ';
+  String get habitFlexWeeklyGoalPrefix => '周期目标: ';
 
   @override
-  String get habitFlexMonthlyGoalPrefix => '每月至少 ';
+  String get habitFlexMonthlyGoalPrefix => '周期目标: ';
 
   @override
   String get habitFlexThisWeek => '本周';
@@ -1844,9 +1969,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get countdownEmpty => '暂无倒数日记录';
 
   @override
-  String get countdownAddRecord => '添加记录';
-
-  @override
   String get countdownNearestEmpty => '暂无即将到期的事件';
 
   @override
@@ -1869,9 +1991,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get countdownCategoryDefault => '默认';
-
-  @override
-  String get countdownEditorAddTitle => '添加倒数日';
 
   @override
   String get countdownEditorEditTitle => '编辑倒数日';
@@ -1905,6 +2024,60 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get countdownReminderBeforeSuffix => ' 天';
+
+  @override
+  String get countdownValidationTitleRequired => '请先填写倒数日名称';
+
+  @override
+  String get countdownSaveFailedPrefix => '倒数日保存失败：';
+
+  @override
+  String get countdownReminderRegisterFailed => '倒数日提醒注册失败';
+
+  @override
+  String get countdownReminderNotRegistered => '倒数日已保存，但提醒未注册。请检查通知权限和提醒时间。';
+
+  @override
+  String get countdownReminderNotRegisteredPrefix => '倒数日已保存，但提醒未注册：';
+
+  @override
+  String get countdownReminderPopupFallbackFailed => '倒数日提醒注册失败：弹出框兜底通知不可用';
+
+  @override
+  String get countdownReminderPopupPermissionDenied =>
+      '倒数日已保存，但弹出框提醒未注册：系统通知权限未开启。';
+
+  @override
+  String get countdownReminderPopupNotRegisteredPrefix => '倒数日已保存，但弹出框提醒未注册：';
+
+  @override
+  String get countdownReminderPopupWarning =>
+      '倒数日已保存。弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。';
+
+  @override
+  String get countdownReminderAlarmPermissionDenied =>
+      '倒数日已保存，但闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。';
+
+  @override
+  String get countdownReminderAlarmChannelMissing => '强提醒渠道未就绪';
+
+  @override
+  String get countdownReminderExactAlarmMissing => '精准闹钟权限未开启，提醒可能延后';
+
+  @override
+  String get countdownReminderFullscreenMissing => '全屏提醒权限未开启，锁屏弹窗可能不可用';
+
+  @override
+  String get countdownReminderSavedWithWarningsPrefix => '倒数日已保存，';
+
+  @override
+  String get countdownReminderEmailWarning => '倒数日已保存，邮件提醒会在联网后由服务端发送。';
+
+  @override
+  String get countdownReminderExceptionPrefix => '倒数日已保存，但提醒未注册：';
+
+  @override
+  String get countdownReminderTimePast => '倒数日已保存，但提醒时间已过去，请重新选择提醒时间。';
 
   @override
   String get countdownStatusPinned => '置顶';
@@ -2004,6 +2177,49 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get anniversaryFieldColor => '颜色标识';
+
+  @override
+  String get anniversaryReminderRegisterFailed => '纪念日提醒注册失败';
+
+  @override
+  String get anniversaryReminderNotRegistered => '纪念日提醒未注册，请检查通知权限和提醒时间。';
+
+  @override
+  String get anniversaryReminderPopupFallbackFailed => '纪念日提醒注册失败：弹出框兜底通知不可用';
+
+  @override
+  String get anniversaryReminderPopupPermissionDenied => '弹出框提醒未注册：系统通知权限未开启。';
+
+  @override
+  String get anniversaryReminderPopupNotRegisteredPrefix => '弹出框提醒未注册：';
+
+  @override
+  String get anniversaryReminderPopupWarning => '弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。';
+
+  @override
+  String get anniversaryReminderAlarmPermissionDenied =>
+      '闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。';
+
+  @override
+  String get anniversaryReminderAlarmChannelMissing => '强提醒渠道未就绪';
+
+  @override
+  String get anniversaryReminderExactAlarmMissing => '精准闹钟权限未开启，提醒可能延后';
+
+  @override
+  String get anniversaryReminderFullscreenMissing => '全屏提醒权限未开启，锁屏弹窗可能不可用';
+
+  @override
+  String get anniversaryReminderEmailWarning => '邮件提醒会在联网后由服务端发送。';
+
+  @override
+  String get anniversaryReminderExceptionPrefix => '提醒未注册：';
+
+  @override
+  String get anniversaryReminderSavedPrefix => '已保存，';
+
+  @override
+  String get anniversaryReminderTimePast => '已保存，但提醒时间已过去，请重新选择提醒时间。';
 
   @override
   String get anniversaryLunarYearSuffix => '年';
@@ -2178,6 +2394,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get reminderSnooze30min => '30 分钟后';
+
+  @override
+  String get reminderKindPush => '通知';
+
+  @override
+  String get reminderKindPopup => '弹出框';
+
+  @override
+  String get reminderKindAlarm => '闹钟';
+
+  @override
+  String get reminderKindOff => '关闭';
 
   @override
   String get timeAuditTitle => '时间足迹';

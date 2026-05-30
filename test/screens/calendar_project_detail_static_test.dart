@@ -15,6 +15,12 @@ void main() {
     expect(source, isNot(contains("title: '\${option.name} · 项目详情'")));
     expect(source, contains("title: '项目详情'"));
     expect(source, contains('subtitle: option.name'));
+    expect(source, contains('scrollable: false'));
+    expect(source, contains("'calendar_project_detail_scroll_region'"));
+    expect(source, contains('ListView.separated('));
+    expect(source, contains('primary: false'));
+    expect(source, contains('itemCount: todos.length'));
+    expect(source, isNot(contains('.take(8)')));
   });
 
   test('calendar detail area and paging are widened for dense views', () {
@@ -24,23 +30,88 @@ void main() {
     expect(source, contains('tabAlignment: TabAlignment.start'));
     expect(
       source,
-      contains('labelPadding: const EdgeInsets.symmetric(horizontal: 18)'),
+      contains('labelPadding: const EdgeInsets.symmetric(horizontal: 14)'),
     );
+    expect(source, contains('Tab(height: 34'));
+    expect(source, contains('fontSize: compact ? 12.5 : 13.5'));
+    expect(source, contains("'calendar_navigation_date_button'"));
+    expect(source, contains('height: compact ? 62 : 68'));
     expect(
       source,
-      contains("key: const ValueKey('calendar_navigation_date_button')"),
+      contains("key: const ValueKey('calendar_navigation_header_bar')"),
     );
-    expect(source, contains('height: 60'));
-    expect(source, contains('const Size(double.infinity, 54)'));
-    expect(source, contains('const Size(0, 46)'));
-    expect(source, contains('constraints.maxWidth < 360'));
+    expect(source, contains('const Size(double.infinity, 56)'));
+    expect(source, contains('const Size(0, 52)'));
+    expect(source, contains('constraints.maxWidth < 390'));
     expect(
       source,
       contains("key: const ValueKey('calendar_month_detail_agenda')"),
     );
-    expect(source, contains('constraints.maxHeight >= 520'));
-    expect(source, contains('maxWidth: 920'));
-    expect(source, contains('width: 380'));
+    expect(
+      source,
+      contains("key: const ValueKey('calendar_fixed_month_grid')"),
+    );
+    expect(source, contains('height: monthGridHeight'));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'final desiredDetailHeight = availableHeight < 560 \?\s*500\.0\s*:\s*660\.0',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(
+      source,
+      contains(
+        'final maxGridForReadableDetail = availableHeight - desiredDetailHeight',
+      ),
+    );
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'final preferredGridHeight = rows >= 6 \?\s*98\.0\s*:\s*92\.0',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'final minGridHeight = rows >= 6 \?\s*82\.0\s*:\s*78\.0',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(source, contains("'calendar_month_detail_scroll_region'"));
+    final monthDetailStart = source.indexOf(
+      "key: const ValueKey('calendar_month_detail_agenda')",
+    );
+    final weekViewStart = source.indexOf('// Week', monthDetailStart);
+    expect(monthDetailStart, greaterThanOrEqualTo(0));
+    expect(weekViewStart, greaterThan(monthDetailStart));
+    final monthDetail = source.substring(monthDetailStart, weekViewStart);
+    expect(monthDetail, contains('horizontalPadding:'));
+    expect(monthDetail, contains('8,'));
+    expect(source, contains('maxGridForReadableDetail'));
+    expect(source, contains('bool _monthGridShowsLunar('));
+    expect(source, contains('maxWidth: 860'));
+    expect(source, contains('MediaQuery.sizeOf(context).height * 0.68'));
+    expect(source, contains('.clamp(360.0, 680.0)'));
+    final agenda = File(
+      'lib/widgets/calendar_day_agenda.dart',
+    ).readAsStringSync();
+    expect(agenda, contains('return Scrollbar('));
+    expect(
+      agenda,
+      contains("key: const ValueKey('calendar_day_agenda_scroll_view')"),
+    );
+    expect(agenda, contains('primary: false'));
+    expect(source, contains('width: constraints.maxWidth < 390'));
+    expect(source, contains('? constraints.maxWidth'));
+    expect(source, contains(': 380'));
     expect(source, contains('workspaceId: workspaceId'));
   });
 

@@ -40,6 +40,7 @@ class FocusRoomProvider extends ChangeNotifier {
   DateTime? _lastGlobalSyncAt;
   String? _realtimeClientKey;
   DateTime? _realtimeRetryAfter;
+  Timer? _realtimeNotifyDebounce;
 
   ApiClient? Function()? apiClientGetter;
   VoidCallback? onLocalChanged;
@@ -558,7 +559,7 @@ class FocusRoomProvider extends ChangeNotifier {
               _lastRemoteError = null;
               _lastRemoteSyncAt = DateTime.now();
               _realtimeRetryAfter = null;
-              notifyListeners();
+              _queueRealtimeNotify();
             },
             onError: (Object e) {
               if (identical(
@@ -571,7 +572,7 @@ class FocusRoomProvider extends ChangeNotifier {
               _realtimeRetryAfter = DateTime.now().add(
                 const Duration(seconds: 30),
               );
-              notifyListeners();
+              _queueRealtimeNotify();
             },
             onDone: () {
               if (identical(
@@ -579,7 +580,7 @@ class FocusRoomProvider extends ChangeNotifier {
                 subscription,
               )) {
                 _rankingEventSubscriptions.remove(room.id);
-                notifyListeners();
+                _queueRealtimeNotify();
               }
             },
             cancelOnError: true,
@@ -601,7 +602,7 @@ class FocusRoomProvider extends ChangeNotifier {
               _lastRemoteError = null;
               _lastGlobalSyncAt = DateTime.now();
               _realtimeRetryAfter = null;
-              notifyListeners();
+              _queueRealtimeNotify();
             },
             onError: (Object e) {
               if (identical(_globalRankingEventSubscription, subscription)) {
@@ -611,12 +612,12 @@ class FocusRoomProvider extends ChangeNotifier {
               _realtimeRetryAfter = DateTime.now().add(
                 const Duration(seconds: 30),
               );
-              notifyListeners();
+              _queueRealtimeNotify();
             },
             onDone: () {
               if (identical(_globalRankingEventSubscription, subscription)) {
                 _globalRankingEventSubscription = null;
-                notifyListeners();
+                _queueRealtimeNotify();
               }
             },
             cancelOnError: true,
@@ -626,6 +627,14 @@ class FocusRoomProvider extends ChangeNotifier {
     if (changed) {
       notifyListeners();
     }
+  }
+
+  void _queueRealtimeNotify() {
+    _realtimeNotifyDebounce?.cancel();
+    _realtimeNotifyDebounce = Timer(const Duration(milliseconds: 120), () {
+      _realtimeNotifyDebounce = null;
+      notifyListeners();
+    });
   }
 
   void stopRealtimeRankings() {
@@ -935,12 +944,16 @@ class FocusRoomProvider extends ChangeNotifier {
   void _cancelAllRealtimeRankings({bool notify = true}) {
     if (_rankingEventSubscriptions.isEmpty &&
         _globalRankingEventSubscription == null) {
+      _realtimeNotifyDebounce?.cancel();
+      _realtimeNotifyDebounce = null;
       return;
     }
     final subscriptions = _rankingEventSubscriptions.values.toList();
     _rankingEventSubscriptions.clear();
     final globalSubscription = _globalRankingEventSubscription;
     _globalRankingEventSubscription = null;
+    _realtimeNotifyDebounce?.cancel();
+    _realtimeNotifyDebounce = null;
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -1064,6 +1077,7 @@ class FocusRoomProvider extends ChangeNotifier {
   @override
   void dispose() {
     _cancelAllRealtimeRankings(notify: false);
+    _realtimeNotifyDebounce?.cancel();
     super.dispose();
   }
 }

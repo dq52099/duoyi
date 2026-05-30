@@ -3,6 +3,12 @@ import WidgetKit
 
 private let appGroupId = "group.com.duoyi.duoyi"
 
+private let duoyiPathSegmentAllowed: CharacterSet = {
+    var allowed = CharacterSet.urlPathAllowed
+    allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
+    return allowed
+}()
+
 private struct DuoyiWidgetConfig {
     let kind: String
     let title: String
@@ -26,7 +32,7 @@ private struct DuoyiTodoRow: Identifiable {
         guard !todoId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
-        let encodedId = todoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? todoId
+        let encodedId = todoId.addingPercentEncoding(withAllowedCharacters: duoyiPathSegmentAllowed) ?? todoId
         return URL(string: "duoyi://todo/\(encodedId)")
     }
 
@@ -34,8 +40,9 @@ private struct DuoyiTodoRow: Identifiable {
         guard !todoId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
-        let encodedId = todoId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? todoId
-        return URL(string: "duoyi://action/complete_todo?id=\(encodedId)")
+        var components = URLComponents(string: "duoyi://action/complete_todo")
+        components?.queryItems = [URLQueryItem(name: "id", value: todoId)]
+        return components?.url
     }
 }
 
@@ -133,9 +140,10 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             primaryTarget = todoRows.first?.detailURL?.absoluteString ?? config.deepLink
             rows = []
         } else {
-            primary = readString(defaults, key: config.primaryKey, fallback: config.fallback)
-            primaryTarget = readString(defaults, key: "\(config.primaryKey)_id", fallback: config.deepLink)
-            rows = readRows(defaults)
+            let primarySource = readPrimary(defaults)
+            primary = primarySource.title
+            primaryTarget = primarySource.target
+            rows = readRows(defaults, excluding: primarySource.sourceKey)
         }
         return DuoyiWidgetEntry(
             date: Date(),
@@ -164,6 +172,27 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             return fallback
         }
         return value
+    }
+
+    private func readPrimary(_ defaults: UserDefaults?) -> (title: String, target: String, sourceKey: String) {
+        var title = readString(defaults, key: config.primaryKey, fallback: config.fallback)
+        var target = readString(defaults, key: "\(config.primaryKey)_id", fallback: config.deepLink)
+        var sourceKey = config.primaryKey
+
+        if config.kind == "DuoyiAnniversaryWidget" {
+            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedTitle == config.fallback {
+                let memorialTitle = readString(defaults, key: "memorial_highlight_1", fallback: "")
+                let trimmedMemorialTitle = memorialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedMemorialTitle.isEmpty && trimmedMemorialTitle != config.fallback {
+                    title = memorialTitle
+                    target = readString(defaults, key: "memorial_highlight_1_id", fallback: config.deepLink)
+                    sourceKey = "memorial_highlight_1"
+                }
+            }
+        }
+
+        return (title, target, sourceKey)
     }
 
     private func readBool(_ defaults: UserDefaults?, key: String) -> Bool {
@@ -204,8 +233,11 @@ private struct DuoyiWidgetProvider: TimelineProvider {
         }
     }
 
-    private func readRows(_ defaults: UserDefaults?) -> [DuoyiWidgetRow] {
+    private func readRows(_ defaults: UserDefaults?, excluding excludedKey: String? = nil) -> [DuoyiWidgetRow] {
         return config.rowKeys.enumerated().compactMap { offset, key in
+            if let excludedKey = excludedKey, key == excludedKey {
+                return nil
+            }
             let title = readString(defaults, key: key, fallback: "")
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return nil
@@ -251,17 +283,21 @@ private struct DuoyiWidgetView: View {
             Text(entry.config.title)
                 .font(.system(size: 13, weight: .bold))
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
             Spacer(minLength: 0)
             Text(entry.brandTitle)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundColor(Color(.tertiaryLabel))
                 .lineLimit(1)
+                .truncationMode(.tail)
             if let quickURL {
                 Link(destination: quickURL) {
                     Text(entry.config.quickActionTitle)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(entry.config.accent)
+                        .foregroundColor(entry.config.accent)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }
@@ -285,11 +321,14 @@ private struct DuoyiWidgetView: View {
                     .font(.system(size: primarySize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
-                    .foregroundStyle(entry.config.accent)
+                    .truncationMode(.tail)
+                    .minimumScaleFactor(0.78)
+                    .foregroundColor(entry.config.accent)
                 Text(entry.focusTimerLabel)
                     .font(.system(size: rowSize, weight: .regular))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
+                    .truncationMode(.tail)
+                    .foregroundColor(.secondary)
             } else {
                 linkedText(entry.primary, target: entry.primaryTarget, primary: true)
             }
@@ -324,7 +363,8 @@ private struct DuoyiWidgetView: View {
         Text(cleanRow(title))
             .font(.system(size: primary ? primarySize : rowSize, weight: primary ? .semibold : .regular))
             .lineLimit(primary ? primaryLines : 1)
-            .foregroundStyle(primary ? .primary : .secondary)
+            .truncationMode(.tail)
+            .foregroundColor(primary ? .primary : .secondary)
     }
 
     private var todoContent: some View {
@@ -335,7 +375,8 @@ private struct DuoyiWidgetView: View {
                 Text(entry.primary)
                     .font(.system(size: primarySize, weight: .semibold))
                     .lineLimit(primaryLines)
-                    .foregroundStyle(.primary)
+                    .truncationMode(.tail)
+                    .foregroundColor(.primary)
             }
             ForEach(visibleTodoRows) { row in
                 todoRow(row, primary: false)
@@ -357,8 +398,9 @@ private struct DuoyiWidgetView: View {
                 Link(destination: completeURL) {
                     Text("完成")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(entry.config.accent)
+                        .foregroundColor(entry.config.accent)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }
@@ -367,6 +409,8 @@ private struct DuoyiWidgetView: View {
     private func todoText(_ title: String, primary: Bool) -> some View {
         Text(cleanRow(title))
             .font(.system(size: primary ? primarySize : rowSize, weight: primary ? .semibold : .regular))
+            .lineLimit(primary ? primaryLines : 1)
+            .truncationMode(.tail)
             .foregroundColor(primary ? .primary : .secondary)
     }
 
@@ -378,6 +422,7 @@ private struct DuoyiWidgetView: View {
                 Text("\(entry.config.title) \(accessoryPrimaryText)")
                     .font(.caption2)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             case .accessoryCircular:
                 ZStack {
                     AccessoryWidgetBackground()
@@ -387,6 +432,7 @@ private struct DuoyiWidgetView: View {
                         Text(accessoryShortText)
                             .font(.system(size: 9, weight: .semibold))
                             .lineLimit(1)
+                            .truncationMode(.tail)
                             .minimumScaleFactor(0.7)
                     }
                 }
@@ -395,25 +441,30 @@ private struct DuoyiWidgetView: View {
                     Text(entry.config.title)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                     Text(accessoryPrimaryText)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                     if let row = accessorySecondaryText {
                         Text(row)
                             .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.secondary)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                 }
             default:
                 Text(accessoryPrimaryText)
                     .font(.caption)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         } else {
             Text(accessoryPrimaryText)
                 .font(.caption)
                 .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 
@@ -438,8 +489,11 @@ private struct DuoyiWidgetView: View {
         }
     }
 
-    private func navText(_ text: String) -> Text {
-        Text(text).font(.system(size: 10, weight: .medium))
+    private func navText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 
     private var visibleRows: [DuoyiWidgetRow] {
@@ -567,8 +621,9 @@ private struct DuoyiWidgetView: View {
             guard !id.isEmpty else {
                 return URL(string: entry.config.quickActionLink)
             }
-            let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
-            return URL(string: "duoyi://action/checkin_habit?id=\(encodedId)")
+            var components = URLComponents(string: "duoyi://action/checkin_habit")
+            components?.queryItems = [URLQueryItem(name: "id", value: id)]
+            return components?.url
         }
         return URL(string: entry.config.quickActionLink)
     }
@@ -677,7 +732,7 @@ private let anniversaryConfig = DuoyiWidgetConfig(
     accent: .pink,
     primaryKey: "anniversary_highlight_1",
     fallback: "暂无近期纪念日",
-    rowKeys: ["anniversary_highlight_2", "memorial_highlight_1", "memorial_highlight_2"],
+    rowKeys: ["anniversary_highlight_2", "memorial_highlight_1", "memorial_highlight_2", "memorial_highlight_3"],
     quickActionTitle: "查看",
     quickActionLink: "duoyi://anniversary"
 )

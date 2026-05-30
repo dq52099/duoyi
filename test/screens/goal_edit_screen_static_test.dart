@@ -34,10 +34,9 @@ void main() {
     );
     expect(source, contains('workspaceId: _workspaceId,'));
     expect(source, contains('_WorkspaceSection('));
-    expect(source, contains('DropdownButtonFormField<String>'));
+    expect(source, contains('AppDropdownField<String>'));
     expect(source, contains('initialValue: current,'));
-    expect(source, contains('onChanged: canEdit'));
-    expect(source, contains('? (value) {'));
+    expect(source, contains('enabled: canEdit'));
     expect(
       source,
       contains("canEdit && (option.id == 'private' || optionRole.canEdit)"),

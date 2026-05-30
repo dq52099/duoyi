@@ -20,6 +20,107 @@ void main() {
     expect(source, contains('return changed;'));
   });
 
+  test(
+    'TodoProvider resyncs reminders after completion and deletion changes',
+    () {
+      final source = File(
+        'lib/providers/todo_provider.dart',
+      ).readAsStringSync();
+
+      String method(String startNeedle, String endNeedle) {
+        final start = source.indexOf(startNeedle);
+        final end = source.indexOf(endNeedle, start);
+        expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+        expect(end, greaterThan(start), reason: endNeedle);
+        return source.substring(start, end);
+      }
+
+      expect(source, contains('Future<void> _syncTodoRemindersNow() async'));
+      expect(source, contains('String? get lastReminderSyncIssue'));
+      expect(source, contains('DateTime? get lastReminderSyncAttemptAt'));
+      expect(source, contains('DateTime? get lastReminderSyncSucceededAt'));
+      expect(
+        source,
+        contains("_lastReminderSyncIssue = 'reminder_scheduler_missing'"),
+      );
+      expect(
+        source,
+        contains(
+          "debugPrint('[TodoProvider] reminder sync skipped: scheduler missing')",
+        ),
+      );
+      expect(source, contains('await scheduler.syncTodos(List.of(_todos))'));
+      expect(source, contains('_lastReminderSyncIssue = null'));
+      expect(source, contains('_lastReminderSyncSucceededAt = DateTime.now()'));
+      expect(source, contains('_lastReminderSyncIssue = e.toString()'));
+
+      expect(
+        method(
+          'Future<void> addTodo(TodoItem todo)',
+          'Future<TodoImportSummary> importTodos(',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<TodoImportSummary> importTodos(',
+          'Future<void> updateTodo(String id, TodoItem updated)',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<int> completeTodos(',
+          'Future<int> reopenTodos(Iterable<String> ids)',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method('Future<int> reopenTodos(Iterable<String> ids)', '/// 切换完成状态。'),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<void> toggleTodo(String id',
+          'Future<void> deleteTodo(String id)',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<void> deleteTodo(String id)',
+          'Future<int> deleteTodos(Iterable<String> ids)',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<int> deleteTodos(Iterable<String> ids)',
+          'Future<int> updateTodosQuadrant(',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<int> updateTodosKanbanColumn(',
+          'Future<bool> scheduleTodoForToday(',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method('Future<bool> scheduleTodoForToday(', 'Future<void> reorder('),
+        contains('await _syncTodoRemindersNow();'),
+      );
+      expect(
+        method(
+          'Future<void> updateListGroupWorkspace(',
+          '// --- Subtask operations ---',
+        ),
+        contains('await _syncTodoRemindersNow();'),
+      );
+    },
+  );
+
   test('TodoProvider exposes batch reopen and deletion paths', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
 

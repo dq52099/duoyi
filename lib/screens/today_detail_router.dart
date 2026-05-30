@@ -57,8 +57,8 @@ class TodayDetailRouter {
       if (!context.mounted) return;
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => _DetailFallback(
+        _brandRoute(
+          _DetailFallback(
             kind: kind,
             title: '出错了',
             body: '打开失败：$e',
@@ -105,11 +105,19 @@ class TodayDetailRouter {
           anniversaryType = items[index].type;
         }
         return switch (anniversaryType) {
-          AnniversaryType.birthday => _brandRoute(const BirthdayScreen()),
-          AnniversaryType.memorial => _brandRoute(
-            const MemorialAnniversaryScreen(),
+          AnniversaryType.birthday => _brandRoute(
+            BirthdayScreen(initialAnniversaryId: id),
           ),
-          _ => _brandRoute(const MemorialAnniversaryScreen()),
+          AnniversaryType.memorial => _brandRoute(
+            MemorialAnniversaryScreen(initialAnniversaryId: id),
+          ),
+          AnniversaryType.normal => _brandRoute(
+            AnniversaryScreen(
+              fixedType: AnniversaryType.normal,
+              initialAnniversaryId: id,
+            ),
+          ),
+          _ => _brandRoute(AnniversaryScreen(initialAnniversaryId: id)),
         };
 
       case TodaySectionKind.goals:
@@ -157,8 +165,8 @@ class TodayDetailRouter {
   }
 
   static Route<void> _emptyRoute(TodaySectionKind kind, String msg) {
-    return MaterialPageRoute(
-      builder: (_) => _DetailFallback(
+    return _brandRoute(
+      _DetailFallback(
         kind: kind,
         title: _titleFor(kind),
         body: msg,

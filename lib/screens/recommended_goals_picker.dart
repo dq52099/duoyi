@@ -30,6 +30,7 @@ import '../core/recommended_goals.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
 import '../providers/goal_provider.dart';
+import '../widgets/surface_components.dart';
 
 /// 顶部 5 个主类别（和 [RecommendedGoalsLibrary] 对齐，排除 `custom`）。
 const List<GoalCategory> _pickerCategories = <GoalCategory>[
@@ -101,37 +102,49 @@ class _RecommendedGoalsPickerState extends State<RecommendedGoalsPicker> {
   @override
   Widget build(BuildContext context) {
     final items = RecommendedGoalsLibrary.byCategory(_selected);
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     return Scaffold(
-      appBar: AppBar(title: const Text('推荐目标')),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _CategoryChipRow(
-            categories: _pickerCategories,
-            selected: _selected,
-            onSelect: _select,
-          ),
-          const SizedBox(height: DesignTokens.spaceXs),
-          Expanded(
-            child: items.isEmpty
-                ? _EmptyCategoryPlaceholder(category: _selected)
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(
-                      DesignTokens.spaceLg,
-                      DesignTokens.spaceSm,
-                      DesignTokens.spaceLg,
-                      DesignTokens.spaceXxl,
+      backgroundColor: routeBackground,
+      appBar: AppBar(
+        title: const Text('推荐目标'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: AppSecondaryControlTheme(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CategoryChipRow(
+              categories: _pickerCategories,
+              selected: _selected,
+              onSelect: _select,
+            ),
+            const SizedBox(height: DesignTokens.spaceXs),
+            Expanded(
+              child: items.isEmpty
+                  ? _EmptyCategoryPlaceholder(category: _selected)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spaceLg,
+                        DesignTokens.spaceSm,
+                        DesignTokens.spaceLg,
+                        DesignTokens.spaceXxl,
+                      ),
+                      itemCount: items.length,
+                      separatorBuilder: (context, _) =>
+                          const SizedBox(height: DesignTokens.spaceMd),
+                      itemBuilder: (_, i) => _RecommendedGoalCard(
+                        goal: items[i],
+                        onApply: () => _apply(items[i]),
+                      ),
                     ),
-                    itemCount: items.length,
-                    separatorBuilder: (context, _) =>
-                        const SizedBox(height: DesignTokens.spaceMd),
-                    itemBuilder: (_, i) => _RecommendedGoalCard(
-                      goal: items[i],
-                      onApply: () => _apply(items[i]),
-                    ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -299,11 +312,17 @@ class _MetaBadges extends StatelessWidget {
     // 提醒（push / alarm）
     if (goal.reminder.enabled) {
       final hhmm = _formatHm(goal.reminder.hour, goal.reminder.minute);
-      final prefix = goal.reminder.kind == ReminderKind.alarm ? '闹钟' : '推送';
+      final prefix = goal.reminder.kind == ReminderKind.alarm
+          ? '闹钟'
+          : goal.reminder.kind == ReminderKind.popup
+          ? '弹出框'
+          : '通知';
       badges.add(
         _Badge(
           icon: goal.reminder.kind == ReminderKind.alarm
               ? Icons.alarm
+              : goal.reminder.kind == ReminderKind.popup
+              ? Icons.open_in_new
               : Icons.notifications_active,
           label: hhmm == null ? prefix : '$prefix $hhmm',
           color: goal.reminder.kind == ReminderKind.alarm

@@ -5,8 +5,8 @@
 ///   供 `docs/empty-surface-audit.md` 生成 backlog、也供 QA 快速定位。
 /// - 修复某条后把 `fixTicketId` 填上对应的 `tasks.md` 任务 id，形成双向追溯。
 ///
-/// 不扫运行时 UI —— 静态 meta 由人工 + `scripts/empty_surface_scan.sh`
-/// 共同维护。运行时辅助 `runtimeAudit` 留在本文件以便未来扩展。
+/// 静态 meta 由人工 + `scripts/empty_surface_scan.sh` 共同维护；运行时辅助
+/// `runtimeAudit` 会轻量遍历当前 widget 子树，捕获仍暴露给用户的占位文案。
 library;
 
 import 'package:flutter/widgets.dart';
@@ -82,16 +82,50 @@ class EmptySurfaceAuditor {
   static List<EmptySurfaceEntry> openEntries() =>
       known.where((e) => e.fixTicketId == null).toList(growable: false);
 
-  /// 运行时探测占位（当前为占位实现）。
-  ///
-  /// 未来可接入 `Service Locator` 遍历已注册 Screen，嗅探 "data=empty
-  /// 但 UI 只渲染 Text(\"TODO\")" 之类的运行时特征。留接口不留实现，
-  /// 避免无意义的常驻开销。
+  /// 运行时探测当前页面子树中仍可见的占位文案。
   static Future<EmptyAuditReport> runtimeAudit(BuildContext context) async {
+    final findings = <String>{};
+
+    void visit(Element element) {
+      final widget = element.widget;
+      if (widget is Text) {
+        final text = widget.data ?? widget.textSpan?.toPlainText() ?? '';
+        if (_looksLikePlaceholderText(text)) {
+          findings.add(
+            '${widget.runtimeType}: ${text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
+          );
+        }
+      }
+      element.visitChildElements(visit);
+    }
+
+    if (context is Element) {
+      visit(context);
+    } else {
+      context.visitChildElements(visit);
+    }
+
     return EmptyAuditReport(
-      knownEntries: known,
-      runtimeFindings: const <String>[],
+      knownEntries: openEntries(),
+      runtimeFindings: findings.toList(growable: false)..sort(),
     );
+  }
+
+  static bool _looksLikePlaceholderText(String text) {
+    final normalized = text.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    const suspicious = [
+      'todo',
+      'fixme',
+      'not implemented',
+      'coming soon',
+      '开发中',
+      '待开发',
+      '未实现',
+      '占位',
+      '假数据',
+    ];
+    return suspicious.any(normalized.contains);
   }
 }
 
@@ -99,7 +133,7 @@ class EmptySurfaceAuditor {
 class EmptyAuditReport {
   final List<EmptySurfaceEntry> knownEntries;
 
-  /// 运行时检测到的可疑位点（目前留空，等未来扩展填入）。
+  /// 运行时检测到的可疑位点。
   final List<String> runtimeFindings;
 
   const EmptyAuditReport({

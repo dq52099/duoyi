@@ -1,8 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import '../core/smart_date_parser.dart';
+import '../core/smart_todo_draft.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/diary_deep_review.dart';
 import '../models/diary_entry.dart';
+import '../models/goal.dart'
+    show
+        ReminderConfig,
+        ReminderKind,
+        ReminderPlan,
+        ReminderRule,
+        ReminderRuleType;
+import '../models/todo.dart';
 import 'api_client.dart';
 
 /// AI 客户端：**不再持有任何 key/base_url**，所有调用通过 `/api/ai/chat`
@@ -86,7 +96,58 @@ class AiService extends ChangeNotifier {
       final content = (res['content'] ?? '').toString();
       return content;
     } on ApiException catch (e) {
-      throw AiException(e.message);
+      throw AiException(_friendlyAiError(e.message));
+    }
+  }
+
+  Future<AiScheduleDraft> createScheduleDraft(
+    String input, {
+    DateTime? now,
+  }) async {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) {
+      throw const AiException('请输入要创建的日程或待办内容');
+    }
+    final localNow = now ?? DateTime.now();
+    final baseDraft = _fallbackScheduleDraft(trimmed, now: localNow);
+    if (!_enabled) return baseDraft.withSource(AiScheduleSource.localParser);
+
+    final prompt = [
+      '当前本地时间：${localNow.toIso8601String()}',
+      '用户输入：$trimmed',
+      '',
+      '请识别用户想创建的是 calendar（日程）还是 todo（待办）。',
+      '只返回 JSON，不要 Markdown。字段：',
+      '{"type":"calendar|todo","title":"标题","start_at":"ISO8601 或空",'
+          '"end_at":"ISO8601 或空","all_day":false,"reminder":true,'
+          '"notes":"补充说明","subtasks":["子任务"]}',
+      '规则：有明确开始时间/会议/日程/安排，优先 calendar；只表达要完成的任务，优先 todo。',
+      '没有结束时间时，calendar 默认 60 分钟；todo 没有时间也可以创建。',
+    ].join('\n');
+    try {
+      final raw = await _chat(
+        '你是多仪的日程创建助手。你必须把自然语言转成可确认的结构化草稿。'
+        '不要编造用户没有提到的地点、人名或重复规则。输出必须是严格 JSON。',
+        prompt,
+        temperature: 0.1,
+        maxTokens: 420,
+      );
+      final parsed = _parseScheduleDraft(raw, trimmed, localNow);
+      return parsed ??
+          baseDraft.withSource(
+            AiScheduleSource.aiWithLocalFallback,
+            warning: 'AI 没有返回可用草稿，已用本地时间解析生成草稿。',
+          );
+    } on AiException catch (e) {
+      return baseDraft.withSource(
+        AiScheduleSource.localParser,
+        warning: 'AI 识别失败，已用本地时间解析生成草稿：${e.message}',
+      );
+    } catch (e) {
+      return baseDraft.withSource(
+        AiScheduleSource.aiWithLocalFallback,
+        warning: 'AI 返回内容无法解析，已用本地时间解析生成草稿：$e',
+      );
     }
   }
 
@@ -107,16 +168,34 @@ class AiService extends ChangeNotifier {
         .toList();
   }
 
+  Future<String> testConnection() {
+    return _chat(
+      '你是多仪的 AI 连通性测试助手。只回复 ok。',
+      '请回复 ok，用于验证 /api/ai/chat 代理链路可用。',
+      temperature: 0,
+      maxTokens: 16,
+    );
+  }
+
   Future<String> weeklyReview({
     required int completedTodos,
     required int totalTodos,
     required int weeklyFocusMinutes,
     required int habitStreak,
     String periodLabel = '本周',
+    DateTime? now,
   }) async {
+    final createdAt = now ?? DateTime.now();
+    final cached = weeklyReviewForDay(createdAt);
+    if (cached != null) return cached.content;
     final summary =
         '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
-    return _runReview(summary, periodLabel, kind: weeklyReviewKind);
+    return _runReview(
+      summary,
+      periodLabel,
+      kind: weeklyReviewKind,
+      createdAt: createdAt,
+    );
   }
 
   /// 基于 ReportEngine 的 PeriodReport 生成自然语言周/月/年报。
@@ -204,17 +283,20 @@ class AiService extends ChangeNotifier {
     String summary,
     String periodLabel, {
     String kind = '',
+    DateTime? createdAt,
   }) async {
     final out = await _chat(
       '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
-      '语气积极不空洞，先肯定 1-2 点亮点，再提 1-2 个具体可执行的下周建议。',
+      '开头必须明确写“$periodLabel回顾：”。语气积极不空洞，先肯定 1-2 点亮点，'
+      '再提 1-2 个具体可执行的下周建议。',
       summary,
       temperature: 0.6,
       maxTokens: 400,
     );
+    final entryTime = createdAt ?? DateTime.now();
     final entry = AiReviewEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      createdAt: DateTime.now(),
+      id: entryTime.millisecondsSinceEpoch.toString(),
+      createdAt: entryTime,
       content: out,
       summary: summary,
       model: _model,
@@ -236,6 +318,479 @@ class AiService extends ChangeNotifier {
     if (entry.kind == weeklyReviewKind) return true;
     return RegExp(r'^(本周|上周)数据：').hasMatch(entry.summary);
   }
+}
+
+enum AiScheduleType { calendar, todo }
+
+enum AiScheduleSource { ai, aiWithLocalFallback, localParser }
+
+class AiScheduleDraft {
+  final AiScheduleType type;
+  final String title;
+  final DateTime startAt;
+  final DateTime? endAt;
+  final bool allDay;
+  final bool reminderEnabled;
+  final String notes;
+  final List<String> subtasks;
+  final AiScheduleSource source;
+  final String? warning;
+
+  const AiScheduleDraft({
+    required this.type,
+    required this.title,
+    required this.startAt,
+    this.endAt,
+    this.allDay = false,
+    this.reminderEnabled = false,
+    this.notes = '',
+    this.subtasks = const <String>[],
+    this.source = AiScheduleSource.ai,
+    this.warning,
+  });
+
+  bool get isCalendar => type == AiScheduleType.calendar;
+  bool get hasTime => !allDay;
+
+  AiScheduleDraft withSource(AiScheduleSource next, {String? warning}) {
+    return AiScheduleDraft(
+      type: type,
+      title: title,
+      startAt: startAt,
+      endAt: endAt,
+      allDay: allDay,
+      reminderEnabled: reminderEnabled,
+      notes: notes,
+      subtasks: subtasks,
+      source: next,
+      warning: warning ?? this.warning,
+    );
+  }
+
+  TodoItem toTodo() {
+    final dueDate = allDay ? null : startAt;
+    final reminder = reminderEnabled
+        ? ReminderConfig(
+            enabled: true,
+            kind: ReminderKind.push,
+            hour: startAt.hour,
+            minute: startAt.minute,
+            vibrate: true,
+          )
+        : const ReminderConfig.disabled();
+    final plan = reminderEnabled
+        ? ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'ai-schedule-${startAt.millisecondsSinceEpoch}',
+                enabled: true,
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: startAt.hour,
+                minute: startAt.minute,
+                vibrate: true,
+              ),
+            ],
+          )
+        : const ReminderPlan.disabled();
+    return TodoItem(
+      title: title,
+      notes: notes,
+      date: startAt,
+      dueDate: dueDate,
+      hasReminder: reminderEnabled,
+      reminderAt: reminderEnabled ? startAt : null,
+      reminder: reminder,
+      reminderPlan: plan,
+      subtasks: subtasks.map((title) => Subtask(title: title)).toList(),
+    );
+  }
+}
+
+AiScheduleDraft _fallbackScheduleDraft(String input, {DateTime? now}) {
+  final localNow = now ?? DateTime.now();
+  final draft = SmartTodoDraftBuilder.fromText(input, now: localNow);
+  final parsed = SmartDateParser.parse(input, now: localNow);
+  final hasExplicitTime = parsed.isSuccess && parsed.hasTimeOfDay;
+  final type = _inferScheduleType(input, hasExplicitTime: hasExplicitTime);
+  final title = _cleanScheduleTitle(
+    draft.title.trim().isEmpty ? input.trim() : draft.title.trim(),
+    input,
+  );
+  final startAt = parsed.isSuccess
+      ? draft.date
+      : DateTime(localNow.year, localNow.month, localNow.day);
+  final reminder = draft.hasReminder && !_hasNoReminderIntent(input);
+  return AiScheduleDraft(
+    type: type,
+    title: title,
+    startAt: startAt,
+    endAt: type == AiScheduleType.calendar && hasExplicitTime
+        ? startAt.add(const Duration(hours: 1))
+        : null,
+    allDay: !hasExplicitTime,
+    reminderEnabled: reminder,
+    notes: '来自输入：$input',
+    source: AiScheduleSource.localParser,
+  );
+}
+
+AiScheduleDraft? _parseScheduleDraft(
+  String raw,
+  String original,
+  DateTime now,
+) {
+  final jsonText = _extractJsonObject(raw);
+  if (jsonText == null) return null;
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) return null;
+  final fallback = _fallbackScheduleDraft(original, now: now);
+  final data = _scheduleDataFromJson(Map<String, dynamic>.from(decoded));
+  final rawTitle = _firstString(data, const [
+    'title',
+    'name',
+    'summary',
+    'content',
+    '标题',
+    '主题',
+    '内容',
+  ]);
+  final title = _cleanScheduleTitle(
+    rawTitle.isEmpty ? fallback.title : rawTitle,
+    original,
+  );
+  if (title.isEmpty) return null;
+
+  final parsedStart = _parseScheduleTime(
+    _firstValue(data, const [
+      'start_at',
+      'startAt',
+      'start',
+      'date',
+      'time',
+      'due_at',
+      'dueAt',
+      'reminder_at',
+      'reminderAt',
+      '开始时间',
+      '开始',
+      '时间',
+      '日期',
+    ]),
+    now,
+  );
+  final parsedEnd = _parseScheduleTime(
+    _firstValue(data, const ['end_at', 'endAt', 'end', '结束时间', '结束']),
+    now,
+  );
+  final start = parsedStart?.dateTime ?? fallback.startAt;
+  final hasTime = parsedStart?.hasTimeOfDay ?? fallback.hasTime;
+  final type = _typeFromAiData(data, original, hasExplicitTime: hasTime);
+  var end = parsedEnd?.dateTime;
+  if (end != null && !end.isAfter(start)) {
+    end = null;
+  }
+  if (type == AiScheduleType.calendar && end == null && hasTime) {
+    end = start.add(const Duration(hours: 1));
+  }
+  final allDay =
+      _parseBoolValue(
+        _firstValue(data, const ['all_day', 'allDay', '全天', '是否全天']),
+      ) ??
+      !hasTime;
+  final reminderRequested =
+      _parseBoolValue(
+        _firstValue(data, const [
+          'reminder',
+          'has_reminder',
+          'reminder_enabled',
+          'reminderEnabled',
+          '提醒',
+          '是否提醒',
+        ]),
+      ) ??
+      fallback.reminderEnabled;
+  final reminder =
+      reminderRequested && hasTime && !_hasNoReminderIntent(original);
+  final warning = reminderRequested && !hasTime ? '未识别到具体提醒时间，提醒已关闭。' : null;
+  final subtasks = _parseSubtasks(
+    _firstValue(data, const ['subtasks', 'tasks', 'checklist', '子任务', '清单']),
+  );
+  return AiScheduleDraft(
+    type: type,
+    title: title,
+    startAt: start,
+    endAt: end,
+    allDay: allDay,
+    reminderEnabled: reminder,
+    notes: _firstString(data, const [
+      'notes',
+      'note',
+      'description',
+      '备注',
+      '说明',
+    ]),
+    subtasks: subtasks,
+    warning: warning,
+  );
+}
+
+String? _extractJsonObject(String raw) {
+  var text = raw.trim();
+  final fence = RegExp(
+    r'```(?:json)?\s*([\s\S]*?)```',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (fence != null) {
+    text = fence.group(1)!.trim();
+  }
+  var depth = 0;
+  var start = -1;
+  var inString = false;
+  var escaping = false;
+  for (var i = 0; i < text.length; i++) {
+    final char = text[i];
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char == '\\') {
+        escaping = true;
+      } else if (char == '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char == '"') {
+      inString = true;
+      continue;
+    }
+    if (char == '{') {
+      if (depth == 0) start = i;
+      depth++;
+    } else if (char == '}') {
+      if (depth == 0) continue;
+      depth--;
+      if (depth == 0 && start >= 0) return text.substring(start, i + 1);
+    }
+  }
+  return null;
+}
+
+Map<String, dynamic> _scheduleDataFromJson(Map<String, dynamic> data) {
+  for (final key in const [
+    'draft',
+    'schedule',
+    'event',
+    'todo',
+    'task',
+    'data',
+    'result',
+  ]) {
+    final nested = data[key];
+    if (nested is Map) {
+      final next = Map<String, dynamic>.from(nested);
+      if (!next.containsKey('type') && data['type'] != null) {
+        next['type'] = data['type'];
+      }
+      return next;
+    }
+  }
+  return data;
+}
+
+Object? _firstValue(Map<String, dynamic> data, List<String> keys) {
+  for (final key in keys) {
+    if (data.containsKey(key)) return data[key];
+  }
+  return null;
+}
+
+String _firstString(Map<String, dynamic> data, List<String> keys) {
+  final value = _firstValue(data, keys);
+  if (value == null) return '';
+  final text = value.toString().trim();
+  if (_isBlankAiValue(text)) return '';
+  return text;
+}
+
+bool _isBlankAiValue(String text) {
+  final normalized = text.trim().toLowerCase();
+  return normalized.isEmpty ||
+      normalized == 'null' ||
+      normalized == 'none' ||
+      normalized == 'n/a' ||
+      normalized == '[]' ||
+      normalized == '无' ||
+      normalized == '空';
+}
+
+AiScheduleType _typeFromAiData(
+  Map<String, dynamic> data,
+  String original, {
+  required bool hasExplicitTime,
+}) {
+  final raw = _firstString(data, const ['type', 'kind', '类别', '类型']);
+  final typeText = raw.toLowerCase();
+  if (RegExp(r'(calendar|event|schedule|日程|会议|活动|行程|课程)').hasMatch(typeText)) {
+    return AiScheduleType.calendar;
+  }
+  if (RegExp(r'(todo|task|reminder|待办|任务|提醒)').hasMatch(typeText)) {
+    return AiScheduleType.todo;
+  }
+  return _inferScheduleType(original, hasExplicitTime: hasExplicitTime);
+}
+
+AiScheduleType _inferScheduleType(
+  String input, {
+  required bool hasExplicitTime,
+}) {
+  final text = input.trim();
+  final looksCalendar = RegExp(
+    r'(日程|会议|开会|会面|安排|约|预约|行程|面试|上课|课程|课|活动|团建|体检|复诊|看诊|拜访|出差|航班|火车|电影|演出|calendar|meeting|appointment|event|class|interview|flight)',
+    caseSensitive: false,
+  ).hasMatch(text);
+  if (looksCalendar) return AiScheduleType.calendar;
+  final looksTodo = RegExp(
+    r'(待办|任务|提醒我|记得|完成|提交|购买|买|写|整理|处理|缴|交|打卡|复习|学习|阅读|看书|发送|发给|寄|取|拿|还|做|todo|task|remind)',
+    caseSensitive: false,
+  ).hasMatch(text);
+  if (looksTodo) return AiScheduleType.todo;
+  return hasExplicitTime ? AiScheduleType.calendar : AiScheduleType.todo;
+}
+
+bool _hasNoReminderIntent(String input) {
+  return RegExp(
+    r'(不提醒|不用提醒|无需提醒|不要提醒|无提醒|no reminder)',
+    caseSensitive: false,
+  ).hasMatch(input);
+}
+
+String _cleanScheduleTitle(String value, String original) {
+  var title = value.trim();
+  if (title.isEmpty) title = original.trim();
+  title = title.replaceAll(RegExp(r'\s+'), ' ');
+  title = title.replaceFirst(RegExp(r'^[，,。；;\s]+'), '');
+  title = title.replaceFirst(RegExp(r'^(请|麻烦|帮我|请帮我|给我|为我|我要|我想|我需要)\s*'), '');
+  title = title.replaceFirst(
+    RegExp(r'^(创建|新建|添加|安排|设置|设|加)(一个|一条)?(日程|待办|任务|提醒)?\s*'),
+    '',
+  );
+  title = title.replaceFirst(
+    RegExp(r'^(和|跟|与)(?=[\u4e00-\u9fa5A-Za-z0-9])'),
+    '',
+  );
+  title = title.replaceAll(
+    RegExp(r'(提前\s*\d*\s*(分钟|小时)?\s*提醒我|提前提醒我|到时候提醒我|记得提醒我|提醒我|记得)$'),
+    '',
+  );
+  title = title.replaceAll(RegExp(r'[，,。；;\s]+$'), '').trim();
+  return title.isEmpty ? original.trim() : title;
+}
+
+_ParsedScheduleTime? _parseScheduleTime(Object? value, DateTime now) {
+  if (value == null) return null;
+  if (value is num) {
+    final millis = value > 1000000000000 ? value.toInt() : value.toInt() * 1000;
+    return _ParsedScheduleTime(
+      DateTime.fromMillisecondsSinceEpoch(millis).toLocal(),
+      hasTimeOfDay: true,
+    );
+  }
+  final text = value.toString().trim();
+  if (_isBlankAiValue(text)) return null;
+  final normalized = text.replaceAll('/', '-').replaceFirst(' ', 'T');
+  final iso = DateTime.tryParse(normalized) ?? DateTime.tryParse(text);
+  if (iso != null) {
+    return _ParsedScheduleTime(
+      iso.toLocal(),
+      hasTimeOfDay:
+          RegExp(r'(T|\s)\d{1,2}[:：]\d{1,2}').hasMatch(text) ||
+          RegExp(r'\d{1,2}[:：]\d{1,2}').hasMatch(text),
+    );
+  }
+  final parsed = SmartDateParser.parse(text, now: now);
+  if (!parsed.isSuccess) return null;
+  return _ParsedScheduleTime(
+    parsed.dateTime!,
+    hasTimeOfDay: parsed.hasTimeOfDay,
+  );
+}
+
+bool? _parseBoolValue(Object? value) {
+  if (value == null) return null;
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = value.toString().trim().toLowerCase();
+  if (_isBlankAiValue(text)) return null;
+  if (const {
+    'true',
+    'yes',
+    'y',
+    '1',
+    '是',
+    '需要',
+    '开启',
+    '开',
+    '有',
+  }.contains(text)) {
+    return true;
+  }
+  if (const {
+    'false',
+    'no',
+    'n',
+    '0',
+    '否',
+    '不需要',
+    '关闭',
+    '关',
+    '无',
+  }.contains(text)) {
+    return false;
+  }
+  return null;
+}
+
+List<String> _parseSubtasks(Object? value) {
+  final rawItems = <Object?>[];
+  if (value is List) {
+    rawItems.addAll(value);
+  } else if (value is String && !_isBlankAiValue(value)) {
+    rawItems.addAll(value.split(RegExp(r'[\n；;]+')));
+  }
+  return rawItems
+      .map((item) => item.toString().trim())
+      .map((item) => item.replaceFirst(RegExp(r'^[\-\*\d\.\s]+'), '').trim())
+      .where((item) => item.isNotEmpty)
+      .take(8)
+      .toList(growable: false);
+}
+
+class _ParsedScheduleTime {
+  final DateTime dateTime;
+  final bool hasTimeOfDay;
+
+  const _ParsedScheduleTime(this.dateTime, {required this.hasTimeOfDay});
+}
+
+String _friendlyAiError(String raw) {
+  final text = raw.trim();
+  final lower = text.toLowerCase();
+  if (text.isEmpty) return 'AI 服务没有返回有效内容';
+  if (text.contains('AI 功能未启用')) return 'AI 功能未启用，请先在管理后台开启';
+  if (text.contains('API Key')) return '管理员尚未配置 AI API Key';
+  if (text.contains('额度') || text.contains('429')) return '今日 AI 额度已用尽';
+  if (text.contains('超时')) return 'AI 服务响应超时，请稍后重试';
+  if (text.contains('404') || lower.contains('not found')) {
+    return 'AI 代理或上游模型不可用，请检查后端 /api/ai/chat、Base URL 和模型名称';
+  }
+  if (text.contains('503')) return 'AI 服务暂不可用，请检查管理后台配置';
+  if (text.contains('上游不可达') || text.contains('502')) {
+    return 'AI 上游服务不可达，请检查 Base URL、网络或模型配置';
+  }
+  if (text.contains('401') || text.contains('403')) return 'AI 密钥无效或没有模型权限';
+  return text;
 }
 
 /// 持久化的 AI 周报条目。

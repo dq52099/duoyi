@@ -52,6 +52,25 @@ void main() {
       expect(source, contains("'$key'"), reason: key);
     }
 
+    expect(
+      source,
+      contains(
+        'final selectedBackground = Color.alphaBlend(\n'
+        '              cs.primary.withValues(alpha: 0.09),',
+      ),
+    );
+    expect(source, contains('foregroundColor: selected ? cs.onSurface : null'));
+    expect(
+      source,
+      isNot(
+        contains(
+          'backgroundColor: selected\n                    ? cs.primary\n',
+        ),
+      ),
+    );
+    expect(source, isNot(contains('foregroundColor: selected ? cs.onPrimary')));
+    expect(source, isNot(contains('foregroundColor: selected ? cs.primary')));
+
     for (final hardcoded in [
       "'回到本周'",
       "'添加课表后就能看到你的一周啦'",

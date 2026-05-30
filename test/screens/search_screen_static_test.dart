@@ -39,12 +39,28 @@ void main() {
       searchScreen,
       contains('calendarEvents: context.read<CalendarProvider>().events'),
     );
+    expect(
+      searchScreen,
+      contains('countdowns: context.read<CountdownProvider>().items'),
+    );
+    expect(searchScreen, contains("import 'countdown_screen.dart';"));
+    expect(
+      searchScreen,
+      contains("import '../providers/countdown_provider.dart';"),
+    );
+    expect(
+      searchScreen,
+      contains('CountdownScreen(initialCountdownId: h.sourceId)'),
+    );
     expect(searchScreen, contains('case SearchKind.calendarEvent:'));
     expect(searchScreen, contains('CalendarScreen(initialDate: h.when)'));
     expect(searchScreen, contains("I18n.tr('search.hint')"));
     expect(searchScreen, contains("I18n.tr('search.empty')"));
     expect(searchScreen, contains("I18n.tr('search.results.title')"));
     expect(searchScreen, contains("I18n.tr('search.clear')"));
+    expect(searchScreen, contains('appSecondaryMenuItemTextStyle('));
+    expect(searchScreen, contains('fontSize: 13'));
+    expect(searchScreen, isNot(contains('style: theme.textTheme.titleMedium')));
     expect(searchScreen, isNot(contains('搜索待办 · 日程 · 习惯 · 笔记 · 日记')));
     expect(searchScreen, isNot(contains('输入关键字，搜索全部内容')));
     expect(searchScreen, isNot(contains('搜索结果')));

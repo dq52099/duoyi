@@ -195,7 +195,6 @@ void main() {
       'diaryWeatherThunder',
       'countdownTitle',
       'countdownEmpty',
-      'countdownAddRecord',
       'countdownNearestEmpty',
       'countdownNearestPrefix',
       'countdownNearestDaysPrefix',
@@ -204,7 +203,6 @@ void main() {
       'countdownListTitle',
       'countdownListSubtitle',
       'countdownCategoryDefault',
-      'countdownEditorAddTitle',
       'countdownEditorEditTitle',
       'countdownEditorSubtitle',
       'countdownFieldTitle',
@@ -1127,10 +1125,6 @@ void main() {
       ),
       'countdown.title': (zh: zh.countdownTitle, en: en.countdownTitle),
       'countdown.empty': (zh: zh.countdownEmpty, en: en.countdownEmpty),
-      'countdown.add_record': (
-        zh: zh.countdownAddRecord,
-        en: en.countdownAddRecord,
-      ),
       'countdown.nearest.empty': (
         zh: zh.countdownNearestEmpty,
         en: en.countdownNearestEmpty,
@@ -1162,10 +1156,6 @@ void main() {
       'countdown.category.default': (
         zh: zh.countdownCategoryDefault,
         en: en.countdownCategoryDefault,
-      ),
-      'countdown.editor.add_title': (
-        zh: zh.countdownEditorAddTitle,
-        en: en.countdownEditorAddTitle,
       ),
       'countdown.editor.edit_title': (
         zh: zh.countdownEditorEditTitle,

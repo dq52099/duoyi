@@ -8,6 +8,7 @@ void main() {
     final provider = File(
       'lib/providers/calendar_provider.dart',
     ).readAsStringSync();
+    final main = File('lib/main.dart').readAsStringSync();
 
     expect(model, contains('event,'));
     expect(model, contains("CalendarEventType.event => I18n.tr"));
@@ -26,6 +27,11 @@ void main() {
     expect(provider, contains('Future<void> addLocalEvent'));
     expect(provider, contains('Future<void> updateLocalEvent'));
     expect(provider, contains('Future<void> deleteLocalEvent'));
+    expect(provider, contains('localEventReminderCanceller'));
+    expect(provider, contains('await localEventReminderCanceller?.call(id);'));
+    expect(provider, contains('local event reminder cancel failed'));
+    expect(main, contains('calendarProvider.localEventReminderCanceller'));
+    expect(main, contains('notificationService.cancelCalendarReminder'));
     expect(provider, contains('..addAll(_localEvents)'));
     expect(provider, contains('_hashCalendarEvents(_localEvents)'));
   });

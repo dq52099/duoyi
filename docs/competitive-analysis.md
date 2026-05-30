@@ -298,7 +298,7 @@
 - 多维交叉分析 (`ReportCrossAnalysis` + `StatisticsScreen`): 展示专注分钟数与待办完成数、习惯达标次数与待办完成数、日记篇数与专注分钟数相关性散点图，时间分类占比趋势堆叠图，以及时间投入 × 待办产出效率（`timeOutputEfficiency`，按时间桶统计每小时完成待办数）
 - 四象限执行分布 (`StatisticsScreen`): 按当前待办池展示重要紧急/重要不紧急/紧急不重要/不重要不紧急四类总数、未完成、逾期、今日到期、已完成、占比和行动建议
 - 统计报告 Markdown/PNG/PDF 导出 (`StatisticsScreen` + `pdf`，`statistics_report_export_static_test`): PDF 支持视觉版、归档版、简报版、仪表版和时间线版五种模板，并通过随包 CJK 字体输出可检索中文文字层
-- 每日复盘/周报/月报/年报定时通知 (`PreferencesScreen` 报告推送 + `main.dart` `_syncReportDigestReminders` + `ReportReminderConfig`): 可分别开启每日复盘、周报、月报和年报，每日复盘支持自定义推送时间，周报支持自定义星期几和推送时间，月报支持自定义每月日期和推送时间，年报支持自定义月份、日期和推送时间，选择 29-31 日时会按短月份自动夹到月末；通知正文由 `PeriodReportDigest.notificationBody` 动态汇总效率分、完成项、专注、习惯、时间足迹和环比变化，并在待办/习惯/专注/时间足迹变化后 debounce 重排，点击 `duoyi://report/...` 直达统计报表
+- 每日复盘/周报/月报/年报定时通知 (`NotificationSettingsScreen` 报告推送 + `main.dart` `_syncReportDigestReminders` + `ReportReminderConfig`): 可分别开启每日复盘、周报、月报和年报，每日复盘支持自定义推送时间，周报支持自定义星期几和推送时间，月报支持自定义每月日期和推送时间，年报支持自定义月份、日期和推送时间，选择 29-31 日时会按短月份自动夹到月末；通知正文由 `PeriodReportDigest.notificationBody` 动态汇总效率分、完成项、专注、习惯、时间足迹和环比变化，并在待办/习惯/专注/时间足迹变化后 debounce 重排，点击 `duoyi://report/...` 直达统计报表
 - 云端个性化报告解读 (`StatisticsScreen` + `AiService.personalizedReportReview`): 当前周期报告卡可一键调用服务端 `/api/ai/chat`，基于周/月/年报告 Markdown 生成结构化个性化解读、未来 7 天行动建议，并写入 AI 历史
 
 #### 缺失 — 与竞品差距
@@ -425,11 +425,11 @@
 
 ### 4.1 全场景一体化（最核心优势）
 
-多仪在**单一 App** 内集成了：待办 + 习惯 + 目标 + 日历 + 番茄钟 + 日记 + 笔记 + 课程表 + 倒数日 + 纪念日 + 老黄历。
+多仪在**单一 App** 内集成了：待办 + 习惯 + 目标 + 日历 + 番茄钟 + 日记 + 笔记 + 课程表 + 倒数日 + 纪念日 + 万年历农历/宜忌。
 
-- 滴答清单覆盖 ~70%（缺日记/笔记/目标/倒数日/纪念日/黄历）
+- 滴答清单覆盖 ~70%（缺日记/笔记/目标/倒数日/纪念日/农历宜忌）
 - Todoist 覆盖 ~40%（纯任务管理 + 日历）
-- 番茄TODO 覆盖 ~50%（缺日历/目标/笔记/纪念日/黄历）
+- 番茄TODO 覆盖 ~50%（缺日历/目标/笔记/纪念日/农历宜忌）
 - Forest 覆盖 ~15%（仅专注）
 - Microsoft To Do 覆盖 ~30%（纯任务 + 日程）
 
@@ -460,7 +460,7 @@
 ### 4.5 中国文化特色功能集（差异化）
 
 - **农历/节气**：`LunarCalendar.fromSolar()` + `solarTerm()` + 节日检测
-- **老黄历**：`AlmanacScreen` 宜忌查询
+- **万年历宜忌**：`AlmanacScreen` 在万年历内展示农历、节气、节日和宜忌查询，不再保留单独“黄历”入口
 - **纪念日**：农历循环纪念（竞品多只支持公历）
 - **倒数日**：独立模块，非简单的提前提醒
 

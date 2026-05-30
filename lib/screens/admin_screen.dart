@@ -11,6 +11,7 @@ import '../core/app_config.dart';
 import '../core/i18n_date_format.dart';
 import '../providers/auth_provider.dart';
 import '../services/admin_api.dart';
+import '../services/ai_service.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -27,40 +28,65 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen>
     with SingleTickerProviderStateMixin {
+  static const int _adminTabCount = 10;
   late TabController _tabs;
   late final List<int> _tabRefreshSerials;
+  late int _activeTabIndex;
 
   @override
   void initState() {
     super.initState();
+    _activeTabIndex = widget.initialTabIndex.clamp(0, _adminTabCount - 1);
     _tabs = TabController(
-      length: 9,
+      length: _adminTabCount,
       vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 8),
+      initialIndex: _activeTabIndex,
     );
-    _tabRefreshSerials = List<int>.filled(9, 0);
+    _tabs.addListener(_handleTabChanged);
+    _tabRefreshSerials = List<int>.filled(_adminTabCount, 0);
   }
 
   @override
   void dispose() {
+    _tabs.removeListener(_handleTabChanged);
     _tabs.dispose();
     super.dispose();
+  }
+
+  void _handleTabChanged() {
+    final nextIndex = _tabs.index.clamp(0, _adminTabCount - 1);
+    if (nextIndex == _activeTabIndex) return;
+    setState(() => _activeTabIndex = nextIndex);
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     if (!auth.state.isAdmin) {
       return Scaffold(
-        appBar: AppBar(title: const Text('管理员后台')),
+        backgroundColor: routeBackground,
+        appBar: AppBar(
+          title: const Text('管理员后台'),
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+          backgroundColor: routeBackground.withValues(alpha: 0.96),
+          surfaceTintColor: Colors.transparent,
+        ),
         body: const EmptyState(icon: Icons.lock, message: '仅管理员可访问'),
       );
     }
     final api = AdminApi(auth.client);
 
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
         title: const Text('管理员后台'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             tooltip: '刷新当前页',
@@ -79,50 +105,60 @@ class _AdminScreenState extends State<AdminScreen>
           labelPadding: const EdgeInsets.symmetric(horizontal: 6),
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
+          labelStyle: appSecondaryMenuItemTextStyle(context),
+          unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
           indicator: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: 0.12),
+              width: 0.45,
+            ),
           ),
-          labelColor: Theme.of(context).colorScheme.onPrimaryContainer,
-          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          labelColor: cs.onSurface,
+          unselectedLabelColor: cs.onSurfaceVariant,
           tabs: const [
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.dashboard_outlined, text: '概览'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
             ),
             Tab(
-              height: 44,
+              height: 38,
+              child: _AdminTabLabel(icon: Icons.groups_2_outlined, text: '用户组'),
+            ),
+            Tab(
+              height: 38,
               child: _AdminTabLabel(icon: Icons.campaign_outlined, text: '公告'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(
                 icon: Icons.feedback_outlined,
                 text: '许愿与反馈',
               ),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(icon: Icons.vpn_key_outlined, text: '邀请码'),
             ),
             Tab(
-              height: 44,
+              height: 38,
               child: _AdminTabLabel(
                 icon: Icons.receipt_long_outlined,
                 text: '日志',
@@ -134,45 +170,196 @@ class _AdminScreenState extends State<AdminScreen>
       body: TabBarView(
         controller: _tabs,
         children: [
-          _DashboardTab(
-            key: ValueKey('admin-dashboard-${_tabRefreshSerials[0]}'),
-            api: api,
+          _AdminTabContent(
+            child: _DashboardTab(
+              key: ValueKey('admin-dashboard-${_tabRefreshSerials[0]}'),
+              api: api,
+            ),
           ),
-          _SettingsTab(
-            key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
-            api: api,
+          _AdminTabContent(
+            child: _SettingsTab(
+              key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
+              api: api,
+            ),
           ),
-          _AiSettingsTab(
-            key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
-            api: api,
+          _AdminTabContent(
+            child: _AiSettingsTab(
+              key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
+              api: api,
+            ),
           ),
-          _BackupSettingsTab(
-            key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
-            api: api,
+          _AdminTabContent(
+            child: _BackupSettingsTab(
+              key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
+              api: api,
+            ),
           ),
-          _UsersTab(
-            key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
-            api: api,
-            selfId: auth.state.userId,
+          _AdminTabContent(
+            child: _UsersTab(
+              key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
+              api: api,
+              selfId: auth.state.userId,
+              selfAdminPermissions: auth.state.adminPermissions,
+              isActive: _activeTabIndex == 4,
+            ),
           ),
-          _AnnouncementsTab(
-            key: ValueKey('admin-announcements-${_tabRefreshSerials[5]}'),
-            api: api,
+          _AdminTabContent(
+            child: _GroupsTab(
+              key: ValueKey('admin-groups-${_tabRefreshSerials[5]}'),
+              api: api,
+            ),
           ),
-          _FeedbackTab(
-            key: ValueKey('admin-feedback-${_tabRefreshSerials[6]}'),
-            api: api,
+          _AdminTabContent(
+            child: _AnnouncementsTab(
+              key: ValueKey('admin-announcements-${_tabRefreshSerials[6]}'),
+              api: api,
+            ),
           ),
-          _InvitesTab(
-            key: ValueKey('admin-invites-${_tabRefreshSerials[7]}'),
-            api: api,
+          _AdminTabContent(
+            child: _FeedbackTab(
+              key: ValueKey('admin-feedback-${_tabRefreshSerials[7]}'),
+              api: api,
+            ),
           ),
-          _AuditLogTab(
-            key: ValueKey('admin-audit-${_tabRefreshSerials[8]}'),
-            api: api,
+          _AdminTabContent(
+            child: _InvitesTab(
+              key: ValueKey('admin-invites-${_tabRefreshSerials[8]}'),
+              api: api,
+            ),
+          ),
+          _AdminTabContent(
+            child: _AuditLogTab(
+              key: ValueKey('admin-audit-${_tabRefreshSerials[9]}'),
+              api: api,
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminTabContent extends StatelessWidget {
+  final Widget child;
+
+  const _AdminTabContent({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 3200),
+            child: SizedBox(
+              width: double.infinity,
+              height: constraints.maxHeight,
+              child: AppSecondaryControlTheme(
+                child: _AdminGlassControlTheme(child: child),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminGlassControlTheme extends StatelessWidget {
+  final Widget child;
+
+  const _AdminGlassControlTheme({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final controlText = appSecondaryControlTextStyle(
+      context,
+    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.w400);
+    final labelText = appSecondaryControlLabelStyle(
+      context,
+    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.w400);
+    final selectedFill = isDark
+        ? cs.primary.withValues(alpha: 0.16)
+        : cs.primary.withValues(alpha: 0.075);
+    final selectedBorder = cs.primary.withValues(alpha: isDark ? 0.24 : 0.18);
+    final selectedForeground = cs.onSurface;
+    final defaultBorder = cs.outlineVariant.withValues(
+      alpha: isDark ? 0.09 : 0.11,
+    );
+    final glassFill = isDark
+        ? cs.surfaceContainerHighest.withValues(alpha: 0.28)
+        : cs.surfaceContainerHighest.withValues(alpha: 0.36);
+
+    ButtonStyle adminTextButtonStyle() {
+      return TextButton.styleFrom(
+        foregroundColor: cs.primary,
+        textStyle: controlText,
+        minimumSize: const Size(0, 30),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      );
+    }
+
+    ButtonStyle adminOutlinedButtonStyle() {
+      return OutlinedButton.styleFrom(
+        foregroundColor: cs.onSurface,
+        disabledForegroundColor: cs.onSurface.withValues(alpha: 0.36),
+        side: BorderSide(color: defaultBorder, width: 0.45),
+        textStyle: controlText,
+        minimumSize: const Size(0, 30),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      );
+    }
+
+    ButtonStyle adminFilledButtonStyle() {
+      return FilledButton.styleFrom(
+        backgroundColor: glassFill,
+        foregroundColor: cs.onSurface,
+        disabledBackgroundColor: glassFill.withValues(alpha: 0.42),
+        disabledForegroundColor: cs.onSurface.withValues(alpha: 0.34),
+        side: BorderSide(color: defaultBorder, width: 0.45),
+        textStyle: controlText,
+        minimumSize: const Size(0, 30),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      );
+    }
+
+    return Theme(
+      data: theme.copyWith(
+        textButtonTheme: TextButtonThemeData(style: adminTextButtonStyle()),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: adminOutlinedButtonStyle(),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: adminFilledButtonStyle(),
+        ),
+        chipTheme: theme.chipTheme.copyWith(
+          labelStyle: labelText.copyWith(color: cs.onSurface),
+          secondaryLabelStyle: labelText.copyWith(color: selectedForeground),
+          selectedColor: selectedFill,
+          backgroundColor: glassFill.withValues(alpha: 0.72),
+          disabledColor: glassFill.withValues(alpha: 0.36),
+          checkmarkColor: selectedForeground,
+          iconTheme: IconThemeData(size: 15, color: selectedForeground),
+          side: BorderSide(color: defaultBorder, width: 0.45),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+            side: BorderSide(color: selectedBorder, width: 0.45),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -185,13 +372,17 @@ class _AdminTabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 92,
+    final textWidth = text.length * 12.0 + 28.0;
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: textWidth.clamp(72.0, 118.0),
+        maxWidth: 128,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 6),
+          Icon(icon, size: 16),
+          const SizedBox(width: 5),
           Flexible(
             child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
@@ -201,16 +392,69 @@ class _AdminTabLabel extends StatelessWidget {
   }
 }
 
+class _AdminChipWrap extends StatelessWidget {
+  final EdgeInsetsGeometry padding;
+  final List<Widget> children;
+
+  const _AdminChipWrap({
+    required this.children,
+    this.padding = const EdgeInsets.fromLTRB(12, 0, 12, 8),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(spacing: 8, runSpacing: 6, children: children),
+      ),
+    );
+  }
+}
+
+class _AdminCompactChipStrip extends StatelessWidget {
+  final EdgeInsetsGeometry padding;
+  final List<Widget> children;
+
+  const _AdminCompactChipStrip({
+    required this.children,
+    this.padding = const EdgeInsets.fromLTRB(12, 0, 12, 6),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: SingleChildScrollView(
+        key: const ValueKey('admin_compact_chip_strip_horizontal'),
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final child in children) ...[child, const SizedBox(width: 6)],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Border _adminSubtleSectionBorder(BuildContext context) {
   final theme = Theme.of(context);
-  final alpha = theme.brightness == Brightness.dark ? 0.08 : 0.035;
-  return Border.all(color: theme.colorScheme.outline.withValues(alpha: alpha));
+  final alpha = theme.brightness == Brightness.dark ? 0.07 : 0.026;
+  return Border.all(
+    color: theme.colorScheme.outline.withValues(alpha: alpha),
+    width: 0.45,
+  );
 }
 
 Border _adminSubtleListBorder(BuildContext context) {
   final theme = Theme.of(context);
-  final alpha = theme.brightness == Brightness.dark ? 0.1 : 0.045;
-  return Border.all(color: theme.colorScheme.outline.withValues(alpha: alpha));
+  final alpha = theme.brightness == Brightness.dark ? 0.06 : 0.020;
+  return Border.all(
+    color: theme.colorScheme.outline.withValues(alpha: alpha),
+    width: 0.45,
+  );
 }
 
 class _AdminListTileCard extends StatelessWidget {
@@ -218,6 +462,7 @@ class _AdminListTileCard extends StatelessWidget {
   final Widget title;
   final Widget? subtitle;
   final Widget? trailing;
+  final VoidCallback? onTap;
   final EdgeInsetsGeometry margin;
   final bool dense;
   final bool isThreeLine;
@@ -227,6 +472,7 @@ class _AdminListTileCard extends StatelessWidget {
     this.leading,
     this.subtitle,
     this.trailing,
+    this.onTap,
     this.margin = EdgeInsets.zero,
     this.dense = false,
     this.isThreeLine = false,
@@ -239,7 +485,9 @@ class _AdminListTileCard extends StatelessWidget {
       leading: leading,
       subtitle: subtitle,
       trailing: trailing,
+      onTap: onTap,
       margin: margin,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       dense: dense,
       isThreeLine: isThreeLine,
       border: _adminSubtleListBorder(context),
@@ -347,7 +595,7 @@ class _DashboardTabState extends State<_DashboardTab> {
               Icons.shield,
               Colors.deepOrange,
             ),
-            _Kpi('已禁用', '${users['disabled'] ?? 0}', Icons.block, Colors.red),
+            _Kpi('已禁用', '${users['disabled'] ?? 0}', Icons.block, cs.error),
             _Kpi(
               '今日新增',
               '${users['new_today'] ?? 0}',
@@ -501,7 +749,10 @@ class _GridCards extends StatelessWidget {
             (k) => AppSurfaceCard(
               padding: const EdgeInsets.all(12),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: k.color.withValues(alpha: 0.16)),
+              border: Border.all(
+                color: k.color.withValues(alpha: 0.16),
+                width: 0.45,
+              ),
               child: Row(
                 children: [
                   Container(
@@ -551,12 +802,11 @@ class _GridCards extends StatelessWidget {
 }
 
 const int _adminPageSize = 20;
-const List<int> _adminPageSizeOptions = [20, 50, 100];
+const List<int> _adminPageSizeOptions = [20, 50, 100, 200];
 const String _adminUpdatePresetCurrent = 'current';
 const String _adminUpdatePresetNextPatch = 'next_patch';
 const String _adminUpdatePresetNextMinor = 'next_minor';
-const String _adminUpdatePresetForceCurrent = 'force_current';
-const String _adminUpdatePresetCustom = 'custom';
+const String _adminUpdatePresetMinimumNextPatch = 'minimum_next_patch';
 const String _adminAllPermission = '*';
 const String _adminNoPermission = '__none__';
 const Map<String, String> _adminPermissionLabels = {
@@ -569,6 +819,9 @@ const Map<String, String> _adminPermissionLabels = {
   'feedback': '反馈',
   'invites': '邀请码',
   'audit': '日志',
+  'groups': '用户组',
+  'roles': '角色',
+  'permissions': '权限字典',
 };
 
 String _adminStatusLabel(String value) {
@@ -620,6 +873,20 @@ String _adminStatusLabel(String value) {
   }
 }
 
+class _AdminUpdateVersionOption {
+  final String key;
+  final String label;
+  final String latestVersion;
+  final String minimumSupportedVersion;
+
+  const _AdminUpdateVersionOption({
+    required this.key,
+    required this.label,
+    required this.latestVersion,
+    required this.minimumSupportedVersion,
+  });
+}
+
 String _adminUserSortLabel(String value) {
   switch (value) {
     case 'last_active_desc':
@@ -667,6 +934,12 @@ String _adminPermissionsLabel(
 int _adminIntValue(dynamic raw) {
   if (raw is num) return raw.toInt();
   return int.tryParse(raw?.toString() ?? '') ?? 0;
+}
+
+int _adminIntValueOrDefault(dynamic raw, int fallback) {
+  if (raw == null) return fallback;
+  if (raw is String && raw.trim().isEmpty) return fallback;
+  return _adminIntValue(raw);
 }
 
 String _adminAnnouncementSortLabel(String value) {
@@ -794,8 +1067,11 @@ String _feedbackCategoryLabel(String value) {
 String _adminPageSummary(AdminPage? page) {
   if (page == null) return '正在加载本页数据';
   if (page.total <= 0) return '0 条';
-  final start = page.offset + 1;
-  final end = page.offset + page.items.length;
+  final safeLimit = page.limit <= 0 ? _adminPageSize : page.limit;
+  final maxOffset = ((page.total - 1) ~/ safeLimit) * safeLimit;
+  final safeOffset = page.offset.clamp(0, maxOffset).toInt();
+  final start = safeOffset + 1;
+  final end = (safeOffset + page.items.length).clamp(start, page.total).toInt();
   return '第 $start-$end 条 / 共 ${page.total} 条';
 }
 
@@ -803,11 +1079,11 @@ String _adminPageNumber(AdminPage? page) {
   if (page == null) return '第 -/- 页';
   if (page.total <= 0) return '第 0/0 页';
   final safeLimit = page.limit <= 0 ? _adminPageSize : page.limit;
-  final current = (page.offset ~/ safeLimit) + 1;
   final totalPages = ((page.total + safeLimit - 1) ~/ safeLimit).clamp(
     1,
     999999,
   );
+  final current = ((page.offset ~/ safeLimit) + 1).clamp(1, totalPages).toInt();
   return '第 $current/$totalPages 页';
 }
 
@@ -832,9 +1108,20 @@ int _offsetAfterAdminDelete({
   return offset;
 }
 
+int _lastAdminOffset({required int total, required int pageSize}) {
+  if (total <= 0) return 0;
+  final safeLimit = pageSize <= 0 ? _adminPageSize : pageSize;
+  return ((total - 1) ~/ safeLimit) * safeLimit;
+}
+
 String _adminErrorMessage(Object error, String target) {
   final text = error is ApiException ? error.message : error.toString();
   return '无法加载$target：$text';
+}
+
+String _adminActionErrorMessage(Object error, String action) {
+  final text = error is ApiException ? error.message : error.toString();
+  return '$action失败：$text';
 }
 
 Future<bool> _confirmAdminDangerAction({
@@ -855,7 +1142,14 @@ Future<bool> _confirmAdminDangerAction({
           child: const Text('取消'),
         ),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+            foregroundColor: Theme.of(ctx).colorScheme.onError,
+            minimumSize: const Size(0, 30),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(confirmLabel),
         ),
@@ -986,51 +1280,39 @@ class _AdminPaginationBar extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final topBorderColor = cs.outlineVariant.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.32 : 0.38,
+      alpha: theme.brightness == Brightness.dark ? 0.08 : 0.055,
+    );
+    final summaryTextStyle = appSecondaryControlLabelStyle(
+      context,
+    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62), fontSize: 10.5);
+    final glassControlFill = theme.brightness == Brightness.dark
+        ? cs.surfaceContainerHighest.withValues(alpha: 0.30)
+        : cs.surfaceContainerHighest.withValues(alpha: 0.38);
+    final glassControlBorder = cs.outlineVariant.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.09 : 0.11,
     );
     return Container(
       key: barKey,
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        border: Border(top: BorderSide(color: topBorderColor)),
+        color: cs.surfaceContainerLowest.withValues(alpha: 0.42),
+        border: Border(top: BorderSide(color: topBorderColor, width: 0.35)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final summary = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _adminPageSummary(page),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.68),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _adminPageNumber(page),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.52),
-                ),
-              ),
-            ],
-          );
-          final compactButtonStyle = ButtonStyle(
-            minimumSize: const WidgetStatePropertyAll(Size(0, 46)),
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 12),
-            ),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          final summary = Text(
+            '${_adminPageSummary(page)} · ${_adminPageNumber(page)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: summaryTextStyle,
           );
           final pageSizePicker = onPageSizeChanged == null
               ? null
               : _AdminPaginationLabeledControl(
                   label: '每页',
-                  child: DropdownButton<int>(
+                  child: AppCompactDropdown<int>(
+                    width: 54,
                     value: pageSize,
-                    underline: const SizedBox.shrink(),
-                    isDense: true,
                     items: _adminPageSizeOptions
                         .map(
                           (v) => DropdownMenuItem(value: v, child: Text('$v')),
@@ -1047,10 +1329,9 @@ class _AdminPaginationBar extends StatelessWidget {
               ? null
               : _AdminPaginationLabeledControl(
                   label: '页码',
-                  child: DropdownButton<int>(
+                  child: AppCompactDropdown<int>(
+                    width: 76,
                     value: currentPage.clamp(1, totalPages).toInt(),
-                    underline: const SizedBox.shrink(),
-                    isDense: true,
                     items: List.generate(totalPages > 200 ? 200 : totalPages, (
                       index,
                     ) {
@@ -1067,135 +1348,141 @@ class _AdminPaginationBar extends StatelessWidget {
                           },
                   ),
                 );
-          Widget navigation({required bool compact}) {
-            final previousButton = compact
-                ? OutlinedButton(
-                    style: compactButtonStyle,
-                    onPressed: canPrevious ? onPrevious : null,
-                    child: const Text('上一页'),
-                  )
-                : OutlinedButton.icon(
-                    onPressed: canPrevious ? onPrevious : null,
-                    icon: const Icon(Icons.chevron_left),
-                    label: const Text('上一页'),
-                  );
-            final nextButton = compact
-                ? FilledButton.tonal(
-                    style: compactButtonStyle,
-                    onPressed: canNext ? onNext : null,
-                    child: const Text('下一页'),
-                  )
-                : FilledButton.tonalIcon(
-                    onPressed: canNext ? onNext : null,
-                    icon: const Icon(Icons.chevron_right),
-                    label: const Text('下一页'),
-                  );
-            final hasPageShortcuts = onJumpToPage != null && totalPages > 1;
-            if (compact) {
-              return Row(
-                children: [
-                  if (hasPageShortcuts) ...[
-                    Tooltip(
-                      message: '跳到第一页',
-                      child: SizedBox.square(
-                        dimension: 44,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: canPrevious
-                              ? () => onJumpToPage!(1)
-                              : null,
-                          icon: const Icon(Icons.first_page),
+          Widget navigation() {
+            Widget navButton({
+              required String message,
+              required IconData icon,
+              required VoidCallback? onPressed,
+            }) {
+              return Tooltip(
+                message: message,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: SizedBox.square(
+                    dimension: 30,
+                    child: IconButton(
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      style: IconButton.styleFrom(
+                        backgroundColor: onPressed == null
+                            ? Colors.transparent
+                            : glassControlFill,
+                        disabledBackgroundColor: Colors.transparent,
+                        side: BorderSide(
+                          color: onPressed == null
+                              ? glassControlBorder.withValues(alpha: 0.50)
+                              : glassControlBorder,
+                          width: 0.45,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
                         ),
                       ),
+                      onPressed: onPressed,
+                      icon: Icon(icon),
                     ),
-                    const SizedBox(width: 6),
-                  ],
-                  Expanded(child: previousButton),
-                  const SizedBox(width: 8),
-                  Expanded(child: nextButton),
-                  if (hasPageShortcuts) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: '跳到最后一页',
-                      child: SizedBox.square(
-                        dimension: 44,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: canNext
-                              ? () => onJumpToPage!(totalPages)
-                              : null,
-                          icon: const Icon(Icons.last_page),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                  ),
+                ),
               );
             }
+
+            final hasPageShortcuts = onJumpToPage != null && totalPages > 1;
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (hasPageShortcuts) ...[
-                  Tooltip(
+                if (hasPageShortcuts)
+                  navButton(
                     message: '跳到第一页',
-                    child: IconButton(
-                      onPressed: canPrevious ? () => onJumpToPage!(1) : null,
-                      icon: const Icon(Icons.first_page),
-                    ),
+                    icon: Icons.first_page,
+                    onPressed: canPrevious ? () => onJumpToPage!(1) : null,
                   ),
-                  const SizedBox(width: 4),
-                ],
-                Tooltip(message: '上一页', child: previousButton),
-                const SizedBox(width: 8),
-                Tooltip(message: '下一页', child: nextButton),
-                if (hasPageShortcuts) ...[
-                  const SizedBox(width: 4),
-                  Tooltip(
+                navButton(
+                  message: '上一页',
+                  icon: Icons.chevron_left,
+                  onPressed: canPrevious ? onPrevious : null,
+                ),
+                navButton(
+                  message: '下一页',
+                  icon: Icons.chevron_right,
+                  onPressed: canNext ? onNext : null,
+                ),
+                if (hasPageShortcuts)
+                  navButton(
                     message: '跳到最后一页',
-                    child: IconButton(
-                      onPressed: canNext
-                          ? () => onJumpToPage!(totalPages)
-                          : null,
-                      icon: const Icon(Icons.last_page),
-                    ),
+                    icon: Icons.last_page,
+                    onPressed: canNext ? () => onJumpToPage!(totalPages) : null,
                   ),
-                ],
               ],
             );
           }
 
-          final isCompact = constraints.maxWidth < 760;
-          if (isCompact) {
-            final controls = [?pageJump, ?pageSizePicker];
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                summary,
-                if (controls.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
-                    children: controls,
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Tooltip(message: '分页导航', child: navigation(compact: true)),
-              ],
-            );
-          }
-          return Row(
+          final isCompact = constraints.maxWidth < 700;
+          final fullControls = Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(child: summary),
-              if (pageJump != null) ...[pageJump, const SizedBox(width: 12)],
+              if (pageJump != null) ...[pageJump, const SizedBox(width: 6)],
               if (pageSizePicker != null) ...[
                 pageSizePicker,
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
               ],
-              navigation(compact: false),
+              Tooltip(message: '分页导航', child: navigation()),
             ],
+          );
+          final compactControls = Wrap(
+            key: const ValueKey('admin_compact_pagination_controls'),
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              ?pageJump,
+              ?pageSizePicker,
+              Tooltip(message: '分页导航', child: navigation()),
+            ],
+          );
+          if (isCompact) {
+            return SizedBox(
+              width: double.infinity,
+              key: const ValueKey('admin_compact_pagination_full_width'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    runSpacing: 4,
+                    spacing: 8,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: summary,
+                      ),
+                      compactControls,
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          return SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: summary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                fullControls,
+              ],
+            ),
           );
         },
       ),
@@ -1223,27 +1510,373 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.08 : 0.10),
+          width: 0.45,
+        ),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 160, minHeight: 44),
+        constraints: const BoxConstraints(minWidth: 66, minHeight: 30),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.68),
-                ),
+                style: appSecondaryControlLabelStyle(
+                  context,
+                ).copyWith(color: cs.onSurface.withValues(alpha: 0.68)),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               child,
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GroupsTab extends StatefulWidget {
+  final AdminApi api;
+
+  const _GroupsTab({super.key, required this.api});
+
+  @override
+  State<_GroupsTab> createState() => _GroupsTabState();
+}
+
+class _GroupsTabState extends State<_GroupsTab> {
+  final List<Map<String, dynamic>> _groups = [];
+  AdminPage? _page;
+  bool _loading = true;
+  String? _error;
+  int _offset = 0;
+  int _pageSize = _adminPageSize;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load({int? pageSize, int? offset}) async {
+    final nextPageSize = pageSize ?? _pageSize;
+    final nextOffset = offset ?? _offset;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _pageSize = nextPageSize;
+      _offset = nextOffset;
+    });
+    try {
+      final page = await widget.api.listGroupsPage(
+        limit: nextPageSize,
+        offset: nextOffset,
+      );
+      if (!mounted) return;
+      _page = page;
+      _groups
+        ..clear()
+        ..addAll(page.items);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _error = e.message;
+    } catch (e) {
+      if (!mounted) return;
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _editGroup([Map<String, dynamic>? group]) async {
+    final nameCtrl = TextEditingController(
+      text: (group?['name'] ?? '').toString(),
+    );
+    final descCtrl = TextEditingController(
+      text: (group?['description'] ?? '').toString(),
+    );
+    final coinsCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_time_coins'],
+        100,
+      ).toString(),
+    );
+    final generateQuotaCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_generate_quota'],
+        100,
+      ).toString(),
+    );
+    final editQuotaCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_edit_quota'],
+        100,
+      ).toString(),
+    );
+    final generateHistoryCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_generate_history_retention'],
+        50,
+      ).toString(),
+    );
+    final editHistoryCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_edit_history_retention'],
+        20,
+      ).toString(),
+    );
+    var imageMode = (group?['image_mode'] ?? 'vip').toString();
+    if (imageMode != 'general' && imageMode != 'vip') imageMode = 'vip';
+    var isActive = group?['is_active'] != false;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text(group == null ? '新增用户组' : '编辑用户组'),
+          icon: const Icon(Icons.groups_2_outlined),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: '用户组名称'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: const InputDecoration(labelText: '说明'),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: coinsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认时光币',
+                      helperText: '新注册或分配到该组时使用的默认额度',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: generateQuotaCtrl,
+                    decoration: const InputDecoration(labelText: '默认生图额度'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: editQuotaCtrl,
+                    decoration: const InputDecoration(labelText: '默认改图额度'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: generateHistoryCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认生图历史保留',
+                      helperText: '留存基础额度；组内用户可按等级继续叠加',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: editHistoryCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认改图历史保留',
+                      helperText: '留存基础额度；组内用户可按等级继续叠加',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  AppDropdownField<String>(
+                    initialValue: imageMode,
+                    labelText: '图片额度模式',
+                    items: const [
+                      DropdownMenuItem(value: 'vip', child: Text('高级额度')),
+                      DropdownMenuItem(value: 'general', child: Text('普通额度')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setSt(() => imageMode = value);
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: const Text('启用用户组'),
+                    onChanged: (value) => setSt(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final coinsText = coinsCtrl.text.trim();
+    final generateQuotaText = generateQuotaCtrl.text.trim();
+    final editQuotaText = editQuotaCtrl.text.trim();
+    final generateHistoryText = generateHistoryCtrl.text.trim();
+    final editHistoryText = editHistoryCtrl.text.trim();
+    final name = nameCtrl.text.trim();
+    final description = descCtrl.text.trim();
+    if (saved != true) return;
+    if (name.isEmpty) {
+      _showSnack('请填写用户组名称');
+      return;
+    }
+    try {
+      await widget.api.saveGroup(
+        id: group?['id']?.toString(),
+        name: name,
+        description: description,
+        defaultTimeCoins: (int.tryParse(coinsText) ?? 100).clamp(0, 1000000),
+        defaultGenerateQuota: (int.tryParse(generateQuotaText) ?? 100).clamp(
+          0,
+          1000000,
+        ),
+        defaultEditQuota: (int.tryParse(editQuotaText) ?? 100).clamp(
+          0,
+          1000000,
+        ),
+        defaultGenerateHistoryRetention:
+            (int.tryParse(generateHistoryText) ?? 50).clamp(0, 1000000),
+        defaultEditHistoryRetention: (int.tryParse(editHistoryText) ?? 20)
+            .clamp(0, 1000000),
+        imageMode: imageMode,
+        isActive: isActive,
+      );
+      await _load(offset: _offset);
+      _showSnack('用户组已保存');
+    } on ApiException catch (e) {
+      _showSnack(e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _groups.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _groups.isEmpty) {
+      return Center(child: Text(_error!));
+    }
+    final cs = Theme.of(context).colorScheme;
+    final page =
+        _page ??
+        AdminPage.fromItems(_groups, limit: _pageSize, offset: _offset);
+    return Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _load(offset: _offset),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: [
+                _AdminSettingsSection(
+                  title: '用户组管理',
+                  subtitle: '默认普通用户 100 时光币；管理员可调整各组额度和启用状态',
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppInfoBanner(
+                            icon: Icons.toll_outlined,
+                            title: '默认额度',
+                            message: '新用户注册后按所属用户组发放时光币，默认组为 100。',
+                            color: cs.primary,
+                            margin: EdgeInsets.zero,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          onPressed: () => _editGroup(),
+                          icon: const Icon(Icons.add),
+                          label: const Text('新增用户组'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (page.items.isEmpty)
+                  const EmptyState(
+                    icon: Icons.groups_2_outlined,
+                    message: '暂无用户组',
+                  )
+                else
+                  for (final group in page.items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _AdminListTileCard(
+                        dense: true,
+                        leading: Icon(
+                          Icons.groups_2_outlined,
+                          color: group['is_active'] == false
+                              ? cs.onSurfaceVariant
+                              : cs.primary,
+                        ),
+                        title: Text(
+                          (group['name'] ?? group['id'] ?? '未命名用户组').toString(),
+                        ),
+                        subtitle: Text(
+                          '默认 ${_adminIntValue(group['default_time_coins'])} 时光币 · '
+                          '生图 ${_adminIntValue(group['default_generate_quota'])} · '
+                          '改图 ${_adminIntValue(group['default_edit_quota'])} · '
+                          '${_adminIntValue(group['user_count'])} 人 · '
+                          '${group['is_active'] == false ? '停用' : '启用'}',
+                        ),
+                        trailing: IconButton(
+                          tooltip: '编辑用户组',
+                          onPressed: () => _editGroup(group),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ),
+        _AdminPaginationBar(
+          barKey: const ValueKey('admin_groups_pagination_bar'),
+          page: page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: (pageNo) =>
+              _load(offset: ((pageNo - 1) * _pageSize).clamp(0, page.total)),
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+        ),
+      ],
     );
   }
 }
@@ -1261,14 +1894,16 @@ class _SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<_SettingsTab> {
   Map<String, dynamic> _data = {};
+  List<Map<String, dynamic>> _groups = [];
+  List<Map<String, dynamic>> _roles = [];
   bool _loading = true;
   final Set<String> _savingKeys = <String>{};
   String? _error;
+  String? _groupsRolesError;
   final _msgCtrl = TextEditingController();
   final _latestVersionCtrl = TextEditingController();
   final _minimumVersionCtrl = TextEditingController();
-  final _updateNotesCtrl = TextEditingController();
-  final _downloadUrlCtrl = TextEditingController();
+  final _defaultCoinsCtrl = TextEditingController(text: '100');
   String _updateVersionPreset = _adminUpdatePresetCurrent;
 
   @override
@@ -1282,8 +1917,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     _msgCtrl.dispose();
     _latestVersionCtrl.dispose();
     _minimumVersionCtrl.dispose();
-    _updateNotesCtrl.dispose();
-    _downloadUrlCtrl.dispose();
+    _defaultCoinsCtrl.dispose();
     super.dispose();
   }
 
@@ -1291,28 +1925,36 @@ class _SettingsTabState extends State<_SettingsTab> {
     setState(() {
       _loading = true;
       _error = null;
+      _groupsRolesError = null;
     });
     try {
-      final data = await widget.api.getSettings();
+      final results = await Future.wait<dynamic>([
+        widget.api.getSettings(),
+        _loadGroupsForSettings(),
+        _loadRolesForSettings(),
+      ]);
+      final data = results[0] as Map<String, dynamic>;
       if (!mounted) return;
       _data = data;
+      _groups = List<Map<String, dynamic>>.from(results[1] as List);
+      _roles = List<Map<String, dynamic>>.from(results[2] as List);
       _msgCtrl.text = (_data['maintenance_message'] ?? '').toString();
+      _defaultCoinsCtrl.text = (_data['default_registration_coins'] ?? 100)
+          .toString();
       final latestVersion = (_data['latest_version'] ?? '').toString().trim();
       final minimumVersion = (_data['minimum_supported_version'] ?? '')
           .toString()
           .trim();
       _latestVersionCtrl.text = latestVersion.isEmpty
-          ? AppVersion.name
+          ? _serverCurrentVersion
           : latestVersion;
       _minimumVersionCtrl.text = minimumVersion.isEmpty
-          ? AppVersion.name
+          ? _serverCurrentVersion
           : minimumVersion;
       _updateVersionPreset = _presetForVersions(
         latestVersion: _latestVersionCtrl.text,
         minimumSupportedVersion: _minimumVersionCtrl.text,
       );
-      _updateNotesCtrl.text = (_data['update_notes'] ?? '').toString();
-      _downloadUrlCtrl.text = (_data['update_download_url'] ?? '').toString();
     } catch (e) {
       if (!mounted) return;
       _error = e.toString();
@@ -1343,6 +1985,9 @@ class _SettingsTabState extends State<_SettingsTab> {
             : null,
         updateNotes: key == 'update_notes' ? value : null,
         updateDownloadUrl: key == 'update_download_url' ? value : null,
+        defaultRegistrationCoins: key == 'default_registration_coins'
+            ? (value is int ? value : int.tryParse(value.toString()) ?? 100)
+            : null,
       );
       _data[key] = value;
     } on ApiException catch (e) {
@@ -1358,11 +2003,328 @@ class _SettingsTabState extends State<_SettingsTab> {
 
   bool _saving(String key) => _savingKeys.contains(key);
 
+  Future<void> _reloadGroupsRoles() async {
+    _groupsRolesError = null;
+    final results = await Future.wait<dynamic>([
+      _loadGroupsForSettings(),
+      _loadRolesForSettings(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _groups = List<Map<String, dynamic>>.from(results[0] as List);
+      _roles = List<Map<String, dynamic>>.from(results[1] as List);
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _loadGroupsForSettings() async {
+    try {
+      return await widget.api.listGroups();
+    } catch (error) {
+      _groupsRolesError = _adminErrorMessage(error, '用户组');
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadRolesForSettings() async {
+    try {
+      return await widget.api.listRoles();
+    } catch (error) {
+      final message = _adminErrorMessage(error, '角色');
+      _groupsRolesError = _groupsRolesError == null
+          ? message
+          : '$_groupsRolesError\n$message';
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<void> _editGroup([Map<String, dynamic>? group]) async {
+    final nameCtrl = TextEditingController(
+      text: (group?['name'] ?? '').toString(),
+    );
+    final descCtrl = TextEditingController(
+      text: (group?['description'] ?? '').toString(),
+    );
+    final coinsCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_time_coins'],
+        100,
+      ).toString(),
+    );
+    final generateQuotaCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_generate_quota'],
+        100,
+      ).toString(),
+    );
+    final editQuotaCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_edit_quota'],
+        100,
+      ).toString(),
+    );
+    final generateHistoryCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_generate_history_retention'],
+        50,
+      ).toString(),
+    );
+    final editHistoryCtrl = TextEditingController(
+      text: _adminIntValueOrDefault(
+        group?['default_edit_history_retention'],
+        20,
+      ).toString(),
+    );
+    var imageMode = (group?['image_mode'] ?? 'vip').toString();
+    if (imageMode != 'general' && imageMode != 'vip') imageMode = 'vip';
+    var isActive = group?['is_active'] != false;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text(group == null ? '新增用户组' : '编辑用户组'),
+          icon: const Icon(Icons.groups_2_outlined),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: '用户组名称'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: const InputDecoration(labelText: '说明'),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: coinsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认时光币',
+                      helperText: '新注册或分配到该组时使用的默认额度',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: generateQuotaCtrl,
+                    decoration: const InputDecoration(labelText: '默认生图额度'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: editQuotaCtrl,
+                    decoration: const InputDecoration(labelText: '默认改图额度'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: generateHistoryCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认生图历史保留',
+                      helperText: '留存基础额度；组内用户可按等级继续叠加',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: editHistoryCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '默认改图历史保留',
+                      helperText: '留存基础额度；组内用户可按等级继续叠加',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 10),
+                  AppDropdownField<String>(
+                    initialValue: imageMode,
+                    labelText: '图片额度模式',
+                    items: const [
+                      DropdownMenuItem(value: 'vip', child: Text('高级额度')),
+                      DropdownMenuItem(value: 'general', child: Text('普通额度')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setSt(() => imageMode = value);
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: const Text('启用用户组'),
+                    onChanged: (value) => setSt(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showSettingsSnack('请填写用户组名称');
+      return;
+    }
+    try {
+      await widget.api.saveGroup(
+        id: group?['id']?.toString(),
+        name: name,
+        description: descCtrl.text.trim(),
+        defaultTimeCoins: (int.tryParse(coinsCtrl.text.trim()) ?? 100).clamp(
+          0,
+          1000000,
+        ),
+        defaultGenerateQuota:
+            (int.tryParse(generateQuotaCtrl.text.trim()) ?? 100).clamp(
+              0,
+              1000000,
+            ),
+        defaultEditQuota: (int.tryParse(editQuotaCtrl.text.trim()) ?? 100)
+            .clamp(0, 1000000),
+        defaultGenerateHistoryRetention:
+            (int.tryParse(generateHistoryCtrl.text.trim()) ?? 50).clamp(
+              0,
+              1000000,
+            ),
+        defaultEditHistoryRetention:
+            (int.tryParse(editHistoryCtrl.text.trim()) ?? 20).clamp(0, 1000000),
+        imageMode: imageMode,
+        isActive: isActive,
+      );
+      await _reloadGroupsRoles();
+      _showSettingsSnack('用户组已保存');
+    } on ApiException catch (e) {
+      _showSettingsSnack(e.message);
+    }
+  }
+
+  Future<void> _editRole([Map<String, dynamic>? role]) async {
+    final nameCtrl = TextEditingController(
+      text: (role?['name'] ?? '').toString(),
+    );
+    final descCtrl = TextEditingController(
+      text: (role?['description'] ?? '').toString(),
+    );
+    final rawPermissions = role?['permission_codes'] ?? role?['permissions'];
+    var selected = _adminUserPermissions(rawPermissions, isAdmin: true).toSet();
+    if (selected.contains(_adminAllPermission)) {
+      selected = _adminPermissionLabels.keys.toSet();
+    }
+    var isActive = role?['is_active'] != false;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text(role == null ? '新增角色' : '编辑角色'),
+          icon: const Icon(Icons.admin_panel_settings_outlined),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: '角色名称'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: const InputDecoration(labelText: '说明'),
+                    maxLines: 2,
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: const Text('启用角色'),
+                    onChanged: (value) => setSt(() => isActive = value),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.length == _adminPermissionLabels.length,
+                    title: const Text('全部权限'),
+                    onChanged: (value) => setSt(() {
+                      selected = value == true
+                          ? _adminPermissionLabels.keys.toSet()
+                          : <String>{};
+                    }),
+                  ),
+                  const Divider(height: 12),
+                  for (final entry in _adminPermissionLabels.entries)
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: selected.contains(entry.key),
+                      title: Text(entry.value),
+                      onChanged: (value) => setSt(() {
+                        if (value == true) {
+                          selected.add(entry.key);
+                        } else {
+                          selected.remove(entry.key);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showSettingsSnack('请填写角色名称');
+      return;
+    }
+    try {
+      await widget.api.saveRole(
+        id: role?['id']?.toString(),
+        name: name,
+        description: descCtrl.text.trim(),
+        permissions: selected.toList(),
+        isActive: isActive,
+      );
+      await _reloadGroupsRoles();
+      _showSettingsSnack('角色已保存');
+    } on ApiException catch (e) {
+      _showSettingsSnack(e.message);
+    }
+  }
+
   bool get _savingUpdateConfig => _savingKeys.any(
     const {
       'latest_version',
       'minimum_supported_version',
-      'update_download_url',
       'update_notes',
       'force_update_required',
     }.contains,
@@ -1375,17 +2337,86 @@ class _SettingsTabState extends State<_SettingsTab> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String get _serverCurrentVersion {
+    final value =
+        (_data['current_version'] ?? _data['current_version_name'] ?? '')
+            .toString()
+            .trim();
+    return value.isEmpty ? AppVersion.name : value;
+  }
+
   String get _nextPatchVersion {
-    final parts = _normalizedVersionParts(AppVersion.name);
+    final parts = _normalizedVersionParts(_serverCurrentVersion);
     return '${parts[0]}.${parts[1]}.${parts[2] + 1}';
   }
 
   String get _nextMinorVersion {
-    final parts = _normalizedVersionParts(AppVersion.name);
+    final parts = _normalizedVersionParts(_serverCurrentVersion);
     return '${parts[0]}.${parts[1] + 1}.0';
   }
 
-  String get _forceCurrentMinimumVersion => AppVersion.name;
+  String get _nextPatchMinimumVersion => _nextPatchVersion;
+
+  List<_AdminUpdateVersionOption> get _updateVersionOptions {
+    final raw = _data['version_options'];
+    final options = <_AdminUpdateVersionOption>[];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final key = (item['key'] ?? '').toString().trim();
+        final label = (item['label'] ?? '').toString().trim();
+        final latest = (item['latest_version'] ?? '').toString().trim();
+        final minimum = (item['minimum_supported_version'] ?? '')
+            .toString()
+            .trim();
+        if (key.isEmpty || latest.isEmpty || minimum.isEmpty) continue;
+        if (options.any((option) => option.key == key)) continue;
+        options.add(
+          _AdminUpdateVersionOption(
+            key: key,
+            label: label.isEmpty ? key : label,
+            latestVersion: latest,
+            minimumSupportedVersion: minimum,
+          ),
+        );
+      }
+    }
+    final fallbackOptions = [
+      _AdminUpdateVersionOption(
+        key: _adminUpdatePresetCurrent,
+        label: '当前版本',
+        latestVersion: _serverCurrentVersion,
+        minimumSupportedVersion: _serverCurrentVersion,
+      ),
+      _AdminUpdateVersionOption(
+        key: _adminUpdatePresetNextPatch,
+        label: '下一补丁',
+        latestVersion: _nextPatchVersion,
+        minimumSupportedVersion: _serverCurrentVersion,
+      ),
+      _AdminUpdateVersionOption(
+        key: _adminUpdatePresetNextMinor,
+        label: '下一小版本',
+        latestVersion: _nextMinorVersion,
+        minimumSupportedVersion: _serverCurrentVersion,
+      ),
+      _AdminUpdateVersionOption(
+        key: _adminUpdatePresetMinimumNextPatch,
+        label: '强制低于下一补丁',
+        latestVersion: _nextPatchVersion,
+        minimumSupportedVersion: _nextPatchMinimumVersion,
+      ),
+    ];
+    if (options.isNotEmpty) {
+      for (final fallback in fallbackOptions) {
+        if (!options.any((option) => option.key == fallback.key)) {
+          options.add(fallback);
+        }
+      }
+      return options;
+    }
+    return fallbackOptions;
+  }
 
   String _latestVersionForSave() {
     return _latestVersionCtrl.text.trim();
@@ -1395,26 +2426,28 @@ class _SettingsTabState extends State<_SettingsTab> {
     return _minimumVersionCtrl.text.trim();
   }
 
-  ({String latestVersion, String minimumSupportedVersion})
+  ({String latestVersion, String minimumSupportedVersion, String updateNotes})
   _normalizedUpdateVersionsForSave({
     required bool forceUpdateRequired,
     required String latestVersion,
     required String minimumSupportedVersion,
-    required String updateDownloadUrl,
-    required String updateNotes,
   }) {
     final latest = latestVersion.trim();
     final minimum = minimumSupportedVersion.trim();
-    final isDefaultCurrentVersions =
-        latest == AppVersion.name && minimum == AppVersion.name;
+    final current = _serverCurrentVersion;
+    final isDefaultCurrentVersions = latest == current && minimum == current;
     final hasExplicitPolicy =
         forceUpdateRequired ||
-        updateDownloadUrl.trim().isNotEmpty ||
-        updateNotes.trim().isNotEmpty;
+        _compareAppVersions(latest, current) > 0 ||
+        _compareAppVersions(minimum, current) > 0;
     if (isDefaultCurrentVersions && !hasExplicitPolicy) {
-      return (latestVersion: '', minimumSupportedVersion: '');
+      return (latestVersion: '', minimumSupportedVersion: '', updateNotes: '');
     }
-    return (latestVersion: latest, minimumSupportedVersion: minimum);
+    return (
+      latestVersion: latest,
+      minimumSupportedVersion: minimum,
+      updateNotes: _defaultUpdateNotesFor(latestVersion: latest),
+    );
   }
 
   void _syncUpdateVersionPreset() {
@@ -1442,66 +2475,75 @@ class _SettingsTabState extends State<_SettingsTab> {
   }) {
     final latest = latestVersion.trim();
     final minimum = minimumSupportedVersion.trim();
-    if (latest == AppVersion.name && minimum == AppVersion.name) {
-      return _adminUpdatePresetCurrent;
+    for (final option in _updateVersionOptions) {
+      if (option.latestVersion == latest &&
+          option.minimumSupportedVersion == minimum) {
+        return option.key;
+      }
     }
-    if (latest == _nextPatchVersion && minimum == AppVersion.name) {
-      return _adminUpdatePresetNextPatch;
-    }
-    if (latest == _nextMinorVersion && minimum == AppVersion.name) {
-      return _adminUpdatePresetNextMinor;
-    }
-    if (latest == _nextPatchVersion && minimum == _forceCurrentMinimumVersion) {
-      return _adminUpdatePresetForceCurrent;
-    }
-    return _adminUpdatePresetCustom;
+    return _adminUpdatePresetCurrent;
   }
 
   void _applyUpdateVersionPreset(String value) {
     setState(() {
       _updateVersionPreset = value;
+      _AdminUpdateVersionOption? option;
+      for (final item in _updateVersionOptions) {
+        if (item.key == value) {
+          option = item;
+          break;
+        }
+      }
+      if (option != null) {
+        _latestVersionCtrl.text = option.latestVersion;
+        _minimumVersionCtrl.text = option.minimumSupportedVersion;
+        return;
+      }
       switch (value) {
         case _adminUpdatePresetCurrent:
-          _latestVersionCtrl.text = AppVersion.name;
-          _minimumVersionCtrl.text = AppVersion.name;
+          _latestVersionCtrl.text = _serverCurrentVersion;
+          _minimumVersionCtrl.text = _serverCurrentVersion;
           break;
         case _adminUpdatePresetNextPatch:
           _latestVersionCtrl.text = _nextPatchVersion;
-          _minimumVersionCtrl.text = AppVersion.name;
+          _minimumVersionCtrl.text = _serverCurrentVersion;
           break;
         case _adminUpdatePresetNextMinor:
           _latestVersionCtrl.text = _nextMinorVersion;
-          _minimumVersionCtrl.text = AppVersion.name;
+          _minimumVersionCtrl.text = _serverCurrentVersion;
           break;
-        case _adminUpdatePresetForceCurrent:
+        case _adminUpdatePresetMinimumNextPatch:
           _latestVersionCtrl.text = _nextPatchVersion;
-          _minimumVersionCtrl.text = _forceCurrentMinimumVersion;
-          break;
-        case _adminUpdatePresetCustom:
+          _minimumVersionCtrl.text = _nextPatchMinimumVersion;
           break;
       }
     });
   }
 
+  String _updateVersionOptionLabel(_AdminUpdateVersionOption option) {
+    final label = option.label.trim();
+    final latest = option.latestVersion.trim();
+    final minimum = option.minimumSupportedVersion.trim();
+    if (latest.isEmpty || minimum.isEmpty) {
+      return label.isEmpty ? option.key : label;
+    }
+    if (latest == minimum) return '$label $latest';
+    return '$label $latest / 最低 $minimum';
+  }
+
   Future<void> _saveUpdateConfig() async {
     final latestVersion = _latestVersionForSave();
     final minimumSupportedVersion = _minimumSupportedVersionForSave();
-    final updateDownloadUrl = _downloadUrlCtrl.text.trim();
-    final updateNotes = _updateNotesCtrl.text.trim();
     final forceUpdateRequired = _data['force_update_required'] == true;
     final versions = _normalizedUpdateVersionsForSave(
       forceUpdateRequired: forceUpdateRequired,
       latestVersion: latestVersion,
       minimumSupportedVersion: minimumSupportedVersion,
-      updateDownloadUrl: updateDownloadUrl,
-      updateNotes: updateNotes,
     );
     final message = _validateUpdatePolicy(
       forceUpdateRequired: forceUpdateRequired,
       latestVersion: latestVersion,
       minimumSupportedVersion: minimumSupportedVersion,
-      updateDownloadUrl: updateDownloadUrl,
-      updateNotes: updateNotes,
     );
     if (message != null) {
       _showSettingsSnack(message);
@@ -1511,21 +2553,21 @@ class _SettingsTabState extends State<_SettingsTab> {
     const keys = {
       'latest_version',
       'minimum_supported_version',
-      'update_download_url',
       'update_notes',
+      'update_download_url',
     };
     setState(() => _savingKeys.addAll(keys));
     try {
       await widget.api.updateSettings(
         latestVersion: versions.latestVersion,
         minimumSupportedVersion: versions.minimumSupportedVersion,
-        updateDownloadUrl: updateDownloadUrl,
-        updateNotes: updateNotes,
+        updateNotes: versions.updateNotes,
+        updateDownloadUrl: '',
       );
       _data['latest_version'] = versions.latestVersion;
       _data['minimum_supported_version'] = versions.minimumSupportedVersion;
-      _data['update_download_url'] = updateDownloadUrl;
-      _data['update_notes'] = updateNotes;
+      _data['update_notes'] = versions.updateNotes;
+      _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
       _showSettingsSnack('更新配置已保存');
     } on ApiException catch (e) {
@@ -1538,21 +2580,15 @@ class _SettingsTabState extends State<_SettingsTab> {
   Future<void> _saveForceUpdateRequired(bool value) async {
     final latestVersion = _latestVersionForSave();
     final minimumSupportedVersion = _minimumSupportedVersionForSave();
-    final updateDownloadUrl = _downloadUrlCtrl.text.trim();
-    final updateNotes = _updateNotesCtrl.text.trim();
     final versions = _normalizedUpdateVersionsForSave(
       forceUpdateRequired: value,
       latestVersion: latestVersion,
       minimumSupportedVersion: minimumSupportedVersion,
-      updateDownloadUrl: updateDownloadUrl,
-      updateNotes: updateNotes,
     );
     final message = _validateUpdatePolicy(
       forceUpdateRequired: value,
       latestVersion: latestVersion,
       minimumSupportedVersion: minimumSupportedVersion,
-      updateDownloadUrl: updateDownloadUrl,
-      updateNotes: updateNotes,
     );
     if (message != null) {
       _showSettingsSnack(message);
@@ -1563,8 +2599,8 @@ class _SettingsTabState extends State<_SettingsTab> {
       'force_update_required',
       'latest_version',
       'minimum_supported_version',
-      'update_download_url',
       'update_notes',
+      'update_download_url',
     };
     setState(() => _savingKeys.addAll(keys));
     try {
@@ -1572,14 +2608,14 @@ class _SettingsTabState extends State<_SettingsTab> {
         forceUpdateRequired: value,
         latestVersion: versions.latestVersion,
         minimumSupportedVersion: versions.minimumSupportedVersion,
-        updateDownloadUrl: updateDownloadUrl,
-        updateNotes: updateNotes,
+        updateNotes: versions.updateNotes,
+        updateDownloadUrl: '',
       );
       _data['force_update_required'] = value;
       _data['latest_version'] = versions.latestVersion;
       _data['minimum_supported_version'] = versions.minimumSupportedVersion;
-      _data['update_download_url'] = updateDownloadUrl;
-      _data['update_notes'] = updateNotes;
+      _data['update_notes'] = versions.updateNotes;
+      _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
     } on ApiException catch (e) {
       _showSettingsSnack(e.message);
@@ -1592,27 +2628,160 @@ class _SettingsTabState extends State<_SettingsTab> {
     required bool forceUpdateRequired,
     required String latestVersion,
     required String minimumSupportedVersion,
-    required String updateDownloadUrl,
-    required String updateNotes,
   }) {
     final hasAnyUpdatePolicy =
         forceUpdateRequired ||
-        updateDownloadUrl.isNotEmpty ||
-        _compareAppVersions(latestVersion, AppVersion.name) > 0 ||
-        _compareAppVersions(minimumSupportedVersion, AppVersion.name) > 0;
-    final hasNewerLatest =
-        latestVersion.isNotEmpty &&
-        _compareAppVersions(latestVersion, AppVersion.name) > 0;
-    final hasRaisedMinimum =
-        minimumSupportedVersion.isNotEmpty &&
-        _compareAppVersions(minimumSupportedVersion, AppVersion.name) > 0;
-    if (hasAnyUpdatePolicy && updateNotes.trim().isEmpty) {
-      return '发布新版本或设置最低支持版本时，必须填写更新内容。';
-    }
-    if (forceUpdateRequired && !hasNewerLatest && !hasRaisedMinimum) {
-      return '强制更新未生效：请先填写高于当前版本 ${AppVersion.name} 的最新版本，或高于当前版本的最低支持版本。';
-    }
+        _compareAppVersions(latestVersion, _serverCurrentVersion) > 0 ||
+        _compareAppVersions(minimumSupportedVersion, _serverCurrentVersion) > 0;
+    if (!hasAnyUpdatePolicy) return null;
+    // 当前版本也允许保存强制更新开关。真正是否遮挡客户端由后端发布通道
+    // 结合可安装包、版本号和下载地址判定，避免管理员必须手填 URL 或内容。
     return null;
+  }
+
+  String _defaultUpdateNotesFor({required String latestVersion}) {
+    final target = latestVersion.trim().isEmpty
+        ? _serverCurrentVersion
+        : latestVersion;
+    return [
+      '本次更新摘要：',
+      '- 版本 $target 包含近期问题修复与稳定性优化。',
+      '- 安装包与完整发布说明由后端发布通道自动读取。',
+      '- 若管理员开启强制更新，客户端会遮挡当前页面直到完成更新。',
+    ].join('\n');
+  }
+
+  String _updateNotesPreview() {
+    final existing = (_data['update_notes'] ?? '').toString().trim();
+    if (_updateVersionPreset == _adminUpdatePresetCurrent &&
+        existing.isNotEmpty) {
+      return existing;
+    }
+    return _defaultUpdateNotesFor(latestVersion: _latestVersionForSave());
+  }
+
+  Widget _groupRoleManagementSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final groupCards = _groups.take(6).map((group) {
+      final active = group['is_active'] != false;
+      final name = (group['name'] ?? group['id'] ?? '').toString();
+      final userCount = _adminIntValue(group['user_count']);
+      final coins = _adminIntValue(group['default_time_coins']);
+      final generateQuota = _adminIntValue(group['default_generate_quota']);
+      final editQuota = _adminIntValue(group['default_edit_quota']);
+      return _AdminListTileCard(
+        dense: true,
+        leading: Icon(
+          Icons.groups_2_outlined,
+          color: active ? cs.primary : cs.onSurfaceVariant,
+        ),
+        title: Text(name.isEmpty ? '未命名用户组' : name),
+        subtitle: Text(
+          '默认 $coins 时光币 · 生图 $generateQuota · 改图 $editQuota · $userCount 人 · ${active ? '启用' : '停用'}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          tooltip: '编辑用户组',
+          onPressed: () => _editGroup(group),
+          icon: const Icon(Icons.edit_outlined),
+        ),
+      );
+    }).toList();
+    final roleCards = _roles.take(6).map((role) {
+      final active = role['is_active'] != false;
+      final name = (role['name'] ?? role['id'] ?? '').toString();
+      final userCount = _adminIntValue(role['user_count']);
+      final permissions = _adminUserPermissions(
+        role['permission_codes'] ?? role['permissions'],
+        isAdmin: true,
+      );
+      return _AdminListTileCard(
+        dense: true,
+        leading: Icon(
+          Icons.admin_panel_settings_outlined,
+          color: active ? Colors.indigo : cs.onSurfaceVariant,
+        ),
+        title: Text(name.isEmpty ? '未命名角色' : name),
+        subtitle: Text(
+          '${_adminPermissionsLabel(permissions, isAdmin: true)} · $userCount 人 · ${active ? '启用' : '停用'}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          tooltip: '编辑角色',
+          onPressed: () => _editRole(role),
+          icon: const Icon(Icons.edit_outlined),
+        ),
+      );
+    }).toList();
+
+    return _AdminSettingsSection(
+      title: '用户组与角色',
+      subtitle: '管理默认时光币、图片额度模式和管理员权限模板',
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '用户组 ${_groups.length} 个 · 角色 ${_roles.length} 个',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.62),
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _editGroup(),
+              icon: const Icon(Icons.add),
+              label: const Text('用户组'),
+            ),
+            const SizedBox(width: 6),
+            TextButton.icon(
+              onPressed: () => _editRole(),
+              icon: const Icon(Icons.add),
+              label: const Text('角色'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_groupsRolesError != null) ...[
+          AppInfoBanner(
+            icon: Icons.lock_outline,
+            title: '用户组或角色加载失败',
+            message: _groupsRolesError!,
+            color: cs.error,
+            margin: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_groups.isEmpty)
+          AppInfoBanner(
+            icon: Icons.groups_2_outlined,
+            title: '暂无可管理用户组',
+            message: _groupsRolesError == null
+                ? '后端返回为空。'
+                : '上方错误说明了用户组未能加载的原因。',
+            color: Colors.blueGrey,
+            margin: EdgeInsets.zero,
+          )
+        else
+          ...groupCards,
+        const SizedBox(height: 8),
+        if (_roles.isEmpty)
+          AppInfoBanner(
+            icon: Icons.admin_panel_settings_outlined,
+            title: '暂无可管理角色',
+            message: _groupsRolesError == null
+                ? '后端返回为空。'
+                : '上方错误说明了角色未能加载的原因。',
+            color: Colors.blueGrey,
+            margin: EdgeInsets.zero,
+          )
+        else
+          ...roleCards,
+      ],
+    );
   }
 
   int _compareAppVersions(String a, String b) {
@@ -1645,204 +2814,177 @@ class _SettingsTabState extends State<_SettingsTab> {
     if (_error != null) return Center(child: Text(_error!));
     final cs = Theme.of(context).colorScheme;
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _AdminSettingsSection(
-          title: '账户与注册',
-          subtitle: '控制新用户入口与邀请码策略',
-          children: [
-            AppSwitchTile(
-              icon: Icons.person_add_alt_1_outlined,
-              color: Colors.green,
-              value: _data['registration_enabled'] == true,
-              title: '允许注册',
-              subtitle: '关闭后新用户无法注册，现有用户仍可登录',
-              onChanged: _saving('registration_enabled')
-                  ? null
-                  : (v) => _set('registration_enabled', v),
-            ),
-            AppSwitchTile(
-              icon: Icons.vpn_key_outlined,
-              color: Colors.purple,
-              value: _data['invite_code_required'] == true,
-              title: '注册需要邀请码',
-              subtitle: '只有带邀请码才能注册',
-              onChanged: _saving('invite_code_required')
-                  ? null
-                  : (v) => _set('invite_code_required', v),
-            ),
-            AppSwitchTile(
-              icon: Icons.mark_email_read_outlined,
-              color: Colors.teal,
-              value: _data['registration_email_required'] == true,
-              title: '注册需要邮箱验证',
-              subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
-              onChanged: _saving('registration_email_required')
-                  ? null
-                  : (v) => _set('registration_email_required', v),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _AdminSettingsSection(
-          title: '维护模式',
-          subtitle: '控制同步服务与客户端提示',
-          children: [
-            AppSwitchTile(
-              icon: Icons.construction_outlined,
-              color: Colors.orange,
-              value: _data['maintenance_mode'] == true,
-              title: '启用维护模式',
-              subtitle: '开启后 /api/sync 拒绝服务；客户端登录页会提示',
-              onChanged: _saving('maintenance_mode')
-                  ? null
-                  : (v) => _set('maintenance_mode', v),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _msgCtrl,
-              decoration: const InputDecoration(
-                labelText: '维护公告文字',
-                hintText: '将在客户端登录/同步报错时展示',
-                prefixIcon: Icon(Icons.campaign_outlined),
+    return AppSecondaryControlTheme(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _AdminSettingsSection(
+            title: '账户、注册与用户组',
+            subtitle: '控制新用户入口、邀请码、邮箱验证和默认用户组额度',
+            children: [
+              AppSwitchTile(
+                icon: Icons.person_add_alt_1_outlined,
+                color: Colors.green,
+                value: _data['registration_enabled'] == true,
+                title: '允许注册',
+                subtitle: '关闭后新用户无法注册，现有用户仍可登录',
+                onChanged: _saving('registration_enabled')
+                    ? null
+                    : (v) => _set('registration_enabled', v),
               ),
-              onEditingComplete: () =>
-                  _set('maintenance_message', _msgCtrl.text.trim()),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _AdminSettingsSection(
-          title: '应用更新',
-          subtitle: '通过 /api/config 下发版本、更新内容与强制更新策略',
-          children: [
-            AppSwitchTile(
-              icon: Icons.system_update_alt_outlined,
-              color: Colors.red,
-              value: _data['force_update_required'] == true,
-              title: '强制更新',
-              subtitle: '开启前必须配置可生效的新版本或最低支持版本',
-              onChanged: _saving('force_update_required')
-                  ? null
-                  : (v) => _set('force_update_required', v),
-            ),
-            const SizedBox(height: 10),
-            AppInfoBanner(
-              icon: Icons.info_outline,
-              title: '当前客户端版本 ${AppVersion.name}',
-              message:
-                  '普通更新会在“检查更新”和底部“我的”入口显示红点；强制更新会锁定客户端，直到用户安装新版本。发布新版本时必须填写更新内容。',
-              color: Theme.of(context).colorScheme.primary,
-              margin: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 10),
-            AppDropdownField<String>(
-              key: ValueKey(_updateVersionPreset),
-              initialValue: _updateVersionPreset,
-              labelText: '版本策略',
-              prefixIcon: const Icon(Icons.rule_folder_outlined),
-              items: [
-                DropdownMenuItem(
-                  value: _adminUpdatePresetCurrent,
-                  child: Text('当前版本 ${AppVersion.name}'),
+              AppSwitchTile(
+                icon: Icons.vpn_key_outlined,
+                color: Colors.purple,
+                value: _data['invite_code_required'] == true,
+                title: '注册需要邀请码',
+                subtitle: '只有带邀请码才能注册',
+                onChanged: _saving('invite_code_required')
+                    ? null
+                    : (v) => _set('invite_code_required', v),
+              ),
+              AppSwitchTile(
+                icon: Icons.mark_email_read_outlined,
+                color: Colors.teal,
+                value: _data['registration_email_required'] == true,
+                title: '注册需要邮箱验证',
+                subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
+                onChanged: _saving('registration_email_required')
+                    ? null
+                    : (v) => _set('registration_email_required', v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _defaultCoinsCtrl,
+                decoration: const InputDecoration(
+                  labelText: '默认用户组时光币',
+                  helperText: '新注册普通用户默认获得的额度，管理员可继续在用户列表单独调整',
+                  prefixIcon: Icon(Icons.toll_outlined),
                 ),
-                DropdownMenuItem(
-                  value: _adminUpdatePresetNextPatch,
-                  child: Text('下一补丁 $_nextPatchVersion'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onEditingComplete: () {
+                  final coins =
+                      int.tryParse(_defaultCoinsCtrl.text.trim()) ?? 100;
+                  _set('default_registration_coins', coins.clamp(0, 1000000));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _groupRoleManagementSection(context),
+          const SizedBox(height: 12),
+          _AdminSettingsSection(
+            title: '维护模式',
+            subtitle: '控制同步服务与客户端提示',
+            children: [
+              AppSwitchTile(
+                icon: Icons.construction_outlined,
+                color: Colors.orange,
+                value: _data['maintenance_mode'] == true,
+                title: '启用维护模式',
+                subtitle: '开启后 /api/sync 拒绝服务；客户端登录页会提示',
+                onChanged: _saving('maintenance_mode')
+                    ? null
+                    : (v) => _set('maintenance_mode', v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _msgCtrl,
+                decoration: const InputDecoration(
+                  labelText: '维护公告文字',
+                  hintText: '将在客户端登录/同步报错时展示',
+                  prefixIcon: Icon(Icons.campaign_outlined),
                 ),
-                DropdownMenuItem(
-                  value: _adminUpdatePresetNextMinor,
-                  child: Text('下一小版本 $_nextMinorVersion'),
+                onEditingComplete: () =>
+                    _set('maintenance_message', _msgCtrl.text.trim()),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _AdminSettingsSection(
+            title: '应用更新',
+            subtitle: '通过 /api/config 下发版本、更新内容与强制更新策略',
+            children: [
+              AppSwitchTile(
+                icon: Icons.system_update_alt_outlined,
+                color: cs.error,
+                value: _data['force_update_required'] == true,
+                title: '强制更新',
+                subtitle: '开启后由发布通道判定可安装新版本，并在客户端全屏阻断',
+                onChanged: _saving('force_update_required')
+                    ? null
+                    : (v) => _set('force_update_required', v),
+              ),
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.info_outline,
+                title: '当前客户端版本 ${AppVersion.name}',
+                message:
+                    '普通更新会在“检查更新”和底部“我的”入口显示红点；强制更新会锁定客户端，直到用户安装新版本。安装包与发布说明由后端发布通道自动读取。',
+                color: Theme.of(context).colorScheme.primary,
+                margin: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 10),
+              AppDropdownField<String>(
+                key: ValueKey(_updateVersionPreset),
+                initialValue: _updateVersionPreset,
+                labelText: '版本策略',
+                prefixIcon: const Icon(Icons.rule_folder_outlined),
+                items: [
+                  for (final option in _updateVersionOptions)
+                    DropdownMenuItem(
+                      value: option.key,
+                      child: Text(_updateVersionOptionLabel(option)),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) _applyUpdateVersionPreset(value);
+                },
+              ),
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.new_releases_outlined,
+                title: '版本选择',
+                message:
+                    '最新版本：${_latestVersionForSave()}；最低支持版本：${_minimumSupportedVersionForSave()}。管理员只需选择上方策略，无需手动输入版本、安装包地址或更新内容。',
+                color: Colors.teal,
+                margin: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 10),
+              AppInfoBanner(
+                icon: Icons.notes_outlined,
+                title: '更新内容预览',
+                message: _updateNotesPreview(),
+                color: Colors.blueGrey,
+                margin: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '保存时会自动写入以上摘要；安装包地址和完整发布说明由后端发布通道自动读取。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.62),
                 ),
-                DropdownMenuItem(
-                  value: _adminUpdatePresetForceCurrent,
-                  child: Text('强制低于 $_forceCurrentMinimumVersion'),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _savingUpdateConfig ? null : _saveUpdateConfig,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('保存更新配置'),
                 ),
-                const DropdownMenuItem(
-                  value: _adminUpdatePresetCustom,
-                  child: Text('自定义版本'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) _applyUpdateVersionPreset(value);
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _latestVersionCtrl,
-              decoration: const InputDecoration(
-                labelText: '最新版本',
-                hintText: '默认当前版本',
-                prefixIcon: Icon(Icons.new_releases_outlined),
               ),
-              textInputAction: TextInputAction.next,
-              onChanged: (_) {
-                if (_updateVersionPreset != _adminUpdatePresetCustom) {
-                  setState(
-                    () => _updateVersionPreset = _adminUpdatePresetCustom,
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _minimumVersionCtrl,
-              decoration: const InputDecoration(
-                labelText: '最低支持版本',
-                hintText: '默认当前版本，低于该版本时强制更新',
-                prefixIcon: Icon(Icons.priority_high_outlined),
-              ),
-              textInputAction: TextInputAction.next,
-              onChanged: (_) {
-                if (_updateVersionPreset != _adminUpdatePresetCustom) {
-                  setState(
-                    () => _updateVersionPreset = _adminUpdatePresetCustom,
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _downloadUrlCtrl,
-              decoration: const InputDecoration(
-                labelText: '下载地址',
-                hintText: 'APK 或发布页 URL',
-                prefixIcon: Icon(Icons.link_outlined),
-              ),
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _updateNotesCtrl,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: '更新内容',
-                hintText: '展示给用户的更新说明',
-                prefixIcon: Icon(Icons.notes_outlined),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _savingUpdateConfig ? null : _saveUpdateConfig,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('保存更新配置'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        AppInfoBanner(
-          icon: Icons.info_outline,
-          color: cs.primary,
-          title: '服务器地址',
-          message: '服务器地址在 APK / Web 构建时就已锁定，运行期不可修改。如需切换后端，请重新构建并分发新版本。',
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppInfoBanner(
+            icon: Icons.info_outline,
+            color: cs.primary,
+            title: '服务器地址',
+            message: '服务器地址在 APK / Web 构建时就已锁定，运行期不可修改。如需切换后端，请重新构建并分发新版本。',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1902,6 +3044,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       _modelCtrl.text = (data['ai_model'] ?? '').toString();
       _quotaCtrl.text = (((data['ai_daily_quota'] as num?) ?? 0).toInt())
           .toString();
+      context.read<AiService>().updateFromServerConfig(data);
     } catch (e) {
       if (!mounted) return;
       _error = e.toString();
@@ -1933,9 +3076,9 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '保存 AI 配置'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1948,31 +3091,40 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       _testResult = null;
     });
     try {
-      final res = await widget.api.testAi();
+      final newKey = _keyCtrl.text.trim();
+      final submitKey = (_keyMasked && newKey.contains('***')) ? null : newKey;
+      final res = await widget.api.testAi(
+        aiEnabled: _enabled,
+        baseUrl: _baseCtrl.text.trim(),
+        apiKey: submitKey,
+        model: _modelCtrl.text.trim(),
+      );
       if (!mounted) return;
-      final content = (res['content'] ?? res['sample'] ?? '').toString();
-      if (res['enabled'] == false) {
-        setState(() {
-          _testResult = '⚠️ 模型 ${res['model']} 配置完整，但 AI 功能开关未启用。$content';
-          _testColor = Colors.orange;
-        });
-        return;
-      }
+      final model = (res['model'] ?? _modelCtrl.text.trim()).toString().trim();
+      final sample = (res['sample'] ?? '').toString().trim();
+      final enabled = res['enabled'] != false;
+      final skipped = res['skipped'] == true;
+      final message = (res['message'] ?? '').toString().trim();
       setState(() {
-        _testResult = '✅ 模型 ${res['model']} 可达，回复: $content';
-        _testColor = Colors.green;
+        final modelLabel = model.isEmpty ? '未命名模型' : model;
+        _testResult = skipped
+            ? (message.isEmpty ? 'AI 功能开关未启用，未测试上游连接。模型：$modelLabel' : message)
+            : enabled
+            ? '当前表单配置可达，模型 $modelLabel 回复: ${sample.isEmpty ? '空回复' : sample}'
+            : '当前表单配置完整，AI 功能开关未启用，未发起上游请求。模型：$modelLabel';
+        _testColor = skipped ? Colors.orange : Colors.green;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _testResult = '❌ ${e.message}';
-        _testColor = Colors.red;
+        _testResult = _adminAiFailureReason(e.message);
+        _testColor = Theme.of(context).colorScheme.error;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _testResult = '❌ $e';
-        _testColor = Colors.red;
+        _testResult = _adminAiFailureReason(e.toString());
+        _testColor = Theme.of(context).colorScheme.error;
       });
     } finally {
       if (mounted) setState(() => _testing = false);
@@ -2055,7 +3207,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.network_check),
-                  label: const Text('测试连接'),
+                  label: const Text('测试当前表单'),
                   onPressed: _testing ? null : _test,
                 ),
               ],
@@ -2067,7 +3219,10 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                 decoration: BoxDecoration(
                   color: _testColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _testColor.withValues(alpha: 0.18)),
+                  border: Border.all(
+                    color: _testColor.withValues(alpha: 0.18),
+                    width: 0.45,
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2105,6 +3260,25 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       ],
     );
   }
+}
+
+String _adminAiFailureReason(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return '测试失败：AI 服务没有返回错误详情';
+  if (text.contains('AI 功能未启用')) return '测试失败：AI 功能未启用，请先保存并开启 AI 功能';
+  if (text.contains('API Key')) return '测试失败：管理员尚未配置 AI API Key';
+  if (text.contains('401') || text.contains('403')) {
+    return '测试失败：AI 密钥无效或没有模型权限';
+  }
+  if (text.contains('429') || text.contains('额度')) return '测试失败：今日 AI 额度已用尽';
+  if (text.contains('404') || text.toLowerCase().contains('not found')) {
+    return '测试失败：AI 代理或上游模型不可用，请检查 Base URL、模型名称和后端 /api/admin/ai/test 路由';
+  }
+  if (text.contains('上游不可达') || text.contains('不可达') || text.contains('502')) {
+    return '测试失败：AI 上游服务不可达，请检查 Base URL、网络或模型配置';
+  }
+  if (text.contains('超时')) return '测试失败：AI 服务响应超时，请稍后重试';
+  return '测试失败：$text';
 }
 
 // ====================================================================
@@ -2485,9 +3659,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '保存备份配置'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2506,9 +3680,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '执行服务器备份'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _runningServerBackup = false);
@@ -2531,9 +3705,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '发送提醒测试邮件'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _testingReminderEmail = false);
@@ -2560,9 +3734,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '发送账号测试邮件'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _testingAccountEmail = false);
@@ -2600,7 +3774,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('清空'),
           ),
@@ -2616,9 +3793,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await _load(backupOffset: nextOffset);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '清空云端备份'))),
+        );
       }
     }
   }
@@ -2719,6 +3896,384 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         onSelected: (_) =>
             _load(serverBackupStatus: value, serverBackupOffset: 0),
       ),
+    );
+  }
+
+  Widget _buildBackupRecordTabs(
+    BuildContext context, {
+    required ThemeData theme,
+    required ColorScheme cs,
+    required int totalKb,
+  }) {
+    return DecoratedBox(
+      key: const ValueKey('admin_backup_record_tabs'),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.10 : 0.12,
+          ),
+          width: 0.45,
+        ),
+      ),
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              labelStyle: appSecondaryMenuItemTextStyle(context),
+              unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
+              tabs: const [
+                Tab(text: '服务器备份记录'),
+                Tab(text: '所有用户备份'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildServerBackupRecords(theme: theme, cs: cs),
+                  _buildUserBackupRecords(
+                    theme: theme,
+                    cs: cs,
+                    totalKb: totalKb,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerBackupRecords({
+    required ThemeData theme,
+    required ColorScheme cs,
+  }) {
+    return Column(
+      key: const ValueKey('admin_backup_server_panel'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+          child: AppSectionHeader(
+            title: '服务器备份记录',
+            subtitle: _adminPageSummary(_serverBackupPage),
+            actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果',
+            actionIcon: Icons.ios_share_outlined,
+            onAction: _exportingServerBackups ? null : _exportServerBackupsCsv,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+          child: TextField(
+            controller: _serverBackupSearchCtrl,
+            decoration: InputDecoration(
+              hintText: '搜索文件名、状态、路径或详情',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _serverBackupQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空服务器备份搜索',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _serverBackupSearchCtrl.clear();
+                        _load(serverBackupQuery: '', serverBackupOffset: 0);
+                      },
+                    ),
+              isDense: true,
+            ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _load(
+              serverBackupQuery: _serverBackupSearchCtrl.text.trim(),
+              serverBackupOffset: 0,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+          child: _AdminChipWrap(
+            padding: EdgeInsets.zero,
+            children: [
+              _serverBackupStatusChip('全部备份', ''),
+              _serverBackupStatusChip('已上传', 'uploaded'),
+              _serverBackupStatusChip('仅本地', 'local_only'),
+              _serverBackupStatusChip('远端失败', 'local_created_remote_failed'),
+              _serverBackupStatusChip('已创建', 'created'),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: AppDropdownField<String>(
+                  initialValue: _serverBackupSort,
+                  labelText: '服务器备份排序',
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'created_desc',
+                      child: Text('最新生成优先'),
+                    ),
+                    DropdownMenuItem(value: 'size_desc', child: Text('文件从大到小')),
+                    DropdownMenuItem(value: 'size_asc', child: Text('文件从小到大')),
+                    DropdownMenuItem(
+                      value: 'status_asc',
+                      child: Text('状态 A-Z'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'filename_asc',
+                      child: Text('文件名 A-Z'),
+                    ),
+                  ],
+                  onChanged: (value) => _load(
+                    serverBackupSort: value ?? 'created_desc',
+                    serverBackupOffset: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => _load(serverBackupOffset: _serverBackupOffset),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('刷新'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _serverBackups.isEmpty
+              ? Center(
+                  child: Text(
+                    '当前筛选下没有服务器备份记录。可搜索文件名、状态、路径或详情，也可以切换状态后再看。',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  key: const ValueKey('admin_backup_server_records'),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  itemCount: _serverBackups.length,
+                  itemBuilder: (context, index) {
+                    final b = _serverBackups[index];
+                    final status = (b['status'] ?? '-').toString();
+                    return _AdminListTileCard(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      dense: true,
+                      leading: Icon(Icons.backup_outlined, color: cs.primary),
+                      title: Text((b['filename'] ?? '-').toString()),
+                      subtitle: Text(
+                        '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} bytes · 排序: ${_adminServerBackupSortLabel(_serverBackupSort)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        _AdminPaginationBar(
+          barKey: const ValueKey('admin_backup_server_pagination'),
+          page: _serverBackupPage,
+          loading: _loading,
+          pageSize: _serverBackupPageSize,
+          onPageSizeChanged: (value) =>
+              _load(serverBackupPageSize: value, serverBackupOffset: 0),
+          onPrevious: () => _load(
+            serverBackupOffset: (_serverBackupOffset - _serverBackupPageSize)
+                .clamp(0, _serverBackupOffset),
+          ),
+          onNext: () => _load(
+            serverBackupOffset: _serverBackupOffset + _serverBackupPageSize,
+          ),
+          onJumpToPage: (page) =>
+              _load(serverBackupOffset: (page - 1) * _serverBackupPageSize),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserBackupRecords({
+    required ThemeData theme,
+    required ColorScheme cs,
+    required int totalKb,
+  }) {
+    return Column(
+      key: const ValueKey('admin_backup_user_panel'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+          child: AppSectionHeader(
+            title: '所有用户备份',
+            subtitle:
+                '${_adminPageSummary(_backupPage)} · 本页 ${(totalKb / 1024).toStringAsFixed(1)} MB',
+            actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果',
+            actionIcon: Icons.ios_share_outlined,
+            onAction: _exportingBackups ? null : _exportBackupsCsv,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+          child: TextField(
+            controller: _backupSearchCtrl,
+            decoration: InputDecoration(
+              hintText: '搜索用户名、邮箱、昵称或用户 ID',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _backupQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空用户备份搜索',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _backupSearchCtrl.clear();
+                        _load(backupQuery: '', backupOffset: 0);
+                      },
+                    ),
+              isDense: true,
+            ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _load(
+              backupQuery: _backupSearchCtrl.text.trim(),
+              backupOffset: 0,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+          child: _AdminChipWrap(
+            padding: EdgeInsets.zero,
+            children: [
+              _backupStatusChip('全部用户', ''),
+              _backupStatusChip('已有快照', 'synced'),
+              _backupStatusChip('无快照', 'empty'),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: AppDropdownField<String>(
+                  initialValue: _backupSort,
+                  labelText: '用户备份排序',
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'updated_desc',
+                      child: Text('最近同步优先'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'username_asc',
+                      child: Text('用户名 A-Z'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'size_desc',
+                      child: Text('备份体积从大到小'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'size_asc',
+                      child: Text('备份体积从小到大'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'version_desc',
+                      child: Text('同步版本较高优先'),
+                    ),
+                  ],
+                  onChanged: (value) => _load(
+                    backupSort: value ?? 'updated_desc',
+                    backupOffset: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => _load(backupOffset: _backupOffset),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('刷新'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _backups.isEmpty
+              ? Center(
+                  child: Text(
+                    '当前筛选下没有用户备份。可搜索用户名、邮箱、昵称或用户 ID，也可以切换“已有快照/无快照”。',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  key: const ValueKey('admin_backup_user_records'),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  itemCount: _backups.length,
+                  itemBuilder: (context, index) {
+                    final b = _backups[index];
+                    final email = (b['email'] ?? '').toString();
+                    final displayName = (b['display_name'] ?? '').toString();
+                    final hasSnapshot = b['has_snapshot'] == true;
+                    final updated = hasSnapshot
+                        ? (b['updated_at'] ?? '尚无同步时间').toString()
+                        : '尚无同步快照';
+                    return _AdminListTileCard(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      dense: true,
+                      leading: Icon(
+                        Icons.cloud_done_outlined,
+                        color: cs.primary,
+                      ),
+                      title: Text(b['username'].toString()),
+                      subtitle: Text(
+                        [
+                          if (displayName.isNotEmpty) '昵称: $displayName',
+                          if (email.isNotEmpty) '邮箱: $email',
+                          updated,
+                          '版本 ${b['sync_version'] ?? 0}',
+                          '${b['size_kb']} KB',
+                          '排序: ${_adminBackupSortLabel(_backupSort)}',
+                        ].join(' · '),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
+                      ),
+                      trailing: IconButton(
+                        tooltip: '清空备份',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _wipe(b),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        _AdminPaginationBar(
+          barKey: const ValueKey('admin_backup_user_pagination'),
+          page: _backupPage,
+          loading: _loading,
+          pageSize: _backupPageSize,
+          onPageSizeChanged: (value) =>
+              _load(backupPageSize: value, backupOffset: 0),
+          onPrevious: () => _load(
+            backupOffset: (_backupOffset - _backupPageSize).clamp(
+              0,
+              _backupOffset,
+            ),
+          ),
+          onNext: () => _load(backupOffset: _backupOffset + _backupPageSize),
+          onJumpToPage: (page) =>
+              _load(backupOffset: (page - 1) * _backupPageSize),
+        ),
+      ],
     );
   }
 
@@ -2991,7 +4546,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: AppDropdownField<String>(
                     initialValue: _emailPrimaryProvider,
                     decoration: const InputDecoration(
                       labelText: '主通道',
@@ -3004,7 +4559,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: AppDropdownField<String>(
                     initialValue: _emailBackupProvider,
                     decoration: const InputDecoration(
                       labelText: '备用通道',
@@ -3021,7 +4576,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: AppDropdownField<String>(
                     initialValue: _emailActiveSlot,
                     decoration: const InputDecoration(
                       labelText: '当前优先线路',
@@ -3293,238 +4848,14 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           ],
         ),
         const SizedBox(height: 12),
-        AppSectionHeader(
-          title: '服务器备份记录',
-          subtitle: _adminPageSummary(_serverBackupPage),
-          actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果',
-          actionIcon: Icons.ios_share_outlined,
-          onAction: _exportingServerBackups ? null : _exportServerBackupsCsv,
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: _loading
-                ? null
-                : () => _load(serverBackupOffset: _serverBackupOffset),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('刷新'),
+        SizedBox(
+          height: 640,
+          child: _buildBackupRecordTabs(
+            context,
+            theme: theme,
+            cs: cs,
+            totalKb: totalKb,
           ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _serverBackupSearchCtrl,
-          decoration: InputDecoration(
-            hintText: '搜索文件名、状态、路径或详情',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _serverBackupQuery.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '清空服务器备份搜索',
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      _serverBackupSearchCtrl.clear();
-                      _load(serverBackupQuery: '', serverBackupOffset: 0);
-                    },
-                  ),
-            isDense: true,
-          ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _load(
-            serverBackupQuery: _serverBackupSearchCtrl.text.trim(),
-            serverBackupOffset: 0,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _serverBackupStatusChip('全部备份', ''),
-              _serverBackupStatusChip('已上传', 'uploaded'),
-              _serverBackupStatusChip('仅本地', 'local_only'),
-              _serverBackupStatusChip('远端失败', 'local_created_remote_failed'),
-              _serverBackupStatusChip('已创建', 'created'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        AppDropdownField<String>(
-          initialValue: _serverBackupSort,
-          labelText: '服务器备份排序',
-          items: const [
-            DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
-            DropdownMenuItem(value: 'size_desc', child: Text('文件从大到小')),
-            DropdownMenuItem(value: 'size_asc', child: Text('文件从小到大')),
-            DropdownMenuItem(value: 'status_asc', child: Text('状态 A-Z')),
-            DropdownMenuItem(value: 'filename_asc', child: Text('文件名 A-Z')),
-          ],
-          onChanged: (value) => _load(
-            serverBackupSort: value ?? 'created_desc',
-            serverBackupOffset: 0,
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (_serverBackups.isEmpty)
-          Text(
-            '当前筛选下没有服务器备份记录。可搜索文件名、状态、路径或详情，也可以切换状态后再看。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.58),
-            ),
-          ),
-        ..._serverBackups.map((b) {
-          final status = (b['status'] ?? '-').toString();
-          return _AdminListTileCard(
-            margin: const EdgeInsets.only(bottom: 8),
-            dense: true,
-            leading: Icon(Icons.backup_outlined, color: cs.primary),
-            title: Text((b['filename'] ?? '-').toString()),
-            subtitle: Text(
-              '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} bytes · 排序: ${_adminServerBackupSortLabel(_serverBackupSort)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.62),
-              ),
-            ),
-          );
-        }),
-        _AdminPaginationBar(
-          page: _serverBackupPage,
-          loading: _loading,
-          pageSize: _serverBackupPageSize,
-          onPageSizeChanged: (value) =>
-              _load(serverBackupPageSize: value, serverBackupOffset: 0),
-          onPrevious: () => _load(
-            serverBackupOffset: (_serverBackupOffset - _serverBackupPageSize)
-                .clamp(0, _serverBackupOffset),
-          ),
-          onNext: () => _load(
-            serverBackupOffset: _serverBackupOffset + _serverBackupPageSize,
-          ),
-          onJumpToPage: (page) =>
-              _load(serverBackupOffset: (page - 1) * _serverBackupPageSize),
-        ),
-        const SizedBox(height: 12),
-        AppSectionHeader(
-          title: '所有用户备份',
-          subtitle:
-              '${_adminPageSummary(_backupPage)} · 本页 ${(totalKb / 1024).toStringAsFixed(1)} MB',
-          actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果',
-          actionIcon: Icons.ios_share_outlined,
-          onAction: _exportingBackups ? null : _exportBackupsCsv,
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: _loading
-                ? null
-                : () => _load(backupOffset: _backupOffset),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('刷新'),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _backupSearchCtrl,
-          decoration: InputDecoration(
-            hintText: '搜索用户名、邮箱、昵称或用户 ID',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _backupQuery.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '清空用户备份搜索',
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      _backupSearchCtrl.clear();
-                      _load(backupQuery: '', backupOffset: 0);
-                    },
-                  ),
-            isDense: true,
-          ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _load(
-            backupQuery: _backupSearchCtrl.text.trim(),
-            backupOffset: 0,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _backupStatusChip('全部用户', ''),
-              _backupStatusChip('已有快照', 'synced'),
-              _backupStatusChip('无快照', 'empty'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        AppDropdownField<String>(
-          initialValue: _backupSort,
-          labelText: '用户备份排序',
-          items: const [
-            DropdownMenuItem(value: 'updated_desc', child: Text('最近同步优先')),
-            DropdownMenuItem(value: 'username_asc', child: Text('用户名 A-Z')),
-            DropdownMenuItem(value: 'size_desc', child: Text('备份体积从大到小')),
-            DropdownMenuItem(value: 'size_asc', child: Text('备份体积从小到大')),
-            DropdownMenuItem(value: 'version_desc', child: Text('同步版本较高优先')),
-          ],
-          onChanged: (value) =>
-              _load(backupSort: value ?? 'updated_desc', backupOffset: 0),
-        ),
-        const SizedBox(height: 6),
-        if (_backups.isEmpty)
-          Text(
-            '当前筛选下没有用户备份。可搜索用户名、邮箱、昵称或用户 ID，也可以切换“已有快照/无快照”。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.58),
-            ),
-          ),
-        ..._backups.map((b) {
-          final email = (b['email'] ?? '').toString();
-          final displayName = (b['display_name'] ?? '').toString();
-          final hasSnapshot = b['has_snapshot'] == true;
-          final updated = hasSnapshot
-              ? (b['updated_at'] ?? '尚无同步时间').toString()
-              : '尚无同步快照';
-          return _AdminListTileCard(
-            margin: const EdgeInsets.only(bottom: 8),
-            dense: true,
-            leading: Icon(Icons.cloud_done_outlined, color: cs.primary),
-            title: Text(b['username'].toString()),
-            subtitle: Text(
-              [
-                if (displayName.isNotEmpty) '昵称: $displayName',
-                if (email.isNotEmpty) '邮箱: $email',
-                updated,
-                '版本 ${b['sync_version'] ?? 0}',
-                '${b['size_kb']} KB',
-                '排序: ${_adminBackupSortLabel(_backupSort)}',
-              ].join(' · '),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.62),
-              ),
-            ),
-            trailing: IconButton(
-              tooltip: '清空备份',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _wipe(b),
-            ),
-          );
-        }),
-        _AdminPaginationBar(
-          page: _backupPage,
-          loading: _loading,
-          pageSize: _backupPageSize,
-          onPageSizeChanged: (value) =>
-              _load(backupPageSize: value, backupOffset: 0),
-          onPrevious: () => _load(
-            backupOffset: (_backupOffset - _backupPageSize).clamp(
-              0,
-              _backupOffset,
-            ),
-          ),
-          onNext: () => _load(backupOffset: _backupOffset + _backupPageSize),
-          onJumpToPage: (page) =>
-              _load(backupOffset: (page - 1) * _backupPageSize),
         ),
       ],
     );
@@ -3538,7 +4869,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 class _UsersTab extends StatefulWidget {
   final AdminApi api;
   final String? selfId;
-  const _UsersTab({super.key, required this.api, required this.selfId});
+  final List<String>? selfAdminPermissions;
+  final bool isActive;
+  const _UsersTab({
+    super.key,
+    required this.api,
+    required this.selfId,
+    required this.selfAdminPermissions,
+    required this.isActive,
+  });
   @override
   State<_UsersTab> createState() => _UsersTabState();
 }
@@ -3547,9 +4886,12 @@ class _UsersTabState extends State<_UsersTab> {
   static const _onlineRefreshInterval = Duration(seconds: 60);
 
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _groups = [];
+  List<Map<String, dynamic>> _roles = [];
   AdminPage? _page;
   bool _loading = true;
   String? _error;
+  String? _groupsRolesError;
   String _query = '';
   String _status = '';
   String _sort = 'created_desc';
@@ -3558,21 +4900,62 @@ class _UsersTabState extends State<_UsersTab> {
   int _loadSerial = 0;
   final Set<String> _selectedUserIds = <String>{};
   Timer? _onlineRefreshTimer;
+  bool _backgroundRefreshInFlight = false;
   final _searchCtrl = TextEditingController();
+
+  bool _canUseAdminPermission(String permission) {
+    final permissions = widget.selfAdminPermissions;
+    if (permissions == null) return true;
+    return permissions.contains(_adminAllPermission) ||
+        permissions.contains(permission);
+  }
+
+  bool get _canManageCoins => _canUseAdminPermission('coins');
+  bool get _canManageGroups => _canUseAdminPermission('groups');
+  bool get _canManageRoles => _canUseAdminPermission('roles');
+  bool get _canManagePermissions => _canUseAdminPermission('permissions');
 
   @override
   void initState() {
     super.initState();
     _load();
+    if (widget.isActive) {
+      _startOnlineRefreshTimer();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _UsersTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive == widget.isActive) return;
+    if (widget.isActive) {
+      _startOnlineRefreshTimer();
+    } else {
+      _stopOnlineRefreshTimer();
+    }
+  }
+
+  void _startOnlineRefreshTimer() {
+    if (_onlineRefreshTimer != null) return;
     _onlineRefreshTimer = Timer.periodic(_onlineRefreshInterval, (_) {
-      if (!mounted || _loading) return;
-      _load(quiet: true);
+      if (!mounted ||
+          !widget.isActive ||
+          _loading ||
+          _backgroundRefreshInFlight) {
+        return;
+      }
+      _load(quiet: true, background: true);
     });
+  }
+
+  void _stopOnlineRefreshTimer() {
+    _onlineRefreshTimer?.cancel();
+    _onlineRefreshTimer = null;
   }
 
   @override
   void dispose() {
-    _onlineRefreshTimer?.cancel();
+    _stopOnlineRefreshTimer();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -3584,7 +4967,10 @@ class _UsersTabState extends State<_UsersTab> {
     int? pageSize,
     int? offset,
     bool quiet = false,
+    bool background = false,
   }) async {
+    if (background && (_backgroundRefreshInFlight || _loading)) return;
+    if (background) _backgroundRefreshInFlight = true;
     final loadSerial = ++_loadSerial;
     final nextQuery = query ?? _query;
     final nextStatus = status ?? _status;
@@ -3600,10 +4986,12 @@ class _UsersTabState extends State<_UsersTab> {
       setState(() {
         _loading = true;
         _error = null;
+        _groupsRolesError = null;
       });
     }
     try {
-      final page = await widget.api.listUsersPage(
+      final groupsRolesErrors = <String>[];
+      final pageFuture = widget.api.listUsersPage(
         query: nextQuery.isEmpty ? null : nextQuery,
         status: _backendStatusFilter(nextStatus),
         online: _onlineFilter(nextStatus),
@@ -3611,14 +4999,31 @@ class _UsersTabState extends State<_UsersTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
+      final groupsFuture = _groups.isEmpty && _canManageGroups
+          ? _loadUserGroupsForUsers(groupsRolesErrors)
+          : Future<List<Map<String, dynamic>>>.value(_groups);
+      final rolesFuture = _roles.isEmpty && _canManageRoles
+          ? _loadUserRolesForUsers(groupsRolesErrors)
+          : Future<List<Map<String, dynamic>>>.value(_roles);
+      final results = await Future.wait<dynamic>([
+        pageFuture,
+        groupsFuture,
+        rolesFuture,
+      ]);
+      final page = results[0] as AdminPage;
       if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
         _users = page.items;
+        _groups = List<Map<String, dynamic>>.from(results[1] as List);
+        _roles = List<Map<String, dynamic>>.from(results[2] as List);
         _selectedUserIds.removeWhere(
           (id) => !_users.any((u) => u['user_id'].toString() == id),
         );
         _error = null;
+        _groupsRolesError = groupsRolesErrors.isEmpty
+            ? null
+            : groupsRolesErrors.join('\n');
       });
     } catch (e) {
       if (!mounted || loadSerial != _loadSerial) return;
@@ -3626,10 +5031,89 @@ class _UsersTabState extends State<_UsersTab> {
         setState(() => _error = _adminErrorMessage(e, '用户列表'));
       }
     } finally {
+      if (background) _backgroundRefreshInFlight = false;
       if (mounted && !quiet && loadSerial == _loadSerial) {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadUserGroupsForUsers(
+    List<String> errors,
+  ) async {
+    try {
+      return await widget.api.listGroups();
+    } catch (error) {
+      errors.add(_adminErrorMessage(error, '用户组'));
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadUserRolesForUsers(
+    List<String> errors,
+  ) async {
+    try {
+      return await widget.api.listRoles();
+    } catch (error) {
+      errors.add(_adminErrorMessage(error, '角色'));
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  String _adminEntityName(
+    List<Map<String, dynamic>> items,
+    String id,
+    String fallback,
+  ) {
+    if (id.isEmpty) return fallback;
+    for (final item in items) {
+      if (item['id'].toString() == id) {
+        final name = (item['name'] ?? '').toString();
+        return name.isEmpty ? id : name;
+      }
+    }
+    return id;
+  }
+
+  List<DropdownMenuItem<String>> _adminEntityItems(
+    List<Map<String, dynamic>> items,
+    String currentId,
+    String currentFallback, {
+    bool activeOnly = false,
+  }) {
+    final seen = <String>{};
+    final result = <DropdownMenuItem<String>>[];
+    if (currentId.isNotEmpty) {
+      seen.add(currentId);
+      final current = items.cast<Map<String, dynamic>?>().firstWhere(
+        (item) => item?['id'].toString() == currentId,
+        orElse: () => null,
+      );
+      final isInactive = current?['is_active'] == false;
+      result.add(
+        DropdownMenuItem(
+          value: currentId,
+          child: Text(
+            '${_adminEntityName(items, currentId, currentFallback)}${isInactive ? ' · 停用' : ''}',
+          ),
+        ),
+      );
+    }
+    for (final item in items) {
+      final id = (item['id'] ?? '').toString();
+      if (id.isEmpty || seen.contains(id)) continue;
+      if (activeOnly && item['is_active'] == false) continue;
+      seen.add(id);
+      final name = (item['name'] ?? '').toString();
+      final count = _adminIntValue(item['user_count']);
+      result.add(
+        DropdownMenuItem(
+          value: id,
+          child: Text('${name.isEmpty ? id : name} · $count 人'),
+        ),
+      );
+    }
+    return result;
   }
 
   void _applySearch() {
@@ -3726,9 +5210,9 @@ class _UsersTabState extends State<_UsersTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '导出用户 CSV'))),
+        );
       }
     }
   }
@@ -3863,8 +5347,8 @@ class _UsersTabState extends State<_UsersTab> {
         builder: (ctx, setSt) => AppDialog(
           title: Text('设置 $username 的管理权限'),
           icon: const Icon(Icons.admin_panel_settings_outlined),
-          content: SizedBox(
-            width: 420,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -3939,6 +5423,107 @@ class _UsersTabState extends State<_UsersTab> {
     }
   }
 
+  Future<void> _editUserGroupRole(Map<String, dynamic> u) async {
+    if (!_canManageGroups && !_canManageRoles) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少用户组或角色管理权限')));
+      return;
+    }
+    if (_canManageGroups && _groups.isEmpty ||
+        _canManageRoles && _roles.isEmpty) {
+      await _load(quiet: true);
+    }
+    if (!mounted) return;
+    final username = u['username'].toString();
+    var selectedGroupId = (u['group_id'] ?? 'group_default').toString();
+    var selectedRoleId =
+        (u['role_id'] ?? (u['is_admin'] == true ? 'role_admin' : 'role_user'))
+            .toString();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text('调整 $username 的用户组与角色'),
+          icon: const Icon(Icons.manage_accounts_outlined),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_canManageGroups) ...[
+                  AppDropdownField<String>(
+                    initialValue: selectedGroupId,
+                    labelText: '用户组',
+                    prefixIcon: const Icon(Icons.groups_2_outlined),
+                    items: _adminEntityItems(
+                      _groups,
+                      selectedGroupId,
+                      '当前用户组',
+                      activeOnly: true,
+                    ),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setSt(() => selectedGroupId = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                if (_canManageRoles)
+                  AppDropdownField<String>(
+                    initialValue: selectedRoleId,
+                    labelText: '管理员角色',
+                    prefixIcon: const Icon(Icons.admin_panel_settings_outlined),
+                    items: _adminEntityItems(
+                      _roles,
+                      selectedRoleId,
+                      '当前角色',
+                      activeOnly: true,
+                    ),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setSt(() => selectedRoleId = value);
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    try {
+      await widget.api.updateUser(
+        u['user_id'].toString(),
+        groupId: _canManageGroups ? selectedGroupId : null,
+        roleId: _canManageRoles ? selectedRoleId : null,
+      );
+      await _load(quiet: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('用户组与角色已更新')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
   Future<void> _adjustCoins(Map<String, dynamic> u) async {
     final deltaCtrl = TextEditingController();
     final reasonCtrl = TextEditingController();
@@ -3950,32 +5535,36 @@ class _UsersTabState extends State<_UsersTab> {
       builder: (ctx) => AppDialog(
         title: Text('调整 $username 的时光币'),
         icon: const Icon(Icons.toll_outlined),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('当前 $balance · 累计 $lifetime'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: deltaCtrl,
-              decoration: const InputDecoration(
-                labelText: '调整数量',
-                helperText: '正数增加，负数扣减',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('当前 $balance · 累计 $lifetime'),
               ),
-              keyboardType: const TextInputType.numberWithOptions(signed: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: reasonCtrl,
-              decoration: const InputDecoration(labelText: '原因 (可选)'),
-              maxLines: 2,
-            ),
-          ],
+              const SizedBox(height: 8),
+              TextField(
+                controller: deltaCtrl,
+                decoration: const InputDecoration(
+                  labelText: '调整数量',
+                  helperText: '正数增加，负数扣减',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reasonCtrl,
+                decoration: const InputDecoration(labelText: '原因 (可选)'),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -4034,7 +5623,10 @@ class _UsersTabState extends State<_UsersTab> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('删除'),
           ),
@@ -4082,6 +5674,416 @@ class _UsersTabState extends State<_UsersTab> {
     return formatted == '-' ? '从未活跃' : formatted;
   }
 
+  Future<void> _showUserDetails(Map<String, dynamic> u) async {
+    final userId = u['user_id'].toString();
+    final admin = u['is_admin'] == true;
+    final disabled = u['is_disabled'] == true;
+    final online = u['online'] == true;
+    final email = (u['email'] ?? '').toString();
+    final emailVerified = u['email_verified'] == true;
+    final displayName = (u['display_name'] ?? '').toString();
+    final username = (u['username'] ?? '').toString();
+    final groupId = (u['group_id'] ?? 'group_default').toString();
+    final roleId = (u['role_id'] ?? (admin ? 'role_admin' : 'role_user'))
+        .toString();
+    final permissions = _adminUserPermissions(
+      u['admin_permissions'],
+      isAdmin: admin,
+    );
+    final detailLines = [
+      '用户名: ${username.isEmpty ? '-' : username}',
+      '用户 ID: $userId',
+      '昵称: ${displayName.isEmpty ? '-' : displayName}',
+      '邮箱: ${email.isEmpty ? '未绑定邮箱' : '$email${emailVerified ? ' (已验证)' : ' (未验证)'}'}',
+      '账号状态: ${disabled ? '已禁用' : '可登录'} · ${online ? '在线' : '离线'}',
+      '管理员: ${admin ? '是' : '否'}',
+      '管理权限: ${_adminPermissionsLabel(permissions, isAdmin: admin)}',
+      '用户组: ${_adminEntityName(_groups, groupId, '默认组')}',
+      '角色: ${_adminEntityName(_roles, roleId, '普通角色')}',
+      '注册时间: ${_formatServerTime(u['created_at'])}',
+      '最近登录: ${_formatLastLogin(u['last_login_at'])}',
+      '最近活跃: ${_formatLastActive(u['last_active_at'])}',
+      '反馈数: ${u['feedback_count'] ?? 0}',
+      '时光币: ${_adminIntValue(u['coin_balance'])}',
+      '累计时光币: ${_adminIntValue(u['lifetime_coins'])}',
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('用户详情'),
+        icon: const Icon(Icons.person_search_outlined),
+        content: SingleChildScrollView(
+          child: SelectableText(detailLines.join('\n')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuButton<String> _userActionMenu(
+    BuildContext context,
+    Map<String, dynamic> u, {
+    required bool admin,
+    required bool disabled,
+    required bool isSelf,
+  }) {
+    return PopupMenuButton<String>(
+      tooltip: '账号操作',
+      onSelected: (action) async {
+        switch (action) {
+          case 'details':
+            await _showUserDetails(u);
+            break;
+          case 'admin':
+            if (_canManageRoles || _canManagePermissions) {
+              await _toggleAdmin(u);
+            } else if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('缺少角色或权限管理权限')));
+            }
+            break;
+          case 'permissions':
+            if (_canManagePermissions) {
+              await _editAdminPermissions(u);
+            } else if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('缺少权限管理权限')));
+            }
+            break;
+          case 'group_role':
+            await _editUserGroupRole(u);
+            break;
+          case 'coins':
+            if (_canManageCoins) {
+              await _adjustCoins(u);
+            } else if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('缺少时光币管理权限')));
+            }
+            break;
+          case 'disable':
+            await _toggleDisable(u);
+            break;
+          case 'reset':
+            await _resetPassword(u);
+            break;
+          case 'delete':
+            await _delete(u);
+            break;
+          case 'copy_id':
+            await Clipboard.setData(
+              ClipboardData(text: u['user_id'].toString()),
+            );
+            if (!context.mounted) return;
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('用户 ID 已复制')));
+            }
+            break;
+        }
+      },
+      itemBuilder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return [
+          const PopupMenuItem(
+            value: 'details',
+            child: AppSecondaryMenuText('查看详情'),
+          ),
+          PopupMenuItem(
+            value: 'admin',
+            enabled: _canManageRoles || _canManagePermissions,
+            child: AppSecondaryMenuText(
+              _canManageRoles || _canManagePermissions
+                  ? (admin ? '撤销管理员权限' : '授予管理员权限')
+                  : '授予管理员权限（无权限）',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'permissions',
+            enabled: _canManagePermissions,
+            child: AppSecondaryMenuText(
+              _canManagePermissions ? '设置管理权限' : '设置管理权限（无权限）',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'group_role',
+            enabled: _canManageGroups || _canManageRoles,
+            child: AppSecondaryMenuText(
+              _canManageGroups || _canManageRoles
+                  ? '设置用户组/角色'
+                  : '设置用户组/角色（无权限）',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'coins',
+            enabled: _canManageCoins,
+            child: AppSecondaryMenuText(
+              _canManageCoins ? '调整时光币' : '调整时光币（无权限）',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'disable',
+            child: AppSecondaryMenuText(disabled ? '恢复账号登录' : '禁用账号登录'),
+          ),
+          const PopupMenuItem(
+            value: 'reset',
+            child: AppSecondaryMenuText('重置登录密码'),
+          ),
+          const PopupMenuItem(
+            value: 'copy_id',
+            child: AppSecondaryMenuText('复制用户 ID'),
+          ),
+          if (!isSelf)
+            PopupMenuItem(
+              value: 'delete',
+              child: AppSecondaryMenuText('删除账号与数据', color: cs.error),
+            ),
+        ];
+      },
+    );
+  }
+
+  Widget _buildUserListItem(Map<String, dynamic> u) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final userId = u['user_id'].toString();
+    final isSelf = userId == widget.selfId;
+    final disabled = u['is_disabled'] == true;
+    final admin = u['is_admin'] == true;
+    final online = u['online'] == true;
+    final permissions = _adminUserPermissions(
+      u['admin_permissions'],
+      isAdmin: admin,
+    );
+    final permissionsText = _adminPermissionsLabel(permissions, isAdmin: admin);
+    final coinBalance = _adminIntValue(u['coin_balance']);
+    final lifetimeCoins = _adminIntValue(u['lifetime_coins']);
+    final selected = _selectedUserIds.contains(userId);
+    final registeredAt = _formatServerTime(u['created_at']);
+    final lastLoginAt = _formatLastLogin(u['last_login_at']);
+    final lastActiveAt = _formatLastActive(u['last_active_at']);
+    final email = (u['email'] ?? '').toString();
+    final emailVerified = u['email_verified'] == true;
+    final displayName = (u['display_name'] ?? '').toString();
+    final username = u['username'].toString();
+    final groupId = (u['group_id'] ?? 'group_default').toString();
+    final roleId = (u['role_id'] ?? (admin ? 'role_admin' : 'role_user'))
+        .toString();
+    final groupName = _adminEntityName(_groups, groupId, '默认组');
+    final roleName = _adminEntityName(_roles, roleId, '普通角色');
+    final actionMenu = _userActionMenu(
+      context,
+      u,
+      admin: admin,
+      disabled: disabled,
+      isSelf: isSelf,
+    );
+    final statusBadges = <Widget>[
+      AppStatusBadge(
+        label: online ? '在线' : '离线',
+        color: online ? Colors.green : Colors.grey,
+        icon: online ? Icons.circle : Icons.radio_button_unchecked,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      ),
+      if (admin) const AppStatusBadge(label: '管理员', color: Colors.deepOrange),
+      if (admin && !permissions.contains(_adminAllPermission))
+        const AppStatusBadge(label: '细分权限', color: Colors.indigo),
+      if (disabled)
+        AppStatusBadge(
+          label: '已禁用',
+          color: Theme.of(context).colorScheme.error,
+        ),
+    ];
+    final identityParts = [
+      if (displayName.isNotEmpty) '昵称: $displayName',
+      if (email.isNotEmpty)
+        '邮箱: $email${emailVerified ? ' (已验证)' : ' (未验证)'}'
+      else
+        '未绑定邮箱',
+      '用户组: $groupName',
+      '角色: $roleName',
+      '权限: $permissionsText',
+      '时光币: $coinBalance / 累计 $lifetimeCoins',
+      '排序: ${_adminUserSortLabel(_sort)}',
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 980) {
+          final subtleText = appSecondaryControlLabelStyle(
+            context,
+          ).copyWith(color: cs.onSurface.withValues(alpha: 0.62));
+          final mainText = appSecondaryMenuItemTextStyle(context).copyWith(
+            color: cs.onSurface,
+            decoration: disabled ? TextDecoration.lineThrough : null,
+          );
+          return AppSurfaceCard(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            borderRadius: BorderRadius.circular(9),
+            border: _adminSubtleListBorder(context),
+            onTap: () => _showUserDetails(u),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 34,
+                  child: Checkbox(
+                    value: selected,
+                    onChanged: isSelf
+                        ? null
+                        : (value) =>
+                              _toggleUserSelection(userId, value == true),
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: admin
+                            ? Colors.deepOrange.withValues(alpha: 0.16)
+                            : cs.primary.withValues(alpha: 0.10),
+                        foregroundColor: admin ? Colors.deepOrange : cs.primary,
+                        child: Text(
+                          username.isEmpty ? '?' : username.substring(0, 1),
+                          style: appSecondaryControlLabelStyle(context),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              username,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: mainText,
+                            ),
+                            Text(
+                              displayName.isEmpty ? userId : displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: subtleText,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    email.isEmpty
+                        ? '未绑定邮箱'
+                        : '$email${emailVerified ? ' · 已验证' : ' · 未验证'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: subtleText,
+                  ),
+                ),
+                SizedBox(
+                  width: 178,
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: statusBadges,
+                  ),
+                ),
+                SizedBox(
+                  width: 138,
+                  child: Text(
+                    '$groupName\n$roleName',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: subtleText,
+                  ),
+                ),
+                SizedBox(
+                  width: 118,
+                  child: Text(
+                    '$coinBalance / $lifetimeCoins',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: mainText,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    '登录: $lastLoginAt\n活跃: $lastActiveAt',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: subtleText,
+                  ),
+                ),
+                actionMenu,
+              ],
+            ),
+          );
+        }
+        return _AdminListTileCard(
+          dense: true,
+          onTap: () => _showUserDetails(u),
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: selected,
+                onChanged: isSelf
+                    ? null
+                    : (value) => _toggleUserSelection(userId, value == true),
+              ),
+              CircleAvatar(
+                backgroundColor: admin
+                    ? Colors.deepOrange.withValues(alpha: 0.2)
+                    : cs.primary.withValues(alpha: 0.12),
+                foregroundColor: admin ? Colors.deepOrange : cs.primary,
+                child: Text(username.isEmpty ? '?' : username.substring(0, 1)),
+              ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  username,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w400,
+                    decoration: disabled ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              ...statusBadges.expand(
+                (badge) => <Widget>[badge, const SizedBox(width: 6)],
+              ),
+            ],
+          ),
+          subtitle: Text(
+            '${identityParts.join(' · ')}\n注册: $registeredAt · 最近登录: $lastLoginAt · 最近活跃: $lastActiveAt · 反馈: ${u['feedback_count'] ?? 0}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.62),
+            ),
+          ),
+          trailing: actionMenu,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -4099,418 +6101,274 @@ class _UsersTabState extends State<_UsersTab> {
       0,
       (sum, user) => sum + _adminIntValue(user['lifetime_coins']),
     );
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      decoration: InputDecoration(
-                        hintText: '搜索用户名、邮箱、昵称或用户 ID',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _query.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: '清空搜索',
-                                icon: const Icon(Icons.close),
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  _load(query: '', offset: 0);
-                                },
-                              ),
-                        isDense: true,
-                      ),
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _applySearch(),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '搜索用户',
-                    onPressed: _applySearch,
-                    icon: const Icon(Icons.manage_search),
-                  ),
-                  IconButton(
-                    tooltip: '导出用户筛选结果',
-                    onPressed: _loading ? null : _exportUsersCsv,
-                    icon: const Icon(Icons.download_outlined),
-                  ),
-                  IconButton(
-                    tooltip: '刷新用户列表',
-                    onPressed: _loading ? null : () => _load(offset: _offset),
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _userFilterChip('全部账号', ''),
-                    _userFilterChip('可登录', 'active'),
-                    _userFilterChip('在线', 'online'),
-                    _userFilterChip('离线', 'offline'),
-                    _userFilterChip('管理员', 'admin'),
-                    _userFilterChip('已禁用', 'disabled'),
-                    _userFilterChip('普通用户', 'normal'),
-                    _userFilterChip('有反馈', 'has_feedback'),
-                    _userFilterChip('邮箱未验证', 'unverified_email'),
-                    _userFilterChip('邮箱已验证', 'verified_email'),
-                    _userFilterChip('未绑定邮箱', 'no_email'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              AppDropdownField<String>(
-                initialValue: _sort,
-                labelText: '排序',
-                items: const [
-                  DropdownMenuItem(
-                    value: 'created_desc',
-                    child: Text('最新注册优先'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'last_active_desc',
-                    child: Text('最近活跃优先'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'last_login_desc',
-                    child: Text('最近登录优先'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'feedback_desc',
-                    child: Text('反馈较多优先'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'username_asc',
-                    child: Text('用户名 A-Z'),
-                  ),
-                  DropdownMenuItem(value: 'email_asc', child: Text('邮箱 A-Z')),
-                ],
-                onChanged: (value) => _applySort(value ?? 'created_desc'),
-              ),
-              if (!loadingFirstPage && _error == null && _users.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                AppSurfaceCard(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  color: cs.secondaryContainer.withValues(alpha: 0.26),
-                  border: Border.all(
-                    color: cs.secondary.withValues(alpha: 0.16),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final summary = Text(
-                        selectedIds.isEmpty
-                            ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 可勾选后批量禁用或恢复'
-                            : '已选 ${selectedIds.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 批量操作仅作用于当前页勾选项',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.68),
-                        ),
-                      );
-                      final actions = Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          FilterChip(
-                            label: Text(
-                              allCurrentPageSelected ? '取消全选本页' : '全选本页',
-                            ),
-                            selected: allCurrentPageSelected,
-                            onSelected: selectableIds.isEmpty
-                                ? null
-                                : (_) => _toggleCurrentPageSelection(
-                                    !allCurrentPageSelected,
-                                  ),
-                          ),
-                          TextButton.icon(
-                            onPressed: selectedIds.isEmpty || _loading
-                                ? null
-                                : () => _bulkSetDisabled(true),
-                            icon: const Icon(Icons.block_outlined),
-                            label: const Text('批量禁用'),
-                          ),
-                          TextButton.icon(
-                            onPressed: selectedIds.isEmpty || _loading
-                                ? null
-                                : () => _bulkSetDisabled(false),
-                            icon: const Icon(Icons.lock_open_outlined),
-                            label: const Text('批量恢复'),
-                          ),
-                        ],
-                      );
-                      if (constraints.maxWidth < 560) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            summary,
-                            const SizedBox(height: 6),
-                            actions,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: summary),
-                          actions,
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
-              _AdminInlineLoadingIndicator(
-                visible: _loading && _page != null,
-                label: '正在更新当前页',
-              ),
-            ],
-          ),
-        ),
-        if (loadingFirstPage)
-          const Expanded(
-            child: Center(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactAdminFilters = constraints.maxWidth < 700;
+        final userFilterChips = [
+          _userFilterChip('全部账号', ''),
+          _userFilterChip('可登录', 'active'),
+          _userFilterChip('在线', 'online'),
+          _userFilterChip('离线', 'offline'),
+          _userFilterChip('管理员', 'admin'),
+          _userFilterChip('已禁用', 'disabled'),
+          _userFilterChip('普通用户', 'normal'),
+          _userFilterChip('有反馈', 'has_feedback'),
+          _userFilterChip('邮箱未验证', 'unverified_email'),
+          _userFilterChip('邮箱已验证', 'verified_email'),
+          _userFilterChip('未绑定邮箱', 'no_email'),
+        ];
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('正在加载用户列表…'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          decoration: InputDecoration(
+                            hintText: '搜索用户名、邮箱、昵称或用户 ID',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: '清空搜索',
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () {
+                                      _searchCtrl.clear();
+                                      _load(query: '', offset: 0);
+                                    },
+                                  ),
+                            isDense: true,
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _applySearch(),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '搜索用户',
+                        onPressed: _applySearch,
+                        icon: const Icon(Icons.manage_search),
+                      ),
+                      IconButton(
+                        tooltip: '导出用户筛选结果',
+                        onPressed: _loading ? null : _exportUsersCsv,
+                        icon: const Icon(Icons.download_outlined),
+                      ),
+                      IconButton(
+                        tooltip: '刷新用户列表',
+                        onPressed: _loading
+                            ? null
+                            : () => _load(offset: _offset),
+                        icon: _loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.refresh),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  compactAdminFilters
+                      ? _AdminCompactChipStrip(
+                          padding: EdgeInsets.zero,
+                          children: userFilterChips,
+                        )
+                      : _AdminChipWrap(
+                          padding: EdgeInsets.zero,
+                          children: userFilterChips,
+                        ),
+                  SizedBox(height: compactAdminFilters ? 6 : 8),
+                  AppDropdownField<String>(
+                    initialValue: _sort,
+                    labelText: '排序',
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'created_desc',
+                        child: Text('最新注册优先'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'last_active_desc',
+                        child: Text('最近活跃优先'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'last_login_desc',
+                        child: Text('最近登录优先'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'feedback_desc',
+                        child: Text('反馈较多优先'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'username_asc',
+                        child: Text('用户名 A-Z'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'email_asc',
+                        child: Text('邮箱 A-Z'),
+                      ),
+                    ],
+                    onChanged: (value) => _applySort(value ?? 'created_desc'),
+                  ),
+                  if (!loadingFirstPage &&
+                      _error == null &&
+                      _users.isNotEmpty) ...[
+                    SizedBox(height: compactAdminFilters ? 6 : 8),
+                    AppSurfaceCard(
+                      padding: EdgeInsets.fromLTRB(
+                        10,
+                        compactAdminFilters ? 6 : 8,
+                        10,
+                        compactAdminFilters ? 6 : 8,
+                      ),
+                      color: cs.secondaryContainer.withValues(alpha: 0.22),
+                      border: Border.all(
+                        color: cs.secondary.withValues(alpha: 0.14),
+                        width: 0.45,
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final summary = Text(
+                            selectedIds.isEmpty
+                                ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 可勾选后批量禁用或恢复'
+                                : '已选 ${selectedIds.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 批量操作仅作用于当前页勾选项',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.withValues(alpha: 0.68),
+                            ),
+                          );
+                          final actions = Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              FilterChip(
+                                label: Text(
+                                  allCurrentPageSelected ? '取消全选本页' : '全选本页',
+                                ),
+                                selected: allCurrentPageSelected,
+                                onSelected: selectableIds.isEmpty
+                                    ? null
+                                    : (_) => _toggleCurrentPageSelection(
+                                        !allCurrentPageSelected,
+                                      ),
+                              ),
+                              TextButton.icon(
+                                onPressed: selectedIds.isEmpty || _loading
+                                    ? null
+                                    : () => _bulkSetDisabled(true),
+                                icon: const Icon(Icons.block_outlined),
+                                label: const Text('批量禁用'),
+                              ),
+                              TextButton.icon(
+                                onPressed: selectedIds.isEmpty || _loading
+                                    ? null
+                                    : () => _bulkSetDisabled(false),
+                                icon: const Icon(Icons.lock_open_outlined),
+                                label: const Text('批量恢复'),
+                              ),
+                            ],
+                          );
+                          if (compactAdminFilters ||
+                              constraints.maxWidth < 560) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                summary,
+                                const SizedBox(height: 6),
+                                actions,
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(child: summary),
+                              actions,
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                  _AdminInlineLoadingIndicator(
+                    visible: _loading && _page != null,
+                    label: '正在更新当前页',
+                  ),
+                  if (_groupsRolesError != null) ...[
+                    const SizedBox(height: 8),
+                    AppInfoBanner(
+                      icon: Icons.lock_outline,
+                      title: '用户组或角色加载失败',
+                      message: _groupsRolesError!,
+                      color: cs.error,
+                      margin: EdgeInsets.zero,
+                    ),
+                  ],
                 ],
               ),
             ),
-          )
-        else if (_error != null)
-          Expanded(
-            child: _AdminErrorState(
-              message: _error!,
-              onRetry: () => _load(offset: _offset),
-            ),
-          )
-        else if (_users.isEmpty)
-          Expanded(
-            child: EmptyState(
-              icon: Icons.people_outline,
-              message: _query.isEmpty && _status.isEmpty
-                  ? '暂无用户记录'
-                  : '没有匹配的用户。请调整搜索关键词或账号状态筛选。',
-            ),
-          )
-        else
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _load(offset: _offset),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: _users.length,
-                separatorBuilder: (context, _) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final u = _users[i];
-                  final userId = u['user_id'].toString();
-                  final isSelf = userId == widget.selfId;
-                  final disabled = u['is_disabled'] == true;
-                  final admin = u['is_admin'] == true;
-                  final online = u['online'] == true;
-                  final permissions = _adminUserPermissions(
-                    u['admin_permissions'],
-                    isAdmin: admin,
-                  );
-                  final permissionsText = _adminPermissionsLabel(
-                    permissions,
-                    isAdmin: admin,
-                  );
-                  final coinBalance = _adminIntValue(u['coin_balance']);
-                  final lifetimeCoins = _adminIntValue(u['lifetime_coins']);
-                  final selected = _selectedUserIds.contains(userId);
-                  final registeredAt = _formatServerTime(u['created_at']);
-                  final lastLoginAt = _formatLastLogin(u['last_login_at']);
-                  final lastActiveAt = _formatLastActive(u['last_active_at']);
-                  final email = (u['email'] ?? '').toString();
-                  final emailVerified = u['email_verified'] == true;
-                  final displayName = (u['display_name'] ?? '').toString();
-                  final identityParts = [
-                    if (displayName.isNotEmpty) '昵称: $displayName',
-                    if (email.isNotEmpty)
-                      '邮箱: $email${emailVerified ? ' (已验证)' : ' (未验证)'}'
-                    else
-                      '未绑定邮箱',
-                    '权限: $permissionsText',
-                    '时光币: $coinBalance / 累计 $lifetimeCoins',
-                    '排序: ${_adminUserSortLabel(_sort)}',
-                  ];
-                  return _AdminListTileCard(
-                    leading: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Checkbox(
-                          value: selected,
-                          onChanged: isSelf
-                              ? null
-                              : (value) =>
-                                    _toggleUserSelection(userId, value == true),
-                        ),
-                        CircleAvatar(
-                          backgroundColor: admin
-                              ? Colors.deepOrange.withValues(alpha: 0.2)
-                              : cs.primary.withValues(alpha: 0.12),
-                          foregroundColor: admin
-                              ? Colors.deepOrange
-                              : cs.primary,
-                          child: Text(
-                            (u['username'] as String? ?? '?').isEmpty
-                                ? '?'
-                                : u['username'].toString().substring(0, 1),
-                          ),
-                        ),
-                      ],
+            if (loadingFirstPage)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text('正在加载用户列表…'),
+                    ],
+                  ),
+                ),
+              )
+            else if (_error != null)
+              Expanded(
+                child: _AdminErrorState(
+                  message: _error!,
+                  onRetry: () => _load(offset: _offset),
+                ),
+              )
+            else if (_users.isEmpty)
+              Expanded(
+                child: EmptyState(
+                  icon: Icons.people_outline,
+                  message: _query.isEmpty && _status.isEmpty
+                      ? '暂无用户记录'
+                      : '没有匹配的用户。请调整搜索关键词或账号状态筛选。',
+                ),
+              )
+            else
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => _load(offset: _offset),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
                     ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            u['username'].toString(),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w400,
-                              decoration: disabled
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        AppStatusBadge(
-                          label: online ? '在线' : '离线',
-                          color: online ? Colors.green : Colors.grey,
-                          icon: online
-                              ? Icons.circle
-                              : Icons.radio_button_unchecked,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                        ),
-                        if (admin) ...[
-                          const SizedBox(width: 6),
-                          const AppStatusBadge(
-                            label: '管理员',
-                            color: Colors.deepOrange,
-                          ),
-                          if (!permissions.contains(_adminAllPermission)) ...[
-                            const SizedBox(width: 6),
-                            const AppStatusBadge(
-                              label: '细分权限',
-                              color: Colors.indigo,
-                            ),
-                          ],
-                        ],
-                        if (disabled) ...[
-                          const SizedBox(width: 6),
-                          const AppStatusBadge(label: '已禁用', color: Colors.red),
-                        ],
-                      ],
-                    ),
-                    subtitle: Text(
-                      '${identityParts.join(' · ')}\n注册: $registeredAt · 最近登录: $lastLoginAt · 最近活跃: $lastActiveAt · 反馈: ${u['feedback_count'] ?? 0}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                      ),
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (action) async {
-                        switch (action) {
-                          case 'admin':
-                            await _toggleAdmin(u);
-                            break;
-                          case 'permissions':
-                            await _editAdminPermissions(u);
-                            break;
-                          case 'coins':
-                            await _adjustCoins(u);
-                            break;
-                          case 'disable':
-                            await _toggleDisable(u);
-                            break;
-                          case 'reset':
-                            await _resetPassword(u);
-                            break;
-                          case 'delete':
-                            await _delete(u);
-                            break;
-                          case 'copy_id':
-                            await Clipboard.setData(
-                              ClipboardData(text: u['user_id'].toString()),
-                            );
-                            if (!context.mounted) return;
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('用户 ID 已复制')),
-                              );
-                            }
-                            break;
-                        }
-                      },
-                      itemBuilder: (ctx) => [
-                        PopupMenuItem(
-                          value: 'admin',
-                          child: Text(admin ? '撤销管理员权限' : '授予管理员权限'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'permissions',
-                          child: Text('设置管理权限'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'coins',
-                          child: Text('调整时光币'),
-                        ),
-                        PopupMenuItem(
-                          value: 'disable',
-                          child: Text(disabled ? '恢复账号登录' : '禁用账号登录'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'reset',
-                          child: Text('重置登录密码'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'copy_id',
-                          child: Text('复制用户 ID'),
-                        ),
-                        if (!isSelf)
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text(
-                              '删除账号与数据',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                },
+                    itemCount: _users.length,
+                    separatorBuilder: (context, _) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _buildUserListItem(_users[i]),
+                  ),
+                ),
               ),
+            _AdminPaginationBar(
+              page: _page,
+              loading: _loading,
+              pageSize: _pageSize,
+              onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+              onPrevious: () =>
+                  _load(offset: _previousAdminOffset(_offset, _pageSize)),
+              onNext: () => _load(offset: _offset + _pageSize),
+              onJumpToPage: _jumpToPage,
             ),
-          ),
-        _AdminPaginationBar(
-          page: _page,
-          loading: _loading,
-          pageSize: _pageSize,
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: _jumpToPage,
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -4713,244 +6571,236 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final loadingFirstPage = _loading && _page == null;
-    return Scaffold(
-      body: Column(
-        children: [
-          AppSectionHeader(
-            title: '公告列表',
-            subtitle: _adminPageSummary(_page),
-            actionLabel: '刷新',
-            actionIcon: Icons.refresh,
-            onAction: _loading ? null : () => _load(offset: _offset),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: () => _openEdit(),
-                icon: const Icon(Icons.add),
-                label: const Text('发布公告'),
-              ),
+    return Column(
+      children: [
+        AppSectionHeader(
+          title: '公告列表',
+          subtitle: _adminPageSummary(_page),
+          actionLabel: '刷新',
+          actionIcon: Icons.refresh,
+          onAction: _loading ? null : () => _load(offset: _offset),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: () => _openEdit(),
+              icon: const Icon(Icons.add),
+              label: const Text('发布公告'),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: '搜索公告标题或正文',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清空公告搜索',
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _load(query: '', offset: 0);
-                        },
-                      ),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _applySearch(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              hintText: '搜索公告标题或正文',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空公告搜索',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        _load(query: '', offset: 0);
+                      },
+                    ),
+              isDense: true,
             ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _applySearch(),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Row(
-              children: [
-                _announcementStatusChip('全部状态', ''),
-                _announcementStatusChip('已发布', 'published'),
-                _announcementStatusChip('草稿', 'draft'),
-              ],
-            ),
+        ),
+        _AdminChipWrap(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+          children: [
+            _announcementStatusChip('全部状态', ''),
+            _announcementStatusChip('已发布', 'published'),
+            _announcementStatusChip('草稿', 'draft'),
+          ],
+        ),
+        _AdminChipWrap(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          children: [
+            _announcementLevelChip('全部级别', ''),
+            _announcementLevelChip('普通', 'info'),
+            _announcementLevelChip('重要', 'warning'),
+            _announcementLevelChip('紧急', 'critical'),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: AppDropdownField<String>(
+            initialValue: _sort,
+            labelText: '公告排序',
+            items: const [
+              DropdownMenuItem(value: 'created_desc', child: Text('最新创建优先')),
+              DropdownMenuItem(value: 'updated_desc', child: Text('最近更新优先')),
+              DropdownMenuItem(value: 'level_desc', child: Text('紧急程度优先')),
+              DropdownMenuItem(value: 'title_asc', child: Text('标题 A-Z')),
+            ],
+            onChanged: (value) =>
+                _load(sort: value ?? 'created_desc', offset: 0),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Row(
-              children: [
-                _announcementLevelChip('全部级别', ''),
-                _announcementLevelChip('普通', 'info'),
-                _announcementLevelChip('重要', 'warning'),
-                _announcementLevelChip('紧急', 'critical'),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: AppDropdownField<String>(
-              initialValue: _sort,
-              labelText: '公告排序',
-              items: const [
-                DropdownMenuItem(value: 'created_desc', child: Text('最新创建优先')),
-                DropdownMenuItem(value: 'updated_desc', child: Text('最近更新优先')),
-                DropdownMenuItem(value: 'level_desc', child: Text('紧急程度优先')),
-                DropdownMenuItem(value: 'title_asc', child: Text('标题 A-Z')),
-              ],
-              onChanged: (value) =>
-                  _load(sort: value ?? 'created_desc', offset: 0),
-            ),
-          ),
-          _AdminInlineLoadingIndicator(
-            visible: _loading && _page != null,
-            label: '正在更新公告列表',
-          ),
-          if (loadingFirstPage)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text('正在加载公告列表…'),
-                  ],
-                ),
+        ),
+        _AdminInlineLoadingIndicator(
+          visible: _loading && _page != null,
+          label: '正在更新公告列表',
+        ),
+        if (loadingFirstPage)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('正在加载公告列表…'),
+                ],
               ),
-            )
-          else if (_error != null)
-            Expanded(
-              child: _AdminErrorState(
-                message: _error!,
-                onRetry: () => _load(offset: _offset),
-              ),
-            )
-          else if (_items.isEmpty)
-            const Expanded(
-              child: EmptyState(
-                icon: Icons.campaign_outlined,
-                message: '当前筛选下没有公告。可调整关键词、发布状态或级别筛选，公告较多时使用底部分页查看。',
-              ),
-            )
-          else
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _load(offset: _offset),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _items.length,
-                  itemBuilder: (_, i) {
-                    final a = _items[i];
-                    final published =
-                        a['published'] == 1 || a['published'] == true;
-                    final level = (a['level'] ?? 'info').toString();
-                    final levelColor = switch (level) {
-                      'critical' => Colors.red,
-                      'warning' => Colors.orange,
-                      _ => cs.primary,
-                    };
-                    return _AdminListTileCard(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      isThreeLine: true,
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              (a['title'] ?? '').toString(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w400,
-                                color: cs.onSurface,
-                              ),
+            ),
+          )
+        else if (_error != null)
+          Expanded(
+            child: _AdminErrorState(
+              message: _error!,
+              onRetry: () => _load(offset: _offset),
+            ),
+          )
+        else if (_items.isEmpty)
+          const Expanded(
+            child: EmptyState(
+              icon: Icons.campaign_outlined,
+              message: '当前筛选下没有公告。可调整关键词、发布状态或级别筛选，公告较多时使用底部分页查看。',
+            ),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => _load(offset: _offset),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: _items.length,
+                itemBuilder: (_, i) {
+                  final a = _items[i];
+                  final published =
+                      a['published'] == 1 || a['published'] == true;
+                  final level = (a['level'] ?? 'info').toString();
+                  final levelColor = switch (level) {
+                    'critical' => cs.error,
+                    'warning' => Colors.orange,
+                    _ => cs.primary,
+                  };
+                  return _AdminListTileCard(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    isThreeLine: true,
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            (a['title'] ?? '').toString(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          AppStatusBadge(
-                            label: _adminStatusLabel(level),
-                            color: levelColor,
-                          ),
-                          if (!published) ...[
-                            const SizedBox(width: 6),
-                            AppStatusBadge(
-                              label: '草稿',
-                              color: cs.onSurface.withValues(alpha: 0.58),
-                            ),
-                          ],
-                        ],
-                      ),
-                      subtitle: Text(
-                        '创建: ${a['created_at']} · 更新: ${a['updated_at'] ?? '-'} · 排序: ${_adminAnnouncementSortLabel(_sort)}\n${(a['body'] ?? '').toString()}',
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.64),
                         ),
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (action) async {
-                          switch (action) {
-                            case 'edit':
-                              await _openEdit(item: a);
-                              return;
-                            case 'toggle':
-                              await widget.api.updateAnnouncement(
-                                (a['id'] as num).toInt(),
-                                published: !published,
-                              );
-                              await _load(offset: _offset);
-                              return;
-                            case 'delete':
-                              final confirmed = await _confirmAdminDangerAction(
-                                context: context,
-                                title: '删除公告？',
-                                message:
-                                    '将删除“${(a['title'] ?? '').toString()}”，已发布用户也将不再看到这条公告。',
-                              );
-                              if (!confirmed) return;
-                              await widget.api.deleteAnnouncement(
-                                (a['id'] as num).toInt(),
-                              );
-                              await _load(
-                                offset: _offsetAfterAdminDelete(
-                                  offset: _offset,
-                                  itemCount: _items.length,
-                                  pageSize: _pageSize,
-                                ),
-                              );
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('公告已删除')),
-                              );
-                              return;
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'edit', child: Text('编辑')),
-                          PopupMenuItem(
-                            value: 'toggle',
-                            child: Text(published ? '下架' : '发布'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text(
-                              '删除',
-                              style: TextStyle(color: Colors.red),
-                            ),
+                        const SizedBox(width: 8),
+                        AppStatusBadge(
+                          label: _adminStatusLabel(level),
+                          color: levelColor,
+                        ),
+                        if (!published) ...[
+                          const SizedBox(width: 6),
+                          AppStatusBadge(
+                            label: '草稿',
+                            color: cs.onSurface.withValues(alpha: 0.58),
                           ),
                         ],
+                      ],
+                    ),
+                    subtitle: Text(
+                      '创建: ${a['created_at']} · 更新: ${a['updated_at'] ?? '-'} · 排序: ${_adminAnnouncementSortLabel(_sort)}\n${(a['body'] ?? '').toString()}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.64),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) async {
+                        switch (action) {
+                          case 'edit':
+                            await _openEdit(item: a);
+                            return;
+                          case 'toggle':
+                            await widget.api.updateAnnouncement(
+                              (a['id'] as num).toInt(),
+                              published: !published,
+                            );
+                            await _load(offset: _offset);
+                            return;
+                          case 'delete':
+                            final confirmed = await _confirmAdminDangerAction(
+                              context: context,
+                              title: '删除公告？',
+                              message:
+                                  '将删除“${(a['title'] ?? '').toString()}”，已发布用户也将不再看到这条公告。',
+                            );
+                            if (!confirmed) return;
+                            await widget.api.deleteAnnouncement(
+                              (a['id'] as num).toInt(),
+                            );
+                            await _load(
+                              offset: _offsetAfterAdminDelete(
+                                offset: _offset,
+                                itemCount: _items.length,
+                                pageSize: _pageSize,
+                              ),
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('公告已删除')),
+                            );
+                            return;
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: AppSecondaryMenuText('编辑'),
+                        ),
+                        PopupMenuItem(
+                          value: 'toggle',
+                          child: AppSecondaryMenuText(published ? '下架' : '发布'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: AppSecondaryMenuText('删除'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-          _AdminPaginationBar(
-            page: _page,
-            loading: _loading,
-            pageSize: _pageSize,
-            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-            onPrevious: () =>
-                _load(offset: _previousAdminOffset(_offset, _pageSize)),
-            onNext: () => _load(offset: _offset + _pageSize),
-            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
           ),
-        ],
-      ),
+        _AdminPaginationBar(
+          page: _page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+        ),
+      ],
     );
   }
 
@@ -5023,6 +6873,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     String? sort,
     int? pageSize,
   }) async {
+    if (!mounted) return;
     final loadSerial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextQuery = query ?? _query;
@@ -5046,6 +6897,16 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         offset: nextOffset,
       );
       if (!mounted || loadSerial != _loadSerial) return;
+      if (page.items.isEmpty && page.total > 0 && nextOffset > 0) {
+        final lastOffset = _lastAdminOffset(
+          total: page.total,
+          pageSize: nextPageSize,
+        );
+        if (lastOffset != nextOffset) {
+          await _load(offset: lastOffset);
+          return;
+        }
+      }
       setState(() {
         _page = page;
         _items = page.items;
@@ -5111,12 +6972,13 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         status: toStatus,
       );
       if (!mounted) return;
+      await _load(offset: _offset);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(successMessage.replaceAll('{count}', '${ids.length}')),
         ),
       );
-      _load(offset: _offset);
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -5160,9 +7022,9 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '导出反馈 CSV'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -5170,9 +7032,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
   }
 
   Future<void> _reply(Map<String, dynamic> f) async {
-    final ctrl = TextEditingController(
-      text: (f['admin_reply'] ?? '').toString(),
-    );
+    var replyText = (f['admin_reply'] ?? '').toString();
     String status = (f['status'] ?? 'resolved').toString();
     final saved = await showDialog<bool>(
       context: context,
@@ -5180,29 +7040,32 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         builder: (ctx, setSt) => AppDialog(
           title: const Text('回复反馈'),
           icon: const Icon(Icons.reply_outlined),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text((f['content'] ?? '').toString()),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                maxLines: 4,
-                decoration: const InputDecoration(labelText: '回复内容'),
-              ),
-              const SizedBox(height: 8),
-              AppDropdownField<String>(
-                initialValue: status,
-                labelText: '处理状态',
-                items: const [
-                  DropdownMenuItem(value: 'open', child: Text('待处理')),
-                  DropdownMenuItem(value: 'in_progress', child: Text('处理中')),
-                  DropdownMenuItem(value: 'resolved', child: Text('已解决')),
-                  DropdownMenuItem(value: 'closed', child: Text('已关闭')),
-                ],
-                onChanged: (v) => setSt(() => status = v ?? status),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text((f['content'] ?? '').toString()),
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: replyText,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: '回复内容'),
+                  onChanged: (value) => replyText = value,
+                ),
+                const SizedBox(height: 8),
+                AppDropdownField<String>(
+                  initialValue: status,
+                  labelText: '处理状态',
+                  items: const [
+                    DropdownMenuItem(value: 'open', child: Text('待处理')),
+                    DropdownMenuItem(value: 'in_progress', child: Text('处理中')),
+                    DropdownMenuItem(value: 'resolved', child: Text('已解决')),
+                    DropdownMenuItem(value: 'closed', child: Text('已关闭')),
+                  ],
+                  onChanged: (v) => setSt(() => status = v ?? status),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -5221,16 +7084,147 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     try {
       await widget.api.replyFeedback(
         feedbackId: (f['id'] as num).toInt(),
-        reply: ctrl.text.trim(),
+        reply: replyText.trim(),
         status: status,
       );
-      _load(offset: _offset);
+      if (!mounted) return;
+      await _load(offset: _offset);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('反馈已回复')));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
       }
+    }
+  }
+
+  Future<void> _showFeedbackDetail(Map<String, dynamic> feedback) async {
+    var detail = Map<String, dynamic>.from(feedback);
+    try {
+      final id = (feedback['id'] as num?)?.toInt();
+      if (id != null) {
+        detail = {...detail, ...await widget.api.getFeedbackDetail(id)};
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('反馈详情加载失败，已展示列表摘要：${e.message}')),
+        );
+      }
+    }
+    if (!mounted) return;
+    final status = (detail['status'] ?? 'open').toString();
+    final category = (detail['category'] ?? '').toString();
+    final username = (detail['username'] ?? '').toString();
+    final displayName = (detail['display_name'] ?? '').toString();
+    final email = (detail['email'] ?? '').toString();
+    final emailVerified = detail['email_verified'] == true;
+    final userLabel = displayName.trim().isNotEmpty
+        ? displayName.trim()
+        : username;
+    final identity = [
+      if (username.trim().isNotEmpty && username.trim() != userLabel)
+        '@${username.trim()}',
+      if (email.trim().isNotEmpty)
+        '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
+    ].join(' · ');
+    final createdAt = (detail['created_at'] ?? '').toString();
+    final updatedAt = (detail['updated_at'] ?? '').toString();
+    final content = (detail['content'] ?? '').toString();
+    final adminReply = (detail['admin_reply'] ?? '').toString();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        maxWidth: 720,
+        icon: const Icon(Icons.feedback_outlined),
+        title: const Text('反馈详情'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 520),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AdminFeedbackDetailField(label: '用户', value: userLabel),
+                if (identity.isNotEmpty)
+                  _AdminFeedbackDetailField(label: '账号', value: identity),
+                _AdminFeedbackDetailField(
+                  label: '分类',
+                  value: _feedbackCategoryLabel(category),
+                ),
+                _AdminFeedbackDetailField(
+                  label: '状态',
+                  value: _adminStatusLabel(status),
+                ),
+                if (createdAt.isNotEmpty)
+                  _AdminFeedbackDetailField(label: '提交', value: createdAt),
+                if (updatedAt.isNotEmpty)
+                  _AdminFeedbackDetailField(label: '更新', value: updatedAt),
+                const SizedBox(height: 4),
+                _AdminFeedbackDetailField(
+                  label: '内容',
+                  value: content,
+                  multiline: true,
+                ),
+                if (adminReply.trim().isNotEmpty)
+                  _AdminFeedbackDetailField(
+                    label: '管理员回复',
+                    value: adminReply,
+                    multiline: true,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _reply(detail);
+            },
+            child: const Text('回复'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteFeedback(
+    Map<String, dynamic> f,
+    String feedbackUserLabel,
+  ) async {
+    final confirmed = await _confirmAdminDangerAction(
+      context: context,
+      title: '删除反馈？',
+      message: '将删除 $feedbackUserLabel 的这条反馈，删除后无法恢复。',
+    );
+    if (!confirmed) return;
+    try {
+      await widget.api.deleteFeedback((f['id'] as num).toInt());
+      await _load(
+        offset: _offsetAfterAdminDelete(
+          offset: _offset,
+          itemCount: _items.length,
+          pageSize: _pageSize,
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('反馈已删除')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -5243,275 +7237,229 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     final openIds = _currentPageOpenIds;
     final inProgressIds = _currentPageIdsWithStatus('in_progress');
     final resolvedIds = _currentPageIdsWithStatus('resolved');
-    return Scaffold(
-      body: Column(
-        children: [
-          AppSectionHeader(
-            title: '反馈列表',
-            subtitle: _adminPageSummary(_page),
-            actionLabel: '刷新',
-            actionIcon: Icons.refresh,
-            onAction: _loading ? null : () => _load(offset: _offset),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: '搜索反馈内容、回复或用户名',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清空反馈搜索',
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _load(query: '', offset: 0);
-                        },
+    final feedbackSummaryCard =
+        !loadingFirstPage && _error == null && _items.isNotEmpty
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+            child: AppSurfaceCard(
+              padding: const EdgeInsets.all(10),
+              color: cs.primary.withValues(alpha: 0.08),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.18),
+                width: 0.45,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.dashboard_customize_outlined,
+                        color: cs.primary,
+                        size: 20,
                       ),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _applySearch(),
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Row(
-              children: [
-                _filterChip('全部', ''),
-                _filterChip('待处理', 'open'),
-                _filterChip('处理中', 'in_progress'),
-                _filterChip('已解决', 'resolved'),
-                _filterChip('已关闭', 'closed'),
-              ],
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Row(
-              children: [
-                _categoryChip(_feedbackCategoryLabel(''), ''),
-                _categoryChip(_feedbackCategoryLabel('feature'), 'feature'),
-                _categoryChip(_feedbackCategoryLabel('bug'), 'bug'),
-                _categoryChip(_feedbackCategoryLabel('wish'), 'wish'),
-                _categoryChip(_feedbackCategoryLabel('other'), 'other'),
-              ],
-            ),
-          ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final sortField = AppDropdownField<String>(
-                initialValue: _sort,
-                labelText: '反馈排序',
-                items: const [
-                  DropdownMenuItem(
-                    value: 'created_desc',
-                    child: Text('最新反馈优先'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'updated_desc',
-                    child: Text('最近处理优先'),
-                  ),
-                  DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
-                  DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
-                ],
-                onChanged: (value) =>
-                    _load(sort: value ?? 'created_desc', offset: 0),
-              );
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                child: constraints.maxHeight < 520
-                    ? Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(width: 260, child: sortField),
-                      )
-                    : sortField,
-              );
-            },
-          ),
-          _AdminInlineLoadingIndicator(
-            visible: _loading && _page != null,
-            label: '正在更新反馈列表',
-          ),
-          if (!loadingFirstPage && _error == null && _items.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: AppSurfaceCard(
-                padding: const EdgeInsets.all(10),
-                color: cs.primary.withValues(alpha: 0.08),
-                border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.dashboard_customize_outlined,
-                          color: cs.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '本页 ${_items.length} 条 · 待处理 ${statusCounts['open'] ?? 0} · 处理中 ${statusCounts['in_progress'] ?? 0} · 已解决 ${statusCounts['resolved'] ?? 0}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w400,
-                                  color: cs.onSurface,
-                                ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '本页 ${_items.length} 条 · 待处理 ${statusCounts['open'] ?? 0} · 处理中 ${statusCounts['in_progress'] ?? 0} · 已解决 ${statusCounts['resolved'] ?? 0}',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: cs.onSurface,
                               ),
-                              Text(
-                                '共 ${_page?.total ?? _items.length} 条反馈，当前按${_adminFeedbackSortLabel(_sort)}排列。大量反馈按状态、分类、搜索和分页拆开处理，也可导出当前筛选结果。',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.64),
-                                ),
+                            ),
+                            Text(
+                              '共 ${_page?.total ?? _items.length} 条反馈，当前按${_adminFeedbackSortLabel(_sort)}排列。大量反馈按状态、分类、搜索和分页拆开处理，也可导出当前筛选结果。',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.64),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: '导出筛选结果',
-                          onPressed: _loading || _exporting
+                      ),
+                      IconButton(
+                        tooltip: '导出筛选结果',
+                        onPressed: _loading || _exporting
+                            ? null
+                            : _exportFilteredCsv,
+                        icon: _exporting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.download_outlined),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 2,
+                    children: [
+                      if (openIds.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: _loading
                               ? null
-                              : _exportFilteredCsv,
-                          icon: _exporting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.download_outlined),
+                              : _markCurrentPageOpenInProgress,
+                          icon: const Icon(Icons.playlist_add_check_outlined),
+                          label: const Text('本页待处理转处理中'),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 2,
-                      children: [
-                        if (openIds.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: _loading
-                                ? null
-                                : _markCurrentPageOpenInProgress,
-                            icon: const Icon(Icons.playlist_add_check_outlined),
-                            label: const Text('本页待处理转处理中'),
-                          ),
-                        if (inProgressIds.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: _loading
-                                ? null
-                                : () => _bulkUpdateCurrentPageStatus(
-                                    fromStatus: 'in_progress',
-                                    toStatus: 'resolved',
-                                    reply: '已处理完成。',
-                                    successMessage:
-                                        '已将当前页 {count} 条处理中反馈标记为已解决',
-                                  ),
-                            icon: const Icon(Icons.task_alt_outlined),
-                            label: const Text('本页处理中转已解决'),
-                          ),
-                        if (resolvedIds.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: _loading
-                                ? null
-                                : () => _bulkUpdateCurrentPageStatus(
-                                    fromStatus: 'resolved',
-                                    toStatus: 'closed',
-                                    reply: '已归档关闭。',
-                                    successMessage: '已将当前页 {count} 条已解决反馈关闭归档',
-                                  ),
-                            icon: const Icon(Icons.inventory_2_outlined),
-                            label: const Text('本页已解决转关闭'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+                      if (inProgressIds.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () => _bulkUpdateCurrentPageStatus(
+                                  fromStatus: 'in_progress',
+                                  toStatus: 'resolved',
+                                  reply: '已处理完成。',
+                                  successMessage: '已将当前页 {count} 条处理中反馈标记为已解决',
+                                ),
+                          icon: const Icon(Icons.task_alt_outlined),
+                          label: const Text('本页处理中转已解决'),
+                        ),
+                      if (resolvedIds.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () => _bulkUpdateCurrentPageStatus(
+                                  fromStatus: 'resolved',
+                                  toStatus: 'closed',
+                                  reply: '已归档关闭。',
+                                  successMessage: '已将当前页 {count} 条已解决反馈关闭归档',
+                                ),
+                          icon: const Icon(Icons.inventory_2_outlined),
+                          label: const Text('本页已解决转关闭'),
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          if (loadingFirstPage)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text('正在加载反馈列表…'),
-                  ],
-                ),
+          )
+        : null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactAdminFilters = constraints.maxWidth < 700;
+        final constrainedFeedbackHeight =
+            constraints.maxWidth < 700 && constraints.maxHeight < 560;
+        final effectiveFeedbackSummaryCard = constrainedFeedbackHeight
+            ? null
+            : feedbackSummaryCard;
+        final statusChips = [
+          _filterChip('全部', ''),
+          _filterChip('待处理', 'open'),
+          _filterChip('处理中', 'in_progress'),
+          _filterChip('已解决', 'resolved'),
+          _filterChip('已关闭', 'closed'),
+        ];
+        final categoryChips = [
+          _categoryChip(_feedbackCategoryLabel(''), ''),
+          _categoryChip(_feedbackCategoryLabel('feature'), 'feature'),
+          _categoryChip(_feedbackCategoryLabel('bug'), 'bug'),
+          _categoryChip(_feedbackCategoryLabel('wish'), 'wish'),
+          _categoryChip(_feedbackCategoryLabel('other'), 'other'),
+        ];
+        final paginationBar = _AdminPaginationBar(
+          barKey: const ValueKey('admin_feedback_pagination'),
+          page: _page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+        );
+        Widget feedbackBody() {
+          if (loadingFirstPage) {
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('正在加载反馈列表…'),
+                ],
               ),
-            )
-          else if (_error != null)
-            Expanded(
-              child: _AdminErrorState(
-                message: _error!,
-                onRetry: () => _load(offset: _offset),
-              ),
-            )
-          else if (_items.isEmpty)
-            const Expanded(
-              child: EmptyState(
-                icon: Icons.inbox_outlined,
-                message: '当前筛选下没有反馈。反馈较多时请用底部分页查看其他页面，或切换处理状态和分类。',
-              ),
-            )
-          else
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _load(offset: _offset),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _items.length,
-                  itemBuilder: (_, i) {
-                    final f = _items[i];
-                    final status = (f['status'] ?? 'open').toString();
-                    final category = (f['category'] ?? '').toString();
-                    final username = (f['username'] ?? '').toString();
-                    final displayName = (f['display_name'] ?? '').toString();
-                    final email = (f['email'] ?? '').toString();
-                    final emailVerified = f['email_verified'] == true;
-                    final feedbackUserLabel = displayName.trim().isNotEmpty
-                        ? displayName.trim()
-                        : username;
-                    final feedbackIdentity = [
-                      if (username.trim().isNotEmpty &&
-                          username.trim() != feedbackUserLabel)
-                        '@${username.trim()}',
-                      if (email.trim().isNotEmpty)
-                        '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
-                    ].join(' · ');
-                    final statusColor = switch (status) {
-                      'resolved' => Colors.green,
-                      'closed' => Colors.grey,
-                      'in_progress' => Colors.orange,
-                      _ => cs.primary,
-                    };
-                    final reply = (f['admin_reply'] ?? '').toString();
-                    final createdAt = (f['created_at'] ?? '').toString();
-                    final metaLine = [
-                      if (createdAt.isNotEmpty) createdAt,
-                      if (feedbackIdentity.isNotEmpty) feedbackIdentity,
-                    ].join(' · ');
-                    return _AdminListTileCard(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      title: Row(
+            );
+          }
+          if (_error != null) {
+            return _AdminErrorState(
+              message: _error!,
+              onRetry: () => _load(offset: _offset),
+            );
+          }
+          if (_items.isEmpty) {
+            return const EmptyState(
+              icon: Icons.inbox_outlined,
+              message: '当前筛选下没有反馈。反馈较多时请用底部分页查看其他页面，或切换处理状态和分类。',
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () => _load(offset: _offset),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 72),
+              itemCount:
+                  _items.length +
+                  (effectiveFeedbackSummaryCard == null ? 0 : 1),
+              itemBuilder: (_, i) {
+                if (effectiveFeedbackSummaryCard != null && i == 0) {
+                  return effectiveFeedbackSummaryCard;
+                }
+                final itemIndex = effectiveFeedbackSummaryCard == null
+                    ? i
+                    : i - 1;
+                final f = _items[itemIndex];
+                final status = (f['status'] ?? 'open').toString();
+                final category = (f['category'] ?? '').toString();
+                final username = (f['username'] ?? '').toString();
+                final displayName = (f['display_name'] ?? '').toString();
+                final email = (f['email'] ?? '').toString();
+                final emailVerified = f['email_verified'] == true;
+                final feedbackUserLabel = displayName.trim().isNotEmpty
+                    ? displayName.trim()
+                    : username;
+                final feedbackIdentity = [
+                  if (username.trim().isNotEmpty &&
+                      username.trim() != feedbackUserLabel)
+                    '@${username.trim()}',
+                  if (email.trim().isNotEmpty)
+                    '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
+                ].join(' · ');
+                final statusColor = switch (status) {
+                  'resolved' => Colors.green,
+                  'closed' => Colors.grey,
+                  'in_progress' => Colors.orange,
+                  _ => cs.primary,
+                };
+                final reply = (f['admin_reply'] ?? '').toString();
+                final createdAt = (f['created_at'] ?? '').toString();
+                final metaLine = [
+                  if (createdAt.isNotEmpty) createdAt,
+                  if (feedbackIdentity.isNotEmpty) feedbackIdentity,
+                ].join(' · ');
+                final feedbackCard = AppSurfaceCard(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  border: _adminSubtleListBorder(context),
+                  elevation: 0,
+                  onTap: () => unawaited(_showFeedbackDetail(f)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
                           Expanded(
                             child: Text(
-                              '$feedbackUserLabel · ${_feedbackCategoryLabel(category)}',
+                              '${feedbackUserLabel.isEmpty ? '匿名用户' : feedbackUserLabel} · ${_feedbackCategoryLabel(category)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyMedium?.copyWith(
@@ -5524,131 +7472,182 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                           AppStatusBadge(
                             label: _adminStatusLabel(status),
                             color: statusColor,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
                           ),
                         ],
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (metaLine.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                metaLine,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.52),
-                                ),
-                              ),
-                            ),
-                          Text(
-                            (f['content'] ?? '').toString(),
-                            maxLines: 3,
+                      if (metaLine.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Text(
+                            metaLine,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.7),
+                              color: cs.onSurface.withValues(alpha: 0.52),
                             ),
                           ),
-                          if (reply.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.teal.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.teal.withValues(alpha: 0.16),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(
-                                      Icons.subdirectory_arrow_right,
-                                      size: 16,
-                                      color: Colors.teal,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        '回复: $reply',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: cs.onSurface.withValues(
-                                                alpha: 0.68,
-                                              ),
-                                              fontWeight: FontWeight.w400,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                        ),
+                      Text(
+                        (f['content'] ?? '').toString(),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      if (reply.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.teal.withValues(alpha: 0.16),
+                                width: 0.45,
                               ),
                             ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: '回复',
-                            icon: const Icon(Icons.reply),
-                            onPressed: () => _reply(f),
-                          ),
-                          IconButton(
-                            tooltip: '删除',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () async {
-                              final confirmed = await _confirmAdminDangerAction(
-                                context: context,
-                                title: '删除反馈？',
-                                message:
-                                    '将删除 $feedbackUserLabel 的这条反馈，删除后无法恢复。',
-                              );
-                              if (!confirmed) return;
-                              try {
-                                await widget.api.deleteFeedback(
-                                  (f['id'] as num).toInt(),
-                                );
-                                await _load(
-                                  offset: _offsetAfterAdminDelete(
-                                    offset: _offset,
-                                    itemCount: _items.length,
-                                    pageSize: _pageSize,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.subdirectory_arrow_right,
+                                  size: 16,
+                                  color: Colors.teal,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '回复: $reply',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.68,
+                                      ),
+                                      fontWeight: FontWeight.w400,
+                                    ),
                                   ),
-                                );
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('反馈已删除')),
-                                );
-                              } on ApiException catch (e) {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(e.message)),
-                                );
-                              }
-                            },
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        ),
+                    ],
+                  ),
+                );
+                return _AdminFeedbackSwipeActions(
+                  key: ValueKey('admin_feedback_swipe_${f['id']}'),
+                  onDetail: () => unawaited(_showFeedbackDetail(f)),
+                  onReply: () => _reply(f),
+                  onDelete: () => _deleteFeedback(f, feedbackUserLabel),
+                  child: feedbackCard,
+                );
+              },
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            AppSectionHeader(
+              title: '反馈列表',
+              subtitle: _adminPageSummary(_page),
+              actionLabel: '刷新',
+              actionIcon: Icons.refresh,
+              onAction: _loading ? null : () => _load(offset: _offset),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: '搜索反馈内容、回复或用户名',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清空反馈搜索',
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _load(query: '', offset: 0);
+                          },
+                        ),
+                  isDense: true,
                 ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _applySearch(),
               ),
             ),
-          _AdminPaginationBar(
-            barKey: const ValueKey('admin_feedback_pagination'),
-            page: _page,
-            loading: _loading,
-            pageSize: _pageSize,
-            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-            onPrevious: () =>
-                _load(offset: _previousAdminOffset(_offset, _pageSize)),
-            onNext: () => _load(offset: _offset + _pageSize),
-            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
-          ),
-        ],
-      ),
+            compactAdminFilters
+                ? _AdminCompactChipStrip(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                    children: [...statusChips, ...categoryChips],
+                  )
+                : Column(
+                    children: [
+                      _AdminChipWrap(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                        children: statusChips,
+                      ),
+                      _AdminChipWrap(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        children: categoryChips,
+                      ),
+                    ],
+                  ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final sortField = AppDropdownField<String>(
+                  initialValue: _sort,
+                  labelText: '反馈排序',
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'created_desc',
+                      child: Text('最新反馈优先'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'updated_desc',
+                      child: Text('最近处理优先'),
+                    ),
+                    DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
+                    DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
+                  ],
+                  onChanged: (value) =>
+                      _load(sort: value ?? 'created_desc', offset: 0),
+                );
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                  child: sortField,
+                );
+              },
+            ),
+            _AdminInlineLoadingIndicator(
+              visible: _loading && _page != null,
+              label: '正在更新反馈列表',
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  SizedBox.expand(child: feedbackBody()),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: paginationBar,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -5678,6 +7677,213 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           setState(() => _categoryFilter = value);
           _load(offset: 0);
         },
+      ),
+    );
+  }
+}
+
+class _AdminFeedbackDetailField extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool multiline;
+
+  const _AdminFeedbackDetailField({
+    required this.label,
+    required this.value,
+    this.multiline = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: appSecondaryControlLabelStyle(
+              context,
+            ).copyWith(color: cs.onSurface.withValues(alpha: 0.58)),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            value,
+            style:
+                (multiline
+                        ? theme.textTheme.bodyMedium
+                        : theme.textTheme.bodySmall)
+                    ?.copyWith(
+                      color: cs.onSurface.withValues(
+                        alpha: multiline ? 0.82 : 0.7,
+                      ),
+                      height: multiline ? 1.35 : 1.28,
+                      fontWeight: FontWeight.w400,
+                    ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminFeedbackSwipeActions extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onDetail;
+  final Future<void> Function() onReply;
+  final Future<void> Function() onDelete;
+
+  const _AdminFeedbackSwipeActions({
+    super.key,
+    required this.child,
+    required this.onDetail,
+    required this.onReply,
+    required this.onDelete,
+  });
+
+  @override
+  State<_AdminFeedbackSwipeActions> createState() =>
+      _AdminFeedbackSwipeActionsState();
+}
+
+class _AdminFeedbackSwipeActionsState
+    extends State<_AdminFeedbackSwipeActions> {
+  static const double _actionRailWidth = 96;
+  static const double _dragOpenThreshold = 40;
+  double _dragDistance = 0;
+  bool _open = false;
+
+  void _setOpen(bool value) {
+    if (_open == value) return;
+    setState(() => _open = value);
+  }
+
+  void _resetDragDistance() {
+    _dragDistance = 0;
+  }
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    _setOpen(false);
+    await action();
+  }
+
+  void _showDetail() {
+    _setOpen(false);
+    widget.onDetail();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ClipRect(
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => _resetDragDistance(),
+        onHorizontalDragUpdate: (details) {
+          _dragDistance += details.delta.dx;
+          if (_dragDistance <= -_dragOpenThreshold) _setOpen(true);
+          if (_dragDistance >= _dragOpenThreshold) _setOpen(false);
+        },
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -120) _setOpen(true);
+          if (velocity > 120) _setOpen(false);
+          _resetDragDistance();
+        },
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            widget.child,
+            if (_open)
+              Positioned(
+                right: 4,
+                top: 10,
+                child: SizedBox(
+                  width: _actionRailWidth,
+                  height: 42,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.18),
+                        width: 0.45,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.shadow.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _AdminFeedbackSwipeButton(
+                          tooltip: '查看反馈详情',
+                          icon: Icons.visibility_outlined,
+                          color: cs.primary,
+                          onPressed: _showDetail,
+                        ),
+                        const SizedBox(width: 2),
+                        _AdminFeedbackSwipeButton(
+                          tooltip: '回复',
+                          icon: Icons.reply_outlined,
+                          color: cs.tertiary,
+                          onPressed: () =>
+                              unawaited(_runAction(widget.onReply)),
+                        ),
+                        const SizedBox(width: 2),
+                        _AdminFeedbackSwipeButton(
+                          tooltip: '删除',
+                          icon: Icons.delete_outline,
+                          color: cs.error,
+                          onPressed: () =>
+                              unawaited(_runAction(widget.onDelete)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminFeedbackSwipeButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const _AdminFeedbackSwipeButton({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: color.withValues(alpha: 0.12),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox.square(
+            dimension: 28,
+            child: Icon(icon, size: 15.5, color: color),
+          ),
+        ),
       ),
     );
   }
@@ -5776,30 +7982,32 @@ class _InvitesTabState extends State<_InvitesTab> {
         builder: (ctx, setSt) => AppDialog(
           title: const Text('生成邀请码'),
           icon: const Icon(Icons.vpn_key_outlined),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  const Text('数量:'),
-                  Expanded(
-                    child: Slider(
-                      value: count.toDouble(),
-                      min: 1,
-                      max: 50,
-                      divisions: 49,
-                      label: '$count',
-                      onChanged: (v) => setSt(() => count = v.toInt()),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Text('数量:'),
+                    Expanded(
+                      child: Slider(
+                        value: count.toDouble(),
+                        min: 1,
+                        max: 50,
+                        divisions: 49,
+                        label: '$count',
+                        onChanged: (v) => setSt(() => count = v.toInt()),
+                      ),
                     ),
-                  ),
-                  Text('$count'),
-                ],
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: '备注 (可选)'),
-                onChanged: (v) => note = v,
-              ),
-            ],
+                    Text('$count'),
+                  ],
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: '备注 (可选)'),
+                  onChanged: (v) => note = v,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -5827,8 +8035,8 @@ class _InvitesTabState extends State<_InvitesTab> {
         builder: (ctx) => AppDialog(
           title: Text('已生成 ${codes.length} 个邀请码'),
           icon: const Icon(Icons.check_circle_outline),
-          content: SizedBox(
-            width: 400,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
             child: SingleChildScrollView(
               child: SelectableText(codes.join('\n')),
             ),
@@ -5858,205 +8066,199 @@ class _InvitesTabState extends State<_InvitesTab> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final loadingFirstPage = _loading && _page == null;
-    return Scaffold(
-      body: Column(
-        children: [
-          AppSectionHeader(
-            title: '邀请码列表',
-            subtitle: _adminPageSummary(_page),
-            actionLabel: '刷新',
-            actionIcon: Icons.refresh,
-            onAction: _loading ? null : () => _load(offset: _offset),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _generate,
-                icon: const Icon(Icons.add),
-                label: const Text('生成邀请码'),
-              ),
+    return Column(
+      children: [
+        AppSectionHeader(
+          title: '邀请码列表',
+          subtitle: _adminPageSummary(_page),
+          actionLabel: '刷新',
+          actionIcon: Icons.refresh,
+          onAction: _loading ? null : () => _load(offset: _offset),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _generate,
+              icon: const Icon(Icons.add),
+              label: const Text('生成邀请码'),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: '搜索邀请码、备注或使用者',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清空邀请码搜索',
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _load(query: '', offset: 0);
-                        },
-                      ),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _applySearch(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              hintText: '搜索邀请码、备注或使用者',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清空邀请码搜索',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        _load(query: '', offset: 0);
+                      },
+                    ),
+              isDense: true,
             ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _applySearch(),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Row(
-              children: [
-                _inviteStatusChip('全部邀请码', ''),
-                _inviteStatusChip('未使用', 'unused'),
-                _inviteStatusChip('已使用', 'used'),
-              ],
+        ),
+        _AdminChipWrap(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          children: [
+            _inviteStatusChip('全部邀请码', ''),
+            _inviteStatusChip('未使用', 'unused'),
+            _inviteStatusChip('已使用', 'used'),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: AppDropdownField<String>(
+            initialValue: _sort,
+            labelText: '邀请码排序',
+            items: const [
+              DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
+              DropdownMenuItem(value: 'used_desc', child: Text('最近使用优先')),
+              DropdownMenuItem(value: 'code_asc', child: Text('邀请码 A-Z')),
+              DropdownMenuItem(value: 'note_asc', child: Text('备注 A-Z')),
+            ],
+            onChanged: (value) =>
+                _load(sort: value ?? 'created_desc', offset: 0),
+          ),
+        ),
+        _AdminInlineLoadingIndicator(
+          visible: _loading && _page != null,
+          label: '正在更新邀请码列表',
+        ),
+        if (loadingFirstPage)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('正在加载邀请码列表…'),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: AppDropdownField<String>(
-              initialValue: _sort,
-              labelText: '邀请码排序',
-              items: const [
-                DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
-                DropdownMenuItem(value: 'used_desc', child: Text('最近使用优先')),
-                DropdownMenuItem(value: 'code_asc', child: Text('邀请码 A-Z')),
-                DropdownMenuItem(value: 'note_asc', child: Text('备注 A-Z')),
-              ],
-              onChanged: (value) =>
-                  _load(sort: value ?? 'created_desc', offset: 0),
+          )
+        else if (_error != null)
+          Expanded(
+            child: _AdminErrorState(
+              message: _error!,
+              onRetry: () => _load(offset: _offset),
             ),
-          ),
-          _AdminInlineLoadingIndicator(
-            visible: _loading && _page != null,
-            label: '正在更新邀请码列表',
-          ),
-          if (loadingFirstPage)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text('正在加载邀请码列表…'),
-                  ],
-                ),
-              ),
-            )
-          else if (_error != null)
-            Expanded(
-              child: _AdminErrorState(
-                message: _error!,
-                onRetry: () => _load(offset: _offset),
-              ),
-            )
-          else if (_codes.isEmpty)
-            const Expanded(
-              child: EmptyState(
-                icon: Icons.vpn_key_outlined,
-                message: '当前筛选下没有邀请码。可搜索邀请码、备注或使用者；邀请码较多时请用底部分页查看其他页面。',
-              ),
-            )
-          else
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _load(offset: _offset),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _codes.length,
-                  itemBuilder: (_, i) {
-                    final c = _codes[i];
-                    final used = (c['used_by'] ?? '').toString().isNotEmpty;
-                    return _AdminListTileCard(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: (used ? Colors.grey : Colors.blue).withValues(
-                            alpha: 0.12,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
+          )
+        else if (_codes.isEmpty)
+          const Expanded(
+            child: EmptyState(
+              icon: Icons.vpn_key_outlined,
+              message: '当前筛选下没有邀请码。可搜索邀请码、备注或使用者；邀请码较多时请用底部分页查看其他页面。',
+            ),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => _load(offset: _offset),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: _codes.length,
+                itemBuilder: (_, i) {
+                  final c = _codes[i];
+                  final used = (c['used_by'] ?? '').toString().isNotEmpty;
+                  return _AdminListTileCard(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: (used ? Colors.grey : Colors.blue).withValues(
+                          alpha: 0.12,
                         ),
-                        child: Icon(
-                          used ? Icons.check_circle : Icons.key,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        used ? Icons.check_circle : Icons.key,
+                        color: used ? Colors.grey : Colors.blue,
+                      ),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            c['code'].toString(),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                        ),
+                        AppStatusBadge(
+                          label: used ? '已使用' : '未使用',
                           color: used ? Colors.grey : Colors.blue,
                         ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      used
+                          ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']} · 排序: ${_adminInviteSortLabel(_sort)}'
+                          : '创建 ${c['created_at']} · 排序: ${_adminInviteSortLabel(_sort)}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.62),
                       ),
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: SelectableText(
-                              c['code'].toString(),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w400,
-                                color: cs.onSurface,
-                              ),
-                            ),
+                    ),
+                    trailing: used
+                        ? null
+                        : IconButton(
+                            tooltip: '删除',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              final code = c['code'].toString();
+                              final confirmed = await _confirmAdminDangerAction(
+                                context: context,
+                                title: '删除邀请码？',
+                                message: '将删除未使用的邀请码 $code，删除后无法恢复。',
+                              );
+                              if (!confirmed) return;
+                              await widget.api.deleteInviteCode(code);
+                              await _load(
+                                offset: _offsetAfterAdminDelete(
+                                  offset: _offset,
+                                  itemCount: _codes.length,
+                                  pageSize: _pageSize,
+                                ),
+                              );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('邀请码已删除')),
+                              );
+                            },
                           ),
-                          AppStatusBadge(
-                            label: used ? '已使用' : '未使用',
-                            color: used ? Colors.grey : Colors.blue,
-                          ),
-                        ],
-                      ),
-                      subtitle: Text(
-                        used
-                            ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']} · 排序: ${_adminInviteSortLabel(_sort)}'
-                            : '创建 ${c['created_at']} · 排序: ${_adminInviteSortLabel(_sort)}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                        ),
-                      ),
-                      trailing: used
-                          ? null
-                          : IconButton(
-                              tooltip: '删除',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () async {
-                                final code = c['code'].toString();
-                                final confirmed =
-                                    await _confirmAdminDangerAction(
-                                      context: context,
-                                      title: '删除邀请码？',
-                                      message: '将删除未使用的邀请码 $code，删除后无法恢复。',
-                                    );
-                                if (!confirmed) return;
-                                await widget.api.deleteInviteCode(code);
-                                await _load(
-                                  offset: _offsetAfterAdminDelete(
-                                    offset: _offset,
-                                    itemCount: _codes.length,
-                                    pageSize: _pageSize,
-                                  ),
-                                );
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('邀请码已删除')),
-                                );
-                              },
-                            ),
-                    );
-                  },
-                ),
+                  );
+                },
               ),
             ),
-          _AdminPaginationBar(
-            page: _page,
-            loading: _loading,
-            pageSize: _pageSize,
-            onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-            onPrevious: () =>
-                _load(offset: _previousAdminOffset(_offset, _pageSize)),
-            onNext: () => _load(offset: _offset + _pageSize),
-            onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
           ),
-        ],
-      ),
+        _AdminPaginationBar(
+          page: _page,
+          loading: _loading,
+          pageSize: _pageSize,
+          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () =>
+              _load(offset: _previousAdminOffset(_offset, _pageSize)),
+          onNext: () => _load(offset: _offset + _pageSize),
+          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+        ),
+      ],
     );
   }
 
@@ -6194,18 +8396,15 @@ class _AuditLogTabState extends State<_AuditLogTab> {
             onSubmitted: (_) => _applySearch(),
           ),
         ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        _AdminChipWrap(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: Row(
-            children: [
-              _actionChip('全部操作', ''),
-              _actionChip('更新用户', 'user.update'),
-              _actionChip('公告', 'announcement.update'),
-              _actionChip('回复反馈', 'feedback.reply'),
-              _actionChip('邀请码', 'invite.create'),
-            ],
-          ),
+          children: [
+            _actionChip('全部操作', ''),
+            _actionChip('更新用户', 'user.update'),
+            _actionChip('公告', 'announcement.update'),
+            _actionChip('回复反馈', 'feedback.reply'),
+            _actionChip('邀请码', 'invite.create'),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),

@@ -6,6 +6,8 @@ import 'package:duoyi/models/recurrence.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 
+import '../test_support/recording_reminder_scheduler.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -75,5 +77,41 @@ void main() {
 
     expect(provider.todos.length, 2);
     expect(provider.todos.every((t) => t.isCompleted), isTrue);
+  });
+
+  test('todo provider exposes reminder sync diagnostics', () async {
+    final missingSchedulerProvider = TodoProvider();
+    await missingSchedulerProvider.addTodo(TodoItem(title: 'needs scheduler'));
+
+    expect(
+      missingSchedulerProvider.lastReminderSyncIssue,
+      'reminder_scheduler_missing',
+    );
+    expect(missingSchedulerProvider.lastReminderSyncAttemptAt, isNotNull);
+    expect(missingSchedulerProvider.lastReminderSyncSucceededAt, isNull);
+
+    final scheduler = RecordingReminderScheduler();
+    missingSchedulerProvider.scheduler = scheduler;
+    await missingSchedulerProvider.updateTodo(
+      missingSchedulerProvider.todos.single.id,
+      missingSchedulerProvider.todos.single.copyWith(title: 'synced'),
+    );
+
+    expect(missingSchedulerProvider.lastReminderSyncIssue, isNull);
+    expect(missingSchedulerProvider.lastReminderSyncSucceededAt, isNotNull);
+    expect(scheduler.todoSyncs.last, [
+      missingSchedulerProvider.todos.single.id,
+    ]);
+
+    scheduler.todoSyncError = StateError('native queue rejected');
+    await missingSchedulerProvider.updateTodo(
+      missingSchedulerProvider.todos.single.id,
+      missingSchedulerProvider.todos.single.copyWith(title: 'failed sync'),
+    );
+
+    expect(
+      missingSchedulerProvider.lastReminderSyncIssue,
+      contains('native queue rejected'),
+    );
   });
 }

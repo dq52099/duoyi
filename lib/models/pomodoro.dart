@@ -6,6 +6,7 @@ class PomodoroConfig {
   static const int defaultFocusDuration = 1500;
   static const int defaultShortBreakDuration = 300;
   static const int defaultLongBreakDuration = 900;
+  static const double defaultFocusSoundVolume = 0.6;
   static const int _minStoredDurationSeconds = 60;
   static const int _maxStoredDurationSeconds = 12 * 60 * 60;
 
@@ -21,6 +22,7 @@ class PomodoroConfig {
   bool monitorDistractingApps;
   List<String> distractingAppPackages;
   String? focusRoomId;
+  double focusSoundVolume;
   DateTime updatedAt;
 
   /// 休息阶段是否继续播放白噪音。默认 `false`，与 `design.md §3.7` 对齐
@@ -40,6 +42,7 @@ class PomodoroConfig {
     this.monitorDistractingApps = false,
     List<String>? distractingAppPackages,
     this.focusRoomId,
+    this.focusSoundVolume = defaultFocusSoundVolume,
     this.playSoundInBreak = false,
     DateTime? updatedAt,
   }) : distractingAppPackages = distractingAppPackages ?? const <String>[],
@@ -62,6 +65,7 @@ class PomodoroConfig {
     'monitorDistractingApps': monitorDistractingApps,
     'distractingAppPackages': distractingAppPackages,
     'focusRoomId': focusRoomId,
+    'focusSoundVolume': focusSoundVolume,
     'playSoundInBreak': playSoundInBreak,
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -102,6 +106,12 @@ class PomodoroConfig {
               .toList() ??
           const <String>[],
       focusRoomId: json['focusRoomId']?.toString(),
+      focusSoundVolume: _doubleInRange(
+        json['focusSoundVolume'],
+        defaultFocusSoundVolume,
+        0.4,
+        1.0,
+      ),
       playSoundInBreak: json['playSoundInBreak'] ?? false,
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
@@ -127,6 +137,21 @@ class PomodoroConfig {
     final value = switch (raw) {
       final num n => n.toInt(),
       final String s => int.tryParse(s.trim()),
+      _ => null,
+    };
+    if (value == null || value < min || value > max) return fallback;
+    return value;
+  }
+
+  static double _doubleInRange(
+    Object? raw,
+    double fallback,
+    double min,
+    double max,
+  ) {
+    final value = switch (raw) {
+      final num n => n.toDouble(),
+      final String s => double.tryParse(s.trim()),
       _ => null,
     };
     if (value == null || value < min || value > max) return fallback;

@@ -23,11 +23,10 @@ void main() {
       mainSource,
       contains('locationReminderProvider.addListener(markDirty);'),
     );
+    expect(mainSource, contains('ReminderRingtoneSettings.onChanged = (keys)'));
     expect(
       mainSource,
-      contains(
-        'ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;',
-      ),
+      contains('cloudSyncProvider.markPreferencesChanged(keys);'),
     );
     expect(
       mainSource,
@@ -268,6 +267,47 @@ void main() {
     expect(backendSource, contains('_merge_by_timestamp('));
     expect(backendSource, contains('_merge_deleted_items('));
     expect(backendSource, contains('_prune_deleted_items('));
+  });
+
+  test('倒数日集合参与云同步 pull、delta 和删除墓碑', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+    final countdownSource = File(
+      'lib/providers/countdown_provider.dart',
+    ).readAsStringSync();
+
+    final listPayloadsBody = providerSource.substring(
+      providerSource.indexOf('static const _listPayloads'),
+      providerSource.indexOf('static const _objectPayloads'),
+    );
+    expect(listPayloadsBody, contains("'duoyi_countdowns': 'countdowns'"));
+
+    final pullCollectionsBody = providerSource.substring(
+      providerSource.indexOf('static const _syncPullCollections'),
+      providerSource.indexOf('static const _itemDeltaCollections'),
+    );
+    expect(pullCollectionsBody, contains("'countdowns'"));
+
+    final itemDeltaCollectionsBody = providerSource.substring(
+      providerSource.indexOf('static const _itemDeltaCollections'),
+      providerSource.indexOf('static const _objectDeltaCollections'),
+    );
+    expect(itemDeltaCollectionsBody, contains("'countdowns'"));
+    expect(
+      countdownSource,
+      contains("CloudSyncProvider.recordDeletedItem('countdowns'"),
+    );
+  });
+
+  test('旧周年表 type=0 记录不会被 Flutter 同步过滤删除', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+
+    expect(providerSource, isNot(contains('_filterLocalSyncList')));
+    expect(providerSource, isNot(contains("type.trim() != '0'")));
+    expect(providerSource, isNot(contains('type.toInt() != 0')));
   });
 
   test('云端回写后会刷新本地个人资料且不触发二次脏标记', () {
@@ -632,7 +672,8 @@ void main() {
       'futures.add(locationReminderProvider.loadFromStorage())',
       'await syncLocationGeofences();',
       'preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;',
-      'ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;',
+      'ReminderRingtoneSettings.onChanged = (keys)',
+      'cloudSyncProvider.markPreferencesChanged(keys);',
       'await ReminderRingtoneSettings.applyPersistedSettingsToNative();',
     ]) {
       expect(mainSource, contains(field), reason: field);
@@ -758,7 +799,7 @@ void main() {
     for (final field in const [
       'merged_annis = _merge_by_timestamp(',
       'server_annis,',
-      'req.anniversaries,',
+      'req_annis,',
       'merged_courses = _merge_by_timestamp(',
       'server_courses,',
       'req.courses,',

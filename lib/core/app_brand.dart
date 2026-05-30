@@ -80,15 +80,34 @@ TextTheme _textTheme({
   );
 }
 
+double _contrastRatio(Color a, Color b) {
+  final aLum = a.computeLuminance();
+  final bLum = b.computeLuminance();
+  final lighter = aLum > bLum ? aLum : bLum;
+  final darker = aLum > bLum ? bLum : aLum;
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+Color _highContrastForeground(Color background, Color preferred) {
+  if (_contrastRatio(background, preferred) >= 4.5) return preferred;
+  final blackContrast = _contrastRatio(background, const Color(0xFF111827));
+  final whiteContrast = _contrastRatio(background, Colors.white);
+  return blackContrast >= whiteContrast
+      ? const Color(0xFF111827)
+      : Colors.white;
+}
+
 ThemeData _withSharedControls(ThemeData theme) {
   final cs = theme.colorScheme;
   final isDark = theme.brightness == Brightness.dark;
   final surface = cs.surface;
+  final primaryForeground = _highContrastForeground(cs.primary, cs.onPrimary);
   final surfaceTint = Colors.transparent;
-  final outline = cs.outlineVariant.withValues(alpha: isDark ? 0.54 : 0.72);
-  final fill = isDark
-      ? cs.surfaceContainerHighest.withValues(alpha: 0.38)
-      : cs.surfaceContainerHighest.withValues(alpha: 0.55);
+  final outline = cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.14);
+  final fill = Color.alphaBlend(
+    cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.52 : 0.64),
+    surface,
+  );
   final sheetShape = const RoundedRectangleBorder(
     borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
   );
@@ -100,10 +119,46 @@ ThemeData _withSharedControls(ThemeData theme) {
   final bodyMuted = theme.textTheme.bodySmall?.copyWith(
     color: cs.onSurface.withValues(alpha: 0.68),
   );
-  final label = theme.textTheme.labelLarge?.copyWith(
+  final label = theme.textTheme.labelMedium?.copyWith(
+    fontSize: 12,
     fontWeight: FontWeight.w400,
   );
-  OutlineInputBorder fieldBorder(Color color, {double width = 1}) {
+  final secondaryControlText = theme.textTheme.bodySmall?.copyWith(
+    fontSize: 11,
+    height: 1.2,
+    fontWeight: FontWeight.w400,
+    color: cs.onSurface,
+  );
+  final secondaryLabelText = theme.textTheme.labelSmall?.copyWith(
+    fontSize: 10,
+    height: 1.16,
+    fontWeight: FontWeight.w400,
+  );
+  final selectedControlBackground = Color.alphaBlend(
+    cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+    surface,
+  );
+  final selectedControlForeground = _highContrastForeground(
+    selectedControlBackground,
+    cs.onSurface,
+  );
+  final selectedTabBackground = Color.alphaBlend(
+    cs.primary.withValues(alpha: 0.12),
+    surface,
+  );
+  final selectedTabForeground = _highContrastForeground(
+    selectedTabBackground,
+    cs.primary,
+  );
+  final selectedNavigationBackground = Color.alphaBlend(
+    cs.primary.withValues(alpha: 0.14),
+    surface,
+  );
+  final selectedNavigationForeground = _highContrastForeground(
+    selectedNavigationBackground,
+    cs.primary,
+  );
+  OutlineInputBorder fieldBorder(Color color, {double width = 0.4}) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
       borderSide: BorderSide(color: color, width: width),
@@ -112,20 +167,29 @@ ThemeData _withSharedControls(ThemeData theme) {
 
   final inputTheme = InputDecorationTheme(
     filled: true,
-    fillColor: fill,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    fillColor: Color.alphaBlend(
+      cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.58 : 0.72),
+      surface,
+    ),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     border: fieldBorder(outline),
     enabledBorder: fieldBorder(outline),
-    focusedBorder: fieldBorder(cs.primary, width: 1.6),
-    errorBorder: fieldBorder(cs.error.withValues(alpha: 0.9)),
-    focusedErrorBorder: fieldBorder(cs.error, width: 1.6),
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+    focusedBorder: fieldBorder(cs.primary.withValues(alpha: 0.18), width: 0.45),
+    errorBorder: fieldBorder(cs.error.withValues(alpha: 0.36)),
+    focusedErrorBorder: fieldBorder(
+      cs.error.withValues(alpha: 0.42),
+      width: 0.45,
+    ),
+    hintStyle: secondaryControlText?.copyWith(
       color: cs.onSurface.withValues(alpha: 0.46),
+      fontWeight: FontWeight.w400,
     ),
-    labelStyle: theme.textTheme.bodyMedium?.copyWith(
+    labelStyle: secondaryLabelText?.copyWith(
       color: cs.onSurface.withValues(alpha: 0.72),
+      fontWeight: FontWeight.w400,
     ),
-    floatingLabelStyle: theme.textTheme.bodySmall?.copyWith(
+    floatingLabelStyle: secondaryLabelText?.copyWith(
       color: cs.primary,
       fontWeight: FontWeight.w400,
     ),
@@ -141,7 +205,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       }
       return cs.onSurfaceVariant;
     }),
-    errorStyle: theme.textTheme.bodySmall?.copyWith(color: cs.error),
+    errorStyle: secondaryLabelText?.copyWith(color: cs.error),
   );
 
   return theme.copyWith(
@@ -197,11 +261,17 @@ ThemeData _withSharedControls(ThemeData theme) {
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
       surfaceTintColor: surfaceTint,
-      textStyle: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+      textStyle: secondaryControlText?.copyWith(
+        color: cs.onSurface,
+        fontWeight: FontWeight.w400,
+      ),
       iconColor: cs.onSurfaceVariant,
     ),
     dropdownMenuTheme: DropdownMenuThemeData(
-      textStyle: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+      textStyle: secondaryControlText?.copyWith(
+        color: cs.onSurface,
+        fontWeight: FontWeight.w400,
+      ),
       inputDecorationTheme: inputTheme,
       menuStyle: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(surface),
@@ -238,7 +308,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
+        foregroundColor: primaryForeground,
         disabledBackgroundColor: cs.onSurface.withValues(alpha: 0.08),
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
         elevation: 0,
@@ -251,7 +321,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: cs.onSurface,
-        side: BorderSide(color: outline),
+        side: BorderSide(color: outline, width: 0.4),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         minimumSize: const Size(0, 44),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -270,7 +340,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
           if (states.contains(WidgetState.selected)) {
-            return cs.primary.withValues(alpha: 0.14);
+            return selectedControlBackground;
           }
           return fill;
         }),
@@ -278,14 +348,19 @@ ThemeData _withSharedControls(ThemeData theme) {
           if (states.contains(WidgetState.disabled)) {
             return cs.onSurface.withValues(alpha: 0.38);
           }
-          if (states.contains(WidgetState.selected)) return cs.primary;
+          if (states.contains(WidgetState.selected)) {
+            return selectedControlForeground;
+          }
           return cs.onSurfaceVariant;
         }),
         side: WidgetStateProperty.resolveWith<BorderSide?>((states) {
           if (states.contains(WidgetState.selected)) {
-            return BorderSide(color: cs.primary.withValues(alpha: 0.54));
+            return BorderSide(
+              color: cs.primary.withValues(alpha: 0.28),
+              width: 0.45,
+            );
           }
-          return BorderSide(color: outline);
+          return BorderSide(color: outline.withValues(alpha: 0.72), width: 0.4);
         }),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -295,7 +370,9 @@ ThemeData _withSharedControls(ThemeData theme) {
         ),
         textStyle: WidgetStatePropertyAll(label),
         iconColor: WidgetStateProperty.resolveWith<Color?>((states) {
-          if (states.contains(WidgetState.selected)) return cs.primary;
+          if (states.contains(WidgetState.selected)) {
+            return selectedControlForeground;
+          }
           return cs.onSurfaceVariant;
         }),
       ),
@@ -309,21 +386,26 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     chipTheme: ChipThemeData(
       backgroundColor: fill,
-      selectedColor: cs.primary.withValues(alpha: 0.12),
-      secondarySelectedColor: cs.secondary.withValues(alpha: 0.12),
+      selectedColor: selectedControlBackground,
+      secondarySelectedColor: selectedControlBackground,
       disabledColor: cs.onSurface.withValues(alpha: 0.08),
       deleteIconColor: cs.onSurface.withValues(alpha: 0.72),
-      checkmarkColor: cs.primary,
+      checkmarkColor: selectedControlForeground,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
+        fontSize: 11,
         color: cs.onSurface,
         fontWeight: FontWeight.w400,
       ),
       secondaryLabelStyle: theme.textTheme.labelMedium?.copyWith(
-        color: cs.onSurface,
+        fontSize: 11,
+        color: selectedControlForeground,
         fontWeight: FontWeight.w400,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      side: BorderSide(color: outline),
+      side: BorderSide(
+        color: outline.withValues(alpha: isDark ? 0.64 : 0.58),
+        width: 0.4,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       showCheckmark: false,
       iconTheme: IconThemeData(size: 18, color: cs.onSurfaceVariant),
@@ -338,26 +420,32 @@ ThemeData _withSharedControls(ThemeData theme) {
           return cs.onSurface.withValues(alpha: 0.38);
         }
         if (states.contains(WidgetState.selected)) {
-          return cs.onPrimary;
+          return cs.primary;
         }
-        return cs.surfaceContainerHighest;
+        return cs.onSurfaceVariant.withValues(alpha: isDark ? 0.82 : 0.68);
       }),
       trackColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.disabled)) {
           return cs.onSurface.withValues(alpha: 0.12);
         }
         if (states.contains(WidgetState.selected)) {
-          return cs.primary;
+          return Color.alphaBlend(
+            cs.primary.withValues(alpha: isDark ? 0.28 : 0.18),
+            surface,
+          );
         }
-        return cs.surfaceContainerHighest;
+        return Color.alphaBlend(
+          cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.56 : 0.72),
+          surface,
+        );
       }),
       trackOutlineColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.selected)) {
-          return Colors.transparent;
+          return cs.primary.withValues(alpha: isDark ? 0.20 : 0.16);
         }
-        return outline;
+        return outline.withValues(alpha: isDark ? 0.70 : 0.62);
       }),
-      trackOutlineWidth: const WidgetStatePropertyAll<double>(1.0),
+      trackOutlineWidth: const WidgetStatePropertyAll<double>(0.45),
       materialTapTargetSize: MaterialTapTargetSize.padded,
       overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.disabled)) {
@@ -378,7 +466,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         }
         return Colors.transparent;
       }),
-      checkColor: WidgetStatePropertyAll<Color>(cs.onPrimary),
+      checkColor: WidgetStatePropertyAll<Color>(primaryForeground),
       overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.disabled)) {
           return Colors.transparent;
@@ -417,7 +505,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       overlayColor: cs.primary.withValues(alpha: 0.12),
       valueIndicatorColor: cs.primary,
       valueIndicatorTextStyle: theme.textTheme.bodySmall?.copyWith(
-        color: cs.onPrimary,
+        color: primaryForeground,
         fontWeight: FontWeight.w400,
       ),
       trackHeight: 4,
@@ -445,10 +533,10 @@ ThemeData _withSharedControls(ThemeData theme) {
       dividerColor: Colors.transparent,
       indicatorSize: TabBarIndicatorSize.tab,
       indicator: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.12),
+        color: selectedTabBackground,
         borderRadius: BorderRadius.circular(999),
       ),
-      labelColor: cs.primary,
+      labelColor: selectedTabForeground,
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
         fontWeight: FontWeight.w400,
@@ -462,12 +550,12 @@ ThemeData _withSharedControls(ThemeData theme) {
       height: 64,
       elevation: 0,
       backgroundColor: surface.withValues(alpha: isDark ? 0.92 : 0.96),
-      indicatorColor: cs.primary.withValues(alpha: 0.14),
+      indicatorColor: selectedNavigationBackground,
       surfaceTintColor: Colors.transparent,
       labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((states) {
         final selected = states.contains(WidgetState.selected);
         return theme.textTheme.labelSmall?.copyWith(
-          color: selected ? cs.primary : cs.onSurfaceVariant,
+          color: selected ? selectedNavigationForeground : cs.onSurfaceVariant,
           fontWeight: FontWeight.w400,
           letterSpacing: 0,
         );
@@ -475,14 +563,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
-          color: selected ? cs.primary : cs.onSurfaceVariant,
+          color: selected ? selectedNavigationForeground : cs.onSurfaceVariant,
           size: 24,
         );
       }),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      foregroundColor: primaryForeground,
       elevation: 0,
       focusElevation: 0,
       hoverElevation: 0,
@@ -497,13 +585,13 @@ ThemeData _withSharedControls(ThemeData theme) {
       shadowColor: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
       shape: dialogShape,
       headerBackgroundColor: cs.primary,
-      headerForegroundColor: cs.onPrimary,
+      headerForegroundColor: primaryForeground,
       headerHeadlineStyle: theme.textTheme.headlineSmall?.copyWith(
-        color: cs.onPrimary,
+        color: primaryForeground,
         fontWeight: FontWeight.w400,
       ),
       headerHelpStyle: bodyMuted?.copyWith(
-        color: cs.onPrimary.withValues(alpha: 0.84),
+        color: primaryForeground.withValues(alpha: 0.84),
       ),
       weekdayStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onSurfaceVariant,
@@ -515,7 +603,7 @@ ThemeData _withSharedControls(ThemeData theme) {
           return cs.onSurface.withValues(alpha: 0.24);
         }
         if (states.contains(WidgetState.selected)) {
-          return cs.onPrimary;
+          return primaryForeground;
         }
         return cs.onSurface;
       }),
@@ -540,7 +628,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       yearStyle: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
       yearForegroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.selected)) {
-          return cs.onPrimary;
+          return primaryForeground;
         }
         return cs.onSurface;
       }),
@@ -564,7 +652,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       ),
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
+        foregroundColor: primaryForeground,
         minimumSize: const Size(0, 40),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
@@ -596,7 +684,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       ),
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
+        foregroundColor: primaryForeground,
         minimumSize: const Size(0, 40),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
@@ -673,7 +761,7 @@ ThemeData _lightTheme({
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
-        foregroundColor: Colors.white,
+        foregroundColor: _highContrastForeground(primary, Colors.white),
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -806,7 +894,10 @@ final _re0Theme = _withSharedControls(
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF4682B4),
-        foregroundColor: Colors.white,
+        foregroundColor: _highContrastForeground(
+          const Color(0xFF4682B4),
+          Colors.white,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         elevation: 4,

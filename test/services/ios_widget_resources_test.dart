@@ -60,7 +60,10 @@ void main() {
           service,
           contains("static const String _ios${_serviceName(kind)} = '$kind';"),
         );
-        expect(service, contains('iOSName: _ios${_serviceName(kind)}'));
+        expect(
+          service,
+          contains('iOSName: HomeWidgetService._ios${_serviceName(kind)}'),
+        );
       }
 
       expect(swift, isNot(contains('Overview')));
@@ -127,8 +130,8 @@ void main() {
         project,
         contains('PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi.DuoyiWidgets;'),
       );
-      expect(project, contains('MARKETING_VERSION = 1.1.9;'));
-      expect(project, contains('CURRENT_PROJECT_VERSION = 110009;'));
+      expect(project, contains('MARKETING_VERSION = 1.1.10;'));
+      expect(project, contains('CURRENT_PROJECT_VERSION = 110010;'));
       expect(project, contains('APPLICATION_EXTENSION_API_ONLY = YES;'));
       expect(project, contains('INFOPLIST_FILE = DuoyiWidgets/Info.plist;'));
     });
@@ -166,6 +169,7 @@ void main() {
         'anniversary_highlight_2',
         'memorial_highlight_1',
         'memorial_highlight_2',
+        'memorial_highlight_3',
         'diary_highlight_1',
         'diary_highlight_2',
         'diary_highlight_3',
@@ -220,6 +224,7 @@ void main() {
           'anniversary_highlight_2',
           'memorial_highlight_1',
           'memorial_highlight_2',
+          'memorial_highlight_3',
         ],
         'diaryConfig': [
           'diary_highlight_1',
@@ -236,7 +241,14 @@ void main() {
       expect(swift, contains('todo_top3_\\(index)_id'));
       expect(swift, contains('private struct DuoyiWidgetRow'));
       expect(swift, contains('primaryTarget'));
+      expect(swift, contains('readPrimary'));
+      expect(swift, contains('config.kind == "DuoyiAnniversaryWidget"'));
+      expect(swift, contains('trimmedTitle == config.fallback'));
+      expect(swift, contains('key: "memorial_highlight_1", fallback: ""'));
+      expect(swift, contains('key: "memorial_highlight_1_id"'));
+      expect(swift, contains('sourceKey = "memorial_highlight_1"'));
       expect(swift, contains('readRows'));
+      expect(swift, contains('excluding: primarySource.sourceKey'));
       expect(swift, contains('"\\(config.primaryKey)_id"'));
       expect(swift, contains('"\\(key)_id"'));
       expect(swift, contains('linkedText(entry.primary'));
@@ -311,6 +323,48 @@ void main() {
       expect(swift, contains('formatMinutes'));
     });
 
+    test(
+      'keeps WidgetKit text compatible with iOS 14 and clipped in bounds',
+      () {
+        final widgetTargetBlocks = RegExp(
+          r'IPHONEOS_DEPLOYMENT_TARGET = 14\.0;',
+        ).allMatches(project).length;
+        expect(widgetTargetBlocks, greaterThanOrEqualTo(3));
+        expect(swift, isNot(contains('.foregroundStyle(')));
+        expect(swift, contains('.foregroundColor(Color(.tertiaryLabel))'));
+        expect(swift, contains('.foregroundColor(entry.config.accent)'));
+        expect(
+          swift,
+          contains('.foregroundColor(primary ? .primary : .secondary)'),
+        );
+        expect(
+          swift,
+          contains(
+            'private func todoText(_ title: String, primary: Bool) -> some View',
+          ),
+        );
+        final rowText = _swiftFunctionBlock(swift, 'rowText');
+        final todoText = _swiftFunctionBlock(swift, 'todoText');
+        final navText = _swiftFunctionBlock(swift, 'navText');
+        for (final block in [rowText, todoText, navText]) {
+          expect(block, contains('.lineLimit('));
+          expect(block, contains('.truncationMode(.tail)'));
+        }
+        final header = _swiftPropertyBlock(swift, 'header');
+        final focusContent = _swiftPropertyBlock(swift, 'focusContent');
+        final todoRow = _swiftFunctionBlock(swift, 'todoRow');
+        final accessoryContent = _swiftPropertyBlock(swift, 'accessoryContent');
+        for (final block in [header, focusContent, todoRow, accessoryContent]) {
+          expect(block, contains('.lineLimit(1)'));
+          expect(block, contains('.truncationMode(.tail)'));
+        }
+        expect(header, contains('.layoutPriority(1)'));
+        expect(focusContent, contains('.minimumScaleFactor(0.78)'));
+        expect(todoText, contains('.lineLimit(primary ? primaryLines : 1)'));
+        expect(navText, contains('.lineLimit(1)'));
+      },
+    );
+
     test('Flutter side enables iOS home_widget updates', () {
       expect(service, contains('PlatformInfo.isAndroid || PlatformInfo.isIOS'));
       expect(service, contains('HomeWidget.setAppGroupId(_appGroupId)'));
@@ -348,33 +402,34 @@ void main() {
         const handlingByKind = {
           'DuoyiTodoWidget': [
             "uri.host == 'todo'",
-            'state?.navigateTo(1);',
+            'state.navigateTo(1, allowHidden: true);',
             'TodayDetailRouter.open(ctx, TodaySectionKind.todos, id: id)',
             "action == 'quick_todo'",
             "action == 'complete_todo'",
           ],
           'DuoyiFocusWidget': [
             "action == 'start_pomodoro'",
-            'state?.navigateTo(4);',
-            'pomodoro.toggleTimer()',
+            'state.navigateTo(4, allowHidden: true);',
+            'pomodoro.startIfIdle()',
+            '专注计时正在进行',
           ],
           'DuoyiHabitWidget': [
             "uri.host == 'habit'",
-            'state?.navigateTo(2);',
+            'state.navigateTo(2, allowHidden: true);',
             'TodayDetailRouter.open(ctx, TodaySectionKind.habits, id: id)',
             "action == 'checkin_habit'",
           ],
           'DuoyiCalendarWidget': [
             "uri.host == 'calendar'",
-            'state?.navigateTo(3);',
+            'state.navigateTo(3, allowHidden: true);',
           ],
           'DuoyiScheduleWidget': [
             "uri.host == 'calendar'",
-            'state?.navigateTo(3);',
+            'state.navigateTo(3, allowHidden: true);',
           ],
           'DuoyiGoalWidget': [
             "uri.host == 'goal'",
-            'TodayDetailRouter.open(ctx, TodaySectionKind.goals)',
+            '_pushHiddenWidgetFallbackRoute(ctx, const GoalScreen())',
             'TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id)',
           ],
           'DuoyiCourseWidget': [
@@ -429,11 +484,24 @@ void main() {
             contains('quickActionLink: "${quickLinksByKind[kind]}"'),
           );
         }
-        expect(swift, contains('duoyi://action/checkin_habit?id='));
+        expect(
+          swift,
+          contains('URLComponents(string: "duoyi://action/checkin_habit")'),
+        );
+        expect(swift, contains('duoyiPathSegmentAllowed'));
+        expect(
+          swift,
+          contains(r'''allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")'''),
+        );
         expect(swift, contains('duoyi://todo/\\(encodedId)'));
         expect(
           swift,
-          contains('duoyi://action/complete_todo?id=\\(encodedId)'),
+          contains('URLComponents(string: "duoyi://action/complete_todo")'),
+        );
+        expect(swift, contains('URLQueryItem(name: "id", value: todoId)'));
+        expect(
+          swift,
+          contains('URLComponents(string: "duoyi://action/checkin_habit")'),
         );
         expect(swift, contains('readTodoRows'));
         expect(swift, contains('todo_top3_\\(index)_id'));
@@ -470,6 +538,12 @@ void main() {
           }
         }
         expect(main, contains("uri.host == 'focus'"));
+        expect(
+          main,
+          contains('state.navigateTo(idx, allowHidden: true);'),
+          reason:
+              'WidgetKit footer links must keep hidden bottom-nav destinations reachable.',
+        );
       },
     );
 
@@ -519,6 +593,32 @@ String _swiftConfigBlock(String swift, String configName) {
     throw StateError('Missing Swift widget config $configName');
   }
   return match.group(0)!;
+}
+
+String _swiftFunctionBlock(String swift, String functionName) {
+  final start = swift.indexOf('private func $functionName');
+  if (start < 0) {
+    throw StateError('Missing Swift function $functionName');
+  }
+  final next = swift.indexOf('\n    private ', start + 1);
+  final end = next < 0 ? swift.indexOf('\n}', start + 1) : next;
+  if (end <= start) {
+    throw StateError('Missing Swift function end for $functionName');
+  }
+  return swift.substring(start, end);
+}
+
+String _swiftPropertyBlock(String swift, String propertyName) {
+  final start = swift.indexOf('private var $propertyName');
+  if (start < 0) {
+    throw StateError('Missing Swift property $propertyName');
+  }
+  final next = swift.indexOf('\n    private ', start + 1);
+  final end = next < 0 ? swift.indexOf('\n}', start + 1) : next;
+  if (end <= start) {
+    throw StateError('Missing Swift property end for $propertyName');
+  }
+  return swift.substring(start, end);
 }
 
 String _configName(String kind) {

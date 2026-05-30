@@ -12,6 +12,21 @@ void main() {
     ).readAsStringSync();
     final source = '$detail\n$dateFields';
 
+    expect(detail, contains("import '../services/alarm_service.dart';"));
+    expect(
+      detail,
+      contains('AlarmService.instance.requestExactAlarmPermission()'),
+    );
+    expect(detail, contains('.requestFullScreenIntentPermission()'));
+    expect(
+      detail,
+      isNot(contains('onRequestExactAlarmPermission: () async {}')),
+    );
+    expect(
+      detail,
+      isNot(contains('onRequestFullScreenIntentPermission: () async {}')),
+    );
+
     for (final key in [
       'habit.detail.title',
       'habit.detail.not_found',
@@ -33,9 +48,8 @@ void main() {
       'habit.error.flex_target',
       'habit.error.date_range',
       'habit.error.notification_permission',
+      'habit.error.reminder_register_failed',
       'habit.flex.rule',
-      'habit.flex.weekly',
-      'habit.flex.monthly',
       'habit.flex.period_target',
       'habit.flex.period_target_hint',
       'habit.flex.daily_note',
@@ -71,6 +85,28 @@ void main() {
     ]) {
       expect(source, contains("'$key'"), reason: key);
     }
+
+    final generatedBase = File(
+      'lib/l10n/generated/app_localizations.dart',
+    ).readAsStringSync();
+    final generatedZh = File(
+      'lib/l10n/generated/app_localizations_zh.dart',
+    ).readAsStringSync();
+    final generatedEn = File(
+      'lib/l10n/generated/app_localizations_en.dart',
+    ).readAsStringSync();
+    expect(
+      generatedBase,
+      contains('String get habitErrorReminderRegisterFailed;'),
+    );
+    expect(
+      generatedZh,
+      contains("String get habitErrorReminderRegisterFailed => '习惯提醒注册失败';"),
+    );
+    expect(
+      generatedEn,
+      contains('String get habitErrorReminderRegisterFailed =>'),
+    );
 
     for (final hardcoded in [
       "'请填写习惯名称'",

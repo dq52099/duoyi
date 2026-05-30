@@ -7,8 +7,8 @@ import '../models/calendar_event.dart';
 import '../models/habit.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/calendar_provider.dart';
-import '../providers/countdown_provider.dart';
 import '../providers/course_provider.dart';
+import '../providers/countdown_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
@@ -60,122 +60,124 @@ Future<void> showLocalCalendarEventEditor(
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AppDialog(
           title: Text(event == null ? '新建日程' : '编辑日程'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '日程标题',
-                    prefixIcon: Icon(Icons.event_note_outlined),
+          content: AppSecondaryControlTheme(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '日程标题',
+                      prefixIcon: Icon(Icons.event_note_outlined),
+                    ),
+                    autofocus: true,
                   ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.today_outlined),
-                  title: const Text('全天'),
-                  subtitle: const Text('适合假期、出差、生日等跨天安排'),
-                  value: allDay,
-                  onChanged: (value) => setDialogState(() => allDay = value),
-                ),
-                _DatePickTile(
-                  icon: Icons.event_available_outlined,
-                  title: '开始日期',
-                  value: startDate,
-                  onTap: () async {
-                    final picked = await AppDatePicker.pickSolar(
-                      dialogContext,
-                      initialDate: startDate,
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime(2100),
-                      title: '开始日期',
-                    );
-                    if (picked == null || !dialogContext.mounted) return;
-                    setDialogState(() {
-                      startDate = _dateOnly(picked);
-                      if (endDate.isBefore(startDate)) {
-                        endDate = startDate;
-                      }
-                    });
-                  },
-                ),
-                _DatePickTile(
-                  icon: Icons.event_busy_outlined,
-                  title: '结束日期',
-                  value: endDate,
-                  onTap: () async {
-                    final picked = await AppDatePicker.pickSolar(
-                      dialogContext,
-                      initialDate: endDate,
-                      firstDate: startDate,
-                      lastDate: DateTime(2100),
-                      title: '结束日期',
-                    );
-                    if (picked == null || !dialogContext.mounted) return;
-                    setDialogState(() => endDate = _dateOnly(picked));
-                  },
-                ),
-                if (!allDay) ...[
-                  _TimePickTile(
-                    icon: Icons.schedule_outlined,
-                    title: '开始时间',
-                    value: startTime,
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.today_outlined),
+                    title: const Text('全天'),
+                    subtitle: const Text('适合假期、出差、生日等跨天安排'),
+                    value: allDay,
+                    onChanged: (value) => setDialogState(() => allDay = value),
+                  ),
+                  _DatePickTile(
+                    icon: Icons.event_available_outlined,
+                    title: '开始日期',
+                    value: startDate,
                     onTap: () async {
-                      final picked = await AppTimePicker.show(
+                      final picked = await AppDatePicker.pickSolar(
                         dialogContext,
-                        initialTime: startTime,
-                        title: '开始时间',
-                        minuteStep: 5,
+                        initialDate: startDate,
+                        firstDate: DateTime(1900),
+                        lastDate: DateTime(2100),
+                        title: '开始日期',
                       );
                       if (picked == null || !dialogContext.mounted) return;
-                      setDialogState(() => startTime = picked);
+                      setDialogState(() {
+                        startDate = _dateOnly(picked);
+                        if (endDate.isBefore(startDate)) {
+                          endDate = startDate;
+                        }
+                      });
                     },
                   ),
-                  _TimePickTile(
-                    icon: Icons.timelapse_outlined,
-                    title: '结束时间',
-                    value: endTime,
+                  _DatePickTile(
+                    icon: Icons.event_busy_outlined,
+                    title: '结束日期',
+                    value: endDate,
                     onTap: () async {
-                      final picked = await AppTimePicker.show(
+                      final picked = await AppDatePicker.pickSolar(
                         dialogContext,
-                        initialTime: endTime,
-                        title: '结束时间',
-                        minuteStep: 5,
+                        initialDate: endDate,
+                        firstDate: startDate,
+                        lastDate: DateTime(2100),
+                        title: '结束日期',
                       );
                       if (picked == null || !dialogContext.mounted) return;
-                      setDialogState(() => endTime = picked);
+                      setDialogState(() => endDate = _dateOnly(picked));
                     },
+                  ),
+                  if (!allDay) ...[
+                    _TimePickTile(
+                      icon: Icons.schedule_outlined,
+                      title: '开始时间',
+                      value: startTime,
+                      onTap: () async {
+                        final picked = await AppTimePicker.show(
+                          dialogContext,
+                          initialTime: startTime,
+                          title: '开始时间',
+                          minuteStep: 5,
+                        );
+                        if (picked == null || !dialogContext.mounted) return;
+                        setDialogState(() => startTime = picked);
+                      },
+                    ),
+                    _TimePickTile(
+                      icon: Icons.timelapse_outlined,
+                      title: '结束时间',
+                      value: endTime,
+                      onTap: () async {
+                        final picked = await AppTimePicker.show(
+                          dialogContext,
+                          initialTime: endTime,
+                          title: '结束时间',
+                          minuteStep: 5,
+                        );
+                        if (picked == null || !dialogContext.mounted) return;
+                        setDialogState(() => endTime = picked);
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in _localEventColors)
+                          _ColorChoice(
+                            color: option,
+                            selected: color == option,
+                            onTap: () => setDialogState(() => color = option),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '备注',
+                      prefixIcon: Icon(Icons.notes_outlined),
+                    ),
+                    maxLines: 2,
                   ),
                 ],
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final option in _localEventColors)
-                        _ColorChoice(
-                          color: option,
-                          selected: color == option,
-                          onTap: () => setDialogState(() => color = option),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: noteCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '备注',
-                    prefixIcon: Icon(Icons.notes_outlined),
-                  ),
-                  maxLines: 2,
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
@@ -238,63 +240,86 @@ class CalendarEventSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppModalSheet(
       title: event.title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row: icon + type tag + time + conflict warning
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: event.color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
+      maxWidth: 860,
+      scrollable: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.68,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row: icon + type tag + time + conflict warning
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: event.color.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_icon(event.type), color: event.color),
                 ),
-                child: Icon(_icon(event.type), color: event.color),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppStatusBadge(
+                        label: event.type.label,
+                        color: event.color,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _timeText(event),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (event.hasConflict)
+                  Tooltip(
+                    message: '同一时间段还有 ${event.conflictCount} 个事项',
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: cs.error,
+                      size: 20,
+                    ),
+                  ),
+              ],
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('calendar_event_detail_scroll_region'),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppStatusBadge(label: event.type.label, color: event.color),
-                    const SizedBox(height: 4),
-                    Text(
-                      _timeText(event),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                    if (event.subtitle != null &&
+                        event.subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        event.subtitle!,
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.68),
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-              if (event.hasConflict)
-                Tooltip(
-                  message: '同一时间段还有 ${event.conflictCount} 个事项',
-                  child: Icon(
-                    Icons.warning_amber_rounded,
-                    color: cs.error,
-                    size: 20,
-                  ),
-                ),
-            ],
-          ),
-          if (event.subtitle != null && event.subtitle!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              event.subtitle!,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.68),
-                fontSize: 13,
-              ),
             ),
+            const SizedBox(height: 16),
+            // Type-specific action buttons
+            Wrap(spacing: 8, runSpacing: 8, children: _buildActions(context)),
           ],
-          const SizedBox(height: 16),
-          // Type-specific action buttons
-          Wrap(spacing: 8, runSpacing: 8, children: _buildActions(context)),
-        ],
+        ),
       ),
     );
   }
@@ -606,17 +631,28 @@ class CalendarEventSheet extends StatelessWidget {
     VoidCallback? onPressed,
     bool tonal = false,
   }) {
+    final compactStyle = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, 34)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      ),
+      textStyle: WidgetStatePropertyAll(appSecondaryControlTextStyle(context)),
+    );
     if (tonal) {
       return FilledButton.tonalIcon(
         onPressed: onPressed,
-        icon: Icon(icon),
+        icon: Icon(icon, size: 16),
         label: Text(label),
+        style: compactStyle,
       );
     }
     return FilledButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon),
+      icon: Icon(icon, size: 16),
       label: Text(label),
+      style: compactStyle,
     );
   }
 
@@ -703,13 +739,19 @@ class CalendarEventSheet extends StatelessWidget {
       case CalendarEventType.countdown:
         if (!navigator.mounted) return;
         await navigator.push(
-          MaterialPageRoute(builder: (_) => const CountdownScreen()),
+          MaterialPageRoute(
+            builder: (_) => BrandRouteSurface(
+              child: CountdownScreen(initialCountdownId: sourceId),
+            ),
+          ),
         );
       case CalendarEventType.timeEntry:
       case CalendarEventType.pomodoro:
         if (!navigator.mounted) return;
         await navigator.push(
-          MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
+          MaterialPageRoute(
+            builder: (_) => const BrandRouteSurface(child: TimeAuditScreen()),
+          ),
         );
       case CalendarEventType.event:
         break;
@@ -761,7 +803,7 @@ class CalendarEventSheet extends StatelessWidget {
         final provider = context.read<CountdownProvider>();
         final item = provider.items.where((c) => c.id == sourceId).firstOrNull;
         if (item != null) {
-          provider.updateItem(item.copyWith(targetDate: picked));
+          await provider.updateItem(item.copyWith(targetDate: picked));
         }
       case CalendarEventType.timeEntry:
         final provider = context.read<TimeAuditProvider>();
@@ -978,7 +1020,7 @@ class CalendarEventSheet extends StatelessWidget {
       case CalendarEventType.anniversary:
         await context.read<AnniversaryProvider>().delete(sourceId);
       case CalendarEventType.countdown:
-        context.read<CountdownProvider>().deleteItem(sourceId);
+        await context.read<CountdownProvider>().deleteItem(sourceId);
       case CalendarEventType.course:
         await context.read<CourseProvider>().delete(sourceId);
       case CalendarEventType.diary:
@@ -1132,7 +1174,13 @@ class _ColorChoice extends StatelessWidget {
           ),
         ),
         child: selected
-            ? const Icon(Icons.check, color: Colors.white, size: 18)
+            ? Icon(
+                Icons.check,
+                color: color.computeLuminance() > 0.55
+                    ? Colors.black
+                    : Colors.white,
+                size: 18,
+              )
             : null,
       ),
     );

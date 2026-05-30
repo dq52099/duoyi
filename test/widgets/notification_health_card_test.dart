@@ -12,6 +12,7 @@ void main() {
     var refreshCount = 0;
     var openSettingsCount = 0;
     var sendTestCount = 0;
+    var sendStrongTestCount = 0;
     var clearCount = 0;
 
     final report = NotificationHealthReport(
@@ -77,7 +78,9 @@ void main() {
               lastTestAt: DateTime(2026, 5, 10, 9, 30),
               onRefresh: () => refreshCount++,
               onOpenSystemSettings: () => openSettingsCount++,
+              onOpenNotificationChannelSettings: (_) => openSettingsCount++,
               onSendTest: () => sendTestCount++,
+              onSendStrongTest: () => sendStrongTestCount++,
               onClearPending: () => clearCount++,
               onRequestNotificationPermission: () {},
               onRequestExactAlarmPermission: () {},
@@ -95,6 +98,7 @@ void main() {
     expect(find.text('HyperOS/MIUI 锁屏与横幅'), findsOneWidget);
     expect(find.text('HyperOS/MIUI 渠道声音'), findsOneWidget);
     expect(find.text('立即发送测试通知'), findsOneWidget);
+    expect(find.text('测试强提醒铃声'), findsOneWidget);
     expect(find.text('30 秒后强提醒'), findsNothing);
     expect(find.text('疑难设置入口'), findsOneWidget);
     expect(find.textContaining('先按上方检查项逐项确认'), findsOneWidget);
@@ -109,6 +113,9 @@ void main() {
     await tester.ensureVisible(find.text('立即发送测试通知'));
     await tester.tap(find.text('立即发送测试通知'));
     await tester.pump();
+    await tester.ensureVisible(find.text('测试强提醒铃声'));
+    await tester.tap(find.text('测试强提醒铃声'));
+    await tester.pump();
     await tester.ensureVisible(find.text('全部取消'));
     await tester.tap(find.text('全部取消'));
     await tester.pump();
@@ -116,6 +123,7 @@ void main() {
     expect(refreshCount, 1);
     expect(openSettingsCount, 1);
     expect(sendTestCount, 1);
+    expect(sendStrongTestCount, 1);
     expect(clearCount, 1);
   });
 
@@ -156,7 +164,9 @@ void main() {
             pendingCount: 0,
             onRefresh: () {},
             onOpenSystemSettings: () => openSettingsCount++,
+            onOpenNotificationChannelSettings: (_) => openSettingsCount++,
             onSendTest: () {},
+            onSendStrongTest: () {},
             onClearPending: () {},
             onRequestNotificationPermission: () {},
             onRequestExactAlarmPermission: () {},
@@ -170,5 +180,69 @@ void main() {
     expect(find.text('疑难设置入口'), findsNothing);
     expect(find.text('0 条待触发'), findsOneWidget);
     expect(openSettingsCount, 0);
+  });
+
+  testWidgets('多个静音渠道可以逐项打开对应渠道设置', (tester) async {
+    final opened = <String>[];
+    final report = NotificationHealthReport(
+      notificationGranted: true,
+      exactAlarmGranted: true,
+      fullScreenIntentGranted: true,
+      channelIds: const <String>{},
+      androidDevice: const AndroidDeviceInfoLite(
+        manufacturer: 'Xiaomi',
+        brand: 'xiaomi',
+        model: '2210132C',
+        sdkInt: 34,
+      ),
+      isAndroid: true,
+      isIOS: false,
+      checkedAt: DateTime(2026, 5, 10, 10, 20),
+      checks: const [
+        PermissionHealthCheck(
+          id: 'notification_channel_sound',
+          title: '渠道声音',
+          subtitle: '已静音 duoyi_general_alerts_v18、duoyi_alarm_fullscreen_v18',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.openAppSettings,
+          actionLabel: '渠道设置',
+          actionChannelIds: [
+            'duoyi_general_alerts_v18',
+            'duoyi_alarm_fullscreen_v18',
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationHealthCard(
+            report: report,
+            pendingCount: 0,
+            onRefresh: () {},
+            onOpenSystemSettings: () {},
+            onOpenNotificationChannelSettings: opened.add,
+            onSendTest: () {},
+            onSendStrongTest: () {},
+            onClearPending: () {},
+            onRequestNotificationPermission: () {},
+            onRequestExactAlarmPermission: () {},
+            onRequestFullScreenIntentPermission: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.tune_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('通知提醒渠道'), findsOneWidget);
+    expect(find.text('强提醒渠道'), findsOneWidget);
+
+    await tester.tap(find.text('强提醒渠道'));
+    await tester.pumpAndSettle();
+
+    expect(opened, ['duoyi_alarm_fullscreen_v18']);
   });
 }

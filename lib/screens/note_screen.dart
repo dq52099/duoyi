@@ -85,19 +85,20 @@ class _NoteScreenState extends State<NoteScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchCtrl.text.trim().isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.close),
-                              tooltip: I18n.tr('note.search.clear'),
-                              onPressed: _searchCtrl.clear,
-                            ),
-                      hintText: I18n.tr('note.search.hint'),
-                      border: const OutlineInputBorder(),
+                  child: AppSecondaryControlTheme(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchCtrl.text.trim().isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close),
+                                tooltip: I18n.tr('note.search.clear'),
+                                onPressed: _searchCtrl.clear,
+                              ),
+                        hintText: I18n.tr('note.search.hint'),
+                      ),
                     ),
                   ),
                 ),
@@ -324,7 +325,7 @@ class _NoteListCard extends StatelessWidget {
                               ? Icons.push_pin_outlined
                               : Icons.push_pin,
                         ),
-                        title: Text(
+                        title: AppSecondaryMenuText(
                           note.pinned
                               ? I18n.tr('note.unpin')
                               : I18n.tr('note.pin'),
@@ -343,7 +344,7 @@ class _NoteListCard extends StatelessWidget {
                             ? Icons.unarchive_outlined
                             : Icons.archive_outlined,
                       ),
-                      title: Text(
+                      title: AppSecondaryMenuText(
                         archived
                             ? I18n.tr('note.restore')
                             : I18n.tr('note.archive'),
@@ -356,9 +357,9 @@ class _NoteListCard extends StatelessWidget {
                     value: _NoteCardAction.delete,
                     child: ListTile(
                       leading: Icon(Icons.delete_outline, color: cs.error),
-                      title: Text(
+                      title: AppSecondaryMenuText(
                         I18n.tr('action.delete'),
-                        style: TextStyle(color: cs.error),
+                        color: cs.error,
                       ),
                       dense: true,
                       contentPadding: EdgeInsets.zero,
@@ -587,23 +588,25 @@ class _NoteEditScreenState extends State<NoteEditScreen> {
   }
 
   Future<void> _addAttachment() async {
-    final source = await showModalBottomSheet<_AttachmentSource>(
+    final source = await showAppModalSheet<_AttachmentSource>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => AppModalSheet(
+        title: '添加附件',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.folder_open_outlined),
-              title: Text(I18n.tr('note.attachment.pick_file')),
-              subtitle: Text(I18n.tr('note.attachment.pick_file.subtitle')),
+            AppSettingsTile(
+              icon: Icons.folder_open_outlined,
+              color: Theme.of(ctx).colorScheme.primary,
+              title: I18n.tr('note.attachment.pick_file'),
+              subtitle: I18n.tr('note.attachment.pick_file.subtitle'),
               onTap: () => Navigator.pop(ctx, _AttachmentSource.file),
             ),
-            ListTile(
-              leading: const Icon(Icons.link_outlined),
-              title: Text(I18n.tr('note.attachment.add_link')),
-              subtitle: Text(I18n.tr('note.attachment.add_link.subtitle')),
+            AppSettingsTile(
+              icon: Icons.link_outlined,
+              color: Theme.of(ctx).colorScheme.secondary,
+              title: I18n.tr('note.attachment.add_link'),
+              subtitle: I18n.tr('note.attachment.add_link.subtitle'),
               onTap: () => Navigator.pop(ctx, _AttachmentSource.manual),
             ),
           ],
@@ -804,7 +807,10 @@ class _MarkdownEditingController extends TextEditingController {
       spans.addAll(
         _parseInlineForEditor(
           trimmed.substring(2),
-          base.copyWith(fontSize: 22, fontWeight: FontWeight.w400),
+          base.copyWith(
+            fontSize: ((base.fontSize ?? 14) + 4).clamp(16.0, 18.0),
+            fontWeight: FontWeight.w400,
+          ),
           cs,
         ),
       );

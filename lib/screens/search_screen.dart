@@ -136,7 +136,9 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const BrandRouteSurface(child: CountdownScreen()),
+            builder: (_) => BrandRouteSurface(
+              child: CountdownScreen(initialCountdownId: h.sourceId),
+            ),
           ),
         );
         break;
@@ -209,6 +211,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final cs = theme.colorScheme;
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       onTap: () => _open(h),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,15 +257,18 @@ class _SearchScreenState extends State<SearchScreen> {
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.52),
                           fontWeight: FontWeight.w400,
+                          fontSize: 11,
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 DefaultTextStyle(
-                  style: theme.textTheme.titleSmall!.copyWith(
+                  style: theme.textTheme.bodyMedium!.copyWith(
+                    fontSize: 13,
                     fontWeight: FontWeight.w400,
                     color: cs.onSurface,
+                    height: 1.25,
                   ),
                   child: _highlight(h.title, _query),
                 ),
@@ -288,8 +294,14 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final routeBackground = theme.brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
         title: TextField(
           controller: _ctrl,
           autofocus: true,
@@ -311,69 +323,73 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
         ],
       ),
-      body: _query.isEmpty
-          ? EmptyState(icon: Icons.search, message: I18n.tr('search.empty'))
-          : _hits.isEmpty
-          ? EmptyState(
-              icon: Icons.sentiment_dissatisfied,
-              message:
-                  '${I18n.tr('search.no_results.prefix')}"$_query"${I18n.tr('search.no_results.suffix')}',
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-              children: [
-                AppSurfaceCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
+      body: AppSecondaryControlTheme(
+        child: _query.isEmpty
+            ? EmptyState(icon: Icons.search, message: I18n.tr('search.empty'))
+            : _hits.isEmpty
+            ? EmptyState(
+                icon: Icons.sentiment_dissatisfied,
+                message:
+                    '${I18n.tr('search.no_results.prefix')}"$_query"${I18n.tr('search.no_results.suffix')}',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                children: [
+                  AppSurfaceCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(Icons.search, color: cs.primary),
                         ),
-                        child: Icon(Icons.search, color: cs.primary),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              I18n.tr('search.results.title'),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w400,
-                                color: cs.onSurface,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                I18n.tr('search.results.title'),
+                                style: appSecondaryMenuItemTextStyle(context)
+                                    .copyWith(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                      color: cs.onSurface,
+                                    ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${I18n.tr('search.results.summary_prefix')}$_query${I18n.tr('search.results.summary_middle')}${_hits.length}${I18n.tr('search.results.summary_suffix')}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${I18n.tr('search.results.summary_prefix')}$_query${I18n.tr('search.results.summary_middle')}${_hits.length}${I18n.tr('search.results.summary_suffix')}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.66),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: I18n.tr('search.clear'),
-                        onPressed: () {
-                          _ctrl.clear();
-                          _onChanged('');
-                        },
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
+                        IconButton(
+                          tooltip: I18n.tr('search.clear'),
+                          onPressed: () {
+                            _ctrl.clear();
+                            _onChanged('');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                ..._hits.map(_resultCard),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                  ..._hits.map(_resultCard),
+                ],
+              ),
+      ),
     );
   }
 }

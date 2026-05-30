@@ -186,7 +186,7 @@ void main() {
   });
 }
 
-Widget _wrapCalendar() {
+Widget _wrapCalendar({CountdownProvider? countdownProvider}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => TodoProvider()),
@@ -196,7 +196,9 @@ Widget _wrapCalendar() {
       ChangeNotifierProvider(create: (_) => CloudSyncProvider()),
       ChangeNotifierProvider(create: (_) => CalendarProvider()),
       ChangeNotifierProvider(create: (_) => UserProvider()),
-      ChangeNotifierProvider(create: (_) => CountdownProvider()),
+      ChangeNotifierProvider(
+        create: (_) => countdownProvider ?? CountdownProvider(),
+      ),
       ChangeNotifierProvider(create: (_) => NoteProvider()),
       ChangeNotifierProvider(create: (_) => AnniversaryProvider()),
       ChangeNotifierProvider(create: (_) => DiaryProvider()),

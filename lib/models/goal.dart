@@ -16,9 +16,22 @@ enum SchedulingMode { fixed, random }
 
 /// 提醒类型：
 /// - [ReminderKind.push] 走通知通道（`duoyi_general`）。
+/// - [ReminderKind.popup] 走轻量弹出提醒通道，适合不需要强提醒的场景。
 /// - [ReminderKind.alarm] 走闹钟通道（`duoyi_alarm`，全屏 / 高优先级）。
-/// - [ReminderKind.email] 走邮件提醒出口，适合桌面端或弱通知场景。
-enum ReminderKind { push, alarm, email }
+/// - [ReminderKind.email] 走邮件提醒出口；保留为后台/历史兼容通道，不作为本地提醒方式展示。
+/// - [ReminderKind.off] 保留规则内容但不派发提醒。
+enum ReminderKind { push, alarm, email, popup, off }
+
+const userSelectableReminderKinds = <ReminderKind>[
+  ReminderKind.push,
+  ReminderKind.popup,
+  ReminderKind.alarm,
+  ReminderKind.off,
+];
+
+ReminderKind normalizeUserSelectableReminderKind(ReminderKind kind) {
+  return userSelectableReminderKinds.contains(kind) ? kind : ReminderKind.push;
+}
 
 /// 目标调度策略：结合 [RecurrenceRule] 决定具体派发日期。
 ///
@@ -153,7 +166,7 @@ class ReminderConfig {
   }) {
     final nextKind = kind ?? this.kind;
     return ReminderConfig(
-      enabled: enabled ?? this.enabled,
+      enabled: nextKind == ReminderKind.off ? false : enabled ?? this.enabled,
       kind: nextKind,
       hour: hour ?? this.hour,
       minute: minute ?? this.minute,
@@ -185,7 +198,7 @@ class ReminderConfig {
         ) ??
         ReminderKind.push;
     return ReminderConfig(
-      enabled: json['enabled'] == true,
+      enabled: kind == ReminderKind.off ? false : json['enabled'] == true,
       kind: kind,
       hour: (json['hour'] as num?)?.toInt(),
       minute: (json['minute'] as num?)?.toInt(),
@@ -261,7 +274,7 @@ class ReminderRule {
     final nextKind = kind ?? this.kind;
     return ReminderRule(
       id: identical(id, _reminderCopyUnset) ? this.id : id as String?,
-      enabled: enabled ?? this.enabled,
+      enabled: nextKind == ReminderKind.off ? false : enabled ?? this.enabled,
       type: type ?? this.type,
       kind: nextKind,
       hour: identical(hour, _reminderCopyUnset) ? this.hour : hour as int?,
@@ -310,7 +323,7 @@ class ReminderRule {
         ReminderKind.push;
     return ReminderRule(
       id: json['id']?.toString(),
-      enabled: json['enabled'] != false,
+      enabled: kind == ReminderKind.off ? false : json['enabled'] != false,
       type: type,
       kind: kind,
       hour: (json['hour'] as num?)?.toInt(),
@@ -347,7 +360,7 @@ class ReminderPlan {
 
   ReminderRule? get primaryRule {
     for (final rule in rules) {
-      if (rule.enabled) return rule;
+      if (rule.enabled && rule.kind != ReminderKind.off) return rule;
     }
     return rules.isEmpty ? null : rules.first;
   }
@@ -412,7 +425,7 @@ class ReminderPlan {
         ? (-rule.offsetMinutes!) ~/ (24 * 60)
         : 0;
     return ReminderConfig(
-      enabled: enabled && rule.enabled,
+      enabled: enabled && rule.enabled && rule.kind != ReminderKind.off,
       kind: rule.kind,
       hour: rule.hour ?? fallback?.hour,
       minute: rule.minute ?? fallback?.minute,

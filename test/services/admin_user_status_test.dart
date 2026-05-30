@@ -39,7 +39,25 @@ void main() {
     expect(adminScreen, contains('从未活跃'));
     expect(adminScreen, contains('Timer.periodic(_onlineRefreshInterval'));
     expect(adminScreen, contains('Duration(seconds: 60)'));
-    expect(adminScreen, contains('_load(quiet: true)'));
+    expect(adminScreen, contains('isActive: _activeTabIndex == 4'));
+    expect(adminScreen, contains('void _handleTabChanged()'));
+    expect(adminScreen, contains('void _startOnlineRefreshTimer()'));
+    expect(adminScreen, contains('void _stopOnlineRefreshTimer()'));
+    expect(adminScreen, contains('!widget.isActive ||'));
+    expect(adminScreen, contains('_backgroundRefreshInFlight'));
+    expect(adminScreen, contains('_load(quiet: true, background: true)'));
+    expect(
+      adminScreen,
+      contains('if (background && (_backgroundRefreshInFlight || _loading))'),
+    );
+    expect(
+      adminScreen,
+      contains('if (background) _backgroundRefreshInFlight = true;'),
+    );
+    expect(
+      adminScreen,
+      contains('if (background) _backgroundRefreshInFlight = false;'),
+    );
   });
 
   test('管理员后台大数据列表使用分页 API 和分页文案', () {
@@ -145,26 +163,77 @@ void main() {
     expect(adminScreen, contains("label: '每页'"));
     expect(adminScreen, contains("label: '页码'"));
     expect(adminScreen, contains('class _AdminPaginationLabeledControl'));
-    expect(adminScreen, contains('constraints.maxWidth < 760'));
+    expect(adminScreen, contains('constraints.maxWidth < 700'));
     expect(adminScreen, isNot(contains('constraints.maxWidth < 520')));
-    expect(adminScreen, contains('minWidth: 160'));
-    expect(adminScreen, contains('Wrap('));
-    expect(adminScreen, contains('alignment: WrapAlignment.spaceBetween'));
-    expect(adminScreen, contains('Expanded(child: previousButton)'));
-    expect(adminScreen, contains('Expanded(child: nextButton)'));
     expect(
       adminScreen,
-      contains('minimumSize: const WidgetStatePropertyAll(Size(0, 46))'),
+      contains("key: const ValueKey('admin_compact_pagination_full_width')"),
     );
+    expect(
+      adminScreen,
+      contains('crossAxisAlignment: CrossAxisAlignment.stretch'),
+    );
+    expect(adminScreen, contains('Wrap('));
+    expect(adminScreen, contains('WrapAlignment.spaceBetween'));
+    expect(adminScreen, contains('width: 76'));
+    expect(adminScreen, contains('width: 54'));
+    expect(adminScreen, contains('maxWidth: 300'));
+    expect(adminScreen, contains('maxWidth: 260'));
+    expect(adminScreen, contains('fromLTRB(8, 2, 8, 2)'));
+    expect(
+      adminScreen,
+      contains("'\${_adminPageSummary(page)} · \${_adminPageNumber(page)}'"),
+    );
+    expect(adminScreen, contains('class _AdminChipWrap'));
+    expect(adminScreen, contains('minWidth: textWidth.clamp(72.0, 118.0)'));
+    expect(adminScreen, isNot(contains('width: 92')));
+    expect(
+      RegExp(r'_AdminChipWrap\(').allMatches(adminScreen).length,
+      greaterThanOrEqualTo(8),
+    );
+    expect(
+      RegExp(
+        r'content:\s+SingleChildScrollView\(',
+      ).allMatches(adminScreen).length,
+      greaterThanOrEqualTo(4),
+    );
+    expect(adminScreen, contains('Widget navButton({'));
+    expect(adminScreen, contains('iconSize: 16'));
+    expect(adminScreen, isNot(contains('admin_compact_pagination_inline')));
+    expect(adminScreen, isNot(contains('compactHasPageShortcuts')));
+    expect(adminScreen, isNot(contains('Expanded(child: previousButton)')));
+    expect(adminScreen, isNot(contains('Expanded(child: nextButton)')));
+    expect(
+      adminScreen,
+      isNot(contains('minimumSize: const WidgetStatePropertyAll')),
+    );
+    expect(adminScreen, contains('dimension: 30'));
+    expect(adminScreen, isNot(contains('dimension: 26')));
+    expect(adminScreen, isNot(contains('height: 22')));
+    expect(adminScreen, isNot(contains('dimension: 22')));
+    expect(adminScreen, isNot(contains('width: 124')));
+    expect(adminScreen, contains('minHeight: 30'));
+    expect(adminScreen, isNot(contains('minHeight: 26')));
+    expect(adminScreen, contains('class _AdminGlassControlTheme'));
+    expect(adminScreen, contains('selectedFill'));
+    expect(adminScreen, contains('glassControlFill'));
     expect(adminScreen, contains("message: '分页导航'"));
     expect(adminScreen, contains("message: '跳到第一页'"));
+    expect(adminScreen, contains("message: '上一页'"));
+    expect(adminScreen, contains("message: '下一页'"));
     expect(adminScreen, contains("message: '跳到最后一页'"));
     expect(adminScreen, contains('onJumpToPage'));
-    expect(adminScreen, contains("label: const Text('上一页')"));
-    expect(adminScreen, contains("label: const Text('下一页')"));
+    expect(adminScreen, isNot(contains("label: const Text('上一页')")));
+    expect(adminScreen, isNot(contains("label: const Text('下一页')")));
+    expect(adminScreen, contains("tooltip: '回复'"));
+    expect(adminScreen, contains("tooltip: '删除'"));
+    expect(adminScreen, contains("tooltip: '查看反馈详情'"));
+    expect(adminScreen, contains('if (_open)'));
+    expect(adminScreen, isNot(contains('Matrix4.translationValues')));
+    expect(adminScreen, contains('static const double _actionRailWidth'));
     expect(
       adminScreen,
-      contains('const List<int> _adminPageSizeOptions = [20, 50, 100]'),
+      contains('const List<int> _adminPageSizeOptions = [20, 50, 100, 200]'),
     );
     expect(adminScreen, contains('items: _adminPageSizeOptions'));
     expect(adminScreen, contains('DropdownMenuItem(value: v'));

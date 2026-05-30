@@ -114,9 +114,10 @@ class ReminderPlanEditor extends StatelessWidget {
         : ReminderRuleType.dailyTime;
     return ReminderRule(
       type: type,
-      kind: allowAlarm ? defaultKind : ReminderKind.push,
+      kind: defaultKind,
       hour: defaultTime.hour,
       minute: defaultTime.minute,
+      fullScreen: allowAlarm && defaultKind == ReminderKind.alarm,
       weekdays: type == ReminderRuleType.weeklyTime
           ? [DateTime.now().weekday]
           : const <int>[],
@@ -187,7 +188,10 @@ class _ReminderRuleTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
             borderRadius: DesignTokens.borderRadiusSm,
-            border: Border.all(color: cs.outline.withValues(alpha: 0.18)),
+            border: Border.all(
+              color: cs.outline.withValues(alpha: 0.18),
+              width: 0.45,
+            ),
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.only(left: 12, right: 4),
@@ -286,8 +290,8 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       _type = _availableTypes.first;
     }
     _kind = widget.allowAlarm
-        ? r?.kind ?? widget.defaultKind
-        : ReminderKind.push;
+        ? normalizeUserSelectableReminderKind(r?.kind ?? widget.defaultKind)
+        : widget.defaultKind;
     _time = TimeOfDay(
       hour: r?.hour ?? defaultTime.hour,
       minute: r?.minute ?? defaultTime.minute,
@@ -297,7 +301,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
         ? [...r!.weekdays]
         : [DateTime.now().weekday];
     _vibrate = r?.vibrate ?? true;
-    _fullScreen = r?.fullScreen ?? false;
+    _fullScreen = r?.fullScreen ?? _kind == ReminderKind.alarm;
     _snoozeMinutes = r?.snoozeMinutes ?? 0;
     _repeatCount = r?.repeatCount ?? 0;
   }
@@ -320,7 +324,14 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             contentPadding: EdgeInsets.zero,
             value: _enabled,
             title: const Text('启用'),
-            onChanged: (v) => setState(() => _enabled = v),
+            onChanged: (v) => setState(() {
+              _enabled = v;
+              if (v && _kind == ReminderKind.off) {
+                _kind = widget.defaultKind == ReminderKind.off
+                    ? ReminderKind.push
+                    : widget.defaultKind;
+              }
+            }),
           ),
           AppDropdownField<ReminderRuleType>(
             initialValue: _type,
@@ -352,9 +363,13 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
               runSpacing: DesignTokens.spaceXs,
               children: ReminderRule.relativeOffsetPresetMinutes.map((minutes) {
                 final offset = minutes.abs();
+                final selected = _offsetMinutes == minutes;
                 return ChoiceChip(
                   label: Text(_durationLabel(offset)),
-                  selected: _offsetMinutes == minutes,
+                  selected: selected,
+                  selectedColor: _selectedControlColor(context),
+                  checkmarkColor: _selectedControlTextColor(context),
+                  labelStyle: _selectedChipLabelStyle(context, selected),
                   onSelected: (_) => setState(() => _offsetMinutes = minutes),
                 );
               }).toList(),
@@ -373,6 +388,9 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
                 return FilterChip(
                   label: Text(_weekdayNames[i]),
                   selected: selected,
+                  selectedColor: _selectedControlColor(context),
+                  checkmarkColor: _selectedControlTextColor(context),
+                  labelStyle: _selectedChipLabelStyle(context, selected),
                   showCheckmark: false,
                   onSelected: (_) {
                     final next = {..._weekdays};
@@ -393,11 +411,17 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             Text('提醒方式', style: _labelStyle(context)),
             const SizedBox(height: DesignTokens.spaceXs),
             SegmentedButton<ReminderKind>(
+              style: _selectedSegmentStyle(context),
               segments: const [
                 ButtonSegment(
                   value: ReminderKind.push,
-                  label: Text('推送'),
+                  label: Text('通知'),
                   icon: Icon(Icons.notifications_outlined),
+                ),
+                ButtonSegment(
+                  value: ReminderKind.popup,
+                  label: Text('弹出框'),
+                  icon: Icon(Icons.open_in_new_outlined),
                 ),
                 ButtonSegment(
                   value: ReminderKind.alarm,
@@ -405,13 +429,16 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
                   icon: Icon(Icons.alarm_outlined),
                 ),
                 ButtonSegment(
-                  value: ReminderKind.email,
-                  label: Text('邮件'),
-                  icon: Icon(Icons.alternate_email),
+                  value: ReminderKind.off,
+                  label: Text('关闭'),
+                  icon: Icon(Icons.notifications_off_outlined),
                 ),
               ],
               selected: {_kind},
-              onSelectionChanged: (s) => setState(() => _kind = s.first),
+              onSelectionChanged: (s) => setState(() {
+                _kind = s.first;
+                _enabled = _kind != ReminderKind.off;
+              }),
             ),
           ],
           SwitchListTile(
@@ -443,9 +470,13 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
                     (15, '15 分钟'),
                     (30, '30 分钟'),
                   ].map((preset) {
+                    final selected = _snoozeMinutes == preset.$1;
                     return ChoiceChip(
                       label: Text(preset.$2),
-                      selected: _snoozeMinutes == preset.$1,
+                      selected: selected,
+                      selectedColor: _selectedControlColor(context),
+                      checkmarkColor: _selectedControlTextColor(context),
+                      labelStyle: _selectedChipLabelStyle(context, selected),
                       onSelected: (_) =>
                           setState(() => _snoozeMinutes = preset.$1),
                     );
@@ -457,9 +488,13 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             Wrap(
               spacing: DesignTokens.spaceXs,
               children: [0, 1, 2, 3].map((count) {
+                final selected = _repeatCount == count;
                 return ChoiceChip(
                   label: Text(count == 0 ? '不重复' : '$count 次'),
-                  selected: _repeatCount == count,
+                  selected: selected,
+                  selectedColor: _selectedControlColor(context),
+                  checkmarkColor: _selectedControlTextColor(context),
+                  labelStyle: _selectedChipLabelStyle(context, selected),
                   onSelected: (_) => setState(() => _repeatCount = count),
                 );
               }).toList(),
@@ -487,7 +522,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       id: widget.initial?.id,
       enabled: _enabled,
       type: type,
-      kind: widget.allowAlarm ? _kind : ReminderKind.push,
+      kind: widget.allowAlarm ? _kind : widget.defaultKind,
       hour: _time.hour,
       minute: _time.minute,
       offsetMinutes: type == ReminderRuleType.relativeToDue
@@ -495,8 +530,9 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
           : null,
       weekdays: type == ReminderRuleType.weeklyTime ? _weekdays : const <int>[],
       vibrate: _vibrate,
-      fullScreen:
-          widget.allowAlarm && _kind == ReminderKind.alarm && _fullScreen,
+      fullScreen: widget.allowAlarm && _kind == ReminderKind.alarm
+          ? _fullScreen
+          : false,
       snoozeMinutes: _snoozeMinutes,
       repeatCount: _repeatCount,
     );
@@ -512,9 +548,81 @@ TextStyle _labelStyle(BuildContext context) {
   );
 }
 
+ButtonStyle _selectedSegmentStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  final selectedBackground = _selectedControlColor(context);
+  final selectedForeground = _selectedControlTextColor(context);
+  return ButtonStyle(
+    backgroundColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) return selectedBackground;
+      return null;
+    }),
+    foregroundColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) return selectedForeground;
+      if (states.contains(WidgetState.disabled)) {
+        return cs.onSurface.withValues(alpha: 0.38);
+      }
+      return cs.onSurface;
+    }),
+    iconColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) return selectedForeground;
+      if (states.contains(WidgetState.disabled)) {
+        return cs.onSurface.withValues(alpha: 0.38);
+      }
+      return cs.onSurfaceVariant;
+    }),
+  );
+}
+
+Color _selectedControlColor(BuildContext context) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  return Color.alphaBlend(
+    cs.primary.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.14 : 0.09,
+    ),
+    cs.surface,
+  );
+}
+
+Color _selectedControlTextColor(BuildContext context) {
+  final theme = Theme.of(context);
+  return _readableForeground(
+    _selectedControlColor(context),
+    theme.colorScheme.onSurface,
+  );
+}
+
+TextStyle _selectedChipLabelStyle(BuildContext context, bool selected) {
+  final cs = Theme.of(context).colorScheme;
+  return TextStyle(
+    color: selected ? _selectedControlTextColor(context) : cs.onSurface,
+  );
+}
+
+Color _readableForeground(Color background, Color preferred) {
+  final preferredContrast = _contrastRatio(background, preferred);
+  final blackContrast = _contrastRatio(background, Colors.black);
+  final whiteContrast = _contrastRatio(background, Colors.white);
+  if (preferredContrast >= 4.5 ||
+      (preferredContrast >= blackContrast &&
+          preferredContrast >= whiteContrast)) {
+    return preferred;
+  }
+  return blackContrast >= whiteContrast ? Colors.black : Colors.white;
+}
+
+double _contrastRatio(Color a, Color b) {
+  final l1 = a.computeLuminance() + 0.05;
+  final l2 = b.computeLuminance() + 0.05;
+  return l1 > l2 ? l1 / l2 : l2 / l1;
+}
+
 IconData _ruleIcon(ReminderRule rule) {
-  if (rule.kind == ReminderKind.alarm) return Icons.alarm_outlined;
-  if (rule.kind == ReminderKind.email) return Icons.alternate_email;
+  final kind = normalizeUserSelectableReminderKind(rule.kind);
+  if (kind == ReminderKind.off) return Icons.notifications_off_outlined;
+  if (kind == ReminderKind.alarm) return Icons.alarm_outlined;
+  if (kind == ReminderKind.popup) return Icons.open_in_new_outlined;
   return switch (rule.type) {
     ReminderRuleType.absolute => Icons.event_available_outlined,
     ReminderRuleType.relativeToDue => Icons.timelapse_outlined,
@@ -524,10 +632,12 @@ IconData _ruleIcon(ReminderRule rule) {
 }
 
 String _ruleTitle(ReminderRule rule) {
-  final mode = switch (rule.kind) {
+  final mode = switch (normalizeUserSelectableReminderKind(rule.kind)) {
     ReminderKind.alarm => '闹钟',
-    ReminderKind.email => '邮件',
-    ReminderKind.push => '推送',
+    ReminderKind.popup => '弹出框',
+    ReminderKind.off => '关闭',
+    ReminderKind.push => '通知',
+    ReminderKind.email => '通知',
   };
   return '${_typeLabel(rule.type)} · $mode';
 }

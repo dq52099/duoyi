@@ -8,38 +8,121 @@ class HabitWeeklyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = context.watch<HabitProvider>().last7DaysCompletion();
+    final provider = context.watch<HabitProvider>();
+    final data = provider.currentWeekProgress();
     final labels = ['一', '二', '三', '四', '五', '六', '日'];
     final todayDOW = DateTime.now().weekday - 1;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final primaryColor = cs.primary;
+    final elapsed = todayDOW + 1;
+    final weekAverage =
+        data.take(elapsed).fold<double>(0, (sum, value) => sum + value) /
+        elapsed;
+    final activeToday = provider.habits.where((h) => h.isActiveToday()).length;
+    final completedToday = provider.habits
+        .where((h) => h.isActiveToday() && h.isCompletedToday())
+        .length;
+    final weekPercent = (weekAverage * 100).round();
 
     return AppSurfaceCard(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      borderRadius: BorderRadius.circular(18),
+      key: const ValueKey('habit_weekly_overview_card'),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: primaryColor.withValues(alpha: 0.18),
+        width: 0.7,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                key: const ValueKey('habit_weekly_overview_icon_box'),
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: primaryColor.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(
-                  Icons.calendar_view_week,
-                  size: 18,
+                  Icons.calendar_view_week_rounded,
+                  size: 24,
                   color: primaryColor,
                 ),
               ),
-              const SizedBox(width: 10),
-              const Text(
-                '本周概览',
-                style: TextStyle(fontWeight: FontWeight.w400, fontSize: 15),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '本周概述',
+                      style: appSecondaryRouteTitleTextStyle(
+                        context,
+                      ).copyWith(fontSize: 17),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '今日 $completedToday/$activeToday 达标',
+                      style: appSecondaryControlLabelStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: primaryColor.withValues(alpha: 0.16),
+                    width: 0.6,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$weekPercent%',
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontSize: 20,
+                        height: 1.0,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '进度 $weekPercent%',
+                      style: appSecondaryControlLabelStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                    ),
+                  ],
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              key: const ValueKey('habit_weekly_overview_progress_bar'),
+              value: weekAverage.clamp(0.0, 1.0).toDouble(),
+              minHeight: 8,
+              backgroundColor: primaryColor.withValues(alpha: 0.10),
+              color: primaryColor,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -68,20 +151,24 @@ class HabitWeeklyCard extends StatelessWidget {
                   Text(
                     labels[i],
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 10.5,
                       fontWeight: isToday ? FontWeight.w400 : FontWeight.normal,
                       color: isToday ? primaryColor : Colors.grey.shade600,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                   Container(
-                    width: 36,
-                    height: 36,
+                    key: ValueKey('habit_weekly_overview_day_$i'),
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: bg,
                       shape: BoxShape.circle,
                       border: isToday
-                          ? Border.all(color: primaryColor, width: 2)
+                          ? Border.all(
+                              color: primaryColor.withValues(alpha: 0.34),
+                              width: 0.8,
+                            )
                           : null,
                       boxShadow: isToday && val > 0
                           ? [
@@ -95,9 +182,9 @@ class HabitWeeklyCard extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        i > todayDOW ? '-' : '${(val * 100).toInt()}%',
+                        i > todayDOW ? '-' : '${(val * 100).round()}%',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 9.5,
                           color: textColor,
                           fontWeight: FontWeight.w400,
                         ),

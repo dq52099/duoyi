@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'api_client.dart';
 import 'reminder_sinks.dart';
 
@@ -22,17 +20,13 @@ class BackendReminderEmailSink implements ReminderEmailSink {
   }) async {
     final client = _client();
     if (!_canUse(client)) return;
-    try {
-      await client.post('/api/reminders/email/once', {
-        'id': id,
-        'title': title,
-        'body': body,
-        'when': when.toUtc().toIso8601String(),
-        if (payload != null && payload.isNotEmpty) 'payload': payload,
-      });
-    } catch (e) {
-      debugPrint('[BackendReminderEmailSink] scheduleOnce failed: $e');
-    }
+    await client.post('/api/reminders/email/once', {
+      'id': id,
+      'title': title,
+      'body': body,
+      'when': when.toUtc().toIso8601String(),
+      if (payload != null && payload.isNotEmpty) 'payload': payload,
+    });
   }
 
   @override
@@ -47,30 +41,22 @@ class BackendReminderEmailSink implements ReminderEmailSink {
   }) async {
     final client = _client();
     if (!_canUse(client)) return;
-    try {
-      await client.post('/api/reminders/email/repeating', {
-        'id': id,
-        'title': title,
-        'body': body,
-        'hour': hour,
-        'minute': minute,
-        if (weekdays != null && weekdays.isNotEmpty) 'weekdays': weekdays,
-        if (payload != null && payload.isNotEmpty) 'payload': payload,
-      });
-    } catch (e) {
-      debugPrint('[BackendReminderEmailSink] scheduleRepeating failed: $e');
-    }
+    await client.post('/api/reminders/email/repeating', {
+      'id': id,
+      'title': title,
+      'body': body,
+      'hour': hour,
+      'minute': minute,
+      if (weekdays != null && weekdays.isNotEmpty) 'weekdays': weekdays,
+      if (payload != null && payload.isNotEmpty) 'payload': payload,
+    });
   }
 
   @override
   Future<void> cancel(int id) async {
     final client = _client();
     if (!_canUse(client)) return;
-    try {
-      await client.delete('/api/reminders/email/$id');
-    } catch (e) {
-      debugPrint('[BackendReminderEmailSink] cancel failed: $e');
-    }
+    await client.delete('/api/reminders/email/$id');
   }
 
   bool _canUse(ApiClient client) =>

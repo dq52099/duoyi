@@ -273,6 +273,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Android ongoing shortcut for tasks and focus';
 
   @override
+  String get preferencesNotificationTodayProgressTitle =>
+      'Today progress in notification bar';
+
+  @override
+  String get preferencesNotificationTodayProgressSubtitle =>
+      'Keep today task progress in the notification bar and refresh it as tasks change';
+
+  @override
+  String get preferencesNotificationStatusBarTitle =>
+      'Notification bar shortcuts';
+
+  @override
+  String get preferencesNotificationStatusBarUnsupported =>
+      'Ongoing notification shortcuts and today progress are Android-only. This platform keeps regular reminders.';
+
+  @override
+  String get preferencesNotificationStatusBarEnabled =>
+      'Notification bar entry enabled';
+
+  @override
+  String get preferencesNotificationStatusBarDisabled =>
+      'Notification bar entry disabled';
+
+  @override
+  String get preferencesNotificationStatusBarSyncFailed =>
+      'Notification bar sync failed, so the previous setting was restored. Check notification permission and channels.';
+
+  @override
   String get preferencesShowCompletedTitle => 'Show completed tasks';
 
   @override
@@ -287,7 +315,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesSectionBottomNavSubtitle =>
-      'Show up to five bottom tabs; Widgets and Me are fixed';
+      'Show up to five bottom tabs; Me stays fixed, Widgets can be hidden';
 
   @override
   String get preferencesSectionInteraction => 'Interaction';
@@ -450,6 +478,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'Set when this reminder fires';
 
   @override
+  String get preferencesDailyReminderKindTitle => 'Reminder method';
+
+  @override
+  String get preferencesDailyReminderKindPushDescription =>
+      'System notification reminder';
+
+  @override
+  String get preferencesDailyReminderKindPopupDescription =>
+      'Show a pop-up while the app is foregrounded, with notification fallback in background';
+
+  @override
+  String get preferencesDailyReminderKindAlarmDescription =>
+      'Use alarm-style reminder for important items';
+
+  @override
+  String get preferencesDailyReminderKindOffDescription =>
+      'Do not register a system notification, pop-up, or alarm';
+
+  @override
+  String get preferencesDailyReminderRegisterFailed =>
+      'Daily reminder registration failed';
+
+  @override
+  String get preferencesDailyReminderNotReady =>
+      'System notifications are not ready, so the daily reminder was not enabled.';
+
+  @override
   String get preferencesDailyReminderTodayTasks => 'Tasks: today';
 
   @override
@@ -479,6 +534,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Skip built-in holidays and resume on the next reminder day';
 
   @override
+  String get preferencesDailyReminderChipTodayTasks => 'Today tasks';
+
+  @override
+  String get preferencesDailyReminderChipTomorrowPlan => 'Tomorrow plan';
+
+  @override
+  String get preferencesDailyReminderChipOverdueTasks => 'Overdue';
+
+  @override
+  String get preferencesDailyReminderChipPauseHolidays => 'Holiday pause';
+
+  @override
   String get preferencesDailyReminderScopeToday => 'Today';
 
   @override
@@ -489,6 +556,75 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesDailyReminderScopeNone => 'No task scope';
+
+  @override
+  String get notificationChannelGeneralName => 'Duoyi reminders';
+
+  @override
+  String get notificationChannelGeneralDescription =>
+      'Daily reminders use a gentle sound, vibration, and banners when available';
+
+  @override
+  String get notificationChannelAlarmName => 'Duoyi strong reminders';
+
+  @override
+  String get notificationChannelAlarmDescription =>
+      'Important reminders use the built-in gentle ringtone and can be stopped from the notification';
+
+  @override
+  String get notificationChannelQuickAddName => 'Duoyi quick shortcuts';
+
+  @override
+  String get notificationChannelQuickAddDescription =>
+      'Ongoing notification for quick task capture and focus start';
+
+  @override
+  String get notificationTickerReminder => 'Duoyi reminder';
+
+  @override
+  String get notificationTickerQuickAdd => 'Duoyi quick shortcut';
+
+  @override
+  String get notificationQuickAddTitle => 'Duoyi quick capture';
+
+  @override
+  String get notificationQuickAddBody =>
+      'Pull down the notification shade to add a task or start focus';
+
+  @override
+  String get notificationQuickAddActionAddTodo => 'Add task';
+
+  @override
+  String get notificationQuickAddActionOpenInput => 'Open input';
+
+  @override
+  String get notificationQuickAddActionStartFocus => 'Start focus';
+
+  @override
+  String get notificationQuickAddInputLabel =>
+      'Example: meeting tomorrow at 3 PM';
+
+  @override
+  String get notificationStatusBarTodayProgressTitle => 'Today progress';
+
+  @override
+  String get notificationStatusBarQuickHint =>
+      'Pull down to quickly add a task';
+
+  @override
+  String get notificationStatusBarTodayRemainingPrefix => '';
+
+  @override
+  String get notificationStatusBarTodayRemainingSuffix => ' tasks left today';
+
+  @override
+  String get notificationStatusBarDailyCount => 'Daily ';
+
+  @override
+  String get notificationStatusBarRepresentativeCount => 'Key ';
+
+  @override
+  String get notificationStatusBarGoalCount => 'Goals ';
 
   @override
   String get quickTodoTitle => 'Quick task';
@@ -1018,6 +1154,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Notification permission is not granted, so habit reminders will not ring or pop up';
 
   @override
+  String get habitErrorReminderRegisterFailed =>
+      'Habit reminder registration failed';
+
+  @override
   String get habitFlexRule => 'Flexible check-in rule';
 
   @override
@@ -1030,7 +1170,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get habitFlexPeriodTarget => 'Period target';
 
   @override
-  String get habitFlexPeriodTargetHint => 'For example, at least 5 this week';
+  String get habitFlexPeriodTargetHint => 'For example, period target 5/week';
 
   @override
   String get habitFlexDailyNote => 'Off uses the daily target for streaks';
@@ -1040,10 +1180,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Avoid habits are counted by days without records';
 
   @override
-  String get habitFlexWeeklyGoalPrefix => 'At least ';
+  String get habitFlexWeeklyGoalPrefix => 'Period target: ';
 
   @override
-  String get habitFlexMonthlyGoalPrefix => 'At least ';
+  String get habitFlexMonthlyGoalPrefix => 'Period target: ';
 
   @override
   String get habitFlexThisWeek => 'This week';
@@ -1913,9 +2053,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countdownEmpty => 'No countdowns yet';
 
   @override
-  String get countdownAddRecord => 'Add record';
-
-  @override
   String get countdownNearestEmpty => 'No upcoming events';
 
   @override
@@ -1938,9 +2075,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get countdownCategoryDefault => 'Default';
-
-  @override
-  String get countdownEditorAddTitle => 'Add countdown';
 
   @override
   String get countdownEditorEditTitle => 'Edit countdown';
@@ -1975,6 +2109,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get countdownReminderBeforeSuffix => ' days before';
+
+  @override
+  String get countdownValidationTitleRequired => 'Enter a countdown name first';
+
+  @override
+  String get countdownSaveFailedPrefix => 'Failed to save countdown: ';
+
+  @override
+  String get countdownReminderRegisterFailed =>
+      'Countdown reminder registration failed';
+
+  @override
+  String get countdownReminderNotRegistered =>
+      'Countdown saved, but the reminder was not registered. Check notification permission and reminder time.';
+
+  @override
+  String get countdownReminderNotRegisteredPrefix =>
+      'Countdown saved, but the reminder was not registered: ';
+
+  @override
+  String get countdownReminderPopupFallbackFailed =>
+      'Countdown reminder registration failed: pop-up notification fallback unavailable';
+
+  @override
+  String get countdownReminderPopupPermissionDenied =>
+      'Countdown saved, but the pop-up reminder was not registered: notification permission is off.';
+
+  @override
+  String get countdownReminderPopupNotRegisteredPrefix =>
+      'Countdown saved, but the pop-up reminder was not registered: ';
+
+  @override
+  String get countdownReminderPopupWarning =>
+      'Countdown saved. Pop-ups show only while the app is running; system notification is used as background or lock-screen fallback.';
+
+  @override
+  String get countdownReminderAlarmPermissionDenied =>
+      'Countdown saved, but the alarm reminder was not registered: enable notification permission and save again.';
+
+  @override
+  String get countdownReminderAlarmChannelMissing =>
+      'Alarm channel is not ready';
+
+  @override
+  String get countdownReminderExactAlarmMissing =>
+      'Exact alarm permission is off, so the reminder may be delayed';
+
+  @override
+  String get countdownReminderFullscreenMissing =>
+      'Full-screen reminder permission is off, so lock-screen pop-up may not work';
+
+  @override
+  String get countdownReminderSavedWithWarningsPrefix => 'Countdown saved, ';
+
+  @override
+  String get countdownReminderEmailWarning =>
+      'Countdown saved, and email reminders will be sent by the server when online.';
+
+  @override
+  String get countdownReminderExceptionPrefix =>
+      'Countdown saved, but the reminder was not registered: ';
+
+  @override
+  String get countdownReminderTimePast =>
+      'Countdown saved, but the reminder time is already in the past. Please choose another reminder time.';
 
   @override
   String get countdownStatusPinned => 'Pinned';
@@ -2076,6 +2275,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get anniversaryFieldColor => 'Color marker';
+
+  @override
+  String get anniversaryReminderRegisterFailed =>
+      'Anniversary reminder registration failed';
+
+  @override
+  String get anniversaryReminderNotRegistered =>
+      'Anniversary reminder was not registered. Check notification permission and reminder time.';
+
+  @override
+  String get anniversaryReminderPopupFallbackFailed =>
+      'Anniversary reminder registration failed: pop-up notification fallback unavailable';
+
+  @override
+  String get anniversaryReminderPopupPermissionDenied =>
+      'Pop-up reminder was not registered: notification permission is off.';
+
+  @override
+  String get anniversaryReminderPopupNotRegisteredPrefix =>
+      'Pop-up reminder was not registered: ';
+
+  @override
+  String get anniversaryReminderPopupWarning =>
+      'Pop-ups show only while the app is running; system notification is used as background or lock-screen fallback.';
+
+  @override
+  String get anniversaryReminderAlarmPermissionDenied =>
+      'Alarm reminder was not registered: enable notification permission and save again.';
+
+  @override
+  String get anniversaryReminderAlarmChannelMissing =>
+      'Alarm channel is not ready';
+
+  @override
+  String get anniversaryReminderExactAlarmMissing =>
+      'Exact alarm permission is off, so the reminder may be delayed';
+
+  @override
+  String get anniversaryReminderFullscreenMissing =>
+      'Full-screen reminder permission is off, so lock-screen pop-up may not work';
+
+  @override
+  String get anniversaryReminderEmailWarning =>
+      'Email reminder will be sent by the server when online.';
+
+  @override
+  String get anniversaryReminderExceptionPrefix =>
+      'Reminder was not registered: ';
+
+  @override
+  String get anniversaryReminderSavedPrefix => 'Saved, ';
+
+  @override
+  String get anniversaryReminderTimePast =>
+      'Saved, but the reminder time is already in the past. Please choose another reminder time.';
 
   @override
   String get anniversaryLunarYearSuffix => '';
@@ -2251,6 +2505,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reminderSnooze30min => 'In 30 min';
+
+  @override
+  String get reminderKindPush => 'Notification';
+
+  @override
+  String get reminderKindPopup => 'Pop-up';
+
+  @override
+  String get reminderKindAlarm => 'Alarm';
+
+  @override
+  String get reminderKindOff => 'Off';
 
   @override
   String get timeAuditTitle => 'Time Tracking';

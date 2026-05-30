@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/app_lock_provider.dart';
@@ -24,8 +25,10 @@ import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/screens/mine_screen.dart';
+import 'package:duoyi/screens/more_apps_screen.dart';
 import 'package:duoyi/screens/profile_screen.dart';
 import 'package:duoyi/screens/today_screen.dart';
+import 'package:duoyi/screens/calendar_screen.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
@@ -92,25 +95,32 @@ void main() {
 
     expect(today, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
     expect(mine, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
-    expect(surface, contains('fontSize: 12.5'));
-    expect(surface, contains('fontSize: 10'));
+    expect(surface, contains('fontSize: 12'));
+    expect(surface, contains('fontSize: 11'));
+    expect(surface, contains('fontSize: 14'));
     expect(surface, contains('iconBoxSize = 28'));
 
     expect(mine, contains('class _TileGroup'));
     expect(mine, contains('border: Border.all'));
-    expect(mine, contains('alpha: isDark ? 0.76 : 1'));
+    expect(
+      mine,
+      contains('cs.surfaceContainerHighest.withValues(alpha: 0.68)'),
+    );
+    expect(mine, contains('cs.surface.withValues(alpha: 0.86)'));
+    expect(mine, contains('final compact = constraints.maxWidth < 360'));
     expect(mine, contains("label: '目标管理'"));
     expect(mine, contains("label: '生日'"));
     expect(mine, contains("label: '纪念日'"));
-    expect(mine, contains("label: '倒数日'"));
-    expect(mine, contains('const MemorialAnniversaryScreen()'));
-    expect(mine, contains('const BirthdayScreen()'));
-    expect(mine, contains('const CountdownScreen()'));
+    expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
+    expect(mine, contains('child: anniversary.BirthdayScreen()'));
+    expect(mine, isNot(contains("label: '倒数日'")));
+    expect(mine, isNot(contains('child: CountdownScreen()')));
     expect(mine, contains("label: '备份'"));
     expect(mine, contains("label: '恢复数据'"));
     expect(mine, contains("label: '许愿与反馈'"));
     expect(mine, contains('FeedbackScreen(initialCategory: category)'));
-    expect(mine, contains('AlmanacEntryMode.almanac'));
+    expect(mine, contains("label: '扩展功能'"));
+    expect(mine, isNot(contains('AlmanacEntryMode.almanac')));
     expect(mine, contains('AlmanacEntryMode.calendar'));
     expect(mine, contains('BackupEntryMode.backup'));
     expect(mine, contains('BackupEntryMode.restore'));
@@ -157,15 +167,17 @@ void main() {
     expect(find.text('行动计划'), findsOneWidget);
     expect(find.text('记录回顾'), findsOneWidget);
     expect(find.text('日程日期'), findsOneWidget);
-    expect(find.text('智能工具'), findsOneWidget);
+    expect(find.text('智能工具'), findsNothing);
     expect(find.text('个性安全'), findsOneWidget);
     expect(find.text('目标管理'), findsOneWidget);
     expect(find.text('效率评分'), findsOneWidget);
+    expect(find.textContaining('时光币'), findsOneWidget);
+    expect(find.text('修改登录密码'), findsNothing);
     expect(find.text('综合评分'), findsNothing);
     expect(find.text('纪念日'), findsOneWidget);
     expect(find.text('生日'), findsOneWidget);
-    expect(find.text('倒数日'), findsOneWidget);
-    expect(find.text('黄历'), findsOneWidget);
+    expect(find.text('倒数日'), findsNothing);
+    expect(find.text('黄历'), findsNothing);
     expect(find.text('万年历'), findsOneWidget);
 
     await tester.scrollUntilVisible(
@@ -186,6 +198,141 @@ void main() {
     expect(find.text('问题反馈'), findsNothing);
     expect(find.text('许愿池'), findsNothing);
   });
+
+  testWidgets('Mine avatar preview and profile info navigation are distinct', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_wrap(const MineScreen()));
+    await tester.pumpAndSettle();
+
+    final avatarButton = find.byKey(
+      const ValueKey('mine_avatar_preview_button'),
+    );
+    await tester.tapAt(tester.getTopLeft(avatarButton) + const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    expect(find.text('头像'), findsOneWidget);
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.byType(ProfileScreen), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final editRect = tester.getRect(
+      find.byKey(const ValueKey('mine_avatar_edit_button')),
+    );
+    expect(editRect.width, greaterThan(43.5));
+    expect(editRect.height, greaterThan(43.5));
+
+    await tester.tap(find.text('用户').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
+  });
+
+  testWidgets('Today todo left swipe exposes detail and delete actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final todoProvider = TodoProvider();
+    final today = DateTime.now();
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '今日左滑删除',
+        date: DateTime(today.year, today.month, today.day),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => PomodoroProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => DiaryProvider()),
+          ChangeNotifierProvider(create: (_) => TimeAuditProvider()),
+          ChangeNotifierProvider(create: (_) => AnniversaryProvider()),
+          ChangeNotifierProvider(create: (_) => CourseProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => UserProvider()),
+        ],
+        child: const MaterialApp(home: TodayScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日左滑删除'), findsOneWidget);
+    await tester.ensureVisible(find.text('今日左滑删除'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('今日左滑删除'), const Offset(-180, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      find
+          .byKey(const ValueKey('today_todo_swipe_detail_button'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find
+          .byKey(const ValueKey('today_todo_swipe_delete_button'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(todoProvider.todos, hasLength(1));
+
+    await tester.tap(
+      find
+          .byKey(const ValueKey('today_todo_swipe_delete_button'))
+          .hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('删除任务？'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(todoProvider.todos, isEmpty);
+    expect(find.text('今日左滑删除'), findsNothing);
+  });
+
+  testWidgets(
+    'More applications opens as a real route and hidden apps render',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_wrap(const MineScreen()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('更多应用'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MoreApplicationsScreen), findsOneWidget);
+      expect(find.text('隐藏入口'), findsOneWidget);
+      expect(find.text('日历'), findsOneWidget);
+      expect(find.text('番茄专注'), findsNothing);
+
+      await tester.tap(find.text('日历'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CalendarScreen), findsOneWidget);
+      expect(find.text('日历'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('AnniversaryScreen can open a specific tab directly', (
     tester,
@@ -213,6 +360,23 @@ void main() {
     expect(find.byType(CountdownScreen), findsOneWidget);
     expect(find.text('倒数日'), findsWidgets);
     expect(find.byType(AnniversaryScreen), findsNothing);
+  });
+
+  testWidgets('CountdownScreen can add countdowns from the empty state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const CountdownScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无倒数日记录'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsWidgets);
+    final provider = Provider.of<CountdownProvider>(
+      tester.element(find.byType(CountdownScreen)),
+      listen: false,
+    );
+    expect(provider.items, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -365,7 +529,7 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
-    expect(userProvider.profile.username, '新昵称');
+    expect(userProvider.profile.username, '旧昵称');
     expect(userProvider.profile.displayName, '新显示名');
     expect(userProvider.profile.avatarInitials, '新');
     expect(userProvider.profile.avatarUrl, 'https://example.com/old.png');
@@ -404,14 +568,11 @@ void main() {
         token: 'token-1',
         httpClient: MockClient((request) async {
           requests.add('${request.method} ${request.url.path}');
-          if (request.method == 'PATCH' &&
-              request.url.path == '/api/auth/profile') {
+          if (request.method == 'POST' &&
+              request.url.path == '/api/me/profile') {
             expect(request.headers['authorization'], 'Bearer token-1');
             final body = json.decode(request.body) as Map<String, dynamic>;
             requestBodies.add(body);
-            if (body.containsKey('email')) {
-              serverEmail = body['email'] as String;
-            }
             if (body.containsKey('display_name')) {
               serverDisplayName = body['display_name'] as String;
             }
@@ -424,6 +585,28 @@ void main() {
                 'username': 'old-user',
                 'email': serverEmail,
                 'email_verified': false,
+                'display_name': serverDisplayName,
+                'avatar': 'https://example.com/old.png',
+                'bio': serverBio,
+                'is_admin': false,
+                'coin_balance': 88,
+                'lifetime_coins': 144,
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          if (request.method == 'POST' && request.url.path == '/api/me/email') {
+            expect(request.headers['authorization'], 'Bearer token-1');
+            final body = json.decode(request.body) as Map<String, dynamic>;
+            requestBodies.add(body);
+            serverEmail = body['email'] as String;
+            return http.Response(
+              json.encode({
+                'user_id': 'u-1',
+                'username': 'old-user',
+                'email': serverEmail,
+                'email_verified': true,
                 'display_name': serverDisplayName,
                 'avatar': 'https://example.com/old.png',
                 'bio': serverBio,
@@ -456,7 +639,8 @@ void main() {
 
     expect(find.text('个人资料'), findsOneWidget);
     expect(find.text('修改登录密码'), findsOneWidget);
-    expect(find.text('old@example.com · 已验证'), findsOneWidget);
+    expect(find.text('old@example.com'), findsOneWidget);
+    expect(find.text('已验证'), findsWidgets);
     expect(find.textContaining('时光币 88'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '昵称'), '新昵称');
@@ -468,33 +652,36 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('old@example.com'));
+    expect(find.widgetWithText(TextField, '邮箱'), findsNothing);
+    expect(find.widgetWithText(TextField, '邮箱验证码'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, '邮箱绑定'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, '邮箱'),
       'new@example.com',
     );
     await tester.enterText(find.widgetWithText(TextField, '邮箱验证码'), '123456');
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.tap(find.widgetWithText(FilledButton, '邮箱绑定'));
     await tester.pumpAndSettle();
 
-    expect(requests, contains('PATCH /api/auth/profile'));
+    expect(requests, contains('POST /api/me/profile'));
+    expect(requests, contains('POST /api/me/email'));
     expect(requestBodies, [
       {'display_name': '新昵称', 'bio': '新的账号简介'},
-      {'email': 'new@example.com', 'email_code': '123456'},
+      {'email': 'new@example.com', 'code': '123456', 'email_code': '123456'},
     ]);
     expect(auth.state.username, 'old-user');
     expect(auth.state.email, 'new@example.com');
-    expect(auth.state.emailVerified, isFalse);
+    expect(auth.state.emailVerified, isTrue);
     expect(auth.state.displayName, '新昵称');
     expect(auth.state.avatar, 'https://example.com/old.png');
     expect(auth.state.bio, '新的账号简介');
     expect(auth.state.coinBalance, 88);
     expect(auth.state.lifetimeCoins, 144);
-    expect(userProvider.profile.username, '新昵称');
+    expect(userProvider.profile.username, 'old-user');
     expect(userProvider.profile.displayName, '新昵称');
     expect(userProvider.profile.email, 'new@example.com');
-    expect(userProvider.profile.emailVerified, isFalse);
+    expect(userProvider.profile.emailVerified, isTrue);
     expect(userProvider.profile.avatarUrl, 'https://example.com/old.png');
     expect(userProvider.profile.bio, '新的账号简介');
     expect(find.text('资料已更新'), findsWidgets);

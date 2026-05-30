@@ -349,21 +349,10 @@ class FocusSoundCatalog {
   }
 
   static List<String> trackIdsFor(String sound) {
-    if (sound.trim().isEmpty || sound == none) return const <String>[];
-    if (sound.contains('+')) return const <String>[];
-    final ids = sound
-        .split('+')
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toList(growable: false);
-    if (ids.isEmpty) return const <String>[];
-
-    final valid = <String>[];
-    for (final id in ids) {
-      if (!assetMap.containsKey(id)) return const <String>[];
-      if (!valid.contains(id)) valid.add(id);
-    }
-    return List<String>.unmodifiable(valid);
+    final id = sound.trim();
+    if (id.isEmpty || id == none || id.contains('+')) return const <String>[];
+    if (!assetMap.containsKey(id)) return const <String>[];
+    return <String>[id];
   }
 
   static List<String> assetsFor(String sound) {

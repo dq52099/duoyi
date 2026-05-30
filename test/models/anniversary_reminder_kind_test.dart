@@ -74,4 +74,44 @@ void main() {
       expect(decoded.updatedAt, updatedAt);
     });
   });
+
+  group('Anniversary birthday ignoreYear', () {
+    test('默认不忽略年份', () {
+      final a = Anniversary(
+        title: '生日',
+        originDate: DateTime(2026, 6, 1),
+        type: AnniversaryType.birthday,
+      );
+
+      expect((a as dynamic).ignoreYear, isFalse);
+      expect(a.toJson()['ignoreYear'], isFalse);
+    });
+
+    test('fromJson 和 toJson 保留生日忽略年份开关', () {
+      final json = {
+        'id': 'birthday-id',
+        'title': '生日',
+        'originDate': '2026-06-01T00:00:00.000',
+        'type': AnniversaryType.birthday.index,
+        'calendarType': AnniversaryCalendarType.solar.index,
+        'colorValue': 0xFFE91E63,
+        'isPinned': false,
+        'remind': true,
+        'remindDaysBefore': 1,
+        'remindHour': 9,
+        'remindMinute': 0,
+        'reminderKind': ReminderKind.push.index,
+        'ignoreYear': true,
+        'lunarIsLeap': false,
+        'createdAt': '2026-01-01T00:00:00.000',
+      };
+
+      final a = Anniversary.fromJson(json);
+      expect((a as dynamic).ignoreYear, isTrue);
+      expect(a.toJson()['ignoreYear'], isTrue);
+
+      final decoded = Anniversary.fromJson(a.toJson());
+      expect((decoded as dynamic).ignoreYear, isTrue);
+    });
+  });
 }

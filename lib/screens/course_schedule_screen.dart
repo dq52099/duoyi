@@ -71,6 +71,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         title: GestureDetector(
           onTap: () => _pickWeek(context, provider),
           child: Row(
@@ -139,6 +140,10 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             final cs = Theme.of(context).colorScheme;
             final current = w == p.currentWeek;
             final selected = w == p.viewingWeek;
+            final selectedBackground = Color.alphaBlend(
+              cs.primary.withValues(alpha: 0.09),
+              cs.surface,
+            );
             return OutlinedButton(
               onPressed: () {
                 p.setViewingWeek(w);
@@ -146,9 +151,15 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
               },
               style: OutlinedButton.styleFrom(
                 backgroundColor: selected
-                    ? cs.primary
+                    ? selectedBackground
                     : (current ? cs.primary.withValues(alpha: 0.1) : null),
-                foregroundColor: selected ? cs.onPrimary : null,
+                foregroundColor: selected ? cs.onSurface : null,
+                side: BorderSide(
+                  color: selected
+                      ? cs.primary.withValues(alpha: 0.32)
+                      : cs.outlineVariant.withValues(alpha: 0.24),
+                  width: 0.45,
+                ),
               ),
               child: Text(_courseWeekLabel(w)),
             );
@@ -880,7 +891,12 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
                     color: Color(v),
                     shape: BoxShape.circle,
                     border: v == _colorValue
-                        ? Border.all(color: Colors.black, width: 2)
+                        ? Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.42),
+                            width: 0.8,
+                          )
                         : null,
                   ),
                 ),

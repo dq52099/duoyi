@@ -93,6 +93,9 @@ class SmartTodoDraftBuilder {
         parsedDate.isBefore(fallbackNow)) {
       parsedDate = recurrence.rule.nextAfter(parsedDate) ?? parsedDate;
     }
+    if (!recurrence.isActive && parsed.hasTimeOfDay) {
+      parsedDate = _nudgeSameMinutePastTime(parsedDate, fallbackNow);
+    }
     final title = recurrence.isActive
         ? _stripDatePhrases(trimmed, recurrence.matchedTexts)
         : _stripDatePhrase(trimmed, parsed.matchedText);
@@ -145,6 +148,18 @@ class SmartTodoDraftBuilder {
 
   static String _stripDatePhrase(String input, String matchedText) {
     return _stripDatePhrases(input, [matchedText]);
+  }
+
+  static DateTime _nudgeSameMinutePastTime(DateTime parsed, DateTime now) {
+    if (!parsed.isBefore(now)) return parsed;
+    final sameMinute =
+        parsed.year == now.year &&
+        parsed.month == now.month &&
+        parsed.day == now.day &&
+        parsed.hour == now.hour &&
+        parsed.minute == now.minute;
+    if (!sameMinute) return parsed;
+    return DateTime(now.year, now.month, now.day, now.hour, now.minute + 1);
   }
 
   static String _stripDatePhrases(String input, Iterable<String> matchedTexts) {

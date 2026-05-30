@@ -1,10 +1,12 @@
-/// 集成中心：日历订阅 + 位置提醒 + 语言设置（Task T-* 集成 UI）。
+/// 扩展功能：日历订阅 + 位置提醒 + 语言设置（Task T-* 集成 UI）。
 ///
 /// 把 v2 阶段新增的三类"边缘能力"集中在一个 Tab 化页面里：
 /// - 日历订阅：用户粘贴 .ics URL 即可让多仪日历显示外部日程；
 /// - 位置提醒：手动录入坐标 + 半径 + 触发方向；
 /// - 语言：在中 / 英 之间切换。
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,32 +29,232 @@ class IntegrationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final needsCalendarSync = context.read<CalendarSyncProvider?>() == null;
+    final needsLocationReminder =
+        context.read<LocationReminderProvider?>() == null;
+    final needsNotificationService =
+        context.read<NotificationService?>() == null;
+    final needsLocaleProvider = context.read<LocaleProvider?>() == null;
+    if (needsCalendarSync ||
+        needsLocationReminder ||
+        needsNotificationService ||
+        needsLocaleProvider) {
+      return _IntegrationsProviderFallback(
+        needsCalendarSync: needsCalendarSync,
+        needsLocationReminder: needsLocationReminder,
+        needsNotificationService: needsNotificationService,
+        needsLocaleProvider: needsLocaleProvider,
+        child: _IntegrationsScreenBody(
+          initialOAuthCallbackUri: initialOAuthCallbackUri,
+        ),
+      );
+    }
+    return _IntegrationsScreenBody(
+      initialOAuthCallbackUri: initialOAuthCallbackUri,
+    );
+  }
+}
+
+class _IntegrationsProviderFallback extends StatefulWidget {
+  final bool needsCalendarSync;
+  final bool needsLocationReminder;
+  final bool needsNotificationService;
+  final bool needsLocaleProvider;
+  final Widget child;
+
+  const _IntegrationsProviderFallback({
+    required this.needsCalendarSync,
+    required this.needsLocationReminder,
+    required this.needsNotificationService,
+    required this.needsLocaleProvider,
+    required this.child,
+  });
+
+  @override
+  State<_IntegrationsProviderFallback> createState() =>
+      _IntegrationsProviderFallbackState();
+}
+
+class _IntegrationsProviderFallbackState
+    extends State<_IntegrationsProviderFallback> {
+  late final CalendarSyncProvider _calendarSync = CalendarSyncProvider();
+  late final LocationReminderProvider _locationReminders =
+      LocationReminderProvider();
+  late final NotificationService _notificationService = NotificationService();
+  late final LocaleProvider _localeProvider = LocaleProvider();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.needsCalendarSync) {
+      unawaited(_calendarSync.loadFromStorage());
+    }
+    if (widget.needsLocationReminder) {
+      unawaited(_locationReminders.loadFromStorage());
+    }
+    if (widget.needsLocaleProvider) {
+      unawaited(_localeProvider.loadFromStorage());
+    }
+  }
+
+  @override
+  void dispose() {
+    _calendarSync.dispose();
+    _locationReminders.dispose();
+    _notificationService.dispose();
+    _localeProvider.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        if (widget.needsCalendarSync)
+          ChangeNotifierProvider<CalendarSyncProvider>.value(
+            value: _calendarSync,
+          ),
+        if (widget.needsLocationReminder)
+          ChangeNotifierProvider<LocationReminderProvider>.value(
+            value: _locationReminders,
+          ),
+        if (widget.needsNotificationService)
+          ChangeNotifierProvider<NotificationService>.value(
+            value: _notificationService,
+          ),
+        if (widget.needsLocaleProvider)
+          ChangeNotifierProvider<LocaleProvider>.value(value: _localeProvider),
+      ],
+      child: widget.child,
+    );
+  }
+}
+
+class _IntegrationsScreenBody extends StatelessWidget {
+  final Uri? initialOAuthCallbackUri;
+
+  const _IntegrationsScreenBody({this.initialOAuthCallbackUri});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     return DefaultTabController(
       length: 3,
       child: Scaffold(
+        backgroundColor: routeBackground,
         appBar: AppBar(
-          title: const Text('扩展集成'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '日历订阅'),
-              Tab(text: '位置提醒'),
-              Tab(text: '语言'),
+          title: const Text('扩展功能'),
+          backgroundColor: routeBackground.withValues(alpha: 0.96),
+          surfaceTintColor: Colors.transparent,
+          bottom: TabBar(
+            labelStyle: appSecondaryMenuItemTextStyle(context),
+            unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+            indicatorSize: TabBarIndicatorSize.tab,
+            tabs: const [
+              Tab(height: 34, text: '日历订阅'),
+              Tab(height: 34, text: '位置提醒'),
+              Tab(height: 34, text: '语言'),
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _CalendarSubscriptionsTab(
-              initialOAuthCallbackUri: initialOAuthCallbackUri,
-            ),
-            const _LocationRemindersTab(),
-            const _LocaleTab(),
-          ],
+        body: AppSecondaryControlTheme(
+          child: TabBarView(
+            children: [
+              _CalendarSubscriptionsTab(
+                initialOAuthCallbackUri: initialOAuthCallbackUri,
+              ),
+              const _LocationRemindersTab(),
+              const _LocaleTab(),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+ButtonStyle _integrationOutlinedButtonStyle(BuildContext context) =>
+    OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(0, 30),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      textStyle: appSecondaryMenuItemTextStyle(context),
+    );
+
+ButtonStyle _integrationFilledButtonStyle(BuildContext context) =>
+    FilledButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(0, 30),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      textStyle: appSecondaryMenuItemTextStyle(context),
+    );
+
+class _IntegrationActionStrip extends StatelessWidget {
+  final List<Widget> children;
+
+  const _IntegrationActionStrip({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final spacedChildren = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) spacedChildren.add(const SizedBox(width: 5));
+      spacedChildren.add(children[i]);
+    }
+
+    return SizedBox(
+      key: const ValueKey('integration_action_strip'),
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: spacedChildren,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+TextStyle _integrationHintTextStyle(
+  BuildContext context, {
+  double fontSize = 12,
+  double alpha = 0.62,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  return (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
+    fontSize: fontSize,
+    color: cs.onSurface.withValues(alpha: alpha),
+    fontWeight: FontWeight.w400,
+  );
+}
+
+TextStyle _integrationWarningTextStyle(BuildContext context) =>
+    _integrationHintTextStyle(
+      context,
+      fontSize: 11,
+    ).copyWith(color: Theme.of(context).colorScheme.tertiary);
+
+TextStyle _integrationErrorTextStyle(BuildContext context) =>
+    _integrationHintTextStyle(
+      context,
+      fontSize: 11,
+    ).copyWith(color: Theme.of(context).colorScheme.error);
 
 // ---------------------------------------------------------------------------
 // 日历订阅
@@ -115,8 +317,9 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
           padding: const EdgeInsets.all(16),
           children: [
             AppSurfaceCard(
+              padding: EdgeInsets.zero,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -138,11 +341,11 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       '支持 Google / Outlook / Apple iCloud 公开日历、企业 iCal feed、'
                       '部分 CalDAV 服务器的导出端点。订阅为只读，'
                       '不会修改远端日历。',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                      style: _integrationHintTextStyle(context),
                     ),
                   ],
                 ),
@@ -158,12 +361,12 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
             const SizedBox(height: 12),
             for (final s in subs) _SubscriptionTile(sub: s),
             if (subs.isEmpty && oauthAccounts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
+              Padding(
+                padding: const EdgeInsets.all(32),
                 child: Center(
                   child: Text(
                     '还没有订阅，点击右下角 + 添加 ICS，或添加 Google / Outlook 账号',
-                    style: TextStyle(color: Colors.black45),
+                    style: _integrationHintTextStyle(context, alpha: 0.50),
                   ),
                 ),
               ),
@@ -171,27 +374,36 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
           ],
         ),
         Positioned(
+          left: 16,
           right: 16,
           bottom: 16,
-          child: FloatingActionButton(
-            heroTag: 'ics_add',
-            onPressed: () => _showAddDialog(context, provider),
-            child: const Icon(Icons.add),
-          ),
-        ),
-        if (provider.subscriptions.isNotEmpty || oauthAccounts.isNotEmpty)
-          Positioned(
-            right: 88,
-            bottom: 22,
-            child: FilledButton.tonalIcon(
-              onPressed: provider.isSyncing
-                  ? null
-                  // ignore: discarded_futures
-                  : () => provider.syncAll(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('刷新'),
+          child: SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: _IntegrationActionStrip(
+                children: [
+                  if (provider.subscriptions.isNotEmpty ||
+                      oauthAccounts.isNotEmpty)
+                    FilledButton.tonalIcon(
+                      onPressed: provider.isSyncing
+                          ? null
+                          // ignore: discarded_futures
+                          : () => provider.syncAll(),
+                      style: _integrationFilledButtonStyle(context),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('刷新'),
+                    ),
+                  IconButton.filled(
+                    tooltip: '添加 ICS',
+                    onPressed: () => _showAddDialog(context, provider),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
       ],
     );
   }
@@ -202,38 +414,64 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
   ) async {
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
+    String? nameError;
+    String? urlError;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('添加日历订阅'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: '名称'),
-              autofocus: true,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ICS URL',
-                hintText: 'https://...',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AppDialog(
+          title: const Text('添加日历订阅'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: InputDecoration(
+                  labelText: '名称',
+                  errorText: nameError,
+                ),
+                autofocus: true,
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: urlCtrl,
+                decoration: InputDecoration(
+                  labelText: 'ICS URL',
+                  hintText: 'https://...',
+                  errorText: urlError,
+                ),
+                keyboardType: TextInputType.url,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                final url = urlCtrl.text.trim();
+                final uri = Uri.tryParse(url);
+                final validUrl =
+                    uri != null &&
+                    uri.host.isNotEmpty &&
+                    (uri.scheme == 'http' || uri.scheme == 'https');
+                setState(() {
+                  nameError = name.isEmpty ? '请填写订阅名称' : null;
+                  urlError = url.isEmpty
+                      ? '请填写 ICS URL'
+                      : (!validUrl ? '请输入有效的 http/https 地址' : null);
+                });
+                if (nameError == null && urlError == null) {
+                  Navigator.pop(ctx, true);
+                }
+              },
+              child: Text(I18n.tr('action.add')),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(I18n.tr('action.add')),
-          ),
-        ],
       ),
     );
     if (ok != true) return;
@@ -258,8 +496,9 @@ class _OAuthCalendarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasAccounts = provider.oauthAccounts.isNotEmpty;
     return AppSurfaceCard(
+      padding: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -286,16 +525,17 @@ class _OAuthCalendarCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               '通过授权码 + PKCE 连接私有 Google Calendar 或 Outlook Calendar，'
               '自动刷新 token 并把远端事件并入本地日历视图。',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+              style: _integrationHintTextStyle(context),
             ),
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.tonalIcon(
                 onPressed: () => showOAuthDialog(context, provider),
+                style: _integrationFilledButtonStyle(context),
                 icon: const Icon(Icons.add_link, size: 16),
                 label: const Text('添加账号'),
               ),
@@ -407,151 +647,164 @@ class _OAuthCalendarCard extends StatelessWidget {
             content: SizedBox(
               width: double.maxFinite,
               child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<OAuthCalendarProvider>(
-                      initialValue: selectedProvider,
-                      decoration: const InputDecoration(labelText: '服务商'),
-                      items: [
-                        for (final p in OAuthCalendarProvider.values)
-                          DropdownMenuItem(value: p, child: Text(p.label)),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          selectedProvider = value;
-                          if (nameCtrl.text.trim().isEmpty ||
-                              OAuthCalendarProvider.values.any(
-                                (p) => p.label == nameCtrl.text.trim(),
-                              )) {
-                            nameCtrl.text = value.label;
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(labelText: '显示名称'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: clientIdCtrl,
-                      decoration: const InputDecoration(labelText: 'Client ID'),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: clientSecretCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Client Secret（可选）',
+                child: AppSecondaryControlTheme(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppDropdownField<OAuthCalendarProvider>(
+                        initialValue: selectedProvider,
+                        decoration: const InputDecoration(labelText: '服务商'),
+                        items: [
+                          for (final p in OAuthCalendarProvider.values)
+                            DropdownMenuItem(value: p, child: Text(p.label)),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            selectedProvider = value;
+                            if (nameCtrl.text.trim().isEmpty ||
+                                OAuthCalendarProvider.values.any(
+                                  (p) => p.label == nameCtrl.text.trim(),
+                                )) {
+                              nameCtrl.text = value.label;
+                            }
+                          });
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: redirectCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Redirect URI',
-                        hintText: 'duoyi://oauth/calendar',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: '显示名称'),
                       ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: calendarIdCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Calendar ID',
-                        hintText: 'primary',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: clientIdCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Client ID',
+                        ),
+                        onChanged: (_) => setState(() {}),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: clientSecretCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Client Secret（可选）',
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '授权链接',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          SelectableText(
-                            authUri?.toString() ?? '填写 Client ID 后生成',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: authUri == null
-                                    ? null
-                                    : () async {
-                                        await savePendingAuthorization(authUri);
-                                        if (!dialogContext.mounted) return;
-                                        ScaffoldMessenger.of(
-                                          dialogContext,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('授权链接已复制'),
-                                          ),
-                                        );
-                                      },
-                                icon: const Icon(Icons.copy, size: 16),
-                                label: const Text('复制'),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: redirectCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Redirect URI',
+                          hintText: 'duoyi://oauth/calendar',
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: calendarIdCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Calendar ID',
+                          hintText: 'primary',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '授权链接',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
                               ),
-                              FilledButton.tonalIcon(
-                                onPressed: authUri == null
-                                    ? null
-                                    : () async {
-                                        await savePendingAuthorization(authUri);
-                                        final opened = await launchUrl(
-                                          authUri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                        if (!dialogContext.mounted) return;
-                                        if (!opened) {
+                            ),
+                            const SizedBox(height: 6),
+                            SelectableText(
+                              authUri?.toString() ?? '填写 Client ID 后生成',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: authUri == null
+                                      ? null
+                                      : () async {
+                                          await savePendingAuthorization(
+                                            authUri,
+                                          );
+                                          if (!dialogContext.mounted) return;
                                           ScaffoldMessenger.of(
                                             dialogContext,
                                           ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('无法打开授权页，已保留链接'),
+                                              content: Text('授权链接已复制'),
                                             ),
                                           );
-                                        }
-                                      },
-                                icon: const Icon(Icons.open_in_new, size: 16),
-                                label: const Text('打开'),
-                              ),
-                            ],
-                          ),
-                        ],
+                                        },
+                                  style: _integrationOutlinedButtonStyle(
+                                    context,
+                                  ),
+                                  icon: const Icon(Icons.copy, size: 16),
+                                  label: const Text('复制'),
+                                ),
+                                FilledButton.tonalIcon(
+                                  onPressed: authUri == null
+                                      ? null
+                                      : () async {
+                                          await savePendingAuthorization(
+                                            authUri,
+                                          );
+                                          final opened = await launchUrl(
+                                            authUri,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                          if (!dialogContext.mounted) return;
+                                          if (!opened) {
+                                            ScaffoldMessenger.of(
+                                              dialogContext,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('无法打开授权页，已保留链接'),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                  style: _integrationFilledButtonStyle(context),
+                                  icon: const Icon(Icons.open_in_new, size: 16),
+                                  label: const Text('打开'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: codeCtrl,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: '授权码或回调 URL',
-                        hintText: '粘贴 code，或粘贴带 ?code= 的回调 URL',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: codeCtrl,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: '授权码或回调 URL',
+                          hintText: '粘贴 code，或粘贴带 ?code= 的回调 URL',
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -659,10 +912,16 @@ class _OAuthCalendarTile extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'toggle',
-              child: Text(account.enabled ? '暂停' : '启用'),
+              child: AppSecondaryMenuText(account.enabled ? '暂停' : '启用'),
             ),
-            const PopupMenuItem(value: 'sync', child: Text('同步')),
-            const PopupMenuItem(value: 'delete', child: Text('删除')),
+            const PopupMenuItem(
+              value: 'sync',
+              child: AppSecondaryMenuText('同步'),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: AppSecondaryMenuText('删除'),
+            ),
           ],
         ),
       ),
@@ -680,8 +939,9 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     final target = provider.writeTarget;
     final configured = target?.isConfigured == true;
     return AppSurfaceCard(
+      padding: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -714,7 +974,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                   : '配置 CalDAV 集合 URL 和 Authorization header，测试时会创建并删除一条探测事件。',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: _integrationHintTextStyle(context),
             ),
             if (provider.lastCalDavConflicts.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -722,14 +982,18 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                 '有 ${provider.lastCalDavConflicts.length} 条远端变更已跳过，避免覆盖别人改过的日程。',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.orange),
+                style: _integrationWarningTextStyle(context),
               ),
             ],
             if (target?.lastTestedAt != null) ...[
               const SizedBox(height: 4),
               Text(
                 '上次测试 ${_formatDateTime(target!.lastTestedAt!)}',
-                style: const TextStyle(fontSize: 11, color: Colors.black45),
+                style: _integrationHintTextStyle(
+                  context,
+                  fontSize: 11,
+                  alpha: 0.50,
+                ),
               ),
             ],
             if (provider.lastError != null) ...[
@@ -738,17 +1002,15 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                 provider.lastError!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.red),
+                style: _integrationErrorTextStyle(context),
               ),
             ],
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
+            _IntegrationActionStrip(
               children: [
                 OutlinedButton.icon(
                   onPressed: () => _showCalDavDialog(context, provider),
+                  style: _integrationOutlinedButtonStyle(context),
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: Text(configured ? '编辑' : '配置'),
                 ),
@@ -757,11 +1019,13 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                     onPressed: provider.isTestingWriteTarget
                         ? null
                         : provider.clearWriteTarget,
+                    style: _integrationOutlinedButtonStyle(context),
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('移除'),
                   ),
                 OutlinedButton.icon(
                   onPressed: () => _showICloudCalDavDialog(context, provider),
+                  style: _integrationOutlinedButtonStyle(context),
                   icon: const Icon(Icons.apple, size: 16),
                   label: const Text('iCloud'),
                 ),
@@ -769,6 +1033,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                   onPressed: !configured || provider.isTestingWriteTarget
                       ? null
                       : provider.testWriteTarget,
+                  style: _integrationFilledButtonStyle(context),
                   icon: const Icon(Icons.fact_check_outlined, size: 16),
                   label: const Text('测试写回'),
                 ),
@@ -796,46 +1061,49 @@ class _CalDavWriteTargetCard extends StatelessWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => AppDialog(
           title: const Text('配置 CalDAV 写回'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: urlCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: '集合 URL',
-                  hintText: 'https://caldav.example.com/calendars/me/default/',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: authCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Authorization header',
-                  hintText: 'Bearer ... 或 Basic ...',
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<CalDavConflictPolicy>(
-                initialValue: conflictPolicy,
-                decoration: const InputDecoration(labelText: '远端冲突处理'),
-                items: const [
-                  DropdownMenuItem(
-                    value: CalDavConflictPolicy.skipRemoteChanges,
-                    child: Text('跳过远端已修改事件'),
+          content: AppSecondaryControlTheme(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '集合 URL',
+                    hintText:
+                        'https://caldav.example.com/calendars/me/default/',
                   ),
-                  DropdownMenuItem(
-                    value: CalDavConflictPolicy.overwriteRemote,
-                    child: Text('始终覆盖远端'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: authCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Authorization header',
+                    hintText: 'Bearer ... 或 Basic ...',
                   ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => conflictPolicy = value);
-                  }
-                },
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                AppDropdownField<CalDavConflictPolicy>(
+                  initialValue: conflictPolicy,
+                  decoration: const InputDecoration(labelText: '远端冲突处理'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: CalDavConflictPolicy.skipRemoteChanges,
+                      child: Text('跳过远端已修改事件'),
+                    ),
+                    DropdownMenuItem(
+                      value: CalDavConflictPolicy.overwriteRemote,
+                      child: Text('始终覆盖远端'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => conflictPolicy = value);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -884,55 +1152,57 @@ class _CalDavWriteTargetCard extends StatelessWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => AppDialog(
           title: const Text('配置 iCloud 日历写回'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                CalDavCredentialHelper.iCloudSetupCopy,
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: urlCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'iCloud CalDAV 集合 URL',
-                  hintText: CalDavCredentialHelper.iCloudCollectionUrlHint,
+          content: AppSecondaryControlTheme(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  CalDavCredentialHelper.iCloudSetupCopy,
+                  style: _integrationHintTextStyle(context),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: appleIdCtrl,
-                decoration: const InputDecoration(labelText: 'Apple ID'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: appPasswordCtrl,
-                decoration: const InputDecoration(labelText: 'App 专用密码'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<CalDavConflictPolicy>(
-                initialValue: conflictPolicy,
-                decoration: const InputDecoration(labelText: '远端冲突处理'),
-                items: const [
-                  DropdownMenuItem(
-                    value: CalDavConflictPolicy.skipRemoteChanges,
-                    child: Text('跳过远端已修改事件'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'iCloud CalDAV 集合 URL',
+                    hintText: CalDavCredentialHelper.iCloudCollectionUrlHint,
                   ),
-                  DropdownMenuItem(
-                    value: CalDavConflictPolicy.overwriteRemote,
-                    child: Text('始终覆盖远端'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => conflictPolicy = value);
-                  }
-                },
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: appleIdCtrl,
+                  decoration: const InputDecoration(labelText: 'Apple ID'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: appPasswordCtrl,
+                  decoration: const InputDecoration(labelText: 'App 专用密码'),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 12),
+                AppDropdownField<CalDavConflictPolicy>(
+                  initialValue: conflictPolicy,
+                  decoration: const InputDecoration(labelText: '远端冲突处理'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: CalDavConflictPolicy.skipRemoteChanges,
+                      child: Text('跳过远端已修改事件'),
+                    ),
+                    DropdownMenuItem(
+                      value: CalDavConflictPolicy.overwriteRemote,
+                      child: Text('始终覆盖远端'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => conflictPolicy = value);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -1015,9 +1285,12 @@ class _SubscriptionTile extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'toggle',
-              child: Text(sub.enabled ? '暂停' : '启用'),
+              child: AppSecondaryMenuText(sub.enabled ? '暂停' : '启用'),
             ),
-            const PopupMenuItem(value: 'delete', child: Text('删除')),
+            const PopupMenuItem(
+              value: 'delete',
+              child: AppSecondaryMenuText('删除'),
+            ),
           ],
         ),
       ),
@@ -1044,8 +1317,9 @@ class _LocationRemindersTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             AppSurfaceCard(
+              padding: EdgeInsets.zero,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1054,25 +1328,25 @@ class _LocationRemindersTab extends StatelessWidget {
                       style: TextStyle(fontWeight: FontWeight.w400),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       '到达 / 离开指定地点时弹出提醒。前台位置更新会立即触发本地通知；'
                       'Android 已接入系统 geofence 调度，需授予后台位置权限并真机验证。',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                      style: _integrationHintTextStyle(context),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    _IntegrationActionStrip(
                       children: [
                         OutlinedButton.icon(
                           onPressed: () =>
                               _testCurrentLocation(context, provider),
+                          style: _integrationOutlinedButtonStyle(context),
                           icon: const Icon(Icons.my_location_outlined),
                           label: const Text('输入当前位置测试'),
                         ),
                         OutlinedButton.icon(
                           onPressed: () =>
                               _requestLocationPermissions(context, provider),
+                          style: _integrationOutlinedButtonStyle(context),
                           icon: const Icon(Icons.location_searching_outlined),
                           label: const Text('授权后台位置'),
                         ),
@@ -1091,12 +1365,12 @@ class _LocationRemindersTab extends StatelessWidget {
             const SizedBox(height: 12),
             for (final r in list) _LocationTile(reminder: r),
             if (list.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
+              Padding(
+                padding: const EdgeInsets.all(32),
                 child: Center(
                   child: Text(
                     '没有位置提醒，点击 + 创建',
-                    style: TextStyle(color: Colors.black45),
+                    style: _integrationHintTextStyle(context, alpha: 0.50),
                   ),
                 ),
               ),
@@ -1104,12 +1378,19 @@ class _LocationRemindersTab extends StatelessWidget {
           ],
         ),
         Positioned(
+          left: 16,
           right: 16,
           bottom: 16,
-          child: FloatingActionButton(
-            heroTag: 'location_add',
-            onPressed: () => _addReminder(context, provider),
-            child: const Icon(Icons.add),
+          child: SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: IconButton.filled(
+                tooltip: '新建位置提醒',
+                onPressed: () => _addReminder(context, provider),
+                icon: const Icon(Icons.add),
+              ),
+            ),
           ),
         ),
       ],
@@ -1125,6 +1406,10 @@ class _LocationRemindersTab extends StatelessWidget {
     final lngCtrl = TextEditingController(text: '');
     final radiusCtrl = TextEditingController(text: '200');
     var trigger = LocationTrigger.enter;
+    String? titleError;
+    String? latError;
+    String? lngError;
+    String? radiusError;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1135,7 +1420,10 @@ class _LocationRemindersTab extends StatelessWidget {
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: const InputDecoration(labelText: '标题'),
+                decoration: InputDecoration(
+                  labelText: '标题',
+                  errorText: titleError,
+                ),
                 autofocus: true,
               ),
               const SizedBox(height: 8),
@@ -1144,7 +1432,10 @@ class _LocationRemindersTab extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: latCtrl,
-                      decoration: const InputDecoration(labelText: '纬度'),
+                      decoration: InputDecoration(
+                        labelText: '纬度',
+                        errorText: latError,
+                      ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
                         decimal: true,
@@ -1155,7 +1446,10 @@ class _LocationRemindersTab extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: lngCtrl,
-                      decoration: const InputDecoration(labelText: '经度'),
+                      decoration: InputDecoration(
+                        labelText: '经度',
+                        errorText: lngError,
+                      ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
                         decimal: true,
@@ -1167,7 +1461,10 @@ class _LocationRemindersTab extends StatelessWidget {
               const SizedBox(height: 8),
               TextField(
                 controller: radiusCtrl,
-                decoration: const InputDecoration(labelText: '半径（米）'),
+                decoration: InputDecoration(
+                  labelText: '半径（米）',
+                  errorText: radiusError,
+                ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 8),
@@ -1198,7 +1495,26 @@ class _LocationRemindersTab extends StatelessWidget {
               child: Text(I18n.tr('action.cancel')),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () {
+                final title = titleCtrl.text.trim();
+                final lat = double.tryParse(latCtrl.text.trim());
+                final lng = double.tryParse(lngCtrl.text.trim());
+                final radius = double.tryParse(radiusCtrl.text.trim());
+                setSt(() {
+                  titleError = title.isEmpty ? '请填写提醒标题' : null;
+                  latError = lat == null ? '请输入有效纬度' : null;
+                  lngError = lng == null ? '请输入有效经度' : null;
+                  radiusError = radius == null || radius <= 0
+                      ? '请输入有效半径'
+                      : null;
+                });
+                if (titleError == null &&
+                    latError == null &&
+                    lngError == null &&
+                    radiusError == null) {
+                  Navigator.pop(ctx, true);
+                }
+              },
               child: Text(I18n.tr('action.save')),
             ),
           ],
@@ -1288,9 +1604,9 @@ class _LocationRemindersTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               '这会把坐标喂给位置提醒引擎，用来验证到达/离开触发规则。',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+              style: _integrationHintTextStyle(context),
             ),
           ],
         ),
@@ -1404,7 +1720,7 @@ class _LocaleTab extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           I18n.tr('settings.language.description'),
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+          style: _integrationHintTextStyle(context),
         ),
       ],
     );

@@ -1,7 +1,6 @@
 package com.duoyi.duoyi
 
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -12,12 +11,18 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
 
 /** "习惯" 小组件。 */
-class DuoyiHabitWidgetProvider : AppWidgetProvider() {
+open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             requestUpdate(context)
         }
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        appWidgetIds.forEach { DuoyiWidgetDisplayMode.clearForWidget(prefs, it) }
+        super.onDeleted(context, appWidgetIds)
     }
 
     override fun onUpdate(
@@ -28,6 +33,9 @@ class DuoyiHabitWidgetProvider : AppWidgetProvider() {
         val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
 
         appWidgetIds.forEach { id ->
+            DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
+                DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
+            }
             val views = RemoteViews(context.packageName, R.layout.duoyi_habit_widget)
 
             views.setTextViewText(
@@ -52,11 +60,15 @@ class DuoyiHabitWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_habit_hint, habitQuickCheckLabel)
             views.setViewVisibility(
                 R.id.widget_habit_streak,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+            )
+            views.setViewVisibility(
+                R.id.widget_habit_bottom_nav,
+                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_habit_hint,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
@@ -91,6 +103,8 @@ class DuoyiHabitWidgetProvider : AppWidgetProvider() {
             }
 
             views.setOnClickPendingIntent(R.id.widget_habit_root, openHabit)
+            views.setOnClickPendingIntent(R.id.widget_habit_title, openHabit)
+            views.setOnClickPendingIntent(R.id.widget_habit_subtitle, openHabit)
             views.setOnClickPendingIntent(R.id.widget_habit_percent, openHabit)
             views.setOnClickPendingIntent(R.id.widget_habit_summary, openHabit)
             views.setOnClickPendingIntent(R.id.widget_habit_streak, openHabit)
@@ -106,15 +120,7 @@ class DuoyiHabitWidgetProvider : AppWidgetProvider() {
 
     companion object {
         fun requestUpdate(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, DuoyiHabitWidgetProvider::class.java))
-            if (ids.isNotEmpty()) {
-                val intent = Intent(context, DuoyiHabitWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                }
-                context.sendBroadcast(intent)
-            }
+            DuoyiWidgetProviderRegistry.requestUpdateForKind(context, "habit")
         }
     }
 }

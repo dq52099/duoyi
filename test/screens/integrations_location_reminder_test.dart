@@ -10,8 +10,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  Finder actionText(String zh, String en) => find.byWidgetPredicate(
+    (widget) => widget is Text && (widget.data == zh || widget.data == en),
+  );
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('integrations screen standalone route renders without provider black screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: IntegrationsScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IntegrationsScreen), findsOneWidget);
+    expect(find.text('扩展功能'), findsOneWidget);
+
+    await tester.tap(find.text('位置提醒'));
+    await tester.pumpAndSettle();
+    expect(find.text('输入当前位置测试'), findsOneWidget);
+
+    await tester.tap(find.text('语言'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ListTile), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('location reminder tab can create and manually trigger reminder', (
@@ -45,7 +68,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '纬度'), '39.9042');
     await tester.enterText(find.widgetWithText(TextField, '经度'), '116.4074');
     await tester.enterText(find.widgetWithText(TextField, '半径（米）'), '500');
-    await tester.tap(find.text('保存'));
+    await tester.tap(actionText('保存', 'Save').first);
     await tester.pumpAndSettle();
 
     expect(locationProvider.reminders, hasLength(1));

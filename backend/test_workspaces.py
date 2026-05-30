@@ -31,6 +31,10 @@ class WorkspaceApiTest(unittest.TestCase):
         db = api.get_db()
         try:
             api._setting_set(db, "registration_email_required", False)
+            api._setting_set(db, "default_registration_coins", 0)
+            db.execute(
+                "UPDATE admin_groups SET default_time_coins=0 WHERE id='group_default'"
+            )
             db.commit()
         finally:
             db.close()
@@ -62,6 +66,15 @@ class WorkspaceApiTest(unittest.TestCase):
         display_name: str = "",
         invitation_code: str = "",
     ) -> dict:
+        db = api.get_db()
+        try:
+            api._setting_set(db, "default_registration_coins", 0)
+            db.execute(
+                "UPDATE admin_groups SET default_time_coins=0 WHERE id='group_default'"
+            )
+            db.commit()
+        finally:
+            db.close()
         return api.register(
             api.RegisterRequest(
                 username=username,
@@ -88,6 +101,86 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_api_title_uses_duoyi_brand(self):
         self.assertEqual(api.app.title, "多仪 Sync API")
+
+    def test_registration_default_user_group_grants_100_time_coins(self):
+        db = api.get_db()
+        try:
+            api._setting_set(db, "registration_email_required", False)
+            api._setting_set(db, "default_registration_coins", 100)
+            db.commit()
+        finally:
+            db.close()
+
+        registered = api.register(
+            api.RegisterRequest(username="default-coins-user", password="pass123456")
+        )
+
+        self.assertEqual(registered["coin_balance"], 100)
+        self.assertEqual(registered["lifetime_coins"], 100)
+        self.assertEqual(registered["user"]["coin_balance"], 100)
+
+    def test_init_db_preserves_zero_default_group_time_coins(self):
+        db = api.get_db()
+        try:
+            api._setting_set(db, "registration_email_required", False)
+            api._setting_set(db, "default_registration_coins", 0)
+            db.execute(
+                "UPDATE admin_groups SET default_time_coins=0 WHERE id='group_default'"
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        api.init_db()
+
+        db = api.get_db()
+        try:
+            row = db.execute(
+                "SELECT default_time_coins FROM admin_groups WHERE id='group_default'"
+            ).fetchone()
+            setting_value = api._setting_get(db, "default_registration_coins", 100)
+            self.assertEqual(row["default_time_coins"], 0)
+            self.assertEqual(setting_value, 0)
+            self.assertEqual(api._group_default_time_coins(db, "group_default"), 0)
+        finally:
+            db.close()
+
+        registered = api.register(
+            api.RegisterRequest(username="zero-default-group-user", password="pass123456")
+        )
+
+        self.assertEqual(registered["coin_balance"], 0)
+        self.assertEqual(registered["lifetime_coins"], 0)
+        self.assertEqual(registered["user"]["coin_balance"], 0)
+
+    def test_init_db_seeds_default_group_from_existing_registration_coins(self):
+        db = api.get_db()
+        try:
+            api._setting_set(db, "registration_email_required", False)
+            api._setting_set(db, "default_registration_coins", 72)
+            db.execute("DELETE FROM admin_groups WHERE id='group_default'")
+            db.commit()
+        finally:
+            db.close()
+
+        api.init_db()
+
+        db = api.get_db()
+        try:
+            row = db.execute(
+                "SELECT default_time_coins FROM admin_groups WHERE id='group_default'"
+            ).fetchone()
+            self.assertEqual(row["default_time_coins"], 72)
+        finally:
+            db.close()
+
+        registered = api.register(
+            api.RegisterRequest(username="migrated-default-group-user", password="pass123456")
+        )
+
+        self.assertEqual(registered["coin_balance"], 72)
+        self.assertEqual(registered["lifetime_coins"], 72)
+        self.assertEqual(registered["user"]["coin_balance"], 72)
 
     def test_legacy_password_hash_migrates_on_login(self):
         user_id = self._register("legacy-password")
@@ -124,6 +217,8 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertEqual(registered["email"], "profile@example.com")
         self.assertEqual(registered["display_name"], "资料同学")
+        self.assertEqual(registered["identifier"], "profile-user")
+        self.assertFalse(registered["can_edit_username"])
 
         logged_in = api.login(
             api.LoginRequest(username="profile@example.com", password="pass123456")
@@ -151,7 +246,7 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(updated["username"], "profile-user")
         self.assertEqual(updated["email"], "profile-new@example.com")
         self.assertFalse(updated["email_verified"])
-        self.assertEqual(updated["avatar"], "https://example.com/avatar.png")
+        self.assertEqual(updated["avatar"], registered.get("avatar") or "")
         self.assertEqual(updated["bio"], "用邮箱登录的多仪用户")
 
         db = api.get_db()
@@ -202,10 +297,12 @@ class WorkspaceApiTest(unittest.TestCase):
 
         me = api.me(user_id=registered["user_id"])
         self.assertEqual(me["username"], "profile-user")
+        self.assertEqual(me["identifier"], "profile-user")
+        self.assertFalse(me["can_edit_username"])
         self.assertEqual(me["display_name"], "新昵称")
         self.assertEqual(me["email"], "profile-new@example.com")
         self.assertTrue(me["email_verified"])
-        self.assertEqual(me["avatar"], "https://example.com/avatar.png")
+        self.assertEqual(me["avatar"], registered.get("avatar") or "")
         self.assertEqual(me["bio"], "用邮箱登录的多仪用户")
         self.assertFalse(me["is_disabled"])
 
@@ -216,6 +313,67 @@ class WorkspaceApiTest(unittest.TestCase):
                 user_id=other_id,
             )
         self.assertEqual(conflict.exception.status_code, 409)
+
+    def test_auth_email_code_profile_and_email_alias_routes_are_live(self):
+        user_id = self._register("profile-route-user")
+        token = api.TOKENS[user_id]
+
+        with TestClient(api.app) as client:
+            profile_response = client.patch(
+                "/api/me/profile",
+                json={
+                    "display_name": "路径用户",
+                    "bio": "通过 API 路径保存",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            code_response = client.post(
+                "/api/auth/email/send",
+                json={"email": "profile-route@example.com", "purpose": "register"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(code_response.status_code, 200)
+            code_payload = code_response.json()
+            self.assertEqual(code_payload["email"], "profile-route@example.com")
+            self.assertEqual(code_payload["purpose"], "bind")
+            self.assertIn("dev_code", code_payload)
+
+            bind_response = client.post(
+                "/api/auth/email/bind",
+                json={
+                    "email": "profile-route@example.com",
+                    "email_code": code_payload["dev_code"],
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            login_code_response = client.post(
+                "/api/auth/send-email_code",
+                json={"email": "profile-route@example.com", "purpose": "login"},
+            )
+            self.assertEqual(login_code_response.status_code, 200)
+            login_response = client.post(
+                "/api/auth/login/email",
+                json={
+                    "email": "profile-route@example.com",
+                    "email_code": login_code_response.json()["dev_code"],
+                },
+            )
+
+        self.assertEqual(profile_response.status_code, 200)
+        profile = profile_response.json()
+        self.assertEqual(profile["user_id"], user_id)
+        self.assertEqual(profile["display_name"], "路径用户")
+        self.assertEqual(profile["bio"], "通过 API 路径保存")
+        self.assertEqual(profile["avatar_url"], profile["avatar"])
+
+        self.assertEqual(bind_response.status_code, 200)
+        bound = bind_response.json()
+        self.assertEqual(bound["user_id"], user_id)
+        self.assertEqual(bound["email"], "profile-route@example.com")
+        self.assertTrue(bound["email_verified"])
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(login_response.json()["user_id"], user_id)
 
     def test_account_mail_defaults_and_registration_email_code_required(self):
         db = api.get_db()
@@ -264,6 +422,75 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(registered["email_verified"])
         self.assertIn("user", registered)
         self.assertEqual(registered["user"]["username"], "required-with-code")
+
+    def test_public_health_and_config_include_api_contract(self):
+        health = api.health()
+        config = api.public_config()
+
+        with TestClient(api.app) as client:
+            health_response = client.get("/api/health")
+            config_response = client.get("/api/config")
+        self.assertEqual(health_response.status_code, 200)
+        self.assertEqual(config_response.status_code, 200)
+        http_health = health_response.json()
+        http_config = config_response.json()
+
+        for payload in (health, config, http_health, http_config):
+            self.assertEqual(payload["api_contract_version"], api.API_CONTRACT_VERSION)
+            self.assertIn("build_git_sha", payload)
+            self.assertIn("build_time", payload)
+            self.assertEqual(
+                payload["required_routes_hash"],
+                api.API_CONTRACT_ROUTES_HASH,
+            )
+            self.assertIn("POST /api/auth/email-code", payload["required_routes"])
+            self.assertIn("PATCH /api/me/profile", payload["required_routes"])
+            self.assertIn(
+                "PATCH /api/admin/users/{user_id}/coins",
+                payload["required_routes"],
+            )
+            self.assertIn(
+                "POST /api/admin/users/{user_id}/coins",
+                payload["required_routes"],
+            )
+            self.assertTrue(payload["features"]["email_code"])
+            self.assertTrue(payload["features"]["avatar_upload"])
+            self.assertTrue(payload["features"]["admin_coins"])
+            self.assertTrue(payload["features"]["mobile_update"])
+
+    def test_api_contract_required_routes_are_registered(self):
+        def route_matches(contract_route, registered_route):
+            contract_method, contract_path = contract_route.split(" ", 1)
+            registered_method, registered_path = registered_route.split(" ", 1)
+            if contract_method != registered_method:
+                return False
+            contract_parts = contract_path.strip("/").split("/")
+            registered_parts = registered_path.strip("/").split("/")
+            if len(contract_parts) != len(registered_parts):
+                return False
+            for contract_part, registered_part in zip(contract_parts, registered_parts):
+                if registered_part.startswith("{") and registered_part.endswith("}"):
+                    continue
+                if contract_part != registered_part:
+                    return False
+            return True
+
+        registered = set()
+        for route in api.app.routes:
+            path = getattr(route, "path", None)
+            methods = getattr(route, "methods", None)
+            if not path or not methods:
+                continue
+            for method in methods:
+                if method == "HEAD":
+                    continue
+                registered.add(f"{method} {path}")
+
+        for route in api.API_CONTRACT_REQUIRED_ROUTES:
+            self.assertTrue(
+                any(route_matches(route, registered_route) for registered_route in registered),
+                route,
+            )
 
     def test_re0_registration_aliases_and_public_bootstrap(self):
         db = api.get_db()
@@ -362,6 +589,1447 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertIn("/api/uploads/avatars/", avatar.json()["avatar"])
         self.assertEqual(avatar.json()["user"]["avatar"], avatar.json()["avatar"])
 
+    def test_profile_email_login_and_avatar_compat_routes_do_not_404(self):
+        registered = self._register_with_email(
+            "compat-profile",
+            "compat-profile@example.com",
+        )
+        user_id = registered["user_id"]
+        headers = {"Authorization": f"Bearer {registered['token']}"}
+
+        with TestClient(api.app) as client:
+            auth_profile = client.post(
+                "/api/auth/profile",
+                json={"display_name": "Auth Profile"},
+                headers=headers,
+            )
+            me_profile = client.put(
+                "/api/me/profile",
+                json={"bio": "Me Profile"},
+                headers=headers,
+            )
+            code_response = client.post(
+                "/api/me/email-code",
+                json={"email": "compat-bound@example.com", "purpose": "bind"},
+                headers=headers,
+            )
+            bind_response = client.patch(
+                "/api/auth/bind-email",
+                json={
+                    "email": "compat-bound@example.com",
+                    "email_code": code_response.json()["dev_code"],
+                },
+                headers=headers,
+            )
+            avatar_response = client.put(
+                "/api/me/profile/avatar",
+                headers=headers,
+                files={
+                    "avatar": (
+                        "avatar.png",
+                        b"\x89PNG\r\n\x1a\ncompat-avatar",
+                        "image/png",
+                    )
+                },
+            )
+
+        self.assertEqual(auth_profile.status_code, 200)
+        self.assertEqual(auth_profile.json()["display_name"], "Auth Profile")
+        self.assertEqual(me_profile.status_code, 200)
+        self.assertEqual(me_profile.json()["bio"], "Me Profile")
+        self.assertEqual(code_response.status_code, 200)
+        self.assertEqual(bind_response.status_code, 200)
+        self.assertEqual(bind_response.json()["email"], "compat-bound@example.com")
+        self.assertTrue(bind_response.json()["email_verified"])
+        self.assertEqual(avatar_response.status_code, 200)
+        self.assertIn("/api/uploads/avatars/", avatar_response.json()["avatar"])
+
+        db = api.get_db()
+        try:
+            login_code = api._create_email_code(
+                db,
+                email="compat-bound@example.com",
+                purpose="login",
+                user_id=user_id,
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        with TestClient(api.app) as client:
+            email_login = client.post(
+                "/api/auth/login/email-code",
+                json={
+                    "email": "compat-bound@example.com",
+                    "email_code": login_code["code"],
+                },
+            )
+
+        self.assertEqual(email_login.status_code, 200)
+        self.assertEqual(email_login.json()["user_id"], user_id)
+
+    def test_email_login_alias_routes_match_client_contracts(self):
+        registered = self._register_with_email(
+            "email-login-alias",
+            "email-login-alias@example.com",
+        )
+        user_id = registered["user_id"]
+        routes = [
+            "/api/auth/email-login",
+            "/api/auth/email/login",
+            "/api/auth/login/email",
+            "/api/auth/email-code-login",
+            "/api/auth/login/email-code",
+            "/api/auth/email_code_login",
+            "/api/auth/login/email_code",
+            "/api/user/email-login",
+            "/api/user/login/email-code",
+            "/api/user/email_code_login",
+            "/api/user/login/email_code",
+            "/api/account/email-login",
+            "/api/account/email_code_login",
+        ]
+
+        with TestClient(api.app) as client:
+            for index, route in enumerate(routes):
+                db = api.get_db()
+                try:
+                    login_code = api._create_email_code(
+                        db,
+                        email="email-login-alias@example.com",
+                        purpose="login",
+                        user_id=user_id,
+                    )
+                    db.commit()
+                finally:
+                    db.close()
+                body = {
+                    "email": "email-login-alias@example.com",
+                    ("code" if index % 2 == 0 else "email_code"): login_code["code"],
+                }
+                response = client.post(route, json=body)
+                self.assertEqual(
+                    response.status_code,
+                    200,
+                    f"POST {route}: {response.text}",
+                )
+                self.assertEqual(response.json()["user_id"], user_id)
+
+    def test_admin_re0_named_routes_for_users_coins_invites_and_settings(self):
+        admin_id = self._make_admin(
+            "re0-admin-routes",
+            ["users", "coins", "settings", "invites"],
+        )
+        target_id = self._register("re0-admin-target")
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            put_user = client.put(
+                f"/api/admin/users/{target_id}",
+                json={"is_disabled": True},
+                headers=headers,
+            )
+            post_user = client.post(
+                f"/api/admin/users/{target_id}",
+                json={"is_disabled": False},
+                headers=headers,
+            )
+            post_quota = client.post(
+                f"/api/admin/users/{target_id}/quota",
+                json={"quota": 25, "reason": "RE0 额度兼容"},
+                headers=headers,
+            )
+            put_time_coins = client.put(
+                f"/api/admin/users/{target_id}/time-coins",
+                json={"time_coins": 40, "reason": "RE0 时光币兼容"},
+                headers=headers,
+            )
+            patch_time_coins = client.patch(
+                f"/api/admin/users/{target_id}/time_coins",
+                json={"target_balance": 45, "reason": "RE0 下划线时光币兼容"},
+                headers=headers,
+            )
+            patch_coin_balance = client.patch(
+                f"/api/admin/users/{target_id}/coin-balance",
+                json={"coin_balance": 46, "reason": "金币余额兼容"},
+                headers=headers,
+            )
+            patch_coin_balance_underscore = client.patch(
+                f"/api/admin/users/{target_id}/coin_balance",
+                json={"target_balance": 47, "reason": "金币余额下划线兼容"},
+                headers=headers,
+            )
+            patch_credit_balance_underscore = client.patch(
+                f"/api/admin/users/{target_id}/credit_balance",
+                json={"credit_balance": 48, "reason": "积分余额下划线兼容"},
+                headers=headers,
+            )
+            patch_coin_adjustment_underscore = client.patch(
+                f"/api/admin/users/{target_id}/coin_adjustment",
+                json={"target_balance": 49, "reason": "调整下划线兼容"},
+                headers=headers,
+            )
+            quota_adjust = client.put(
+                f"/api/admin/users/{target_id}/quota/adjust",
+                json={"quota": 50, "reason": "RE0 额度调整兼容"},
+                headers=headers,
+            )
+            create_invites = client.post(
+                "/api/admin/invitation-codes",
+                json={"count": 2, "note": "RE0 命名兼容"},
+                headers=headers,
+            )
+            list_invites = client.get(
+                "/api/admin/invitation-codes",
+                headers=headers,
+            )
+            patch_settings = client.patch(
+                "/api/admin/system-settings",
+                json={"force_app_update_enabled": True},
+                headers=headers,
+            )
+            put_settings = client.put(
+                "/api/admin/system-settings",
+                json={"force_relogin_enabled": True},
+                headers=headers,
+            )
+
+        self.assertEqual(put_user.status_code, 200)
+        self.assertEqual(post_user.status_code, 200)
+        self.assertEqual(post_quota.status_code, 200)
+        self.assertEqual(post_quota.json()["balance"], 25)
+        self.assertEqual(put_time_coins.status_code, 200)
+        self.assertEqual(put_time_coins.json()["balance"], 40)
+        self.assertEqual(patch_time_coins.status_code, 200)
+        self.assertEqual(patch_time_coins.json()["balance"], 45)
+        self.assertEqual(patch_coin_balance.status_code, 200)
+        self.assertEqual(patch_coin_balance.json()["balance"], 46)
+        self.assertEqual(patch_coin_balance_underscore.status_code, 200)
+        self.assertEqual(patch_coin_balance_underscore.json()["balance"], 47)
+        self.assertEqual(patch_credit_balance_underscore.status_code, 200)
+        self.assertEqual(patch_credit_balance_underscore.json()["balance"], 48)
+        self.assertEqual(patch_coin_adjustment_underscore.status_code, 200)
+        self.assertEqual(patch_coin_adjustment_underscore.json()["balance"], 49)
+        self.assertEqual(quota_adjust.status_code, 200)
+        self.assertEqual(quota_adjust.json()["balance"], 50)
+        self.assertEqual(create_invites.status_code, 200)
+        self.assertEqual(len(create_invites.json()["codes"]), 2)
+        self.assertEqual(list_invites.status_code, 200)
+        self.assertGreaterEqual(list_invites.json()["total"], 2)
+        self.assertEqual(patch_settings.status_code, 200)
+        self.assertTrue(
+            patch_settings.json()["runtime_status"]["force_app_update_enabled"]
+        )
+        self.assertEqual(put_settings.status_code, 200)
+        self.assertTrue(
+            put_settings.json()["runtime_status"]["force_relogin_enabled"]
+        )
+
+    def test_admin_current_management_routes_do_not_404(self):
+        admin_id = self._make_admin(
+            "current-admin-routes",
+            ["announcements", "invites", "audit", "feedback"],
+        )
+        user_id = self._register("current-admin-feedback-user")
+        admin_headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+        user_headers = {"Authorization": f"Bearer {api.TOKENS[user_id]}"}
+
+        with TestClient(api.app) as client:
+            announcement_list = client.get(
+                "/api/admin/announcements?limit=1&offset=0&sort=created_desc",
+                headers=admin_headers,
+            )
+            announcement_create = client.post(
+                "/api/admin/announcements",
+                json={
+                    "title": "当前后台公告",
+                    "body": "当前 AdminApi 公告路径不应 404",
+                    "level": "warning",
+                    "published": True,
+                },
+                headers=admin_headers,
+            )
+            ann_id = announcement_create.json()["id"]
+            announcement_update = client.patch(
+                f"/api/admin/announcements/{ann_id}",
+                json={"level": "critical", "published": False},
+                headers=admin_headers,
+            )
+            announcement_delete = client.delete(
+                f"/api/admin/announcements/{ann_id}",
+                headers=admin_headers,
+            )
+
+            invite_create = client.post(
+                "/api/admin/invite-codes",
+                json={"count": 1, "note": "当前 AdminApi 邀请码路径"},
+                headers=admin_headers,
+            )
+            invite_code = invite_create.json()["codes"][0]
+            invite_list = client.get(
+                "/api/admin/invite-codes?limit=1&offset=0&sort=created_desc",
+                headers=admin_headers,
+            )
+            invite_delete = client.delete(
+                f"/api/admin/invite-codes/{invite_code}",
+                headers=admin_headers,
+            )
+
+            feedback_create = client.post(
+                "/api/me/feedback",
+                json={
+                    "category": "bug",
+                    "content": "后台反馈详情当前路径不应 404",
+                },
+                headers=user_headers,
+            )
+            fb_id = feedback_create.json()["id"]
+            feedback_list = client.get(
+                "/api/admin/feedback?limit=1&offset=0&sort=created_desc",
+                headers=admin_headers,
+            )
+            feedback_detail = client.get(
+                f"/api/admin/feedback/{fb_id}",
+                headers=admin_headers,
+            )
+            feedback_delete = client.delete(
+                f"/api/admin/feedback/{fb_id}",
+                headers=admin_headers,
+            )
+
+            audit_log = client.get(
+                "/api/admin/audit-log?limit=1&offset=0&sort=created_desc",
+                headers=admin_headers,
+            )
+
+        for response in [
+            announcement_list,
+            announcement_create,
+            announcement_update,
+            announcement_delete,
+            invite_create,
+            invite_list,
+            invite_delete,
+            feedback_create,
+            feedback_list,
+            feedback_detail,
+            feedback_delete,
+            audit_log,
+        ]:
+            self.assertNotEqual(response.status_code, 404)
+            self.assertLess(response.status_code, 400)
+
+        self.assertIn("items", announcement_list.json())
+        self.assertEqual(announcement_create.json()["id"], ann_id)
+        self.assertEqual(announcement_update.json()["status"], "ok")
+        self.assertEqual(announcement_delete.json()["status"], "ok")
+        self.assertEqual(len(invite_create.json()["codes"]), 1)
+        self.assertIn("items", invite_list.json())
+        self.assertEqual(invite_delete.json()["status"], "ok")
+        self.assertEqual(feedback_detail.json()["id"], fb_id)
+        self.assertEqual(feedback_delete.json()["deleted"], 1)
+        self.assertIn("items", audit_log.json())
+
+    def test_admin_groups_roles_permissions_routes_match_re0_contracts(self):
+        admin_id = self._make_admin(
+            "group-role-admin",
+            ["users", "groups", "roles", "permissions"],
+        )
+        db = api.get_db()
+        try:
+            api._setting_set(db, "default_registration_coins", 100)
+            db.commit()
+        finally:
+            db.close()
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            permissions = client.get("/api/admin/permissions", headers=headers)
+            groups = client.get("/api/admin/groups", headers=headers)
+            paged_groups = client.get(
+                "/api/admin/groups?limit=1&offset=0",
+                headers=headers,
+            )
+            roles = client.get("/api/admin/roles", headers=headers)
+            create_group = client.post(
+                "/api/admin/groups",
+                json={
+                    "name": "测试用户组",
+                    "description": "RE0 用户组兼容",
+                    "default_time_coins": 100,
+                    "default_generate_quota": 12,
+                    "default_edit_quota": 6,
+                    "default_generate_history_retention": 30,
+                    "default_edit_history_retention": 15,
+                    "image_mode": "general",
+                    "is_active": True,
+                },
+                headers=headers,
+            )
+            group_id = create_group.json()["id"]
+            update_group = client.put(
+                f"/api/admin/groups/{group_id}",
+                json={
+                    "name": "测试用户组改",
+                    "description": "可更新",
+                    "default_time_coins": 120,
+                    "default_generate_quota": 14,
+                    "default_edit_quota": 7,
+                    "default_generate_history_retention": 32,
+                    "default_edit_history_retention": 16,
+                    "image_mode": "vip",
+                    "is_active": False,
+                },
+                headers=headers,
+            )
+            partial_group = client.patch(
+                f"/api/admin/groups/{group_id}",
+                json={
+                    "name": "测试用户组局部改",
+                    "description": "隐藏额度保留",
+                    "default_time_coins": 130,
+                    "image_mode": "general",
+                    "is_active": True,
+                },
+                headers=headers,
+            )
+            default_group_update = client.patch(
+                "/api/admin/groups/group_default",
+                json={
+                    "name": "默认用户组",
+                    "description": "默认注册额度",
+                    "default_time_coins": 150,
+                    "image_mode": "vip",
+                    "is_active": True,
+                },
+                headers=headers,
+            )
+            create_role = client.post(
+                "/api/admin/roles",
+                json={
+                    "name": "客服角色",
+                    "description": "只处理反馈",
+                    "permission_codes": ["feedback"],
+                    "is_active": True,
+                },
+                headers=headers,
+            )
+            role_id = create_role.json()["id"]
+            update_role = client.patch(
+                f"/api/admin/roles/{role_id}",
+                json={
+                    "name": "客服角色改",
+                    "description": "反馈和公告",
+                    "permissions": ["feedback", "announcements"],
+                    "is_active": True,
+                },
+                headers=headers,
+            )
+            created_user = client.post(
+                "/api/admin/users",
+                json={
+                    "username": "grouped-user",
+                    "password": "pass123456",
+                    "group_id": group_id,
+                    "role_id": role_id,
+                    "is_admin": True,
+                    "admin_permissions": ["feedback"],
+                },
+                headers=headers,
+            )
+
+        self.assertEqual(permissions.status_code, 200)
+        permission_codes = {item["code"] for item in permissions.json()}
+        self.assertIn("users", permission_codes)
+        self.assertIn("coins", permission_codes)
+        self.assertEqual(groups.status_code, 200)
+        self.assertTrue(any(item["id"] == "group_default" for item in groups.json()))
+        self.assertEqual(paged_groups.status_code, 200)
+        self.assertIn("items", paged_groups.json())
+        self.assertEqual(paged_groups.json()["limit"], 1)
+        self.assertGreaterEqual(paged_groups.json()["total"], 1)
+        self.assertTrue(paged_groups.json()["items"][0]["id"])
+        self.assertEqual(roles.status_code, 200)
+        self.assertTrue(any(item["id"] == "role_admin" for item in roles.json()))
+        self.assertEqual(create_group.status_code, 200)
+        self.assertEqual(create_group.json()["default_time_coins"], 100)
+        self.assertEqual(update_group.status_code, 200)
+        self.assertEqual(update_group.json()["default_time_coins"], 120)
+        self.assertFalse(update_group.json()["is_active"])
+        self.assertEqual(partial_group.status_code, 200)
+        self.assertEqual(partial_group.json()["default_time_coins"], 130)
+        self.assertEqual(partial_group.json()["default_generate_quota"], 14)
+        self.assertEqual(partial_group.json()["default_edit_quota"], 7)
+        self.assertEqual(
+            partial_group.json()["default_generate_history_retention"], 32
+        )
+        self.assertEqual(
+            partial_group.json()["default_edit_history_retention"], 16
+        )
+        self.assertTrue(partial_group.json()["is_active"])
+        self.assertEqual(default_group_update.status_code, 200)
+        self.assertEqual(default_group_update.json()["default_time_coins"], 150)
+        db = api.get_db()
+        try:
+            self.assertEqual(api._setting_get(db, "default_registration_coins", 0), 150)
+        finally:
+            db.close()
+        self.assertEqual(create_role.status_code, 200)
+        self.assertEqual(create_role.json()["permissions"], ["feedback"])
+        self.assertEqual(update_role.status_code, 200)
+        self.assertEqual(
+            update_role.json()["permissions"],
+            ["feedback", "announcements"],
+        )
+        self.assertEqual(created_user.status_code, 200)
+        created_payload = created_user.json()
+        self.assertEqual(created_payload["group_id"], group_id)
+        self.assertEqual(created_payload["role_id"], role_id)
+        self.assertIn("feedback", created_payload["permissions"])
+        self.assertEqual(created_payload["coin_balance"], 130)
+
+    def test_user_admin_can_read_groups_and_roles_for_assignment(self):
+        admin_id = self._make_admin("user-group-reader-admin", ["users"])
+        target_id = self._register("user-group-reader-target")
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            groups = client.get("/api/admin/groups", headers=headers)
+            paged_groups = client.get(
+                "/api/admin/groups?limit=1&offset=0",
+                headers=headers,
+            )
+            roles = client.get("/api/admin/roles", headers=headers)
+            update_user = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={"group_id": "group_default", "role_id": "role_user"},
+                headers=headers,
+            )
+            create_group = client.post(
+                "/api/admin/groups",
+                json={"name": "只读管理员不可创建", "default_time_coins": 1},
+                headers=headers,
+            )
+
+        self.assertEqual(groups.status_code, 200)
+        self.assertTrue(any(item["id"] == "group_default" for item in groups.json()))
+        self.assertEqual(paged_groups.status_code, 200)
+        self.assertIn("items", paged_groups.json())
+        self.assertEqual(roles.status_code, 200)
+        self.assertTrue(any(item["id"] == "role_user" for item in roles.json()))
+        self.assertEqual(update_user.status_code, 200)
+        self.assertEqual(update_user.json()["group_id"], "group_default")
+        self.assertEqual(update_user.json()["role_id"], "role_user")
+        self.assertEqual(create_group.status_code, 403)
+
+    def test_user_admin_cannot_escalate_admin_permissions(self):
+        admin_id = self._make_admin("user-only-admin", ["users"])
+        target_id = self._register("user-only-target")
+
+        for payload in (
+            api.UserUpdate(admin_permissions=[api.ADMIN_ALL_PERMISSION]),
+            api.UserUpdate(admin_permissions=[]),
+        ):
+            with self.assertRaises(HTTPException) as denied:
+                api.admin_update_user(admin_id, payload, actor=admin_id)
+            self.assertEqual(denied.exception.status_code, 403)
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_update_user(
+                target_id,
+                api.UserUpdate(is_admin=True),
+                actor=admin_id,
+            )
+        self.assertEqual(denied.exception.status_code, 403)
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_create_user(
+                api.UserCreate(username="user-only-created-admin", is_admin=True),
+                actor=admin_id,
+            )
+        self.assertEqual(denied.exception.status_code, 403)
+
+        db = api.get_db()
+        try:
+            actor_row = db.execute(
+                "SELECT admin_permissions FROM users WHERE id=?", (admin_id,)
+            ).fetchone()
+            target_row = db.execute(
+                "SELECT is_admin FROM users WHERE id=?", (target_id,)
+            ).fetchone()
+        finally:
+            db.close()
+        self.assertEqual(json.loads(actor_row["admin_permissions"]), ["users"])
+        self.assertEqual(target_row["is_admin"], 0)
+
+    def test_roles_admin_can_manage_admin_permissions(self):
+        actor_id = self._make_admin("roles-admin-can-promote", ["users", "roles"])
+        target_id = self._register("roles-admin-target")
+
+        updated = api.admin_update_user(
+            target_id,
+            api.UserUpdate(
+                is_admin=True,
+                admin_permissions=["feedback"],
+                role_id="role_user",
+            ),
+            actor=actor_id,
+        )
+
+        self.assertTrue(updated["is_admin"])
+        self.assertIn("feedback", updated["permissions"])
+
+    def test_roles_admin_cannot_grant_super_admin_permission_or_role(self):
+        actor_id = self._make_admin("limited-roles-admin", ["users", "roles"])
+        target_id = self._register("limited-roles-target")
+
+        for payload in (
+            api.UserUpdate(is_admin=True),
+            api.UserUpdate(is_admin=True, admin_permissions=[api.ADMIN_ALL_PERMISSION]),
+            api.UserUpdate(role_id="role_admin"),
+        ):
+            with self.assertRaises(HTTPException) as denied:
+                api.admin_update_user(target_id, payload, actor=actor_id)
+            self.assertEqual(denied.exception.status_code, 403)
+
+        with self.assertRaises(HTTPException) as denied_create_user:
+            api.admin_create_user(
+                api.UserCreate(username="limited-roles-created", is_admin=True),
+                actor=actor_id,
+            )
+        self.assertEqual(denied_create_user.exception.status_code, 403)
+
+        with self.assertRaises(HTTPException) as denied_create_role:
+            api.admin_create_role(
+                api.AdminRoleUpsert(
+                    name="越权角色",
+                    permissions=[api.ADMIN_ALL_PERMISSION],
+                ),
+                actor=actor_id,
+            )
+        self.assertEqual(denied_create_role.exception.status_code, 403)
+
+        db = api.get_db()
+        try:
+            target_row = db.execute(
+                "SELECT is_admin, role_id, admin_permissions FROM users WHERE id=?",
+                (target_id,),
+            ).fetchone()
+        finally:
+            db.close()
+        self.assertEqual(target_row["is_admin"], 0)
+        self.assertNotEqual(target_row["role_id"], "role_admin")
+        self.assertNotIn(api.ADMIN_ALL_PERMISSION, target_row["admin_permissions"])
+
+    def test_admin_group_assignment_grants_target_group_default_coins_once(self):
+        admin_id = self._make_admin("group-assignment-admin", ["users", "groups"])
+        target_id = self._register("group-assignment-target")
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            created_group = client.post(
+                "/api/admin/groups",
+                json={"name": "分配额度组", "default_time_coins": 80},
+                headers=headers,
+            )
+            self.assertEqual(created_group.status_code, 200)
+            group_id = created_group.json()["id"]
+
+            assigned = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={"group_id": group_id},
+                headers=headers,
+            )
+            repeated = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={"group_id": group_id},
+                headers=headers,
+            )
+
+        self.assertEqual(assigned.status_code, 200)
+        self.assertEqual(assigned.json()["group_id"], group_id)
+        self.assertEqual(assigned.json()["coin_balance"], 80)
+        self.assertEqual(assigned.json()["lifetime_coins"], 80)
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.json()["coin_balance"], 80)
+
+    def test_admin_cannot_create_or_assign_disabled_group(self):
+        admin_id = self._make_admin("disabled-group-admin", ["users", "groups"])
+        target_id = self._register("disabled-group-target")
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            created_group = client.post(
+                "/api/admin/groups",
+                json={
+                    "name": "停用额度组",
+                    "default_time_coins": 999,
+                    "is_active": False,
+                },
+                headers=headers,
+            )
+            self.assertEqual(created_group.status_code, 200)
+            group_id = created_group.json()["id"]
+
+            created_user = client.post(
+                "/api/admin/users",
+                json={
+                    "username": "disabled-group-created-user",
+                    "password": "pass123456",
+                    "group_id": group_id,
+                },
+                headers=headers,
+            )
+            assigned = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={"group_id": group_id},
+                headers=headers,
+            )
+
+        self.assertEqual(created_user.status_code, 400)
+        self.assertIn("用户组已停用", created_user.text)
+        self.assertEqual(assigned.status_code, 400)
+        self.assertIn("用户组已停用", assigned.text)
+
+        db = api.get_db()
+        try:
+            row = db.execute(
+                "SELECT group_id FROM users WHERE id=?",
+                (target_id,),
+            ).fetchone()
+            rewards = json.loads(
+                db.execute(
+                    "SELECT virtual_rewards FROM sync_data WHERE user_id=?",
+                    (target_id,),
+                ).fetchone()["virtual_rewards"]
+            )
+        finally:
+            db.close()
+
+        self.assertEqual(row["group_id"], "group_default")
+        self.assertEqual(rewards.get("balance", 0), 0)
+
+    def test_default_admin_role_migrates_to_all_permissions_for_groups_and_coins(self):
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE admin_roles SET permissions=? WHERE id='role_admin'",
+                (json.dumps(["users"]),),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        api.init_db()
+
+        db = api.get_db()
+        try:
+            role_permissions = db.execute(
+                "SELECT permissions FROM admin_roles WHERE id='role_admin'"
+            ).fetchone()["permissions"]
+        finally:
+            db.close()
+        self.assertEqual(json.loads(role_permissions), [api.ADMIN_ALL_PERMISSION])
+
+        admin_id = self._register("default-role-admin")
+        target_id = self._register("default-role-coin-target")
+        db = api.get_db()
+        try:
+            db.execute(
+                """
+                UPDATE users
+                SET is_admin=1, role_id='role_admin', admin_permissions='[]'
+                WHERE id=?
+                """,
+                (admin_id,),
+            )
+            db.commit()
+        finally:
+            db.close()
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            groups = client.get("/api/admin/groups", headers=headers)
+            coins = client.post(
+                f"/api/admin/users/{target_id}/coins",
+                json={"delta": 9, "reason": "默认管理员角色额度调整"},
+                headers=headers,
+            )
+
+        self.assertEqual(groups.status_code, 200)
+        self.assertEqual(coins.status_code, 200)
+        self.assertEqual(coins.json()["balance"], 9)
+
+    def test_account_api_fallback_routes_match_client_contracts(self):
+        registered = self._register_with_email(
+            "fallback-account",
+            "fallback-account@example.com",
+        )
+        token = registered["token"]
+        user_id = registered["user_id"]
+        headers = {"Authorization": f"Bearer {token}"}
+        old_avatar_dir = api.AVATAR_UPLOAD_DIR
+        api.AVATAR_UPLOAD_DIR = os.path.join(self._tmp.name, "fallback-avatars")
+        try:
+            with TestClient(api.app) as client:
+                for method, path in [
+                    ("patch", "/api/me/profile"),
+                    ("post", "/api/me/profile"),
+                    ("put", "/api/me/profile"),
+                    ("patch", "/api/auth/profile"),
+                    ("post", "/api/auth/profile"),
+                    ("put", "/api/auth/profile"),
+                ]:
+                    response = getattr(client, method)(
+                        path,
+                        json={"display_name": f"{method}:{path}"},
+                        headers=headers,
+                    )
+                    self.assertEqual(
+                        response.status_code,
+                        200,
+                        f"{method.upper()} {path}: {response.text}",
+                    )
+                    self.assertEqual(response.json()["user_id"], user_id)
+
+                for path in [
+                    "/api/auth/email-code",
+                    "/api/auth/email-code/send",
+                    "/api/auth/email/send-code",
+                    "/api/auth/send-email-code",
+                    "/api/me/email-code",
+                    "/api/me/email-code/send",
+                    "/api/me/email/send-code",
+                    "/api/me/email/send",
+                ]:
+                    db = api.get_db()
+                    try:
+                        db.execute(
+                            """
+                            UPDATE email_verification_codes
+                            SET created_at=?
+                            WHERE email=?
+                            """,
+                            (
+                                api._format_utc(api._utc_now() - timedelta(seconds=61)),
+                                "fallback-code@example.com",
+                            ),
+                        )
+                        db.commit()
+                    finally:
+                        db.close()
+                    response = client.post(
+                        path,
+                        json={"email": "fallback-code@example.com", "purpose": "bind"},
+                        headers=headers,
+                    )
+                    self.assertEqual(
+                        response.status_code,
+                        200,
+                        f"POST {path}: {response.text}",
+                    )
+                    self.assertEqual(response.json()["purpose"], "bind")
+
+                bind_aliases = [
+                    "/api/me/email",
+                    "/api/me/email/bind",
+                    "/api/me/bind-email",
+                    "/api/auth/email",
+                    "/api/auth/email/bind",
+                    "/api/auth/bind-email",
+                ]
+                for method in ["patch", "post", "put"]:
+                    for path in bind_aliases:
+                        db = api.get_db()
+                        try:
+                            bind_code = api._create_email_code(
+                                db,
+                                email="fallback-bind@example.com",
+                                purpose="bind",
+                                user_id=user_id,
+                            )
+                            db.commit()
+                        finally:
+                            db.close()
+                        response = getattr(client, method)(
+                            path,
+                            json={
+                                "email": "fallback-bind@example.com",
+                                "code": bind_code["code"],
+                                "email_code": bind_code["code"],
+                            },
+                            headers=headers,
+                        )
+                        self.assertEqual(
+                            response.status_code,
+                            200,
+                            f"{method.upper()} {path}: {response.text}",
+                        )
+                        self.assertEqual(
+                            response.json()["email"],
+                            "fallback-bind@example.com",
+                        )
+                        self.assertTrue(response.json()["email_verified"])
+
+                db = api.get_db()
+                try:
+                    profile_code = api._create_email_code(
+                        db,
+                        email="fallback-profile-code@example.com",
+                        purpose="bind",
+                        user_id=user_id,
+                    )
+                    db.commit()
+                finally:
+                    db.close()
+                profile_response = client.patch(
+                    "/api/auth/profile",
+                    json={
+                        "email": "fallback-profile-code@example.com",
+                        "code": profile_code["code"],
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(profile_response.status_code, 200)
+                self.assertEqual(
+                    profile_response.json()["email"],
+                    "fallback-profile-code@example.com",
+                )
+                self.assertTrue(profile_response.json()["email_verified"])
+
+                for method, path, field_name in [
+                    ("post", "/api/me/avatar", "avatar"),
+                    ("patch", "/api/me/profile/avatar", "file"),
+                    ("put", "/api/auth/avatar", "image"),
+                    ("post", "/api/auth/profile/avatar", "avatar"),
+                ]:
+                    response = getattr(client, method)(
+                        path,
+                        headers=headers,
+                        files={
+                            field_name: (
+                                "avatar.png",
+                                b"\x89PNG\r\n\x1a\nfallback-avatar",
+                                "image/png",
+                            )
+                        },
+                    )
+                    self.assertEqual(
+                        response.status_code,
+                        200,
+                        f"{method.upper()} {path}: {response.text}",
+                    )
+                    self.assertIn("/api/uploads/avatars/", response.json()["avatar"])
+        finally:
+            api.AVATAR_UPLOAD_DIR = old_avatar_dir
+
+    def test_admin_coin_fallback_routes_match_client_contracts(self):
+        admin_id = self._make_admin("coin-contract-admin", ["coins"])
+        user_id = self._register("coin-contract-user")
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        route_methods = [
+            ("post", "/api/admin/users/{user_id}/coins"),
+            ("patch", "/api/admin/users/{user_id}/coins"),
+            ("put", "/api/admin/users/{user_id}/coins"),
+            ("post", "/api/admin/users/{user_id}/coin"),
+            ("patch", "/api/admin/users/{user_id}/coin"),
+            ("put", "/api/admin/users/{user_id}/coin"),
+            ("post", "/api/admin/users/{user_id}/time-coins"),
+            ("patch", "/api/admin/users/{user_id}/time-coins"),
+            ("put", "/api/admin/users/{user_id}/time-coins"),
+            ("post", "/api/admin/users/{user_id}/time-coin-balance"),
+            ("patch", "/api/admin/users/{user_id}/time-coin-balance"),
+            ("put", "/api/admin/users/{user_id}/time-coin-balance"),
+            ("post", "/api/admin/users/{user_id}/time_coins"),
+            ("patch", "/api/admin/users/{user_id}/time_coins"),
+            ("put", "/api/admin/users/{user_id}/time_coins"),
+            ("post", "/api/admin/users/{user_id}/time_coin_balance"),
+            ("patch", "/api/admin/users/{user_id}/time_coin_balance"),
+            ("put", "/api/admin/users/{user_id}/time_coin_balance"),
+            ("post", "/api/admin/users/{user_id}/credits"),
+            ("patch", "/api/admin/users/{user_id}/credits"),
+            ("put", "/api/admin/users/{user_id}/credits"),
+            ("post", "/api/admin/users/{user_id}/credit-balance"),
+            ("patch", "/api/admin/users/{user_id}/credit-balance"),
+            ("put", "/api/admin/users/{user_id}/credit-balance"),
+            ("post", "/api/admin/users/{user_id}/coins/adjust"),
+            ("patch", "/api/admin/users/{user_id}/coins/adjust"),
+            ("put", "/api/admin/users/{user_id}/coins/adjust"),
+            ("post", "/api/admin/users/{user_id}/coin-adjustment"),
+            ("patch", "/api/admin/users/{user_id}/coin-adjustment"),
+            ("put", "/api/admin/users/{user_id}/coin-adjustment"),
+            ("post", "/api/admin/users/{user_id}/quota"),
+            ("patch", "/api/admin/users/{user_id}/quota"),
+            ("put", "/api/admin/users/{user_id}/quota"),
+            ("post", "/api/admin/users/{user_id}/quota/adjust"),
+            ("patch", "/api/admin/users/{user_id}/quota/adjust"),
+            ("put", "/api/admin/users/{user_id}/quota/adjust"),
+        ]
+
+        with TestClient(api.app) as client:
+            for index, (method, route_template) in enumerate(route_methods, start=1):
+                path = route_template.format(user_id=user_id)
+                response = getattr(client, method)(
+                    path,
+                    json={"delta": 1, "reason": f"route contract {index}"},
+                    headers=headers,
+                )
+                self.assertEqual(
+                    response.status_code,
+                    200,
+                    f"{method.upper()} {path}: {response.text}",
+                )
+                self.assertEqual(response.json()["balance"], index)
+                self.assertEqual(response.json()["ledger_entry"]["coins"], 1)
+
+    def test_user_reported_empty_endpoint_contracts_do_not_404(self):
+        registered = self._register_with_email(
+            "empty-endpoint-user",
+            "empty-endpoint-user@example.com",
+        )
+        user_id = registered["user_id"]
+        user_headers = {"Authorization": f"Bearer {registered['token']}"}
+        admin_id = self._make_admin(
+            "empty-endpoint-admin",
+            ["ai", "coins", "feedback", "groups", "settings"],
+        )
+        admin_headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+        old_avatar_dir = api.AVATAR_UPLOAD_DIR
+        api.AVATAR_UPLOAD_DIR = os.path.join(self._tmp.name, "empty-avatars")
+
+        try:
+            with TestClient(api.app) as client:
+                profile_routes = [
+                    "/api/me/profile",
+                    "/api/profile",
+                    "/api/auth/profile",
+                    "/api/user/profile",
+                    "/api/account/profile",
+                ]
+                for method in ("post", "patch", "put"):
+                    for route in profile_routes:
+                        response = getattr(client, method)(
+                            route,
+                            json={
+                                "display_name": f"{method}:{route}",
+                                "bio": "404 contract profile save",
+                            },
+                            headers=user_headers,
+                        )
+                        self.assertNotEqual(
+                            response.status_code,
+                            404,
+                            f"{method.upper()} {route}: {response.text}",
+                        )
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.json()["user_id"], user_id)
+
+                email_code_routes = [
+                    "/api/auth/email-code",
+                    "/api/auth/email-code/send",
+                    "/api/auth/email_code",
+                    "/api/auth/email_code/send",
+                    "/api/auth/email/send",
+                    "/api/auth/email/send-code",
+                    "/api/auth/send-email-code",
+                    "/api/auth/send-email_code",
+                    "/api/me/email-code",
+                    "/api/me/email-code/send",
+                    "/api/me/email_code",
+                    "/api/me/email_code/send",
+                    "/api/me/email/send",
+                    "/api/me/email/send-code",
+                    "/api/email-code",
+                    "/api/email-code/send",
+                    "/api/email_code",
+                    "/api/email_code/send",
+                    "/api/email/send",
+                    "/api/email/send-code",
+                    "/api/send-email-code",
+                    "/api/send-email_code",
+                    "/api/user/email-code",
+                    "/api/user/email-code/send",
+                    "/api/user/email_code",
+                    "/api/user/email_code/send",
+                    "/api/user/email/send",
+                    "/api/user/email/send-code",
+                    "/api/account/email-code",
+                    "/api/account/email-code/send",
+                    "/api/account/email_code",
+                    "/api/account/email_code/send",
+                    "/api/account/email/send",
+                    "/api/account/email/send-code",
+                ]
+                for index, route in enumerate(email_code_routes):
+                    response = client.post(
+                        route,
+                        json={
+                            "email": f"empty-code-{index}@example.com",
+                            "purpose": "bind",
+                        },
+                        headers=user_headers,
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"POST {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("dev_code", response.json())
+
+                bind_routes = [
+                    "/api/me/email",
+                    "/api/me/email/bind",
+                    "/api/me/bind-email",
+                    "/api/email",
+                    "/api/email/bind",
+                    "/api/bind-email",
+                    "/api/auth/email",
+                    "/api/auth/email/bind",
+                    "/api/auth/bind-email",
+                    "/api/user/email",
+                    "/api/user/email/bind",
+                    "/api/user/bind-email",
+                    "/api/account/email",
+                    "/api/account/email/bind",
+                ]
+                for index, route in enumerate(bind_routes):
+                    email = f"empty-bind-{index}@example.com"
+                    db = api.get_db()
+                    try:
+                        bind_code = api._create_email_code(
+                            db,
+                            email=email,
+                            purpose="bind",
+                            user_id=user_id,
+                        )
+                        db.commit()
+                    finally:
+                        db.close()
+                    response = client.patch(
+                        route,
+                        json={"email": email, "email_code": bind_code["code"]},
+                        headers=user_headers,
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"PATCH {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["email"], email)
+
+                login_routes = [
+                    "/api/auth/email-login",
+                    "/api/auth/email/login",
+                    "/api/auth/login/email",
+                    "/api/auth/email-code-login",
+                    "/api/auth/login/email-code",
+                    "/api/auth/email_code_login",
+                    "/api/auth/login/email_code",
+                    "/api/user/email-login",
+                    "/api/user/login/email-code",
+                    "/api/user/email_code_login",
+                    "/api/user/login/email_code",
+                    "/api/account/email-login",
+                    "/api/account/email_code_login",
+                    "/api/email-login",
+                    "/api/email/login",
+                    "/api/login/email",
+                    "/api/email-code-login",
+                    "/api/login/email-code",
+                    "/api/email_code_login",
+                    "/api/login/email_code",
+                ]
+                login_email = f"empty-bind-{len(bind_routes) - 1}@example.com"
+                latest_login_token = registered["token"]
+                for route in login_routes:
+                    db = api.get_db()
+                    try:
+                        login_code = api._create_email_code(
+                            db,
+                            email=login_email,
+                            purpose="login",
+                            user_id=user_id,
+                        )
+                        db.commit()
+                    finally:
+                        db.close()
+                    response = client.post(
+                        route,
+                        json={
+                            "email": login_email,
+                            "email_code": login_code["code"],
+                        },
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"POST {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["user_id"], user_id)
+                    latest_login_token = response.json()["token"]
+
+                user_headers = {"Authorization": f"Bearer {latest_login_token}"}
+
+                avatar_routes = [
+                    ("post", "/api/me/avatar", "avatar"),
+                    ("patch", "/api/me/profile/avatar", "file"),
+                    ("put", "/api/avatar", "image"),
+                    ("post", "/api/profile/avatar", "avatar"),
+                    ("put", "/api/auth/avatar", "image"),
+                    ("post", "/api/auth/profile/avatar", "avatar"),
+                    ("patch", "/api/user/avatar", "file"),
+                    ("put", "/api/user/profile/avatar", "image"),
+                    ("post", "/api/account/avatar", "avatar"),
+                    ("patch", "/api/account/profile/avatar", "file"),
+                ]
+                for method, route, field_name in avatar_routes:
+                    response = getattr(client, method)(
+                        route,
+                        headers=user_headers,
+                        files={
+                            field_name: (
+                                "avatar.png",
+                                b"\x89PNG\r\n\x1a\nempty-endpoint-avatar",
+                                "image/png",
+                            )
+                        },
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"{method.upper()} {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("/api/uploads/avatars/", response.json()["avatar"])
+
+                coin_routes = [
+                    "/api/admin/users/{user_id}/coins",
+                    "/api/admin/users/{user_id}/coin",
+                    "/api/admin/users/{user_id}/coin-balance",
+                    "/api/admin/users/{user_id}/coin_balance",
+                    "/api/admin/users/{user_id}/time-coins",
+                    "/api/admin/users/{user_id}/time_coins",
+                    "/api/admin/users/{user_id}/time-coin-balance",
+                    "/api/admin/users/{user_id}/time_coin_balance",
+                    "/api/admin/users/{user_id}/credits",
+                    "/api/admin/users/{user_id}/credit-balance",
+                    "/api/admin/users/{user_id}/credit_balance",
+                    "/api/admin/users/{user_id}/coins/adjust",
+                    "/api/admin/users/{user_id}/time-coins/adjust",
+                    "/api/admin/users/{user_id}/time_coins/adjust",
+                    "/api/admin/users/{user_id}/time-coin-balance/adjust",
+                    "/api/admin/users/{user_id}/time_coin_balance/adjust",
+                    "/api/admin/users/{user_id}/coin-adjustment",
+                    "/api/admin/users/{user_id}/coin_adjustment",
+                    "/api/admin/users/{user_id}/quota",
+                    "/api/admin/users/{user_id}/quota/adjust",
+                ]
+                for index, route_template in enumerate(coin_routes, start=1):
+                    route = route_template.format(user_id=user_id)
+                    method = ("post", "patch", "put")[index % 3]
+                    response = getattr(client, method)(
+                        route,
+                        json={"delta": 1, "reason": "404 contract coin route"},
+                        headers=admin_headers,
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"{method.upper()} {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["ledger_entry"]["coins"], 1)
+
+                settings_response = client.post(
+                    "/api/admin/system-settings",
+                    json={
+                        "force_app_update_enabled": True,
+                        "latest_version": "8.8.8",
+                        "update_notes": "404 contract update settings",
+                    },
+                    headers=admin_headers,
+                )
+                self.assertNotEqual(settings_response.status_code, 404)
+                self.assertEqual(settings_response.status_code, 200)
+                self.assertTrue(
+                    settings_response.json()["runtime_status"][
+                        "force_app_update_enabled"
+                    ]
+                )
+                settings_patch = client.patch(
+                    "/api/admin/settings",
+                    json={
+                        "force_update_required": True,
+                        "latest_version": "8.8.9",
+                        "minimum_supported_version": "8.8.8",
+                        "update_notes": "404 contract force update settings",
+                        "update_download_url": "",
+                    },
+                    headers=admin_headers,
+                )
+                self.assertNotEqual(
+                    settings_patch.status_code,
+                    404,
+                    f"PATCH /api/admin/settings: {settings_patch.text}",
+                )
+                self.assertEqual(settings_patch.status_code, 200)
+                self.assertTrue(
+                    settings_patch.json()["changed"]["force_update_required"]
+                )
+
+                mobile_update = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version": "8.8.7",
+                        "current_version_code": 80807,
+                    },
+                )
+                self.assertNotEqual(
+                    mobile_update.status_code,
+                    404,
+                    f"GET /api/mobile/apps/duoyi/update: {mobile_update.text}",
+                )
+                self.assertEqual(mobile_update.status_code, 200)
+                mobile_payload = mobile_update.json()
+                self.assertTrue(mobile_payload["force_update"])
+                self.assertTrue(mobile_payload["force_update_required"])
+                self.assertEqual(
+                    mobile_payload["minimum_supported_version"], "8.8.8"
+                )
+                self.assertGreater(
+                    mobile_payload["minimum_supported_version_code"], 0
+                )
+
+                group_create = client.post(
+                    "/api/admin/groups",
+                    json={
+                        "name": "404 contract group",
+                        "description": "group route no-404 check",
+                        "default_time_coins": 77,
+                        "image_mode": "vip",
+                        "is_active": True,
+                    },
+                    headers=admin_headers,
+                )
+                self.assertNotEqual(
+                    group_create.status_code,
+                    404,
+                    f"POST /api/admin/groups: {group_create.text}",
+                )
+                self.assertEqual(group_create.status_code, 200)
+                group_id = group_create.json()["id"]
+                for route in [
+                    "/api/admin/groups",
+                    "/api/admin/user-groups",
+                    "/api/admin/user_groups",
+                ]:
+                    response = client.get(route, headers=admin_headers)
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"GET {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+
+                for method, route in [
+                    ("patch", f"/api/admin/groups/{group_id}"),
+                    ("put", f"/api/admin/user-groups/{group_id}"),
+                    ("patch", f"/api/admin/user_groups/{group_id}"),
+                ]:
+                    response = getattr(client, method)(
+                        route,
+                        json={
+                            "name": "404 contract group",
+                            "description": "group route no-404 check",
+                            "default_time_coins": 78,
+                            "image_mode": "general",
+                            "is_active": True,
+                        },
+                        headers=admin_headers,
+                    )
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"{method.upper()} {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+
+                for index in range(3):
+                    created_feedback = client.post(
+                        "/api/feedback",
+                        json={
+                            "category": "bug",
+                            "content": f"404 contract feedback page {index}",
+                        },
+                        headers=user_headers,
+                    )
+                    self.assertNotEqual(
+                        created_feedback.status_code,
+                        404,
+                        f"POST /api/feedback: {created_feedback.text}",
+                    )
+                    self.assertEqual(created_feedback.status_code, 200)
+                my_feedback_page = client.get(
+                    "/api/feedback/me?page=1&page_size=2",
+                    headers=user_headers,
+                )
+                admin_feedback_page = client.get(
+                    "/api/admin/feedback?page=1&page_size=2",
+                    headers=admin_headers,
+                )
+                for route, response in [
+                    ("/api/feedback/me?page=1&page_size=2", my_feedback_page),
+                    ("/api/admin/feedback?page=1&page_size=2", admin_feedback_page),
+                ]:
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"GET {route}: {response.text}",
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("items", response.json())
+                    self.assertGreaterEqual(response.json()["total"], 3)
+
+                ai_test = client.post(
+                    "/api/admin/ai/test",
+                    json={"ai_enabled": False},
+                    headers=admin_headers,
+                )
+                ai_healthcheck = client.post(
+                    "/api/admin/provider-healthcheck",
+                    json={"ai_enabled": False},
+                    headers=admin_headers,
+                )
+                ai_schedule_chat = client.post(
+                    "/api/ai/chat",
+                    json={
+                        "system": "schedule draft test",
+                        "user": "tomorrow 9am standup",
+                        "temperature": 0,
+                        "max_tokens": 16,
+                    },
+                    headers=user_headers,
+                )
+                for route, response in [
+                    ("/api/admin/ai/test", ai_test),
+                    ("/api/admin/provider-healthcheck", ai_healthcheck),
+                    ("/api/ai/chat", ai_schedule_chat),
+                ]:
+                    self.assertNotEqual(
+                        response.status_code,
+                        404,
+                        f"POST {route}: {response.text}",
+                    )
+                self.assertEqual(ai_test.status_code, 200)
+                self.assertEqual(ai_healthcheck.status_code, 200)
+                self.assertEqual(ai_schedule_chat.status_code, 503)
+        finally:
+            api.AVATAR_UPLOAD_DIR = old_avatar_dir
+
     def test_re0_mail_settings_aliases_and_hermes_runtime_status(self):
         admin_id = self._register("settings-admin")
         db = api.get_db()
@@ -439,33 +2107,51 @@ class WorkspaceApiTest(unittest.TestCase):
             updated["changed"],
             {
                 "force_update_required": True,
+                "force_app_update_enabled": True,
                 "latest_version": "2.4.0",
+                "latest_version_name": "2.4.0",
                 "minimum_supported_version": "2.1.0",
                 "update_notes": "必须升级以继续同步",
+                "release_notes": "必须升级以继续同步",
                 "update_download_url": "https://example.test/duoyi-2.4.0.apk",
+                "download_url": "https://example.test/duoyi-2.4.0.apk",
             },
         )
         settings = api.admin_get_settings(admin_id)
         self.assertTrue(settings["force_update_required"])
+        self.assertTrue(settings["force_app_update_enabled"])
         self.assertEqual(settings["latest_version"], "2.4.0")
+        self.assertEqual(settings["latest_version_name"], "2.4.0")
         self.assertEqual(settings["minimum_supported_version"], "2.1.0")
         self.assertEqual(settings["update_notes"], "必须升级以继续同步")
+        self.assertEqual(settings["release_notes"], "必须升级以继续同步")
         self.assertEqual(
             settings["update_download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+        self.assertEqual(
+            settings["download_url"],
             "https://example.test/duoyi-2.4.0.apk",
         )
 
         config = api.public_config()
         self.assertEqual(config["latest_version"], "2.4.0")
+        self.assertEqual(config["latest_version_name"], "2.4.0")
         self.assertEqual(config["app_update"]["latest_version"], "2.4.0")
         self.assertTrue(config["app_update"]["force_update_required"])
+        self.assertTrue(config["app_update"]["force_app_update_enabled"])
         self.assertEqual(
             config["app_update"]["minimum_supported_version"],
             "2.1.0",
         )
         self.assertEqual(config["app_update"]["update_notes"], "必须升级以继续同步")
+        self.assertEqual(config["app_update"]["release_notes"], "必须升级以继续同步")
         self.assertEqual(
             config["app_update"]["update_download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+        self.assertEqual(
+            config["app_update"]["download_url"],
             "https://example.test/duoyi-2.4.0.apk",
         )
 
@@ -475,6 +2161,59 @@ class WorkspaceApiTest(unittest.TestCase):
         )
         self.assertEqual(disabled["changed"]["force_update_required"], False)
         self.assertFalse(api.public_config()["app_update"]["force_update_required"])
+
+        retained_url = api.admin_update_settings(
+            api.SettingsUpdate(
+                force_update_required=True,
+                latest_version="2.5.0",
+                minimum_supported_version="2.1.0",
+                update_notes="继续使用已有安装包地址",
+            ),
+            actor=admin_id,
+        )
+        self.assertNotIn("update_download_url", retained_url["changed"])
+        retained_settings = api.admin_get_settings(admin_id)
+        self.assertEqual(
+            retained_settings["update_download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+        self.assertEqual(
+            retained_settings["download_url"],
+            "https://example.test/duoyi-2.4.0.apk",
+        )
+
+    def test_admin_settings_post_alias_updates_force_update_contract(self):
+        admin_id = self._make_admin("force-update-post-alias", ["settings"])
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            response = client.post(
+                "/api/admin/settings",
+                json={
+                    "force_update_required": True,
+                    "latest_version": "2.6.0",
+                    "minimum_supported_version": "2.5.0",
+                    "update_notes": "POST 别名写入更新策略",
+                    "update_download_url": "https://example.test/duoyi-2.6.0.apk",
+                },
+                headers=headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        changed = response.json()["changed"]
+        self.assertTrue(changed["force_update_required"])
+        self.assertEqual(changed["latest_version"], "2.6.0")
+        self.assertEqual(changed["minimum_supported_version"], "2.5.0")
+        self.assertEqual(changed["update_notes"], "POST 别名写入更新策略")
+        self.assertEqual(
+            changed["update_download_url"],
+            "https://example.test/duoyi-2.6.0.apk",
+        )
+        self.assertTrue(api.public_config()["app_update"]["force_update_required"])
+        self.assertEqual(
+            api.public_config()["app_update"]["latest_version"],
+            "2.6.0",
+        )
 
     def test_force_update_settings_require_settings_permission(self):
         admin_id = self._make_admin("force-update-denied", ["users"])
@@ -490,8 +2229,27 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertEqual(denied.exception.status_code, 403)
 
-    def test_update_policy_requires_notes(self):
+    def test_update_policy_fills_default_notes_and_mobile_update(self):
         admin_id = self._make_admin("force-update-notes", ["settings"])
+
+        def reset_policy_settings():
+            db = api.get_db()
+            try:
+                for key in (
+                    "latest_version",
+                    "latest_version_name",
+                    "minimum_supported_version",
+                    "update_notes",
+                    "release_notes",
+                    "update_download_url",
+                    "download_url",
+                ):
+                    api._setting_set(db, key, "")
+                api._setting_set(db, "force_update_required", False)
+                api._setting_set(db, "force_app_update_enabled", False)
+                db.commit()
+            finally:
+                db.close()
 
         for payload in (
             api.SettingsUpdate(latest_version="9.9.9"),
@@ -499,10 +2257,171 @@ class WorkspaceApiTest(unittest.TestCase):
             api.SettingsUpdate(force_update_required=True),
             api.SettingsUpdate(minimum_supported_version="9.9.9"),
         ):
-            with self.assertRaises(HTTPException) as denied:
-                api.admin_update_settings(payload, actor=admin_id)
-            self.assertEqual(denied.exception.status_code, 400)
-            self.assertIn("更新内容", denied.exception.detail)
+            reset_policy_settings()
+            result = api.admin_update_settings(payload, actor=admin_id)
+            self.assertEqual(result["changed"]["update_notes"], api.APP_UPDATE_DEFAULT_NOTES)
+            self.assertEqual(result["changed"]["release_notes"], api.APP_UPDATE_DEFAULT_NOTES)
+            config = api.public_config()["app_update"]
+            self.assertEqual(config["update_notes"], api.APP_UPDATE_DEFAULT_NOTES)
+            self.assertEqual(config["release_notes"], api.APP_UPDATE_DEFAULT_NOTES)
+
+        reset_policy_settings()
+        old_repository = api.APP_UPDATE_REPOSITORY
+        api.APP_UPDATE_REPOSITORY = ""
+        try:
+            with TestClient(api.app) as client:
+                system_settings = client.post(
+                    "/api/admin/system-settings",
+                    json={"force_app_update_enabled": True},
+                    headers={"Authorization": f"Bearer {api.TOKENS[admin_id]}"},
+                )
+                self.assertEqual(system_settings.status_code, 200)
+                runtime = system_settings.json()["runtime_status"]
+                self.assertTrue(runtime["force_app_update_enabled"])
+                self.assertEqual(runtime["latest_version_name"], api.APP_CURRENT_VERSION)
+                self.assertEqual(
+                    runtime["release_notes"], api.APP_UPDATE_DEFAULT_NOTES
+                )
+
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version_code": api._version_to_code(
+                            api.APP_CURRENT_VERSION
+                        )
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertFalse(mobile["available"])
+            self.assertFalse(mobile["force_update"])
+            self.assertEqual(mobile["force_update_blocked_reason"], "")
+            self.assertEqual(mobile["latest_version_name"], api.APP_CURRENT_VERSION)
+            self.assertEqual(
+                mobile["minimum_supported_version"], api.APP_CURRENT_VERSION
+            )
+            self.assertGreater(mobile["minimum_supported_version_code"], 0)
+            self.assertTrue("force_update_required" in mobile)
+            self.assertGreater(mobile["latest_version_code"], 0)
+            self.assertEqual(mobile["release_notes"], api.APP_UPDATE_DEFAULT_NOTES)
+            self.assertEqual(
+                mobile["api_contract_version"], api.API_CONTRACT_VERSION
+            )
+            self.assertEqual(
+                mobile["required_routes_hash"], api.API_CONTRACT_ROUTES_HASH
+            )
+            self.assertIn(
+                "GET /api/mobile/apps/duoyi/update", mobile["required_routes"]
+            )
+        finally:
+            api.APP_UPDATE_REPOSITORY = old_repository
+
+        reset_policy_settings()
+        old_repository = api.APP_UPDATE_REPOSITORY
+        api.APP_UPDATE_REPOSITORY = ""
+        try:
+            api.admin_update_settings(
+                api.SettingsUpdate(
+                    latest_version=api.APP_CURRENT_VERSION,
+                    minimum_supported_version="9.9.9",
+                    force_update_required=True,
+                ),
+                actor=admin_id,
+            )
+            with TestClient(api.app) as client:
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version": api.APP_CURRENT_VERSION,
+                        "current_version_code": api._version_to_code(
+                            api.APP_CURRENT_VERSION
+                        ),
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["force_update"])
+            self.assertTrue(mobile["force_update_required"])
+            self.assertEqual(mobile["minimum_supported_version"], "9.9.9")
+            self.assertEqual(mobile["latest_version_name"], "9.9.9")
+            self.assertEqual(
+                mobile["force_update_blocked_reason"],
+                "missing_download_url",
+            )
+        finally:
+            api.APP_UPDATE_REPOSITORY = old_repository
+
+        reset_policy_settings()
+        old_repository = api.APP_UPDATE_REPOSITORY
+        api.APP_UPDATE_REPOSITORY = ""
+        try:
+            api.admin_update_settings(
+                api.SettingsUpdate(
+                    latest_version="9.9.9",
+                    update_download_url="",
+                    force_update_required=True,
+                    update_notes="必须升级但还没有安装包",
+                ),
+                actor=admin_id,
+            )
+            with TestClient(api.app) as client:
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version_code": api._version_to_code(
+                            api.APP_CURRENT_VERSION
+                        )
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["available"])
+            self.assertTrue(mobile["force_update"])
+            self.assertEqual(
+                mobile["force_update_blocked_reason"],
+                "missing_download_url",
+            )
+            self.assertEqual(mobile["latest_version_name"], "9.9.9")
+            self.assertEqual(mobile["download_url"], "")
+        finally:
+            api.APP_UPDATE_REPOSITORY = old_repository
+
+        reset_policy_settings()
+        old_repository = api.APP_UPDATE_REPOSITORY
+        old_mobile_apk_dir = api.MOBILE_APK_DIR
+        api.APP_UPDATE_REPOSITORY = ""
+        api.MOBILE_APK_DIR = os.path.join(self._tmp.name, "missing_mobile_apps")
+        try:
+            api.admin_update_settings(
+                api.SettingsUpdate(
+                    latest_version="9.9.9",
+                    update_download_url="/api/mobile/apps/duoyi/download",
+                    force_update_required=True,
+                    update_notes="配置了本地下载但安装包不存在",
+                ),
+                actor=admin_id,
+            )
+            with TestClient(api.app) as client:
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version_code": api._version_to_code(
+                            api.APP_CURRENT_VERSION
+                        )
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["available"])
+            self.assertTrue(mobile["force_update"])
+            self.assertEqual(
+                mobile["force_update_blocked_reason"],
+                "missing_download_url",
+            )
+            self.assertEqual(mobile["download_url"], "")
+        finally:
+            api.APP_UPDATE_REPOSITORY = old_repository
+            api.MOBILE_APK_DIR = old_mobile_apk_dir
 
         result = api.admin_update_settings(
             api.SettingsUpdate(
@@ -513,6 +2432,60 @@ class WorkspaceApiTest(unittest.TestCase):
         )
         self.assertEqual(result["changed"]["latest_version"], "9.9.9")
         self.assertEqual(result["changed"]["update_notes"], "修复关键问题并优化更新提示")
+
+    def test_force_update_current_preset_uses_release_channel_version(self):
+        admin_id = self._make_admin("force-update-channel", ["settings"])
+        old_repository = api.APP_UPDATE_REPOSITORY
+        old_mobile_apk_dir = api.MOBILE_APK_DIR
+        api.APP_UPDATE_REPOSITORY = ""
+        api.MOBILE_APK_DIR = os.path.join(self._tmp.name, "mobile_apps")
+        next_version = api._next_patch_version(api.APP_CURRENT_VERSION)
+        app_dir = os.path.join(api.MOBILE_APK_DIR, "duoyi")
+        os.makedirs(app_dir, exist_ok=True)
+        with open(os.path.join(app_dir, "duoyi.apk"), "wb") as handle:
+            handle.write(b"fake apk")
+        with open(os.path.join(app_dir, "manifest.json"), "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "apk_name": "duoyi.apk",
+                    "version_name": next_version,
+                    "version_code": api._version_to_code(next_version),
+                    "release_notes": "发布通道修复通知和小组件问题",
+                },
+                handle,
+            )
+        try:
+            with TestClient(api.app) as client:
+                system_settings = client.post(
+                    "/api/admin/system-settings",
+                    json={"force_app_update_enabled": True},
+                    headers={"Authorization": f"Bearer {api.TOKENS[admin_id]}"},
+                )
+                self.assertEqual(system_settings.status_code, 200)
+                runtime = system_settings.json()["runtime_status"]
+                self.assertEqual(runtime["latest_version_name"], api.APP_CURRENT_VERSION)
+                self.assertTrue(runtime["force_app_update_enabled"])
+
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version_code": api._version_to_code(
+                            api.APP_CURRENT_VERSION
+                        )
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["available"])
+            self.assertTrue(mobile["force_update"])
+            self.assertEqual(mobile["latest_version_name"], next_version)
+            self.assertEqual(
+                mobile["release_notes"], "发布通道修复通知和小组件问题"
+            )
+            self.assertIn("/api/mobile/apps/duoyi/download", mobile["download_url"])
+        finally:
+            api.APP_UPDATE_REPOSITORY = old_repository
+            api.MOBILE_APK_DIR = old_mobile_apk_dir
 
     def test_email_code_login_uses_verified_bound_email(self):
         db = api.get_db()
@@ -704,6 +2677,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertIn("/api/uploads/avatars/", payload["avatar"])
+                self.assertTrue(payload["avatar"].startswith("/api/uploads/avatars/"))
                 self.assertEqual(payload["coin_balance"], 0)
                 self.assertEqual(payload["lifetime_coins"], 0)
                 avatar_path = api._avatar_file_path_from_url(payload["avatar"])
@@ -714,6 +2688,14 @@ class WorkspaceApiTest(unittest.TestCase):
                 fetched = client.get(f"/api/uploads/avatars/{filename}")
                 self.assertEqual(fetched.status_code, 200)
                 self.assertEqual(fetched.content, b"\x89PNG\r\n\x1a\navatar-bytes")
+
+                profile_avatar = client.patch(
+                    "/api/me/profile",
+                    headers={"Authorization": f"Bearer {registered['token']}"},
+                    json={"avatar": "https://example.com/should-not-save.png"},
+                )
+                self.assertEqual(profile_avatar.status_code, 200)
+                self.assertEqual(profile_avatar.json()["avatar"], payload["avatar"])
 
                 invalid = client.post(
                     "/api/auth/avatar",
@@ -728,6 +2710,20 @@ class WorkspaceApiTest(unittest.TestCase):
                 )
                 self.assertEqual(invalid.status_code, 400)
                 self.assertIn("内容与格式不匹配", invalid.json()["detail"])
+
+                alias_response = client.post(
+                    "/api/me/profile/avatar",
+                    headers={"Authorization": f"Bearer {registered['token']}"},
+                    files={
+                        "file": (
+                            "avatar.png",
+                            b"\x89PNG\r\n\x1a\navatar-file-alias",
+                            "image/png",
+                        )
+                    },
+                )
+                self.assertEqual(alias_response.status_code, 200)
+                self.assertIn("/api/uploads/avatars/", alias_response.json()["avatar"])
         finally:
             api.AVATAR_UPLOAD_DIR = old_avatar_dir
 
@@ -751,13 +2747,33 @@ class WorkspaceApiTest(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["ok"])
             self.assertTrue(response.json()["dev_code"])
-        confirmed = api.confirm_password_reset(
-            api.PasswordResetConfirm(
-                token=result["dev_code"],
-                password="newpass456",
+            latest_dev_code = response.json()["dev_code"]
+            for path in (
+                "/api/auth/reset-password",
+                "/api/auth/reset-password/request",
+                "/api/auth/forgot-password",
+                "/api/auth/forgot-password/request",
+                "/api/password-reset",
+                "/api/password-reset/request",
+            ):
+                alias_response = client.post(
+                    path,
+                    json={"account": "reset-dev-user"},
+                )
+                self.assertEqual(alias_response.status_code, 200, path)
+                self.assertTrue(alias_response.json()["ok"], path)
+                self.assertTrue(alias_response.json()["dev_code"], path)
+                latest_dev_code = alias_response.json()["dev_code"]
+            confirm_alias = client.post(
+                "/api/auth/reset-password/confirm",
+                json={
+                    "account": "reset-dev-user",
+                    "code": latest_dev_code,
+                    "new_password": "newpass456",
+                },
             )
-        )
-        self.assertTrue(confirmed["ok"])
+            self.assertEqual(confirm_alias.status_code, 200)
+            self.assertTrue(confirm_alias.json()["ok"])
         self.assertNotIn(registered["user_id"], api.TOKENS)
         logged_in = api.login(
             api.LoginRequest(username="reset-dev-user", password="newpass456")
@@ -1991,6 +4007,77 @@ class WorkspaceApiTest(unittest.TestCase):
             first["collection_hashes"]["habits"],
         )
 
+    def test_sync_preserves_countdown_collection_and_migrates_legacy_normal(self):
+        user_id = self._register("sync-countdowns-preserve")
+
+        synced = api.sync(
+            api.SyncRequest(
+                countdowns=[
+                    {
+                        "id": "countdown-keep",
+                        "title": "倒数日保留",
+                        "targetDate": "2026-06-01T00:00:00Z",
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+                anniversaries=[
+                    {
+                        "id": "legacy-countdown",
+                        "title": "旧普通倒数日",
+                        "originDate": "2026-05-22T00:00:00Z",
+                        "type": 0,
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    },
+                    {
+                        "id": "birthday-keep",
+                        "title": "生日保留",
+                        "originDate": "2026-05-21T00:00:00Z",
+                        "type": 1,
+                        "updatedAt": "2026-05-20T00:00:00Z",
+                    }
+                ],
+            ),
+            user_id=user_id,
+        )
+
+        countdown_ids = {item["id"] for item in synced["countdowns"]}
+        self.assertEqual(countdown_ids, {"countdown-keep", "legacy-countdown"})
+        self.assertEqual(synced["anniversaries"][0]["id"], "birthday-keep")
+        self.assertIn("countdowns", synced["collection_hashes"])
+
+        db = api.get_db()
+        try:
+            row = db.execute(
+                "SELECT countdowns, anniversaries FROM sync_data WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+        finally:
+            db.close()
+        self.assertEqual(
+            {item["id"] for item in json.loads(row["countdowns"])},
+            {"countdown-keep", "legacy-countdown"},
+        )
+        self.assertEqual(
+            {item["id"] for item in json.loads(row["anniversaries"])},
+            {"birthday-keep"},
+        )
+
+        deleted = api.sync_item_delta(
+            api.SyncItemDeltaRequest(
+                deleted_items={
+                    "countdowns": {
+                        "countdown-keep": "2026-05-21T00:00:00Z",
+                    }
+                },
+                collection_hashes=synced["collection_hashes"],
+            ),
+            user_id=user_id,
+        )
+        self.assertEqual(
+            [item["id"] for item in deleted["countdowns"]],
+            ["legacy-countdown"],
+        )
+
     def test_sync_item_delta_upload_updates_only_changed_items(self):
         user_id = self._register("sync-item-delta-upload")
 
@@ -2507,8 +4594,13 @@ class WorkspaceApiTest(unittest.TestCase):
         db = api.get_db()
         try:
             db.execute(
-                "UPDATE users SET is_admin=1, last_login_at=?, last_active_at=? WHERE id=?",
-                (api._format_utc(stale_at), api._format_utc(stale_at), admin_id),
+                "UPDATE users SET is_admin=1, admin_permissions=?, last_login_at=?, last_active_at=? WHERE id=?",
+                (
+                    json.dumps(["users"]),
+                    api._format_utc(stale_at),
+                    api._format_utc(stale_at),
+                    admin_id,
+                ),
             )
             db.execute(
                 "UPDATE users SET last_login_at=?, last_active_at=? WHERE id=?",
@@ -2772,6 +4864,123 @@ class WorkspaceApiTest(unittest.TestCase):
             adjusted["ledger_entry"]["id"],
         )
 
+    def test_admin_coin_adjustment_route_accepts_compatible_payloads(self):
+        admin_id = self._register("coin-route-admin")
+        user_id = self._register("coin-route-user")
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(["coins"]), admin_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        with TestClient(api.app) as client:
+            response = client.post(
+                f"/api/admin/users/{user_id}/quota",
+                json={"amount": 25, "reason": "路径补发"},
+                headers={"Authorization": f"Bearer {api.TOKENS[admin_id]}"},
+            )
+            balance_response = client.post(
+                f"/api/admin/users/{user_id}/quota",
+                json={"quota": 40, "reason": "设为目标余额"},
+                headers={"Authorization": f"Bearer {api.TOKENS[admin_id]}"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["balance"], 25)
+        self.assertEqual(response.json()["ledger_entry"]["coins"], 25)
+        self.assertEqual(balance_response.status_code, 200)
+        self.assertEqual(balance_response.json()["balance"], 40)
+        self.assertEqual(balance_response.json()["ledger_entry"]["coins"], 15)
+        synced = api.sync(api.SyncRequest(), user_id=user_id)
+        self.assertEqual(synced["virtual_rewards"]["balance"], 40)
+
+    def test_admin_coin_adjustment_compat_routes_and_fields_do_not_404(self):
+        admin_id = self._register("coin-compat-admin")
+        user_id = self._register("coin-compat-user")
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, admin_permissions=? WHERE id=?",
+                (json.dumps(["coins"]), admin_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+        with TestClient(api.app) as client:
+            delta_response = client.patch(
+                f"/api/admin/users/{user_id}/time-coins",
+                json={"coin_delta": 12, "reason": "兼容增发"},
+                headers=headers,
+            )
+            balance_response = client.put(
+                f"/api/admin/users/{user_id}/coins/adjust",
+                json={"target_balance": 20, "reason": "兼容设定余额"},
+                headers=headers,
+            )
+            quota_response = client.post(
+                f"/api/admin/users/{user_id}/coin-adjustment",
+                json={"time_coins": 5, "reason": "兼容目标时光币"},
+                headers=headers,
+            )
+            re0_user_update_response = client.put(
+                f"/api/admin/users/{user_id}",
+                json={"coin_balance": 18, "reason": "RE0 用户编辑兼容"},
+                headers=headers,
+            )
+            time_coin_balance_response = client.patch(
+                f"/api/admin/users/{user_id}/time-coin-balance",
+                json={"time_coin_balance": 24, "reason": "RE0 时光币余额兼容"},
+                headers=headers,
+            )
+            time_coin_camel_response = client.put(
+                f"/api/admin/users/{user_id}/time_coin_balance",
+                json={"timeCoinBalance": 30, "reason": "RE0 驼峰时光币余额兼容"},
+                headers=headers,
+            )
+            credits_response = client.post(
+                f"/api/admin/users/{user_id}/credits",
+                json={"credits": 33, "reason": "RE0 credits 兼容"},
+                headers=headers,
+            )
+            credit_balance_response = client.put(
+                f"/api/admin/users/{user_id}/credit-balance",
+                json={"credit_balance": 36, "reason": "RE0 credit balance 兼容"},
+                headers=headers,
+            )
+
+        self.assertEqual(delta_response.status_code, 200)
+        self.assertEqual(delta_response.json()["balance"], 12)
+        self.assertEqual(delta_response.json()["ledger_entry"]["coins"], 12)
+        self.assertEqual(balance_response.status_code, 200)
+        self.assertEqual(balance_response.json()["balance"], 20)
+        self.assertEqual(balance_response.json()["ledger_entry"]["coins"], 8)
+        self.assertEqual(quota_response.status_code, 200)
+        self.assertEqual(quota_response.json()["balance"], 5)
+        self.assertEqual(quota_response.json()["ledger_entry"]["coins"], -15)
+        self.assertEqual(re0_user_update_response.status_code, 200)
+        self.assertEqual(re0_user_update_response.json()["balance"], 18)
+        self.assertEqual(
+            re0_user_update_response.json()["ledger_entry"]["coins"], 13
+        )
+        self.assertEqual(time_coin_balance_response.status_code, 200)
+        self.assertEqual(time_coin_balance_response.json()["balance"], 24)
+        self.assertEqual(time_coin_balance_response.json()["ledger_entry"]["coins"], 6)
+        self.assertEqual(time_coin_camel_response.status_code, 200)
+        self.assertEqual(time_coin_camel_response.json()["balance"], 30)
+        self.assertEqual(time_coin_camel_response.json()["ledger_entry"]["coins"], 6)
+        self.assertEqual(credits_response.status_code, 200)
+        self.assertEqual(credits_response.json()["balance"], 33)
+        self.assertEqual(credits_response.json()["ledger_entry"]["coins"], 3)
+        self.assertEqual(credit_balance_response.status_code, 200)
+        self.assertEqual(credit_balance_response.json()["balance"], 36)
+        self.assertEqual(credit_balance_response.json()["ledger_entry"]["coins"], 3)
+
     def test_admin_without_coin_permission_cannot_mutate_sync_rewards(self):
         admin_id = self._register("no-coin-admin")
         user_id = self._register("no-coin-user")
@@ -2810,6 +5019,49 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(after["virtual_rewards"], before["virtual_rewards"])
         self.assertEqual(after["sync_version"], before["sync_version"])
         self.assertEqual(after["updated_at"], before["updated_at"])
+
+    def test_admin_welfare_grants_route_awards_time_coins(self):
+        admin_id = self._make_admin("welfare-admin", ["coins"])
+        user_id = self._register("welfare-user")
+        disabled_id = self._register("welfare-disabled")
+        db = api.get_db()
+        try:
+            db.execute("UPDATE users SET is_disabled=1 WHERE id=?", (disabled_id,))
+            db.commit()
+        finally:
+            db.close()
+
+        with TestClient(api.app) as client:
+            response = client.post(
+                "/api/admin/welfare-grants",
+                json={
+                    "title": "补丁福利",
+                    "body": "修复后补发",
+                    "generate_bonus": 3,
+                    "edit_bonus": 2,
+                    "notify": False,
+                },
+                headers={"Authorization": f"Bearer {api.TOKENS[admin_id]}"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["coins"], 5)
+        self.assertGreaterEqual(payload["users"], 2)
+        self.assertEqual(payload["generate_bonus"], 3)
+        self.assertEqual(payload["edit_bonus"], 2)
+
+        user_rewards = api.sync(api.SyncRequest(), user_id=user_id)[
+            "virtual_rewards"
+        ]
+        self.assertEqual(user_rewards["balance"], 5)
+        self.assertEqual(user_rewards["lifetime"], 5)
+        self.assertEqual(user_rewards["ledger"][0]["title"], "补丁福利")
+        self.assertEqual(user_rewards["ledger"][0]["generate_bonus"], 3)
+        disabled_rewards = api.sync(api.SyncRequest(), user_id=disabled_id)[
+            "virtual_rewards"
+        ]
+        self.assertEqual(disabled_rewards.get("balance", 0), 0)
 
     def test_admin_granular_permissions_gate_feature_families(self):
         denied_admin = self._make_admin("granular-denied", ["users"])
@@ -3405,7 +5657,117 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(fallback["recipient"], "ops@example.com")
         self.assertEqual(sent[1]["to_addr"], "ops@example.com")
 
-    def test_feedback_create_validates_content_and_category(self):
+    def test_admin_test_buttons_http_routes_do_not_404(self):
+        admin_id = self._make_admin(
+            "admin-test-buttons@example.com",
+            ["ai", "settings"],
+        )
+        db = api.get_db()
+        try:
+            for key, value in {
+                "ai_enabled": False,
+                "ai_model": "test-model",
+                "reminder_email_enabled": True,
+                "reminder_email_smtp_host": "smtp.example.com",
+                "reminder_email_smtp_port": 465,
+                "reminder_email_smtp_username": "mailer@example.com",
+                "reminder_email_smtp_password": "secret",
+                "reminder_email_from": "noreply@example.com",
+                "email_service_enabled": True,
+                "email_code_primary_provider": "smtp",
+                "email_code_backup_provider": "none",
+                "email_code_active_slot": "primary",
+                "email_smtp_host": "smtp.example.com",
+                "email_smtp_port": 465,
+                "email_smtp_username": "mailer@example.com",
+                "email_smtp_password": "secret",
+                "email_smtp_from": "noreply@example.com",
+            }.items():
+                api._setting_set(db, key, value)
+            db.commit()
+        finally:
+            db.close()
+
+        sent = []
+        old_send = api._smtp_send
+        try:
+            api._smtp_send = lambda **kwargs: sent.append(kwargs)
+            with TestClient(api.app) as client:
+                headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+                ai_test = client.post("/api/admin/ai/test", headers=headers)
+                ai_test_form = client.post(
+                    "/api/admin/ai/test",
+                    headers=headers,
+                    json={
+                        "ai_enabled": False,
+                        "ai_api_key": "temporary-key",
+                        "ai_base_url": "https://temporary.example.com/v1",
+                        "ai_model": "temporary-model",
+                    },
+                )
+                provider_healthcheck = client.post(
+                    "/api/admin/provider-healthcheck",
+                    headers=headers,
+                    json={"apply_switch": False},
+                )
+                reminder_test = client.post(
+                    "/api/admin/reminders/email/test",
+                    headers=headers,
+                )
+                account_test = client.post(
+                    "/api/admin/account-email/test",
+                    headers=headers,
+                )
+        finally:
+            api._smtp_send = old_send
+
+        self.assertEqual(ai_test.status_code, 200)
+        self.assertFalse(ai_test.json()["ok"])
+        self.assertEqual(ai_test.json()["model"], "test-model")
+        self.assertFalse(ai_test.json()["enabled"])
+        self.assertTrue(ai_test.json()["skipped"])
+        self.assertNotIn("尚未配置 API Key", ai_test.text)
+        self.assertEqual(ai_test_form.status_code, 200)
+        self.assertFalse(ai_test_form.json()["ok"])
+        self.assertEqual(ai_test_form.json()["model"], "temporary-model")
+        self.assertFalse(ai_test_form.json()["enabled"])
+        self.assertTrue(ai_test_form.json()["skipped"])
+        self.assertNotIn("尚未配置 API Key", ai_test_form.text)
+        self.assertEqual(provider_healthcheck.status_code, 200)
+        self.assertFalse(provider_healthcheck.json()["ok"])
+        self.assertEqual(provider_healthcheck.json()["model"], "test-model")
+        self.assertFalse(provider_healthcheck.json()["enabled"])
+        self.assertTrue(provider_healthcheck.json()["skipped"])
+        self.assertNotIn("尚未配置 API Key", provider_healthcheck.text)
+        self.assertEqual(reminder_test.status_code, 200)
+        self.assertEqual(
+            reminder_test.json()["recipient"],
+            "admin-test-buttons@example.com",
+        )
+        self.assertEqual(account_test.status_code, 200)
+        self.assertEqual(
+            account_test.json()["recipient"],
+            "admin-test-buttons@example.com",
+        )
+        self.assertEqual([mail["subject"] for mail in sent], [
+            "多仪邮件提醒测试",
+            "多仪账号邮件测试",
+        ])
+
+    def test_ai_response_parser_supports_chat_and_output_text_shapes(self):
+        self.assertEqual(
+            api._ai_chat_content_from_response(
+                {"choices": [{"message": {"content": "ok"}}]}
+            ),
+            "ok",
+        )
+        self.assertEqual(
+            api._ai_chat_content_from_response({"output_text": "ok"}),
+            "ok",
+        )
+        self.assertEqual(api._ai_chat_content_from_response({}), "")
+
+    def test_feedback_create_validates_content_and_normalizes_category(self):
         user_id = self._register("feedback-user")
 
         with self.assertRaises(HTTPException) as empty:
@@ -3415,12 +5777,11 @@ class WorkspaceApiTest(unittest.TestCase):
             )
         self.assertEqual(empty.exception.status_code, 400)
 
-        with self.assertRaises(HTTPException) as bad_category:
-            api.create_feedback(
-                api.FeedbackCreate(category="invalid", content="按钮没有反应"),
-                user_id=user_id,
-            )
-        self.assertEqual(bad_category.exception.status_code, 400)
+        fallback_category = api.create_feedback(
+            api.FeedbackCreate(category="invalid", content="按钮没有反应"),
+            user_id=user_id,
+        )
+        self.assertEqual(fallback_category["status"], "open")
 
         created = api.create_feedback(
             api.FeedbackCreate(category="bug", content="  通知没有声音  "),
@@ -3431,6 +5792,151 @@ class WorkspaceApiTest(unittest.TestCase):
         items = api.my_feedback(user_id=user_id)
         self.assertEqual(items[0]["category"], "bug")
         self.assertEqual(items[0]["content"], "通知没有声音")
+        self.assertEqual(items[1]["category"], "other")
+
+    def test_re0_feedback_password_overview_and_backup_alias_routes_do_not_404(self):
+        user_id = self._register("re0-alias-user")
+        admin_id = self._make_admin("re0-alias-admin", ["feedback", "backup"])
+        user_headers = {"Authorization": f"Bearer {api.TOKENS[user_id]}"}
+        admin_headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            created = client.post(
+                "/api/me/feedback",
+                json={
+                    "type": "bug",
+                    "category": "bug",
+                    "title": "反馈标题",
+                    "content": "RE0 风格反馈入口不应 404",
+                },
+                headers=user_headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            fb_id = created.json()["id"]
+
+            my_list = client.get(
+                "/api/me/feedback?page=1&page_size=10&keyword=RE0&type=feedback",
+                headers=user_headers,
+            )
+            my_detail = client.get(f"/api/me/feedback/{fb_id}", headers=user_headers)
+            my_detail_alias = client.get(
+                f"/api/feedback/me/{fb_id}",
+                headers=user_headers,
+            )
+            admin_list = client.get(
+                "/api/admin/feedback",
+                params={
+                    "page": 1,
+                    "page_size": 10,
+                    "keyword": "RE0",
+                    "type": "feedback",
+                    "start_at": "2000-01-01T00:00:00Z",
+                },
+                headers=admin_headers,
+            )
+            admin_detail = client.get(
+                f"/api/admin/feedback/{fb_id}",
+                headers=admin_headers,
+            )
+            summary = client.post(
+                f"/api/admin/feedback/{fb_id}/ai-summary",
+                headers=admin_headers,
+            )
+            automation = client.get(
+                "/api/admin/feedback/automation",
+                headers=admin_headers,
+            )
+            save_automation = client.post(
+                "/api/admin/feedback/automation",
+                json={
+                    "auto_enabled": True,
+                    "automation_limit": "10",
+                    "interval_minutes": 30,
+                    "auto_reply_enabled": True,
+                    "auto_export_enabled": True,
+                },
+                headers=admin_headers,
+            )
+            auto_run = client.post(
+                "/api/admin/feedback/auto-run",
+                headers=admin_headers,
+            )
+            auto_reply = client.post(
+                "/api/admin/feedback/auto-reply",
+                headers=admin_headers,
+            )
+            auto_reply_detail = client.get(
+                f"/api/admin/feedback/{fb_id}",
+                headers=admin_headers,
+            )
+            insights = client.get(
+                "/api/admin/feedback/insights?period=month",
+                headers=admin_headers,
+            )
+            insights_export = client.post(
+                "/api/admin/feedback/export?period=month",
+                headers=admin_headers,
+            )
+            status_update = client.post(
+                f"/api/admin/feedback/{fb_id}/status",
+                json={"status": "accepted", "note": "已进入处理"},
+                headers=admin_headers,
+            )
+            reply_update = client.post(
+                f"/api/admin/feedback/{fb_id}/reply",
+                json={"reply": "已修复", "status": "resolved"},
+                headers=admin_headers,
+            )
+            password = client.post(
+                "/api/me/password",
+                json={
+                    "current_password": "pass123456",
+                    "new_password": "newpass123456",
+                },
+                headers=user_headers,
+            )
+            overview = client.get("/api/admin/overview", headers=admin_headers)
+            local_backups = client.get(
+                "/api/admin/local-backups",
+                headers=admin_headers,
+            )
+            run_local_backup = client.post(
+                "/api/admin/local-backups/run",
+                headers=admin_headers,
+            )
+
+        self.assertEqual(my_list.status_code, 200)
+        self.assertEqual(my_list.json()["items"][0]["id"], fb_id)
+        self.assertEqual(my_detail.status_code, 200)
+        self.assertEqual(my_detail_alias.status_code, 200)
+        self.assertEqual(my_detail.json()["content"], "RE0 风格反馈入口不应 404")
+        self.assertEqual(admin_list.status_code, 200)
+        self.assertEqual(admin_list.json()["items"][0]["id"], fb_id)
+        self.assertEqual(admin_detail.status_code, 200)
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn("summary", summary.json())
+        self.assertEqual(automation.status_code, 200)
+        self.assertEqual(save_automation.status_code, 200)
+        self.assertTrue(save_automation.json()["auto_enabled"])
+        self.assertEqual(auto_run.status_code, 200)
+        self.assertGreaterEqual(auto_run.json()["processed"], 1)
+        self.assertEqual(auto_reply.status_code, 200)
+        self.assertGreaterEqual(auto_reply.json()["processed"], 1)
+        self.assertEqual(auto_reply_detail.status_code, 200)
+        self.assertIn("已收到你的", auto_reply_detail.json()["admin_reply"])
+        self.assertEqual(auto_reply_detail.json()["status"], "in_progress")
+        self.assertEqual(insights.status_code, 200)
+        self.assertEqual(insights.json()["period"], "month")
+        self.assertEqual(insights_export.status_code, 200)
+        self.assertTrue(insights_export.json()["ok"])
+        self.assertEqual(status_update.status_code, 200)
+        self.assertEqual(reply_update.status_code, 200)
+        self.assertEqual(password.status_code, 200)
+        self.assertEqual(overview.status_code, 200)
+        self.assertIn("users", overview.json())
+        self.assertEqual(local_backups.status_code, 200)
+        self.assertIn("items", local_backups.json())
+        self.assertEqual(run_local_backup.status_code, 200)
 
     def test_admin_feedback_reply_and_delete_validate_targets(self):
         admin_id = self._register("feedback-admin")
@@ -3458,6 +5964,19 @@ class WorkspaceApiTest(unittest.TestCase):
         )
         self.assertEqual(replied["status"], "ok")
         self.assertEqual(api.my_feedback(user_id=user_id)[0]["admin_reply"], "已加入排查")
+
+        status_only = api.reply_feedback(
+            api.FeedbackReply(
+                feedback_id=fb_id,
+                reply="",
+                status="resolved",
+            ),
+            actor=admin_id,
+        )
+        self.assertEqual(status_only["status"], "ok")
+        after_status_only = api.my_feedback(user_id=user_id)[0]
+        self.assertEqual(after_status_only["status"], "resolved")
+        self.assertEqual(after_status_only["admin_reply"], "已加入排查")
 
         with self.assertRaises(HTTPException) as bad_status:
             api.reply_feedback(
@@ -3490,6 +6009,20 @@ class WorkspaceApiTest(unittest.TestCase):
                 and item["admin_reply"] == "已收到，进入处理中。"
                 for item in feedback[:2]
             )
+        )
+        empty_bulk = api.bulk_update_feedback_status(
+            api.FeedbackBulkStatus(
+                feedback_ids=[fb_id, second["id"]],
+                reply="",
+                status="closed",
+            ),
+            actor=admin_id,
+        )
+        self.assertEqual(empty_bulk["updated"], 2)
+        feedback = api.my_feedback(user_id=user_id)
+        self.assertTrue(all(item["status"] == "closed" for item in feedback[:2]))
+        self.assertTrue(
+            all(item["admin_reply"] == "已收到，进入处理中。" for item in feedback[:2])
         )
 
         with self.assertRaises(HTTPException) as missing_bulk:

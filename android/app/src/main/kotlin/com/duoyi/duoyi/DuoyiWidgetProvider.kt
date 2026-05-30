@@ -27,6 +27,12 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        appWidgetIds.forEach { DuoyiWidgetDisplayMode.clearForWidget(prefs, it) }
+        super.onDeleted(context, appWidgetIds)
+    }
+
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
 
@@ -57,19 +63,19 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
             )
             views.setViewVisibility(
                 R.id.widget_quick_row,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_goal_summary,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_anniversary_summary,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_course_summary,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"

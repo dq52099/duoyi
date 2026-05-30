@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -10,7 +11,9 @@ import '../core/platform_info.dart';
 import 'local_notifications.dart';
 import 'native_reminder_ringtone.dart';
 import 'notification_permission_exception.dart';
+import 'notification_settings.dart';
 import 'reminder_sinks.dart';
+import 'reminder_ringtone_settings.dart';
 
 /// 精准闹钟权限缺失异常。
 ///
@@ -20,8 +23,8 @@ import 'reminder_sinks.dart';
 /// `PlatformException(code: 'exact_alarms_not_permitted')`。
 ///
 /// `AlarmService.scheduleFullScreen` 会捕获该异常并**尽力而为**降级到
-/// 非精准模式重试一次（让提醒仍能发出，只是可能偏移几分钟），然后再
-/// 抛出本异常；调用方捕获后可弹出"前往系统设置开启精准闹钟"的引导。
+/// 非精准模式重试一次（让提醒仍能发出，只是可能偏移几分钟），并记录
+/// [AlarmScheduleIssue]；非精准回退也失败时才抛出本异常。
 class AlarmPermissionDeniedException implements Exception {
   final String message;
   const AlarmPermissionDeniedException([this.message = '需要精准闹钟权限才能准时提醒']);
@@ -30,10 +33,34 @@ class AlarmPermissionDeniedException implements Exception {
   String toString() => 'AlarmPermissionDeniedException: $message';
 }
 
+class AlarmQueueHandoffException implements Exception {
+  final String message;
+  const AlarmQueueHandoffException(this.message);
+
+  @override
+  String toString() => 'AlarmQueueHandoffException: $message';
+}
+
+class AlarmScheduleIssue {
+  final String title;
+  final String message;
+  final DateTime happenedAt;
+  final DateTime? scheduledTime;
+  final int? id;
+
+  const AlarmScheduleIssue({
+    required this.title,
+    required this.message,
+    required this.happenedAt,
+    this.scheduledTime,
+    this.id,
+  });
+}
+
 /// 闹钟通道服务（与 [LocalNotifications] 平行）。
 ///
 /// 用于"到点必须处理"的强提醒场景：
-/// - Android：`duoyi_alarm_fullscreen_v8` 渠道，`Importance.max`，可按提醒配置启用
+/// - Android：`duoyi_alarm_fullscreen_v18` 渠道，`Importance.max`，可按提醒配置启用
 ///   `fullScreenIntent`，`category=alarm`，震动模式 `[0, 500, 500, 500]`。
 /// - iOS：`interruptionLevel=.timeSensitive`（避免使用 `.critical`，
 ///   后者需要 Apple 单独批准的 entitlement）。
@@ -41,7 +68,7 @@ class AlarmPermissionDeniedException implements Exception {
 ///
 /// 所有调度走 [FlutterLocalNotificationsPlugin.zonedSchedule]，时间统一使用
 /// `tz.TZDateTime.from(when, tz.local)` 以获得"壁钟时间"语义。
-class AlarmService implements ReminderAlarmSink {
+class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   static final AlarmService instance = AlarmService._();
   AlarmService._();
 
@@ -52,18 +79,263 @@ class AlarmService implements ReminderAlarmSink {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  Future<void>? _initFuture;
   String? _launchPayload;
+  AlarmScheduleIssue? _lastScheduleIssue;
   bool get isInitialized => _initialized;
+  AlarmScheduleIssue? get lastScheduleIssue => _lastScheduleIssue;
 
   /// Tap 回调（payload）——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
+
+  void clearScheduleIssue() {
+    _lastScheduleIssue = null;
+  }
+
+  void _recordScheduleIssue({
+    required String title,
+    required String message,
+    DateTime? scheduledTime,
+    int? id,
+  }) {
+    _lastScheduleIssue = AlarmScheduleIssue(
+      title: title,
+      message: message,
+      happenedAt: DateTime.now(),
+      scheduledTime: scheduledTime,
+      id: id,
+    );
+    debugPrint('[AlarmService] $title: $message');
+  }
+
+  Future<bool> _tryNativeRingtone({
+    required String issueTitle,
+    required String issueMessage,
+    required Future<void> Function() action,
+    DateTime? scheduledTime,
+    int? id,
+  }) async {
+    try {
+      await action();
+      return true;
+    } catch (e, st) {
+      if (id != null && _isAndroid) {
+        try {
+          await NativeReminderRingtone.cancelOrThrow(id);
+        } catch (cleanupError, cleanupStack) {
+          final message = '原生闹钟部分注册失败后的清理失败，已阻止注册系统通知兜底以避免重复弹出。';
+          debugPrint(
+            '[AlarmService] native partial schedule cleanup failed: '
+            '$cleanupError\n$cleanupStack',
+          );
+          _recordScheduleIssue(
+            title: '闹钟提醒交接失败',
+            message: message,
+            scheduledTime: scheduledTime,
+            id: id,
+          );
+          throw AlarmQueueHandoffException(message);
+        }
+      }
+      _recordScheduleIssue(
+        title: issueTitle,
+        message: '$issueMessage ($e)',
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      debugPrint('[AlarmService] native ringtone failed: $e\n$st');
+      return false;
+    }
+  }
+
+  Future<void> _cancelPartialScheduleAfterFailure(
+    int id, {
+    Iterable<int> pluginIds = const <int>[],
+  }) async {
+    if (!_initialized) return;
+    for (final pluginId in pluginIds) {
+      try {
+        await _plugin.cancel(pluginId);
+      } catch (e, st) {
+        debugPrint(
+          '[AlarmService] plugin partial schedule cleanup failed: $e\n$st',
+        );
+      }
+    }
+    try {
+      await _plugin.cancel(id);
+    } catch (e, st) {
+      debugPrint(
+        '[AlarmService] plugin partial schedule cleanup failed: $e\n$st',
+      );
+    }
+    if (!_isAndroid) return;
+    try {
+      await NativeReminderRingtone.cancelOrThrow(id);
+    } catch (e, st) {
+      debugPrint('[AlarmService] native ringtone cleanup failed: $e\n$st');
+      final message = '部分注册失败后的原生闹钟清理失败，已阻止继续注册另一条提醒以避免重复弹出。';
+      _recordScheduleIssue(title: '闹钟提醒交接失败', message: message, id: id);
+      throw AlarmQueueHandoffException(message);
+    }
+  }
+
+  Set<int> _pluginAlarmQueueIds(int id) {
+    return <int>{
+      id,
+      for (var weekday = 1; weekday <= 7; weekday++) _subId(id, weekday),
+      for (var weekday = 1; weekday <= 7; weekday++) _legacySubId(id, weekday),
+    };
+  }
+
+  Future<void> _cancelFlutterAlarmQueue(
+    int id, {
+    required String operation,
+  }) async {
+    final failures = <Object>[];
+    for (final pluginId in _pluginAlarmQueueIds(id)) {
+      try {
+        await _plugin.cancel(pluginId);
+      } catch (e, st) {
+        failures.add(e);
+        debugPrint(
+          '[AlarmService] $operation plugin owner cleanup failed: $e\n$st',
+        );
+      }
+    }
+    if (failures.isNotEmpty) {
+      final message = '旧 Flutter 闹钟队列清理失败，已阻止注册另一条提醒以避免重复弹出。';
+      _recordScheduleIssue(title: '闹钟提醒交接失败', message: message, id: id);
+      throw AlarmQueueHandoffException(message);
+    }
+  }
+
+  Future<void> _cancelNativeAlarmQueue(
+    int id, {
+    required String operation,
+  }) async {
+    if (!_isAndroid) return;
+    final failures = <Object>[];
+    for (final nativeId in _pluginAlarmQueueIds(id)) {
+      try {
+        await NativeReminderRingtone.cancelOrThrow(nativeId);
+      } catch (e, st) {
+        failures.add(e);
+        debugPrint(
+          '[AlarmService] $operation native owner cleanup failed: $e\n$st',
+        );
+      }
+    }
+    if (failures.isNotEmpty) {
+      final message = '旧原生闹钟队列清理失败，已阻止注册另一条提醒以避免重复弹出。';
+      _recordScheduleIssue(title: '闹钟提醒交接失败', message: message, id: id);
+      throw AlarmQueueHandoffException(message);
+    }
+  }
+
+  Future<bool> _exactAlarmPermissionMissing(bool requireExactAlarm) async {
+    if (!requireExactAlarm || !_isAndroid) return false;
+    return !await hasExactAlarmPermission();
+  }
+
+  Future<String?> _androidChannelIssueMessage() async {
+    if (!_isAndroid) return null;
+    try {
+      final statuses =
+          await NotificationSettings.notificationChannelStatuses(const [
+            channelId,
+            NativeReminderRingtone.statusChannelId,
+            NativeReminderRingtone.fallbackChannelId,
+          ]);
+      final alarmStatus = statuses?[channelId];
+      if (alarmStatus != null && alarmStatus.exists) {
+        if (alarmStatus.isBlocked) {
+          return '强提醒渠道已关闭，系统闹钟通知可能不会显示。请在系统通知设置里开启“多仪 · 柔和强提醒”。';
+        }
+        if (alarmStatus.isSilent) {
+          return '强提醒渠道声音已关闭，系统兜底通知可能静音。请在系统通知设置里恢复“多仪 · 柔和强提醒”的声音。';
+        }
+      }
+
+      final statusChannel = statuses?[NativeReminderRingtone.statusChannelId];
+      if (statusChannel != null &&
+          statusChannel.exists &&
+          statusChannel.isBlocked) {
+        return '内置铃声状态渠道已关闭，到点响铃时可能看不到停止按钮。请在系统通知设置里开启内置铃声状态渠道。';
+      }
+
+      final fallbackStatus =
+          statuses?[NativeReminderRingtone.fallbackChannelId];
+      if (fallbackStatus != null && fallbackStatus.exists) {
+        if (fallbackStatus.isBlocked) {
+          return '闹钟兜底通知渠道已关闭，内置铃声失败时可能没有备用提醒。请在系统通知设置里开启闹钟兜底通知。';
+        }
+        if (fallbackStatus.isSilent) {
+          return '闹钟兜底通知渠道声音已关闭，内置铃声失败时备用提醒可能静音。请在系统通知设置里恢复闹钟兜底通知声音。';
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[AlarmService] channel readiness probe failed: $e\n$st');
+    }
+    return null;
+  }
+
+  void _finishScheduleIssue({
+    required bool nativeRingtoneOk,
+    required bool exactAlarmMissing,
+    required bool exactFallbackUsed,
+    required bool fullScreenIntentMissing,
+    required String? channelIssueMessage,
+    DateTime? scheduledTime,
+    int? id,
+  }) {
+    final exactDegraded = exactAlarmMissing || exactFallbackUsed;
+    if (!nativeRingtoneOk && exactDegraded) {
+      _recordScheduleIssue(
+        title: '闹钟提醒已降级注册',
+        message: '内置铃声注册失败，且精准闹钟权限未开启；已继续使用非精准系统通知提醒。请检查后台限制并开启精准闹钟权限后重新保存提醒。',
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      return;
+    }
+    if (!nativeRingtoneOk) return;
+    if (exactDegraded) {
+      _recordScheduleIssue(
+        title: '精准闹钟权限未开启',
+        message: '闹钟已注册，但系统只能使用非精准唤醒，到点可能延后。请开启精准闹钟权限后重新保存提醒。',
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      return;
+    }
+    if (fullScreenIntentMissing) {
+      _recordScheduleIssue(
+        title: '强提醒弹屏权限未开启',
+        message: '闹钟和内置铃声已注册，但系统可能不会遮挡当前页面或锁屏弹出。请开启弹屏权限后重新保存提醒。',
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      return;
+    }
+    if (channelIssueMessage != null) {
+      _recordScheduleIssue(
+        title: '强提醒渠道需要检查',
+        message: channelIssueMessage,
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      return;
+    }
+    _lastScheduleIssue = null;
+  }
 
   /// Android 闹钟通道标识。
   ///
   /// Android 通知渠道一旦在用户手机上创建，声音/弹窗等级无法通过代码修改。
   /// 使用新的 channel id 强制创建强提醒渠道，避免旧包遗留的静音/低优先级渠道
   /// 继续吞掉习惯提醒。
-  static const String channelId = 'duoyi_alarm_fullscreen_v8';
+  static const String channelId = 'duoyi_alarm_fullscreen_v18';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_alarm',
     'duoyi_alarm_fullscreen_v3',
@@ -71,11 +343,25 @@ class AlarmService implements ReminderAlarmSink {
     'duoyi_alarm_fullscreen_v5',
     'duoyi_alarm_fullscreen_v6',
     'duoyi_alarm_fullscreen_v7',
+    'duoyi_alarm_fullscreen_v8',
+    'duoyi_alarm_fullscreen_v9',
+    'duoyi_alarm_fullscreen_v10',
+    'duoyi_alarm_fullscreen_v11',
+    'duoyi_alarm_fullscreen_v12',
+    'duoyi_alarm_fullscreen_v13',
+    'duoyi_alarm_fullscreen_v14',
+    'duoyi_alarm_fullscreen_v15',
+    'duoyi_alarm_fullscreen_v16',
+    'duoyi_alarm_fullscreen_v17',
   };
   static const String _channelName = '多仪 · 柔和强提醒';
   static const String _channelDesc = '到点用柔和内置铃声提醒，可在通知上手动停止';
-  static const RawResourceAndroidNotificationSound _alarmSound =
-      RawResourceAndroidNotificationSound('duoyi_classic');
+  String _androidSoundResourceName =
+      ReminderRingtoneSettings.androidRawResourceNameFor(
+        ReminderRingtoneSettings.defaultSound,
+      );
+  RawResourceAndroidNotificationSound get _alarmSound =>
+      RawResourceAndroidNotificationSound(_androidSoundResourceName);
 
   /// 震动模式：静 0 → 震 220 → 静 420 → 震 220（毫秒）。
   /// `Int64List` 无法 const 化，使用 late final 缓存。
@@ -119,6 +405,23 @@ class AlarmService implements ReminderAlarmSink {
   /// 初始化插件与通道；幂等。
   Future<void> init() async {
     if (_initialized) return;
+    final inFlight = _initFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final initFuture = _doInit();
+    _initFuture = initFuture;
+    try {
+      await initFuture;
+    } finally {
+      _initFuture = null;
+    }
+  }
+
+  Future<void> _doInit() async {
+    if (_initialized) return;
 
     if (!LocalTimezoneResolver.isInitialized) {
       await LocalTimezoneResolver.init();
@@ -143,7 +446,28 @@ class AlarmService implements ReminderAlarmSink {
       ),
       onDidReceiveNotificationResponse: (resp) {
         final payload = resp.payload;
-        if (payload != null && onTap != null) onTap!(payload);
+        final actionId = resp.actionId;
+        unawaited(NativeReminderRingtone.stopActive());
+        if (onTap == null) return;
+        if (actionId == 'todo_complete' && payload != null) {
+          final id = _idFromPayload(payload, 'todo');
+          if (id != null && id.isNotEmpty) {
+            onTap!(
+              'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}',
+            );
+            return;
+          }
+        }
+        if (actionId == 'habit_checkin' && payload != null) {
+          final id = _idFromPayload(payload, 'habit');
+          if (id != null && id.isNotEmpty) {
+            onTap!(
+              'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}',
+            );
+            return;
+          }
+        }
+        if (payload != null) onTap!(payload);
       },
     );
 
@@ -161,24 +485,15 @@ class AlarmService implements ReminderAlarmSink {
 
     if (_isAndroid) {
       try {
+        await _ensureAndroidFallbackChannelSound();
         final android = _plugin
             .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin
             >();
-        await android?.createNotificationChannel(
-          AndroidNotificationChannel(
-            channelId,
-            _channelName,
-            description: _channelDesc,
-            importance: Importance.max,
-            enableVibration: true,
-            vibrationPattern: _vibrationPattern,
-            playSound: true,
-            sound: _alarmSound,
-            audioAttributesUsage: AudioAttributesUsage.alarm,
-          ),
-        );
         for (final legacyId in legacyChannelIds) {
+          await android?.deleteNotificationChannel(legacyId);
+        }
+        for (final legacyId in NativeReminderRingtone.legacyChannelIds) {
           await android?.deleteNotificationChannel(legacyId);
         }
       } catch (e, st) {
@@ -204,9 +519,9 @@ class AlarmService implements ReminderAlarmSink {
   ///   需要 Android 12+ 的 `SCHEDULE_EXACT_ALARM` 权限。缺权限时底层插件会
   ///   抛出 `PlatformException(code: 'exact_alarms_not_permitted')`，本方法
   ///   会**尽力而为**降级到 [AndroidScheduleMode.inexactAllowWhileIdle] 重试
-  ///   一次（让提醒仍能发出，只是可能偏移几分钟），随后再抛出
-  ///   [AlarmPermissionDeniedException]，调用方可据此展示"前往系统设置
-  ///   开启精准闹钟"的引导 UI。
+  ///   一次（让提醒仍能发出，只是可能偏移几分钟），并记录可展示的
+  ///   [AlarmScheduleIssue]；非精准回退也失败时才抛出
+  ///   [AlarmPermissionDeniedException]。
   /// - `requireExactAlarm=false` 时直接使用非精准模式，不触发回退逻辑。
   /// - `when` 已过去时直接丢弃，保持幂等。
   @override
@@ -223,25 +538,81 @@ class AlarmService implements ReminderAlarmSink {
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
-    if (when.isBefore(DateTime.now())) return;
-    if (_isAndroid) {
-      await NativeReminderRingtone.scheduleOnce(
+    if (!when.isAfter(DateTime.now())) {
+      _recordScheduleIssue(
+        title: '闹钟提醒注册失败',
+        message: '提醒时间已过去，未注册到系统闹钟。请把提醒时间改到未来时间。',
+        scheduledTime: when,
         id: id,
-        title: title,
-        body: body,
-        when: when,
-        payload: payload,
-        fullScreen: fullScreen,
-        vibrate: vibrate,
-        snoozeMinutes: snoozeMinutes,
-        repeatCount: repeatCount,
+      );
+      throw const AlarmPermissionDeniedException(
+        '提醒时间已过去，未注册到系统闹钟。请把提醒时间改到未来时间。',
+      );
+    }
+    final exactAlarmMissing = await _exactAlarmPermissionMissing(
+      requireExactAlarm,
+    );
+    final fullScreenIntentMissing =
+        fullScreen && _isAndroid && !await hasFullScreenIntentPermission();
+    String? channelIssueMessage;
+    var nativeRingtoneOk = true;
+    if (_isAndroid) {
+      await _cancelFlutterAlarmQueue(
+        id,
+        operation: 'scheduleFullScreen native owner handoff',
+      );
+      await _ensureAndroidFallbackChannelSound();
+      channelIssueMessage = await _androidChannelIssueMessage();
+      nativeRingtoneOk = await _tryNativeRingtone(
+        issueTitle: '内置闹钟铃声注册失败',
+        issueMessage: '系统未接受内置铃声调度，已继续注册系统通知提醒。请检查后台限制或系统闹钟权限。',
+        id: id,
+        scheduledTime: when,
+        action: () => NativeReminderRingtone.scheduleOnce(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+          fullScreen: fullScreen,
+          vibrate: vibrate,
+          snoozeMinutes: snoozeMinutes,
+          repeatCount: repeatCount,
+        ),
       );
     }
     try {
       await _ensureNotificationPermission('scheduleFullScreen');
     } on NotificationPermissionDeniedException {
-      if (_isAndroid) return;
+      _recordScheduleIssue(
+        title: '闹钟提醒通知权限未开启',
+        message: nativeRingtoneOk
+            ? '系统通知权限未开启，系统通知可能不可见；已保留内置闹钟铃声，提醒仍会响铃。请开启通知权限以显示停止/稍后按钮。'
+            : '系统通知权限未开启，且内置闹钟铃声未注册成功，请开启通知权限后重试。',
+        scheduledTime: when,
+        id: id,
+      );
+      if (_isAndroid && nativeRingtoneOk) return;
       rethrow;
+    }
+    if (_isAndroid && nativeRingtoneOk) {
+      _finishScheduleIssue(
+        nativeRingtoneOk: nativeRingtoneOk,
+        exactAlarmMissing: exactAlarmMissing,
+        exactFallbackUsed: false,
+        fullScreenIntentMissing: fullScreenIntentMissing,
+        channelIssueMessage: channelIssueMessage,
+        scheduledTime: when,
+        id: id,
+      );
+      return;
+    }
+
+    if (_isAndroid) {
+      await _cancelNativeAlarmQueue(
+        id,
+        operation: 'scheduleFullScreen flutter fallback handoff',
+      );
     }
 
     final androidDetails = AndroidNotificationDetails(
@@ -262,7 +633,6 @@ class AlarmService implements ReminderAlarmSink {
       icon: '@mipmap/ic_launcher',
       ongoing: false,
       autoCancel: true,
-      onlyAlertOnce: true,
     );
     const iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
@@ -294,6 +664,11 @@ class AlarmService implements ReminderAlarmSink {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
+      await _verifyPluginPendingIds(
+        <int>{id},
+        operation: 'scheduleFullScreen',
+        scheduledTime: when,
+      );
       if (!_isAndroid) {
         await NativeReminderRingtone.scheduleOnce(
           id: id,
@@ -307,8 +682,20 @@ class AlarmService implements ReminderAlarmSink {
           repeatCount: repeatCount,
         );
       }
+      _finishScheduleIssue(
+        nativeRingtoneOk: nativeRingtoneOk,
+        exactAlarmMissing: exactAlarmMissing,
+        exactFallbackUsed: false,
+        fullScreenIntentMissing: fullScreenIntentMissing,
+        channelIssueMessage: channelIssueMessage,
+        scheduledTime: when,
+        id: id,
+      );
     } on PlatformException catch (e) {
-      if (!_isExactAlarmDenied(e)) rethrow;
+      if (!_isExactAlarmDenied(e)) {
+        await _cancelPartialScheduleAfterFailure(id);
+        rethrow;
+      }
       // 降级重试：精准闹钟权限缺失时，退化为非精准模式，让提醒至少还能响，
       // 只是可能偏移几分钟。降级成功时视为已调度，避免上层误以为队列为空。
       if (requireExactAlarm) {
@@ -324,6 +711,11 @@ class AlarmService implements ReminderAlarmSink {
                 UILocalNotificationDateInterpretation.absoluteTime,
             payload: payload,
           );
+          await _verifyPluginPendingIds(
+            <int>{id},
+            operation: 'scheduleFullScreenFallback',
+            scheduledTime: when,
+          );
           if (!_isAndroid) {
             await NativeReminderRingtone.scheduleOnce(
               id: id,
@@ -337,12 +729,45 @@ class AlarmService implements ReminderAlarmSink {
               repeatCount: repeatCount,
             );
           }
+          _finishScheduleIssue(
+            nativeRingtoneOk: nativeRingtoneOk,
+            exactAlarmMissing: exactAlarmMissing,
+            exactFallbackUsed: true,
+            fullScreenIntentMissing: fullScreenIntentMissing,
+            channelIssueMessage: channelIssueMessage,
+            scheduledTime: when,
+            id: id,
+          );
           return;
+        } on StateError {
+          await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
+          rethrow;
         } catch (_) {
-          // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
+          // 回退也失败时下方一并抛出业务异常让调用方处理。
         }
       }
+      await _cancelPartialScheduleAfterFailure(id);
+      _recordScheduleIssue(
+        title: '闹钟提醒注册失败',
+        message: '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。',
+        scheduledTime: when,
+        id: id,
+      );
       throw const AlarmPermissionDeniedException();
+    } on StateError catch (e, st) {
+      await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
+      debugPrint('[AlarmService] scheduleFullScreen not confirmed: $e\n$st');
+      rethrow;
+    } catch (e, st) {
+      await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
+      _recordScheduleIssue(
+        title: '闹钟提醒注册失败',
+        message: '系统闹钟注册失败：$e',
+        scheduledTime: when,
+        id: id,
+      );
+      debugPrint('[AlarmService] scheduleFullScreen failed: $e\n$st');
+      rethrow;
     }
   }
 
@@ -353,21 +778,50 @@ class AlarmService implements ReminderAlarmSink {
     String payload = 'duoyi://alarm-test',
   }) async {
     if (!_initialized) await init();
+    String? channelIssueMessage;
+    var nativeRingtoneOk = true;
     if (_isAndroid) {
-      await NativeReminderRingtone.showNow(
+      await _cancelFlutterAlarmQueue(
+        id,
+        operation: 'scheduleDailyFullScreen native owner handoff',
+      );
+      await _ensureAndroidFallbackChannelSound();
+      channelIssueMessage = await _androidChannelIssueMessage();
+      nativeRingtoneOk = await _tryNativeRingtone(
+        issueTitle: '强提醒铃声测试失败',
+        issueMessage: '内置铃声测试未能启动，已继续发送系统通知测试。请检查通知权限、渠道声音或系统后台限制。',
         id: id,
-        title: title,
-        body: body,
-        payload: payload,
-        fullScreen: false,
-        snoozeMinutes: 5,
+        action: () => NativeReminderRingtone.showNow(
+          id: id,
+          title: title,
+          body: body,
+          payload: payload,
+          fullScreen: false,
+          snoozeMinutes: 5,
+        ),
       );
     }
     try {
       await _ensureNotificationPermission('showFullScreenTest');
     } on NotificationPermissionDeniedException {
-      if (_isAndroid) return;
+      _recordScheduleIssue(
+        title: '强提醒测试通知权限未开启',
+        message: '内置铃声已启动测试，但系统通知权限关闭，通知栏可能看不到停止按钮。',
+        id: id,
+      );
+      if (_isAndroid && nativeRingtoneOk) return;
       rethrow;
+    }
+    if (_isAndroid && nativeRingtoneOk) {
+      _finishScheduleIssue(
+        nativeRingtoneOk: nativeRingtoneOk,
+        exactAlarmMissing: false,
+        exactFallbackUsed: false,
+        fullScreenIntentMissing: false,
+        channelIssueMessage: channelIssueMessage,
+        id: id,
+      );
+      return;
     }
     await _plugin.show(
       id,
@@ -384,6 +838,14 @@ class AlarmService implements ReminderAlarmSink {
         payload: payload,
       );
     }
+    _finishScheduleIssue(
+      nativeRingtoneOk: nativeRingtoneOk,
+      exactAlarmMissing: false,
+      exactFallbackUsed: false,
+      fullScreenIntentMissing: false,
+      channelIssueMessage: channelIssueMessage,
+      id: id,
+    );
   }
 
   @override
@@ -402,26 +864,69 @@ class AlarmService implements ReminderAlarmSink {
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
+    final exactAlarmMissing = await _exactAlarmPermissionMissing(
+      requireExactAlarm,
+    );
+    final fullScreenIntentMissing =
+        fullScreen && _isAndroid && !await hasFullScreenIntentPermission();
+    String? channelIssueMessage;
+    var nativeRingtoneOk = true;
     if (_isAndroid) {
-      await NativeReminderRingtone.scheduleDaily(
+      await _cancelFlutterAlarmQueue(
+        id,
+        operation: 'scheduleDailyFullScreen native owner handoff',
+      );
+      await _ensureAndroidFallbackChannelSound();
+      channelIssueMessage = await _androidChannelIssueMessage();
+      nativeRingtoneOk = await _tryNativeRingtone(
+        issueTitle: '内置重复闹钟铃声注册失败',
+        issueMessage: '系统未接受内置重复铃声调度，已继续注册系统通知提醒。请检查后台限制或系统闹钟权限。',
         id: id,
-        title: title,
-        body: body,
-        hour: hour,
-        minute: minute,
-        weekdays: weekdays,
-        payload: payload,
-        fullScreen: fullScreen,
-        vibrate: vibrate,
-        snoozeMinutes: snoozeMinutes,
-        repeatCount: repeatCount,
+        action: () => NativeReminderRingtone.scheduleDaily(
+          id: id,
+          title: title,
+          body: body,
+          hour: hour,
+          minute: minute,
+          weekdays: weekdays,
+          payload: payload,
+          fullScreen: fullScreen,
+          vibrate: vibrate,
+          snoozeMinutes: snoozeMinutes,
+          repeatCount: repeatCount,
+        ),
       );
     }
     try {
       await _ensureNotificationPermission('scheduleDailyFullScreen');
     } on NotificationPermissionDeniedException {
-      if (_isAndroid) return;
+      _recordScheduleIssue(
+        title: '闹钟提醒通知权限未开启',
+        message: nativeRingtoneOk
+            ? '系统通知权限未开启，系统通知可能不可见；已保留内置重复闹钟铃声，提醒仍会响铃。请开启通知权限以显示停止/稍后按钮。'
+            : '系统通知权限未开启，且内置重复闹钟铃声未注册成功，请开启通知权限后重试。',
+        id: id,
+      );
+      if (_isAndroid && nativeRingtoneOk) return;
       rethrow;
+    }
+    if (_isAndroid && nativeRingtoneOk) {
+      _finishScheduleIssue(
+        nativeRingtoneOk: nativeRingtoneOk,
+        exactAlarmMissing: exactAlarmMissing,
+        exactFallbackUsed: false,
+        fullScreenIntentMissing: fullScreenIntentMissing,
+        channelIssueMessage: channelIssueMessage,
+        id: id,
+      );
+      return;
+    }
+
+    if (_isAndroid) {
+      await _cancelNativeAlarmQueue(
+        id,
+        operation: 'scheduleDailyFullScreen flutter fallback handoff',
+      );
     }
 
     final details = _notificationDetails(
@@ -434,6 +939,8 @@ class AlarmService implements ReminderAlarmSink {
         : weekdays.where((w) => w >= 1 && w <= 7).toSet().toList();
 
     final targets = normalized.isEmpty ? <int?>[null] : normalized.cast<int?>();
+    var exactFallbackUsed = false;
+    final scheduledIds = <int>{};
     for (final weekday in targets) {
       final scheduleId = weekday == null ? id : _subId(id, weekday);
       final when = weekday == null
@@ -457,6 +964,7 @@ class AlarmService implements ReminderAlarmSink {
               UILocalNotificationDateInterpretation.absoluteTime,
           payload: payload,
         );
+        scheduledIds.add(scheduleId);
         if (!_isAndroid) {
           await NativeReminderRingtone.scheduleDaily(
             id: scheduleId,
@@ -473,7 +981,10 @@ class AlarmService implements ReminderAlarmSink {
           );
         }
       } on PlatformException catch (e) {
-        if (!_isExactAlarmDenied(e)) rethrow;
+        if (!_isExactAlarmDenied(e)) {
+          await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+          rethrow;
+        }
         if (requireExactAlarm) {
           try {
             await _plugin.zonedSchedule(
@@ -490,6 +1001,7 @@ class AlarmService implements ReminderAlarmSink {
                   UILocalNotificationDateInterpretation.absoluteTime,
               payload: payload,
             );
+            scheduledIds.add(scheduleId);
             if (!_isAndroid) {
               await NativeReminderRingtone.scheduleDaily(
                 id: scheduleId,
@@ -505,14 +1017,48 @@ class AlarmService implements ReminderAlarmSink {
                 repeatCount: repeatCount,
               );
             }
+            exactFallbackUsed = true;
             continue;
           } catch (_) {
-            // 回退也失败时静默吞掉，下方一并抛出业务异常让调用方处理。
+            // 回退也失败时下方一并抛出业务异常让调用方处理。
           }
         }
+        await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+        _recordScheduleIssue(
+          title: '重复闹钟注册失败',
+          message: '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。',
+          id: scheduleId,
+        );
         throw const AlarmPermissionDeniedException();
+      } catch (e, st) {
+        await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+        _recordScheduleIssue(
+          title: '重复闹钟注册失败',
+          message: '系统重复闹钟注册失败：$e',
+          id: scheduleId,
+        );
+        debugPrint('[AlarmService] scheduleDailyFullScreen failed: $e\n$st');
+        rethrow;
       }
     }
+    try {
+      await _verifyPluginPendingIds(
+        scheduledIds,
+        operation: 'scheduleDailyFullScreen',
+        id: id,
+      );
+    } on StateError {
+      await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+      rethrow;
+    }
+    _finishScheduleIssue(
+      nativeRingtoneOk: nativeRingtoneOk,
+      exactAlarmMissing: exactAlarmMissing,
+      exactFallbackUsed: exactFallbackUsed,
+      fullScreenIntentMissing: fullScreenIntentMissing,
+      channelIssueMessage: channelIssueMessage,
+      id: id,
+    );
   }
 
   /// 判断一个 [PlatformException] 是否由 Android 12+ 精准闹钟权限缺失引起。
@@ -525,26 +1071,94 @@ class AlarmService implements ReminderAlarmSink {
 
   @override
   Future<void> cancel(int id) async {
-    if (!_initialized) return;
-    await _plugin.cancel(id);
-    await NativeReminderRingtone.cancel(id);
-    for (int w = 1; w <= 7; w++) {
-      await _plugin.cancel(_subId(id, w));
-      await NativeReminderRingtone.cancel(_subId(id, w));
+    if (!_initialized) await init();
+    final failures = <Object>[];
+    for (final queueId in _pluginAlarmQueueIds(id)) {
+      try {
+        await _plugin.cancel(queueId);
+      } catch (e, st) {
+        failures.add(e);
+        debugPrint('[AlarmService] cancel plugin queue failed: $e\n$st');
+      }
+      try {
+        await NativeReminderRingtone.cancelOrThrow(queueId);
+      } catch (e, st) {
+        failures.add(e);
+        debugPrint('[AlarmService] cancel native queue failed: $e\n$st');
+      }
     }
+    if (failures.isEmpty) return;
+    const message = '旧闹钟队列清理失败，已尝试清理 Flutter 与原生队列；请重新保存提醒以避免重复弹出。';
+    _recordScheduleIssue(title: '闹钟提醒取消失败', message: message, id: id);
+    throw const AlarmQueueHandoffException(message);
   }
 
   Future<void> cancelAll() async {
-    if (!_initialized) return;
-    await _plugin.cancelAll();
-    await NativeReminderRingtone.cancelAll();
+    if (!_initialized) await init();
+    final failures = <Object>[];
+    try {
+      await _plugin.cancelAll();
+    } catch (e, st) {
+      failures.add(e);
+      debugPrint('[AlarmService] cancelAll plugin queue failed: $e\n$st');
+    }
+    try {
+      await NativeReminderRingtone.cancelAll();
+    } catch (e, st) {
+      failures.add(e);
+      debugPrint('[AlarmService] cancelAll native queue failed: $e\n$st');
+    }
+    if (failures.isEmpty) return;
+    const message = '闹钟队列批量清理失败，已尝试同时清理 Flutter 与原生队列。';
+    _recordScheduleIssue(title: '闹钟提醒取消失败', message: message);
+    throw const AlarmQueueHandoffException(message);
   }
 
   /// 查询当前 AlarmService 下发的 pending id 列表（便于测试与诊断）。
+  @override
   Future<List<int>> pendingIds() async {
     if (!_initialized) return const [];
     final pending = await _plugin.pendingNotificationRequests();
-    return pending.map((e) => e.id).toList(growable: false);
+    final ids = pending.map((e) => e.id).toSet();
+    final nativeIds = await NativeReminderRingtone.pendingIdsOrThrow();
+    ids.addAll(nativeIds);
+    return ids.toList(growable: false)..sort();
+  }
+
+  Future<void> _verifyPluginPendingIds(
+    Iterable<int> ids, {
+    required String operation,
+    DateTime? scheduledTime,
+    int? id,
+  }) async {
+    final expected = ids.toSet();
+    if (expected.isEmpty) return;
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      final actual = pending.map((request) => request.id).toSet();
+      final missing = expected.difference(actual);
+      if (missing.isEmpty) return;
+      final missingText = missing.join(',');
+      _recordScheduleIssue(
+        title: '闹钟提醒注册失败',
+        message: '系统闹钟注册后未出现在待触发队列，提醒未确认成功：$missingText',
+        scheduledTime: scheduledTime,
+        id: id ?? missing.first,
+      );
+      throw StateError('闹钟提醒未进入系统待触发队列：$missingText');
+    } catch (e, st) {
+      if (e is StateError) rethrow;
+      _recordScheduleIssue(
+        title: '闹钟提醒注册失败',
+        message: '系统闹钟注册后无法确认待触发队列：$e',
+        scheduledTime: scheduledTime,
+        id: id,
+      );
+      debugPrint(
+        '[AlarmService] $operation pending verification failed: $e\n$st',
+      );
+      throw StateError('闹钟提醒无法确认系统待触发队列：$e');
+    }
   }
 
   Future<Set<String>?> notificationChannelIds() async {
@@ -561,6 +1175,12 @@ class AlarmService implements ReminderAlarmSink {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<void> refreshAndroidRingtoneChannel() async {
+    if (!_isAndroid) return;
+    if (!_initialized) await init();
+    await _ensureAndroidFallbackChannelSound();
   }
 
   /// 请求 Android 12+ 精准闹钟权限。
@@ -670,7 +1290,6 @@ class AlarmService implements ReminderAlarmSink {
       icon: '@mipmap/ic_launcher',
       ongoing: false,
       autoCancel: true,
-      onlyAlertOnce: true,
     );
     const iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
@@ -687,13 +1306,81 @@ class AlarmService implements ReminderAlarmSink {
     );
   }
 
-  int _subId(int base, int weekday) => base * 10 + weekday;
+  Future<void> _refreshFallbackRingtoneSound() async {
+    if (!_isAndroid) return;
+    _androidSoundResourceName =
+        await ReminderRingtoneSettings.loadAndroidRawResourceName();
+  }
+
+  Future<void> _ensureAndroidFallbackChannelSound() async {
+    if (!_isAndroid) return;
+    await _refreshFallbackRingtoneSound();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final shouldRecreateChannel =
+        await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+          channelId,
+          _androidSoundResourceName,
+        );
+    final brokenChannel = await _androidChannelNeedsSoundRepair(channelId);
+    if (shouldRecreateChannel || brokenChannel) {
+      await android?.deleteNotificationChannel(channelId);
+    }
+    await android?.createNotificationChannel(
+      AndroidNotificationChannel(
+        channelId,
+        _channelName,
+        description: _channelDesc,
+        importance: Importance.max,
+        enableVibration: true,
+        vibrationPattern: _vibrationPattern,
+        playSound: true,
+        sound: _alarmSound,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    );
+    await ReminderRingtoneSettings.markAndroidFallbackChannelSoundApplied(
+      channelId,
+      _androidSoundResourceName,
+    );
+  }
+
+  Future<bool> _androidChannelNeedsSoundRepair(String channelId) async {
+    final statuses = await NotificationSettings.notificationChannelStatuses([
+      channelId,
+    ]);
+    final status = statuses?[channelId];
+    return status != null &&
+        (status.isSilent || status.isLowImportance || status.isBlocked);
+  }
+
+  int _subId(int base, int weekday) {
+    var h = 0x811c9dc5;
+    final key = '$base:$weekday';
+    for (final unit in key.codeUnits) {
+      h ^= unit;
+      h = (h * 0x01000193) & 0x7fffffff;
+    }
+    return h == 0 ? weekday : h;
+  }
+
+  int _legacySubId(int base, int weekday) => base * 10 + weekday;
 
   List<AndroidNotificationAction>? _actionsForPayload(String? payload) {
     if (payload == null) return null;
     if (payload.startsWith('duoyi://habit/')) return _habitActions;
     if (payload.startsWith('duoyi://todo/')) return _todoActions;
     return null;
+  }
+
+  String? _idFromPayload(String payload, String host) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null || uri.host != host || uri.pathSegments.isEmpty) {
+      return null;
+    }
+    return uri.pathSegments.first;
   }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {

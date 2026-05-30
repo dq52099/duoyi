@@ -24,6 +24,7 @@ void main() {
     final integrations = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
+    final model = File('lib/models/location_reminder.dart').readAsStringSync();
 
     expect(dartService, contains("'duoyi/location_geofence'"));
     expect(
@@ -73,6 +74,8 @@ void main() {
     expect(receiver, contains('POST_NOTIFICATIONS'));
 
     expect(integrations, contains('Android 已接入系统 geofence 调度'));
+    expect(model, contains('Android 通过原生 geofence 调度接入系统后台触发'));
+    expect(model, isNot(contains('本期先做模型 + 前台触发能力，后续接入')));
     expect(integrations, contains('授权后台位置'));
     expect(
       integrations,

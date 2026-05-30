@@ -1,6 +1,8 @@
 import 'package:duoyi/models/calendar_event.dart';
+import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/models/time_entry.dart';
 import 'package:duoyi/models/todo.dart';
+import 'package:duoyi/providers/countdown_provider.dart';
 import 'package:duoyi/providers/time_audit_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/widgets/calendar_event_sheet.dart';
@@ -169,5 +171,52 @@ void main() {
 
     expect(provider.todos.single.dueDate, DateTime(2026, 5, 18, 20));
     expect(provider.todos.single.date, DateTime(2026, 5, 18));
+  });
+
+  testWidgets('countdown event exposes actions and can delete source item', (
+    tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    final provider = CountdownProvider();
+    await provider.addItem(
+      CountdownItem(
+        id: 'countdown-1',
+        title: '版本发布',
+        targetDate: DateTime(2026, 6, 1),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<CountdownProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: CalendarEventSheet(
+              event: CalendarEvent(
+                id: 'countdown_countdown-1',
+                title: '版本发布',
+                date: DateTime(2026, 6, 1),
+                type: CalendarEventType.countdown,
+                color: Colors.deepOrange,
+                sourceId: 'countdown-1',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('改期'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('跳转详情'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(provider.items, isEmpty);
   });
 }

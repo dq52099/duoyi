@@ -10,6 +10,9 @@ void main() {
         'lib/providers/preferences_provider.dart',
       ).readAsStringSync();
       final screen = File(
+        'lib/screens/notification_history_screen.dart',
+      ).readAsStringSync();
+      final preferencesScreen = File(
         'lib/screens/preferences_screen.dart',
       ).readAsStringSync();
       final main = File('lib/main.dart').readAsStringSync();
@@ -64,8 +67,36 @@ void main() {
       expect(screen, contains('config.copyWith(weekday: day)'));
       expect(screen, contains('config.copyWith(month: month)'));
       expect(screen, contains('config.copyWith(monthDay: day)'));
+      expect(
+        preferencesScreen,
+        isNot(contains('class _ReportReminderSection')),
+      );
+      expect(preferencesScreen, isNot(contains('报告推送')));
 
       expect(main, contains('Future<void> _syncReportDigestReminders'));
+      expect(main, contains('Future<bool> _cancelDailyDigestReminderIds'));
+      expect(main, contains('await _cancelDailyDigestReminderIds('));
+      expect(
+        main,
+        contains('final cancelled = await _cancelDailyDigestReminderIds('),
+      );
+      expect(main, contains('skip scheduling to avoid duplicate delivery'));
+      expect(main, contains('baseId: baseId'));
+      expect(main, contains('slotCount: 3'));
+      expect(
+        main,
+        contains(
+          'for (var derived = 0; derived < _dailyDigestHolidayWindowDays; derived++)',
+        ),
+      );
+      expect(
+        main,
+        contains(
+          'await _cancelDailyDigestChannelId(notification, id * 100 + derived)',
+        ),
+      );
+      expect(main, contains('Future<bool> _cancelDailyDigestChannelId'));
+      expect(main, contains('Future<void> cancelSafely('));
       expect(main, contains('const dailyId = 880023'));
       expect(main, contains('const weeklyId = 880020'));
       expect(main, contains('const monthlyId = 880021'));
@@ -95,12 +126,31 @@ void main() {
       expect(main, isNot(contains('查看上一周的效率分、待办、习惯、专注和时间投入趋势')));
       expect(main, isNot(contains('查看上月成长轨迹、效率对比、专注投入和活跃热力图')));
       expect(main, contains("uri.host == 'report'"));
-      expect(main, contains('const StatisticsScreen()'));
-      expect(main, contains("await _startupGuard('report digest reminders'"));
       expect(
         main,
-        contains('preferencesProvider.addListener(syncReportDigestReminders)'),
+        contains('const BrandRouteSurface(child: StatisticsScreen())'),
       );
+      expect(main, contains('Future<void> runPostFrameStartupTasks()'));
+      expect(main, contains("_startupGuard('report digest reminders'"));
+      expect(
+        main,
+        contains(
+          "_startupGuard('daily digest reminder', syncDailyDigestReminder)",
+        ),
+      );
+      expect(
+        main,
+        contains(
+          'preferencesProvider.addListener(queueReportDigestReminderSync)',
+        ),
+      );
+      expect(
+        main,
+        contains(
+          'preferencesProvider.addListener(queueDailyDigestReminderSync)',
+        ),
+      );
+      expect(main, contains('void queueDailyDigestReminderSync()'));
       expect(
         main,
         contains('todoProvider.addListener(queueReportDigestReminderSync)'),

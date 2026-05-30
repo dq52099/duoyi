@@ -4,8 +4,8 @@
 /// - 用户绑定经纬度 + 半径 + 触发方向（进入/离开）；
 /// - `LocationReminderEngine` 在 App 在前台 / 收到位置更新时检查匹配，
 ///   命中后 publish DomainEvent + 发本地通知；
-/// - 真正的后台 geofence 监听需要平台插件（geolocator / flutter_background_geofence），
-///   本期先做模型 + 前台触发能力，后续接入。
+/// - Android 通过原生 geofence 调度接入系统后台触发；
+/// - 其它平台保留前台 / 手动位置输入触发能力。
 library;
 
 import 'package:uuid/uuid.dart';

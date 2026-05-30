@@ -25,17 +25,22 @@ class TodoProvider extends ChangeNotifier {
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
   ///
-  /// 设计上允许 `null`：TodoProvider 的持久化路径**不**强依赖调度器，
-  /// 只有在 [postponeOverdue] 这种显式 hook 里才会尝试转发给调度器，做一次
-  /// 额外的重同步。常规写路径依然由 `main.dart` 的 `addListener(resyncReminders)`
-  /// 覆盖。
+  /// 设计上允许 `null`：TodoProvider 的持久化路径**不**强依赖调度器。
+  /// 注入后，创建、编辑、完成、恢复、删除和顺延会主动重同步，确保系统
+  /// 队列及时注册或取消；`main.dart` 的监听重同步仍作为兜底。
   ReminderScheduler? _scheduler;
   TimeAuditProvider? _timeAudit;
+  String? _lastReminderSyncIssue;
+  DateTime? _lastReminderSyncAttemptAt;
+  DateTime? _lastReminderSyncSucceededAt;
 
   /// 注入或解绑调度器；传 `null` 即解绑。
   // ignore: use_setters_to_change_properties
   set scheduler(ReminderScheduler? s) {
     _scheduler = s;
+    if (s != null && _lastReminderSyncIssue == 'reminder_scheduler_missing') {
+      _lastReminderSyncIssue = null;
+    }
   }
 
   // ignore: use_setters_to_change_properties
@@ -44,6 +49,9 @@ class TodoProvider extends ChangeNotifier {
   }
 
   List<TodoItem> get todos => _todos;
+  String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+  DateTime? get lastReminderSyncAttemptAt => _lastReminderSyncAttemptAt;
+  DateTime? get lastReminderSyncSucceededAt => _lastReminderSyncSucceededAt;
 
   int _compareTodos(TodoItem a, TodoItem b) {
     if (a.sortOrder != b.sortOrder) {
@@ -164,6 +172,24 @@ class TodoProvider extends ChangeNotifier {
 
   // --- CRUD ---
 
+  Future<void> _syncTodoRemindersNow() async {
+    _lastReminderSyncAttemptAt = DateTime.now();
+    final scheduler = _scheduler;
+    if (scheduler == null) {
+      _lastReminderSyncIssue = 'reminder_scheduler_missing';
+      debugPrint('[TodoProvider] reminder sync skipped: scheduler missing');
+      return;
+    }
+    try {
+      await scheduler.syncTodos(List.of(_todos));
+      _lastReminderSyncIssue = null;
+      _lastReminderSyncSucceededAt = DateTime.now();
+    } catch (e, st) {
+      _lastReminderSyncIssue = e.toString();
+      debugPrint('[TodoProvider] reminder sync failed: $e\n$st');
+    }
+  }
+
   Future<void> addTodo(TodoItem todo) async {
     _todos.add(todo);
     DomainEventBus.instance.publish(
@@ -171,6 +197,7 @@ class TodoProvider extends ChangeNotifier {
     );
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
@@ -210,6 +237,7 @@ class TodoProvider extends ChangeNotifier {
     }
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
     return TodoImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
@@ -238,6 +266,7 @@ class TodoProvider extends ChangeNotifier {
       }
       await _saveToStorage();
       _notify();
+      await _syncTodoRemindersNow();
       if (next.isCompleted) {
         await _timeAudit?.recordTodoCompletion(
           next,
@@ -295,6 +324,7 @@ class TodoProvider extends ChangeNotifier {
         );
       }
     }
+    await _syncTodoRemindersNow();
     return changed;
   }
 
@@ -328,6 +358,7 @@ class TodoProvider extends ChangeNotifier {
         completedAt: todo.completedAt,
       );
     }
+    await _syncTodoRemindersNow();
     return changed;
   }
 
@@ -373,6 +404,7 @@ class TodoProvider extends ChangeNotifier {
         completedAt: prev.completedAt,
       );
     }
+    await _syncTodoRemindersNow();
   }
 
   Future<void> deleteTodo(String id) async {
@@ -384,6 +416,7 @@ class TodoProvider extends ChangeNotifier {
     _todos.removeWhere((t) => t.id == id);
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
   }
 
   Future<int> deleteTodos(Iterable<String> ids) async {
@@ -402,6 +435,7 @@ class TodoProvider extends ChangeNotifier {
     _todos.removeWhere((t) => selected.contains(t.id));
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
     return existing.length;
   }
 
@@ -505,6 +539,7 @@ class TodoProvider extends ChangeNotifier {
         completedAt: todo.completedAt,
       );
     }
+    await _syncTodoRemindersNow();
     return changed;
   }
 
@@ -522,6 +557,7 @@ class TodoProvider extends ChangeNotifier {
     _todos[idx] = todo.copyWith(date: today, isArchivedAfterRollover: false);
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
     return true;
   }
 
@@ -674,6 +710,7 @@ class TodoProvider extends ChangeNotifier {
     if (!mutated) return;
     await _saveToStorage();
     _notify();
+    await _syncTodoRemindersNow();
   }
 
   // --- Subtask operations ---
@@ -740,6 +777,7 @@ class TodoProvider extends ChangeNotifier {
         completedAt: removedCompletedAt,
       );
     }
+    await _syncTodoRemindersNow();
   }
 
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
@@ -877,16 +915,7 @@ class TodoProvider extends ChangeNotifier {
     _notify();
 
     // 顺延后重新同步提醒调度队列。
-    final scheduler = _scheduler;
-    if (scheduler != null) {
-      try {
-        await scheduler.syncTodos(List.of(_todos));
-      } catch (e, st) {
-        debugPrint(
-          '[TodoProvider] postponeOverdue scheduler sync failed: $e\n$st',
-        );
-      }
-    }
+    await _syncTodoRemindersNow();
   }
 
   String _dateKey(DateTime d) =>

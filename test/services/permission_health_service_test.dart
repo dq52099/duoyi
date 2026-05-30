@@ -3,7 +3,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:duoyi/core/platform_info.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/services/alarm_service.dart';
+import 'package:duoyi/services/local_notifications.dart';
+import 'package:duoyi/services/native_reminder_ringtone.dart';
+import 'package:duoyi/services/notification_settings.dart';
 import 'package:duoyi/services/permission_health_service.dart';
+
+Future<SystemNotificationAudioStatus?> _okAudioStatus() async =>
+    const SystemNotificationAudioStatus(
+      alarmVolume: 5,
+      alarmMaxVolume: 10,
+      notificationVolume: 5,
+      notificationMaxVolume: 10,
+      ringVolume: 5,
+      ringMaxVolume: 10,
+      dndSupported: true,
+      interruptionFilter: 1,
+      notificationPolicyAccessGranted: false,
+    );
 
 void main() {
   test('通知未授权时返回阻断状态', () async {
@@ -19,9 +35,13 @@ void main() {
         model: 'SM-S9180',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{
         NotificationService.channelId,
         AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
       },
     );
 
@@ -49,6 +69,7 @@ void main() {
         model: 'Pixel 8',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{NotificationService.channelId},
     );
 
@@ -79,9 +100,13 @@ void main() {
         model: '2210132C',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{
         NotificationService.channelId,
         AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
       },
     );
 
@@ -131,9 +156,13 @@ void main() {
         model: 'Pixel 8',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{
         NotificationService.channelId,
         AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
       },
     );
 
@@ -164,6 +193,7 @@ void main() {
         model: 'Pixel 8',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{
         NotificationService.channelId,
         AlarmService.channelId,
@@ -194,9 +224,13 @@ void main() {
         model: 'Pixel 8',
         sdkInt: 34,
       ),
+      systemAudioStatusReader: _okAudioStatus,
       channelIdsReader: () async => <String>{
         NotificationService.channelId,
         AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
         'duoyi_general_alerts_v3',
         'duoyi_alarm',
       },
@@ -212,5 +246,366 @@ void main() {
     expect(legacy.action, PermissionHealthAction.none);
     expect(legacy.subtitle, contains('duoyi_general_alerts_v3'));
     expect(legacy.subtitle, contains('duoyi_alarm'));
+  });
+
+  test('通知渠道静音时不会误报健康', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+      channelStatusesReader: (_) async => const {
+        NotificationService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: false,
+        ),
+        AlarmService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+        NativeReminderRingtone.statusChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 2,
+          hasSound: false,
+        ),
+        NativeReminderRingtone.fallbackChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+      },
+    );
+
+    final report = await service.check();
+
+    expect(report.summaryStatus, PermissionHealthStatus.warning);
+    final sound = report.checks.firstWhere(
+      (check) => check.id == 'notification_channel_sound',
+    );
+    expect(sound.title, '渠道声音');
+    expect(sound.subtitle, contains('已静音 普通提醒'));
+    expect(sound.actionLabel, '渠道设置');
+    expect(sound.actionChannelIds, contains(NotificationService.channelId));
+  });
+
+  test('通知渠道优先级过低时提示打开横幅和声音入口', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+      channelStatusesReader: (_) async => const {
+        NotificationService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 2,
+          hasSound: true,
+        ),
+        AlarmService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+        NativeReminderRingtone.statusChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 2,
+          hasSound: false,
+        ),
+        NativeReminderRingtone.fallbackChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+      },
+    );
+
+    final report = await service.check();
+
+    expect(report.summaryStatus, PermissionHealthStatus.warning);
+    final sound = report.checks.firstWhere(
+      (check) => check.id == 'notification_channel_sound',
+    );
+    expect(sound.subtitle, contains('优先级过低 普通提醒'));
+    expect(sound.subtitle, contains('声音、横幅和锁屏显示'));
+    expect(sound.actionChannelIds, contains(NotificationService.channelId));
+  });
+
+  test('原生闹钟派发失败会进入通知健康诊断', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+      nativeReminderIssueReader: () async => NativeReminderDeliveryIssue(
+        id: 42,
+        reason: 'fallback_notification_permission_denied',
+        message: '系统通知权限关闭，前台铃声服务失败后无法展示兜底通知。',
+        timestamp: DateTime.fromMillisecondsSinceEpoch(123),
+      ),
+    );
+
+    final report = await service.check();
+
+    expect(report.summaryStatus, PermissionHealthStatus.warning);
+    final nativeIssue = report.checks.firstWhere(
+      (check) => check.id == 'native_reminder_delivery',
+    );
+    expect(nativeIssue.title, '闹钟响铃诊断');
+    expect(nativeIssue.subtitle, contains('无法展示兜底通知'));
+    expect(nativeIssue.actionLabel, '系统设置');
+    expect(nativeIssue.manual, isTrue);
+  });
+
+  test('闹钟兜底通知渠道缺失或静音时会进入健康诊断', () async {
+    final missingService = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+    );
+
+    final missingReport = await missingService.check();
+    final channels = missingReport.checks.firstWhere(
+      (check) => check.id == 'notification_channels',
+    );
+    expect(channels.status, PermissionHealthStatus.warning);
+    expect(
+      channels.subtitle,
+      contains(NativeReminderRingtone.fallbackChannelId),
+    );
+
+    final mutedService = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+      channelStatusesReader: (_) async => const {
+        NotificationService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+        AlarmService.channelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: true,
+        ),
+        NativeReminderRingtone.statusChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 2,
+          hasSound: false,
+        ),
+        NativeReminderRingtone.fallbackChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 4,
+          hasSound: false,
+        ),
+      },
+    );
+
+    final mutedReport = await mutedService.check();
+    final sound = mutedReport.checks.firstWhere(
+      (check) => check.id == 'notification_channel_sound',
+    );
+    expect(sound.subtitle, contains('闹钟兜底通知'));
+    expect(
+      sound.actionChannelIds,
+      contains(NativeReminderRingtone.fallbackChannelId),
+    );
+  });
+
+  test('通知栏快捷入口渠道纳入健康检查但低优先级不误报', () async {
+    final missingService = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+      },
+    );
+
+    final missingReport = await missingService.check();
+    final missingChannels = missingReport.checks.firstWhere(
+      (check) => check.id == 'notification_channels',
+    );
+    expect(missingChannels.status, PermissionHealthStatus.warning);
+    expect(
+      missingChannels.subtitle,
+      contains(LocalNotifications.quickAddChannelId),
+    );
+
+    final lowService = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+      channelStatusesReader: (_) async => const {
+        LocalNotifications.quickAddChannelId: NotificationChannelStatus(
+          exists: true,
+          importance: 2,
+          hasSound: false,
+        ),
+      },
+    );
+
+    final lowReport = await lowService.check();
+    final channelSoundChecks = lowReport.checks.where(
+      (check) => check.id == 'notification_channel_sound',
+    );
+    expect(channelSoundChecks, isEmpty);
+  });
+
+  test('系统闹钟音量为 0 或勿扰开启时会进入健康诊断', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: () async => const SystemNotificationAudioStatus(
+        alarmVolume: 0,
+        alarmMaxVolume: 10,
+        notificationVolume: 0,
+        notificationMaxVolume: 10,
+        ringVolume: 3,
+        ringMaxVolume: 10,
+        dndSupported: true,
+        interruptionFilter: 2,
+        notificationPolicyAccessGranted: false,
+      ),
+      channelIdsReader: () async => <String>{
+        NotificationService.channelId,
+        AlarmService.channelId,
+        NativeReminderRingtone.statusChannelId,
+        NativeReminderRingtone.fallbackChannelId,
+        LocalNotifications.quickAddChannelId,
+      },
+    );
+
+    final report = await service.check();
+
+    expect(report.summaryStatus, PermissionHealthStatus.blocked);
+    final alarmVolume = report.checks.firstWhere(
+      (check) => check.id == 'system_alarm_volume',
+    );
+    expect(alarmVolume.title, '系统闹钟音量');
+    expect(alarmVolume.subtitle, contains('闹钟音量为 0'));
+    final notificationVolume = report.checks.firstWhere(
+      (check) => check.id == 'system_notification_volume',
+    );
+    expect(notificationVolume.subtitle, contains('通知音量为 0'));
+    final dnd = report.checks.firstWhere(
+      (check) => check.id == 'system_dnd_mode',
+    );
+    expect(dnd.title, '勿扰模式');
+    expect(dnd.subtitle, contains('勿扰模式'));
   });
 }

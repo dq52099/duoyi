@@ -26,6 +26,7 @@ class CalendarProvider extends ChangeNotifier {
   Object? _lastRebuildSignature;
   int _sourceRevision = 0;
   VoidCallback? onLocalEventsChanged;
+  Future<void> Function(String id)? localEventReminderCanceller;
 
   List<CalendarEvent> get events => _events;
   List<CalendarEvent> get localEvents => List.unmodifiable(_localEvents);
@@ -88,6 +89,13 @@ class CalendarProvider extends ChangeNotifier {
   }
 
   Future<void> deleteLocalEvent(String id) async {
+    try {
+      await localEventReminderCanceller?.call(id);
+    } catch (e, st) {
+      debugPrint(
+        '[CalendarProvider] local event reminder cancel failed: $e\n$st',
+      );
+    }
     await CloudSyncProvider.recordDeletedItem('calendar_events', id);
     _localEvents.removeWhere((event) => event.id == id);
     await _saveLocalEvents();

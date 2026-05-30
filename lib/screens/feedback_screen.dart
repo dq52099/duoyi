@@ -20,13 +20,9 @@ class FeedbackScreen extends StatefulWidget {
 class _FeedbackScreenState extends State<FeedbackScreen> {
   static const int _pageSize = 10;
 
-  late String _category;
-  final _contentCtrl = TextEditingController();
   final List<Map<String, dynamic>> _items = [];
   bool _loading = false;
-  bool _submitting = false;
   String? _error;
-  String? _submitError;
   int _page = 1;
   int _totalPages = 1;
   int _total = 0;
@@ -35,38 +31,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   @override
   void initState() {
     super.initState();
-    _category = _normalizeCategory(widget.initialCategory);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  @override
-  void dispose() {
-    _contentCtrl.dispose();
-    super.dispose();
-  }
-
-  String _normalizeCategory(String value) {
-    return switch (value) {
-      'bug' => 'bug',
-      'wish' => 'wish',
-      'other' => 'other',
-      _ => 'feature',
-    };
-  }
-
-  String _categoryLabel(String value) => switch (value) {
-    'bug' => I18n.tr('feedback.category.bug'),
-    'wish' => I18n.tr('feedback.category.wish'),
-    'other' => I18n.tr('feedback.category.other'),
-    _ => I18n.tr('feedback.category.feature'),
-  };
-
-  String _categoryHelp(String value) => switch (value) {
-    'bug' => I18n.tr('feedback.help.bug'),
-    'wish' => I18n.tr('feedback.help.wish'),
-    'other' => I18n.tr('feedback.help.other'),
-    _ => I18n.tr('feedback.help.feature'),
-  };
+  String _categoryLabel(String value) => feedbackCategoryLabel(value);
 
   String _statusLabel(String value) => switch (value) {
     'resolved' => I18n.tr('feedback.status.resolved'),
@@ -132,6 +100,223 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
   }
 
+  Future<void> _openSubmit(String category) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.state.isLoggedIn) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      if (!mounted) return;
+      if (!context.read<AuthProvider>().state.isLoggedIn) return;
+    }
+    final submitted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FeedbackSubmitScreen(initialCategory: category),
+      ),
+    );
+    if (submitted == true && mounted) {
+      await _load(page: 1);
+    }
+  }
+
+  void _showFeedbackDetail(Map<String, dynamic> item) {
+    final category = (item['category'] ?? 'feature').toString();
+    final status = (item['status'] ?? 'open').toString();
+    final content = (item['content'] ?? '').toString();
+    final reply = (item['admin_reply'] ?? '').toString();
+    final createdAt = (item['created_at'] ?? '').toString();
+    final updatedAt = (item['updated_at'] ?? '').toString();
+    final lines = [
+      '分类: ${_categoryLabel(category)}',
+      '状态: ${_statusLabel(status)}',
+      if (createdAt.isNotEmpty) '提交: $createdAt',
+      if (updatedAt.isNotEmpty) '更新: $updatedAt',
+      '',
+      '内容:',
+      content,
+      if (reply.trim().isNotEmpty) ...[
+        '',
+        '${I18n.tr('feedback.admin_reply')}:',
+        reply,
+      ],
+    ];
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        icon: const Icon(Icons.feedback_outlined),
+        title: const Text('反馈详情'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: SingleChildScrollView(child: SelectableText(lines.join('\n'))),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final loggedIn = auth.state.isLoggedIn;
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    return Scaffold(
+      backgroundColor: routeBackground,
+      appBar: AppBar(
+        title: const Text('许愿与反馈'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const ValueKey('feedback_submit_fab'),
+        onPressed: () => _openSubmit(widget.initialCategory),
+        icon: const Icon(Icons.add_comment_outlined),
+        label: Text(I18n.tr('feedback.submit.button')),
+      ),
+      body: AppSecondaryControlTheme(
+        child: RefreshIndicator(
+          onRefresh: () => _load(page: _page),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+            children: [
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.forum_outlined, color: cs.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppSectionHeader(
+                            title: '反馈记录',
+                            padding: EdgeInsets.zero,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            loggedIn
+                                ? '共 $_total 条，当前第 $_page/$_totalPages 页'
+                                : I18n.tr('feedback.login.records_required'),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.64),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (!loggedIn)
+                EmptyState(
+                  icon: Icons.login_outlined,
+                  message: I18n.tr('feedback.login.records_required'),
+                  actionLabel:
+                      '${I18n.tr('feedback.submit.login_prefix')}${_categoryLabel(widget.initialCategory)}',
+                  onAction: () => _openSubmit(widget.initialCategory),
+                )
+              else if (_loading && _items.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_error != null && _items.isEmpty)
+                EmptyState(
+                  icon: Icons.error_outline,
+                  message: _error!,
+                  actionLabel: I18n.tr('feedback.refresh'),
+                  onAction: () => _load(page: _page),
+                )
+              else if (_items.isEmpty)
+                EmptyState(
+                  icon: Icons.feedback_outlined,
+                  message: I18n.tr('feedback.empty'),
+                  actionLabel: I18n.tr('feedback.submit.button'),
+                  onAction: () => _openSubmit(widget.initialCategory),
+                )
+              else ...[
+                ..._items.map(
+                  (item) => _FeedbackRecordSwipeActions(
+                    onDetail: () => _showFeedbackDetail(item),
+                    child: _FeedbackRecordCard(
+                      item: item,
+                      categoryLabel: _categoryLabel,
+                      statusLabel: _statusLabel,
+                      statusColor: (status) => _statusColor(context, status),
+                      onTap: () => _showFeedbackDetail(item),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _FeedbackPagination(
+                  key: const ValueKey('feedback_record_pagination'),
+                  page: _page,
+                  totalPages: _totalPages,
+                  loading: _loading,
+                  onPrevious: _page <= 1 ? null : () => _load(page: _page - 1),
+                  onNext: _page >= _totalPages
+                      ? null
+                      : () => _load(page: _page + 1),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FeedbackSubmitScreen extends StatefulWidget {
+  final String initialCategory;
+
+  const FeedbackSubmitScreen({super.key, this.initialCategory = 'feature'});
+
+  @override
+  State<FeedbackSubmitScreen> createState() => _FeedbackSubmitScreenState();
+}
+
+class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
+  late String _category;
+  final _contentCtrl = TextEditingController();
+  bool _submitting = false;
+  String? _submitError;
+
+  @override
+  void initState() {
+    super.initState();
+    _category = normalizeFeedbackCategory(widget.initialCategory);
+  }
+
+  @override
+  void dispose() {
+    _contentCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final auth = context.read<AuthProvider>();
     if (!auth.state.isLoggedIn) {
@@ -148,7 +333,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
     setState(() {
       _submitting = true;
-      _error = null;
       _submitError = null;
     });
     try {
@@ -156,13 +340,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         'category': _category,
         'content': content,
       });
-      _contentCtrl.clear();
-      if (!mounted) return;
-      await _load(page: 1);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(I18n.tr('feedback.submitted'))));
+      Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (mounted) setState(() => _submitError = e.message);
     } catch (e) {
@@ -177,123 +359,87 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final auth = context.watch<AuthProvider>();
     final loggedIn = auth.state.isLoggedIn;
     final cs = Theme.of(context).colorScheme;
+    final categoryLabel = feedbackCategoryLabel(_category);
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     return Scaffold(
-      appBar: AppBar(title: const Text('许愿与反馈')),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const ValueKey('feedback_submit_fab'),
-        onPressed: loggedIn ? _submit : null,
-        icon: const Icon(Icons.add_comment_outlined),
-        label: Text(I18n.tr('feedback.submit.button')),
+      backgroundColor: routeBackground,
+      appBar: AppBar(
+        title: const Text('提交许愿与反馈'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
       ),
-      body: RefreshIndicator(
-        onRefresh: () => _load(page: _page),
+      body: AppSecondaryControlTheme(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           children: [
             AppSurfaceCard(
+              key: const ValueKey('feedback_submit_page_card'),
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.forum_outlined, color: cs.primary),
+                  AppSectionHeader(
+                    title: '提交许愿与反馈',
+                    subtitle: loggedIn
+                        ? '选择反馈类型后提交，处理进度会回到记录列表'
+                        : I18n.tr('feedback.login.submit_required'),
+                    padding: EdgeInsets.zero,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppSectionHeader(
-                          title: '反馈记录',
-                          padding: EdgeInsets.zero,
-                          titleStyle: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          loggedIn
-                              ? '共 $_total 条，当前第 $_page/$_totalPages 页'
-                              : I18n.tr('feedback.login.records_required'),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.64),
-                              ),
-                        ),
-                      ],
+                  const SizedBox(height: 12),
+                  _FeedbackCategoryMenu(
+                    selected: _category,
+                    labelFor: feedbackCategoryLabel,
+                    onSelected: loggedIn && !_submitting
+                        ? (value) => setState(() {
+                            _category = normalizeFeedbackCategory(value);
+                            _submitError = null;
+                          })
+                        : (_) {},
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('feedback_submit_content'),
+                    controller: _contentCtrl,
+                    enabled: loggedIn && !_submitting,
+                    minLines: 5,
+                    maxLines: 9,
+                    decoration: InputDecoration(
+                      labelText:
+                          '${I18n.tr('feedback.content.label_prefix')}$categoryLabel',
+                      helperText: feedbackCategoryHelp(_category),
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  if (_submitError != null) ...[
+                    const SizedBox(height: 10),
+                    Text(_submitError!, style: TextStyle(color: cs.error)),
+                  ],
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      key: const ValueKey('feedback_submit_page_button'),
+                      onPressed: loggedIn && !_submitting ? _submit : null,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_outlined),
+                      label: Text(
+                        _submitting
+                            ? I18n.tr('feedback.submitting')
+                            : I18n.tr('feedback.submit.button'),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            _FeedbackSubmitCard(
-              category: _category,
-              categoryLabel: _categoryLabel,
-              categoryHelp: _categoryHelp,
-              contentController: _contentCtrl,
-              enabled: loggedIn,
-              submitting: _submitting,
-              error: _submitError,
-              onCategoryChanged: (value) => setState(() {
-                _category = _normalizeCategory(value);
-                _submitError = null;
-              }),
-              onSubmit: _submit,
-            ),
-            const SizedBox(height: 12),
-            if (!loggedIn)
-              EmptyState(
-                icon: Icons.login_outlined,
-                message: I18n.tr('feedback.login.records_required'),
-                actionLabel:
-                    '${I18n.tr('feedback.submit.login_prefix')}${_categoryLabel(_category)}',
-              )
-            else if (_loading && _items.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (_error != null && _items.isEmpty)
-              EmptyState(
-                icon: Icons.error_outline,
-                message: _error!,
-                actionLabel: I18n.tr('feedback.refresh'),
-                onAction: () => _load(page: _page),
-              )
-            else if (_items.isEmpty)
-              EmptyState(
-                icon: Icons.feedback_outlined,
-                message: I18n.tr('feedback.empty'),
-                actionLabel: I18n.tr('feedback.submit.button'),
-                onAction: _submit,
-              )
-            else ...[
-              ..._items.map(
-                (item) => _FeedbackRecordCard(
-                  item: item,
-                  categoryLabel: _categoryLabel,
-                  statusLabel: _statusLabel,
-                  statusColor: (status) => _statusColor(context, status),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _FeedbackPagination(
-                key: const ValueKey('feedback_record_pagination'),
-                page: _page,
-                totalPages: _totalPages,
-                loading: _loading,
-                onPrevious: _page <= 1 ? null : () => _load(page: _page - 1),
-                onNext: _page >= _totalPages
-                    ? null
-                    : () => _load(page: _page + 1),
-              ),
-            ],
           ],
         ),
       ),
@@ -315,142 +461,66 @@ class _FeedbackCategoryMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final selectedBg = cs.primary.withValues(alpha: 0.1);
+    final selectedBorder = cs.primary.withValues(alpha: 0.28);
+    final selectedFg = cs.onSurface;
     return Row(
       key: const ValueKey('feedback_three_level_menu'),
       children: [
         Text(
-          '三级菜单',
+          '类型',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.54),
           ),
         ),
         const SizedBox(width: 8),
-        PopupMenuButton<String>(
-          tooltip: I18n.tr('feedback.category.label'),
-          initialValue: selected,
-          onSelected: onSelected,
-          itemBuilder: (_) => [
-            for (final category in const ['feature', 'bug', 'wish'])
-              PopupMenuItem(
-                value: category,
-                child: Row(
-                  children: [
-                    Expanded(child: Text(labelFor(category))),
-                    if (selected == category)
-                      Icon(Icons.check, size: 16, color: cs.primary),
-                  ],
+        Listener(
+          onPointerDown: (_) {
+            FocusScope.of(context, createDependency: false).unfocus();
+            FocusManager.instance.primaryFocus?.unfocus();
+          },
+          child: PopupMenuButton<String>(
+            tooltip: I18n.tr('feedback.category.label'),
+            initialValue: selected,
+            onSelected: onSelected,
+            itemBuilder: (_) => [
+              for (final category in const ['feature', 'bug', 'wish'])
+                PopupMenuItem(
+                  value: category,
+                  child: Row(
+                    children: [
+                      Expanded(child: AppSecondaryMenuText(labelFor(category))),
+                      if (selected == category)
+                        Icon(Icons.check, size: 16, color: cs.primary),
+                    ],
+                  ),
                 ),
+            ],
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: selectedBg,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: selectedBorder, width: 0.45),
               ),
-          ],
-          child: Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  labelFor(selected),
-                  style: TextStyle(color: cs.primary, fontSize: 13),
-                ),
-                const SizedBox(width: 4),
-                Icon(Icons.arrow_drop_down, color: cs.primary, size: 18),
-              ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    labelFor(selected),
+                    style: appSecondaryControlTextStyle(
+                      context,
+                    ).copyWith(color: selectedFg, fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, color: cs.primary, size: 18),
+                ],
+              ),
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _FeedbackSubmitCard extends StatelessWidget {
-  final String category;
-  final String Function(String) categoryLabel;
-  final String Function(String) categoryHelp;
-  final TextEditingController contentController;
-  final bool enabled;
-  final bool submitting;
-  final String? error;
-  final ValueChanged<String> onCategoryChanged;
-  final VoidCallback onSubmit;
-
-  const _FeedbackSubmitCard({
-    required this.category,
-    required this.categoryLabel,
-    required this.categoryHelp,
-    required this.contentController,
-    required this.enabled,
-    required this.submitting,
-    required this.error,
-    required this.onCategoryChanged,
-    required this.onSubmit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AppSurfaceCard(
-      key: const ValueKey('feedback_inline_submit_card'),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppSectionHeader(
-            title: '提交许愿与反馈',
-            subtitle: enabled
-                ? '功能建议、问题反馈和许愿池统一从这里提交'
-                : I18n.tr('feedback.login.submit_required'),
-            padding: EdgeInsets.zero,
-          ),
-          const SizedBox(height: 12),
-          _FeedbackCategoryMenu(
-            selected: category,
-            labelFor: categoryLabel,
-            onSelected: enabled && !submitting ? onCategoryChanged : (_) {},
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: contentController,
-            enabled: enabled && !submitting,
-            minLines: 4,
-            maxLines: 7,
-            decoration: InputDecoration(
-              labelText:
-                  '${I18n.tr('feedback.content.label_prefix')}${categoryLabel(category)}',
-              helperText: categoryHelp(category),
-              alignLabelWithHint: true,
-            ),
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 10),
-            Text(error!, style: TextStyle(color: cs.error)),
-          ],
-          const SizedBox(height: 14),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: enabled && !submitting ? onSubmit : null,
-              icon: submitting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_outlined),
-              label: Text(
-                submitting
-                    ? I18n.tr('feedback.submitting')
-                    : I18n.tr('feedback.submit.button'),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -460,12 +530,14 @@ class _FeedbackRecordCard extends StatelessWidget {
   final String Function(String) categoryLabel;
   final String Function(String) statusLabel;
   final Color Function(String) statusColor;
+  final VoidCallback onTap;
 
   const _FeedbackRecordCard({
     required this.item,
     required this.categoryLabel,
     required this.statusLabel,
     required this.statusColor,
+    required this.onTap,
   });
 
   @override
@@ -479,57 +551,167 @@ class _FeedbackRecordCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        key: const ValueKey('feedback_record_card_tap_target'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  categoryLabel(category),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-              AppStatusBadge(label: statusLabel(status), color: color),
-            ],
-          ),
-          if (createdAt.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              createdAt,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.52),
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Text(content),
-          if (reply.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withValues(alpha: 0.42),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text(
-                    I18n.tr('feedback.admin_reply'),
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: cs.onPrimaryContainer,
+                  Expanded(
+                    child: Text(
+                      categoryLabel(category),
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(reply),
+                  AppStatusBadge(label: statusLabel(status), color: color),
                 ],
               ),
+              if (createdAt.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  createdAt,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.52),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(content),
+              if (reply.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer.withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        I18n.tr('feedback.admin_reply'),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: cs.onPrimaryContainer),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(reply),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedbackRecordSwipeActions extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onDetail;
+
+  const _FeedbackRecordSwipeActions({
+    required this.child,
+    required this.onDetail,
+  });
+
+  @override
+  State<_FeedbackRecordSwipeActions> createState() =>
+      _FeedbackRecordSwipeActionsState();
+}
+
+class _FeedbackRecordSwipeActionsState
+    extends State<_FeedbackRecordSwipeActions> {
+  static const double _actionRailWidth = 58;
+  static const double _dragOpenThreshold = 40;
+  double _dragDistance = 0;
+  bool _open = false;
+
+  void _setOpen(bool value) {
+    if (_open == value) return;
+    setState(() => _open = value);
+  }
+
+  void _showDetail() {
+    _setOpen(false);
+    widget.onDetail();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ClipRect(
+      child: GestureDetector(
+        key: const ValueKey('feedback_record_swipe_actions'),
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => _dragDistance = 0,
+        onHorizontalDragUpdate: (details) {
+          _dragDistance += details.delta.dx;
+          if (_dragDistance <= -_dragOpenThreshold) _setOpen(true);
+          if (_dragDistance >= _dragOpenThreshold) _setOpen(false);
+        },
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -120) _setOpen(true);
+          if (velocity > 120) _setOpen(false);
+          _dragDistance = 0;
+        },
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            if (_open)
+              Positioned(
+                right: 0,
+                top: 8,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.18),
+                      width: 0.45,
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: _actionRailWidth,
+                    height: 46,
+                    child: Center(
+                      child: Tooltip(
+                        message: '查看反馈详情',
+                        child: IconButton(
+                          key: const ValueKey('feedback_record_detail_action'),
+                          tooltip: '查看反馈详情',
+                          icon: Icon(
+                            Icons.visibility_outlined,
+                            color: cs.primary,
+                          ),
+                          onPressed: _showDetail,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(
+                _open ? -_actionRailWidth : 0,
+                0,
+                0,
+              ),
+              child: widget.child,
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -553,27 +735,75 @@ class _FeedbackPagination extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: loading ? null : onPrevious,
-            icon: const Icon(Icons.chevron_left),
-            label: const Text('上一页'),
+    final pageLabel = Text(
+      '第 $page/$totalPages 页',
+      textAlign: TextAlign.center,
+      style: appSecondaryControlLabelStyle(context),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+        final controls = [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: loading ? null : onPrevious,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('上一页'),
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('第 $page/$totalPages 页'),
-        ),
-        Expanded(
-          child: FilledButton.tonalIcon(
-            onPressed: loading ? null : onNext,
-            icon: const Icon(Icons.chevron_right),
-            label: const Text('下一页'),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.tonalIcon(
+              onPressed: loading ? null : onNext,
+              icon: const Icon(Icons.chevron_right),
+              label: const Text('下一页'),
+            ),
           ),
-        ),
-      ],
+        ];
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              pageLabel,
+              const SizedBox(height: 6),
+              Row(children: controls),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            controls[0],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: pageLabel,
+            ),
+            controls[2],
+          ],
+        );
+      },
     );
   }
 }
+
+String normalizeFeedbackCategory(String value) {
+  return switch (value) {
+    'bug' => 'bug',
+    'wish' => 'wish',
+    'other' => 'other',
+    _ => 'feature',
+  };
+}
+
+String feedbackCategoryLabel(String value) => switch (value) {
+  'bug' => I18n.tr('feedback.category.bug'),
+  'wish' => I18n.tr('feedback.category.wish'),
+  'other' => I18n.tr('feedback.category.other'),
+  _ => I18n.tr('feedback.category.feature'),
+};
+
+String feedbackCategoryHelp(String value) => switch (value) {
+  'bug' => I18n.tr('feedback.help.bug'),
+  'wish' => I18n.tr('feedback.help.wish'),
+  'other' => I18n.tr('feedback.help.other'),
+  _ => I18n.tr('feedback.help.feature'),
+};

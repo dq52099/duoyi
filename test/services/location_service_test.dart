@@ -103,7 +103,7 @@ void main() {
         ),
       );
 
-      service.notifyLocationReminderHit(hit);
+      service.notifyLocationReminderHit(hit, showSystemNotification: false);
 
       expect(service.history, hasLength(1));
       expect(service.history.single.type, NotificationType.location);

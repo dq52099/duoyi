@@ -26,7 +26,7 @@ void main() {
     expect(source, contains('selectedTodoIds.contains'));
     expect(source, contains('onToggleSelection(todo.id)'));
     expect(source, contains('onLongPress: canEdit'));
-    expect(source, contains('if (batchMode) return content;'));
+    expect(source, contains('if (widget.batchMode) return content;'));
     expect(source, contains('floatingActionButton: _batchMode'));
     expect(source, contains('? null'));
     expect(source, contains('if (!_batchMode)'));
@@ -80,5 +80,37 @@ void main() {
     expect(source, contains('ids.insert(newIndex, moved);'));
     expect(source, contains('.reorderVisibleTodos(ids)'));
     expect(source, contains('onLongPress: canEdit'));
+  });
+
+  test('任务左滑弹出操作按钮而不是直接删除', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(source, contains('class _TodoTile extends StatefulWidget'));
+    expect(source, contains('onHorizontalDragUpdate'));
+    expect(source, contains('Matrix4.translationValues(-_swipeOffset'));
+    expect(source, contains('class _TodoInlineSwipeActions'));
+    expect(source, contains("label: '详情'"));
+    expect(source, contains("label: completed ? '恢复' : '完成'"));
+    expect(source, contains("label: '删除'"));
+    expect(source, contains('if (widget.batchMode) return content;'));
+    expect(source, contains("ValueKey('todo_swipe_detail_button')"));
+    expect(source, contains("'todo_swipe_complete_button'"));
+    expect(source, contains("'todo_swipe_reopen_button'"));
+    expect(source, contains("ValueKey('todo_swipe_delete_button')"));
+    expect(
+      source,
+      contains('_toggleTodoCompletionFromSwipe(context, widget.todo)'),
+    );
+    expect(
+      source,
+      contains('completeTodoWithOptionalTimeRecord(context, todo)'),
+    );
+    expect(source, contains('reopenTodos([todo.id])'));
+    expect(source, contains("title: const Text('删除任务？')"));
+    expect(source, isNot(contains('Dismissible(')));
+    expect(source, isNot(contains('confirmDismiss: (_) async')));
+    expect(source, isNot(contains('_showSwipeActions(context, provider)')));
+    expect(source, isNot(contains("title: '任务操作'")));
+    expect(source, isNot(contains('onDismissed:')));
   });
 }

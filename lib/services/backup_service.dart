@@ -11,8 +11,8 @@ class BackupService {
     'pomodoro_config',
     'user_profile',
     'duoyi_notes',
-    'duoyi_countdowns',
     'duoyi_anniversaries_v2',
+    'duoyi_countdowns',
     'duoyi_diary',
     'duoyi_goals',
     'duoyi_local_calendar_events_v1',
@@ -85,8 +85,7 @@ class BackupService {
         final list = value.map((e) => e.toString()).toList();
         if (merge) {
           final existing = p.getStringList(key) ?? const <String>[];
-          final set = <String>{...existing, ...list};
-          await p.setStringList(key, set.toList());
+          await p.setStringList(key, _mergeStringLists(existing, list));
         } else {
           await p.setStringList(key, list);
         }
@@ -106,5 +105,53 @@ class BackupService {
     for (final k in _keys) {
       await p.remove(k);
     }
+  }
+
+  static List<String> _mergeStringLists(
+    List<String> existing,
+    List<String> incoming,
+  ) {
+    final merged = <String>[];
+    final indexByKey = <String, int>{};
+
+    void absorb(String raw) {
+      final mergeKey = _stringListMergeKey(raw);
+      final index = indexByKey[mergeKey];
+      if (index == null) {
+        indexByKey[mergeKey] = merged.length;
+        merged.add(raw);
+      } else {
+        merged[index] = raw;
+      }
+    }
+
+    for (final raw in existing) {
+      absorb(raw);
+    }
+    for (final raw in incoming) {
+      absorb(raw);
+    }
+    return merged;
+  }
+
+  static String _stringListMergeKey(String raw) {
+    final trimmed = raw.trim();
+    final recordId = _decodedRecordId(trimmed);
+    if (recordId == null || recordId.isEmpty) {
+      return 'raw:$trimmed';
+    }
+    return 'id:$recordId';
+  }
+
+  static String? _decodedRecordId(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map) {
+        final id = decoded['id']?.toString().trim() ?? '';
+        if (id.isNotEmpty) return id;
+      }
+    } catch (_) {}
+    return null;
   }
 }

@@ -6,7 +6,9 @@ void main() {
   test('result_states.dart 统一导出 EmptyState/LoadingState/ErrorState', () {
     final source = File('lib/widgets/result_states.dart').readAsStringSync();
     final emptyState = File('lib/widgets/empty_state.dart').readAsStringSync();
-    final auditor = File('lib/core/empty_surface_auditor.dart').readAsStringSync();
+    final auditor = File(
+      'lib/core/empty_surface_auditor.dart',
+    ).readAsStringSync();
     final checklist = File('docs/empty-surface-audit.md').readAsStringSync();
     final router = File(
       'lib/screens/today_detail_router.dart',
@@ -31,5 +33,50 @@ void main() {
     );
     expect(checklist, contains('✅ **20**'));
     expect(router, isNot(contains('Task 20 会补齐')));
+  });
+
+  test('空架子审计清单没有未闭环条目', () {
+    final auditor = File(
+      'lib/core/empty_surface_auditor.dart',
+    ).readAsStringSync();
+    final checklist = File('docs/empty-surface-audit.md').readAsStringSync();
+    final entryPattern = RegExp(r'EmptySurfaceEntry\((.*?)\),', dotAll: true);
+    final openEntries = [
+      for (final match in entryPattern.allMatches(auditor))
+        if (!match.group(1)!.contains('fixTicketId:')) match.group(1)!,
+    ];
+
+    expect(
+      openEntries,
+      isEmpty,
+      reason:
+          'EmptySurfaceAuditor.known should not keep untracked empty surfaces.',
+    );
+    expect(
+      auditor,
+      contains('known.where((e) => e.fixTicketId == null)'),
+      reason:
+          'openEntries must continue to define unfinished items as missing fixTicketId.',
+    );
+    expect(
+      auditor,
+      contains('element.visitChildElements(visit)'),
+      reason:
+          'runtimeAudit should actively inspect the current widget tree instead of returning an empty placeholder report.',
+    );
+    expect(auditor, contains('widget is Text'));
+    expect(auditor, contains('_looksLikePlaceholderText'));
+    expect(auditor, isNot(contains('运行时探测占位（当前为占位实现）')));
+    expect(auditor, isNot(contains('留接口不留实现')));
+    final unfinishedRows = checklist
+        .split('\n')
+        .where((line) => line.trimLeft().startsWith('|') && line.contains('⏳'))
+        .toList(growable: false);
+    expect(
+      unfinishedRows,
+      isEmpty,
+      reason:
+          'docs/empty-surface-audit.md should not list unfinished table rows before patch release.',
+    );
   });
 }

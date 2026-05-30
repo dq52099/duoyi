@@ -31,26 +31,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('许愿与反馈'), findsWidgets);
-    expect(find.text('功能建议'), findsOneWidget);
     expect(find.text('登录后可查看反馈记录'), findsWidgets);
-    final submit = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, '提交反馈'),
+    expect(find.byKey(const ValueKey('feedback_submit_fab')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('feedback_submit_page_card')),
+      findsNothing,
     );
-    expect(submit.onPressed, isNull);
   });
 
-  testWidgets('FeedbackScreen initialCategory selects category menu', (
+  testWidgets('FeedbackSubmitScreen initialCategory selects category menu', (
     tester,
   ) async {
     await tester.pumpWidget(
       _wrap(
-        screen: const FeedbackScreen(initialCategory: 'bug'),
+        screen: const FeedbackSubmitScreen(initialCategory: 'bug'),
         auth: _FakeAuthProvider(
-          state: const AuthState(),
+          state: const AuthState(
+            userId: 'u1',
+            username: 'tester',
+            token: 'token',
+          ),
           client: ApiClient(
             baseUrl: 'https://duoyi.test',
             httpClient: MockClient((_) async {
-              fail('未登录状态不应请求反馈接口');
+              fail('打开独立提交页不应先请求反馈接口');
             }),
           ),
         ),
@@ -58,9 +62,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('许愿与反馈'), findsOneWidget);
+    expect(find.text('提交许愿与反馈'), findsWidgets);
     expect(find.text('问题反馈'), findsOneWidget);
-    expect(find.text('三级菜单'), findsOneWidget);
+    expect(find.text('类型'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('feedback_record_pagination')),
       findsNothing,
@@ -135,14 +139,47 @@ void main() {
     expect(find.text('管理员回复'), findsOneWidget);
     expect(find.text('已加入排查'), findsOneWidget);
 
+    await tester.tap(
+      find.byKey(const ValueKey('feedback_record_card_tap_target')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('反馈详情'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+    final detailText = tester.widget<SelectableText>(
+      find.byType(SelectableText),
+    );
+    expect(detailText.data, contains('分类: 问题反馈'));
+    expect(detailText.data, contains('状态: 处理中'));
+    expect(detailText.data, contains('通知没有声音'));
+    expect(detailText.data, contains('已加入排查'));
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('feedback_record_swipe_actions')).first,
+      const Offset(-96, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('feedback_record_detail_action')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('feedback_record_detail_action')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('反馈详情'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('feedback_submit_fab')));
+    await tester.pumpAndSettle();
+    expect(find.byType(FeedbackSubmitScreen), findsOneWidget);
     await tester.enterText(
-      find.descendant(
-        of: find.byKey(const ValueKey('feedback_inline_submit_card')),
-        matching: find.byType(TextField),
-      ),
+      find.byKey(const ValueKey('feedback_submit_content')),
       '小组件想要月历',
     );
-    await tester.tap(find.byKey(const ValueKey('feedback_submit_fab')));
+    await tester.tap(find.byKey(const ValueKey('feedback_submit_page_button')));
     await tester.pumpAndSettle();
 
     expect(requests, <String>[
@@ -152,38 +189,69 @@ void main() {
     ]);
     expect(bodies.single['category'], 'feature');
     expect(bodies.single['content'], '小组件想要月历');
-    expect(find.text('反馈已提交，感谢！'), findsOneWidget);
+    expect(find.byType(FeedbackSubmitScreen), findsNothing);
     expect(find.text('小组件想要月历'), findsOneWidget);
   });
 
-  test('FeedbackScreen keeps merged submit form, menu, pagination and FAB', () {
-    final source = File('lib/screens/feedback_screen.dart').readAsStringSync();
+  test(
+    'FeedbackScreen separates records page from third-level submit page',
+    () {
+      final source = File(
+        'lib/screens/feedback_screen.dart',
+      ).readAsStringSync();
 
-    expect(source, contains("title: const Text('许愿与反馈')"));
-    expect(source, contains("title: '反馈记录'"));
-    expect(source, contains("title: '提交许愿与反馈'"));
-    expect(
-      source,
-      contains("key: const ValueKey('feedback_inline_submit_card')"),
-    );
-    expect(
-      source,
-      contains("key: const ValueKey('feedback_three_level_menu')"),
-    );
-    expect(
-      source,
-      contains("key: const ValueKey('feedback_record_pagination')"),
-    );
-    expect(source, contains("key: const ValueKey('feedback_submit_fab')"));
-    expect(source, contains('const int _pageSize = 10'));
-    expect(source, contains('PopupMenuButton<String>'));
-    expect(
-      source,
-      contains("for (final category in const ['feature', 'bug', 'wish'])"),
-    );
-    expect(source, contains('FloatingActionButton.extended'));
-    expect(source, isNot(contains('showAppModalSheet<void>')));
-  });
+      expect(source, contains("title: const Text('许愿与反馈')"));
+      expect(source, contains("title: '反馈记录'"));
+      expect(
+        source,
+        contains('class FeedbackSubmitScreen extends StatefulWidget'),
+      );
+      expect(source, contains('appBar: AppBar('));
+      expect(source, contains("title: const Text('提交许愿与反馈')"));
+      expect(
+        source,
+        contains("key: const ValueKey('feedback_submit_page_card')"),
+      );
+      expect(
+        source,
+        contains("key: const ValueKey('feedback_three_level_menu')"),
+      );
+      expect(
+        source,
+        contains("key: const ValueKey('feedback_record_pagination')"),
+      );
+      expect(source, contains("key: const ValueKey('feedback_submit_fab')"));
+      expect(
+        source,
+        contains("key: const ValueKey('feedback_record_swipe_actions')"),
+      );
+      expect(source, contains("'feedback_record_detail_action'"));
+      expect(source, contains("title: const Text('反馈详情')"));
+      expect(source, contains('const int _pageSize = 10'));
+      expect(source, contains('PopupMenuButton<String>'));
+      expect(source, contains('onPointerDown: (_)'));
+      expect(source, contains('FocusManager.instance.primaryFocus?.unfocus()'));
+      expect(
+        source,
+        contains("for (final category in const ['feature', 'bug', 'wish'])"),
+      );
+      expect(source, contains('FloatingActionButton.extended'));
+      expect(source, contains('Navigator.push<bool>'));
+      expect(
+        source,
+        contains('FeedbackSubmitScreen(initialCategory: category)'),
+      );
+      final recordPageStart = source.indexOf('class _FeedbackScreenState');
+      final submitPageStart = source.indexOf('class FeedbackSubmitScreen');
+      expect(recordPageStart, greaterThanOrEqualTo(0));
+      expect(submitPageStart, greaterThan(recordPageStart));
+      final recordPage = source.substring(recordPageStart, submitPageStart);
+      expect(recordPage, isNot(contains('TextField(')));
+      expect(recordPage, isNot(contains('/api/feedback\', {')));
+      expect(source, isNot(contains('showAppModalSheet<void>')));
+      expect(source, isNot(contains('Dismissible(')));
+    },
+  );
 
   test('FeedbackScreen ignores stale pagination responses', () {
     final source = File('lib/screens/feedback_screen.dart').readAsStringSync();

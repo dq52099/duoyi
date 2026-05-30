@@ -1,4 +1,4 @@
-/// `ReminderScheduler` 依赖的两条调度出口抽象（Task 14.3）。
+/// `ReminderScheduler` 依赖的调度出口抽象（Task 14.3）。
 ///
 /// 设计目标：把 `ReminderScheduler` 与具体的 `NotificationService` /
 /// `AlarmService` 解耦，让通道路由（`ReminderKind.push` 走 push、
@@ -107,6 +107,30 @@ abstract class ReminderAlarmSink {
   Future<void> cancel(int id);
 }
 
+/// 可选的系统待触发队列查询接口。
+///
+/// `ReminderScheduler` 会在规则内容未变化时使用它确认系统队列仍然存在。
+/// 这样可以覆盖系统通知队列被清空、旧版本曾错误缓存成功等场景；不支持该
+/// 接口的通道仍按原有内存幂等逻辑处理。
+abstract class ReminderPendingSink {
+  Future<List<int>> pendingIds();
+}
+
+/// 可选的提醒注册诊断出口。
+///
+/// 当提醒规则已经启用，但最终无法解析成任何可注册的系统任务时，
+/// `ReminderScheduler` 会通过该接口把失败原因暴露给页面和健康提示，
+/// 避免用户保存后只看到“已创建”，实际系统队列为空。
+abstract class ReminderScheduleIssueSink {
+  void recordReminderScheduleIssue({
+    required String title,
+    required String message,
+    DateTime? scheduledTime,
+    String? relatedId,
+    bool blocking = true,
+  });
+}
+
 /// 邮件提醒出口。
 ///
 /// 当前客户端只负责把邮件提醒解析成可投递请求；真正投递可以由后端、
@@ -132,6 +156,138 @@ abstract class ReminderEmailSink {
   });
 
   Future<void> cancel(int id);
+}
+
+/// 前台弹出框提醒出口。
+///
+/// 这条通道只负责应用进程存活时的应用内弹窗；系统级后台/锁屏提醒仍应使用
+/// push 或 alarm 通道。
+abstract class ReminderPopupSink {
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  });
+
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  });
+
+  Future<void> cancel(int id);
+}
+
+class NoopReminderPopupSink implements ReminderPopupSink {
+  const NoopReminderPopupSink();
+
+  @override
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    throw const ReminderPopupFallbackUnavailableException(
+      '未配置弹出框提醒出口，popup 提醒未注册',
+    );
+  }
+
+  @override
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    throw const ReminderPopupFallbackUnavailableException(
+      '未配置弹出框提醒出口，popup 重复提醒未注册',
+    );
+  }
+
+  @override
+  Future<void> cancel(int id) async {}
+}
+
+class ReminderPopupFallbackUnavailableException implements Exception {
+  final String message;
+
+  const ReminderPopupFallbackUnavailableException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Popup 通道缺省实现的系统通知兜底。
+///
+/// 生产入口通常会注入 `ForegroundReminderPopupSink`，用户选择“弹出框”时只
+/// 展示应用内弹窗，避免和系统通知重复。测试或后台对象图若没有显式注入
+/// popup sink，则使用本实现直接落到 push 通道，避免 popup 规则被空实现
+/// 缓存为“已调度”。
+class NotificationFallbackReminderPopupSink implements ReminderPopupSink {
+  final ReminderNotificationSink notificationFallback;
+
+  const NotificationFallbackReminderPopupSink(this.notificationFallback);
+
+  @override
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) {
+    return notificationFallback.scheduleOnce(
+      id: id,
+      title: title,
+      body: body,
+      when: when,
+      payload: _fallbackPayload(payload),
+    );
+  }
+
+  @override
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) {
+    return notificationFallback.scheduleDaily(
+      id: id,
+      title: title,
+      body: body,
+      hour: hour,
+      minute: minute,
+      weekdays: weekdays,
+      payload: _fallbackPayload(payload),
+    );
+  }
+
+  @override
+  Future<void> cancel(int id) => notificationFallback.cancel(id);
+
+  String? _fallbackPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return payload;
+    final uri = Uri.tryParse(payload);
+    if (uri == null) return payload;
+    final query = Map<String, String>.from(uri.queryParameters)
+      ..putIfAbsent('fallback', () => 'popup_notification');
+    return uri.replace(queryParameters: query).toString();
+  }
 }
 
 class NoopReminderEmailSink implements ReminderEmailSink {

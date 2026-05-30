@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/models/calendar_event.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/calendar_provider.dart';
@@ -211,4 +212,42 @@ void main() {
       expect(provider.sourceRevision, 2);
     },
   );
+
+  test('CalendarProvider rebuilds countdown events when countdowns change', () {
+    final provider = CalendarProvider();
+    final colorScheme = const ColorScheme.light();
+    final today = DateTime(2026, 5, 29);
+
+    provider.rebuild(
+      const [],
+      const [],
+      const [],
+      colorScheme,
+      countdowns: [
+        CountdownItem(id: 'launch', title: '项目发布', targetDate: today),
+      ],
+    );
+
+    final events = provider.getEventsForDate(today);
+    expect(
+      events.map((event) => event.type),
+      contains(CalendarEventType.countdown),
+    );
+    expect(events.map((event) => event.title), contains('项目发布'));
+
+    provider.rebuild(
+      const [],
+      const [],
+      const [],
+      colorScheme,
+      countdowns: const <CountdownItem>[],
+    );
+
+    expect(
+      provider
+          .getEventsForDate(today)
+          .where((event) => event.type == CalendarEventType.countdown),
+      isEmpty,
+    );
+  });
 }

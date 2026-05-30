@@ -90,13 +90,23 @@ void main() {
     expect(find.text('准备周会'), findsOneWidget);
     expect(find.text('背单词'), findsOneWidget);
 
-    await tester.tap(find.text('工作 1'));
+    await tester.tap(
+      find.ancestor(
+        of: find.text('工作 1'),
+        matching: find.byType(FilterChip),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('准备周会'), findsOneWidget);
     expect(find.text('背单词'), findsNothing);
 
-    await tester.tap(find.text('全部项目'));
+    await tester.tap(
+      find.ancestor(
+        of: find.text('全部项目'),
+        matching: find.byType(FilterChip),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(Tab, '日'));
@@ -104,13 +114,23 @@ void main() {
     expect(find.text('准备周会'), findsOneWidget);
     expect(find.text('背单词'), findsOneWidget);
 
-    await tester.tap(find.text('工作 1'));
+    await tester.tap(
+      find.ancestor(
+        of: find.text('工作 1'),
+        matching: find.byType(FilterChip),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('准备周会'), findsOneWidget);
     expect(find.text('背单词'), findsNothing);
 
-    await tester.tap(find.text('全部项目'));
+    await tester.tap(
+      find.ancestor(
+        of: find.text('全部项目'),
+        matching: find.byType(FilterChip),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('准备周会'), findsOneWidget);

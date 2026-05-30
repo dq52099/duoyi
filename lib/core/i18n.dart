@@ -138,11 +138,21 @@ const Map<String, String> _zh = <String, String>{
   'preferences.quick_capture.subtitle': '今日页右下角的快捷创建按钮',
   'preferences.notification_quick_add.title': '通知栏快捷添加',
   'preferences.notification_quick_add.subtitle': 'Android 常驻通知：添加待办或开始专注',
+  'preferences.notification_today_progress.title': '通知栏今日任务进展',
+  'preferences.notification_today_progress.subtitle':
+      '开启后在通知栏常驻显示今日任务摘要，可随任务变化刷新',
+  'preferences.notification_status_bar.title': '通知栏快捷入口',
+  'preferences.notification_status_bar.unsupported':
+      '通知栏常驻快捷入口和今日进展仅 Android 支持，当前平台保留普通通知提醒。',
+  'preferences.notification_status_bar.enabled': '通知栏入口已开启',
+  'preferences.notification_status_bar.disabled': '通知栏入口已关闭',
+  'preferences.notification_status_bar.sync_failed':
+      '通知栏同步失败，已恢复原设置。请检查系统通知权限和通知渠道。',
   'preferences.show_completed.title': '待办页显示已完成',
   'preferences.show_completed.subtitle': '关闭后只看未完成和进行中的事项',
   'preferences.pomodoro_length.title': '默认番茄钟长度',
   'preferences.section.bottom_nav': '底部导航栏',
-  'preferences.section.bottom_nav.subtitle': '底部导航最多显示 5 个入口，小组件和我的固定显示',
+  'preferences.section.bottom_nav.subtitle': '底部导航最多显示 5 个入口；我的固定显示，小组件可隐藏',
   'preferences.section.interaction': '交互',
   'preferences.section.interaction.subtitle': '触感反馈与完成动作',
   'preferences.haptic.title': '震动反馈',
@@ -193,6 +203,13 @@ const Map<String, String> _zh = <String, String>{
   'preferences.daily_reminder.time.subtitle': '到点发送带声音和震动的提醒',
   'preferences.daily_reminder.time_suffix': '时间',
   'preferences.daily_reminder.time_picker.subtitle': '设置提醒触发时间',
+  'preferences.daily_reminder.kind.title': '提醒方式',
+  'preferences.daily_reminder.kind.push.description': '系统通知栏提醒',
+  'preferences.daily_reminder.kind.popup.description': '应用前台时弹出提醒，后台使用通知兜底',
+  'preferences.daily_reminder.kind.alarm.description': '按闹钟方式提醒，适合重要事项',
+  'preferences.daily_reminder.kind.off.description': '不注册系统通知、弹窗或闹钟',
+  'preferences.daily_reminder.register_failed': '每日提醒注册失败',
+  'preferences.daily_reminder.not_ready': '系统通知未就绪，每日提醒没有开启。',
   'preferences.daily_reminder.today_tasks': '任务：今日任务',
   'preferences.daily_reminder.today_tasks.subtitle': '提醒中包含今日未完成任务数量',
   'preferences.daily_reminder.tomorrow_plan': '任务：明日计划',
@@ -201,10 +218,36 @@ const Map<String, String> _zh = <String, String>{
   'preferences.daily_reminder.overdue_tasks.subtitle': '提醒中包含已过期未完成任务',
   'preferences.daily_reminder.pause_holidays': '法定节假日暂停提醒',
   'preferences.daily_reminder.pause_holidays.subtitle': '遇到内置节假日时顺延到下一个提醒日',
+  'preferences.daily_reminder.chip.today_tasks': '今日任务',
+  'preferences.daily_reminder.chip.tomorrow_plan': '明日计划',
+  'preferences.daily_reminder.chip.overdue_tasks': '逾期事项',
+  'preferences.daily_reminder.chip.pause_holidays': '节假日暂停',
   'preferences.daily_reminder.scope.today': '今日',
   'preferences.daily_reminder.scope.overdue': '逾期',
   'preferences.daily_reminder.scope.tomorrow': '明日',
   'preferences.daily_reminder.scope.none': '无任务范围',
+  // 通知栏与通知渠道
+  'notification.channel.general.name': '多仪 · 通知提醒',
+  'notification.channel.general.description': '日常提醒使用柔和提示音、震动并尽量显示横幅',
+  'notification.channel.alarm.name': '多仪 · 柔和强提醒',
+  'notification.channel.alarm.description': '重要提醒使用柔和内置铃声，可在通知上手动停止',
+  'notification.channel.quick_add.name': '多仪 · 快捷入口',
+  'notification.channel.quick_add.description': '通知栏常驻快捷添加待办和开始专注',
+  'notification.ticker.reminder': '多仪提醒',
+  'notification.ticker.quick_add': '多仪快捷入口',
+  'notification.quick_add.title': '多仪快捷记录',
+  'notification.quick_add.body': '下拉通知栏添加待办，或一键开始专注',
+  'notification.quick_add.action.add_todo': '添加待办',
+  'notification.quick_add.action.open_input': '打开输入',
+  'notification.quick_add.action.start_focus': '开始专注',
+  'notification.quick_add.input_label': '例如：明天下午3点开会',
+  'notification.status_bar.today_progress_title': '今日任务进展',
+  'notification.status_bar.quick_hint': '下拉可快速添加待办',
+  'notification.status_bar.today_remaining.prefix': '今日还要完成 ',
+  'notification.status_bar.today_remaining.suffix': ' 项',
+  'notification.status_bar.daily_count': '日常 ',
+  'notification.status_bar.representative_count': '代表 ',
+  'notification.status_bar.goal_count': '目标 ',
   // 快速捕获
   'quick.todo.title': '快速待办',
   'quick.todo.hint': '一句话描述（如：明天下午3点开会）',
@@ -313,7 +356,7 @@ const Map<String, String> _zh = <String, String>{
   'auth.error.password_required': '请填写密码',
   'auth.error.reset_account_required': '请填写用户名或已绑定邮箱',
   'auth.error.mail_code_required': '请填写邮件验证码',
-  'auth.error.new_password_short': '新密码至少 6 位',
+  'auth.error.new_password_short': '新密码至少 10 位',
   'auth.error.new_password_mismatch': '两次输入的新密码不一致',
   'profile.title': '个人资料',
   'profile.nickname': '昵称',
@@ -379,15 +422,16 @@ const Map<String, String> _zh = <String, String>{
   'habit.error.flex_target': '周期目标至少为 1',
   'habit.error.date_range': '结束日期不能早于开始日期',
   'habit.error.notification_permission': '系统通知未授权，习惯提醒不会响铃或弹出',
+  'habit.error.reminder_register_failed': '习惯提醒注册失败',
   'habit.flex.rule': '弹性打卡规则',
   'habit.flex.weekly': '每周',
   'habit.flex.monthly': '每月',
   'habit.flex.period_target': '周期目标',
-  'habit.flex.period_target_hint': '例如本周至少 5 次',
+  'habit.flex.period_target_hint': '例如周期目标 5 次/周',
   'habit.flex.daily_note': '关闭时按每日目标连续统计',
   'habit.flex.negative_note': '反向戒除按每日不发生统计',
-  'habit.flex.weekly_goal_prefix': '每周至少 ',
-  'habit.flex.monthly_goal_prefix': '每月至少 ',
+  'habit.flex.weekly_goal_prefix': '周期目标: ',
+  'habit.flex.monthly_goal_prefix': '周期目标: ',
   'habit.flex.this_week': '本周',
   'habit.flex.this_month': '本月',
   'habit.daily_prefix': '每天',
@@ -681,7 +725,6 @@ const Map<String, String> _zh = <String, String>{
   // 倒数日
   'countdown.title': '倒数日',
   'countdown.empty': '暂无倒数日记录',
-  'countdown.add_record': '添加记录',
   'countdown.nearest.empty': '暂无即将到期的事件',
   'countdown.nearest.prefix': '下一项：',
   'countdown.nearest.days_prefix': '还有 ',
@@ -690,7 +733,6 @@ const Map<String, String> _zh = <String, String>{
   'countdown.list.title': '全部倒数日',
   'countdown.list.subtitle': '按优先级和剩余天数排序',
   'countdown.category.default': '默认',
-  'countdown.editor.add_title': '添加倒数日',
   'countdown.editor.edit_title': '编辑倒数日',
   'countdown.editor.subtitle': '分类、到期日和提醒会同步到日历',
   'countdown.field.title': '事件名称',
@@ -699,9 +741,27 @@ const Map<String, String> _zh = <String, String>{
   'countdown.field.due_reminder': '到期提醒',
   'countdown.field.remind_days': '提前天数',
   'countdown.field.remind_time': '提醒时间',
+  'countdown.validation.title_required': '请先填写倒数日名称',
+  'countdown.save_failed_prefix': '倒数日保存失败：',
   'countdown.reminder.closed': '关闭',
   'countdown.reminder.before_prefix': '提前 ',
   'countdown.reminder.before_suffix': ' 天',
+  'countdown.reminder.register_failed': '倒数日提醒注册失败',
+  'countdown.reminder.not_registered': '倒数日已保存，但提醒未注册。请检查通知权限和提醒时间。',
+  'countdown.reminder.not_registered_prefix': '倒数日已保存，但提醒未注册：',
+  'countdown.reminder.popup_fallback_failed': '倒数日提醒注册失败：弹出框兜底通知不可用',
+  'countdown.reminder.popup_permission_denied': '倒数日已保存，但弹出框提醒未注册：系统通知权限未开启。',
+  'countdown.reminder.popup_not_registered_prefix': '倒数日已保存，但弹出框提醒未注册：',
+  'countdown.reminder.popup_warning': '倒数日已保存。弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。',
+  'countdown.reminder.alarm_permission_denied':
+      '倒数日已保存，但闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。',
+  'countdown.reminder.alarm_channel_missing': '强提醒渠道未就绪',
+  'countdown.reminder.exact_alarm_missing': '精准闹钟权限未开启，提醒可能延后',
+  'countdown.reminder.fullscreen_missing': '全屏提醒权限未开启，锁屏弹窗可能不可用',
+  'countdown.reminder.saved_with_warnings_prefix': '倒数日已保存，',
+  'countdown.reminder.email_warning': '倒数日已保存，邮件提醒会在联网后由服务端发送。',
+  'countdown.reminder.exception_prefix': '倒数日已保存，但提醒未注册：',
+  'countdown.reminder.time_past': '倒数日已保存，但提醒时间已过去，请重新选择提醒时间。',
   'countdown.status.pinned': '置顶',
   'countdown.status.expired': '已过期',
   'countdown.status.soon': '临近',
@@ -736,6 +796,21 @@ const Map<String, String> _zh = <String, String>{
   'anniversary.field.date_picker_title': '选择日期',
   'anniversary.field.date_picker_subtitle': '公历和农历使用独立组件',
   'anniversary.field.color': '颜色标识',
+  'anniversary.reminder.register_failed': '纪念日提醒注册失败',
+  'anniversary.reminder.not_registered': '纪念日提醒未注册，请检查通知权限和提醒时间。',
+  'anniversary.reminder.popup_fallback_failed': '纪念日提醒注册失败：弹出框兜底通知不可用',
+  'anniversary.reminder.popup_permission_denied': '弹出框提醒未注册：系统通知权限未开启。',
+  'anniversary.reminder.popup_not_registered_prefix': '弹出框提醒未注册：',
+  'anniversary.reminder.popup_warning': '弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。',
+  'anniversary.reminder.alarm_permission_denied':
+      '闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。',
+  'anniversary.reminder.alarm_channel_missing': '强提醒渠道未就绪',
+  'anniversary.reminder.exact_alarm_missing': '精准闹钟权限未开启，提醒可能延后',
+  'anniversary.reminder.fullscreen_missing': '全屏提醒权限未开启，锁屏弹窗可能不可用',
+  'anniversary.reminder.email_warning': '邮件提醒会在联网后由服务端发送。',
+  'anniversary.reminder.exception_prefix': '提醒未注册：',
+  'anniversary.reminder.saved_prefix': '已保存，',
+  'anniversary.reminder.time_past': '已保存，但提醒时间已过去，请重新选择提醒时间。',
   'anniversary.lunar.year_suffix': '年',
   // 课程表
   'course.week.prefix': '第 ',
@@ -799,6 +874,10 @@ const Map<String, String> _zh = <String, String>{
   'reminder.snooze_5min': '5 分钟后',
   'reminder.snooze_10min': '10 分钟后',
   'reminder.snooze_30min': '30 分钟后',
+  'reminder.kind.push': '通知',
+  'reminder.kind.popup': '弹出框',
+  'reminder.kind.alarm': '闹钟',
+  'reminder.kind.off': '关闭',
   // 时间足迹
   'time_audit.title': '时间足迹',
   'time_audit.add_manual': '补记',
@@ -946,13 +1025,26 @@ const Map<String, String> _en = <String, String>{
   'preferences.notification_quick_add.title': 'Notification quick add',
   'preferences.notification_quick_add.subtitle':
       'Android ongoing shortcut for tasks and focus',
+  'preferences.notification_today_progress.title':
+      'Today progress in notification bar',
+  'preferences.notification_today_progress.subtitle':
+      'Keep today task progress in the notification bar and refresh it as tasks change',
+  'preferences.notification_status_bar.title': 'Notification bar shortcuts',
+  'preferences.notification_status_bar.unsupported':
+      'Ongoing notification shortcuts and today progress are Android-only. This platform keeps regular reminders.',
+  'preferences.notification_status_bar.enabled':
+      'Notification bar entry enabled',
+  'preferences.notification_status_bar.disabled':
+      'Notification bar entry disabled',
+  'preferences.notification_status_bar.sync_failed':
+      'Notification bar sync failed, so the previous setting was restored. Check notification permission and channels.',
   'preferences.show_completed.title': 'Show completed tasks',
   'preferences.show_completed.subtitle':
       'Hide completed items to focus on open work',
   'preferences.pomodoro_length.title': 'Default Pomodoro length',
   'preferences.section.bottom_nav': 'Bottom navigation',
   'preferences.section.bottom_nav.subtitle':
-      'Show up to five bottom tabs; Widgets and Me are fixed',
+      'Show up to five bottom tabs; Me stays fixed, Widgets can be hidden',
   'preferences.section.interaction': 'Interaction',
   'preferences.section.interaction.subtitle': 'Haptics and completion behavior',
   'preferences.haptic.title': 'Haptic feedback',
@@ -1016,6 +1108,19 @@ const Map<String, String> _en = <String, String>{
   'preferences.daily_reminder.time_suffix': ' time',
   'preferences.daily_reminder.time_picker.subtitle':
       'Set when this reminder fires',
+  'preferences.daily_reminder.kind.title': 'Reminder method',
+  'preferences.daily_reminder.kind.push.description':
+      'System notification reminder',
+  'preferences.daily_reminder.kind.popup.description':
+      'Show a pop-up while the app is foregrounded, with notification fallback in background',
+  'preferences.daily_reminder.kind.alarm.description':
+      'Use alarm-style reminder for important items',
+  'preferences.daily_reminder.kind.off.description':
+      'Do not register a system notification, pop-up, or alarm',
+  'preferences.daily_reminder.register_failed':
+      'Daily reminder registration failed',
+  'preferences.daily_reminder.not_ready':
+      'System notifications are not ready, so the daily reminder was not enabled.',
   'preferences.daily_reminder.today_tasks': 'Tasks: today',
   'preferences.daily_reminder.today_tasks.subtitle':
       'Include the number of unfinished tasks due today',
@@ -1028,10 +1133,39 @@ const Map<String, String> _en = <String, String>{
   'preferences.daily_reminder.pause_holidays': 'Pause on public holidays',
   'preferences.daily_reminder.pause_holidays.subtitle':
       'Skip built-in holidays and resume on the next reminder day',
+  'preferences.daily_reminder.chip.today_tasks': 'Today tasks',
+  'preferences.daily_reminder.chip.tomorrow_plan': 'Tomorrow plan',
+  'preferences.daily_reminder.chip.overdue_tasks': 'Overdue',
+  'preferences.daily_reminder.chip.pause_holidays': 'Holiday pause',
   'preferences.daily_reminder.scope.today': 'Today',
   'preferences.daily_reminder.scope.overdue': 'Overdue',
   'preferences.daily_reminder.scope.tomorrow': 'Tomorrow',
   'preferences.daily_reminder.scope.none': 'No task scope',
+  'notification.channel.general.name': 'Duoyi reminders',
+  'notification.channel.general.description':
+      'Daily reminders use a gentle sound, vibration, and banners when available',
+  'notification.channel.alarm.name': 'Duoyi strong reminders',
+  'notification.channel.alarm.description':
+      'Important reminders use the built-in gentle ringtone and can be stopped from the notification',
+  'notification.channel.quick_add.name': 'Duoyi quick shortcuts',
+  'notification.channel.quick_add.description':
+      'Ongoing notification for quick task capture and focus start',
+  'notification.ticker.reminder': 'Duoyi reminder',
+  'notification.ticker.quick_add': 'Duoyi quick shortcut',
+  'notification.quick_add.title': 'Duoyi quick capture',
+  'notification.quick_add.body':
+      'Pull down the notification shade to add a task or start focus',
+  'notification.quick_add.action.add_todo': 'Add task',
+  'notification.quick_add.action.open_input': 'Open input',
+  'notification.quick_add.action.start_focus': 'Start focus',
+  'notification.quick_add.input_label': 'Example: meeting tomorrow at 3 PM',
+  'notification.status_bar.today_progress_title': 'Today progress',
+  'notification.status_bar.quick_hint': 'Pull down to quickly add a task',
+  'notification.status_bar.today_remaining.prefix': '',
+  'notification.status_bar.today_remaining.suffix': ' tasks left today',
+  'notification.status_bar.daily_count': 'Daily ',
+  'notification.status_bar.representative_count': 'Key ',
+  'notification.status_bar.goal_count': 'Goals ',
   'quick.todo.title': 'Quick task',
   'quick.todo.hint': 'Describe it in one line, e.g. meeting tomorrow at 3 PM',
   'quick.todo.parsed_prefix': 'Detected: ',
@@ -1141,7 +1275,8 @@ const Map<String, String> _en = <String, String>{
   'auth.error.password_required': 'Enter your password',
   'auth.error.reset_account_required': 'Enter username or bound email',
   'auth.error.mail_code_required': 'Enter the email code',
-  'auth.error.new_password_short': 'New password must be at least 6 characters',
+  'auth.error.new_password_short':
+      'New password must be at least 10 characters',
   'auth.error.new_password_mismatch': 'The two new passwords do not match',
   'profile.title': 'Profile',
   'profile.nickname': 'Nickname',
@@ -1210,16 +1345,17 @@ const Map<String, String> _en = <String, String>{
   'habit.error.date_range': 'End date cannot be before start date',
   'habit.error.notification_permission':
       'Notification permission is not granted, so habit reminders will not ring or pop up',
+  'habit.error.reminder_register_failed': 'Habit reminder registration failed',
   'habit.flex.rule': 'Flexible check-in rule',
   'habit.flex.weekly': 'Weekly',
   'habit.flex.monthly': 'Monthly',
   'habit.flex.period_target': 'Period target',
-  'habit.flex.period_target_hint': 'For example, at least 5 this week',
+  'habit.flex.period_target_hint': 'For example, period target 5/week',
   'habit.flex.daily_note': 'Off uses the daily target for streaks',
   'habit.flex.negative_note':
       'Avoid habits are counted by days without records',
-  'habit.flex.weekly_goal_prefix': 'At least ',
-  'habit.flex.monthly_goal_prefix': 'At least ',
+  'habit.flex.weekly_goal_prefix': 'Period target: ',
+  'habit.flex.monthly_goal_prefix': 'Period target: ',
   'habit.flex.this_week': 'This week',
   'habit.flex.this_month': 'This month',
   'habit.daily_prefix': 'Daily',
@@ -1517,7 +1653,6 @@ const Map<String, String> _en = <String, String>{
   'diary.weather.thunder': 'Thunder',
   'countdown.title': 'Countdown',
   'countdown.empty': 'No countdowns yet',
-  'countdown.add_record': 'Add record',
   'countdown.nearest.empty': 'No upcoming events',
   'countdown.nearest.prefix': 'Next: ',
   'countdown.nearest.days_prefix': 'in ',
@@ -1526,7 +1661,6 @@ const Map<String, String> _en = <String, String>{
   'countdown.list.title': 'All countdowns',
   'countdown.list.subtitle': 'Sorted by priority and remaining days',
   'countdown.category.default': 'Default',
-  'countdown.editor.add_title': 'Add countdown',
   'countdown.editor.edit_title': 'Edit countdown',
   'countdown.editor.subtitle':
       'Category, target date, and reminders sync to calendar',
@@ -1536,9 +1670,39 @@ const Map<String, String> _en = <String, String>{
   'countdown.field.due_reminder': 'Due reminder',
   'countdown.field.remind_days': 'Days before',
   'countdown.field.remind_time': 'Reminder time',
+  'countdown.validation.title_required': 'Enter a countdown name first',
+  'countdown.save_failed_prefix': 'Failed to save countdown: ',
   'countdown.reminder.closed': 'Off',
   'countdown.reminder.before_prefix': '',
   'countdown.reminder.before_suffix': ' days before',
+  'countdown.reminder.register_failed':
+      'Countdown reminder registration failed',
+  'countdown.reminder.not_registered':
+      'Countdown saved, but the reminder was not registered. Check notification permission and reminder time.',
+  'countdown.reminder.not_registered_prefix':
+      'Countdown saved, but the reminder was not registered: ',
+  'countdown.reminder.popup_fallback_failed':
+      'Countdown reminder registration failed: pop-up notification fallback unavailable',
+  'countdown.reminder.popup_permission_denied':
+      'Countdown saved, but the pop-up reminder was not registered: notification permission is off.',
+  'countdown.reminder.popup_not_registered_prefix':
+      'Countdown saved, but the pop-up reminder was not registered: ',
+  'countdown.reminder.popup_warning':
+      'Countdown saved. Pop-ups show only while the app is running; system notification is used as background or lock-screen fallback.',
+  'countdown.reminder.alarm_permission_denied':
+      'Countdown saved, but the alarm reminder was not registered: enable notification permission and save again.',
+  'countdown.reminder.alarm_channel_missing': 'Alarm channel is not ready',
+  'countdown.reminder.exact_alarm_missing':
+      'Exact alarm permission is off, so the reminder may be delayed',
+  'countdown.reminder.fullscreen_missing':
+      'Full-screen reminder permission is off, so lock-screen pop-up may not work',
+  'countdown.reminder.saved_with_warnings_prefix': 'Countdown saved, ',
+  'countdown.reminder.email_warning':
+      'Countdown saved. Email reminder will be sent by the server when online.',
+  'countdown.reminder.exception_prefix':
+      'Countdown saved, but the reminder was not registered: ',
+  'countdown.reminder.time_past':
+      'Countdown saved, but the reminder time has passed. Choose another reminder time.',
   'countdown.status.pinned': 'Pinned',
   'countdown.status.expired': 'Expired',
   'countdown.status.soon': 'Soon',
@@ -1573,6 +1737,31 @@ const Map<String, String> _en = <String, String>{
   'anniversary.field.date_picker_subtitle':
       'Solar and lunar dates use separate pickers',
   'anniversary.field.color': 'Color marker',
+  'anniversary.reminder.register_failed':
+      'Anniversary reminder registration failed',
+  'anniversary.reminder.not_registered':
+      'Anniversary reminder was not registered. Check notification permission and reminder time.',
+  'anniversary.reminder.popup_fallback_failed':
+      'Anniversary reminder registration failed: pop-up notification fallback unavailable',
+  'anniversary.reminder.popup_permission_denied':
+      'Pop-up reminder was not registered: notification permission is off.',
+  'anniversary.reminder.popup_not_registered_prefix':
+      'Pop-up reminder was not registered: ',
+  'anniversary.reminder.popup_warning':
+      'Pop-ups show only while the app is running; system notification is used as background or lock-screen fallback.',
+  'anniversary.reminder.alarm_permission_denied':
+      'Alarm reminder was not registered: enable notification permission and save again.',
+  'anniversary.reminder.alarm_channel_missing': 'Alarm channel is not ready',
+  'anniversary.reminder.exact_alarm_missing':
+      'Exact alarm permission is off, so the reminder may be delayed',
+  'anniversary.reminder.fullscreen_missing':
+      'Full-screen reminder permission is off, so lock-screen pop-up may not work',
+  'anniversary.reminder.email_warning':
+      'Email reminder will be sent by the server when online.',
+  'anniversary.reminder.exception_prefix': 'Reminder was not registered: ',
+  'anniversary.reminder.saved_prefix': 'Saved, ',
+  'anniversary.reminder.time_past':
+      'Saved, but the reminder time has passed. Choose another reminder time.',
   'anniversary.lunar.year_suffix': '',
   'course.week.prefix': 'Week ',
   'course.week.suffix': '',
@@ -1632,6 +1821,10 @@ const Map<String, String> _en = <String, String>{
   'reminder.snooze_5min': 'In 5 min',
   'reminder.snooze_10min': 'In 10 min',
   'reminder.snooze_30min': 'In 30 min',
+  'reminder.kind.push': 'Notification',
+  'reminder.kind.popup': 'Pop-up',
+  'reminder.kind.alarm': 'Alarm',
+  'reminder.kind.off': 'Off',
   'time_audit.title': 'Time Tracking',
   'time_audit.add_manual': 'Add entry',
   'time_audit.weekly_overview': 'This week',

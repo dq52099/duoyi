@@ -7,8 +7,9 @@ void main() {
     final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
 
     expect(source, contains('TabController(length: 5'));
-    expect(source, contains("PopupMenuItem(value: 'three_day'"));
-    expect(source, contains("const Tab(text: '三日')"));
+    expect(source, contains("value: 'three_day'"));
+    expect(source, contains("AppSecondaryMenuText('三日视图')"));
+    expect(source, contains("const Tab(height: 34, text: '三日')"));
     expect(source, contains('_previousThreeDays'));
     expect(source, contains('_nextThreeDays'));
     expect(source, contains("3 => '前三天'"));
@@ -39,7 +40,13 @@ void main() {
     expect(source, contains('VerticalDivider('));
     expect(source, contains('SingleChildScrollView('));
     expect(source, contains('scrollDirection: Axis.horizontal'));
-    expect(source, contains('width: 380'));
+    expect(source, contains('width: constraints.maxWidth < 390'));
+    expect(source, contains('? constraints.maxWidth'));
+    expect(source, contains(': 380'));
+    expect(source, contains('horizontalPadding: 8'));
+    expect(source, contains('withValues(alpha: 0.16)'));
+    expect(source, contains('withValues(alpha: 0.34)'));
+    expect(source, contains('withValues(alpha: 0.18)'));
   });
 
   test('日历聚合不在 build 同步执行', () {
@@ -78,13 +85,94 @@ void main() {
 
     expect(
       headerSource,
-      contains('final compact = constraints.maxWidth < 360'),
+      contains('final compact = constraints.maxWidth < 390'),
     );
-    expect(headerSource, contains('? const Size(0, 46)'));
-    expect(headerSource, contains(': const Size(double.infinity, 54)'));
-    expect(headerSource, contains('dimension: compact ? 40 : 44'));
-    expect(headerSource, contains('label: Text('));
+    expect(headerSource, contains('? const Size(0, 52)'));
+    expect(headerSource, contains(': const Size(double.infinity, 56)'));
+    expect(headerSource, contains('height: compact ? 62 : 68'));
+    expect(
+      headerSource,
+      contains("key: const ValueKey('calendar_navigation_header_bar')"),
+    );
+    expect(headerSource, contains('dimension: compact ? 36 : 40'));
+    expect(headerSource, contains('Icons.calendar_month_outlined'));
+    expect(headerSource, contains('if (!compact) ...['));
+    expect(headerSource, contains('child: Text('));
+    expect(headerSource, contains('textAlign: TextAlign.center'));
     expect(headerSource, contains('TextOverflow.ellipsis'));
     expect(headerSource, isNot(contains('minWidth: 180')));
+  });
+
+  test('月视图固定顶部日历并只让日信息区域滚动', () {
+    final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+    final monthViewSource = source.substring(
+      source.indexOf('// Month'),
+      source.indexOf('// Week'),
+    );
+
+    expect(source, contains('double _monthGridHeightFor('));
+    expect(source, contains('bool _monthGridShowsLunar('));
+    expect(source, contains('final minGridHeight = rows >= 6 ? 82.0 : 78.0'));
+    expect(
+      source,
+      contains('final preferredGridHeight = rows >= 6 ? 98.0 : 92.0'),
+    );
+    expect(
+      source,
+      contains('final desiredDetailHeight = availableHeight < 560 ? 500.0 : 660.0'),
+    );
+    expect(
+      source,
+      contains(
+        'final maxGridForReadableDetail = availableHeight - desiredDetailHeight',
+      ),
+    );
+    expect(source, contains("const ValueKey('calendar_fixed_month_grid')"));
+    expect(source, contains('height: monthGridHeight'));
+    expect(monthViewSource, contains('SizedBox('));
+    expect(monthViewSource, contains('CalendarMonthGrid('));
+    expect(
+      monthViewSource,
+      contains("key: const ValueKey('calendar_month_detail_agenda')"),
+    );
+    expect(monthViewSource, contains("'calendar_month_detail_scroll_region'"));
+    expect(monthViewSource, contains('horizontalPadding: 8'));
+    expect(monthViewSource, contains('Expanded('));
+    expect(monthViewSource, contains('CalendarDayAgenda('));
+  });
+
+  test('日历详情弹层扩大内容宽高并让详情列表独立滚动', () {
+    final source = File(
+      'lib/widgets/calendar_event_sheet.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('maxWidth: 860'));
+    expect(
+      source,
+      contains('maxHeight: MediaQuery.sizeOf(context).height * 0.68'),
+    );
+    expect(source, contains('scrollable: false'));
+    expect(
+      source,
+      contains("key: const ValueKey('calendar_event_detail_scroll_region')"),
+    );
+  });
+
+  test('日历二级筛选和表单使用小号控件样式', () {
+    final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+
+    expect(source, contains('Widget _calendarFilterChip({'));
+    expect(
+      source,
+      contains('materialTapTargetSize: MaterialTapTargetSize.shrinkWrap'),
+    );
+    expect(source, contains('width: 0.45'));
+    expect(source, contains('alpha: 0.08'));
+    expect(source, contains('appSecondaryControlLabelStyle(context)'));
+    expect(source, contains('Tab(height: 34'));
+    expect(source, contains('height: 28'));
+    expect(source, contains('AppSecondaryControlTheme('));
+    expect(source, contains('AppSecondaryMenuText('));
+    expect(source, contains('AppDropdownField<TimeEntryCategory>'));
   });
 }

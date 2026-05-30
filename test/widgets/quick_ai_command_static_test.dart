@@ -21,7 +21,9 @@ void main() {
     expect(fab, contains('AiCommandParser.parseBatch(value)'));
     expect(fab, contains('Future<void> _executeAiCommands'));
     expect(fab, contains('已执行 \${commands.length} 条 AI 指令'));
-    expect(fab, contains('Future<void> _executeAiCommand('));
+    expect(fab, contains('Future<_AiCommandOutcome> _executeAiCommand('));
+    expect(fab, contains('class _AiCommandOutcome'));
+    expect(fab, contains('const _AiCommandOutcome.skipped()'));
     expect(fab, contains('AiCommand command,'));
     expect(fab, contains('bool showSnackBar = true'));
     expect(fab, contains('context.read<TodoProvider>().addTodo'));

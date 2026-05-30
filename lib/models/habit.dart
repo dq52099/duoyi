@@ -1,8 +1,13 @@
+import 'goal.dart'
+    show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
+
 /// 习惯类型：正向=养成；负向=戒除 (记录"今天没做到")。
 enum HabitKind { positive, negative }
 
 /// 弹性打卡周期：一周/一月至少完成 N 次。
 enum HabitFlexPeriod { week, month }
+
+const String defaultHabitIconToken = 'check_circle_outline';
 
 int _readInt(Object? value, int fallback) {
   if (value is num) return value.toInt();
@@ -28,6 +33,43 @@ HabitFlexPeriod? _readFlexPeriod(Object? value) {
     if (period.name == raw) return period;
   }
   return null;
+}
+
+ReminderPlan _legacyReminderPlan({
+  required bool remind,
+  required int? hour,
+  required int? minute,
+  required List<int>? activeWeekdays,
+}) {
+  if (!remind || hour == null || minute == null) {
+    return const ReminderPlan.disabled();
+  }
+  final weekdays =
+      (activeWeekdays ?? const [0, 1, 2, 3, 4, 5, 6])
+          .where((d) => d >= 0 && d <= 6)
+          .map((d) => d + 1)
+          .toSet()
+          .toList()
+        ..sort();
+  final fullWeek = weekdays.length == 7;
+  return ReminderPlan(
+    enabled: true,
+    rules: [
+      ReminderRule(
+        id: 'habit-reminder',
+        enabled: true,
+        type: fullWeek
+            ? ReminderRuleType.dailyTime
+            : ReminderRuleType.weeklyTime,
+        kind: ReminderKind.alarm,
+        hour: hour,
+        minute: minute,
+        weekdays: fullWeek ? const <int>[] : weekdays,
+        fullScreen: true,
+        snoozeMinutes: 5,
+      ),
+    ],
+  );
 }
 
 class HabitPeriodBounds {
@@ -89,13 +131,14 @@ class Habit {
   bool remind;
   int? remindHour;
   int? remindMinute;
+  ReminderPlan reminderPlan;
   DateTime createdAt;
   DateTime updatedAt;
 
   Habit({
     required this.id,
     required this.name,
-    this.icon = 'star',
+    this.icon = defaultHabitIconToken,
     this.colorValue = 0xFF4CAF50,
     this.kind = HabitKind.positive,
     List<int>? activeWeekdays,
@@ -116,12 +159,21 @@ class Habit {
     this.remind = false,
     this.remindHour,
     this.remindMinute,
+    ReminderPlan? reminderPlan,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
        completions = completions ?? {},
        completionUpdatedAt = completionUpdatedAt ?? {},
        tags = tags ?? [],
+       reminderPlan =
+           reminderPlan ??
+           _legacyReminderPlan(
+             remind: remind,
+             hour: remindHour,
+             minute: remindMinute,
+             activeWeekdays: activeWeekdays,
+           ),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
@@ -148,6 +200,7 @@ class Habit {
     bool? remind,
     int? remindHour,
     int? remindMinute,
+    ReminderPlan? reminderPlan,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool clearUnit = false,
@@ -156,13 +209,34 @@ class Habit {
     bool clearStartDate = false,
     bool clearEndDate = false,
   }) {
+    final nextActiveWeekdays =
+        activeWeekdays ?? List<int>.from(this.activeWeekdays);
+    final nextRemind = remind ?? this.remind;
+    final nextRemindHour = remindHour ?? this.remindHour;
+    final nextRemindMinute = remindMinute ?? this.remindMinute;
+    final legacyReminderChanged =
+        reminderPlan == null &&
+        (remind != null ||
+            remindHour != null ||
+            remindMinute != null ||
+            activeWeekdays != null);
+    final nextReminderPlan =
+        reminderPlan ??
+        (legacyReminderChanged
+            ? _legacyReminderPlan(
+                remind: nextRemind,
+                hour: nextRemindHour,
+                minute: nextRemindMinute,
+                activeWeekdays: nextActiveWeekdays,
+              )
+            : this.reminderPlan);
     return Habit(
       id: id,
       name: name ?? this.name,
       icon: icon ?? this.icon,
       colorValue: colorValue ?? this.colorValue,
       kind: kind ?? this.kind,
-      activeWeekdays: activeWeekdays ?? List<int>.from(this.activeWeekdays),
+      activeWeekdays: nextActiveWeekdays,
       targetCount: targetCount ?? this.targetCount,
       unit: clearUnit ? null : unit ?? this.unit,
       currentStreak: currentStreak ?? this.currentStreak,
@@ -181,43 +255,55 @@ class Habit {
       startDate: clearStartDate ? null : startDate ?? this.startDate,
       endDate: clearEndDate ? null : endDate ?? this.endDate,
       sortOrder: sortOrder ?? this.sortOrder,
-      remind: remind ?? this.remind,
-      remindHour: remindHour ?? this.remindHour,
-      remindMinute: remindMinute ?? this.remindMinute,
+      remind: nextRemind,
+      remindHour: nextRemindHour,
+      remindMinute: nextRemindMinute,
+      reminderPlan: nextReminderPlan,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'icon': icon,
-    'colorValue': colorValue,
-    'kind': kind.index,
-    'activeWeekdays': activeWeekdays,
-    'targetCount': targetCount,
-    'unit': unit,
-    'currentStreak': currentStreak,
-    'bestStreak': bestStreak,
-    'completions': completions,
-    'completionUpdatedAt': completionUpdatedAt.map(
-      (key, value) => MapEntry(key, value.toIso8601String()),
-    ),
-    'category': category,
-    'tags': tags,
-    'weeklyTarget': weeklyTarget,
-    'flexTarget': flexTarget,
-    'flexPeriod': flexPeriod?.name,
-    'startDate': startDate?.toIso8601String(),
-    'endDate': endDate?.toIso8601String(),
-    'sortOrder': sortOrder,
-    'remind': remind,
-    'remindHour': remindHour,
-    'remindMinute': remindMinute,
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
-  };
+  Map<String, dynamic> toJson() {
+    final legacyRule = reminderPlan.primaryRule;
+    final legacyEnabled =
+        reminderPlan.enabled &&
+        legacyRule != null &&
+        legacyRule.enabled &&
+        legacyRule.kind != ReminderKind.off &&
+        legacyRule.hour != null &&
+        legacyRule.minute != null;
+    return {
+      'id': id,
+      'name': name,
+      'icon': icon,
+      'colorValue': colorValue,
+      'kind': kind.index,
+      'activeWeekdays': activeWeekdays,
+      'targetCount': targetCount,
+      'unit': unit,
+      'currentStreak': currentStreak,
+      'bestStreak': bestStreak,
+      'completions': completions,
+      'completionUpdatedAt': completionUpdatedAt.map(
+        (key, value) => MapEntry(key, value.toIso8601String()),
+      ),
+      'category': category,
+      'tags': tags,
+      'weeklyTarget': weeklyTarget,
+      'flexTarget': flexTarget,
+      'flexPeriod': flexPeriod?.name,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+      'sortOrder': sortOrder,
+      'remind': legacyEnabled,
+      'remindHour': legacyEnabled ? legacyRule.hour : remindHour,
+      'remindMinute': legacyEnabled ? legacyRule.minute : remindMinute,
+      'reminderPlan': reminderPlan.toJson(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
 
   factory Habit.fromJson(Map<String, dynamic> json) {
     final kindIndex = _readInt(json['kind'], 0);
@@ -229,20 +315,47 @@ class Habit {
     final target = _readInt(json['targetCount'], 1);
     final flexTarget = _readPositiveInt(json['flexTarget']);
 
+    final activeWeekdays =
+        weekdaysRaw
+            ?.map((e) => e is num ? e.toInt() : int.tryParse(e.toString()))
+            .whereType<int>()
+            .where((e) => e >= 0 && e <= 6)
+            .toList() ??
+        [0, 1, 2, 3, 4, 5, 6];
+    final remind = json['remind'] == true;
+    final remindHour = json['remindHour'] == null
+        ? null
+        : _readInt(json['remindHour'], 0).clamp(0, 23).toInt();
+    final remindMinute = json['remindMinute'] == null
+        ? null
+        : _readInt(json['remindMinute'], 0).clamp(0, 59).toInt();
+    var reminderPlan = json['reminderPlan'] is Map
+        ? ReminderPlan.fromJson(
+            Map<String, dynamic>.from(json['reminderPlan'] as Map),
+          )
+        : _legacyReminderPlan(
+            remind: remind,
+            hour: remindHour,
+            minute: remindMinute,
+            activeWeekdays: activeWeekdays,
+          );
+    if (!reminderPlan.enabled && remind) {
+      reminderPlan = _legacyReminderPlan(
+        remind: remind,
+        hour: remindHour,
+        minute: remindMinute,
+        activeWeekdays: activeWeekdays,
+      );
+    }
+
     return Habit(
       id: (json['id'] ?? DateTime.now().microsecondsSinceEpoch).toString(),
       name: (json['name'] ?? '未命名习惯').toString(),
-      icon: (json['icon'] ?? 'star').toString(),
+      icon: (json['icon'] ?? defaultHabitIconToken).toString(),
       colorValue: _readInt(json['colorValue'], 0xFF4CAF50),
       kind: HabitKind
           .values[kindIndex.clamp(0, HabitKind.values.length - 1).toInt()],
-      activeWeekdays:
-          weekdaysRaw
-              ?.map((e) => e is num ? e.toInt() : int.tryParse(e.toString()))
-              .whereType<int>()
-              .where((e) => e >= 0 && e <= 6)
-              .toList() ??
-          [0, 1, 2, 3, 4, 5, 6],
+      activeWeekdays: activeWeekdays,
       targetCount: target < 1 ? 1 : target,
       unit: json['unit']?.toString(),
       currentStreak: _readInt(json['currentStreak'], 0),
@@ -257,9 +370,7 @@ class Habit {
           ? {
               for (final entry in completionUpdatedAtRaw.entries)
                 if (DateTime.tryParse(entry.value?.toString() ?? '') != null)
-                  entry.key.toString(): DateTime.parse(
-                    entry.value.toString(),
-                  ),
+                  entry.key.toString(): DateTime.parse(entry.value.toString()),
             }
           : {},
       category: json['category']?.toString(),
@@ -278,13 +389,10 @@ class Habit {
           ? DateTime.tryParse(json['endDate'].toString())
           : null,
       sortOrder: _readInt(json['sortOrder'], 0),
-      remind: json['remind'] == true,
-      remindHour: json['remindHour'] == null
-          ? null
-          : _readInt(json['remindHour'], 0).clamp(0, 23).toInt(),
-      remindMinute: json['remindMinute'] == null
-          ? null
-          : _readInt(json['remindMinute'], 0).clamp(0, 59).toInt(),
+      remind: reminderPlan.enabled && reminderPlan.primaryRule != null,
+      remindHour: remindHour,
+      remindMinute: remindMinute,
+      reminderPlan: reminderPlan,
       createdAt: createdAtRaw == null
           ? DateTime.now()
           : DateTime.tryParse(createdAtRaw) ?? DateTime.now(),
@@ -330,8 +438,8 @@ class Habit {
   String get flexPeriodGoalLabel {
     if (!hasFlexRule) return '';
     return switch (flexPeriod!) {
-      HabitFlexPeriod.week => '每周至少 $effectiveFlexTarget 次',
-      HabitFlexPeriod.month => '每月至少 $effectiveFlexTarget 次',
+      HabitFlexPeriod.week => '周期目标: $effectiveFlexTarget 次/周',
+      HabitFlexPeriod.month => '周期目标: $effectiveFlexTarget 次/月',
     };
   }
 

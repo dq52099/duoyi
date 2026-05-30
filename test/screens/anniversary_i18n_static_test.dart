@@ -35,7 +35,24 @@ void main() {
       'anniversary.field.date_picker_title',
       'anniversary.field.date_picker_subtitle',
       'anniversary.field.color',
+      'anniversary.reminder.register_failed',
+      'anniversary.reminder.not_registered',
+      'anniversary.reminder.popup_fallback_failed',
+      'anniversary.reminder.popup_permission_denied',
+      'anniversary.reminder.popup_warning',
+      'anniversary.reminder.alarm_permission_denied',
+      'anniversary.reminder.alarm_channel_missing',
+      'anniversary.reminder.exact_alarm_missing',
+      'anniversary.reminder.fullscreen_missing',
+      'anniversary.reminder.email_warning',
+      'anniversary.reminder.exception_prefix',
+      'anniversary.reminder.saved_prefix',
+      'anniversary.reminder.time_past',
       'anniversary.lunar.year_suffix',
+      'reminder.kind.push',
+      'reminder.kind.popup',
+      'reminder.kind.alarm',
+      'reminder.kind.off',
       'countdown.field.due_reminder',
       'countdown.field.remind_days',
       'countdown.field.remind_time',
@@ -101,10 +118,220 @@ void main() {
       contains('class MemorialAnniversaryScreen extends StatelessWidget'),
     );
     expect(anniversary, contains('fixedType == null'));
+    expect(
+      anniversary,
+      contains('final canAdd = fixedType != AnniversaryType.normal'),
+    );
+    expect(anniversary, contains('floatingActionButton: canAdd'));
+    expect(
+      anniversary,
+      contains("actionLabel: onAdd == null ? null : I18n.tr('action.add')"),
+    );
+    expect(anniversary, contains('fixedType == AnniversaryType.normal'));
     expect(anniversary, contains("ValueKey('anniversary_fixed_\$name')"));
-    expect(mine, contains('const MemorialAnniversaryScreen()'));
-    expect(mine, contains('const BirthdayScreen()'));
-    expect(mine, contains('const CountdownScreen()'));
+    expect(anniversary, contains('_tabs = TabController(length: 3'));
+    expect(anniversary, contains('children: List.generate(3'));
+    expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
+    expect(mine, contains('child: anniversary.BirthdayScreen()'));
+    expect(mine, isNot(contains('CountdownScreen')));
+    expect(mine, isNot(contains("label: '倒数日'")));
     expect(mine, isNot(contains('const AnniversaryScreen(initialTab: 3)')));
+    expect(
+      anniversary,
+      isNot(contains("Tab(text: I18n.tr('anniversary.countdown_short'))")),
+    );
+    expect(anniversary, isNot(contains('3 => AnniversaryType.normal')));
   });
+
+  test('纪念日和生日二级页面使用紧凑统一样式', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('final routeBackground ='));
+    expect(source, contains('backgroundColor: routeBackground'));
+    expect(
+      source,
+      contains('titleTextStyle: appSecondaryRouteTitleTextStyle(context)'),
+    );
+    expect(source, contains('surfaceTintColor: Colors.transparent'));
+    expect(
+      source,
+      contains('backgroundColor: routeBackground.withValues(alpha: 0.96)'),
+    );
+    expect(source, contains('ColoredBox('));
+    expect(source, contains('AppSecondaryControlTheme('));
+    expect(
+      source,
+      contains('labelStyle: appSecondaryMenuItemTextStyle(context)'),
+    );
+    expect(
+      source,
+      contains('unselectedLabelStyle: appSecondaryMenuItemTextStyle(context)'),
+    );
+  });
+
+  test('生日和纪念日固定类型添加页不允许切换到其他类型', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final editor = source.substring(
+      source.indexOf('class _AnniversaryEditSheetState'),
+      source.indexOf('class _AnniversaryReminderPreflightResult'),
+    );
+
+    expect(
+      source,
+      contains(
+        'fixedType: widget.fixedType ?? _typeForTab ?? AnniversaryType.memorial',
+      ),
+    );
+    expect(
+      source,
+      contains('_AnniversaryEditSheet(editing: item, fixedType: editorType)'),
+    );
+    expect(source, contains('fixedType == AnniversaryType.normal'));
+    expect(source, contains('fixedType: item.type'));
+    expect(editor, contains('final isTypeLocked = widget.fixedType != null'));
+    expect(editor, contains('if (!isTypeLocked) ...['));
+    expect(editor, contains('ChoiceChip('));
+    expect(editor, contains('_type = e?.type ?? widget.fixedType'));
+    expect(editor, contains('widget.editing != null ||'));
+    expect(editor, contains('t != AnniversaryType.normal'));
+  });
+
+  test('生日和纪念日卡片使用轻量统一风格', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final card = source.substring(
+      source.indexOf('class _AnniversaryCard'),
+      source.indexOf('class _AnniversaryEditSheet'),
+    );
+
+    expect(card, contains('AppSurfaceCard('));
+    expect(card, contains('class _AnniversaryCard extends StatefulWidget'));
+    expect(card, contains('onHorizontalDragUpdate'));
+    expect(card, contains('Matrix4.translationValues(-_swipeOffset'));
+    expect(card, contains('class _AnniversaryInlineSwipeActions'));
+    expect(card, contains("ValueKey('anniversary_swipe_delete_button')"));
+    expect(card, contains('appSecondaryRouteTitleTextStyle(context)'));
+    expect(card, contains('appSecondaryControlLabelStyle('));
+    expect(
+      card,
+      contains('Border.all(color: color.withValues(alpha: 0.12), width: 0.45)'),
+    );
+    expect(card, contains('BorderRadius.circular(14)'));
+    expect(card, contains('width: 5'));
+    expect(card, contains('fontSize: days == 0 ? 14 : 18'));
+    expect(card, contains('fontSize: 11'));
+    expect(card, isNot(contains('LinearGradient(')));
+    expect(card, isNot(contains('IntrinsicHeight(')));
+    expect(card, isNot(contains('Dismissible(')));
+    expect(card, isNot(contains('onDismissed:')));
+    expect(card, isNot(contains('fontSize: days == 0 ? 22 : 30')));
+    expect(card, isNot(contains('textTheme.titleMedium')));
+    expect(card, isNot(matches(RegExp(r'FontWeight\.(bold|w700|w800|w900)'))));
+    for (final call in _calls(card, 'Border.all(')) {
+      expect(call, contains('width: 0.45'), reason: call);
+    }
+  });
+
+  test('纪念日提醒保存前检查通知权限和时间', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final saveStart = source.indexOf('Future<void> _save() async');
+    final saveEnd = source.indexOf('@override', saveStart);
+    expect(saveStart, greaterThanOrEqualTo(0));
+    expect(saveEnd, greaterThan(saveStart));
+    final saveMethod = source.substring(saveStart, saveEnd);
+
+    expect(
+      source,
+      contains("import '../providers/notification_service.dart';"),
+    );
+    expect(source, contains("import '../services/alarm_service.dart';"));
+    expect(source, contains("import '../services/local_notifications.dart';"));
+    expect(source, contains('Future<_AnniversaryReminderPreflightResult>'));
+    expect(source, contains('ensureReadyForReminder('));
+    expect(
+      source,
+      contains(
+        "final issueTitle = I18n.tr('anniversary.reminder.register_failed')",
+      ),
+    );
+    expect(source, contains('scheduledTime: remindAt'));
+    expect(source, contains('case ReminderKind.push:'));
+    expect(source, contains('case ReminderKind.popup:'));
+    expect(source, contains('case ReminderKind.alarm:'));
+    expect(source, contains('case ReminderKind.off:'));
+    expect(source, contains('LocalNotifications.instance.ensurePermission()'));
+    expect(source, contains('AlarmService.instance'));
+    expect(source, contains('.notificationChannelIds()'));
+    expect(source, contains('.hasExactAlarmPermission()'));
+    expect(source, contains('.hasFullScreenIntentPermission()'));
+    expect(saveMethod, contains('ScaffoldMessenger.of(context).showSnackBar'));
+    expect(
+      saveMethod.indexOf('await _checkReminderBeforeSave('),
+      lessThan(saveMethod.indexOf('await p.add(item)')),
+    );
+    expect(source, contains('reminderKind: remind ? kind : ReminderKind.off'));
+    expect(
+      saveMethod,
+      contains('_buildItem(remind: _remind, kind: _reminderKind)'),
+    );
+    expect(source, contains('value: ReminderKind.push'));
+    expect(source, contains('value: ReminderKind.popup'));
+    expect(source, contains('value: ReminderKind.alarm'));
+    expect(source, contains('value: ReminderKind.off'));
+  });
+
+  test('生日编辑器把忽略年份开关写入纪念日模型', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final editor = source.substring(
+      source.indexOf('class _AnniversaryEditSheetState'),
+      source.indexOf('class _AnniversaryReminderPreflightResult'),
+    );
+
+    expect(editor, contains('bool _ignoreYear = false'));
+    expect(editor, contains('_ignoreYear = e?.ignoreYear ?? false'));
+    expect(
+      editor,
+      contains(
+        'ignoreYear: _type == AnniversaryType.birthday ? _ignoreYear : false',
+      ),
+    );
+    expect(
+      editor,
+      contains('allowIgnoreYear: _type == AnniversaryType.birthday'),
+    );
+    expect(editor, contains('_ignoreYear = result.ignoreYear'));
+  });
+}
+
+Iterable<String> _calls(String source, String token) sync* {
+  var searchFrom = 0;
+  while (true) {
+    final start = source.indexOf(token, searchFrom);
+    if (start == -1) return;
+    var depth = 0;
+    var end = start;
+    for (; end < source.length; end++) {
+      final char = source[end];
+      if (char == '(') {
+        depth++;
+      } else if (char == ')') {
+        depth--;
+        if (depth == 0) {
+          end++;
+          break;
+        }
+      }
+    }
+    yield source.substring(start, end);
+    searchFrom = end;
+  }
 }

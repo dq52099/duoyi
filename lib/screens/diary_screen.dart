@@ -265,15 +265,20 @@ class DiaryScreen extends StatelessWidget {
       );
       return;
     }
+    var dialogOpen = false;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+    dialogOpen = true;
     try {
       final review = await ai.deepDiaryReview(entries: entries);
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
+      if (dialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogOpen = false;
+      }
       await showDialog<void>(
         context: context,
         builder: (_) => AppDialog(
@@ -297,7 +302,10 @@ class DiaryScreen extends StatelessWidget {
       );
     } on AiException catch (e) {
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
+      if (dialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogOpen = false;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -308,7 +316,10 @@ class DiaryScreen extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
+      if (dialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogOpen = false;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${I18n.tr('diary.ai.review_failed_prefix')}$e'),
@@ -695,174 +706,193 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
   Widget build(BuildContext context) {
     final lunar = LunarCalendar.fromSolar(_date);
     final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
     return Scaffold(
+      backgroundColor: routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('diary.title')),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
         actions: [IconButton(icon: const Icon(Icons.check), onPressed: _save)],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Date and lunar context.
-          GestureDetector(
-            onTap: () async {
-              final picked = await AppDatePicker.pickSolar(
-                context,
-                initialDate: _date,
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2099, 12, 31),
-                title: I18n.tr('diary.editor.date_title'),
-              );
-              if (picked != null) setState(() => _date = picked);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 16, color: cs.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    I18nDateFormat.date(_date),
-                    style: TextStyle(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w400,
+      body: AppSecondaryControlTheme(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Date and lunar context.
+            GestureDetector(
+              onTap: () async {
+                final picked = await AppDatePicker.pickSolar(
+                  context,
+                  initialDate: _date,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2099, 12, 31),
+                  title: I18n.tr('diary.editor.date_title'),
+                );
+                if (picked != null) setState(() => _date = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 16, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      I18nDateFormat.date(_date),
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    I18n.current == AppLocale.en
-                        ? I18n.tr('calendar.chinese_lunar_calendar')
-                        : lunar.chineseText,
-                    style: TextStyle(
-                      color: cs.primary.withValues(alpha: 0.7),
-                      fontSize: 12,
+                    const SizedBox(width: 10),
+                    Text(
+                      I18n.current == AppLocale.en
+                          ? I18n.tr('calendar.chinese_lunar_calendar')
+                          : lunar.chineseText,
+                      style: TextStyle(
+                        color: cs.primary.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          // Mood selector.
-          Text(
-            I18n.tr('diary.editor.mood_prompt'),
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: Mood.values.map((m) {
-              final selected = _mood == m;
-              return GestureDetector(
-                onTap: () => setState(() => _mood = selected ? null : m),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? cs.primary.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: selected ? cs.primary : Colors.grey.shade300,
+            const SizedBox(height: 16),
+            // Mood selector.
+            Text(
+              I18n.tr('diary.editor.mood_prompt'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: Mood.values.map((m) {
+                final selected = _mood == m;
+                return GestureDetector(
+                  onTap: () => setState(() => _mood = selected ? null : m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? cs.primary.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected ? cs.primary : Colors.grey.shade300,
+                        width: 0.45,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(m.emoji, style: const TextStyle(fontSize: 24)),
+                        const SizedBox(height: 2),
+                        Text(
+                          _moodLabel(m),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Text(m.emoji, style: const TextStyle(fontSize: 24)),
-                      const SizedBox(height: 2),
-                      Text(_moodLabel(m), style: const TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          // Weather selector.
-          Text(
-            I18n.tr('diary.editor.weather'),
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: Weather.values.map((w) {
-              final selected = _weather == w;
-              return FilterChip(
-                label: Text('${w.emoji} ${_weatherLabel(w)}'),
-                selected: selected,
-                onSelected: (_) =>
-                    setState(() => _weather = selected ? null : w),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          // Tags.
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _tag,
-                  decoration: InputDecoration(
-                    hintText: I18n.tr('diary.editor.tag_hint'),
-                    prefixIcon: const Icon(Icons.tag),
-                  ),
-                  onSubmitted: (v) {
-                    if (v.trim().isNotEmpty) {
-                      setState(() {
-                        _tags.add(v.trim());
-                        _tag.clear();
-                      });
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          if (_tags.isNotEmpty) ...[
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            // Weather selector.
+            Text(
+              I18n.tr('diary.editor.weather'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
-              runSpacing: 4,
-              children: _tags
-                  .map(
-                    (t) => Chip(
-                      label: Text(t),
-                      onDeleted: () => setState(() => _tags.remove(t)),
+              runSpacing: 6,
+              children: Weather.values.map((w) {
+                final selected = _weather == w;
+                return FilterChip(
+                  label: Text('${w.emoji} ${_weatherLabel(w)}'),
+                  selected: selected,
+                  onSelected: (_) =>
+                      setState(() => _weather = selected ? null : w),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            // Tags.
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tag,
+                    decoration: InputDecoration(
+                      hintText: I18n.tr('diary.editor.tag_hint'),
+                      prefixIcon: const Icon(Icons.tag),
                     ),
-                  )
-                  .toList(),
+                    onSubmitted: (v) {
+                      if (v.trim().isNotEmpty) {
+                        setState(() {
+                          _tags.add(v.trim());
+                          _tag.clear();
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            if (_tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: _tags
+                    .map(
+                      (t) => Chip(
+                        label: Text(t),
+                        onDeleted: () => setState(() => _tags.remove(t)),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 16),
+            // Body.
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.14),
+                  width: 0.45,
+                ),
+              ),
+              child: TextField(
+                controller: _content,
+                maxLines: 12,
+                minLines: 8,
+                decoration: InputDecoration(
+                  hintText: I18n.tr('diary.editor.content_hint'),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                ),
+                style: const TextStyle(fontSize: 15, height: 1.6),
+              ),
             ),
           ],
-          const SizedBox(height: 16),
-          // Body.
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: TextField(
-              controller: _content,
-              maxLines: 12,
-              minLines: 8,
-              decoration: InputDecoration(
-                hintText: I18n.tr('diary.editor.content_hint'),
-                border: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                enabledBorder: InputBorder.none,
-              ),
-              style: const TextStyle(fontSize: 15, height: 1.6),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

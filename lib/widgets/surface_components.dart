@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
@@ -48,16 +49,19 @@ class AppSurfaceCard extends StatelessWidget {
         color == null &&
         gradient == null;
     final surfaceColor =
-        color ?? (isDark ? cs.surface.withValues(alpha: 0.92) : cs.surface);
-    final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.05);
+        color ??
+        (isDark
+            ? cs.surface.withValues(alpha: 0.93)
+            : cs.surface.withValues(alpha: 0.94));
+    final glassBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.045)
+        : Colors.white.withValues(alpha: 0.28);
     final skinGradient = useCardSkin
         ? LinearGradient(
             colors: [
               cardSkin.colors.first.withValues(alpha: isDark ? 0.22 : 0.18),
               cardSkin.colors.last.withValues(alpha: isDark ? 0.18 : 0.12),
-              surfaceColor,
+              cs.surface.withValues(alpha: isDark ? 0.94 : 0.96),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -71,15 +75,22 @@ class AppSurfaceCard extends StatelessWidget {
           border ??
           Border.all(
             color: useCardSkin
-                ? cardSkin.colors.first.withValues(alpha: 0.28)
-                : borderColor,
+                ? cardSkin.colors.first.withValues(alpha: 0.06)
+                : glassBorderColor,
+            width: 0.35,
           ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
-          blurRadius: 18 + elevation * 3,
-          offset: const Offset(0, 6),
+          color: Colors.black.withValues(alpha: isDark ? 0.055 : 0.010),
+          blurRadius: 16 + elevation * 2,
+          offset: const Offset(0, 4),
         ),
+        if (!isDark)
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.42),
+            blurRadius: 1,
+            offset: const Offset(0, 0.5),
+          ),
       ],
     );
 
@@ -96,6 +107,318 @@ class AppSurfaceCard extends StatelessWidget {
             ? content
             : InkWell(onTap: onTap, borderRadius: borderRadius, child: content),
       ),
+    );
+  }
+}
+
+TextStyle appSecondaryControlTextStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+    fontSize: 11,
+    fontWeight: FontWeight.w400,
+    height: 1.2,
+  );
+}
+
+TextStyle appSecondaryControlLabelStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return (theme.textTheme.labelMedium ?? const TextStyle()).copyWith(
+    fontSize: 10,
+    fontWeight: FontWeight.w400,
+    height: 1.16,
+  );
+}
+
+TextStyle appSecondaryMenuItemTextStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+    fontSize: 11,
+    fontWeight: FontWeight.w400,
+    height: 1.18,
+  );
+}
+
+TextStyle appSecondaryRouteTitleTextStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  return (theme.textTheme.titleMedium ?? const TextStyle()).copyWith(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: cs.onSurface,
+    height: 1.2,
+  );
+}
+
+Color _appSecondaryActionBackground(ColorScheme cs) {
+  final candidate = cs.primary;
+  return candidate.computeLuminance() > 0.92
+      ? const Color(0xFF2563EB)
+      : candidate;
+}
+
+Color _appSecondaryActionForeground(Color background) {
+  return _appReadableForeground(background, Colors.white);
+}
+
+Color _appReadableForeground(Color background, Color preferred) {
+  if (_appContrastRatio(background, preferred) >= 4.5) return preferred;
+  const dark = Color(0xFF111827);
+  final darkContrast = _appContrastRatio(background, dark);
+  final whiteContrast = _appContrastRatio(background, Colors.white);
+  return darkContrast >= whiteContrast ? dark : Colors.white;
+}
+
+double _appContrastRatio(Color a, Color b) {
+  final aLum = a.computeLuminance();
+  final bLum = b.computeLuminance();
+  final lighter = aLum > bLum ? aLum : bLum;
+  final darker = aLum > bLum ? bLum : aLum;
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final background = _appSecondaryActionBackground(cs);
+  final disabledBackground =
+      Color.lerp(
+        cs.surfaceContainerHighest,
+        background,
+        theme.brightness == Brightness.dark ? 0.22 : 0.18,
+      ) ??
+      cs.surfaceContainerHighest;
+  return FilledButton.styleFrom(
+    backgroundColor: background,
+    foregroundColor: _appSecondaryActionForeground(background),
+    disabledBackgroundColor: disabledBackground,
+    disabledForegroundColor: _appReadableForeground(
+      disabledBackground,
+      cs.onSurfaceVariant,
+    ).withValues(alpha: 0.70),
+    side: BorderSide(color: background.withValues(alpha: 0.16), width: 0.45),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    minimumSize: const Size(0, 30),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    textStyle: appSecondaryMenuItemTextStyle(context),
+  );
+}
+
+class AppSecondaryControlTheme extends StatelessWidget {
+  final Widget child;
+
+  const AppSecondaryControlTheme({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final controlText = appSecondaryControlTextStyle(context);
+    final labelText = appSecondaryControlLabelStyle(context);
+    OutlineInputBorder inputBorder(Color color, {double width = 0.35}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    final subtleBorder = cs.outlineVariant.withValues(
+      alpha: isDark ? 0.055 : 0.075,
+    );
+    final selectedControlBackground = Color.alphaBlend(
+      cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+      cs.surface,
+    );
+    final selectedControlRenderedBackground = Color.alphaBlend(
+      selectedControlBackground,
+      cs.surface,
+    );
+    final selectedControlForeground = _appReadableForeground(
+      selectedControlRenderedBackground,
+      cs.onSurface,
+    );
+    final selectedControlIcon = _appReadableForeground(
+      selectedControlRenderedBackground,
+      cs.primary,
+    );
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          titleMedium: controlText.copyWith(color: cs.onSurface),
+          titleSmall: controlText.copyWith(color: cs.onSurface),
+          bodyLarge: controlText.copyWith(color: cs.onSurface),
+          bodyMedium: controlText.copyWith(color: cs.onSurface),
+          bodySmall: labelText.copyWith(color: cs.onSurfaceVariant),
+          labelLarge: labelText.copyWith(color: cs.onSurface),
+          labelMedium: labelText.copyWith(color: cs.onSurface),
+        ),
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 6,
+          ),
+          prefixIconConstraints: const BoxConstraints.tightFor(
+            width: 30,
+            height: 30,
+          ),
+          suffixIconConstraints: const BoxConstraints.tightFor(
+            width: 30,
+            height: 30,
+          ),
+          labelStyle: labelText.copyWith(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w400,
+          ),
+          floatingLabelStyle: labelText.copyWith(
+            color: cs.primary,
+            fontWeight: FontWeight.w400,
+          ),
+          hintStyle: controlText.copyWith(
+            color: cs.onSurfaceVariant.withValues(alpha: 0.68),
+            fontWeight: FontWeight.w400,
+          ),
+          border: inputBorder(subtleBorder),
+          enabledBorder: inputBorder(subtleBorder),
+          disabledBorder: inputBorder(
+            cs.outlineVariant.withValues(alpha: isDark ? 0.045 : 0.06),
+          ),
+          focusedBorder: inputBorder(
+            cs.primary.withValues(alpha: isDark ? 0.16 : 0.12),
+            width: 0.4,
+          ),
+          errorBorder: inputBorder(cs.error.withValues(alpha: 0.24)),
+          focusedErrorBorder: inputBorder(
+            cs.error.withValues(alpha: 0.30),
+            width: 0.4,
+          ),
+        ),
+        listTileTheme: theme.listTileTheme.copyWith(
+          dense: true,
+          titleTextStyle: controlText.copyWith(color: cs.onSurface),
+          subtitleTextStyle: labelText.copyWith(color: cs.onSurfaceVariant),
+        ),
+        dropdownMenuTheme: theme.dropdownMenuTheme.copyWith(
+          textStyle: controlText.copyWith(color: cs.onSurface),
+          inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 9,
+              vertical: 6,
+            ),
+          ),
+        ),
+        popupMenuTheme: theme.popupMenuTheme.copyWith(
+          textStyle: controlText.copyWith(color: cs.onSurface),
+          labelTextStyle: WidgetStatePropertyAll(
+            controlText.copyWith(color: cs.onSurface),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            textStyle: controlText,
+            minimumSize: const Size(0, 30),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            textStyle: controlText,
+            minimumSize: const Size(0, 30),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            textStyle: controlText,
+            minimumSize: const Size(0, 30),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            side: BorderSide(color: subtleBorder, width: 0.4),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: appSecondaryFilledButtonStyle(
+            context,
+          ).copyWith(textStyle: WidgetStatePropertyAll(controlText)),
+        ),
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: ButtonStyle(
+            textStyle: WidgetStatePropertyAll(controlText),
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return cs.onSurface.withValues(alpha: 0.38);
+              }
+              if (states.contains(WidgetState.selected)) {
+                return selectedControlForeground;
+              }
+              return cs.onSurface;
+            }),
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return selectedControlBackground;
+              }
+              return Colors.transparent;
+            }),
+            side: WidgetStateProperty.resolveWith((states) {
+              final color = states.contains(WidgetState.selected)
+                  ? cs.primary.withValues(alpha: isDark ? 0.34 : 0.30)
+                  : subtleBorder;
+              return BorderSide(color: color, width: 0.4);
+            }),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        chipTheme: theme.chipTheme.copyWith(
+          labelStyle: labelText.copyWith(color: cs.onSurface),
+          secondaryLabelStyle: labelText.copyWith(
+            color: selectedControlForeground,
+          ),
+          selectedColor: selectedControlBackground,
+          checkmarkColor: selectedControlIcon,
+          iconTheme: IconThemeData(size: 16, color: selectedControlIcon),
+          side: BorderSide(color: subtleBorder, width: 0.4),
+        ),
+      ),
+      child: DefaultTextStyle.merge(style: controlText, child: child),
+    );
+  }
+}
+
+class AppSecondaryMenuText extends StatelessWidget {
+  final String text;
+  final Color? color;
+  final TextAlign? textAlign;
+  final int? maxLines;
+  final TextOverflow? overflow;
+
+  const AppSecondaryMenuText(
+    this.text, {
+    super.key,
+    this.color,
+    this.textAlign,
+    this.maxLines,
+    this.overflow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Text(
+      text,
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: overflow,
+      style: appSecondaryMenuItemTextStyle(
+        context,
+      ).copyWith(color: color ?? cs.onSurface, fontWeight: FontWeight.w400),
     );
   }
 }
@@ -139,18 +462,17 @@ class AppSectionHeader extends StatelessWidget {
                   title,
                   style:
                       titleStyle ??
-                      theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
-                        color: cs.onSurface,
-                      ),
+                      appSecondaryMenuItemTextStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface),
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                    ),
+                    style: appSecondaryControlLabelStyle(
+                      context,
+                    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
                   ),
                 ],
               ],
@@ -201,13 +523,15 @@ class AppStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bg = filled ? color : color.withValues(alpha: 0.12);
-    final fg = filled ? Colors.white : color;
+    final fg = _appReadableForeground(bg, filled ? Colors.white : color);
     return Container(
       padding: padding,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(DesignTokens.radiusPill),
-        border: filled ? null : Border.all(color: color.withValues(alpha: 0.2)),
+        border: filled
+            ? null
+            : Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -263,7 +587,7 @@ class AppInfoBanner extends StatelessWidget {
       color: color.withValues(
         alpha: theme.brightness == Brightness.dark ? 0.16 : 0.08,
       ),
-      border: Border.all(color: color.withValues(alpha: 0.18)),
+      border: Border.all(color: color.withValues(alpha: 0.10), width: 0.45),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -357,7 +681,8 @@ class AppMetricCard extends StatelessWidget {
         color: fill,
         borderRadius: borderRadius,
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.5 : 0.64),
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.10 : 0.12),
+          width: 0.45,
         ),
         boxShadow: [
           BoxShadow(
@@ -503,6 +828,7 @@ class AppActionTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
                         fontWeight: FontWeight.w400,
                         color: cs.onSurface,
                       ),
@@ -562,6 +888,7 @@ class AppSettingsSection extends StatelessWidget {
       padding: padding,
       border: border,
       elevation: elevation,
+      borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -612,15 +939,15 @@ class AppSettingsTile extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -629,10 +956,9 @@ class AppSettingsTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
-                        color: cs.onSurface,
-                      ),
+                      style: appSecondaryMenuItemTextStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -640,9 +966,9 @@ class AppSettingsTile extends StatelessWidget {
                         subtitle!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                        ),
+                        style: appSecondaryControlLabelStyle(
+                          context,
+                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
                       ),
                     ],
                   ],
@@ -748,15 +1074,15 @@ class AppSwitchTile extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -765,10 +1091,9 @@ class AppSwitchTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
-                        color: cs.onSurface,
-                      ),
+                      style: appSecondaryMenuItemTextStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -776,9 +1101,9 @@ class AppSwitchTile extends StatelessWidget {
                         subtitle!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                        ),
+                        style: appSecondaryControlLabelStyle(
+                          context,
+                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
                       ),
                     ],
                   ],
@@ -800,7 +1125,7 @@ Future<T?> showAppModalSheet<T>({
   bool useRootNavigator = false,
   bool isDismissible = true,
   bool enableDrag = true,
-  bool shiftForKeyboard = false,
+  bool shiftForKeyboard = true,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -808,6 +1133,7 @@ Future<T?> showAppModalSheet<T>({
     useRootNavigator: useRootNavigator,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
+    requestFocus: false,
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
       final child = builder(sheetContext);
@@ -838,16 +1164,38 @@ class AppDialog extends StatelessWidget {
     this.icon,
     this.contentPadding,
     this.maxWidth = 420,
-    this.shiftForKeyboard = false,
+    this.shiftForKeyboard = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final media = MediaQuery.of(context);
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final availableHeight = (media.size.height - viewInsets.bottom).clamp(
+      280.0,
+      media.size.height,
+    );
+    final horizontalInset = media.size.width < 360 ? 12.0 : 20.0;
+    final availableWidth = media.size.width - horizontalInset * 2;
+    final effectiveMaxWidth = availableWidth.isFinite
+        ? availableWidth.clamp(0.0, maxWidth).toDouble()
+        : maxWidth;
+    final effectiveMinWidth = effectiveMaxWidth < 320
+        ? effectiveMaxWidth
+        : 320.0;
     final dialog = AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      constraints: BoxConstraints(minWidth: 320, maxWidth: maxWidth),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: 24,
+      ),
+      constraints: BoxConstraints(
+        minWidth: effectiveMinWidth,
+        maxWidth: effectiveMaxWidth,
+        maxHeight: availableHeight * 0.86,
+      ),
+      scrollable: true,
       titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
       contentPadding:
           contentPadding ?? const EdgeInsets.fromLTRB(24, 16, 24, 8),
@@ -872,15 +1220,12 @@ class AppDialog extends StatelessWidget {
           ],
           Expanded(
             child: DefaultTextStyle(
-              style:
-                  theme.textTheme.titleLarge?.copyWith(
+              style: (theme.textTheme.titleMedium ?? const TextStyle())
+                  .copyWith(
                     color: cs.onSurface,
+                    fontSize: 16,
                     fontWeight: FontWeight.w400,
-                  ) ??
-                  TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w400,
+                    height: 1.2,
                   ),
               child: title,
             ),
@@ -890,12 +1235,25 @@ class AppDialog extends StatelessWidget {
       content: content == null
           ? null
           : ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: content,
+              constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+              child: AppSecondaryControlTheme(child: content!),
             ),
-      actions: actions,
+      actions: actions.isEmpty
+          ? null
+          : [
+              AppSecondaryControlTheme(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: actions,
+                ),
+              ),
+            ],
     );
-    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final keyboardLift = viewInsets.bottom <= 0
+        ? 0.0
+        : (viewInsets.bottom * 0.42).clamp(56.0, 128.0).toDouble();
     final scopedDialog = MediaQuery.removeViewInsets(
       context: context,
       removeBottom: true,
@@ -906,8 +1264,13 @@ class AppDialog extends StatelessWidget {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: viewInsets.bottom),
-      child: scopedDialog,
+      padding: EdgeInsets.only(bottom: keyboardLift),
+      child: Align(
+        alignment: viewInsets.bottom > 0
+            ? const Alignment(0, -0.18)
+            : Alignment.center,
+        child: scopedDialog,
+      ),
     );
   }
 }
@@ -937,7 +1300,7 @@ class AppModalSheet extends StatelessWidget {
     this.showDragHandle = true,
     this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 20),
     this.maxWidth = 720,
-    this.shiftForKeyboard = false,
+    this.shiftForKeyboard = true,
   });
 
   @override
@@ -947,6 +1310,10 @@ class AppModalSheet extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final media = MediaQuery.of(context);
     final viewInsets = shiftForKeyboard ? media.viewInsets : EdgeInsets.zero;
+    final availableHeight = (media.size.height - viewInsets.bottom).clamp(
+      320.0,
+      media.size.height,
+    );
     final resolvedPadding = padding.resolve(Directionality.of(context));
     final sheetPadding = EdgeInsets.fromLTRB(
       resolvedPadding.left,
@@ -962,7 +1329,7 @@ class AppModalSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: cs.outlineVariant.withValues(alpha: isDark ? 0.62 : 0.78),
+              color: cs.outlineVariant.withValues(alpha: isDark ? 0.28 : 0.34),
               borderRadius: BorderRadius.circular(999),
             ),
           ),
@@ -977,17 +1344,16 @@ class AppModalSheet extends StatelessWidget {
         ),
         const SizedBox(height: 14),
       ],
-      child,
+      AppSecondaryControlTheme(child: child),
       if (leadingActions.isNotEmpty || actions.isNotEmpty) ...[
         const SizedBox(height: 18),
-        Row(
-          children: [
-            ...leadingActions,
-            const Spacer(),
-            ...actions
-                .expand((action) => [const SizedBox(width: 8), action])
-                .skip(1),
-          ],
+        AppSecondaryControlTheme(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 8,
+            children: [...leadingActions, ...actions],
+          ),
         ),
       ],
     ];
@@ -1030,7 +1396,7 @@ class AppModalSheet extends StatelessWidget {
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxWidth,
-              maxHeight: media.size.height * 0.88,
+              maxHeight: availableHeight * 0.88,
             ),
             child: SizedBox(
               width: double.infinity,
@@ -1092,90 +1458,449 @@ class AppPickerSheet<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     return AppModalSheet(
       title: title,
       subtitle: subtitle,
-      child: options.isEmpty
-          ? (empty ??
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text(
-                      '暂无可选项',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                      ),
-                    ),
-                  ),
-                ))
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final option in options)
-                  ListTile(
-                    enabled: option.enabled,
-                    contentPadding: EdgeInsets.zero,
-                    leading: option.icon == null
-                        ? null
-                        : Container(
-                            width: 38,
-                            height: 38,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: (option.color ?? cs.primary).withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              option.icon,
-                              color: option.color ?? cs.primary,
-                              size: 20,
-                            ),
+      child: Builder(
+        builder: (context) {
+          final theme = Theme.of(context);
+          final cs = theme.colorScheme;
+          return options.isEmpty
+              ? (empty ??
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '暂无可选项',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.62),
                           ),
-                    title: Text(
-                      option.title,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: option.enabled
-                            ? cs.onSurface
-                            : cs.onSurface.withValues(alpha: 0.38),
-                        fontWeight: selectedValue == option.value
-                            ? FontWeight.w400
-                            : FontWeight.w400,
+                        ),
                       ),
-                    ),
-                    subtitle: option.subtitle == null
-                        ? null
-                        : Text(
-                            option.subtitle!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.62),
-                            ),
-                          ),
-                    trailing: selectedValue == option.value
-                        ? Icon(Icons.check_rounded, color: cs.primary)
-                        : null,
-                    onTap: option.enabled
-                        ? () {
-                            onSelected?.call(option.value);
-                            if (closeOnSelect) {
-                              Navigator.pop<T>(context, option.value);
-                            }
-                          }
-                        : null,
-                  ),
-              ],
-            ),
+                    ))
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final option in options) _optionTile(context, option),
+                  ],
+                );
+        },
+      ),
     );
   }
+
+  Widget _optionTile(BuildContext context, AppPickerOption<T> option) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final selected = selectedValue == option.value;
+    final accent = option.color ?? cs.primary;
+    final borderColor = selected
+        ? accent.withValues(alpha: 0.22)
+        : cs.outlineVariant.withValues(alpha: 0.12);
+    final textColor = option.enabled
+        ? cs.onSurface
+        : cs.onSurface.withValues(alpha: 0.38);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? accent.withValues(alpha: 0.08)
+              : cs.surfaceContainerHighest.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: 0.45),
+        ),
+        child: ListTile(
+          enabled: option.enabled,
+          dense: true,
+          minLeadingWidth: 30,
+          horizontalTitleGap: 10,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 2,
+          ),
+          leading: option.icon == null
+              ? null
+              : Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(option.icon, color: accent, size: 17),
+                ),
+          title: Text(
+            option.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: appSecondaryControlTextStyle(
+              context,
+            ).copyWith(color: textColor, fontWeight: FontWeight.w400),
+          ),
+          subtitle: option.subtitle == null
+              ? null
+              : Text(
+                  option.subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appSecondaryControlLabelStyle(context).copyWith(
+                    color: cs.onSurface.withValues(
+                      alpha: option.enabled ? 0.62 : 0.38,
+                    ),
+                  ),
+                ),
+          trailing: selected
+              ? Icon(Icons.check_circle, color: accent, size: 18)
+              : null,
+          onTap: option.enabled
+              ? () {
+                  onSelected?.call(option.value);
+                  if (closeOnSelect) {
+                    Navigator.pop<T>(context, option.value);
+                  }
+                }
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+String _dropdownItemLabel<T>(DropdownMenuItem<T> item) {
+  final widgetText = _dropdownWidgetText(item.child);
+  if (widgetText != null && widgetText.trim().isNotEmpty) {
+    return widgetText.trim();
+  }
+  final value = item.value;
+  return value == null ? '未设置' : value.toString();
+}
+
+String? _dropdownWidgetText(Widget widget) {
+  if (widget is Text) {
+    final data = widget.data;
+    if (data != null && data.trim().isNotEmpty) return data.trim();
+    final spanText = widget.textSpan?.toPlainText();
+    if (spanText != null && spanText.trim().isNotEmpty) {
+      return spanText.trim();
+    }
+    return null;
+  }
+  if (widget is RichText) {
+    final text = widget.text.toPlainText();
+    return text.trim().isEmpty ? null : text.trim();
+  }
+  if (widget is Row || widget is Column || widget is Wrap) {
+    final children = switch (widget) {
+      Row(:final children) => children,
+      Column(:final children) => children,
+      Wrap(:final children) => children,
+      _ => const <Widget>[],
+    };
+    final parts = <String>[];
+    for (final child in children) {
+      final text = _dropdownWidgetText(child);
+      if (text != null && text.trim().isNotEmpty) parts.add(text.trim());
+    }
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+  if (widget is Flexible) return _dropdownWidgetText(widget.child);
+  if (widget is Padding && widget.child != null) {
+    return _dropdownWidgetText(widget.child!);
+  }
+  if (widget is Align && widget.child != null) {
+    return _dropdownWidgetText(widget.child!);
+  }
+  if (widget is SizedBox && widget.child != null) {
+    return _dropdownWidgetText(widget.child!);
+  }
+  if (widget is ConstrainedBox && widget.child != null) {
+    return _dropdownWidgetText(widget.child!);
+  }
+  if (widget is DecoratedBox && widget.child != null) {
+    return _dropdownWidgetText(widget.child!);
+  }
+  return null;
+}
+
+Future<void> _hideKeyboardBeforePicker(BuildContext context) async {
+  final hadKeyboard = _effectiveDropdownBottomInset(context) > 1.0;
+  _beginDropdownKeyboardDismiss(context);
+  await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  if (!context.mounted) return;
+  await _waitForDropdownInsetsToSettle(context);
+
+  if (!context.mounted) return;
+  if (hadKeyboard) {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!context.mounted) return;
+    await _waitForDropdownAnchorLayoutToSettle(context);
+  }
+  if (!context.mounted) return;
+  if (!_dropdownAnchorIsVisible(context)) {
+    await Scrollable.ensureVisible(
+      context,
+      duration: Duration.zero,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+    );
+  }
+  if (!context.mounted) return;
+  await _waitForDropdownAnchorLayoutToSettle(context);
+  await WidgetsBinding.instance.endOfFrame;
+}
+
+Future<void> _waitForDropdownInsetsToSettle(BuildContext context) async {
+  double? previousInset;
+  var closedStableFrames = 0;
+  var unchangedFrames = 0;
+  for (var i = 0; i < 18; i += 1) {
+    await Future<void>.delayed(const Duration(milliseconds: 32));
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+
+    final inset = _effectiveDropdownBottomInset(context);
+    if (inset <= 1.0) {
+      closedStableFrames += 1;
+      if (closedStableFrames >= 3) {
+        await WidgetsBinding.instance.endOfFrame;
+        return;
+      }
+    } else {
+      closedStableFrames = 0;
+    }
+
+    if (previousInset != null && (inset - previousInset).abs() <= 0.5) {
+      unchangedFrames += 1;
+      if (unchangedFrames >= 4) return;
+    } else {
+      unchangedFrames = 0;
+    }
+    previousInset = inset;
+  }
+}
+
+void _beginDropdownKeyboardDismiss(BuildContext context) {
+  FocusScope.of(context, createDependency: false).unfocus();
+  FocusManager.instance.primaryFocus?.unfocus();
+  SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+}
+
+double _effectiveDropdownBottomInset(BuildContext context) {
+  final mediaInset = MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0.0;
+  final view = View.maybeOf(context);
+  final viewInset = view == null
+      ? 0.0
+      : view.viewInsets.bottom / view.devicePixelRatio;
+  return viewInset > mediaInset ? viewInset : mediaInset;
+}
+
+RenderBox? _dropdownOverlayBox(BuildContext context) {
+  final overlay = Navigator.of(context).overlay?.context.findRenderObject();
+  if (overlay is! RenderBox || !overlay.attached || !overlay.hasSize) {
+    return null;
+  }
+  return overlay;
+}
+
+Rect? _dropdownAnchorRectInOverlay(BuildContext context) {
+  final box = context.findRenderObject();
+  final overlay = _dropdownOverlayBox(context);
+  if (box is! RenderBox || overlay == null || !box.attached || !box.hasSize) {
+    return null;
+  }
+  final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final bottomRight = box.localToGlobal(
+    box.size.bottomRight(Offset.zero),
+    ancestor: overlay,
+  );
+  return Rect.fromPoints(topLeft, bottomRight);
+}
+
+Future<void> _waitForDropdownAnchorLayoutToSettle(BuildContext context) async {
+  Rect? previous;
+  var stableFrames = 0;
+  for (var i = 0; i < 14; i += 1) {
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+    final rect = _dropdownAnchorRectInOverlay(context);
+    if (rect == null) return;
+    final stable =
+        previous != null &&
+        (rect.topLeft - previous.topLeft).distance <= 0.5 &&
+        (rect.bottomRight - previous.bottomRight).distance <= 0.5;
+    if (stable) {
+      stableFrames += 1;
+      if (stableFrames >= 2) return;
+    } else {
+      stableFrames = 0;
+    }
+    previous = rect;
+  }
+}
+
+bool _dropdownAnchorIsVisible(BuildContext context) {
+  final rect = _dropdownAnchorRectInOverlay(context);
+  final overlay = _dropdownOverlayBox(context);
+  if (rect == null || overlay == null) {
+    return true;
+  }
+  final media = MediaQuery.maybeOf(context);
+  if (media == null) return true;
+  final visibleTop = media.padding.top + 8;
+  final visibleBottom = overlay.size.height - media.viewInsets.bottom - 8;
+  return rect.top >= visibleTop && rect.bottom <= visibleBottom;
+}
+
+Future<T?> _showAnchoredDropdownMenu<T>({
+  required BuildContext context,
+  required List<DropdownMenuItem<T>> items,
+  required T? selectedValue,
+  required double? menuMaxHeight,
+  required bool shiftForKeyboard,
+}) async {
+  final fieldBox = context.findRenderObject() as RenderBox?;
+  final overlay =
+      Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+  if (fieldBox == null ||
+      overlay == null ||
+      !fieldBox.attached ||
+      !overlay.attached ||
+      !fieldBox.hasSize ||
+      !overlay.hasSize) {
+    return null;
+  }
+
+  _DropdownMenuPosition positionForCurrentLayout() {
+    final currentFieldBox = context.findRenderObject() as RenderBox?;
+    final currentOverlay =
+        Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+    final activeFieldBox = currentFieldBox?.attached == true
+        ? currentFieldBox!
+        : fieldBox;
+    final activeOverlay = currentOverlay?.attached == true
+        ? currentOverlay!
+        : overlay;
+    final fieldTopLeft = activeFieldBox.localToGlobal(
+      Offset.zero,
+      ancestor: activeOverlay,
+    );
+    final fieldBottomRight = activeFieldBox.localToGlobal(
+      activeFieldBox.size.bottomRight(Offset.zero),
+      ancestor: activeOverlay,
+    );
+    final bottomInset = shiftForKeyboard
+        ? _effectiveDropdownBottomInset(context)
+        : 0.0;
+    final safeTop = MediaQuery.paddingOf(context).top + 8;
+    final safeBottom = (activeOverlay.size.height - bottomInset - 8).clamp(
+      safeTop + 48,
+      activeOverlay.size.height,
+    );
+    final preferredMaxHeight = menuMaxHeight ?? 320;
+    final belowSpace = safeBottom - fieldBottomRight.dy - 6;
+    final aboveSpace = fieldTopLeft.dy - safeTop - 6;
+    final openAbove = belowSpace < 160 && aboveSpace > belowSpace;
+    final availableHeight = (openAbove ? aboveSpace : belowSpace)
+        .clamp(96.0, preferredMaxHeight)
+        .toDouble();
+    final unclampedTop = openAbove
+        ? fieldTopLeft.dy - availableHeight - 6
+        : fieldBottomRight.dy + 6;
+    final maxTop = (safeBottom - availableHeight).clamp(safeTop, safeBottom);
+    final menuTop = unclampedTop.clamp(safeTop, maxTop).toDouble();
+    final menuBottom = (activeOverlay.size.height - menuTop - availableHeight)
+        .clamp(0.0, activeOverlay.size.height)
+        .toDouble();
+    final menuLeft = fieldTopLeft.dx.clamp(0.0, activeOverlay.size.width);
+    final menuRight = (activeOverlay.size.width - fieldBottomRight.dx).clamp(
+      0.0,
+      activeOverlay.size.width,
+    );
+    return _DropdownMenuPosition(
+      rect: RelativeRect.fromLTRB(menuLeft, menuTop, menuRight, menuBottom),
+      height: availableHeight,
+    );
+  }
+
+  final initialPosition = positionForCurrentLayout();
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final selectedColor = cs.primary.withValues(alpha: 0.10);
+
+  return showMenu<T>(
+    context: context,
+    requestFocus: false,
+    positionBuilder: (_, constraints) => positionForCurrentLayout().rect,
+    constraints: BoxConstraints(
+      minWidth: fieldBox.size.width,
+      maxWidth: fieldBox.size.width,
+      maxHeight: initialPosition.height,
+    ),
+    color: cs.surface,
+    surfaceTintColor: Colors.transparent,
+    elevation: 4,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(
+        color: cs.outlineVariant.withValues(alpha: 0.14),
+        width: 0.45,
+      ),
+    ),
+    items: [
+      for (final item in items)
+        PopupMenuItem<T>(
+          value: item.value,
+          enabled: item.enabled,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: DefaultTextStyle.merge(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: appSecondaryControlTextStyle(context).copyWith(
+              color: item.enabled
+                  ? cs.onSurface
+                  : cs.onSurface.withValues(alpha: 0.38),
+              fontWeight: FontWeight.w400,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: item.value == selectedValue
+                    ? selectedColor
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                child: Row(
+                  children: [
+                    Expanded(child: item.child),
+                    if (item.value == selectedValue) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.check_rounded, size: 16, color: cs.primary),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+class _DropdownMenuPosition {
+  final RelativeRect rect;
+  final double height;
+
+  const _DropdownMenuPosition({required this.rect, required this.height});
 }
 
 class AppCompactDropdown<T> extends StatelessWidget {
   final T value;
   final List<DropdownMenuItem<T>> items;
-  final ValueChanged<T?> onChanged;
+  final ValueChanged<T?>? onChanged;
   final double width;
 
   const AppCompactDropdown({
@@ -1194,37 +1919,87 @@ class AppCompactDropdown<T> extends StatelessWidget {
     final bg = isDark
         ? cs.surfaceContainerHighest.withValues(alpha: 0.42)
         : cs.surfaceContainerHighest.withValues(alpha: 0.52);
-    final borderColor = cs.outlineVariant.withValues(alpha: isDark ? 0.5 : 0.7);
+    final borderColor = cs.outlineVariant.withValues(
+      alpha: isDark ? 0.10 : 0.12,
+    );
+    final selectedItem = _selectedItem();
+    final enabled = onChanged != null && items.any((item) => item.enabled);
+    final textColor = enabled
+        ? cs.onSurface
+        : cs.onSurface.withValues(alpha: 0.38);
     return SizedBox(
       width: width,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<T>(
-            value: value,
-            isExpanded: true,
-            borderRadius: BorderRadius.circular(16),
-            icon: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 20,
-              color: cs.onSurfaceVariant,
+      child: Builder(
+        builder: (anchorContext) {
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTapDown: enabled
+                  ? (_) => _beginDropdownKeyboardDismiss(anchorContext)
+                  : null,
+              onTap: enabled ? () => _openPicker(anchorContext) : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor, width: 0.45),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedItem == null
+                            ? value.toString()
+                            : _dropdownItemLabel(selectedItem),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryControlTextStyle(context).copyWith(
+                          color: textColor,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: enabled
+                          ? cs.onSurfaceVariant
+                          : cs.onSurface.withValues(alpha: 0.38),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            dropdownColor: cs.surface,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w400,
-            ),
-            items: items,
-            onChanged: onChanged,
-          ),
-        ),
+          );
+        },
       ),
     );
+  }
+
+  DropdownMenuItem<T>? _selectedItem() {
+    for (final item in items) {
+      if (item.value == value) return item;
+    }
+    return null;
+  }
+
+  Future<void> _openPicker(BuildContext anchorContext) async {
+    await _hideKeyboardBeforePicker(anchorContext);
+    if (!anchorContext.mounted) return;
+
+    final picked = await _showAnchoredDropdownMenu<T>(
+      context: anchorContext,
+      items: items,
+      selectedValue: value,
+      menuMaxHeight: 320,
+      shiftForKeyboard: false,
+    );
+    if (picked == null) return;
+    onChanged?.call(picked);
   }
 }
 
@@ -1284,35 +2059,94 @@ class AppDropdownField<T> extends StatelessWidget {
           prefixIcon: prefixIcon,
           isDense: true,
         );
-    return DropdownButtonFormField<T>(
+    final effectiveBorderRadius = borderRadius ?? BorderRadius.circular(16);
+    return FormField<T>(
       initialValue: initialValue,
-      decoration: inputDecoration,
-      items: items,
-      onTap: () {
-        FocusManager.instance.primaryFocus?.unfocus();
-        onTap?.call();
-      },
-      onChanged: enabled ? onChanged : null,
       validator: validator,
       onSaved: onSaved,
       autovalidateMode: autovalidateMode,
-      isExpanded: isExpanded,
-      dropdownColor: dropdownColor ?? cs.surface,
-      borderRadius: borderRadius ?? BorderRadius.circular(16),
-      menuMaxHeight: menuMaxHeight,
-      icon:
-          icon ??
-          Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: iconEnabledColor ?? cs.onSurfaceVariant,
-          ),
-      iconEnabledColor: iconEnabledColor ?? cs.onSurfaceVariant,
-      iconDisabledColor:
-          iconDisabledColor ?? cs.onSurface.withValues(alpha: 0.38),
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurface,
-        fontWeight: FontWeight.w400,
-      ),
+      builder: (field) {
+        final selectedItem = _selectedItem(field.value);
+        final iconColor = enabled
+            ? iconEnabledColor ?? cs.onSurfaceVariant
+            : iconDisabledColor ?? cs.onSurface.withValues(alpha: 0.38);
+        final effectiveDecoration = inputDecoration
+            .applyDefaults(theme.inputDecorationTheme)
+            .copyWith(
+              enabled: enabled,
+              errorText: field.errorText,
+              suffixIcon:
+                  inputDecoration.suffixIcon ??
+                  icon ??
+                  Icon(Icons.keyboard_arrow_down_rounded, color: iconColor),
+            );
+        final canOpen = enabled && items.any((item) => item.enabled);
+        return Builder(
+          builder: (anchorContext) {
+            final content = selectedItem == null
+                ? const SizedBox.shrink()
+                : DefaultTextStyle.merge(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: appSecondaryControlTextStyle(context).copyWith(
+                      color: enabled
+                          ? cs.onSurface
+                          : cs.onSurface.withValues(alpha: 0.38),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    child: IconTheme.merge(
+                      data: IconThemeData(color: cs.onSurfaceVariant),
+                      child: selectedItem.child,
+                    ),
+                  );
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: effectiveBorderRadius,
+                onTapDown: canOpen
+                    ? (_) => _beginDropdownKeyboardDismiss(anchorContext)
+                    : null,
+                onTap: canOpen
+                    ? () => _openPicker(anchorContext, field, inputDecoration)
+                    : null,
+                child: InputDecorator(
+                  decoration: effectiveDecoration,
+                  isEmpty: selectedItem == null,
+                  child: content,
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
+  }
+
+  DropdownMenuItem<T>? _selectedItem(T? value) {
+    for (final item in items) {
+      if (item.value == value) return item;
+    }
+    return null;
+  }
+
+  Future<void> _openPicker(
+    BuildContext anchorContext,
+    FormFieldState<T> field,
+    InputDecoration decoration,
+  ) async {
+    onTap?.call();
+    await _hideKeyboardBeforePicker(anchorContext);
+    if (!anchorContext.mounted || !field.mounted) return;
+
+    final picked = await _showAnchoredDropdownMenu<T>(
+      context: anchorContext,
+      items: items,
+      selectedValue: field.value,
+      menuMaxHeight: menuMaxHeight,
+      shiftForKeyboard: false,
+    );
+    if (!field.mounted || picked == null) return;
+    field.didChange(picked);
+    onChanged(picked);
   }
 }

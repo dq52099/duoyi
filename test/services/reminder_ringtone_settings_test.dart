@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:duoyi/services/reminder_ringtone_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +20,16 @@ void main() {
     );
     expect(ReminderRingtoneSettings.defaultVolumePercent, 60);
     expect(
+      ReminderRingtoneSettings.defaultSound,
+      isNot('alarm'),
+      reason: '默认提醒铃声应使用柔和铃声，不能默认强提醒警报',
+    );
+    expect(
+      ReminderRingtoneSettings.defaultSound,
+      'soft',
+      reason: '默认提醒铃声使用柔和晨铃，避免新用户第一次提醒像警报。',
+    );
+    expect(
       await ReminderRingtoneSettings.loadSound(),
       ReminderRingtoneSettings.defaultSound,
     );
@@ -23,15 +37,45 @@ void main() {
 
   test('persists preset volume and selected ringtone', () async {
     await ReminderRingtoneSettings.setVolumePercent(80);
-    await ReminderRingtoneSettings.setSound('classic');
+    await ReminderRingtoneSettings.setSound('classic', preview: false);
 
     expect(await ReminderRingtoneSettings.loadVolumePercent(), 80);
     expect(await ReminderRingtoneSettings.loadSound(), 'classic');
   });
 
+  test(
+    'migrates legacy alarm default to soft once without blocking opt-in',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        ReminderRingtoneSettings.soundPreferenceKey,
+        'alarm',
+      );
+
+      expect(
+        await ReminderRingtoneSettings.loadSound(),
+        ReminderRingtoneSettings.defaultSound,
+      );
+      expect(
+        prefs.getBool(
+          ReminderRingtoneSettings.legacyAlarmMigrationPreferenceKey,
+        ),
+        isTrue,
+      );
+      expect(
+        prefs.getString(ReminderRingtoneSettings.soundPreferenceKey),
+        ReminderRingtoneSettings.defaultSound,
+      );
+
+      await ReminderRingtoneSettings.setSound('alarm', preview: false);
+
+      expect(await ReminderRingtoneSettings.loadSound(), 'alarm');
+    },
+  );
+
   test('normalizes unsupported volume and ringtone values', () async {
     await ReminderRingtoneSettings.setVolumePercent(73);
-    await ReminderRingtoneSettings.setSound('missing');
+    await ReminderRingtoneSettings.setSound('missing', preview: false);
 
     expect(await ReminderRingtoneSettings.loadVolumePercent(), 80);
     expect(
@@ -43,16 +87,273 @@ void main() {
   test('exposes multiple named ringtone options beyond volume presets', () {
     expect(
       ReminderRingtoneSettings.sounds.map((sound) => sound.id),
-      containsAll(<String>['alarm', 'chime', 'bell', 'beep', 'classic']),
+      containsAll(<String>[
+        'soft',
+        'lull',
+        'glass',
+        'bamboo',
+        'dawn',
+        'wood',
+        'water',
+        'harp',
+        'mist',
+        'pebble',
+        'tide',
+        'alarm',
+        'chime',
+        'bell',
+        'morning',
+        'pearl',
+        'beep',
+        'classic',
+      ]),
     );
+    expect(ReminderRingtoneSettings.sounds.first.id, 'soft');
+    expect(ReminderRingtoneSettings.sounds.first.label, '柔和晨铃');
     expect(
       ReminderRingtoneSettings.sounds
-          .firstWhere((sound) => sound.id == 'chime')
+          .firstWhere((sound) => sound.id == 'classic')
           .label,
-      '苹果经典轻铃',
+      '经典闹钟柔和版',
     );
-    expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(5));
+    expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(18));
     expect(ReminderRingtoneSettings.presets, <int>[40, 60, 80]);
+  });
+
+  test('ringtone changes trigger unified native preview by default', () {
+    final source = File(
+      'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
+    final mainActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+    ).readAsStringSync();
+    final service = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+    ).readAsStringSync();
+    final screen = File(
+      'lib/screens/notification_history_screen.dart',
+    ).readAsStringSync();
+    final native = File(
+      'lib/services/native_reminder_ringtone.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('setSound(String value, {bool preview = true})'));
+    expect(
+      source,
+      contains('final previewResult = await _applyAndPreviewWithFallback('),
+    );
+    expect(source, contains('ReminderRingtonePreviewException'));
+    expect(source, contains('fellBackToDefault'));
+    expect(source, contains('所选提醒铃声试听失败'));
+    expect(source, contains('默认柔和晨铃'));
+    expect(source, isNot(contains('默认轻铃')));
+    expect(source, contains('usedFallback: fallbackStarted'));
+    expect(source, contains('await applyPersistedSettingsToNative();'));
+    expect(source, contains('NativeReminderRingtone.preview()'));
+    expect(mainActivity, contains('"setSoundName"'));
+    expect(mainActivity, contains('ReminderRingtoneService.setSoundName'));
+    expect(mainActivity, contains('"setVolumePercent"'));
+    expect(mainActivity, contains('ReminderRingtoneService.setVolumePercent'));
+    expect(mainActivity, contains('result.success(null)'));
+    expect(service, contains('val normalized = value.coerceIn(40, 80)'));
+    expect(service, contains('.getInt(volumeKey, 60)'));
+    expect(service, contains('.coerceIn(40, 80)'));
+    expect(native, contains('static const int previewNotificationId'));
+    expect(native, contains('static const Duration previewDuration'));
+    expect(native, contains('Future<bool> preview({'));
+    expect(native, contains("_tryInvoke('showNow'"));
+    expect(native, contains("'vibrate': false"));
+    expect(native, contains('unawaited('));
+    expect(native, contains("_tryInvoke('cancel'"));
+    expect(native, isNot(contains('await cancel(previewNotificationId)')));
+    expect(screen, contains('Future<void> _reloadRingtoneSettings() async'));
+    expect(screen, contains('await _reloadRingtoneSettings();'));
+    expect(screen, contains('Future<void> _previewCurrentSound() async'));
+    expect(screen, contains("tooltip: '试听当前铃声'"));
+    expect(screen, contains('ReminderRingtoneSettings.previewCurrentSound()'));
+    expect(screen, contains('正在试听当前提醒铃声'));
+    expect(screen, contains('if (_previewing) return;'));
+    expect(screen, contains('_previewing = true;'));
+    expect(screen, contains(r"successMessage: '已切换为 $label，并开始试听'"));
+    expect(screen, contains("successMessage: '已切换音量并开始试听'"));
+  });
+
+  test('ringtone volume changes also trigger native preview by default', () {
+    final source = File(
+      'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
+
+    final volumeStart = source.indexOf(
+      'static Future<void> setVolumePercent(int value, {bool preview = true})',
+    );
+    final volumeEnd = source.indexOf(
+      'static Future<void> setSound',
+      volumeStart,
+    );
+    expect(volumeStart, greaterThanOrEqualTo(0));
+    expect(volumeEnd, greaterThan(volumeStart));
+    final method = source.substring(volumeStart, volumeEnd);
+
+    expect(
+      method,
+      contains('final previewResult = await _applyAndPreviewWithFallback();'),
+    );
+    expect(method, contains('throw const ReminderRingtonePreviewException();'));
+    expect(
+      method,
+      contains(
+        'throw const ReminderRingtonePreviewException(fellBackToDefault: true);',
+      ),
+    );
+    expect(
+      source,
+      contains('final applied = await applyPersistedSettingsToNative();'),
+    );
+    expect(
+      source,
+      contains('if (applied && await _previewNativeCurrentSound())'),
+    );
+    expect(
+      source,
+      contains('final applied = await applyPersistedSettingsToNative();'),
+    );
+    expect(source, contains('if (!applied) return false;'));
+    expect(source, contains('if (!_isAndroid) return true;'));
+    expect(
+      source,
+      contains('final started = await NativeReminderRingtone.preview();'),
+    );
+    expect(source, contains('NativeReminderRingtone.clearLastDeliveryIssue()'));
+    expect(source, contains('NativeReminderRingtone.lastDeliveryIssue()'));
+    expect(
+      source,
+      contains('issue?.id != NativeReminderRingtone.previewNotificationId'),
+    );
+    expect(
+      source,
+      contains('static Future<bool> applyPersistedSettingsToNative()'),
+    );
+  });
+
+  test('built-in ringtone options map to non-empty Android raw resources', () {
+    final service = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+    ).readAsStringSync();
+    final alarmService = File(
+      'lib/services/alarm_service.dart',
+    ).readAsStringSync();
+    final localNotifications = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
+
+    for (final sound in ReminderRingtoneSettings.sounds) {
+      final file = File('android/app/src/main/res/raw/duoyi_${sound.id}.wav');
+      expect(
+        ReminderRingtoneSettings.androidRawResourceNameFor(sound.id),
+        'duoyi_${sound.id}',
+      );
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason: 'duoyi_${sound.id}.wav missing',
+      );
+      expect(
+        file.lengthSync(),
+        greaterThan(4096),
+        reason: 'duoyi_${sound.id}.wav must not be an empty placeholder',
+      );
+      expect(
+        _wavPcm16Rms(file),
+        greaterThan(1200),
+        reason:
+            'duoyi_${sound.id}.wav must be clearly audible; near-silent built-in sounds make reminders look broken.',
+      );
+      final header = file.openSync();
+      try {
+        expect(String.fromCharCodes(header.readSync(4)), 'RIFF');
+        header.setPositionSync(8);
+        expect(String.fromCharCodes(header.readSync(4)), 'WAVE');
+      } finally {
+        header.closeSync();
+      }
+      expect(service, contains('R.raw.duoyi_${sound.id}'));
+    }
+    expect(
+      ReminderRingtoneSettings.androidRawResourceNameFor('missing'),
+      'duoyi_soft',
+    );
+    expect(
+      alarmService,
+      contains('ReminderRingtoneSettings.loadAndroidRawResourceName()'),
+    );
+    expect(
+      localNotifications,
+      contains('ReminderRingtoneSettings.loadAndroidRawResourceName()'),
+    );
+    expect(
+      '$alarmService\n$localNotifications',
+      isNot(contains("RawResourceAndroidNotificationSound('duoyi_chime')")),
+    );
+  });
+
+  test('tracks selected ringtone used by Android fallback channels', () async {
+    const channelId = 'duoyi_alarm_fullscreen_v18';
+
+    expect(
+      await ReminderRingtoneSettings.loadAndroidRawResourceName(),
+      'duoyi_soft',
+    );
+    expect(
+      await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+        channelId,
+        'duoyi_soft',
+      ),
+      isTrue,
+      reason: '首次运行要强制重建渠道，修复旧包遗留的静音默认渠道。',
+    );
+    await ReminderRingtoneSettings.markAndroidFallbackChannelSoundApplied(
+      channelId,
+      'duoyi_soft',
+    );
+    expect(
+      await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+        channelId,
+        'duoyi_soft',
+      ),
+      isFalse,
+    );
+
+    await ReminderRingtoneSettings.setSound('bell', preview: false);
+    expect(
+      await ReminderRingtoneSettings.loadAndroidRawResourceName(),
+      'duoyi_bell',
+    );
+    expect(
+      await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+        channelId,
+        'duoyi_bell',
+      ),
+      isTrue,
+    );
+
+    await ReminderRingtoneSettings.markAndroidFallbackChannelSoundApplied(
+      channelId,
+      'duoyi_bell',
+    );
+    expect(
+      await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+        channelId,
+        'duoyi_bell',
+      ),
+      isFalse,
+    );
+    expect(
+      await ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh(
+        channelId,
+        'duoyi_classic',
+      ),
+      isTrue,
+    );
   });
 
   test('uses native built-in ringtone controls on Android only', () {
@@ -144,4 +445,29 @@ void main() {
     expect(policy.usesSystemNotificationSound, isFalse);
     expect(policy.tileTitleKey, 'preferences.ringtone.unsupported');
   });
+}
+
+int _wavPcm16Rms(File file) {
+  final bytes = file.readAsBytesSync();
+  final data = ByteData.sublistView(bytes);
+  var offset = 12;
+  while (offset + 8 <= bytes.length) {
+    final chunkId = String.fromCharCodes(bytes.sublist(offset, offset + 4));
+    final chunkSize = data.getUint32(offset + 4, Endian.little);
+    final chunkStart = offset + 8;
+    if (chunkId == 'data') {
+      final chunkEnd = math.min(chunkStart + chunkSize, bytes.length);
+      var sumSquares = 0.0;
+      var count = 0;
+      for (var i = chunkStart; i + 1 < chunkEnd; i += 2) {
+        final sample = data.getInt16(i, Endian.little).toDouble();
+        sumSquares += sample * sample;
+        count++;
+      }
+      if (count == 0) return 0;
+      return math.sqrt(sumSquares / count).round();
+    }
+    offset = chunkStart + chunkSize + (chunkSize.isOdd ? 1 : 0);
+  }
+  return 0;
 }

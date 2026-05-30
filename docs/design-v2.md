@@ -337,7 +337,7 @@ class TestNotificationResult {
 
 #### 4.3.3 App Resume 自动刷新
 
-在偏好设置页 `_PreferencesScreenState` 中混入 `WidgetsBindingObserver`：
+在独立通知设置页 `_NotificationSettingsScreenState` 中混入 `WidgetsBindingObserver`：
 
 ```dart
 @override
@@ -545,40 +545,12 @@ CloudSyncProvider 的 sync payload 增加 `achievement_states` collection：
 
 合并策略：`unlocked_at` 取最早（非空优先）；`current` 取最大。
 
-### D7: 课程/倒数日/纪念日深度集成
+### D7: 课程/纪念日深度集成（倒数日恢复可见）
 
-#### 4.7.1 倒数日 Alarm 支持
+#### 4.7.1 倒数日可见边界
 
-ReminderScheduler.syncCountdowns() 当前仅走 push。扩展：
-
-```dart
-// CountdownItem 模型增加：
-//   ReminderKind kind = ReminderKind.push; // 默认 push
-//   bool fullScreen = false;
-
-// syncCountdowns 中根据 kind 决定走 _dispatch 还是 notif.scheduleOnce
-Future<void> syncCountdowns(Iterable<CountdownItem> items) async {
-  // ...
-  for (final item in wanted.values) {
-    final when = _countdownReminderAt(item);
-    if (item.kind == ReminderKind.alarm) {
-      await _dispatch(
-        kind: ReminderKind.alarm,
-        payload: _DispatchPayload(
-          id: _idFor('countdown:${item.id}:due'),
-          title: '倒数日提醒',
-          body: '${item.title} 到了！',
-          when: when,
-          payload: 'duoyi://countdown/${item.id}',
-          fullScreen: item.fullScreen,
-        ),
-      );
-    } else {
-      await notif.scheduleOnce(/* 现有逻辑 */);
-    }
-  }
-}
-```
+倒数日作为当前版本的可见主流程：提供新增入口，进入搜索、日历聚合、导出和深链。
+旧数据继续保留兼容读取/编辑路径，避免历史数据丢失。
 
 #### 4.7.2 纪念日 Alarm 支持
 

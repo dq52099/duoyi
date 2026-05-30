@@ -121,4 +121,109 @@ void main() {
     expect(find.text('高优先任务'), findsOneWidget);
     expect(find.text('低优先任务'), findsOneWidget);
   });
+
+  testWidgets(
+    'TodoScreen left swipe reveals inline detail and delete actions',
+    (tester) async {
+      final todoProvider = TodoProvider();
+      await todoProvider.addTodo(
+        TodoItem(title: '左滑任务', quadrant: EisenhowerQuadrant.urgentImportant),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+            ChangeNotifierProvider(create: (_) => HabitProvider()),
+            ChangeNotifierProvider(create: (_) => GoalProvider()),
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider(create: (_) => AiService()),
+            ChangeNotifierProvider(create: (_) => ShareProvider()),
+            ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ],
+          child: const MaterialApp(home: TodoScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('列表'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('左滑任务'), const Offset(-160, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('todo_swipe_detail_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('todo_swipe_delete_button')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
+      await tester.pumpAndSettle();
+      expect(find.text('删除任务？'), findsOneWidget);
+
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(todoProvider.todos.single.title, '左滑任务');
+
+      await tester.drag(find.text('左滑任务'), const Offset(-160, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+
+      expect(todoProvider.todos, isEmpty);
+      expect(find.text('左滑任务'), findsNothing);
+    },
+  );
+
+  testWidgets('TodoScreen kanban card left swipe can delete task', (
+    tester,
+  ) async {
+    final todoProvider = TodoProvider();
+    await todoProvider.addTodo(
+      TodoItem(title: '看板左滑删除', kanbanColumnId: defaultKanbanPendingColumnId),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AiService()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: const MaterialApp(home: TodoScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('看板'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('看板左滑删除'), const Offset(-160, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_swipe_detail_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_swipe_delete_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(todoProvider.todos, isEmpty);
+    expect(find.text('看板左滑删除'), findsNothing);
+  });
 }

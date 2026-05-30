@@ -11,6 +11,10 @@ void main() {
     expect(source, contains("import 'dart:math' as math;"));
     expect(source, contains('final timedEvents = events.where'));
     expect(source, contains('final untimedEvents = events.where'));
+    expect(source, contains('Expanded('));
+    expect(source, contains('Wrap('));
+    expect(source, contains('runSpacing: 5'));
+    expect(source, contains('Widget _dayBadge('));
     expect(source, contains('_sectionTitle(\'🕘 时间线\')'));
     expect(source, contains('_sectionTitle(\'📝 全天/无时间\')'));
     expect(source, contains('_CalendarDayTimeGrid(date: date'));
@@ -27,6 +31,8 @@ void main() {
     expect(source, contains('static const double _timeColumnWidth'));
     expect(source, contains('for (var hour = 0; hour < 24; hour++)'));
     expect(source, contains('class _TimelineHourRow'));
+    expect(source, contains('alpha: 0.10'));
+    expect(source, contains('alpha: 0.08'));
     expect(source, contains('Positioned('));
     expect(source, contains('top: clampedTop'));
     expect(source, contains('height: clampedHeight'));

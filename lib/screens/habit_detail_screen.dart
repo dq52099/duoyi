@@ -12,6 +12,7 @@ import '../models/goal.dart'
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
+import '../services/alarm_service.dart';
 import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/reminder_health_hint.dart';
@@ -106,11 +107,19 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
             final notificationService = context.read<NotificationService?>();
             final granted =
                 notificationService == null ||
-                await notificationService.requestPermission();
+                await notificationService.ensureReadyForReminder(
+                  scheduledTime: _nextHabitReminderTrigger(reminderRule),
+                  issueTitle: I18n.tr('habit.error.reminder_register_failed'),
+                  relatedId: habit.id,
+                );
             if (!granted) {
+              final issue = notificationService.lastScheduleIssue;
               messenger.showSnackBar(
                 SnackBar(
-                  content: Text(I18n.tr('habit.error.notification_permission')),
+                  content: Text(
+                    issue?.message ??
+                        I18n.tr('habit.error.notification_permission'),
+                  ),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -140,6 +149,9 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
             remind: hasReminder,
             remindHour: hasReminder ? reminderRule.hour : null,
             remindMinute: hasReminder ? reminderRule.minute : null,
+            reminderPlan: hasReminder
+                ? reminderPlan
+                : const ReminderPlan.disabled(),
           );
 
           await habitProvider.updateHabit(habit.id, updated);
@@ -250,13 +262,13 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                                       ButtonSegment(
                                         value: HabitFlexPeriod.week,
                                         label: Text(
-                                          I18n.tr('habit.flex.weekly'),
+                                          '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.week')}',
                                         ),
                                       ),
                                       ButtonSegment(
                                         value: HabitFlexPeriod.month,
                                         label: Text(
-                                          I18n.tr('habit.flex.monthly'),
+                                          '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.month')}',
                                         ),
                                       ),
                                     ],
@@ -373,7 +385,7 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                           color: Color(c),
                           shape: BoxShape.circle,
                           border: selectedColor == c
-                              ? Border.all(color: Colors.white, width: 2)
+                              ? Border.all(color: Colors.white, width: 1.2)
                               : null,
                           boxShadow: selectedColor == c
                               ? [
@@ -392,13 +404,13 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
               ReminderPlanEditor(
                 plan: reminderPlan,
                 title: I18n.tr('habit.reminder'),
-                allowAlarm: false,
+                allowAlarm: true,
                 allowRelativeToDue: false,
                 allowWeekly: true,
                 allowSnooze: false,
                 hasAnchorDate: false,
                 maxRules: 1,
-                defaultKind: ReminderKind.push,
+                defaultKind: ReminderKind.alarm,
                 onChanged: (plan) => setSt(() => reminderPlan = plan),
               ),
               const SizedBox(height: DesignTokens.spaceSm),
@@ -406,16 +418,24 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 builder: (context) {
                   final notif = context.watch<NotificationService?>();
                   if (notif == null) return const SizedBox.shrink();
+                  final reminderKind =
+                      _habitPrimaryReminder(reminderPlan)?.kind ??
+                      ReminderKind.push;
                   return ReminderHealthHint(
-                    reminderKind: ReminderKind.push,
+                    reminderKind: reminderKind,
                     onOpenSystemSettings: () => _openSystemSettings(context),
                     onRequestNotificationPermission: () async {
                       await context
                           .read<NotificationService>()
                           .requestPermission();
                     },
-                    onRequestExactAlarmPermission: () async {},
-                    onRequestFullScreenIntentPermission: () async {},
+                    onRequestExactAlarmPermission: () async {
+                      await AlarmService.instance.requestExactAlarmPermission();
+                    },
+                    onRequestFullScreenIntentPermission: () async {
+                      await AlarmService.instance
+                          .requestFullScreenIntentPermission();
+                    },
                   );
                 },
               ),
@@ -489,6 +509,59 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
       appBar: AppBar(
         title: Text(habit.name),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: '更多操作',
+            onSelected: (value) async {
+              final provider = context.read<HabitProvider>();
+              if (value == 'end') {
+                await provider.endHabit(habit.id);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('习惯已结束，历史记录已保留')));
+              } else if (value == 'delete') {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AppDialog(
+                    title: const Text('删除习惯？'),
+                    content: const Text('会删除该习惯和关联记录，不可恢复。'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('取消'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('删除'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                await provider.deleteHabit(habit.id);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'end',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.event_busy_outlined),
+                  title: Text('结束习惯'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('删除习惯'),
+                ),
+              ),
+            ],
+          ),
           IconButton(
             tooltip: I18n.tr('action.edit'),
             icon: const Icon(Icons.edit_outlined),
@@ -511,15 +584,16 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(Icons.star, color: color, size: 32),
+                    child: Icon(
+                      _habitIconForToken(habit.icon),
+                      color: color,
+                      size: 32,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     habit.name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w400,
-                    ),
+                    style: appSecondaryRouteTitleTextStyle(context),
                   ),
                   if (habit.hasFlexRule) ...[
                     const SizedBox(height: 6),
@@ -558,6 +632,72 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       _StatChip(
                         label: I18n.tr('habit.stat.today'),
                         value: todayLabel,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                        ),
+                        onPressed: () async {
+                          final provider = context.read<HabitProvider>();
+                          await provider.endHabit(habit.id);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('习惯已结束，历史记录已保留')),
+                          );
+                        },
+                        icon: const Icon(Icons.event_busy_outlined, size: 16),
+                        label: const Text('结束习惯'),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: cs.error,
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                        ),
+                        onPressed: () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AppDialog(
+                              title: const Text('删除习惯？'),
+                              content: const Text('会删除该习惯和关联记录，不可恢复。'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('取消'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('删除'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok != true || !context.mounted) return;
+                          await context.read<HabitProvider>().deleteHabit(
+                            habit.id,
+                          );
+                          if (!context.mounted) return;
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('删除'),
                       ),
                     ],
                   ),
@@ -961,9 +1101,9 @@ String localizedFlexPeriodGoalLabel(Habit habit) {
   if (!habit.hasFlexRule) return '';
   return switch (habit.flexPeriod!) {
     HabitFlexPeriod.week =>
-      '${I18n.tr('habit.flex.weekly_goal_prefix')}${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}',
+      '${I18n.tr('habit.flex.period_target')}: ${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.week')}',
     HabitFlexPeriod.month =>
-      '${I18n.tr('habit.flex.monthly_goal_prefix')}${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}',
+      '${I18n.tr('habit.flex.period_target')}: ${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.month')}',
   };
 }
 
@@ -1014,6 +1154,9 @@ String _habitCountLabel(int count, String unit) {
 }
 
 ReminderPlan _habitReminderPlan(Habit habit) {
+  if (habit.reminderPlan.enabled && habit.reminderPlan.rules.isNotEmpty) {
+    return habit.reminderPlan;
+  }
   if (!habit.remind || habit.remindHour == null || habit.remindMinute == null) {
     return const ReminderPlan.disabled();
   }
@@ -1033,7 +1176,7 @@ ReminderPlan _habitReminderPlan(Habit habit) {
         type: fullWeek
             ? ReminderRuleType.dailyTime
             : ReminderRuleType.weeklyTime,
-        kind: ReminderKind.push,
+        kind: ReminderKind.alarm,
         hour: habit.remindHour,
         minute: habit.remindMinute,
         weekdays: fullWeek ? const <int>[] : weekdays,
@@ -1047,6 +1190,46 @@ ReminderRule? _habitPrimaryReminder(ReminderPlan plan) {
     if (rule.enabled) return rule;
   }
   return plan.rules.isEmpty ? null : plan.rules.first;
+}
+
+DateTime? _nextHabitReminderTrigger(ReminderRule rule) {
+  final hour = rule.hour;
+  final minute = rule.minute;
+  if (hour == null || minute == null) return null;
+  final now = DateTime.now();
+  final weekdays = rule.type == ReminderRuleType.weeklyTime
+      ? rule.weekdays.where((day) => day >= 1 && day <= 7).toSet()
+      : const <int>{};
+  for (var offset = 0; offset <= 7; offset++) {
+    final date = now.add(Duration(days: offset));
+    final target = DateTime(date.year, date.month, date.day, hour, minute);
+    if (!target.isAfter(now)) continue;
+    if (weekdays.isNotEmpty && !weekdays.contains(target.weekday)) continue;
+    return target;
+  }
+  return null;
+}
+
+IconData _habitIconForToken(String token) {
+  final codePoint = int.tryParse(token);
+  if (codePoint != null) {
+    return IconData(codePoint, fontFamily: 'MaterialIcons');
+  }
+  return switch (token) {
+    defaultHabitIconToken => Icons.check_circle_outline,
+    'check' => Icons.check_circle_outline,
+    'star' => Icons.check_circle_outline,
+    'water' => Icons.local_drink,
+    'run' => Icons.directions_run,
+    'book' => Icons.book,
+    'sleep' => Icons.bedtime,
+    'meditation' => Icons.self_improvement,
+    'code' => Icons.code,
+    'school' => Icons.school,
+    'fitness' => Icons.fitness_center,
+    'mood' => Icons.mood,
+    _ => Icons.check_circle_outline,
+  };
 }
 
 class _StatChip extends StatelessWidget {

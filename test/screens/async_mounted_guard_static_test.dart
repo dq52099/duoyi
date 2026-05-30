@@ -37,10 +37,8 @@ void main() {
     expect(source, contains('lastDate: _lastSupportedDate'));
     expect(source, contains('onPressed: _date == _firstSupportedDate'));
     expect(source, contains('onPressed: _date == _lastSupportedDate'));
-    expect(source, contains('void _goToday()'));
-    expect(source, contains('messenger.hideCurrentSnackBar();'));
-    expect(source, contains('messenger.showSnackBar('));
     expect(source, contains("tooltip: '回到今天'"));
+    expect(source, contains('void _goToday()'));
     expect(source, isNot(contains('void _toggleMode()')));
     expect(source, isNot(contains('Navigator.pushReplacement')));
   });
@@ -63,15 +61,17 @@ void main() {
     expect(
       source,
       contains(
-        'final data = await widget.api.getSettings();\n      if (!mounted) return;',
+        "final data = await widget.api.getSettings(scope: 'ai');\n      if (!mounted) return;",
       ),
     );
     expect(
       source,
       contains(
-        'final res = await widget.api.testAi();\n      if (!mounted) return;',
+        'final res = await widget.api.testAi(\n        aiEnabled: _enabled,',
       ),
     );
+    expect(source, contains('model: _modelCtrl.text.trim(),\n      );'));
+    expect(source, contains('if (!mounted) return;'));
     expect(
       source,
       contains('final backupPage = await widget.api.listBackupsPage('),

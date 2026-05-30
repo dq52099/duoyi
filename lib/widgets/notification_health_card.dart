@@ -12,7 +12,9 @@ class NotificationHealthCard extends StatelessWidget {
   final DateTime? lastTestAt;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSystemSettings;
+  final ValueChanged<String> onOpenNotificationChannelSettings;
   final VoidCallback onSendTest;
+  final VoidCallback onSendStrongTest;
   final VoidCallback onClearPending;
   final VoidCallback onRequestNotificationPermission;
   final VoidCallback onRequestExactAlarmPermission;
@@ -22,7 +24,9 @@ class NotificationHealthCard extends StatelessWidget {
     super.key,
     required this.onRefresh,
     required this.onOpenSystemSettings,
+    required this.onOpenNotificationChannelSettings,
     required this.onSendTest,
+    required this.onSendStrongTest,
     required this.onClearPending,
     required this.onRequestNotificationPermission,
     required this.onRequestExactAlarmPermission,
@@ -76,6 +80,8 @@ class NotificationHealthCard extends StatelessWidget {
                 onRequestFullScreenIntentPermission:
                     onRequestFullScreenIntentPermission,
                 onOpenSystemSettings: onOpenSystemSettings,
+                onOpenNotificationChannelSettings:
+                    onOpenNotificationChannelSettings,
               ),
               const SizedBox(height: 2),
             ],
@@ -89,6 +95,13 @@ class NotificationHealthCard extends StatelessWidget {
                 ? '验证普通通知渠道是否可见、可响铃'
                 : '上次测试 ${_formatDateTime(lastTestAt!)}',
             onTap: onSendTest,
+          ),
+          AppSettingsTile(
+            icon: Icons.alarm_on_outlined,
+            color: Colors.deepOrange,
+            title: '测试强提醒铃声',
+            subtitle: '验证闹钟提醒、内置铃声和通知停止按钮，同时检查系统闹钟音量和勿扰影响，可能会响铃',
+            onTap: onSendStrongTest,
           ),
           if (report == null ||
               report.summaryStatus != PermissionHealthStatus.ok)
@@ -145,7 +158,7 @@ class _SummaryBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.45),
       ),
       child: Row(
         children: [
@@ -196,6 +209,7 @@ class _HealthCheckTile extends StatelessWidget {
   final VoidCallback onRequestExactAlarmPermission;
   final VoidCallback onRequestFullScreenIntentPermission;
   final VoidCallback onOpenSystemSettings;
+  final ValueChanged<String> onOpenNotificationChannelSettings;
 
   const _HealthCheckTile({
     required this.check,
@@ -203,21 +217,28 @@ class _HealthCheckTile extends StatelessWidget {
     required this.onRequestExactAlarmPermission,
     required this.onRequestFullScreenIntentPermission,
     required this.onOpenSystemSettings,
+    required this.onOpenNotificationChannelSettings,
   });
 
   @override
   Widget build(BuildContext context) {
-    final action = switch (check.action) {
+    final VoidCallback? action = switch (check.action) {
       PermissionHealthAction.requestNotificationPermission =>
         onRequestNotificationPermission,
       PermissionHealthAction.requestExactAlarmPermission =>
         onRequestExactAlarmPermission,
       PermissionHealthAction.requestFullScreenIntentPermission =>
         onRequestFullScreenIntentPermission,
-      PermissionHealthAction.openAppSettings => onOpenSystemSettings,
+      PermissionHealthAction.openAppSettings =>
+        check.actionChannelIds.isNotEmpty
+            ? () => onOpenNotificationChannelSettings(
+                check.actionChannelIds.first,
+              )
+            : onOpenSystemSettings,
       PermissionHealthAction.none => null,
       null => null,
     };
+    final trailing = _actionTrailing(context, action);
 
     final color = _statusColor(check.status, Theme.of(context).colorScheme);
     final icon = check.manual
@@ -229,14 +250,48 @@ class _HealthCheckTile extends StatelessWidget {
       color: color,
       title: check.title,
       subtitle: check.manual ? '${check.subtitle} · 需要人工确认' : check.subtitle,
-      trailing: action == null
-          ? Icon(_statusTrailingIcon(check.status), color: color)
-          : TextButton(
-              onPressed: action,
-              child: Text(check.actionLabel ?? '处理'),
-            ),
+      trailing: trailing,
     );
   }
+
+  Widget _actionTrailing(BuildContext context, VoidCallback? action) {
+    final color = _statusColor(check.status, Theme.of(context).colorScheme);
+    if (check.action == PermissionHealthAction.openAppSettings &&
+        check.actionChannelIds.length > 1) {
+      return PopupMenuButton<String>(
+        tooltip: check.actionLabel ?? '渠道设置',
+        icon: Icon(Icons.tune_outlined, color: color),
+        onSelected: onOpenNotificationChannelSettings,
+        itemBuilder: (context) => [
+          for (final id in check.actionChannelIds)
+            PopupMenuItem(
+              value: id,
+              child: AppSecondaryMenuText(_notificationChannelLabel(id)),
+            ),
+        ],
+      );
+    }
+    if (action == null) {
+      return Icon(_statusTrailingIcon(check.status), color: color);
+    }
+    return TextButton(
+      onPressed: action,
+      child: Text(check.actionLabel ?? '处理'),
+    );
+  }
+}
+
+String _notificationChannelLabel(String id) {
+  if (id.contains('alarm') || id.contains('fullscreen')) return '强提醒渠道';
+  if (id.contains('fallback')) return '闹钟兜底通知';
+  if (id.contains('native') || id.contains('status')) return '内置铃声状态';
+  if (id.contains('reminder') ||
+      id.contains('notification') ||
+      id.contains('general') ||
+      id.contains('alerts')) {
+    return '通知提醒渠道';
+  }
+  return id;
 }
 
 Color _statusColor(PermissionHealthStatus status, ColorScheme cs) {

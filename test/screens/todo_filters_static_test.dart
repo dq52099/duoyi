@@ -32,6 +32,14 @@ void main() {
     expect(source, contains('_TodoFilterMenu<TodoPriority>'));
     expect(source, contains('_TodoFilterMenu<TodoDueFilter>'));
     expect(source, contains('_TodoFilterMenu<TodoCompletionFilter>'));
+    expect(source, contains('AppSecondaryMenuText('));
+    expect(source, contains('AppSecondaryControlTheme('));
+    expect(source, contains('appSecondaryRouteTitleTextStyle(ctx)'));
+    expect(source, contains('appSecondaryControlLabelStyle(ctx)'));
+    expect(source, contains('height: 42'));
+    expect(source, isNot(contains('fontSize: 20')));
+    expect(source, isNot(contains('selectedColor: t.color,')));
+    expect(source, contains('selectedColor: t.color.withValues(alpha: 0.12)'));
   });
 
   test('任务筛选覆盖日期、完成状态、标签、清单和空结果', () {
@@ -61,16 +69,44 @@ void main() {
       contains('class _TodoTodaySummaryCard extends StatelessWidget'),
     );
     expect(source, contains("key: const ValueKey('todo_today_summary_card')"));
-    expect(source, contains("'今日还要完成 \$remaining'"));
+    expect(source, contains("'今日还要完成 \$remaining 项'"));
     expect(
       source,
-      contains("'日常\$dailyCount 代表\$representativeCount 目标\$activeGoalCount'"),
+      contains(
+        "'日常 \$dailyCount / 代表 \$representativeCount / 目标 \$activeGoalCount'",
+      ),
     );
+    expect(source, isNot(contains('下一个')));
+    expect(source, isNot(contains('upcomingToday')));
+    expect(source, isNot(contains('nextDue')));
     expect(source, contains('habitProvider.habits'));
     expect(source, contains('goalProvider.activeGoals.length'));
     expect(source, contains('TodoPriority.urgent'));
     expect(source, contains('TodoPriority.high'));
     expect(source, contains('EisenhowerQuadrant.urgentImportant'));
+  });
+
+  test('清单模板选中态使用浅色主题背景避免白字实心块', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(source, isNot(contains('Color _todoTemplateChipForeground')));
+    expect(source, isNot(contains('double _todoContrastRatio')));
+    expect(source, isNot(contains('_todoTemplateChipForeground(t.color)')));
+    final templateStart = source.indexOf('TodoListTemplates.all');
+    final templateEnd = source.indexOf(
+      'const SizedBox(height: 20)',
+      templateStart,
+    );
+    expect(templateStart, greaterThanOrEqualTo(0));
+    expect(templateEnd, greaterThan(templateStart));
+    final templateBlock = source.substring(templateStart, templateEnd);
+    expect(templateBlock, isNot(contains('? Colors.white')));
+    expect(templateBlock, isNot(contains('selectedColor: t.color,')));
+    expect(
+      templateBlock,
+      contains('selectedColor: t.color.withValues(alpha: 0.12)'),
+    );
+    expect(templateBlock, contains('checkmarkColor: t.color'));
   });
 
   test('四象限详情继承外层自定义视图条件', () {

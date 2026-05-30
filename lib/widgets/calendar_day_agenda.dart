@@ -23,6 +23,7 @@ class CalendarDayAgenda extends StatelessWidget {
   final Set<CalendarEventType>? activeTypes;
   final String? projectKey;
   final String? workspaceId;
+  final double horizontalPadding;
 
   const CalendarDayAgenda({
     super.key,
@@ -31,6 +32,7 @@ class CalendarDayAgenda extends StatelessWidget {
     this.activeTypes,
     this.projectKey,
     this.workspaceId,
+    this.horizontalPadding = 16,
   });
 
   IconData _icon(CalendarEventType t) {
@@ -93,109 +95,123 @@ class CalendarDayAgenda extends StatelessWidget {
 
     final todayDiary = diary.entryForDate(date);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      children: [
-        // 农历 / 节日 / 节气头
-        _dayHeader(context, lunar, term, solarFes, lunarFes),
+    return Scrollbar(
+      child: ListView(
+        key: const ValueKey('calendar_day_agenda_scroll_view'),
+        primary: false,
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        children: [
+          // 农历 / 节日 / 节气头
+          _dayHeader(context, lunar, term, solarFes, lunarFes),
 
-        // 日记按钮
-        _DiaryQuickEntry(date: date, entry: todayDiary),
+          // 日记按钮
+          _DiaryQuickEntry(date: date, entry: todayDiary),
 
-        if (hitAnniversaries.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _sectionTitle('🎉 今日纪念'),
-          ...hitAnniversaries.map(
-            (a) => _AnniversaryTile(
-              title: a.title,
-              color: Color(a.colorValue),
-              subtitle: a.yearsPassed != null
-                  ? '第 ${a.yearsPassed! + 1} 次'
-                  : null,
+          if (hitAnniversaries.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _sectionTitle('🎉 今日纪念'),
+            ...hitAnniversaries.map(
+              (a) => _AnniversaryTile(
+                title: a.title,
+                color: Color(a.colorValue),
+                subtitle: a.yearsPassed != null
+                    ? '第 ${a.yearsPassed! + 1} 次'
+                    : null,
+              ),
             ),
-          ),
-        ],
+          ],
 
-        if (todayCourses.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _sectionTitle('📚 今日课程'),
-          ...todayCourses.map(
-            (c) => Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Color(c.colorValue).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Color(c.colorValue).withValues(alpha: 0.2),
+          if (todayCourses.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _sectionTitle('📚 今日课程'),
+            ...todayCourses.map(
+              (c) => Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Color(c.colorValue).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Color(c.colorValue).withValues(alpha: 0.2),
+                    width: 0.45,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.class_outlined,
+                      color: Color(c.colorValue),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w400,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.class_outlined,
-                    color: Color(c.colorValue),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          c.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w400,
-                            fontSize: 13,
-                          ),
-                        ),
-                        Text(
-                          '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
+            ),
+          ],
+
+          if (timedEvents.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _sectionTitle('🕘 时间线'),
+            _CalendarDayTimeGrid(date: date, events: timedEvents),
+          ],
+
+          if (untimedEvents.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _sectionTitle('📝 全天/无时间'),
+            ..._buildTimeline(context, untimedEvents),
+          ],
+
+          if (events.isEmpty &&
+              hitAnniversaries.isEmpty &&
+              todayCourses.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.event_busy,
+                      size: 48,
+                      color: Colors.grey.shade300,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Text(
+                      s.calendarEmpty,
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          const SizedBox(height: 24),
         ],
-
-        if (timedEvents.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _sectionTitle('🕘 时间线'),
-          _CalendarDayTimeGrid(date: date, events: timedEvents),
-        ],
-
-        if (untimedEvents.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _sectionTitle('📝 全天/无时间'),
-          ..._buildTimeline(context, untimedEvents),
-        ],
-
-        if (events.isEmpty && hitAnniversaries.isEmpty && todayCourses.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(32),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.event_busy, size: 48, color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  Text(
-                    s.calendarEmpty,
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        const SizedBox(height: 24),
-      ],
+      ),
     );
   }
 
@@ -215,60 +231,61 @@ class CalendarDayAgenda extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.wb_sunny_outlined, size: 16, color: cs.primary),
-          const SizedBox(width: 8),
-          Text(
-            '${I18n.tr('calendar.chinese_lunar_calendar')} ${lunar.chineseText}',
-            style: TextStyle(
-              fontSize: 13,
-              color: cs.primary,
-              fontWeight: FontWeight.w400,
-            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(Icons.wb_sunny_outlined, size: 16, color: cs.primary),
           ),
           const SizedBox(width: 8),
-          if (term != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                term,
-                style: const TextStyle(fontSize: 11, color: Colors.green),
-              ),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 5,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '${I18n.tr('calendar.chinese_lunar_calendar')} ${lunar.chineseText}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.primary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                if (term != null)
+                  _dayBadge(
+                    term,
+                    Colors.green,
+                    Colors.green.withValues(alpha: 0.12),
+                  ),
+                if (solarFes != null)
+                  _dayBadge(
+                    solarFes,
+                    Colors.red,
+                    Colors.red.withValues(alpha: 0.12),
+                  ),
+                if (lunarFes != null)
+                  _dayBadge(
+                    lunarFes,
+                    Colors.deepOrange,
+                    Colors.deepOrange.withValues(alpha: 0.12),
+                  ),
+              ],
             ),
-          if (solarFes != null) ...[
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                solarFes,
-                style: const TextStyle(fontSize: 11, color: Colors.red),
-              ),
-            ),
-          ],
-          if (lunarFes != null) ...[
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.deepOrange.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                lunarFes,
-                style: const TextStyle(fontSize: 11, color: Colors.deepOrange),
-              ),
-            ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _dayBadge(String text, Color color, Color backgroundColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 11, color: color)),
     );
   }
 
@@ -345,7 +362,10 @@ class _CalendarDayTimeGrid extends StatelessWidget {
       height: _hourHeight * 24,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.10),
+          width: 0.45,
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
@@ -435,7 +455,10 @@ class _TimelineHourRow extends StatelessWidget {
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 10,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+              ),
             ),
           ),
         ),
@@ -443,7 +466,7 @@ class _TimelineHourRow extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.only(top: 10, right: 8),
             height: 1,
-            color: cs.outlineVariant.withValues(alpha: 0.45),
+            color: cs.outlineVariant.withValues(alpha: 0.08),
           ),
         ),
       ],
@@ -489,6 +512,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             color: e.hasConflict
                 ? cs.error.withValues(alpha: 0.36)
                 : Colors.grey.withValues(alpha: 0.1),
+            width: 0.45,
           ),
         ),
         child: compact
@@ -753,6 +777,7 @@ class _DiaryQuickEntry extends StatelessWidget {
             color: hasEntry
                 ? cs.primary.withValues(alpha: 0.2)
                 : Colors.grey.shade200,
+            width: 0.45,
           ),
         ),
         child: Row(
@@ -804,7 +829,7 @@ class _AnniversaryTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18), width: 0.45),
       ),
       child: Row(
         children: [

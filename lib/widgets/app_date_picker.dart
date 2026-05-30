@@ -64,6 +64,7 @@ class AppDatePicker {
     String? subtitle,
     AppDatePickerMode initialMode = AppDatePickerMode.solar,
     bool allowIgnoreYear = false,
+    bool initialIgnoreYear = false,
   }) {
     return showAppModalSheet<AppDatePickerResult>(
       context: context,
@@ -75,6 +76,7 @@ class AppDatePicker {
         subtitle: subtitle,
         initialMode: initialMode,
         allowIgnoreYear: allowIgnoreYear,
+        initialIgnoreYear: initialIgnoreYear,
       ),
     );
   }
@@ -88,6 +90,7 @@ class _AppDatePickerSheet extends StatefulWidget {
   final String? subtitle;
   final AppDatePickerMode initialMode;
   final bool allowIgnoreYear;
+  final bool initialIgnoreYear;
 
   const _AppDatePickerSheet({
     required this.initialDate,
@@ -97,6 +100,7 @@ class _AppDatePickerSheet extends StatefulWidget {
     required this.subtitle,
     required this.initialMode,
     required this.allowIgnoreYear,
+    required this.initialIgnoreYear,
   });
 
   @override
@@ -117,6 +121,7 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
     _focusedDay = _selectedDay;
     _mode = widget.initialMode;
     _lunar = LunarCalendar.fromSolar(_selectedDay);
+    _ignoreYear = widget.initialIgnoreYear && widget.allowIgnoreYear;
   }
 
   DateTime _clamp(DateTime date) {
@@ -209,7 +214,10 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
                 cs.surface,
               ),
               borderRadius: DesignTokens.borderRadiusLg,
-              border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.16),
+                width: 0.45,
+              ),
             ),
             child: Row(
               children: [
@@ -324,7 +332,10 @@ class _SolarCalendar extends StatelessWidget {
       decoration: BoxDecoration(
         color: calendarFill,
         borderRadius: DesignTokens.borderRadiusLg,
-        border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.16),
+          width: 0.45,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
@@ -488,8 +499,14 @@ class _SolarDayCell extends StatelessWidget {
       ),
       cs.surface,
     );
+    final selectedFill = Color.alphaBlend(
+      cs.primary.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.20 : 0.13,
+      ),
+      cs.surface,
+    );
     final background = isSelected
-        ? cs.primary
+        ? selectedFill
         : isToday
         ? todayFill
         : isEnabledCurrentMonth
@@ -498,16 +515,18 @@ class _SolarDayCell extends StatelessWidget {
     final foreground = disabled
         ? cs.onSurface.withValues(alpha: 0.30)
         : isSelected
-        ? cs.onPrimary
+        ? cs.onSurface
         : isToday
         ? cs.primary
         : cell.inCurrentMonth
         ? cs.onSurface
         : cs.onSurfaceVariant.withValues(alpha: 0.36);
-    final border = isToday && !isSelected
-        ? Border.all(color: cs.primary.withValues(alpha: 0.72), width: 1.2)
+    final border = isSelected
+        ? Border.all(color: cs.primary.withValues(alpha: 0.26), width: 0.45)
+        : isToday
+        ? Border.all(color: cs.primary.withValues(alpha: 0.26), width: 0.45)
         : isEnabledCurrentMonth
-        ? Border.all(color: cs.primary.withValues(alpha: 0.18))
+        ? Border.all(color: cs.primary.withValues(alpha: 0.14), width: 0.45)
         : null;
 
     return Padding(

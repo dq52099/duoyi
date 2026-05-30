@@ -614,6 +614,48 @@ abstract class AppLocalizations {
   /// **'Android 常驻通知：添加待办或开始专注'**
   String get preferencesNotificationQuickAddSubtitle;
 
+  /// No description provided for @preferencesNotificationTodayProgressTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏今日任务进展'**
+  String get preferencesNotificationTodayProgressTitle;
+
+  /// No description provided for @preferencesNotificationTodayProgressSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启后在通知栏常驻显示今日任务摘要，可随任务变化刷新'**
+  String get preferencesNotificationTodayProgressSubtitle;
+
+  /// No description provided for @preferencesNotificationStatusBarTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏快捷入口'**
+  String get preferencesNotificationStatusBarTitle;
+
+  /// No description provided for @preferencesNotificationStatusBarUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏常驻快捷入口和今日进展仅 Android 支持，当前平台保留普通通知提醒。'**
+  String get preferencesNotificationStatusBarUnsupported;
+
+  /// No description provided for @preferencesNotificationStatusBarEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏入口已开启'**
+  String get preferencesNotificationStatusBarEnabled;
+
+  /// No description provided for @preferencesNotificationStatusBarDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏入口已关闭'**
+  String get preferencesNotificationStatusBarDisabled;
+
+  /// No description provided for @preferencesNotificationStatusBarSyncFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏同步失败，已恢复原设置。请检查系统通知权限和通知渠道。'**
+  String get preferencesNotificationStatusBarSyncFailed;
+
   /// No description provided for @preferencesShowCompletedTitle.
   ///
   /// In zh, this message translates to:
@@ -641,7 +683,7 @@ abstract class AppLocalizations {
   /// No description provided for @preferencesSectionBottomNavSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'底部导航最多显示 5 个入口，小组件和我的固定显示'**
+  /// **'底部导航最多显示 5 个入口；我的固定显示，小组件可隐藏'**
   String get preferencesSectionBottomNavSubtitle;
 
   /// No description provided for @preferencesSectionInteraction.
@@ -920,6 +962,48 @@ abstract class AppLocalizations {
   /// **'设置提醒触发时间'**
   String get preferencesDailyReminderTimePickerSubtitle;
 
+  /// No description provided for @preferencesDailyReminderKindTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒方式'**
+  String get preferencesDailyReminderKindTitle;
+
+  /// No description provided for @preferencesDailyReminderKindPushDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统通知栏提醒'**
+  String get preferencesDailyReminderKindPushDescription;
+
+  /// No description provided for @preferencesDailyReminderKindPopupDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用前台时弹出提醒，后台使用通知兜底'**
+  String get preferencesDailyReminderKindPopupDescription;
+
+  /// No description provided for @preferencesDailyReminderKindAlarmDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'按闹钟方式提醒，适合重要事项'**
+  String get preferencesDailyReminderKindAlarmDescription;
+
+  /// No description provided for @preferencesDailyReminderKindOffDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'不注册系统通知、弹窗或闹钟'**
+  String get preferencesDailyReminderKindOffDescription;
+
+  /// No description provided for @preferencesDailyReminderRegisterFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'每日提醒注册失败'**
+  String get preferencesDailyReminderRegisterFailed;
+
+  /// No description provided for @preferencesDailyReminderNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统通知未就绪，每日提醒没有开启。'**
+  String get preferencesDailyReminderNotReady;
+
   /// No description provided for @preferencesDailyReminderTodayTasks.
   ///
   /// In zh, this message translates to:
@@ -968,6 +1052,30 @@ abstract class AppLocalizations {
   /// **'遇到内置节假日时顺延到下一个提醒日'**
   String get preferencesDailyReminderPauseHolidaysSubtitle;
 
+  /// No description provided for @preferencesDailyReminderChipTodayTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日任务'**
+  String get preferencesDailyReminderChipTodayTasks;
+
+  /// No description provided for @preferencesDailyReminderChipTomorrowPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'明日计划'**
+  String get preferencesDailyReminderChipTomorrowPlan;
+
+  /// No description provided for @preferencesDailyReminderChipOverdueTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'逾期事项'**
+  String get preferencesDailyReminderChipOverdueTasks;
+
+  /// No description provided for @preferencesDailyReminderChipPauseHolidays.
+  ///
+  /// In zh, this message translates to:
+  /// **'节假日暂停'**
+  String get preferencesDailyReminderChipPauseHolidays;
+
   /// No description provided for @preferencesDailyReminderScopeToday.
   ///
   /// In zh, this message translates to:
@@ -991,6 +1099,132 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'无任务范围'**
   String get preferencesDailyReminderScopeNone;
+
+  /// No description provided for @notificationChannelGeneralName.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪 · 通知提醒'**
+  String get notificationChannelGeneralName;
+
+  /// No description provided for @notificationChannelGeneralDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'日常提醒使用柔和提示音、震动并尽量显示横幅'**
+  String get notificationChannelGeneralDescription;
+
+  /// No description provided for @notificationChannelAlarmName.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪 · 柔和强提醒'**
+  String get notificationChannelAlarmName;
+
+  /// No description provided for @notificationChannelAlarmDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'重要提醒使用柔和内置铃声，可在通知上手动停止'**
+  String get notificationChannelAlarmDescription;
+
+  /// No description provided for @notificationChannelQuickAddName.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪 · 快捷入口'**
+  String get notificationChannelQuickAddName;
+
+  /// No description provided for @notificationChannelQuickAddDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知栏常驻快捷添加待办和开始专注'**
+  String get notificationChannelQuickAddDescription;
+
+  /// No description provided for @notificationTickerReminder.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪提醒'**
+  String get notificationTickerReminder;
+
+  /// No description provided for @notificationTickerQuickAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪快捷入口'**
+  String get notificationTickerQuickAdd;
+
+  /// No description provided for @notificationQuickAddTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪快捷记录'**
+  String get notificationQuickAddTitle;
+
+  /// No description provided for @notificationQuickAddBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'下拉通知栏添加待办，或一键开始专注'**
+  String get notificationQuickAddBody;
+
+  /// No description provided for @notificationQuickAddActionAddTodo.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加待办'**
+  String get notificationQuickAddActionAddTodo;
+
+  /// No description provided for @notificationQuickAddActionOpenInput.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开输入'**
+  String get notificationQuickAddActionOpenInput;
+
+  /// No description provided for @notificationQuickAddActionStartFocus.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始专注'**
+  String get notificationQuickAddActionStartFocus;
+
+  /// No description provided for @notificationQuickAddInputLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：明天下午3点开会'**
+  String get notificationQuickAddInputLabel;
+
+  /// No description provided for @notificationStatusBarTodayProgressTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日任务进展'**
+  String get notificationStatusBarTodayProgressTitle;
+
+  /// No description provided for @notificationStatusBarQuickHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'下拉可快速添加待办'**
+  String get notificationStatusBarQuickHint;
+
+  /// No description provided for @notificationStatusBarTodayRemainingPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日还要完成 '**
+  String get notificationStatusBarTodayRemainingPrefix;
+
+  /// No description provided for @notificationStatusBarTodayRemainingSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 项'**
+  String get notificationStatusBarTodayRemainingSuffix;
+
+  /// No description provided for @notificationStatusBarDailyCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'日常 '**
+  String get notificationStatusBarDailyCount;
+
+  /// No description provided for @notificationStatusBarRepresentativeCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'代表 '**
+  String get notificationStatusBarRepresentativeCount;
+
+  /// No description provided for @notificationStatusBarGoalCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'目标 '**
+  String get notificationStatusBarGoalCount;
 
   /// No description provided for @quickTodoTitle.
   ///
@@ -2012,6 +2246,12 @@ abstract class AppLocalizations {
   /// **'系统通知未授权，习惯提醒不会响铃或弹出'**
   String get habitErrorNotificationPermission;
 
+  /// No description provided for @habitErrorReminderRegisterFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯提醒注册失败'**
+  String get habitErrorReminderRegisterFailed;
+
   /// No description provided for @habitFlexRule.
   ///
   /// In zh, this message translates to:
@@ -2039,7 +2279,7 @@ abstract class AppLocalizations {
   /// No description provided for @habitFlexPeriodTargetHint.
   ///
   /// In zh, this message translates to:
-  /// **'例如本周至少 5 次'**
+  /// **'例如周期目标 5 次/周'**
   String get habitFlexPeriodTargetHint;
 
   /// No description provided for @habitFlexDailyNote.
@@ -2057,13 +2297,13 @@ abstract class AppLocalizations {
   /// No description provided for @habitFlexWeeklyGoalPrefix.
   ///
   /// In zh, this message translates to:
-  /// **'每周至少 '**
+  /// **'周期目标: '**
   String get habitFlexWeeklyGoalPrefix;
 
   /// No description provided for @habitFlexMonthlyGoalPrefix.
   ///
   /// In zh, this message translates to:
-  /// **'每月至少 '**
+  /// **'周期目标: '**
   String get habitFlexMonthlyGoalPrefix;
 
   /// No description provided for @habitFlexThisWeek.
@@ -3746,12 +3986,6 @@ abstract class AppLocalizations {
   /// **'暂无倒数日记录'**
   String get countdownEmpty;
 
-  /// No description provided for @countdownAddRecord.
-  ///
-  /// In zh, this message translates to:
-  /// **'添加记录'**
-  String get countdownAddRecord;
-
   /// No description provided for @countdownNearestEmpty.
   ///
   /// In zh, this message translates to:
@@ -3799,12 +4033,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'默认'**
   String get countdownCategoryDefault;
-
-  /// No description provided for @countdownEditorAddTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'添加倒数日'**
-  String get countdownEditorAddTitle;
 
   /// No description provided for @countdownEditorEditTitle.
   ///
@@ -3871,6 +4099,108 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **' 天'**
   String get countdownReminderBeforeSuffix;
+
+  /// No description provided for @countdownValidationTitleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写倒数日名称'**
+  String get countdownValidationTitleRequired;
+
+  /// No description provided for @countdownSaveFailedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日保存失败：'**
+  String get countdownSaveFailedPrefix;
+
+  /// No description provided for @countdownReminderRegisterFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日提醒注册失败'**
+  String get countdownReminderRegisterFailed;
+
+  /// No description provided for @countdownReminderNotRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但提醒未注册。请检查通知权限和提醒时间。'**
+  String get countdownReminderNotRegistered;
+
+  /// No description provided for @countdownReminderNotRegisteredPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但提醒未注册：'**
+  String get countdownReminderNotRegisteredPrefix;
+
+  /// No description provided for @countdownReminderPopupFallbackFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日提醒注册失败：弹出框兜底通知不可用'**
+  String get countdownReminderPopupFallbackFailed;
+
+  /// No description provided for @countdownReminderPopupPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但弹出框提醒未注册：系统通知权限未开启。'**
+  String get countdownReminderPopupPermissionDenied;
+
+  /// No description provided for @countdownReminderPopupNotRegisteredPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但弹出框提醒未注册：'**
+  String get countdownReminderPopupNotRegisteredPrefix;
+
+  /// No description provided for @countdownReminderPopupWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存。弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。'**
+  String get countdownReminderPopupWarning;
+
+  /// No description provided for @countdownReminderAlarmPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。'**
+  String get countdownReminderAlarmPermissionDenied;
+
+  /// No description provided for @countdownReminderAlarmChannelMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'强提醒渠道未就绪'**
+  String get countdownReminderAlarmChannelMissing;
+
+  /// No description provided for @countdownReminderExactAlarmMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'精准闹钟权限未开启，提醒可能延后'**
+  String get countdownReminderExactAlarmMissing;
+
+  /// No description provided for @countdownReminderFullscreenMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'全屏提醒权限未开启，锁屏弹窗可能不可用'**
+  String get countdownReminderFullscreenMissing;
+
+  /// No description provided for @countdownReminderSavedWithWarningsPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，'**
+  String get countdownReminderSavedWithWarningsPrefix;
+
+  /// No description provided for @countdownReminderEmailWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，邮件提醒会在联网后由服务端发送。'**
+  String get countdownReminderEmailWarning;
+
+  /// No description provided for @countdownReminderExceptionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但提醒未注册：'**
+  String get countdownReminderExceptionPrefix;
+
+  /// No description provided for @countdownReminderTimePast.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数日已保存，但提醒时间已过去，请重新选择提醒时间。'**
+  String get countdownReminderTimePast;
 
   /// No description provided for @countdownStatusPinned.
   ///
@@ -4069,6 +4399,90 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'颜色标识'**
   String get anniversaryFieldColor;
+
+  /// No description provided for @anniversaryReminderRegisterFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'纪念日提醒注册失败'**
+  String get anniversaryReminderRegisterFailed;
+
+  /// No description provided for @anniversaryReminderNotRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'纪念日提醒未注册，请检查通知权限和提醒时间。'**
+  String get anniversaryReminderNotRegistered;
+
+  /// No description provided for @anniversaryReminderPopupFallbackFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'纪念日提醒注册失败：弹出框兜底通知不可用'**
+  String get anniversaryReminderPopupFallbackFailed;
+
+  /// No description provided for @anniversaryReminderPopupPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'弹出框提醒未注册：系统通知权限未开启。'**
+  String get anniversaryReminderPopupPermissionDenied;
+
+  /// No description provided for @anniversaryReminderPopupNotRegisteredPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'弹出框提醒未注册：'**
+  String get anniversaryReminderPopupNotRegisteredPrefix;
+
+  /// No description provided for @anniversaryReminderPopupWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'弹出框只在应用运行时显示，后台或锁屏将使用系统通知兜底。'**
+  String get anniversaryReminderPopupWarning;
+
+  /// No description provided for @anniversaryReminderAlarmPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'闹钟提醒未注册：系统通知权限未开启，请开启后重新保存提醒。'**
+  String get anniversaryReminderAlarmPermissionDenied;
+
+  /// No description provided for @anniversaryReminderAlarmChannelMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'强提醒渠道未就绪'**
+  String get anniversaryReminderAlarmChannelMissing;
+
+  /// No description provided for @anniversaryReminderExactAlarmMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'精准闹钟权限未开启，提醒可能延后'**
+  String get anniversaryReminderExactAlarmMissing;
+
+  /// No description provided for @anniversaryReminderFullscreenMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'全屏提醒权限未开启，锁屏弹窗可能不可用'**
+  String get anniversaryReminderFullscreenMissing;
+
+  /// No description provided for @anniversaryReminderEmailWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮件提醒会在联网后由服务端发送。'**
+  String get anniversaryReminderEmailWarning;
+
+  /// No description provided for @anniversaryReminderExceptionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒未注册：'**
+  String get anniversaryReminderExceptionPrefix;
+
+  /// No description provided for @anniversaryReminderSavedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存，'**
+  String get anniversaryReminderSavedPrefix;
+
+  /// No description provided for @anniversaryReminderTimePast.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存，但提醒时间已过去，请重新选择提醒时间。'**
+  String get anniversaryReminderTimePast;
 
   /// No description provided for @anniversaryLunarYearSuffix.
   ///
@@ -4417,6 +4831,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'30 分钟后'**
   String get reminderSnooze30min;
+
+  /// No description provided for @reminderKindPush.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知'**
+  String get reminderKindPush;
+
+  /// No description provided for @reminderKindPopup.
+  ///
+  /// In zh, this message translates to:
+  /// **'弹出框'**
+  String get reminderKindPopup;
+
+  /// No description provided for @reminderKindAlarm.
+  ///
+  /// In zh, this message translates to:
+  /// **'闹钟'**
+  String get reminderKindAlarm;
+
+  /// No description provided for @reminderKindOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get reminderKindOff;
 
   /// No description provided for @timeAuditTitle.
   ///

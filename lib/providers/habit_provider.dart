@@ -4,12 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
+import '../services/reminder_scheduler.dart';
 import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
 
 class HabitProvider extends ChangeNotifier {
   List<Habit> _habits = [];
   TimeAuditProvider? _timeAudit;
+  ReminderScheduler? _scheduler;
 
   List<Habit> get habits => _habits;
 
@@ -55,12 +57,27 @@ class HabitProvider extends ChangeNotifier {
     _timeAudit = provider;
   }
 
+  // ignore: use_setters_to_change_properties
+  set scheduler(ReminderScheduler? scheduler) {
+    _scheduler = scheduler;
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'habits',
       json.encode(_habits.map((e) => e.toJson()).toList()),
     );
+  }
+
+  Future<void> _syncRemindersNow() async {
+    final scheduler = _scheduler;
+    if (scheduler == null) return;
+    try {
+      await scheduler.syncHabits(List.of(_habits));
+    } catch (error, stackTrace) {
+      debugPrint('[HabitProvider] reminder sync failed: $error\n$stackTrace');
+    }
   }
 
   // --- CRUD ---
@@ -72,6 +89,7 @@ class HabitProvider extends ChangeNotifier {
       DomainEvent(type: DomainEventType.habitCreated, objectId: habit.id),
     );
     await _save();
+    await _syncRemindersNow();
     notifyListeners();
   }
 
@@ -97,6 +115,7 @@ class HabitProvider extends ChangeNotifier {
     }
     if (inserted > 0) {
       await _save();
+      await _syncRemindersNow();
       notifyListeners();
     }
     return HabitImportSummary(
@@ -282,6 +301,23 @@ class HabitProvider extends ChangeNotifier {
     await _timeAudit?.deleteBySource(TimeEntrySource.habit, id);
     _habits.removeWhere((h) => h.id == id);
     await _save();
+    await _syncRemindersNow();
+    notifyListeners();
+  }
+
+  Future<void> endHabit(String id, {DateTime? at}) async {
+    final idx = _habits.indexWhere((h) => h.id == id);
+    if (idx == -1) return;
+    final base = at ?? DateTime.now();
+    final day = DateTime(base.year, base.month, base.day);
+    final habit = _habits[idx];
+    final hasRecordOnEndDay = habit.countForDate(day) > 0;
+    final endDate = hasRecordOnEndDay
+        ? day
+        : day.subtract(const Duration(days: 1));
+    _habits[idx] = habit.copyWith(endDate: endDate);
+    await _save();
+    await _syncRemindersNow();
     notifyListeners();
   }
 
@@ -290,6 +326,7 @@ class HabitProvider extends ChangeNotifier {
     if (idx != -1) {
       _habits[idx] = updated.copyWith(updatedAt: DateTime.now());
       await _save();
+      await _syncRemindersNow();
       notifyListeners();
     }
   }
@@ -329,6 +366,40 @@ class HabitProvider extends ChangeNotifier {
       final active = _habits.where((h) => h.activeForDate(d)).toList();
       if (active.isEmpty) return 0;
       return active.where((h) => h.isCompletedForDate(d)).length /
+          active.length;
+    });
+  }
+
+  bool _habitExistsOnDate(Habit habit, DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = habit.startDate == null
+        ? DateTime(
+            habit.createdAt.year,
+            habit.createdAt.month,
+            habit.createdAt.day,
+          )
+        : DateTime(
+            habit.startDate!.year,
+            habit.startDate!.month,
+            habit.startDate!.day,
+          );
+    return !day.isBefore(start);
+  }
+
+  List<double> currentWeekProgress() {
+    final now = DateTime.now();
+    final weekStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    return List.generate(7, (i) {
+      final d = weekStart.add(Duration(days: i));
+      final active = _habits
+          .where((h) => _habitExistsOnDate(h, d) && h.activeForDate(d))
+          .toList();
+      if (active.isEmpty) return 0;
+      return active.fold(0.0, (sum, h) => sum + h.progressForDate(d)) /
           active.length;
     });
   }

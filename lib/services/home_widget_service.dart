@@ -37,25 +37,33 @@ class HomeWidgetService {
     return PlatformInfo.isAndroid || PlatformInfo.isIOS;
   }
 
-  static Future<void> init() async {
-    if (!_supported) return;
+  static Future<bool> init() async {
+    if (!_supported) return true;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
-    } catch (_) {}
+      return true;
+    } catch (e, st) {
+      debugPrint('[HomeWidget] init failed: $e\n$st');
+      return false;
+    }
   }
 
-  static Future<void> setDisplayMode(String mode) async {
-    if (!_supported) return;
+  static Future<bool> setDisplayMode(String mode) async {
+    if (!_supported) return true;
     try {
       await HomeWidget.saveWidgetData<String>('widget_display_mode', mode);
-      await _updateAllWidgets();
-    } catch (_) {}
+      return _updateAllWidgets();
+    } catch (e, st) {
+      debugPrint('[HomeWidget] setDisplayMode($mode) failed: $e\n$st');
+      return false;
+    }
   }
 
-  static Future<void> push({
+  static Future<bool> push({
     required int todoCount,
     required int habitPercent,
     required int pomodoroToday,
+    required int focusMinutesToday,
     required BrandStrings strings,
     List<String> todoTop3 = const [],
     List<String> todoTop3Ids = const [],
@@ -86,12 +94,16 @@ class HomeWidgetService {
     String habitQuickCheckId = '',
     String habitQuickCheckLabel = '点击进入习惯打卡',
   }) async {
-    if (!_supported) return;
+    if (!_supported) return true;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<int>('todo_count', todoCount),
         HomeWidget.saveWidgetData<int>('habit_percent', habitPercent),
         HomeWidget.saveWidgetData<int>('pomodoro_today', pomodoroToday),
+        HomeWidget.saveWidgetData<int>(
+          'focus_minutes_today',
+          focusMinutesToday,
+        ),
         HomeWidget.saveWidgetData<String>('brand_app_title', strings.appTitle),
         HomeWidget.saveWidgetData<String>('nav_todo', strings.navTodo),
         HomeWidget.saveWidgetData<String>('nav_habit', strings.navHabit),
@@ -182,6 +194,14 @@ class HomeWidgetService {
         HomeWidget.saveWidgetData<String>(
           'course_highlight_2_id',
           courseHighlightIds.length > 1 ? courseHighlightIds[1] : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'course_highlight_3',
+          courseHighlights.length > 2 ? '· ${courseHighlights[2]}' : '',
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'course_highlight_3_id',
+          courseHighlightIds.length > 2 ? courseHighlightIds[2] : '',
         ),
         HomeWidget.saveWidgetData<String>(
           'note_highlight_1',
@@ -325,61 +345,63 @@ class HomeWidgetService {
           habitQuickCheckLabel,
         ),
       ]);
-      await _updateAllWidgets();
-    } catch (_) {}
+      return _updateAllWidgets();
+    } catch (e, st) {
+      debugPrint('[HomeWidget] push failed: $e\n$st');
+      return false;
+    }
   }
 
-  static Future<void> _updateAllWidgets() async {
-    await HomeWidget.updateWidget(
-      name: _androidTodoProviderName,
-      androidName: _androidTodoProviderName,
-      iOSName: _iosTodoWidgetName,
+  static Future<bool> _updateAllWidgets() async {
+    var ok = true;
+    for (final target in _widgetUpdateTargets) {
+      ok =
+          await _updateWidgetFamily(
+            androidName: target.androidName,
+            iOSName: target.iOSName,
+          ) &&
+          ok;
+    }
+    if (!ok) {
+      debugPrint('[HomeWidget] one or more widget providers failed to update');
+    }
+    return ok;
+  }
+
+  static Future<bool> _updateWidgetFamily({
+    required String androidName,
+    required String iOSName,
+  }) async {
+    var ok = true;
+    Future<void> updateOne(String name, {String? ios}) async {
+      try {
+        await HomeWidget.updateWidget(
+          name: name,
+          androidName: name,
+          iOSName: ios,
+        );
+      } catch (e, st) {
+        ok = false;
+        debugPrint('[HomeWidget] updateWidget($name) failed: $e\n$st');
+      }
+    }
+
+    await updateOne(androidName, ios: iOSName);
+    if (!PlatformInfo.isAndroid) return ok;
+    for (final variantName in _androidVariantProviderNames(androidName)) {
+      await updateOne(variantName);
+    }
+    return ok;
+  }
+
+  static Iterable<String> _androidVariantProviderNames(String standardName) {
+    const suffix = 'WidgetProvider';
+    if (!standardName.endsWith(suffix)) return const [];
+    final prefix = standardName.substring(
+      0,
+      standardName.length - suffix.length,
     );
-    await HomeWidget.updateWidget(
-      name: _androidFocusProviderName,
-      androidName: _androidFocusProviderName,
-      iOSName: _iosFocusWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidHabitProviderName,
-      androidName: _androidHabitProviderName,
-      iOSName: _iosHabitWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidCalendarProviderName,
-      androidName: _androidCalendarProviderName,
-      iOSName: _iosCalendarWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidScheduleProviderName,
-      androidName: _androidScheduleProviderName,
-      iOSName: _iosScheduleWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidGoalProviderName,
-      androidName: _androidGoalProviderName,
-      iOSName: _iosGoalWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidCourseProviderName,
-      androidName: _androidCourseProviderName,
-      iOSName: _iosCourseWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidNoteProviderName,
-      androidName: _androidNoteProviderName,
-      iOSName: _iosNoteWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidAnniversaryProviderName,
-      androidName: _androidAnniversaryProviderName,
-      iOSName: _iosAnniversaryWidgetName,
-    );
-    await HomeWidget.updateWidget(
-      name: _androidDiaryProviderName,
-      androidName: _androidDiaryProviderName,
-      iOSName: _iosDiaryWidgetName,
-    );
+    return <String>['${prefix}Compact$suffix', '${prefix}Detailed$suffix'];
   }
 
   static Stream<Uri?> get widgetClickedStream {
@@ -392,3 +414,56 @@ class HomeWidgetService {
     return HomeWidget.initiallyLaunchedFromHomeWidget();
   }
 }
+
+class _HomeWidgetUpdateTarget {
+  final String androidName;
+  final String iOSName;
+
+  const _HomeWidgetUpdateTarget({
+    required this.androidName,
+    required this.iOSName,
+  });
+}
+
+const List<_HomeWidgetUpdateTarget> _widgetUpdateTargets = [
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidTodoProviderName,
+    iOSName: HomeWidgetService._iosTodoWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidFocusProviderName,
+    iOSName: HomeWidgetService._iosFocusWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidHabitProviderName,
+    iOSName: HomeWidgetService._iosHabitWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidCalendarProviderName,
+    iOSName: HomeWidgetService._iosCalendarWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidScheduleProviderName,
+    iOSName: HomeWidgetService._iosScheduleWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidGoalProviderName,
+    iOSName: HomeWidgetService._iosGoalWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidCourseProviderName,
+    iOSName: HomeWidgetService._iosCourseWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidNoteProviderName,
+    iOSName: HomeWidgetService._iosNoteWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidAnniversaryProviderName,
+    iOSName: HomeWidgetService._iosAnniversaryWidgetName,
+  ),
+  _HomeWidgetUpdateTarget(
+    androidName: HomeWidgetService._androidDiaryProviderName,
+    iOSName: HomeWidgetService._iosDiaryWidgetName,
+  ),
+];

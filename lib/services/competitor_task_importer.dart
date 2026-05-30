@@ -1205,10 +1205,20 @@ class CompetitorTaskImporter {
       warnings.add('第 $rowNumber 行缺少倒数日标题，已跳过');
       return null;
     }
-    final target = _parseDate(
-      _firstText(raw, const ['target', 'targetdate', 'date', '日期', '目标日期']),
+    final targetDate = _parseDate(
+      _firstText(raw, const [
+        'targetdate',
+        'target',
+        'date',
+        'due',
+        'deadline',
+        'end',
+        '截止',
+        '日期',
+        '目标日期',
+      ]),
     );
-    if (target == null) {
+    if (targetDate == null) {
       warnings.add('第 $rowNumber 行缺少倒数日日期，已跳过');
       return null;
     }
@@ -1218,13 +1228,13 @@ class CompetitorTaskImporter {
     return CountdownItem(
       id: 'imported_countdown_${DateTime.now().microsecondsSinceEpoch}_$rowNumber',
       title: title.trim(),
-      targetDate: target,
-      isPinned: _parseBool(_firstText(raw, const ['pinned', 'pin', '置顶'])),
+      targetDate: targetDate,
       category:
           _emptyToNull(
             _firstText(raw, const ['category', 'group', 'folder', '分类', '分组']),
           ) ??
           '默认',
+      isPinned: _parseBool(_firstText(raw, const ['pinned', 'pin', '置顶'])),
       remind: _parseBool(_firstText(raw, const ['remind', '提醒'])),
       remindDaysBefore: _parseNonNegativeInt(
         _firstText(raw, const ['reminddaysbefore', '提前天数']),
@@ -1232,6 +1242,7 @@ class CompetitorTaskImporter {
       ),
       remindHour: remindTime?.$1 ?? 9,
       remindMinute: remindTime?.$2 ?? 0,
+      reminderKind: ReminderKind.push,
     );
   }
 
@@ -1458,9 +1469,6 @@ class CompetitorTaskImporter {
     }
     if (const {'memorial', 'anniversary', '纪念日', '周年'}.contains(text)) {
       return AnniversaryType.memorial;
-    }
-    if (const {'countdown', 'normal', '倒数日', '倒计时'}.contains(text)) {
-      return AnniversaryType.normal;
     }
     return fallback;
   }

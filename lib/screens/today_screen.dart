@@ -7,6 +7,7 @@ import '../core/lunar_calendar.dart';
 import '../core/quotes.dart';
 import '../core/report_engine.dart';
 import '../core/smart_schedule_advisor.dart';
+import '../models/course_schedule.dart' show CourseItem, ScheduleSettings;
 import '../models/todo.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/course_provider.dart';
@@ -97,11 +98,23 @@ class TodayScreen extends StatelessWidget {
     }
     todayTodos.sort((a, b) {
       if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
+      final dueA = a.dueDate;
+      final dueB = b.dueDate;
+      if (dueA != null && dueB != null) return dueA.compareTo(dueB);
+      if (dueA != null) return -1;
+      if (dueB != null) return 1;
       return a.quadrant.index.compareTo(b.quadrant.index);
     });
 
     final todayCourses = courseP.todayCourses
       ..sort((a, b) => a.startSection.compareTo(b.startSection));
+    final reminderGroups = _TodayReminderGroups.build(
+      todos: todoP.todos,
+      courses: todayCourses,
+      courseSettings: courseP.settings,
+      now: now,
+      todayKey: todayKey,
+    );
     final todayHabitProgress = habitP.todayCompletionRate;
 
     // 最近的 3 个纪念日
@@ -118,6 +131,8 @@ class TodayScreen extends StatelessWidget {
       now: now,
       limit: 5,
     );
+    final showReminderSection =
+        !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -128,6 +143,13 @@ class TodayScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
+          _TodayProductivityCard(
+            comparison: weeklyComparison,
+            onTap: () => _go(context, const StatisticsScreen()),
+          ),
+
+          const SizedBox(height: 12),
+
           // 日期卡
           AppSurfaceCard(
             onTap: () => _go(context, AlmanacScreen(initialDate: now)),
@@ -266,69 +288,35 @@ class TodayScreen extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          _TodayProductivityCard(
-            comparison: weeklyComparison,
-            onTap: () => _go(context, const StatisticsScreen()),
-          ),
-
-          const SizedBox(height: 10),
-
-          if (suggestions.isNotEmpty)
-            _section(
-              I18n.tr('today.suggestions'),
-              subtitle: I18n.tr('today.suggestions.subtitle'),
-              onMore: () =>
-                  TodayDetailRouter.open(context, TodaySectionKind.todos),
-              child: Column(
-                children: suggestions.map((suggestion) {
-                  final t = suggestion.todo;
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(
-                      Icons.auto_awesome,
-                      size: 18,
-                      color: cs.primary,
-                    ),
-                    title: Text(
-                      t.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      suggestion.reason,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    trailing:
-                        _isSameDay(t.date, todayKey) ||
-                            t.isArchivedAfterRollover
-                        ? null
-                        : TextButton(
-                            onPressed: () async {
-                              final changed = await context
-                                  .read<TodoProvider>()
-                                  .scheduleTodoForToday(t.id, now: now);
-                              if (!context.mounted || !changed) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${I18n.tr('today.added_prefix')}${t.title}',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            child: Text(I18n.tr('today.add_to_today')),
-                          ),
-                    onTap: () => TodayDetailRouter.open(
-                      context,
-                      TodaySectionKind.todos,
-                      id: t.id,
-                    ),
-                  );
-                }).toList(),
+          if (showReminderSection)
+            _TodayReminderSection(
+              groups: reminderGroups,
+              suggestions: suggestions,
+              todayKey: todayKey,
+              now: now,
+              onOpenTodo: (id) => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.todos,
+                id: id,
               ),
+              onToggleTodo: (todo) =>
+                  completeTodoWithOptionalTimeRecord(context, todo),
+              onOpenCourses: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.courses),
+              onAddToday: (todo) async {
+                final changed = await context
+                    .read<TodoProvider>()
+                    .scheduleTodoForToday(todo.id, now: now);
+                if (!context.mounted || !changed) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${I18n.tr('today.added_prefix')}${todo.title}',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
             ),
 
           // 今日待办
@@ -341,29 +329,11 @@ class TodayScreen extends StatelessWidget {
                   TodayDetailRouter.open(context, TodaySectionKind.todos),
               child: Column(
                 children: todayTodos.take(6).map((t) {
-                  return ListTile(
-                    dense: true,
-                    leading: Checkbox(
-                      value: t.isCompleted,
-                      shape: const CircleBorder(),
-                      onChanged: (_) =>
-                          completeTodoWithOptionalTimeRecord(context, t),
-                    ),
-                    title: Text(
-                      t.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        decoration: t.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: t.isCompleted
-                            ? cs.onSurface.withValues(alpha: 0.52)
-                            : null,
-                      ),
-                    ),
-                    subtitle: _TodoTodaySubtitle(todo: t),
-                    onTap: () => TodayDetailRouter.open(
+                  return _TodayTodoSwipeTile(
+                    todo: t,
+                    onToggle: () =>
+                        completeTodoWithOptionalTimeRecord(context, t),
+                    onOpen: () => TodayDetailRouter.open(
                       context,
                       TodaySectionKind.todos,
                       id: t.id,
@@ -589,9 +559,6 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
   void _go(BuildContext context, Widget screen) {
     Navigator.push(
       context,
@@ -613,13 +580,14 @@ class _TodayProductivityCard extends StatelessWidget {
     final trendColor = _trendColor(cs, comparison.productivityScore.direction);
     return AppSurfaceCard(
       onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(18),
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         children: [
           Container(
-            width: 64,
-            height: 64,
+            width: 72,
+            height: 72,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -632,7 +600,7 @@ class _TodayProductivityCard extends StatelessWidget {
                 Text(
                   comparison.current.productivityScore.toString(),
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 25,
                     height: 1,
                     color: cs.primary,
                     fontWeight: FontWeight.w400,
@@ -660,7 +628,7 @@ class _TodayProductivityCard extends StatelessWidget {
                       child: Text(
                         I18n.tr('today.productivity.weekly'),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 14,
+                          fontSize: 18,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -683,7 +651,7 @@ class _TodayProductivityCard extends StatelessWidget {
                 Text(
                   I18n.tr('today.productivity.subtitle'),
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: cs.onSurface.withValues(alpha: 0.58),
                   ),
                 ),
@@ -822,6 +790,747 @@ class _TodoTodaySubtitle extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TodayTodoSwipeTile extends StatefulWidget {
+  final TodoItem todo;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+  final Widget? leading;
+  final String? title;
+  final Color? titleColor;
+  final Color? completedTextColor;
+  final Widget? subtitle;
+  final Widget? trailing;
+
+  const _TodayTodoSwipeTile({
+    required this.todo,
+    required this.onToggle,
+    required this.onOpen,
+    this.leading,
+    this.title,
+    this.titleColor,
+    this.completedTextColor,
+    this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  State<_TodayTodoSwipeTile> createState() => _TodayTodoSwipeTileState();
+}
+
+class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
+  static const double _swipeActionWidth = 124;
+  static const double _swipeOpenThreshold = 40;
+
+  double _swipeOffset = 0;
+  bool _dragging = false;
+
+  bool get _swipeOpen => _swipeOffset > 0;
+
+  @override
+  void didUpdateWidget(covariant _TodayTodoSwipeTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.todo.id != oldWidget.todo.id) {
+      _swipeOffset = 0;
+      _dragging = false;
+    }
+  }
+
+  void _closeSwipe() {
+    if (!_swipeOpen || !mounted) return;
+    setState(() => _swipeOffset = 0);
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: const Text('删除任务？'),
+        content: Text('将删除“${widget.todo.title}”，相关时间足迹也会同步移除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await context.read<TodoProvider>().deleteTodo(widget.todo.id);
+    } else {
+      _closeSwipe();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final todo = widget.todo;
+    final tile = Material(
+      color: Colors.transparent,
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading:
+            widget.leading ??
+            Checkbox(
+              value: todo.isCompleted,
+              shape: const CircleBorder(),
+              onChanged: (_) => widget.onToggle(),
+            ),
+        title: Text(
+          widget.title ?? todo.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: todo.isCompleted
+                ? widget.completedTextColor ??
+                      cs.onSurface.withValues(alpha: 0.52)
+                : widget.titleColor,
+            decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
+          ),
+        ),
+        subtitle: widget.subtitle ?? _TodoTodaySubtitle(todo: todo),
+        trailing: widget.trailing,
+        onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
+      ),
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => setState(() => _dragging = true),
+      onHorizontalDragUpdate: (details) {
+        final next = (_swipeOffset - details.delta.dx).clamp(
+          0.0,
+          _swipeActionWidth,
+        );
+        if (next == _swipeOffset) return;
+        setState(() => _swipeOffset = next);
+      },
+      onHorizontalDragEnd: (_) {
+        final shouldOpen = _swipeOffset >= _swipeOpenThreshold;
+        setState(() {
+          _dragging = false;
+          _swipeOffset = shouldOpen ? _swipeActionWidth : 0;
+        });
+      },
+      onHorizontalDragCancel: () => setState(() {
+        _dragging = false;
+        _swipeOffset = _swipeOffset >= _swipeOpenThreshold
+            ? _swipeActionWidth
+            : 0;
+      }),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              alignment: Alignment.centerRight,
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.62),
+              child: SizedBox(
+                width: _swipeActionWidth,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _TodayTodoSwipeButton(
+                        key: const ValueKey('today_todo_swipe_detail_button'),
+                        icon: Icons.open_in_new,
+                        label: '详情',
+                        background: cs.primaryContainer.withValues(alpha: 0.78),
+                        foreground: cs.onPrimaryContainer,
+                        onTap: widget.onOpen,
+                      ),
+                    ),
+                    Expanded(
+                      child: _TodayTodoSwipeButton(
+                        key: const ValueKey('today_todo_swipe_delete_button'),
+                        icon: Icons.delete_outline,
+                        label: '删除',
+                        background: cs.errorContainer.withValues(alpha: 0.86),
+                        foreground: cs.onErrorContainer,
+                        onTap: () => _confirmDelete(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: _dragging
+                ? Duration.zero
+                : const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
+            child: tile,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodayTodoSwipeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  const _TodayTodoSwipeButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: background,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox.expand(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: foreground),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1,
+                  color: foreground,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _TodayReminderKind { todo, course }
+
+class _TodayReminderItem {
+  final _TodayReminderKind kind;
+  final String id;
+  final String title;
+  final DateTime time;
+  final String subtitle;
+  final TodoItem? todo;
+  final Color? accentColor;
+
+  const _TodayReminderItem({
+    required this.kind,
+    required this.id,
+    required this.title,
+    required this.time,
+    required this.subtitle,
+    this.todo,
+    this.accentColor,
+  });
+}
+
+class _TodayReminderGroups {
+  final List<_TodayReminderItem> dueToday;
+  final List<_TodayReminderItem> upcoming;
+  final List<_TodayReminderItem> overdue;
+
+  const _TodayReminderGroups({
+    required this.dueToday,
+    required this.upcoming,
+    required this.overdue,
+  });
+
+  bool get isEmpty => dueToday.isEmpty && upcoming.isEmpty && overdue.isEmpty;
+
+  static _TodayReminderGroups build({
+    required Iterable<TodoItem> todos,
+    required Iterable<CourseItem> courses,
+    required ScheduleSettings courseSettings,
+    required DateTime now,
+    required DateTime todayKey,
+  }) {
+    final dueToday = <_TodayReminderItem>[];
+    final upcoming = <_TodayReminderItem>[];
+    final overdue = <_TodayReminderItem>[];
+    final soonLimit = now.add(const Duration(hours: 6));
+
+    for (final todo in todos) {
+      if (todo.isCompleted || todo.isArchivedAfterRollover) continue;
+      final trigger = _todoTriggerTime(todo);
+      if (trigger == null) continue;
+      final item = _TodayReminderItem(
+        kind: _TodayReminderKind.todo,
+        id: todo.id,
+        title: todo.title,
+        time: trigger,
+        subtitle: _todoReminderSubtitle(todo, trigger, now),
+        todo: todo,
+      );
+      if (trigger.isBefore(now)) {
+        overdue.add(item);
+      } else if (_sameDay(trigger, todayKey)) {
+        dueToday.add(item);
+      } else if (trigger.isBefore(soonLimit)) {
+        upcoming.add(item);
+      }
+    }
+
+    for (final course in courses) {
+      final start = courseSettings.sectionStart(todayKey, course.startSection);
+      final end = courseSettings.sectionEnd(
+        todayKey,
+        course.startSection,
+        course.sectionCount,
+      );
+      final item = _TodayReminderItem(
+        kind: _TodayReminderKind.course,
+        id: course.id,
+        title: course.name,
+        time: start,
+        subtitle:
+            '${I18n.tr('today.course.period_prefix')}${course.startSection}-${course.endSection}${I18n.tr('today.course.period_suffix')}${course.location.isEmpty ? '' : ' · ${course.location}'}${course.teacher.isEmpty ? '' : ' · ${course.teacher}'}',
+        accentColor: Color(course.colorValue),
+      );
+      if (end.isBefore(now)) {
+        overdue.add(item);
+      } else if (start.isBefore(now.add(const Duration(minutes: 30)))) {
+        dueToday.add(item);
+      } else {
+        upcoming.add(item);
+      }
+    }
+
+    int compare(_TodayReminderItem a, _TodayReminderItem b) =>
+        a.time.compareTo(b.time);
+    dueToday.sort(compare);
+    upcoming.sort(compare);
+    overdue.sort(compare);
+
+    return _TodayReminderGroups(
+      dueToday: dueToday,
+      upcoming: upcoming,
+      overdue: overdue,
+    );
+  }
+
+  static bool _sameDay(DateTime value, DateTime day) =>
+      value.year == day.year &&
+      value.month == day.month &&
+      value.day == day.day;
+
+  static DateTime? _todoTriggerTime(TodoItem todo) {
+    if (todo.hasReminder && todo.reminderAt != null) return todo.reminderAt;
+    return todo.dueDate;
+  }
+
+  static String _todoReminderSubtitle(
+    TodoItem todo,
+    DateTime trigger,
+    DateTime now,
+  ) {
+    final prefix = trigger.isBefore(now)
+        ? '提醒时间'
+        : _sameDay(trigger, DateTime(now.year, now.month, now.day))
+        ? '今日提醒'
+        : '即将开始';
+    final meta = <String>[
+      I18nDateFormat.smartDate(trigger, includeTime: true),
+      if (todo.listGroupName != null && todo.listGroupName!.isNotEmpty)
+        todo.listGroupName!,
+    ];
+    return '$prefix · ${meta.join(' · ')}';
+  }
+}
+
+class _TodayReminderSection extends StatelessWidget {
+  final _TodayReminderGroups groups;
+  final List<SmartScheduleSuggestion> suggestions;
+  final DateTime todayKey;
+  final DateTime now;
+  final ValueChanged<String> onOpenTodo;
+  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback onOpenCourses;
+  final Future<void> Function(TodoItem todo) onAddToday;
+
+  const _TodayReminderSection({
+    required this.groups,
+    required this.suggestions,
+    required this.todayKey,
+    required this.now,
+    required this.onOpenTodo,
+    required this.onToggleTodo,
+    required this.onOpenCourses,
+    required this.onAddToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total =
+        groups.dueToday.length + groups.upcoming.length + groups.overdue.length;
+    final subtitle = suggestions.isEmpty
+        ? '$total 项 · 今日待提醒 > 即将开始 > 已逾期事项（弱化）'
+        : '$total 项提醒 · 今日待提醒 > 即将开始 > 已逾期事项（弱化） > 今日建议';
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: AppSurfaceCard(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppSectionHeader(
+              title: '今日提醒',
+              subtitle: subtitle,
+              actionLabel: I18n.tr('today.view'),
+              onAction: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.todos),
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 6),
+              titleStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                height: 1.25,
+                fontWeight: FontWeight.w400,
+              ),
+              actionTextStyle: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w400),
+            ),
+            if (groups.dueToday.isNotEmpty)
+              _ReminderGroupBlock(
+                title: '今日待提醒事项',
+                items: groups.dueToday.take(4).toList(),
+                now: now,
+                onOpenTodo: onOpenTodo,
+                onToggleTodo: onToggleTodo,
+                onOpenCourses: onOpenCourses,
+              ),
+            if (groups.upcoming.isNotEmpty)
+              _ReminderGroupBlock(
+                title: '即将开始事项',
+                items: groups.upcoming.take(4).toList(),
+                now: now,
+                onOpenTodo: onOpenTodo,
+                onToggleTodo: onToggleTodo,
+                onOpenCourses: onOpenCourses,
+              ),
+            if (groups.overdue.isNotEmpty)
+              _ReminderGroupBlock(
+                title: '已逾期事项',
+                items: groups.overdue.take(4).toList(),
+                now: now,
+                overdue: true,
+                onOpenTodo: onOpenTodo,
+                onToggleTodo: onToggleTodo,
+                onOpenCourses: onOpenCourses,
+              ),
+            if (suggestions.isNotEmpty)
+              _SuggestionSection(
+                suggestions: suggestions,
+                todayKey: todayKey,
+                onOpenTodo: onOpenTodo,
+                onAddToday: onAddToday,
+              ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderGroupBlock extends StatelessWidget {
+  final String title;
+  final List<_TodayReminderItem> items;
+  final DateTime now;
+  final bool overdue;
+  final ValueChanged<String> onOpenTodo;
+  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback onOpenCourses;
+
+  const _ReminderGroupBlock({
+    required this.title,
+    required this.items,
+    required this.now,
+    required this.onOpenTodo,
+    required this.onToggleTodo,
+    required this.onOpenCourses,
+    this.overdue = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = overdue ? cs.onSurfaceVariant : cs.primary;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: overdue
+              ? cs.surfaceContainerHighest.withValues(alpha: 0.18)
+              : cs.surfaceContainerHighest.withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: color.withValues(alpha: overdue ? 0.08 : 0.1),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 9, 12, 2),
+              child: Row(
+                children: [
+                  Icon(
+                    overdue
+                        ? Icons.warning_amber_outlined
+                        : Icons.notifications_none_outlined,
+                    size: 16,
+                    color: color,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: overdue ? cs.onSurfaceVariant : cs.onSurface,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${items.length} 项',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...items.map(
+              (item) => _TodayReminderTile(
+                item: item,
+                now: now,
+                overdue: overdue,
+                onOpenTodo: onOpenTodo,
+                onToggleTodo: onToggleTodo,
+                onOpenCourses: onOpenCourses,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayReminderTile extends StatelessWidget {
+  final _TodayReminderItem item;
+  final DateTime now;
+  final bool overdue;
+  final ValueChanged<String> onOpenTodo;
+  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback onOpenCourses;
+
+  const _TodayReminderTile({
+    required this.item,
+    required this.now,
+    required this.overdue,
+    required this.onOpenTodo,
+    required this.onToggleTodo,
+    required this.onOpenCourses,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final todo = item.todo;
+    final isTodo = item.kind == _TodayReminderKind.todo;
+    final accent =
+        item.accentColor ?? (overdue ? cs.onSurfaceVariant : cs.primary);
+    final tile = ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: isTodo
+          ? Checkbox(
+              value: todo?.isCompleted ?? false,
+              shape: const CircleBorder(),
+              onChanged: todo == null ? null : (_) => onToggleTodo(todo),
+            )
+          : CircleAvatar(
+              radius: 13,
+              backgroundColor: accent.withValues(alpha: 0.14),
+              child: Icon(Icons.menu_book_outlined, size: 14, color: accent),
+            ),
+      title: Text(
+        item.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: overdue ? cs.onSurface.withValues(alpha: 0.56) : cs.onSurface,
+          decoration: todo?.isCompleted == true
+              ? TextDecoration.lineThrough
+              : null,
+        ),
+      ),
+      subtitle: Text(
+        overdue
+            ? '${item.subtitle} · ${_pastStatusLabel(item, now)}'
+            : item.subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          color: overdue
+              ? cs.onSurfaceVariant.withValues(alpha: 0.74)
+              : cs.onSurfaceVariant,
+        ),
+      ),
+      trailing: Text(
+        I18nDateFormat.time(item.time),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: overdue
+              ? cs.onSurfaceVariant.withValues(alpha: 0.70)
+              : cs.onSurfaceVariant,
+        ),
+      ),
+      onTap: isTodo ? () => onOpenTodo(item.id) : onOpenCourses,
+    );
+    if (!isTodo || todo == null) return tile;
+    return _TodayTodoSwipeTile(
+      todo: todo,
+      onToggle: () => onToggleTodo(todo),
+      onOpen: () => onOpenTodo(item.id),
+      title: item.title,
+      subtitle: Text(
+        overdue
+            ? '${item.subtitle} · ${_pastStatusLabel(item, now)}'
+            : item.subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          color: overdue
+              ? cs.onSurfaceVariant.withValues(alpha: 0.74)
+              : cs.onSurfaceVariant,
+        ),
+      ),
+      trailing: Text(
+        I18nDateFormat.time(item.time),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: overdue
+              ? cs.onSurfaceVariant.withValues(alpha: 0.70)
+              : cs.onSurfaceVariant,
+        ),
+      ),
+      completedTextColor: overdue ? cs.onSurface.withValues(alpha: 0.56) : null,
+    );
+  }
+
+  String _pastStatusLabel(_TodayReminderItem item, DateTime now) {
+    final trigger = item.time;
+    final triggerDay = DateTime(trigger.year, trigger.month, trigger.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final days = today.difference(triggerDay).inDays;
+    if (days <= 0) {
+      final minutes = now.difference(trigger).inMinutes.clamp(1, 999);
+      return item.kind == _TodayReminderKind.course
+          ? '已过期 $minutes 分钟'
+          : '已过提醒 $minutes 分钟';
+    }
+    return '已逾期 $days 天';
+  }
+}
+
+class _SuggestionSection extends StatelessWidget {
+  final List<SmartScheduleSuggestion> suggestions;
+  final DateTime todayKey;
+  final ValueChanged<String> onOpenTodo;
+  final Future<void> Function(TodoItem todo) onAddToday;
+
+  const _SuggestionSection({
+    required this.suggestions,
+    required this.todayKey,
+    required this.onOpenTodo,
+    required this.onAddToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        maintainState: true,
+        tilePadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+        childrenPadding: const EdgeInsets.only(bottom: 4),
+        leading: Icon(
+          Icons.auto_awesome,
+          size: 18,
+          color: cs.primary.withValues(alpha: 0.72),
+        ),
+        title: Text(
+          I18n.tr('today.suggestions'),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        subtitle: Text(
+          '${I18n.tr('today.suggestions.subtitle')} · 默认收起',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.58),
+          ),
+        ),
+        children: suggestions.map((suggestion) {
+          final t = suggestion.todo;
+          return _TodayTodoSwipeTile(
+            todo: t,
+            onToggle: () {},
+            onOpen: () => onOpenTodo(t.id),
+            leading: Icon(
+              Icons.auto_awesome,
+              size: 18,
+              color: cs.primary.withValues(alpha: 0.66),
+            ),
+            title: t.title,
+            titleColor: cs.onSurface.withValues(alpha: 0.76),
+            subtitle: Text(
+              suggestion.reason,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: _sameDay(t.date, todayKey) || t.isArchivedAfterRollover
+                ? null
+                : TextButton(
+                    onPressed: () => onAddToday(t),
+                    child: Text(I18n.tr('today.add_to_today')),
+                  ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _QuoteCardState extends State<_QuoteCard> {

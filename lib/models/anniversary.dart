@@ -29,6 +29,7 @@ class Anniversary {
   int remindHour;
   int remindMinute;
   ReminderKind reminderKind;
+  bool ignoreYear;
   int? lunarYear; // 农历年(仅 lunar 用)
   int? lunarMonth;
   int? lunarDay;
@@ -50,6 +51,7 @@ class Anniversary {
     this.remindHour = 9,
     this.remindMinute = 0,
     this.reminderKind = ReminderKind.push,
+    this.ignoreYear = false,
     this.lunarYear,
     this.lunarMonth,
     this.lunarDay,
@@ -75,6 +77,7 @@ class Anniversary {
     int remindHour = 9,
     int remindMinute = 0,
     ReminderKind reminderKind = ReminderKind.push,
+    bool ignoreYear = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -101,6 +104,7 @@ class Anniversary {
       remindHour: remindHour,
       remindMinute: remindMinute,
       reminderKind: reminderKind,
+      ignoreYear: ignoreYear,
       lunarYear: ly,
       lunarMonth: lm,
       lunarDay: ld,
@@ -169,6 +173,7 @@ class Anniversary {
   /// 已经过去多少年(生日/纪念日用)
   int? get yearsPassed {
     if (type == AnniversaryType.normal) return null;
+    if (ignoreYear) return null;
     final now = DateTime.now();
     int years = now.year - originDate.year;
     final thisYearOccur = DateTime(now.year, originDate.month, originDate.day);
@@ -192,6 +197,7 @@ class Anniversary {
     'remindHour': remindHour,
     'remindMinute': remindMinute,
     'reminderKind': reminderKind.index,
+    'ignoreYear': ignoreYear,
     'lunarYear': lunarYear,
     'lunarMonth': lunarMonth,
     'lunarDay': lunarDay,
@@ -216,6 +222,7 @@ class Anniversary {
     reminderKind: json['reminderKind'] != null
         ? ReminderKind.values[(json['reminderKind'] as num).toInt()]
         : ReminderKind.push,
+    ignoreYear: json['ignoreYear'] == true,
     lunarYear: json['lunarYear'],
     lunarMonth: json['lunarMonth'],
     lunarDay: json['lunarDay'],

@@ -115,10 +115,12 @@
             android:exported="false" />
         <receiver
             android:name=".ReminderRingtoneBootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
@@ -128,9 +130,17 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.DuoyiScheduledNotificationUpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 
@@ -149,10 +159,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_todo_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_todo_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_todo_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_todo_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_todo_preview" />
         </receiver>
-
         <!-- 专注 小组件 -->
         <receiver
             android:name=".DuoyiFocusHabitWidgetProvider"
@@ -168,10 +186,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_focus_habit_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_focus_habit_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_focus_habit_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_focus_habit_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_focus_habit_preview" />
         </receiver>
-
         <!-- 习惯 小组件 -->
         <receiver
             android:name=".DuoyiHabitWidgetProvider"
@@ -187,10 +213,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_habit_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_habit_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_habit_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_habit_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_habit_preview" />
         </receiver>
-
         <!-- 月历 小组件 -->
         <receiver
             android:name=".DuoyiCalendarWidgetProvider"
@@ -206,10 +240,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_calendar_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_calendar_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_calendar_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_calendar_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_calendar_preview" />
         </receiver>
-
         <!-- 今日日程 小组件 -->
         <receiver
             android:name=".DuoyiScheduleWidgetProvider"
@@ -225,10 +267,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_schedule_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_schedule_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_schedule_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_schedule_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_schedule_preview" />
         </receiver>
-
         <!-- 目标 小组件 -->
         <receiver
             android:name=".DuoyiGoalWidgetProvider"
@@ -244,10 +294,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_goal_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_goal_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_goal_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_goal_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_goal_preview" />
         </receiver>
-
         <!-- 课程表 小组件 -->
         <receiver
             android:name=".DuoyiCourseWidgetProvider"
@@ -263,10 +321,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_course_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_course_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_course_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_course_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_course_preview" />
         </receiver>
-
         <!-- 随手记 小组件 -->
         <receiver
             android:name=".DuoyiNoteWidgetProvider"
@@ -282,10 +348,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_note_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_note_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_note_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_note_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_note_preview" />
         </receiver>
-
         <!-- 纪念日 小组件 -->
         <receiver
             android:name=".DuoyiAnniversaryWidgetProvider"
@@ -301,10 +375,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_anniversary_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_anniversary_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_anniversary_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_anniversary_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_anniversary_preview" />
         </receiver>
-
         <!-- 日记 小组件 -->
         <receiver
             android:name=".DuoyiDiaryWidgetProvider"
@@ -320,10 +402,319 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/duoyi_diary_widget_info" />
             <meta-data
+                android:name="duoyi.appwidget.provider.compact"
+                android:resource="@xml/duoyi_diary_widget_info_compact" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.standard"
+                android:resource="@xml/duoyi_diary_widget_info" />
+            <meta-data
+                android:name="duoyi.appwidget.provider.detailed"
+                android:resource="@xml/duoyi_diary_widget_info_detailed" />
+            <meta-data
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_diary_preview" />
         </receiver>
-
+        <!-- 应用内添加用样式变体：默认禁用，requestPinWidget 前按需启用，避免系统默认列表膨胀。 -->
+        <receiver
+            android:name=".DuoyiTodoCompactWidgetProvider"
+            android:label="@string/widget_todo_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_todo_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiTodoDetailedWidgetProvider"
+            android:label="@string/widget_todo_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_todo_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiFocusHabitCompactWidgetProvider"
+            android:label="@string/widget_focus_habit_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_focus_habit_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiFocusHabitDetailedWidgetProvider"
+            android:label="@string/widget_focus_habit_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_focus_habit_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiHabitCompactWidgetProvider"
+            android:label="@string/widget_habit_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_habit_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiHabitDetailedWidgetProvider"
+            android:label="@string/widget_habit_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_habit_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiCalendarCompactWidgetProvider"
+            android:label="@string/widget_calendar_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_calendar_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiCalendarDetailedWidgetProvider"
+            android:label="@string/widget_calendar_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_calendar_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiScheduleCompactWidgetProvider"
+            android:label="@string/widget_schedule_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_schedule_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiScheduleDetailedWidgetProvider"
+            android:label="@string/widget_schedule_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_schedule_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiGoalCompactWidgetProvider"
+            android:label="@string/widget_goal_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_goal_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiGoalDetailedWidgetProvider"
+            android:label="@string/widget_goal_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_goal_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiCourseCompactWidgetProvider"
+            android:label="@string/widget_course_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_course_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiCourseDetailedWidgetProvider"
+            android:label="@string/widget_course_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_course_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiNoteCompactWidgetProvider"
+            android:label="@string/widget_note_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_note_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiNoteDetailedWidgetProvider"
+            android:label="@string/widget_note_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_note_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiAnniversaryCompactWidgetProvider"
+            android:label="@string/widget_anniversary_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_anniversary_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiAnniversaryDetailedWidgetProvider"
+            android:label="@string/widget_anniversary_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_anniversary_widget_info_detailed" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiDiaryCompactWidgetProvider"
+            android:label="@string/widget_diary_label_compact"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_diary_widget_info_compact" />
+        </receiver>
+        <receiver
+            android:name=".DuoyiDiaryDetailedWidgetProvider"
+            android:label="@string/widget_diary_label_detailed"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+                <action android:name="miui.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/duoyi_diary_widget_info_detailed" />
+        </receiver>
         <activity
             android:name=".DuoyiWidgetConfigActivity"
             android:exported="true"

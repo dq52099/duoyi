@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/anniversary.dart';
+import '../services/reminder_scheduler.dart';
 import 'cloud_sync_provider.dart';
 
 class AnniversaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_anniversaries_v2';
   List<Anniversary> _items = [];
+  ReminderScheduler? _scheduler;
 
   List<Anniversary> get items {
     final sorted = [..._items];
@@ -38,29 +40,16 @@ class AnniversaryProvider extends ChangeNotifier {
     }).toList();
   }
 
+  // ignore: use_setters_to_change_properties
+  set scheduler(ReminderScheduler? scheduler) {
+    _scheduler = scheduler;
+  }
+
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList(_key) ?? [];
     _items = data.map((e) => Anniversary.fromJson(jsonDecode(e))).toList();
 
-    // 兼容旧 countdown 数据
-    final legacy = prefs.getStringList('duoyi_countdowns') ?? [];
-    if (_items.isEmpty && legacy.isNotEmpty) {
-      for (final s in legacy) {
-        final j = jsonDecode(s);
-        _items.add(
-          Anniversary(
-            id: j['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            title: j['title'] ?? '',
-            originDate: DateTime.parse(j['targetDate']),
-            type: AnniversaryType.normal,
-            calendarType: AnniversaryCalendarType.solar,
-            isPinned: j['isPinned'] ?? false,
-          ),
-        );
-      }
-      await _save();
-    }
     notifyListeners();
   }
 
@@ -73,10 +62,23 @@ class AnniversaryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _syncRemindersNow() async {
+    final scheduler = _scheduler;
+    if (scheduler == null) return;
+    try {
+      await scheduler.syncAnniversaries(List.of(_items));
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[AnniversaryProvider] reminder sync failed: $error\n$stackTrace',
+      );
+    }
+  }
+
   Future<void> add(Anniversary item) async {
     item.updatedAt = DateTime.now();
     _items.add(item);
     await _save();
+    await _syncRemindersNow();
   }
 
   Future<AnniversaryImportSummary> importAnniversaries(
@@ -87,6 +89,10 @@ class AnniversaryProvider extends ChangeNotifier {
     final seen = _items.map(_importDuplicateKey).toSet();
     for (final item in items) {
       if (item.title.trim().isEmpty) continue;
+      if (item.type == AnniversaryType.normal) {
+        skippedDuplicates++;
+        continue;
+      }
       final key = _importDuplicateKey(item);
       if (seen.contains(key)) {
         skippedDuplicates++;
@@ -98,6 +104,7 @@ class AnniversaryProvider extends ChangeNotifier {
     }
     if (inserted > 0) {
       await _save();
+      await _syncRemindersNow();
     }
     return AnniversaryImportSummary(
       inserted: inserted,
@@ -111,6 +118,7 @@ class AnniversaryProvider extends ChangeNotifier {
       item.updatedAt = DateTime.now();
       _items[idx] = item;
       await _save();
+      await _syncRemindersNow();
     }
   }
 
@@ -118,6 +126,7 @@ class AnniversaryProvider extends ChangeNotifier {
     await CloudSyncProvider.recordDeletedItem('anniversaries', id);
     _items.removeWhere((e) => e.id == id);
     await _save();
+    await _syncRemindersNow();
   }
 
   Future<void> togglePin(String id) async {

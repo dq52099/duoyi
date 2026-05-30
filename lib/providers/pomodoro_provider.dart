@@ -80,7 +80,13 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_lifecycleAttached) return;
     WidgetsBinding.instance.addObserver(this);
     _sound.bindLifecycle(WidgetsBinding.instance);
+    _sound.onForegroundStopRequested = handleFocusForegroundStopRequested;
     _lifecycleAttached = true;
+  }
+
+  Future<void> handleFocusForegroundStopRequested() async {
+    await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);
+    await _sound.stop();
   }
 
   @override
@@ -141,7 +147,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         focusRoomId: _config.focusRoomId,
         clearFocusRoom: _config.focusRoomId == null,
       );
-      _syncSoundToState();
+      unawaited(_syncSoundToState());
       _syncDndToState();
       _syncDistractionMonitorToState();
     } else {
@@ -305,7 +311,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         _state = _state.copyWith(isRunning: true);
         notifyListeners();
       }
-      _syncSoundToState();
+      unawaited(_syncSoundToState());
       _syncDndToState();
       _syncDistractionMonitorToState();
       return;
@@ -314,7 +320,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       _state = _state.copyWith(isRunning: true);
       notifyListeners();
     }
-    _syncSoundToState();
+    unawaited(_syncSoundToState());
     _syncDndToState();
     _syncDistractionMonitorToState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -357,7 +363,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// [_config.playSoundInBreak] 决定播放 / 停止白噪音。
   ///
   /// 调用点：`_startTimer` 与 `_completeSession` 的相位切换后。
-  void _syncSoundToState() {
+  Future<bool> _syncSoundToState() async {
     final sound = _state.whiteNoiseSound;
     final shouldPlay =
         _state.isRunning &&
@@ -365,15 +371,34 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         (_state.type == PomodoroType.focus || _config.playSoundInBreak);
     if (shouldPlay) {
       if (!_sound.isPlaying || _sound.currentSound != sound) {
-        // ignore: discarded_futures
-        _sound.play(sound);
+        return _playFocusSound(sound);
+      } else {
+        await _sound.setVolume(_config.focusSoundVolume);
+        return true;
       }
     } else {
       if (_sound.isPlaying) {
-        // ignore: discarded_futures
-        _sound.stop();
+        await _sound.stop();
       }
+      return true;
     }
+  }
+
+  Future<bool> _playFocusSound(String sound) async {
+    await _sound.setVolume(_config.focusSoundVolume);
+    return _sound.play(sound);
+  }
+
+  Future<bool> _previewWhiteNoiseSound(String sound) async {
+    if (sound == FocusSoundCatalog.none || _state.isRunning) return true;
+    await _sound.setVolume(_config.focusSoundVolume);
+    return _sound.preview(sound);
+  }
+
+  String get _focusSoundPreviewFallback {
+    final current = _state.whiteNoiseSound;
+    if (current != FocusSoundCatalog.none) return current;
+    return FocusSoundCatalog.tracks.first.id;
   }
 
   void _completeSession() {
@@ -763,20 +788,58 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _syncDistractionMonitorToState();
   }
 
-  Future<void> setWhiteNoiseSound(String sound) async {
+  Future<bool> setWhiteNoiseSound(String sound, {bool preview = true}) async {
     final normalized = sound.startsWith('custom:')
         ? sound
         : FocusSoundCatalog.normalizeForPlayback(sound);
     if (_config.whiteNoiseSound == normalized &&
         _state.whiteNoiseSound == normalized) {
-      return;
+      if (preview &&
+          normalized != FocusSoundCatalog.none &&
+          !_state.isRunning) {
+        return _previewWhiteNoiseSound(normalized);
+      }
+      return true;
     }
     _state = _state.copyWith(whiteNoiseSound: normalized);
     _config.whiteNoiseSound = normalized;
     await _touchAndSaveConfig();
     _persistedRevision++;
     notifyListeners();
-    _syncSoundToState();
+    final playbackOk = await _syncSoundToState();
+    if (!playbackOk && _state.isRunning && normalized != FocusSoundCatalog.none) {
+      _state = _state.copyWith(whiteNoiseSound: FocusSoundCatalog.none);
+      _config.whiteNoiseSound = FocusSoundCatalog.none;
+      await _touchAndSaveConfig();
+      _persistedRevision++;
+      notifyListeners();
+      return false;
+    }
+    if (preview && normalized != FocusSoundCatalog.none && !_state.isRunning) {
+      return _previewWhiteNoiseSound(normalized);
+    }
+    return true;
+  }
+
+  Future<bool> setFocusSoundVolume(double volume, {bool preview = true}) async {
+    final normalized = volume
+        .clamp(FocusSoundService.minimumAudibleVolume, 1.0)
+        .toDouble();
+    if (_config.focusSoundVolume == normalized) {
+      if (preview && !_state.isRunning) {
+        return _previewWhiteNoiseSound(_focusSoundPreviewFallback);
+      }
+      return true;
+    }
+    _config.focusSoundVolume = normalized;
+    await _touchAndSaveConfig();
+    _persistedRevision++;
+    notifyListeners();
+    await _sound.setVolume(normalized);
+    if (preview && !_state.isRunning) {
+      return _previewWhiteNoiseSound(_focusSoundPreviewFallback);
+    }
+    return true;
   }
 
   void recordFocusLeaveAppPenalty() {

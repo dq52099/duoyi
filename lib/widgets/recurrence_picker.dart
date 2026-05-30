@@ -71,6 +71,9 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final controlText = appSecondaryControlTextStyle(context);
+    final labelText = appSecondaryControlLabelStyle(context);
     return AppModalSheet(
       title: '重复',
       subtitle: widget.supportMaxOccurrences
@@ -111,167 +114,179 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
           child: const Text('保存'),
         ),
       ],
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            children: [
-              for (final f in RecurrenceFrequency.values)
-                ChoiceChip(
-                  label: Text(_freqLabel(f)),
-                  selected: _freq == f,
-                  onSelected: (_) => setState(() => _freq = f),
-                ),
-            ],
-          ),
-          if (_freq != RecurrenceFrequency.none) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('每'),
-                SizedBox(
-                  width: 72,
-                  child: TextField(
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    controller: _intervalCtrl,
-                    decoration: const InputDecoration(isDense: true),
-                    onChanged: (v) {
-                      final n = int.tryParse(v);
-                      if (n != null && n > 0) {
-                        setState(() => _interval = n);
-                      }
-                    },
-                  ),
-                ),
-                Text(' ${_unitLabel(_freq)}'),
-              ],
-            ),
-          ],
-          if (_freq == RecurrenceFrequency.weekly) ...[
-            const SizedBox(height: 12),
-            const Text(
-              '每周哪几天',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 6),
+      child: AppSecondaryControlTheme(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Wrap(
-              spacing: 4,
-              children: List.generate(7, (i) {
-                const names = ['一', '二', '三', '四', '五', '六', '日'];
-                final selected = _weekdays.contains(i);
-                return FilterChip(
-                  label: Text(names[i]),
-                  selected: selected,
-                  showCheckmark: false,
-                  onSelected: (_) => setState(() {
-                    if (selected) {
-                      _weekdays.remove(i);
-                    } else {
-                      _weekdays.add(i);
-                    }
-                  }),
-                );
-              }),
-            ),
-          ],
-          if (_freq == RecurrenceFrequency.monthly) ...[
-            const SizedBox(height: 12),
-            Row(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                const Text('每月第几天 '),
-                SizedBox(
-                  width: 72,
-                  child: TextField(
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    controller: _byMonthDayCtrl,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: '留空=同日',
-                    ),
-                    onChanged: (v) => setState(() {
-                      final n = int.tryParse(v);
-                      if (n != null && n >= 1 && n <= 31) _byMonthDay = n;
-                      if (v.isEmpty) _byMonthDay = null;
-                    }),
+                for (final f in RecurrenceFrequency.values)
+                  ChoiceChip(
+                    label: Text(_freqLabel(f)),
+                    selected: _freq == f,
+                    labelStyle: controlText,
+                    onSelected: (_) => setState(() => _freq = f),
                   ),
-                ),
-                const Text(' 日'),
               ],
             ),
-          ],
-          if (_freq != RecurrenceFrequency.none) ...[
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: const Icon(Icons.event_busy, size: 18),
-              title: const Text('结束日期 (可选)'),
-              subtitle: Text(
-                _endDate == null ? '永不结束' : I18nDateFormat.date(_endDate!),
-              ),
-              trailing: _endDate == null
-                  ? const Icon(Icons.chevron_right)
-                  : IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => setState(() => _endDate = null),
-                    ),
-              onTap: () async {
-                final picked = await AppDatePicker.pickSolar(
-                  context,
-                  initialDate:
-                      _endDate ?? DateTime.now().add(const Duration(days: 90)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2099, 12, 31),
-                  title: '结束日期',
-                );
-                if (!mounted) return;
-                if (picked != null) setState(() => _endDate = picked);
-              },
-            ),
-            if (widget.supportMaxOccurrences) ...[
+            if (_freq != RecurrenceFrequency.none) ...[
               const SizedBox(height: 12),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.repeat_one, size: 18),
-                  const SizedBox(width: 16),
-                  Expanded(
+                  Text('每', style: controlText),
+                  SizedBox(
+                    width: 72,
                     child: TextField(
-                      controller: _maxOccurrencesCtrl,
+                      textAlign: TextAlign.center,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: '重复次数 (可选)',
-                        helperText: '留空表示不限次数；例如 10 表示共 10 次',
-                      ),
+                      controller: _intervalCtrl,
+                      style: controlText,
+                      decoration: const InputDecoration(isDense: true),
                       onChanged: (v) {
-                        final text = v.trim();
-                        final n = int.tryParse(text);
-                        setState(() {
-                          _maxOccurrences = text.isEmpty || n == null || n < 1
-                              ? null
-                              : n;
-                        });
+                        final n = int.tryParse(v);
+                        if (n != null && n > 0) {
+                          setState(() => _interval = n);
+                        }
                       },
                     ),
                   ),
-                  if (_maxOccurrences != null)
-                    IconButton(
-                      tooltip: '清除重复次数',
-                      icon: const Icon(Icons.close),
-                      onPressed: () => setState(() {
-                        _maxOccurrences = null;
-                        _maxOccurrencesCtrl.clear();
-                      }),
-                    ),
+                  Text(' ${_unitLabel(_freq)}', style: controlText),
                 ],
               ),
             ],
+            if (_freq == RecurrenceFrequency.weekly) ...[
+              const SizedBox(height: 12),
+              Text(
+                '每周哪几天',
+                style: labelText.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.62),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: List.generate(7, (i) {
+                  const names = ['一', '二', '三', '四', '五', '六', '日'];
+                  final selected = _weekdays.contains(i);
+                  return FilterChip(
+                    label: Text(names[i]),
+                    selected: selected,
+                    showCheckmark: false,
+                    labelStyle: controlText,
+                    onSelected: (_) => setState(() {
+                      if (selected) {
+                        _weekdays.remove(i);
+                      } else {
+                        _weekdays.add(i);
+                      }
+                    }),
+                  );
+                }),
+              ),
+            ],
+            if (_freq == RecurrenceFrequency.monthly) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text('每月第几天 ', style: controlText),
+                  SizedBox(
+                    width: 72,
+                    child: TextField(
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      controller: _byMonthDayCtrl,
+                      style: controlText,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: '留空=同日',
+                      ),
+                      onChanged: (v) => setState(() {
+                        final n = int.tryParse(v);
+                        if (n != null && n >= 1 && n <= 31) _byMonthDay = n;
+                        if (v.isEmpty) _byMonthDay = null;
+                      }),
+                    ),
+                  ),
+                  Text(' 日', style: controlText),
+                ],
+              ),
+            ],
+            if (_freq != RecurrenceFrequency.none) ...[
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: const Icon(Icons.event_busy, size: 18),
+                title: const Text('结束日期 (可选)'),
+                subtitle: Text(
+                  _endDate == null ? '永不结束' : I18nDateFormat.date(_endDate!),
+                ),
+                trailing: _endDate == null
+                    ? const Icon(Icons.chevron_right)
+                    : IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() => _endDate = null),
+                      ),
+                onTap: () async {
+                  final picked = await AppDatePicker.pickSolar(
+                    context,
+                    initialDate:
+                        _endDate ??
+                        DateTime.now().add(const Duration(days: 90)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2099, 12, 31),
+                    title: '结束日期',
+                  );
+                  if (!mounted) return;
+                  if (picked != null) setState(() => _endDate = picked);
+                },
+              ),
+              if (widget.supportMaxOccurrences) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.repeat_one, size: 18),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _maxOccurrencesCtrl,
+                        keyboardType: TextInputType.number,
+                        style: controlText,
+                        decoration: const InputDecoration(
+                          labelText: '重复次数 (可选)',
+                          helperText: '留空表示不限次数；例如 10 表示共 10 次',
+                        ),
+                        onChanged: (v) {
+                          final text = v.trim();
+                          final n = int.tryParse(text);
+                          setState(() {
+                            _maxOccurrences = text.isEmpty || n == null || n < 1
+                                ? null
+                                : n;
+                          });
+                        },
+                      ),
+                    ),
+                    if (_maxOccurrences != null)
+                      IconButton(
+                        tooltip: '清除重复次数',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() {
+                          _maxOccurrences = null;
+                          _maxOccurrencesCtrl.clear();
+                        }),
+                      ),
+                  ],
+                ),
+              ],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

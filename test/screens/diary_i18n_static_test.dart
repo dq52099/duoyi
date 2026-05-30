@@ -67,5 +67,8 @@ void main() {
     ]) {
       expect(source, isNot(contains(hardcoded)), reason: hardcoded);
     }
+    expect(source, contains('cs.outlineVariant.withValues(alpha: 0.14)'));
+    expect(source, contains('width: 0.45'));
+    expect(source, isNot(contains('Border.all(color: Colors.grey.shade200)')));
   });
 }

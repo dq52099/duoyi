@@ -54,6 +54,35 @@ void main() {
     expect(source, contains("I18n.tr('habit.field.group.empty_hint')"));
   });
 
+  test('习惯详情页直接暴露结束和删除操作', () {
+    final source = File(
+      'lib/screens/habit_detail_screen.dart',
+    ).readAsStringSync();
+    final headerStart = source.indexOf('width: 64,');
+    final headerEnd = source.indexOf(
+      "I18n.tr('habit.heatmap.title')",
+      headerStart,
+    );
+    expect(headerStart, greaterThanOrEqualTo(0));
+    expect(headerEnd, greaterThan(headerStart));
+    final header = source.substring(headerStart, headerEnd);
+
+    expect(header, contains('OutlinedButton.icon('));
+    expect(header, contains("label: const Text('结束习惯')"));
+    expect(header, contains('Icons.event_busy_outlined'));
+    expect(header, contains('provider.endHabit(habit.id)'));
+    expect(header, contains('TextButton.icon('));
+    expect(header, contains("label: const Text('删除')"));
+    expect(header, contains('Icons.delete_outline'));
+    expect(header, contains("title: const Text('删除习惯？')"));
+    expect(header, contains('deleteHabit('));
+    expect(header, contains('_habitIconForToken(habit.icon)'));
+    expect(source, contains('IconData _habitIconForToken(String token)'));
+    expect(source, isNot(contains('child: Icon(Icons.star')));
+    expect(source, contains('builder: (ctx) => AppDialog('));
+    expect(source, isNot(contains('builder: (ctx) => AlertDialog(')));
+  });
+
   test('习惯打卡提供完成反馈和轻量动效', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
 
@@ -64,16 +93,141 @@ void main() {
     expect(source, contains('HapticFeedback.mediumImpact()'));
     expect(source, contains('SystemSound.play(SystemSoundType.click)'));
     expect(source, contains('HapticFeedback.selectionClick()'));
-    expect(source, contains("key: const ValueKey('habit-undo-inline-button')"));
-    expect(source, contains('OutlinedButton.icon('));
-    expect(source, contains("label: const Text('撤回一次')"));
-    expect(source, contains('minimumSize: const Size(128, 44)'));
-    expect(source, contains('tapTargetSize: MaterialTapTargetSize.padded'));
+    expect(source, contains("'habit-undo-inline-button'"));
+    expect(source, contains('IconButton('));
+    expect(source, contains("message: '撤回一次'"));
+    expect(source, isNot(contains("label: const Text('还原')")));
+    expect(source, contains('width: _habitUndoButtonWidth'));
+    expect(source, contains('height: 26'));
+    expect(
+      source,
+      contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'),
+    );
+    expect(
+      source,
+      contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'),
+    );
+    expect(source, contains('tapTargetSize: MaterialTapTargetSize.shrinkWrap'));
     expect(source, isNot(contains('dimension: 48')));
     expect(source, contains('messenger.hideCurrentSnackBar()'));
     expect(source, contains('今日已达标'));
-    expect(source, contains("label: '已达标'"));
+    expect(source, contains("label: habit.hasFlexRule"));
+    expect(source, contains(": '已达标'"));
     expect(source, contains("label: '已记录'"));
+  });
+
+  test('习惯打卡卡片采用紧凑排版让一屏展示更多任务', () {
+    final source = File('lib/screens/habit_screen.dart').readAsStringSync();
+    final cardStart = source.indexOf('class _HabitCheckinCard');
+    final cardEnd = source.indexOf('Future<void> _handleCheckIn', cardStart);
+    expect(cardStart, greaterThanOrEqualTo(0));
+    expect(cardEnd, greaterThan(cardStart));
+    final cardSource = source.substring(cardStart, cardEnd);
+
+    expect(
+      cardSource,
+      contains('margin: const EdgeInsets.fromLTRB(10, 0, 10, 1)'),
+    );
+    expect(
+      cardSource,
+      contains('padding: const EdgeInsets.fromLTRB(6, 0, 6, 0)'),
+    );
+    expect(source, contains('const double _habitCheckinCardBodyHeight = 32'));
+    expect(source, contains('const double _habitTitleStatusHeight = 14'));
+    expect(source, contains('const double _habitUndoButtonWidth = 30'));
+    expect(source, contains('const double _habitMenuButtonWidth = 28'));
+    expect(source, contains('const double _habitActionButtonGap = 3'));
+    expect(source, contains('const double _habitActionRailWidth'));
+    expect(cardSource, contains('height: _habitCheckinCardBodyHeight'));
+    expect(cardSource, contains('width: 17'));
+    expect(cardSource, contains('height: 17'));
+    expect(cardSource, contains('height: 2'));
+    expect(cardSource, contains('width: _habitCheckinButtonWidth'));
+    expect(cardSource, contains('height: 25'));
+    expect(cardSource, contains('minimumSize: const Size('));
+    expect(cardSource, contains('_habitCheckinButtonWidth'));
+    expect(cardSource, contains('_habitIconForToken(habit.icon)'));
+    expect(cardSource, isNot(contains('Icons.shield_outlined')));
+    expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
+    expect(cardSource, isNot(contains('Icons.verified_rounded')));
+    expect(cardSource, contains('_HabitMoreButton(habit: habit)'));
+    expect(source, contains('class _HabitMoreButton extends StatelessWidget'));
+    expect(source, contains("tooltip: '习惯操作'"));
+    expect(
+      source,
+      contains(
+        'onSelected: (value) => _handleHabitMenuAction(context, habit, value)',
+      ),
+    );
+    expect(
+      source,
+      contains('List<PopupMenuEntry<String>> _habitActionMenuItems'),
+    );
+    expect(
+      source,
+      contains(
+        "PopupMenuItem(value: 'detail', child: AppSecondaryMenuText('查看详情'))",
+      ),
+    );
+    expect(
+      source,
+      contains(
+        "PopupMenuItem(value: 'end', child: AppSecondaryMenuText('结束习惯'))",
+      ),
+    );
+    expect(source, contains("value: 'delete'"));
+    expect(source, contains("AppSecondaryMenuText('删除习惯', color: cs.error)"));
+    expect(cardSource, contains('Visibility('));
+    expect(cardSource, contains('maintainSize: true'));
+    expect(
+      cardSource,
+      contains('const SizedBox(width: _habitActionButtonGap)'),
+    );
+    expect(cardSource, contains("'\$targetText · \$countText'"));
+    expect(cardSource, contains('if (habit.currentStreak > 0)'));
+    expect(cardSource, contains('overflow: TextOverflow.ellipsis'));
+  });
+
+  test('习惯本周概览置顶且保持紧凑', () {
+    final screen = File('lib/screens/habit_screen.dart').readAsStringSync();
+    final weekly = File(
+      'lib/widgets/habit_weekly_card.dart',
+    ).readAsStringSync();
+
+    final weeklyIndex = screen.indexOf(
+      'const SliverToBoxAdapter(child: HabitWeeklyCard())',
+    );
+    expect(weeklyIndex, greaterThanOrEqualTo(0));
+    expect(weeklyIndex, lessThan(screen.indexOf('_HabitTodaySummaryCard(')));
+    expect(
+      weeklyIndex,
+      lessThan(
+        screen.indexOf("key: const ValueKey('habit_today_checkin_sliver')"),
+      ),
+    );
+    expect(
+      weeklyIndex,
+      lessThan(
+        screen.indexOf("key: const ValueKey('habit_today_empty_state_sliver')"),
+      ),
+    );
+    expect(
+      weekly,
+      contains("key: const ValueKey('habit_weekly_overview_card')"),
+    );
+    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(12, 8, 12, 7)'));
+    expect(
+      weekly,
+      contains('padding: const EdgeInsets.fromLTRB(16, 18, 16, 18)'),
+    );
+    expect(weekly, contains('currentWeekProgress()'));
+    expect(weekly, contains('borderRadius: BorderRadius.circular(16)'));
+    expect(weekly, contains('fontSize: 17'));
+    expect(weekly, contains('fontSize: 20'));
+    expect(weekly, contains('minHeight: 8'));
+    expect(weekly, contains('width: 40'));
+    expect(weekly, contains('height: 40'));
+    expect(weekly, contains('fontWeight: FontWeight.w400'));
   });
 
   test('习惯达标状态与任务名同一行靠右展示', () {
@@ -87,7 +241,7 @@ void main() {
     expect(nameIndex, greaterThanOrEqualTo(0));
     expect(badgeIndex, greaterThan(nameIndex));
     expect(streakIndex, greaterThan(badgeIndex));
-    expect(cardSource, contains("key: ValueKey('habit-completed-feedback')"));
+    expect(cardSource, contains("'habit-completed-feedback'"));
     expect(cardSource, contains('key: const ValueKey('));
     expect(cardSource, contains("'habit-warning-feedback'"));
   });
@@ -139,6 +293,12 @@ void main() {
     expect(source, contains('HabitInsightEngine.buildInsights('));
     expect(source, contains('_HabitInsightCard'));
     expect(source, contains('智能习惯洞察'));
+    expect(
+      source.indexOf('_HabitInsightCard(insights: insights)'),
+      lessThan(
+        source.indexOf("key: const ValueKey('habit_today_checkin_sliver')"),
+      ),
+    );
     expect(source, contains('HabitInsightKind.rising'));
     expect(source, contains('HabitInsightKind.slipping'));
   });
@@ -154,9 +314,10 @@ void main() {
 
     expect(screen, contains('flexRuleEnabled'));
     expect(screen, contains('SegmentedButton<HabitFlexPeriod>'));
-    expect(screen, contains("label: Text('每周')"));
-    expect(screen, contains("label: Text('每月')"));
-    expect(screen, contains("labelText: '周期目标'"));
+    expect(screen, contains("I18n.tr('habit.unit.week')"));
+    expect(screen, contains("I18n.tr('habit.unit.month')"));
+    expect(screen, contains("'habit.flex.period_target'"));
+    expect(screen, contains("'habit.flex.period_target_hint'"));
     expect(screen, contains('flexTarget: shouldUseFlex ? flexTarget : null'));
     expect(screen, contains('flexPeriod: shouldUseFlex'));
     expect(screen, contains('habit.flexPeriodGoalLabel'));

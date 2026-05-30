@@ -76,19 +76,23 @@ void main() {
       }
 
       expect(focusService, contains('FocusSoundCatalog.assetMap'));
-      expect(focusService, contains('AssetSource(assets.single)'));
+      expect(
+        focusService,
+        contains('assets.map(AssetSource.new).toList(growable: false)'),
+      );
       expect(focusService, contains('await player.play('));
       expect(focusService, contains('volume: _volume'));
       expect(focusService, contains('ctx: _focusAudioContext'));
       expect(focusService, contains('AudioContextConfig('));
       expect(focusService, contains('stayAwake: true'));
-      expect(focusService, contains('defaultVolume = 0.95'));
+      expect(focusService, contains('defaultVolume = 1.0'));
       expect(focusService, contains('_playbackGeneration'));
-      expect(focusService, contains('assets.length != 1'));
+      expect(focusService, contains('if (assets.isEmpty)'));
+      expect(focusService, contains('for (final source in sources)'));
       expect(
         focusService,
-        isNot(contains('_attachCompletionHook')),
-        reason: 'looping must rely on one player, not manual replay overlays',
+        isNot(contains('assets.single')),
+        reason: '组合白噪音需要支持多条真实资源同时播放',
       );
       expect(focusService, isNot(contains('Random(')));
       expect(focusService, isNot(contains('sin(')));
@@ -105,7 +109,9 @@ void main() {
       );
       expect(manifest, isNot(contains('MissingClass')));
       expect(mainActivity, contains('focusSoundForegroundChannel'));
+      expect(mainActivity, contains('invokeMethod("stopRequested", null)'));
       expect(foregroundService, contains('startForeground(notificationId'));
+      expect(foregroundService, contains('stopRequestCallback?.invoke()'));
       expect(foregroundService, contains('NotificationManager.IMPORTANCE_LOW'));
       expect(pomodoroScreen, contains('FocusSoundCatalog.options'));
       expect(pomodoroScreen, isNot(contains('组合环境音')));
@@ -452,6 +458,36 @@ void main() {
           reason: '${entry.key} 解码后接近静音或平直占位信号',
         );
       }
+
+      final centroids = features.values
+          .map((feature) => feature.spectralCentroid)
+          .toList(growable: false);
+      final crestFactors = features.values
+          .map((feature) => feature.crestFactor)
+          .toList(growable: false);
+      final decodedProfiles = features.values
+          .map(
+            (feature) =>
+                '${feature.spectralCentroid.round()}/'
+                '${(feature.crestFactor * 10).round()}/'
+                '${(feature.rmsStd * 10000).round()}',
+          )
+          .toSet();
+      expect(
+        decodedProfiles.length,
+        greaterThanOrEqualTo(tracks.length - 2),
+        reason: '白噪音资源不应是同一段素材批量改名或同质合成噪声',
+      );
+      expect(
+        centroids.reduce(math.max) - centroids.reduce(math.min),
+        greaterThan(300),
+        reason: '白噪音频谱差异过小，可能又回退成单一噪声底',
+      );
+      expect(
+        crestFactors.reduce(math.max) - crestFactors.reduce(math.min),
+        greaterThan(0.15),
+        reason: '白噪音动态差异过小，可能又回退成平直噪声底',
+      );
     });
 
     test('Android 通知提示音存在且不是静音占位文件', () {
@@ -467,6 +503,21 @@ void main() {
         expect(file.existsSync(), isTrue, reason: '${file.path} 不存在');
         expect(file.lengthSync(), greaterThan(32 * 1024));
         expect(file.lengthSync(), lessThan(256 * 1024));
+      }
+
+      if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
+        return;
+      }
+      final ffmpeg = Process.runSync('which', ['ffmpeg']);
+      if (ffmpeg.exitCode != 0) {
+        return;
+      }
+      for (final file in files) {
+        expect(
+          _readMaxVolumeDb(file),
+          greaterThan(-18),
+          reason: '${file.path} 峰值过低，按 60% 提醒音量可能像静音',
+        );
       }
     });
   });
@@ -574,4 +625,24 @@ class _AudioFeature {
     required this.spectralCentroid,
     required this.crestFactor,
   });
+}
+
+double _readMaxVolumeDb(File wav) {
+  final result = Process.runSync('ffmpeg', [
+    '-hide_banner',
+    '-i',
+    wav.path,
+    '-filter:a',
+    'volumedetect',
+    '-f',
+    'null',
+    '-',
+  ]);
+  expect(result.exitCode, 0, reason: '${wav.path} volumedetect 失败');
+  final output = '${result.stdout}\n${result.stderr}';
+  final match = RegExp(
+    r'max_volume:\s*(-?\d+(?:\.\d+)?) dB',
+  ).firstMatch(output);
+  expect(match, isNotNull, reason: '${wav.path} 缺少 max_volume 输出');
+  return double.parse(match!.group(1)!);
 }

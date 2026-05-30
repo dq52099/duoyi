@@ -35,38 +35,51 @@ import 'providers/custom_focus_sound_provider.dart';
 import 'providers/focus_room_provider.dart';
 import 'providers/share_provider.dart';
 import 'providers/location_reminder_provider.dart';
-import 'models/goal.dart' show GoalStatus;
+import 'models/goal.dart' show GoalStatus, ReminderKind;
 import 'models/habit.dart' show HabitKind;
 import 'models/calendar_event.dart'
     show CalendarEvent, CalendarEventType, CalendarEventTypeX;
 import 'models/note.dart' show NoteItem;
 import 'models/pomodoro.dart' show PomodoroType;
-import 'models/todo.dart' show TodoPriorityX;
+import 'models/todo.dart'
+    show EisenhowerQuadrant, TodoItem, TodoPriority, TodoPriorityX;
 import 'services/alarm_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
+import 'services/app_update_installer.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
+import 'services/foreground_reminder_popup_sink.dart';
 import 'services/holiday_calendar.dart';
 import 'services/local_notifications.dart';
+import 'services/native_reminder_ringtone.dart';
 import 'services/location_geofence_service.dart';
 import 'services/notification_permission_exception.dart';
+import 'services/notification_status_bar_sync_bridge.dart';
+import 'services/notification_status_bar_service.dart';
+import 'services/reminder_sinks.dart';
 import 'services/reminder_ringtone_settings.dart';
 import 'services/reminder_scheduler.dart';
 import 'screens/today_screen.dart';
 import 'screens/todo_screen.dart';
 import 'screens/habit_screen.dart';
 import 'screens/calendar_screen.dart';
+import 'screens/countdown_screen.dart';
 import 'screens/pomodoro_screen.dart';
 import 'screens/widget_screen.dart';
 import 'screens/mine_screen.dart';
 import 'screens/integrations_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/note_screen.dart';
+import 'screens/anniversary_screen.dart';
+import 'screens/course_schedule_screen.dart';
+import 'screens/diary_screen.dart';
+import 'screens/goal_screen.dart';
 import 'screens/statistics_screen.dart';
+import 'screens/time_audit_screen.dart';
 import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
 import 'widgets/quick_capture_fab.dart';
@@ -74,26 +87,57 @@ import 'widgets/todo_completion_flow.dart';
 import 'widgets/surface_components.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
+final List<Uri> _pendingWidgetUris = <Uri>[];
+typedef _ReminderResyncQueue =
+    Future<void> Function({Duration delay, String reason});
 
 /// 模块级的提醒调度器实例。
 ///
 /// 在 `main()` 中构造后注入到各 Provider，并被 `_DuoyiAppState` 在
-/// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发 `resyncAll`。
+/// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发提醒重放。
 /// 放在顶层是因为 `_DuoyiAppState` 并不持有构造时的闭包引用。
 late ReminderScheduler _reminderScheduler;
+Future<bool> Function({bool force})? _syncNotificationQuickAddDedupedCallback;
+_ReminderResyncQueue? _queueFullReminderResyncCallback;
 bool _initialExactAlarmGranted = false;
+const int _dailyDigestHolidayWindowDays = 45;
 
-Future<void> _startupGuard(String label, Future<void> Function() task) async {
+Future<void> _refreshReminderRingtoneChannels() async {
   try {
-    await task();
+    await ReminderRingtoneSettings.applyPersistedSettingsToNative();
+    await Future.wait([
+      LocalNotifications.instance.refreshAndroidRingtoneChannels(),
+      AlarmService.instance.refreshAndroidRingtoneChannel(),
+    ]);
+  } catch (e, st) {
+    debugPrint('[ReminderRingtone] channel refresh failed: $e\n$st');
+  }
+}
+
+Future<void> _startupGuard(
+  String label,
+  Future<void> Function() task, {
+  Duration timeout = const Duration(seconds: 12),
+}) async {
+  try {
+    await task().timeout(timeout);
+  } on TimeoutException {
+    debugPrint('[startup] $label timed out after ${timeout.inSeconds}s');
   } catch (e, st) {
     debugPrint('[startup] $label failed: $e\n$st');
   }
 }
 
-Future<T?> _startupValue<T>(String label, Future<T?> Function() task) async {
+Future<T?> _startupValue<T>(
+  String label,
+  Future<T?> Function() task, {
+  Duration timeout = const Duration(seconds: 12),
+}) async {
   try {
-    return await task();
+    return await task().timeout(timeout);
+  } on TimeoutException {
+    debugPrint('[startup] $label timed out after ${timeout.inSeconds}s');
+    return null;
   } catch (e, st) {
     debugPrint('[startup] $label failed: $e\n$st');
     return null;
@@ -270,7 +314,12 @@ void main() async {
     ),
     _startupGuard('notifications', () => notificationService.init()),
     _startupGuard('system tray', () => systemTray.init()),
-    _startupGuard('home widget', () => HomeWidgetService.init()),
+    _startupGuard('home widget', () async {
+      final initialized = await HomeWidgetService.init();
+      if (!initialized) {
+        debugPrint('[HomeWidget] startup init completed with failures');
+      }
+    }),
     _startupGuard('auth storage', () => authProvider.loadFromStorage()),
     _startupGuard('ai storage', () => aiService.loadFromStorage()),
     _startupGuard('locale storage', () => localeProvider.loadFromStorage()),
@@ -287,8 +336,6 @@ void main() async {
       () => calendarProvider.loadFromStorage(),
     ),
   ]);
-
-  await _startupGuard('auth profile refresh', () => authProvider.refreshMe());
 
   try {
     _initialExactAlarmGranted = await AlarmService.instance
@@ -325,13 +372,34 @@ void main() async {
   final reminderScheduler = ReminderScheduler(
     notificationService,
     email: BackendReminderEmailSink(() => authProvider.client),
+    popup: ForegroundReminderPopupSink(
+      contextGetter: () => mainShellKey.currentContext,
+      onOpenPayload: (payload) {
+        final uri = Uri.tryParse(payload);
+        if (uri == null) return;
+        _handleWidgetUri(uri, pomodoroProvider);
+      },
+    ),
   );
   _reminderScheduler = reminderScheduler;
   // 注入到 Provider，供 Provider 内部的局部 hook（例如 postponeOverdue、
   // onTimezoneChanged）转发调度请求。
   todoProvider.scheduler = reminderScheduler;
+  habitProvider.scheduler = reminderScheduler;
+  anniversaryProvider.scheduler = reminderScheduler;
+  countdownProvider.scheduler = reminderScheduler;
   goalProvider.scheduler = reminderScheduler;
+  var reminderResyncInFlight = false;
+  var reminderResyncQueued = false;
+  Timer? reminderResyncDebounce;
+  Completer<void>? reminderResyncDebounceCompleter;
+  String reminderResyncReason = 'startup';
   Future<void> resyncReminders() async {
+    if (reminderResyncInFlight) {
+      reminderResyncQueued = true;
+      return;
+    }
+    reminderResyncInFlight = true;
     // 单条 sync 失败不应中断整轮调度（R2.8 / T-14）。
     Future<void> guarded(String label, Future<void> Function() task) async {
       try {
@@ -341,37 +409,79 @@ void main() async {
       }
     }
 
-    await guarded(
-      'syncTodos',
-      () => reminderScheduler.syncTodos(todoProvider.todos),
-    );
-    await guarded(
-      'syncHabits',
-      () => reminderScheduler.syncHabits(habitProvider.habits),
-    );
-    await guarded(
-      'syncAnniversaries',
-      () => reminderScheduler.syncAnniversaries(anniversaryProvider.items),
-    );
-    await guarded(
-      'syncGoals',
-      () => reminderScheduler.syncGoals(goalProvider.goals),
-    );
-    await guarded(
-      'syncCountdowns',
-      () => reminderScheduler.syncCountdowns(countdownProvider.items),
-    );
+    try {
+      await guarded(
+        'syncTodos',
+        () => reminderScheduler.syncTodos(
+          todoProvider.todos,
+          allowJustMissedOneShotReminders: false,
+        ),
+      );
+      await guarded(
+        'syncHabits',
+        () => reminderScheduler.syncHabits(habitProvider.habits),
+      );
+      await guarded(
+        'syncAnniversaries',
+        () => reminderScheduler.syncAnniversaries(anniversaryProvider.items),
+      );
+      await guarded(
+        'syncCountdowns',
+        () => reminderScheduler.syncCountdowns(countdownProvider.items),
+      );
+      await guarded(
+        'syncGoals',
+        () => reminderScheduler.syncGoals(goalProvider.goals),
+      );
+    } finally {
+      reminderResyncInFlight = false;
+    }
+    if (reminderResyncQueued) {
+      reminderResyncQueued = false;
+      await resyncReminders();
+    }
   }
 
-  todoProvider.addListener(resyncReminders);
-  habitProvider.addListener(resyncReminders);
-  anniversaryProvider.addListener(resyncReminders);
-  goalProvider.addListener(resyncReminders);
-  countdownProvider.addListener(resyncReminders);
+  Future<void> queueFullReminderResync({
+    Duration delay = const Duration(milliseconds: 350),
+    String reason = 'manual',
+  }) {
+    reminderResyncReason = reason;
+    reminderResyncDebounce?.cancel();
+    final completer = reminderResyncDebounceCompleter ??= Completer<void>();
+    reminderResyncDebounce = Timer(delay, () {
+      reminderResyncDebounce = null;
+      final pending = reminderResyncDebounceCompleter;
+      reminderResyncDebounceCompleter = null;
+      unawaited(() async {
+        try {
+          await resyncReminders();
+          if (pending != null && !pending.isCompleted) pending.complete();
+        } catch (e, st) {
+          debugPrint(
+            '[queueFullReminderResync] $reminderResyncReason failed: $e\n$st',
+          );
+          if (pending != null && !pending.isCompleted) {
+            pending.completeError(e, st);
+          }
+        }
+      }());
+    });
+    return completer.future;
+  }
+
+  _queueFullReminderResyncCallback = queueFullReminderResync;
+  goalProvider.reminderResyncRequester = () => queueFullReminderResync(
+    delay: Duration.zero,
+    reason: 'goal timezone changed',
+  );
   await notificationService.setHistoryLimit(
     preferencesProvider.notificationHistoryLimit,
   );
-  preferencesProvider.onAppTimeZoneChanged = resyncReminders;
+  preferencesProvider.onAppTimeZoneChanged = () => queueFullReminderResync(
+    delay: Duration.zero,
+    reason: 'app timezone changed',
+  );
 
   Future<void> syncLocationGeofences() async {
     try {
@@ -395,9 +505,9 @@ void main() async {
   todoProvider.addListener(markDirty);
   habitProvider.addListener(markDirty);
   anniversaryProvider.addListener(markDirty);
+  countdownProvider.addListener(markDirty);
   goalProvider.addListener(markDirty);
   noteProvider.addListener(markDirty);
-  countdownProvider.addListener(markDirty);
   diaryProvider.addListener(markDirty);
   courseProvider.addListener(markDirty);
   var lastPomodoroDirtySignature = _pomodoroPersistedSignature(
@@ -428,8 +538,22 @@ void main() async {
   focusRoomProvider.onLocalChanged = markDirty;
   themeProvider.addListener(markDirty);
   calendarProvider.onLocalEventsChanged = markDirty;
+  calendarProvider.localEventReminderCanceller =
+      notificationService.cancelCalendarReminder;
   preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;
-  ReminderRingtoneSettings.onChanged = cloudSyncProvider.markPreferencesChanged;
+  ReminderRingtoneSettings.onChanged = (keys) {
+    cloudSyncProvider.markPreferencesChanged(keys);
+    if (keys.contains(ReminderRingtoneSettings.soundPreferenceKey) ||
+        keys.contains(ReminderRingtoneSettings.volumePreferenceKey)) {
+      unawaited(() async {
+        await _refreshReminderRingtoneChannels();
+        await queueFullReminderResync(
+          delay: Duration.zero,
+          reason: 'ringtone settings changed',
+        );
+      }());
+    }
+  };
   quickCaptureTemplateProvider.addListener(
     cloudSyncProvider.markQuickCaptureTemplatesChanged,
   );
@@ -576,12 +700,25 @@ void main() async {
   courseProvider.addListener(refreshAchievements);
   noteProvider.addListener(refreshAchievements);
   themeProvider.addListener(refreshAchievements);
-  // 初次同步
-  await _startupGuard('initial reminder resync', resyncReminders);
+  bool calendarSyncDue() {
+    const minStartupSyncInterval = Duration(minutes: 30);
+    final now = DateTime.now();
+    bool stale(DateTime? lastSyncedAt) =>
+        lastSyncedAt == null ||
+        now.difference(lastSyncedAt) >= minStartupSyncInterval;
+    return calendarSyncProvider.subscriptions.any(
+          (sub) => sub.enabled && stale(sub.lastSyncedAt),
+        ) ||
+        calendarSyncProvider.oauthAccounts.any(
+          (account) => account.enabled && stale(account.lastSyncedAt),
+        );
+  }
 
-  // 启动后异步刷新订阅日历（不阻塞冷启动）。
+  // 启动后延迟刷新订阅日历，且 30 分钟内已同步过的不再抢首屏资源。
   // ignore: discarded_futures
-  Future.microtask(() => calendarSyncProvider.syncAll());
+  Future<void>.delayed(const Duration(seconds: 5), () {
+    if (calendarSyncDue()) return calendarSyncProvider.syncAll();
+  });
 
   // 订阅日历变化 → 写入 CalendarProvider 的外部事件，下次 rebuild 合并显示。
   void onCalendarSyncChange() {
@@ -607,17 +744,92 @@ void main() async {
   void queueReportDigestReminderSync() {
     reportDigestSyncDebounce?.cancel();
     reportDigestSyncDebounce = Timer(const Duration(seconds: 2), () {
-      // ignore: discarded_futures
-      syncReportDigestReminders();
+      unawaited(syncReportDigestReminders());
     });
   }
 
-  Future<void> syncNotificationQuickAdd() =>
-      _syncNotificationQuickAdd(preferencesProvider);
-  preferencesProvider.addListener(syncDailyDigestReminder);
-  preferencesProvider.addListener(syncReportDigestReminders);
-  preferencesProvider.addListener(syncNotificationQuickAdd);
-  todoProvider.addListener(syncDailyDigestReminder);
+  Future<bool> syncNotificationQuickAdd() => _syncNotificationQuickAdd(
+    preferencesProvider,
+    todos: todoProvider,
+    habits: habitProvider,
+    goals: goalProvider,
+  );
+
+  Timer? dailyDigestSyncDebounce;
+  void queueDailyDigestReminderSync() {
+    dailyDigestSyncDebounce?.cancel();
+    dailyDigestSyncDebounce = Timer(const Duration(seconds: 2), () {
+      unawaited(syncDailyDigestReminder());
+    });
+  }
+
+  Timer? notificationQuickAddSyncDebounce;
+  var notificationQuickAddSyncInFlight = false;
+  var notificationQuickAddSyncQueued = false;
+  Completer<bool>? notificationQuickAddSyncQueuedCompleter;
+  var lastNotificationQuickAddSignature = '';
+  Future<bool> syncNotificationQuickAddDeduped({bool force = false}) async {
+    final signature =
+        '${preferencesProvider.notificationQuickAdd}:'
+        '${preferencesProvider.notificationTodayProgress}:'
+        '${_todayTaskProgressNotificationBody(todoProvider.todos, habits: habitProvider, goals: goalProvider)}';
+    if (!force && signature == lastNotificationQuickAddSignature) return true;
+    if (notificationQuickAddSyncInFlight) {
+      notificationQuickAddSyncQueued = true;
+      final completer = notificationQuickAddSyncQueuedCompleter ??=
+          Completer<bool>();
+      return completer.future;
+    }
+    notificationQuickAddSyncInFlight = true;
+    var synced = false;
+    try {
+      synced = await syncNotificationQuickAdd();
+      if (synced) {
+        lastNotificationQuickAddSignature = signature;
+      }
+    } finally {
+      notificationQuickAddSyncInFlight = false;
+    }
+    if (notificationQuickAddSyncQueued) {
+      notificationQuickAddSyncQueued = false;
+      final queuedCompleter = notificationQuickAddSyncQueuedCompleter;
+      notificationQuickAddSyncQueuedCompleter = null;
+      lastNotificationQuickAddSignature = '';
+      final queuedSynced = await syncNotificationQuickAddDeduped();
+      if (queuedCompleter != null && !queuedCompleter.isCompleted) {
+        queuedCompleter.complete(queuedSynced);
+      }
+    }
+    return synced;
+  }
+
+  _syncNotificationQuickAddDedupedCallback = syncNotificationQuickAddDeduped;
+  NotificationStatusBarSyncBridge.attach(syncNotificationQuickAddDeduped);
+
+  void queueNotificationQuickAddSync() {
+    notificationQuickAddSyncDebounce?.cancel();
+    notificationQuickAddSyncDebounce = Timer(const Duration(seconds: 2), () {
+      unawaited(syncNotificationQuickAddDeduped());
+    });
+  }
+
+  Timer? notificationProgressMidnightTimer;
+  void scheduleNotificationProgressMidnightRefresh() {
+    notificationProgressMidnightTimer?.cancel();
+    final delay = _durationUntilNextLocalDay();
+    notificationProgressMidnightTimer = Timer(delay, () {
+      unawaited(syncNotificationQuickAddDeduped());
+      scheduleNotificationProgressMidnightRefresh();
+    });
+  }
+
+  preferencesProvider.addListener(queueDailyDigestReminderSync);
+  preferencesProvider.addListener(queueReportDigestReminderSync);
+  preferencesProvider.addListener(queueNotificationQuickAddSync);
+  todoProvider.addListener(queueNotificationQuickAddSync);
+  habitProvider.addListener(queueNotificationQuickAddSync);
+  goalProvider.addListener(queueNotificationQuickAddSync);
+  todoProvider.addListener(queueDailyDigestReminderSync);
   todoProvider.addListener(queueReportDigestReminderSync);
   habitProvider.addListener(queueReportDigestReminderSync);
   var lastPomodoroReportSignature = _pomodoroSessionsSignature(
@@ -634,14 +846,13 @@ void main() async {
     queueReportDigestReminderSyncOnPomodoroSummaryChange,
   );
   timeAuditProvider.addListener(queueReportDigestReminderSync);
-  await _startupGuard('daily digest reminder', syncDailyDigestReminder);
-  await _startupGuard('report digest reminders', syncReportDigestReminders);
-  await _startupGuard('notification quick add', syncNotificationQuickAdd);
+  scheduleNotificationProgressMidnightRefresh();
   refreshUserStats();
   refreshAchievements();
 
   // 通知点击后的深链接(打开对应 Tab)
   void handleNotificationPayload(String payload) {
+    unawaited(NativeReminderRingtone.stopActive());
     final uri = Uri.tryParse(payload);
     if (uri == null) return;
     _handleWidgetUri(uri, pomodoroProvider);
@@ -674,7 +885,6 @@ void main() async {
   if (authProvider.serverConfig.isNotEmpty) {
     aiService.updateFromServerConfig(authProvider.serverConfig);
   }
-
   cloudSyncProvider.onSynced = (changedCollections) async {
     // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作"脏改动"。
     await cloudSyncProvider.suppressDirtyMarkWhile(() async {
@@ -765,7 +975,10 @@ void main() async {
       }
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
       if (shouldResyncReminders) {
-        await resyncReminders();
+        await queueFullReminderResync(
+          delay: Duration.zero,
+          reason: 'cloud sync changed reminders',
+        );
       }
     });
   };
@@ -776,6 +989,10 @@ void main() async {
       // ignore: discarded_futures
       unawaited(cloudSyncProvider.syncNow());
       cloudSyncProvider.startRemotePolling();
+      // 登录/切号后立刻重放本地提醒；云同步回写后还会幂等重放一次。
+      unawaited(
+        queueFullReminderResync(delay: Duration.zero, reason: 'auth changed'),
+      );
     } else {
       cloudSyncProvider.stopRemotePolling();
     }
@@ -787,9 +1004,15 @@ void main() async {
     // ignore: discarded_futures
     unawaited(cloudSyncProvider.syncNow());
     cloudSyncProvider.startRemotePolling();
+    unawaited(
+      queueFullReminderResync(
+        delay: Duration.zero,
+        reason: 'initial logged-in startup',
+      ),
+    );
   }
 
-  Future<void> pushHomeWidgetNow() => _pushHomeWidget(
+  Future<bool> pushHomeWidgetNow() => _pushHomeWidget(
     todoProvider,
     habitProvider,
     pomodoroProvider,
@@ -805,11 +1028,17 @@ void main() async {
   );
 
   Timer? homeWidgetPushDebounce;
+  Future<void> runQueuedHomeWidgetPush() async {
+    final pushed = await pushHomeWidgetNow();
+    if (!pushed) {
+      debugPrint('[HomeWidget] queued push completed with failures');
+    }
+  }
+
   void queueHomeWidgetPush() {
     homeWidgetPushDebounce?.cancel();
     homeWidgetPushDebounce = Timer(const Duration(milliseconds: 800), () {
-      // ignore: discarded_futures
-      pushHomeWidgetNow();
+      unawaited(runQueuedHomeWidgetPush());
     });
   }
 
@@ -837,53 +1066,85 @@ void main() async {
   todoProvider.addListener(onDataChange);
   habitProvider.addListener(onDataChange);
   pomodoroProvider.addListener(onPomodoroHomeWidgetChange);
-  countdownProvider.addListener(onDataChange);
   timeAuditProvider.addListener(onDataChange);
   goalProvider.addListener(onDataChange);
   anniversaryProvider.addListener(onDataChange);
+  countdownProvider.addListener(onDataChange);
   courseProvider.addListener(onDataChange);
   noteProvider.addListener(onDataChange);
   diaryProvider.addListener(onDataChange);
 
-  await _startupGuard('initial home widget push', pushHomeWidgetNow);
-
   try {
-    HomeWidgetService.widgetClickedStream.listen(
-      (uri) => _handleWidgetUri(uri, pomodoroProvider),
-    );
+    HomeWidgetService.widgetClickedStream.listen((uri) {
+      if (uri != null) handleDeepLink(uri);
+    });
   } catch (e, st) {
     debugPrint('[startup] home widget stream failed: $e\n$st');
   }
-  final initial = await _startupValue<Uri>(
-    'home widget initial launch',
-    () => HomeWidgetService.initialLaunchUri(),
-  );
-  final initialDeepLink = await _startupValue<Uri>(
-    'deep link initial launch',
-    () => DeepLinkService.takeInitialLink(),
-  );
-  final initialOAuthLink = await _startupValue<Uri>(
-    'deep link initial oauth',
-    () => DeepLinkService.takeInitialOAuthLink(),
-  );
-  final initialSharedText = await _startupValue<String>(
-    'deep link initial shared text',
-    () => DeepLinkService.takeInitialSharedText(),
-  );
-  if (initial != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+  Future<void> runPostFrameStartupTasks() async {
+    await _startupGuard(
+      'auth profile refresh',
+      () => authProvider.refreshMe(),
+      timeout: const Duration(seconds: 8),
+    );
+    await Future.wait([
+      _startupGuard(
+        'initial reminder resync',
+        () => queueFullReminderResync(
+          delay: Duration.zero,
+          reason: 'post-frame startup',
+        ),
+      ),
+      _startupGuard('daily digest reminder', syncDailyDigestReminder),
+      _startupGuard('report digest reminders', syncReportDigestReminders),
+      _startupGuard('notification quick add', syncNotificationQuickAddDeduped),
+      _startupGuard('initial home widget push', () async {
+        final pushed = await pushHomeWidgetNow();
+        if (!pushed) {
+          debugPrint('[HomeWidget] initial push completed with failures');
+        }
+      }),
+    ]);
+    final initial = await _startupValue<Uri>(
+      'home widget initial launch',
+      () => HomeWidgetService.initialLaunchUri(),
+    );
+    final initialDeepLink = await _startupValue<Uri>(
+      'deep link initial launch',
+      () => DeepLinkService.takeInitialLink(),
+    );
+    final initialOAuthLink = await _startupValue<Uri>(
+      'deep link initial oauth',
+      () => DeepLinkService.takeInitialOAuthLink(),
+    );
+    final initialSharedText = await _startupValue<String>(
+      'deep link initial shared text',
+      () => DeepLinkService.takeInitialSharedText(),
+    );
+    if (initial != null) {
       _handleWidgetUri(initial, pomodoroProvider);
-    });
-  }
-  if (initialDeepLink != null &&
-      initialDeepLink.toString() != initial?.toString()) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    }
+    if (initialDeepLink != null &&
+        initialDeepLink.toString() != initial?.toString()) {
       _handleWidgetUri(initialDeepLink, pomodoroProvider);
-    });
+    }
+    if (initialOAuthLink != null) {
+      _handleWidgetUri(initialOAuthLink, pomodoroProvider);
+    }
+    if (initialSharedText != null) {
+      _showSharedTextImportSheet(initialSharedText);
+    }
   }
 
-  // 冷启动所有 loadFromStorage / resyncReminders / _pushHomeWidget 都已完成，
-  // 从这一刻起 Provider 的改动才算"用户发起的脏改动"。
+  // 强制更新是启动门禁：先拉服务端策略，再渲染首页，避免先进入应用后再被覆盖。
+  await _startupGuard(
+    'startup app update policy',
+    () => appUpdate.checkServerPolicyNow(),
+    timeout: const Duration(seconds: 8),
+  );
+
+  // 冷启动本地 loadFromStorage 已完成；首帧后的远端刷新和通知重放不再阻塞页面。
   cloudSyncProvider.dirtyMarkEnabled = true;
 
   runApp(
@@ -930,19 +1191,12 @@ void main() async {
       }
     });
   }
-  if (initialOAuthLink != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleWidgetUri(initialOAuthLink, pomodoroProvider);
-    });
-  }
-  if (initialSharedText != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showSharedTextImportSheet(initialSharedText);
-    });
-  }
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(runPostFrameStartupTasks());
+  });
 }
 
-Future<void> _pushHomeWidget(
+Future<bool> _pushHomeWidget(
   TodoProvider t,
   HabitProvider h,
   PomodoroProvider p,
@@ -1073,10 +1327,16 @@ Future<void> _pushHomeWidget(
     PomodoroType.shortBreak => '短休息倒计时',
     PomodoroType.longBreak => '长休息倒计时',
   };
-  await HomeWidgetService.push(
+  return HomeWidgetService.push(
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
     pomodoroToday: p.sessionCountToday,
+    focusMinutesToday:
+        p.todayFocusSessions.fold<int>(
+          0,
+          (sum, session) => sum + session.durationSeconds,
+        ) ~/
+        60,
     strings: tp.brand.strings,
     todoTop3: top3,
     todoTop3Ids: top3Ids,
@@ -1182,31 +1442,78 @@ String _homeWidgetEventDeepLink(CalendarEvent event) {
   };
 }
 
+Future<void> _dailyDigestReminderSyncQueue = Future<void>.value();
+
 Future<void> _syncDailyDigestReminder(
+  PreferencesProvider prefs,
+  NotificationService notification,
+  TodoProvider todos,
+) {
+  return _runDailyDigestReminderSyncSerialized(
+    () => _syncDailyDigestReminderLocked(prefs, notification, todos),
+  );
+}
+
+Future<void> _runDailyDigestReminderSyncSerialized(
+  Future<void> Function() action,
+) async {
+  final run = _dailyDigestReminderSyncQueue.then((_) => action());
+  _dailyDigestReminderSyncQueue = run.then<void>((_) {}, onError: (_) {});
+  return run;
+}
+
+Future<void> _syncDailyDigestReminderLocked(
   PreferencesProvider prefs,
   NotificationService notification,
   TodoProvider todos,
 ) async {
   const baseId = 880017;
-  for (var i = 0; i < 3; i++) {
-    await notification.cancel(baseId + i);
+  final cancelled = await _cancelDailyDigestReminderIds(
+    notification,
+    baseId: baseId,
+    slotCount: 3,
+  );
+  if (!cancelled) {
+    debugPrint(
+      '[DailyDigest] cancel incomplete; skip scheduling to avoid duplicate delivery',
+    );
+    return;
   }
 
   final now = DateTime.now();
-  for (var i = 0; i < prefs.dailyReminderSlots.length; i++) {
-    final slot = prefs.dailyReminderSlots[i];
-    if (!slot.enabled) continue;
-    final target = _nextDailyReminderTime(now, slot);
+  final scheduleSlots = effectiveDailyReminderScheduleSlots(
+    prefs.dailyReminderSlots,
+  );
+  const slotLabels = ['一', '二', '三'];
+  for (final entry in scheduleSlots) {
+    final i = entry.index;
+    final slot = entry.slot;
     final body = _dailyDigestBody(now, todos, slot);
 
     try {
-      await notification.scheduleOnce(
-        id: baseId + i,
-        title: '每日提醒${['一', '二', '三'][i]}',
-        body: body,
-        when: target,
-        payload: 'duoyi://tab/today',
-      );
+      final id = baseId + i;
+      final label = i < slotLabels.length ? slotLabels[i] : '${i + 1}';
+      final title = '每日提醒$label';
+      final repeatDays = slot.repeatDays;
+      if (slot.pauseHolidays) {
+        await _scheduleHolidayAwareDailyDigest(
+          notification: notification,
+          baseId: id,
+          title: title,
+          body: body,
+          now: now,
+          slot: slot,
+        );
+      } else {
+        await _scheduleDailyDigestRepeating(
+          notification: notification,
+          id: id,
+          title: title,
+          body: body,
+          slot: slot,
+          repeatDays: repeatDays,
+        );
+      }
     } on NotificationPermissionDeniedException catch (e) {
       debugPrint('[DailyDigest] notification permission denied: $e');
     } catch (e, st) {
@@ -1215,11 +1522,294 @@ Future<void> _syncDailyDigestReminder(
   }
 }
 
+Future<bool> _cancelDailyDigestReminderIds(
+  NotificationService notification, {
+  required int baseId,
+  required int slotCount,
+}) async {
+  var ok = true;
+  for (var slot = 0; slot < slotCount; slot++) {
+    final id = baseId + slot;
+    ok = await _cancelDailyDigestChannelId(notification, id) && ok;
+    for (var derived = 0; derived < _dailyDigestHolidayWindowDays; derived++) {
+      ok =
+          await _cancelDailyDigestChannelId(notification, id * 100 + derived) &&
+          ok;
+    }
+  }
+  return ok;
+}
+
+Future<bool> _cancelDailyDigestChannelId(
+  NotificationService notification,
+  int id,
+) async {
+  var ok = true;
+  Future<void> cancelSafely(
+    String label,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (e, st) {
+      ok = false;
+      debugPrint('[DailyDigest] cancel $label failed for $id: $e\n$st');
+    }
+  }
+
+  await cancelSafely('notification', () => notification.cancel(id));
+  await cancelSafely('alarm', () => _reminderScheduler.alarm.cancel(id));
+  await cancelSafely('popup', () => _reminderScheduler.popup.cancel(id));
+  return ok;
+}
+
+Future<void> _scheduleDailyDigestRepeating({
+  required NotificationService notification,
+  required int id,
+  required String title,
+  required String body,
+  required DailyReminderSlot slot,
+  required List<int> repeatDays,
+}) async {
+  final weekdays = repeatDays.length == 7 ? null : repeatDays;
+  final payload = 'duoyi://tab/today';
+  Future<void> schedulePushFallback() => notification.scheduleDaily(
+    id: id,
+    title: title,
+    body: body,
+    hour: slot.hour,
+    minute: slot.minute,
+    weekdays: weekdays,
+    payload: payload,
+  );
+
+  switch (DailyReminderSlot.normalizeKind(slot.kind)) {
+    case ReminderKind.push:
+      await schedulePushFallback();
+    case ReminderKind.popup:
+      try {
+        await _reminderScheduler.popup.scheduleRepeating(
+          id: id,
+          title: title,
+          body: body,
+          hour: slot.hour,
+          minute: slot.minute,
+          weekdays: weekdays,
+          payload: payload,
+        );
+      } catch (e, st) {
+        debugPrint(
+          '[DailyDigest] popup schedule failed, fallback to push: $e\n$st',
+        );
+        await schedulePushFallback();
+      }
+    case ReminderKind.alarm:
+      try {
+        await _reminderScheduler.alarm.scheduleDailyFullScreen(
+          id: id,
+          title: title,
+          body: body,
+          hour: slot.hour,
+          minute: slot.minute,
+          weekdays: weekdays,
+          payload: payload,
+          fullScreen: true,
+          vibrate: true,
+          snoozeMinutes: 5,
+          repeatCount: 0,
+        );
+      } on AlarmQueueHandoffException catch (e) {
+        debugPrint(
+          '[DailyDigest] alarm schedule handoff failed; skip push fallback to avoid duplicate delivery: $e',
+        );
+      } catch (e, st) {
+        debugPrint('[DailyDigest] alarm schedule failed: $e\n$st');
+        if (await _dailyDigestAlarmQueueAlreadyOwns(
+          id: id,
+          weekdays: weekdays,
+          label: 'daily repeating digest',
+        )) {
+          return;
+        }
+        debugPrint('[DailyDigest] alarm schedule failed, fallback to push');
+        await schedulePushFallback();
+      }
+    case ReminderKind.off:
+      return;
+    case ReminderKind.email:
+      await schedulePushFallback();
+  }
+}
+
+Future<void> _scheduleHolidayAwareDailyDigest({
+  required NotificationService notification,
+  required int baseId,
+  required String title,
+  required String body,
+  required DateTime now,
+  required DailyReminderSlot slot,
+}) async {
+  var cursor = DateTime(now.year, now.month, now.day, slot.hour, slot.minute);
+  var scheduled = 0;
+  for (
+    var offset = 0;
+    offset < _dailyDigestHolidayWindowDays &&
+        scheduled < _dailyDigestHolidayWindowDays;
+    offset++
+  ) {
+    final target = cursor.add(Duration(days: offset));
+    if (!target.isAfter(now)) continue;
+    final weekdayAllowed = slot.repeatDays.contains(target.weekday);
+    final holidayPaused = HolidayCalendar.isHoliday(target);
+    if (!weekdayAllowed || holidayPaused) continue;
+    await _scheduleDailyDigestOnce(
+      notification: notification,
+      id: baseId * 100 + scheduled,
+      title: title,
+      body: body,
+      when: target,
+      slot: slot,
+    );
+    scheduled++;
+  }
+  if (scheduled == 0) {
+    final target = _nextDailyReminderTime(now, slot);
+    await _scheduleDailyDigestOnce(
+      notification: notification,
+      id: baseId * 100,
+      title: title,
+      body: body,
+      when: target,
+      slot: slot,
+    );
+  }
+}
+
+Future<void> _scheduleDailyDigestOnce({
+  required NotificationService notification,
+  required int id,
+  required String title,
+  required String body,
+  required DateTime when,
+  required DailyReminderSlot slot,
+}) async {
+  final payload = 'duoyi://tab/today';
+  Future<void> schedulePushFallback() => notification.scheduleOnce(
+    id: id,
+    title: title,
+    body: body,
+    when: when,
+    payload: payload,
+  );
+
+  switch (DailyReminderSlot.normalizeKind(slot.kind)) {
+    case ReminderKind.push:
+      await schedulePushFallback();
+    case ReminderKind.popup:
+      try {
+        await _reminderScheduler.popup.scheduleOnce(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+        );
+      } catch (e, st) {
+        debugPrint(
+          '[DailyDigest] popup one-shot failed, fallback to push: $e\n$st',
+        );
+        await schedulePushFallback();
+      }
+    case ReminderKind.alarm:
+      try {
+        await _reminderScheduler.alarm.scheduleFullScreen(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+          fullScreen: true,
+          vibrate: true,
+          snoozeMinutes: 5,
+          repeatCount: 0,
+        );
+      } on AlarmQueueHandoffException catch (e) {
+        debugPrint(
+          '[DailyDigest] alarm one-shot handoff failed; skip push fallback to avoid duplicate delivery: $e',
+        );
+      } catch (e, st) {
+        debugPrint('[DailyDigest] alarm one-shot failed: $e\n$st');
+        if (await _dailyDigestAlarmQueueAlreadyOwns(
+          id: id,
+          label: 'daily one-shot digest',
+        )) {
+          return;
+        }
+        debugPrint('[DailyDigest] alarm one-shot failed, fallback to push');
+        await schedulePushFallback();
+      }
+    case ReminderKind.off:
+      return;
+    case ReminderKind.email:
+      await schedulePushFallback();
+  }
+}
+
+Future<bool> _dailyDigestAlarmQueueAlreadyOwns({
+  required int id,
+  required String label,
+  List<int>? weekdays,
+}) async {
+  final alarm = _reminderScheduler.alarm;
+  if (alarm is! ReminderPendingSink) return false;
+  final pendingAlarm = alarm as ReminderPendingSink;
+  final expected = _dailyDigestExpectedAlarmIds(id, weekdays);
+  final acceptedSets = <Set<int>>[
+    <int>{id},
+    if (expected.length > 1) expected,
+  ];
+  try {
+    final actual = (await pendingAlarm.pendingIds()).toSet();
+    final owns = acceptedSets.any(
+      (ids) => ids.isNotEmpty && actual.containsAll(ids),
+    );
+    if (owns) {
+      debugPrint(
+        '[DailyDigest] $label alarm queue already registered; skip push fallback to avoid duplicate delivery.',
+      );
+    }
+    return owns;
+  } catch (e, st) {
+    debugPrint(
+      '[DailyDigest] $label pending probe failed; skip push fallback to avoid duplicate delivery: $e\n$st',
+    );
+    return true;
+  }
+}
+
+Set<int> _dailyDigestExpectedAlarmIds(int id, List<int>? weekdays) {
+  final normalized = weekdays == null || weekdays.isEmpty
+      ? const <int>[]
+      : weekdays.where((w) => w >= 1 && w <= 7).toSet().toList();
+  if (normalized.isEmpty) return <int>{id};
+  return {for (final weekday in normalized) _dailyDigestSubId(id, weekday)};
+}
+
+int _dailyDigestSubId(int base, int weekday) {
+  var hash = 0x811c9dc5;
+  final key = '$base:$weekday';
+  for (final unit in key.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash == 0 ? weekday : hash;
+}
+
 DateTime _nextDailyReminderTime(DateTime now, DailyReminderSlot slot) {
   var target = DateTime(now.year, now.month, now.day, slot.hour, slot.minute);
   if (!target.isAfter(now)) target = target.add(const Duration(days: 1));
 
-  for (var i = 0; i < 14; i++) {
+  for (var i = 0; i < _dailyDigestHolidayWindowDays; i++) {
     final weekdayAllowed = slot.repeatDays.contains(target.weekday);
     final holidayPaused =
         slot.pauseHolidays && HolidayCalendar.isHoliday(target);
@@ -1455,12 +2045,53 @@ String _reportDigestNotificationBody({
   return (previousStart, previousEnd);
 }
 
-void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
+void _queuePendingWidgetUri(Uri uri, String reason) {
+  if (_pendingWidgetUris.any(
+    (pending) => pending.toString() == uri.toString(),
+  )) {
+    return;
+  }
+  if (_pendingWidgetUris.length >= 20) {
+    _pendingWidgetUris.removeAt(0);
+  }
+  _pendingWidgetUris.add(uri);
+  debugPrint('[DeepLink] queued $uri: $reason');
+}
+
+void _drainPendingWidgetUris(PomodoroProvider pomodoro) {
+  if (_pendingWidgetUris.isEmpty) return;
+  final pending = List<Uri>.of(_pendingWidgetUris);
+  _pendingWidgetUris.clear();
+  for (final uri in pending) {
+    _handleWidgetUri(uri, pomodoro, allowQueue: false);
+  }
+}
+
+void _handleWidgetUri(
+  Uri? uri,
+  PomodoroProvider pomodoro, {
+  int retry = 0,
+  bool allowQueue = true,
+}) {
   if (uri == null) return;
   if (uri.scheme != 'duoyi') return;
 
   final state = mainShellKey.currentState;
   final ctx = mainShellKey.currentContext;
+  if (state == null && retry < 8) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleWidgetUri(uri, pomodoro, retry: retry + 1);
+    });
+    return;
+  }
+  if (state == null) {
+    if (allowQueue) {
+      _queuePendingWidgetUri(uri, 'main shell not ready after $retry frames');
+    } else {
+      debugPrint('[DeepLink] dropped $uri: main shell not ready');
+    }
+    return;
+  }
 
   if (uri.host == 'tab') {
     final tab = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
@@ -1474,23 +2105,26 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       'mine' => 6,
       _ => 3,
     };
-    state?.navigateTo(idx);
+    state.navigateTo(idx, allowHidden: true);
   } else if (uri.host == 'oauth' && ctx != null) {
-    state?.navigateTo(6);
+    state.navigateTo(6, allowHidden: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
       Navigator.of(latestContext).push(
         MaterialPageRoute(
-          builder: (_) => IntegrationsScreen(initialOAuthCallbackUri: uri),
+          builder: (_) => BrandRouteSurface(
+            child: IntegrationsScreen(initialOAuthCallbackUri: uri),
+          ),
         ),
       );
     });
   } else if (uri.host == 'todo' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) {
-      state?.navigateTo(1);
+      state.navigateTo(1, allowHidden: true);
       return;
     }
+    state.navigateTo(1, allowHidden: true);
     final confirm = uri.queryParameters['confirm'] == '1';
     if (confirm) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1503,15 +2137,15 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   } else if (uri.host == 'goal' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) {
-      // ignore: discarded_futures
-      TodayDetailRouter.open(ctx, TodaySectionKind.goals);
+      _pushHiddenWidgetFallbackRoute(ctx, const GoalScreen());
       return;
     }
+    state.navigateTo(0, allowHidden: true);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id);
   } else if (uri.host == 'habit' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    state?.navigateTo(2);
+    state.navigateTo(2, allowHidden: true);
     if (id == null || id.isEmpty) return;
     final confirm = uri.queryParameters['confirm'] == '1';
     if (confirm) {
@@ -1522,49 +2156,82 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
       // ignore: discarded_futures
       TodayDetailRouter.open(ctx, TodaySectionKind.habits, id: id);
     }
-  } else if (uri.host == 'countdown') {
-    state?.navigateTo(3);
   } else if (uri.host == 'calendar') {
-    state?.navigateTo(3);
+    state.navigateTo(3, allowHidden: true);
   } else if (uri.host == 'focus') {
-    state?.navigateTo(4);
+    state.navigateTo(4, allowHidden: true);
+  } else if (uri.host == 'widget') {
+    state.navigateTo(5, allowHidden: true);
   } else if (uri.host == 'course' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) {
+      _pushHiddenWidgetFallbackRoute(ctx, const CourseScheduleScreen());
+      return;
+    }
+    state.navigateTo(0, allowHidden: true);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.courses, id: id);
   } else if (uri.host == 'anniversary' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) {
+      _pushHiddenWidgetFallbackRoute(ctx, const AnniversaryScreen());
+      return;
+    }
+    state.navigateTo(0, allowHidden: true);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.anniversaries, id: id);
+  } else if (uri.host == 'countdown' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    _pushHiddenWidgetFallbackRoute(
+      ctx,
+      CountdownScreen(initialCountdownId: id),
+    );
   } else if (uri.host == 'note' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) {
-      Navigator.of(
-        ctx,
-      ).push(MaterialPageRoute(builder: (_) => const NoteScreen()));
+      _pushHiddenWidgetFallbackRoute(ctx, const NoteScreen());
     } else {
+      state.navigateTo(0, allowHidden: true);
       // ignore: discarded_futures
       TodayDetailRouter.open(ctx, TodaySectionKind.notes, id: id);
     }
   } else if (uri.host == 'diary' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    if (id == null || id.isEmpty) {
+      _pushHiddenWidgetFallbackRoute(ctx, const DiaryScreen());
+      return;
+    }
+    state.navigateTo(0, allowHidden: true);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.diary, id: id);
+  } else if (uri.host == 'time-entry' && ctx != null) {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    state.navigateTo(6, allowHidden: true);
+    Navigator.of(ctx).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            BrandRouteSurface(child: TimeAuditScreen(initialEntryId: id)),
+      ),
+    );
   } else if (uri.host == 'report' && ctx != null) {
-    state?.navigateTo(6);
+    state.navigateTo(6, allowHidden: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
-      Navigator.of(
-        latestContext,
-      ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen()));
+      Navigator.of(latestContext).push(
+        MaterialPageRoute(
+          builder: (_) => const BrandRouteSurface(child: StatisticsScreen()),
+        ),
+      );
     });
   } else if (uri.host == 'location' && ctx != null) {
-    state?.navigateTo(6);
+    state.navigateTo(6, allowHidden: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
-      Navigator.of(
-        latestContext,
-      ).push(MaterialPageRoute(builder: (_) => const IntegrationsScreen()));
+      Navigator.of(latestContext).push(
+        MaterialPageRoute(
+          builder: (_) => const BrandRouteSurface(child: IntegrationsScreen()),
+        ),
+      );
     });
   } else if (uri.host == 'snooze' && ctx != null) {
     // 稍后提醒深链：duoyi://snooze/<id>?delay=<minutes>&title=...&body=...&payload=...
@@ -1574,16 +2241,19 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     if (action == 'start_pomodoro') {
-      state?.navigateTo(4);
-      if (!pomodoro.state.isRunning) pomodoro.toggleTimer();
+      state.navigateTo(4, allowHidden: true);
+      if (pomodoro.state.isRunning) {
+        if (ctx != null) _showWidgetActionFeedback(ctx, '专注计时正在进行');
+      } else {
+        pomodoro.startIfIdle();
+        if (ctx != null) _showWidgetActionFeedback(ctx, '已开始专注');
+      }
     } else if (action == 'quick_todo' && ctx != null) {
       final text = uri.queryParameters['text']?.trim();
-      state?.navigateTo(1);
+      state.navigateTo(1, allowHidden: true);
       if (text != null && text.isNotEmpty) {
         final draft = SmartTodoDraftBuilder.fromText(text);
-        final todos = Provider.of<TodoProvider>(ctx, listen: false);
-        // ignore: discarded_futures
-        todos.addTodo(draft.toTodo());
+        unawaited(_createQuickTodoFromAction(ctx, draft.toTodo()));
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1592,47 +2262,269 @@ void _handleWidgetUri(Uri? uri, PomodoroProvider pomodoro) {
     } else if (action == 'complete_todo' && ctx != null) {
       final id = uri.queryParameters['id'];
       if (id == null || id.isEmpty) return;
+      state.navigateTo(1, allowHidden: true);
       final todos = Provider.of<TodoProvider>(ctx, listen: false);
       final target = todos.todos.where((todo) => todo.id == id).firstOrNull;
-      if (target == null || target.isCompleted) return;
-      // ignore: discarded_futures
-      completeTodoWithOptionalTimeRecord(ctx, target);
+      if (target == null) {
+        _showWidgetActionFeedback(ctx, '这个任务不存在或已被删除');
+        return;
+      }
+      if (target.isCompleted) {
+        _showWidgetActionFeedback(ctx, '“${target.title}”已经完成');
+        return;
+      }
+      unawaited(_completeTodoFromWidgetAction(ctx, todos, target));
     } else if (action == 'checkin_habit' && ctx != null) {
       final id = uri.queryParameters['id'];
-      state?.navigateTo(2);
+      state.navigateTo(2, allowHidden: true);
       if (id == null || id.isEmpty) return;
       final habits = Provider.of<HabitProvider>(ctx, listen: false);
       final target = habits.habits.where((habit) => habit.id == id).firstOrNull;
-      if (target == null ||
-          target.kind != HabitKind.positive ||
-          !target.isActiveToday() ||
-          target.isCompletedToday()) {
+      if (target == null) {
+        _showWidgetActionFeedback(ctx, '这个习惯不存在或已被删除');
         return;
       }
-      // ignore: discarded_futures
-      habits.incrementHabit(id);
+      if (target.kind != HabitKind.positive) {
+        _showWidgetActionFeedback(ctx, '这个习惯不支持快捷打卡');
+        return;
+      }
+      if (!target.isActiveToday()) {
+        _showWidgetActionFeedback(ctx, '“${target.name}”今天不需要打卡');
+        return;
+      }
+      if (target.isCompletedToday()) {
+        _showWidgetActionFeedback(ctx, '“${target.name}”今天已经完成');
+        return;
+      }
+      unawaited(
+        habits.incrementHabit(id).then((_) {
+          _showWidgetActionFeedbackFromShell('已打卡：${target.name}');
+        }),
+      );
+    }
+  } else {
+    debugPrint('[DeepLink] unknown duoyi host: ${uri.host} uri=$uri');
+    state.navigateTo(6, allowHidden: true);
+    if (ctx != null) {
+      _showWidgetActionFeedback(ctx, '无法识别的入口，已返回我的');
     }
   }
 }
 
-Future<void> _syncNotificationQuickAdd(PreferencesProvider prefs) async {
-  if (prefs.notificationQuickAdd) {
+void _pushHiddenWidgetFallbackRoute(BuildContext context, Widget child) {
+  mainShellKey.currentState?.navigateTo(6, allowHidden: true);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final latestContext = mainShellKey.currentContext ?? context;
+    if (!latestContext.mounted) return;
+    Navigator.of(
+      latestContext,
+    ).push(MaterialPageRoute(builder: (_) => BrandRouteSurface(child: child)));
+  });
+}
+
+void _showWidgetActionFeedback(BuildContext context, String message) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final latestContext = mainShellKey.currentContext ?? context;
+    if (!latestContext.mounted) return;
+    ScaffoldMessenger.of(latestContext)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1400),
+        ),
+      );
+  });
+}
+
+void _showWidgetActionFeedbackFromShell(String message) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final latestContext = mainShellKey.currentContext;
+    if (latestContext == null || !latestContext.mounted) return;
+    ScaffoldMessenger.of(latestContext)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1400),
+        ),
+      );
+  });
+}
+
+Future<void> _createQuickTodoFromAction(
+  BuildContext context,
+  TodoItem todo,
+) async {
+  if (!await _preflightQuickTodoReminder(
+    context,
+    todo,
+    feedback: _showWidgetActionFeedbackFromShell,
+  )) {
+    return;
+  }
+  final latestContext = mainShellKey.currentContext ?? context;
+  if (!latestContext.mounted) return;
+  await Provider.of<TodoProvider>(latestContext, listen: false).addTodo(todo);
+  _showWidgetActionFeedbackFromShell(_quickTodoCreatedMessage(todo));
+}
+
+Future<void> _completeTodoFromWidgetAction(
+  BuildContext context,
+  TodoProvider todos,
+  TodoItem target,
+) async {
+  final title = target.title;
+  final changed = await todos.completeTodos([target.id]);
+  if (!context.mounted && mainShellKey.currentContext == null) return;
+  _showWidgetActionFeedbackFromShell(
+    changed > 0 ? '已完成：$title' : '“$title”已经完成',
+  );
+}
+
+Future<bool> _preflightQuickTodoReminder(
+  BuildContext context,
+  TodoItem todo, {
+  required void Function(String message) feedback,
+  String issueTitle = '待办提醒注册失败',
+}) async {
+  final preflight = preflightTodoReminderPlan(todo);
+  if (!preflight.hasEnabledPlan) return true;
+
+  final blocking = preflight.blockingIssue;
+  if (blocking != null) {
+    feedback('${blocking.title}：${blocking.message}');
+    return false;
+  }
+
+  final usesPush = preflight.kinds.contains(ReminderKind.push);
+  final usesPopup = preflight.kinds.contains(ReminderKind.popup);
+  final usesAlarm = preflight.kinds.contains(ReminderKind.alarm);
+  if (!usesPush && !usesPopup && !usesAlarm) return true;
+  final latestContext = mainShellKey.currentContext ?? context;
+  if (!latestContext.mounted) return false;
+  final notification = Provider.of<NotificationService?>(
+    latestContext,
+    listen: false,
+  );
+  if (notification != null && (usesPush || usesPopup)) {
+    final ready = await notification.ensureReadyForReminder(
+      scheduledTime: preflight.firstScheduledTime,
+      issueTitle: issueTitle,
+      relatedId: todo.id,
+    );
+    if (ready) return true;
+    final issue = notification.lastScheduleIssue;
+    feedback(
+      issue == null
+          ? '$issueTitle：提醒未注册，请检查通知权限、渠道声音和提醒时间。'
+          : '${issue.title}：${issue.message}',
+    );
+    return false;
+  }
+  if (usesAlarm) {
+    final granted = await LocalNotifications.instance.ensurePermission();
+    if (granted) return true;
+    feedback('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
+    return false;
+  }
+  return true;
+}
+
+String _quickTodoCreatedMessage(TodoItem todo) {
+  final preflight = preflightTodoReminderPlan(todo);
+  return preflight.hasEnabledPlan ? '已创建待办，提醒状态可在通知设置/待办详情检查' : '已创建待办';
+}
+
+Future<bool> _syncNotificationQuickAdd(
+  PreferencesProvider prefs, {
+  required TodoProvider todos,
+  required HabitProvider habits,
+  required GoalProvider goals,
+}) async {
+  final progress = _todayTaskProgressNotificationBody(
+    todos.todos,
+    habits: habits,
+    goals: goals,
+  );
+  final plan = buildNotificationStatusBarPlan(
+    notificationQuickAdd: prefs.notificationQuickAdd,
+    notificationTodayProgress: prefs.notificationTodayProgress,
+    todayProgressBody: progress,
+  );
+  if (plan.shouldShow) {
     try {
-      await LocalNotifications.instance.showQuickAddOngoing();
+      await LocalNotifications.instance.showQuickAddOngoing(
+        title: plan.title,
+        body: plan.body,
+        enableQuickActions: plan.enableQuickActions,
+      );
+      return true;
     } on NotificationPermissionDeniedException catch (e) {
-      debugPrint('[NotificationQuickAdd] notification permission denied: $e');
+      debugPrint('[NotificationStatusBar] notification permission denied: $e');
+      return false;
     } catch (e, st) {
-      debugPrint('[NotificationQuickAdd] show failed: $e\n$st');
+      debugPrint('[NotificationStatusBar] show failed: $e\n$st');
+      return false;
     }
   } else {
     try {
-      await LocalNotifications.instance.cancel(
-        LocalNotifications.quickAddNotificationId,
-      );
+      await LocalNotifications.instance.cancelQuickAddOngoing();
+      return true;
     } catch (e, st) {
-      debugPrint('[NotificationQuickAdd] cancel failed: $e\n$st');
+      debugPrint('[NotificationStatusBar] cancel failed: $e\n$st');
+      return false;
     }
   }
+}
+
+Duration _durationUntilNextLocalDay() {
+  final now = DateTime.now();
+  final nextDay = DateTime(now.year, now.month, now.day + 1, 0, 0, 2);
+  final delay = nextDay.difference(now);
+  return delay.isNegative ? const Duration(seconds: 2) : delay;
+}
+
+String _todayTaskProgressNotificationBody(
+  List<TodoItem> todos, {
+  required HabitProvider habits,
+  required GoalProvider goals,
+}) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  var todayTotal = 0;
+  var todayDone = 0;
+  var representativeCount = 0;
+  for (final todo in todos) {
+    final due = todo.dueDate;
+    final date = due ?? todo.date;
+    final day = DateTime(date.year, date.month, date.day);
+    final isTodayTodo = day == today;
+    if (isTodayTodo) {
+      todayTotal++;
+      if (todo.isCompleted) todayDone++;
+    }
+    if (isTodayTodo &&
+        !todo.isCompleted &&
+        (todo.priority == TodoPriority.urgent ||
+            todo.priority == TodoPriority.high ||
+            todo.quadrant == EisenhowerQuadrant.urgentImportant)) {
+      representativeCount++;
+    }
+  }
+  final remaining = (todayTotal - todayDone).clamp(0, todayTotal);
+  final dailyCount = habits.habits
+      .where((habit) => habit.isActiveToday() && !habit.isCompletedToday())
+      .length;
+  final goalCount = goals.activeGoals.length;
+  return formatNotificationTodayProgressBody(
+    remaining: remaining,
+    dailyCount: dailyCount,
+    representativeCount: representativeCount,
+    goalCount: goalCount,
+  );
 }
 
 Future<void> _showQuickTodoDialog(BuildContext context) async {
@@ -1706,7 +2598,18 @@ Future<void> _showQuickTodoDialog(BuildContext context) async {
   final text = ctrl.text.trim();
   if (text.isEmpty) return;
   final draft = SmartTodoDraftBuilder.fromText(text);
-  await context.read<TodoProvider>().addTodo(draft.toTodo());
+  final todo = draft.toTodo();
+  if (!await _preflightQuickTodoReminder(
+    context,
+    todo,
+    feedback: (message) => _showContextSnackBar(context, message),
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
+  await context.read<TodoProvider>().addTodo(todo);
+  if (!context.mounted) return;
+  _showContextSnackBar(context, _quickTodoCreatedMessage(todo));
 }
 
 Future<void> _showSharedTextImportSheet(String rawText) async {
@@ -1798,11 +2701,20 @@ Future<void> _showSharedTextImportSheet(String rawText) async {
 
   if (action == 'todo') {
     final draft = SmartTodoDraftBuilder.fromText(text);
-    await latestContext.read<TodoProvider>().addTodo(draft.toTodo());
-    mainShellKey.currentState?.navigateTo(1);
+    final todo = draft.toTodo();
+    if (!await _preflightQuickTodoReminder(
+      latestContext,
+      todo,
+      feedback: (message) => _showContextSnackBar(latestContext, message),
+    )) {
+      return;
+    }
+    if (!latestContext.mounted) return;
+    await latestContext.read<TodoProvider>().addTodo(todo);
+    mainShellKey.currentState?.navigateTo(1, allowHidden: true);
     messenger?.showSnackBar(
-      const SnackBar(
-        content: Text('已创建待办'),
+      SnackBar(
+        content: Text(_quickTodoCreatedMessage(todo)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1816,9 +2728,11 @@ Future<void> _showSharedTextImportSheet(String rawText) async {
         updatedAt: now,
       ),
     );
-    Navigator.of(
-      latestContext,
-    ).push(MaterialPageRoute(builder: (_) => const NoteScreen()));
+    Navigator.of(latestContext).push(
+      MaterialPageRoute(
+        builder: (_) => const BrandRouteSurface(child: NoteScreen()),
+      ),
+    );
     messenger?.showSnackBar(
       const SnackBar(
         content: Text('已保存笔记'),
@@ -1826,6 +2740,15 @@ Future<void> _showSharedTextImportSheet(String rawText) async {
       ),
     );
   }
+}
+
+void _showContextSnackBar(BuildContext context, String message) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
 }
 
 String _formatParsedSmartDate(SmartDateParseResult result) {
@@ -1938,7 +2861,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   ///
   /// 在 [initState] 初始化为 `LocalTimezoneResolver.currentIana`；
   /// 之后每次 `AppLifecycleState.resumed` 都会先刷新时区再与此值比较，
-  /// 差异即触发 [ReminderScheduler.resyncAll]（Requirements 8.6 / 8.8）。
+  /// 差异即排队重放提醒（Requirements 8.6 / 8.8）。
   String? _lastIana;
   bool? _lastExactAlarmGranted;
   AchievementProvider? _achievementProvider;
@@ -2020,6 +2943,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       // 先处理时区变更（可能影响调度），再做跨日 rollover。
       _maybeResyncOnTimezoneChange();
       _maybeRunDailyRolloverOnResume();
+      _refreshNotificationProgressOnResume();
       _refreshNotificationPermissionsOnResume();
     }
   }
@@ -2060,22 +2984,13 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     updater.checkNow();
   }
 
-  /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并触发
-  /// [ReminderScheduler.resyncAll]，保证壁钟时间不变。
+  /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并排队
+  /// 重放提醒，保证壁钟时间不变。
   ///
   /// 对应 Requirements 8.6 / 8.8：
   /// - 8.6：resumed 且 IANA 变化时重新 `tz.setLocalLocation` 并 resync；
   /// - 8.8：resync 后新调度的 `(hour, minute)` 仍等于用户原设定。
   void _maybeResyncOnTimezoneChange() {
-    // 从 mainShellKey.currentContext（冷启动早期可能为 null）或当前 context
-    // 同步读取 Provider，避免异步 gap 之后再使用 BuildContext。
-    final ctx = mainShellKey.currentContext ?? context;
-    final todos = Provider.of<TodoProvider>(ctx, listen: false);
-    final habits = Provider.of<HabitProvider>(ctx, listen: false);
-    final annis = Provider.of<AnniversaryProvider>(ctx, listen: false);
-    final goals = Provider.of<GoalProvider>(ctx, listen: false);
-    final countdowns = Provider.of<CountdownProvider>(ctx, listen: false);
-
     final prevIana = _lastIana;
 
     // ignore: discarded_futures
@@ -2092,15 +3007,14 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       }
       _lastIana = currentIana;
       try {
-        await _reminderScheduler.resyncAll(
-          todos: todos.todos,
-          habits: habits.habits,
-          annis: annis.items,
-          goals: goals.goals,
-          countdowns: countdowns.items,
+        await _queueFullReminderResyncCallback?.call(
+          delay: Duration.zero,
+          reason: 'system timezone changed',
         );
       } catch (e, st) {
-        debugPrint('[DuoyiApp] resyncAll on timezone change failed: $e\n$st');
+        debugPrint(
+          '[DuoyiApp] reminder resync on timezone change failed: $e\n$st',
+        );
       }
     });
   }
@@ -2112,11 +3026,6 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   void _refreshNotificationPermissionsOnResume() {
     final ctx = mainShellKey.currentContext ?? context;
     final notif = Provider.of<NotificationService>(ctx, listen: false);
-    final todos = Provider.of<TodoProvider>(ctx, listen: false);
-    final habits = Provider.of<HabitProvider>(ctx, listen: false);
-    final annis = Provider.of<AnniversaryProvider>(ctx, listen: false);
-    final goals = Provider.of<GoalProvider>(ctx, listen: false);
-    final countdowns = Provider.of<CountdownProvider>(ctx, listen: false);
 
     final prevNotifGranted = notif.permissionGranted;
     final prevExactGranted = _lastExactAlarmGranted;
@@ -2131,12 +3040,9 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
         final exactChanged =
             prevExactGranted != null && prevExactGranted != exactGranted;
         if (prevNotifGranted == notifGranted && !exactChanged) return;
-        await _reminderScheduler.resyncAll(
-          todos: todos.todos,
-          habits: habits.habits,
-          annis: annis.items,
-          goals: goals.goals,
-          countdowns: countdowns.items,
+        await _queueFullReminderResyncCallback?.call(
+          delay: Duration.zero,
+          reason: 'notification permission changed',
         );
       } catch (e, st) {
         debugPrint('[DuoyiApp] refresh permission/resync failed: $e\n$st');
@@ -2191,11 +3097,19 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     });
   }
 
+  void _refreshNotificationProgressOnResume() {
+    // ignore: discarded_futures
+    Future.microtask(() async {
+      await _syncNotificationQuickAddDedupedCallback?.call(force: true);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.watch<ThemeProvider>().brand;
     final lock = context.watch<AppLockProvider>();
     final locale = context.watch<LocaleProvider>();
+    final updater = context.watch<AppUpdateService>();
     return MaterialApp(
       title: brand.strings.appTitle,
       debugShowCheckedModeBanner: false,
@@ -2203,14 +3117,16 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: brand.theme,
-      home: Stack(
-        children: [
-          MainShell(key: mainShellKey),
-          if (lock.isLocked)
-            const Positioned.fill(child: Material(child: LockScreen())),
-          const _ForceUpdateGate(),
-        ],
-      ),
+      home: updater.mustUpdate
+          ? const Stack(children: [_ForceUpdateGate()])
+          : Stack(
+              children: [
+                MainShell(key: mainShellKey),
+                if (lock.isLocked)
+                  const Positioned.fill(child: Material(child: LockScreen())),
+                const _ForceUpdateGate(),
+              ],
+            ),
     );
   }
 }
@@ -2226,7 +3142,8 @@ class _ForceUpdateGate extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final notes = updater.latestNotesForDisplay;
-    final canInstall = updater.latestUrl != null;
+    final canInstall =
+        updater.latestUrl != null && AppUpdateInstaller.supportsInstall;
 
     return Positioned.fill(
       child: PopScope(
@@ -2328,13 +3245,22 @@ class _ForceUpdateGate extends StatelessWidget {
                           style: TextStyle(color: colorScheme.error),
                         ),
                       ],
-                      if (!canInstall) ...[
+                      if (updater.latestUrl == null) ...[
                         const SizedBox(height: 12),
                         AppInfoBanner(
                           icon: Icons.link_off_outlined,
-                          title: '管理员未配置下载地址',
-                          message: '请管理员在后台补充最新版本安装包地址，否则客户端无法完成强制更新。',
+                          title: '安装包暂不可用',
+                          message: '管理员未配置下载地址，或发布通道还没有提供可安装的新版本。请等待发布包同步完成。',
                           color: colorScheme.error,
+                          margin: EdgeInsets.zero,
+                        ),
+                      ] else if (!AppUpdateInstaller.supportsInstall) ...[
+                        const SizedBox(height: 12),
+                        AppInfoBanner(
+                          icon: Icons.install_mobile_outlined,
+                          title: '当前平台不支持应用内安装',
+                          message: '请在 Android 手机上安装更新包；桌面或 Web 端仅展示更新说明。',
+                          color: colorScheme.primary,
                           margin: EdgeInsets.zero,
                         ),
                       ],
@@ -2431,9 +3357,12 @@ class MainShell extends StatefulWidget {
 
 class MainShellState extends State<MainShell> {
   static const _tabCount = 7;
-  static const _fallbackVisibleTabs = <int>[1, 2, 3, 5, 6];
+  static const _fallbackVisibleTabs = <int>[0, 1, 2, 6];
 
   int _currentIndex = 0; // Today first
+  bool _allowHiddenCurrentIndex = false;
+  bool _hasExplicitNavigation = false;
+  final Set<int> _builtTabs = <int>{0};
 
   static final GlobalKey todayKey = GlobalKey();
   static final GlobalKey todoKey = GlobalKey();
@@ -2444,45 +3373,10 @@ class MainShellState extends State<MainShell> {
   static final GlobalKey mineKey = GlobalKey();
 
   List<int> _visibleBottomNavTabs(PreferencesProvider prefs) {
-    final rawTabs = prefs.enabledBottomNavTabs
+    final result = prefs.visibleBottomNavTabs
         .where((tab) => tab >= 0 && tab < _tabCount)
         .toList(growable: false);
-    if (rawTabs.isEmpty) return _fallbackVisibleTabs;
-
-    final fixedTabs = PreferencesProvider.fixedBottomNavTabs;
-    final flexibleBudget =
-        PreferencesProvider.maxBottomNavTabs - fixedTabs.length;
-    final selected = <int>{};
-    for (final tab in rawTabs) {
-      if (fixedTabs.contains(tab)) continue;
-      if (selected.length >= flexibleBudget) break;
-      selected.add(tab);
-    }
-    selected.addAll(fixedTabs);
-
-    final result = <int>[];
-    for (final tab in rawTabs) {
-      if (selected.contains(tab) && !result.contains(tab)) result.add(tab);
-    }
-    for (final tab in fixedTabs) {
-      if (!result.contains(tab)) result.add(tab);
-    }
-    while (result.length > PreferencesProvider.maxBottomNavTabs) {
-      final removeAt = result.indexWhere((tab) => !fixedTabs.contains(tab));
-      if (removeAt < 0) break;
-      result.removeAt(removeAt);
-    }
-    if (result.isEmpty) {
-      return _fallbackVisibleTabs;
-    }
-    for (final tab in fixedTabs) {
-      if (result.length >= PreferencesProvider.maxBottomNavTabs ||
-          result.contains(tab)) {
-        continue;
-      }
-      result.add(tab);
-    }
-    return List.unmodifiable(result);
+    return result.length < 2 ? _fallbackVisibleTabs : List.unmodifiable(result);
   }
 
   int _coerceTabIndex(int index) {
@@ -2498,9 +3392,17 @@ class MainShellState extends State<MainShell> {
     return index.clamp(0, _tabCount - 1);
   }
 
-  void navigateTo(int index) {
+  void navigateTo(int index, {bool allowHidden = false}) {
     if (!mounted) return;
-    setState(() => _currentIndex = _coerceTabIndex(index));
+    final target = allowHidden
+        ? index.clamp(0, _tabCount - 1)
+        : _coerceTabIndex(index);
+    setState(() {
+      _currentIndex = target;
+      _builtTabs.add(target);
+      _allowHiddenCurrentIndex = allowHidden;
+      _hasExplicitNavigation = true;
+    });
   }
 
   @override
@@ -2509,11 +3411,17 @@ class MainShellState extends State<MainShell> {
     // 延迟一帧再读 PreferencesProvider，避免 initState 中 read 异常
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _drainPendingWidgetUris(context.read<PomodoroProvider>());
+      if (_hasExplicitNavigation) return;
       final target = _coerceTabIndex(
         context.read<PreferencesProvider>().defaultTab,
       );
       if (target != _currentIndex) {
-        setState(() => _currentIndex = target);
+        setState(() {
+          _currentIndex = target;
+          _builtTabs.add(target);
+          _allowHiddenCurrentIndex = false;
+        });
       }
     });
   }
@@ -2523,12 +3431,19 @@ class MainShellState extends State<MainShell> {
     final prefs = context.watch<PreferencesProvider>();
     final safeVisibleTabs = _visibleBottomNavTabs(prefs);
     var safeIndex = _currentIndex.clamp(0, _tabCount - 1);
-    if (!safeVisibleTabs.contains(safeIndex)) {
+    if (!safeVisibleTabs.contains(safeIndex) && !_allowHiddenCurrentIndex) {
       safeIndex = safeVisibleTabs.first;
     }
+    _builtTabs.add(safeIndex);
     if (safeIndex != _currentIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _currentIndex = safeIndex);
+        if (mounted) {
+          setState(() {
+            _currentIndex = safeIndex;
+            _builtTabs.add(safeIndex);
+            _allowHiddenCurrentIndex = false;
+          });
+        }
       });
     }
     final allDestinations = [
@@ -2569,10 +3484,10 @@ class MainShellState extends State<MainShell> {
       ),
     ];
     final selectedNavIndex = safeVisibleTabs.indexOf(safeIndex);
-    final updater = context.watch<AppUpdateService>();
-    final showUpdateBadge = updater.hasUpdate && !updater.mustUpdate;
+    final showingHiddenTab =
+        _allowHiddenCurrentIndex && !safeVisibleTabs.contains(safeIndex);
     final notification = context.watch<NotificationService>();
-    final showMineBadge = showUpdateBadge || notification.hasUnreadHistory;
+    final showMineBadge = notification.hasUnreadHistory;
     final navDestinations = safeVisibleTabs
         .map((tab) {
           final destination = allDestinations[tab];
@@ -2590,26 +3505,108 @@ class MainShellState extends State<MainShell> {
       body: BrandBackground(
         child: IndexedStack(
           index: safeIndex,
-          children: [
-            TodayScreen(key: todayKey),
-            TodoScreen(key: todoKey),
-            HabitScreen(key: habitKey),
-            CalendarScreen(key: calendarKey),
-            PomodoroScreen(key: pomodoroKey),
-            WidgetScreen(key: widgetKey),
-            MineScreen(key: mineKey),
-          ],
+          children: List.generate(
+            _tabCount,
+            (tab) => _builtTabs.contains(tab)
+                ? _buildTab(tab, safeVisibleTabs)
+                : _LazyTabPlaceholder(tab: tab),
+          ),
         ),
       ),
       floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
           ? const QuickCaptureFab()
           : null,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
-        onDestinationSelected: (i) =>
-            setState(() => _currentIndex = safeVisibleTabs[i]),
-        destinations: navDestinations,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      bottomNavigationBar: showingHiddenTab
+          ? _HiddenTabReturnBar(
+              onClose: () => setState(() {
+                _currentIndex = safeVisibleTabs.contains(6)
+                    ? 6
+                    : safeVisibleTabs.first;
+                _builtTabs.add(_currentIndex);
+                _allowHiddenCurrentIndex = false;
+                _hasExplicitNavigation = true;
+              }),
+            )
+          : NavigationBar(
+              selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
+              onDestinationSelected: (i) => setState(() {
+                _currentIndex = safeVisibleTabs[i];
+                _builtTabs.add(_currentIndex);
+                _allowHiddenCurrentIndex = false;
+                _hasExplicitNavigation = true;
+              }),
+              destinations: navDestinations,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            ),
+    );
+  }
+
+  Widget _buildTab(int tab, List<int> safeVisibleTabs) {
+    return switch (tab) {
+      0 => TodayScreen(key: todayKey),
+      1 => TodoScreen(key: todoKey),
+      2 => HabitScreen(key: habitKey),
+      3 => CalendarScreen(key: calendarKey),
+      4 => PomodoroScreen(key: pomodoroKey),
+      5 => WidgetScreen(key: widgetKey),
+      6 => MineScreen(
+        key: mineKey,
+        useShellBackground: true,
+        visibleBottomNavTabs: safeVisibleTabs,
+      ),
+      _ => const SizedBox.shrink(),
+    };
+  }
+}
+
+class _LazyTabPlaceholder extends StatelessWidget {
+  final int tab;
+
+  const _LazyTabPlaceholder({required this.tab});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.shrink(key: ValueKey('lazy-tab-$tab'));
+  }
+}
+
+class _HiddenTabReturnBar extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _HiddenTabReturnBar({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface.withValues(alpha: 0.96),
+      elevation: 0,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '隐藏应用',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.58),
+                  ),
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onClose,
+                icon: const Icon(Icons.keyboard_return_rounded, size: 18),
+                label: const Text('返回我的'),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: appSecondaryMenuItemTextStyle(context),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,7 +1,6 @@
 package com.duoyi.duoyi
 
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -12,12 +11,18 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
 
 /** "随手记" 小组件。 */
-class DuoyiNoteWidgetProvider : AppWidgetProvider() {
+open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             requestUpdate(context)
         }
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        appWidgetIds.forEach { DuoyiWidgetDisplayMode.clearForWidget(prefs, it) }
+        super.onDeleted(context, appWidgetIds)
     }
 
     override fun onUpdate(
@@ -28,6 +33,9 @@ class DuoyiNoteWidgetProvider : AppWidgetProvider() {
         val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
 
         appWidgetIds.forEach { id ->
+            DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
+                DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
+            }
             val views = RemoteViews(context.packageName, R.layout.duoyi_note_widget)
 
             views.setTextViewText(
@@ -49,11 +57,15 @@ class DuoyiNoteWidgetProvider : AppWidgetProvider() {
             )
             views.setViewVisibility(
                 R.id.widget_note_2,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_note_3,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs)
+                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
+            )
+            views.setViewVisibility(
+                R.id.widget_note_bottom_nav,
+                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
@@ -82,6 +94,8 @@ class DuoyiNoteWidgetProvider : AppWidgetProvider() {
             )
 
             views.setOnClickPendingIntent(R.id.widget_note_root, openNote)
+            views.setOnClickPendingIntent(R.id.widget_note_title, openNote)
+            views.setOnClickPendingIntent(R.id.widget_note_subtitle, openNote)
             views.setOnClickPendingIntent(
                 R.id.widget_note_1,
                 itemIntent(context, prefs, "note_highlight_1_id", "duoyi://note")
@@ -108,19 +122,18 @@ class DuoyiNoteWidgetProvider : AppWidgetProvider() {
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                Uri.parse((prefs.getString(key, "") ?: "").ifBlank { fallback })
+                detailUri(prefs, key, fallback)
             )
 
+        private fun detailUri(prefs: SharedPreferences, key: String, fallback: String): Uri {
+            val rawId = prefs.getString(key, "")?.trim().orEmpty()
+            if (rawId.isBlank()) return Uri.parse(fallback)
+            if (rawId.startsWith("duoyi://")) return Uri.parse(rawId)
+            return Uri.parse("$fallback/${Uri.encode(rawId)}")
+        }
+
         fun requestUpdate(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, DuoyiNoteWidgetProvider::class.java))
-            if (ids.isNotEmpty()) {
-                val intent = Intent(context, DuoyiNoteWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                }
-                context.sendBroadcast(intent)
-            }
+            DuoyiWidgetProviderRegistry.requestUpdateForKind(context, "note")
         }
     }
 }

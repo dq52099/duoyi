@@ -12,17 +12,18 @@ class GoalProvider extends ChangeNotifier {
   static const _key = 'duoyi_goals';
   List<GoalItem> _goals = [];
   TimeAuditProvider? _timeAudit;
-
-  /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
-  ///
-  /// 设计上允许 `null`：GoalProvider 的持久化路径**不**强依赖调度器，
-  /// 只有在 [onTimezoneChanged] 这种显式 hook 里才会尝试转发给调度器。
   ReminderScheduler? _scheduler;
 
-  /// 注入或解绑调度器；传 `null` 即解绑。
+  Future<void> Function()? _reminderResyncRequester;
+
   // ignore: use_setters_to_change_properties
-  set scheduler(ReminderScheduler? s) {
-    _scheduler = s;
+  set reminderResyncRequester(Future<void> Function()? requester) {
+    _reminderResyncRequester = requester;
+  }
+
+  // ignore: use_setters_to_change_properties
+  set scheduler(ReminderScheduler? scheduler) {
+    _scheduler = scheduler;
   }
 
   // ignore: use_setters_to_change_properties
@@ -66,12 +67,23 @@ class GoalProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _syncGoalRemindersNow() async {
+    final scheduler = _scheduler;
+    if (scheduler == null) return;
+    try {
+      await scheduler.syncGoals(List.of(_goals));
+    } catch (error, stackTrace) {
+      debugPrint('[GoalProvider] reminder sync failed: $error\n$stackTrace');
+    }
+  }
+
   Future<void> add(GoalItem goal) async {
     _goals.add(goal);
     DomainEventBus.instance.publish(
       DomainEvent(type: DomainEventType.goalCreated, objectId: goal.id),
     );
     await _save();
+    await _syncGoalRemindersNow();
   }
 
   /// 把推荐模板实例化为真实 [GoalItem] 并入库。
@@ -86,6 +98,7 @@ class GoalProvider extends ChangeNotifier {
       DomainEvent(type: DomainEventType.goalCreated, objectId: goal.id),
     );
     await _save();
+    await _syncGoalRemindersNow();
     return goal;
   }
 
@@ -97,6 +110,7 @@ class GoalProvider extends ChangeNotifier {
       goal.updatedAt = DateTime.now();
       _goals[idx] = goal;
       await _save();
+      await _syncGoalRemindersNow();
       if (!wasAchieved && goal.status == GoalStatus.achieved) {
         DomainEventBus.instance.publish(
           DomainEvent(type: DomainEventType.goalAchieved, objectId: goal.id),
@@ -113,6 +127,7 @@ class GoalProvider extends ChangeNotifier {
     await CloudSyncProvider.recordDeletedItem('goals', id);
     _goals.removeWhere((g) => g.id == id);
     await _save();
+    await _syncGoalRemindersNow();
   }
 
   Future<void> setStatus(String id, GoalStatus status) async {
@@ -122,6 +137,7 @@ class GoalProvider extends ChangeNotifier {
       if (status == GoalStatus.achieved) _goals[idx].progress = 1.0;
       _goals[idx].updatedAt = DateTime.now();
       await _save();
+      await _syncGoalRemindersNow();
       if (status == GoalStatus.achieved) {
         DomainEventBus.instance.publish(
           DomainEvent(
@@ -170,6 +186,7 @@ class GoalProvider extends ChangeNotifier {
         _goals[idx].status = GoalStatus.active;
       }
       await _save();
+      await _syncGoalRemindersNow();
       await _syncMilestoneEntry(_goals[idx], m, wasCompleted: wasCompleted);
     }
   }
@@ -180,6 +197,7 @@ class GoalProvider extends ChangeNotifier {
       _goals[idx].milestones.add(GoalMilestone(title: title));
       _goals[idx].updatedAt = DateTime.now();
       await _save();
+      await _syncGoalRemindersNow();
     }
   }
 
@@ -196,6 +214,7 @@ class GoalProvider extends ChangeNotifier {
       _goals[idx].milestones.removeWhere((m) => m.id == milestoneId);
       _goals[idx].updatedAt = DateTime.now();
       await _save();
+      await _syncGoalRemindersNow();
     }
   }
 
@@ -209,21 +228,24 @@ class GoalProvider extends ChangeNotifier {
         _goals[idx].status = GoalStatus.achieved;
       }
       await _save();
+      await _syncGoalRemindersNow();
     }
   }
 
-  /// 时区变化时由上层（通常是 `main.dart` 的 `AppLifecycle.resumed` hook）
-  /// 调用；要求 [ReminderScheduler] 按最新 goals 重同步调度队列。
+  /// 时区或跨日派发命中后由上层触发提醒重放。
+  ///
+  /// 普通写入路径由 Provider 写侧做局部同步；这个显式 hook 只请求全量队列
+  /// 合并，避免和启动、权限、云同步重放并发双跑。
   Future<void> onTimezoneChanged() async {
-    final scheduler = _scheduler;
-    if (scheduler == null) {
+    final requester = _reminderResyncRequester;
+    if (requester == null) {
       debugPrint(
-        '[GoalProvider] onTimezoneChanged skipped: no scheduler attached',
+        '[GoalProvider] onTimezoneChanged skipped: no reminder resync requester',
       );
       return;
     }
     try {
-      await scheduler.syncGoals(List.of(_goals));
+      await requester();
     } catch (e, st) {
       debugPrint('[GoalProvider] onTimezoneChanged failed: $e\n$st');
     }

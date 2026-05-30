@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:test/test.dart';
@@ -16,9 +17,9 @@ import 'package:duoyi/services/reminder_sinks.dart';
 /// Feature: app-alignment-overhaul
 /// Property 14 (P14): ∀ `ReminderConfig r`,
 ///   `r.kind = push  ⟹ 调度最终落到 ReminderNotificationSink.scheduleOnce`
-///                     (NotificationService，channel = `duoyi_general_alerts_v9`)；
+///                     (NotificationService，channel = `duoyi_general_alerts_v18`)；
 ///   `r.kind = alarm ⟹ 调度最终落到 ReminderAlarmSink.scheduleFullScreen`
-///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v8`)。
+///                     (AlarmService，channel = `duoyi_alarm_fullscreen_v18`)。
 ///
 /// Validates: Requirements 4.4, 4.5
 ///
@@ -41,8 +42,41 @@ void main() {
   test('channel id 常量与设计 §2.4 / §3.6 保持一致', () {
     // P14 的其中一半约束是"用对通道 id"：由 NotificationService / AlarmService
     // 的类级常量承载，Scheduler 不重复传递。这里显式断言，防止后续被误改。
-    expect(NotificationService.channelId, 'duoyi_general_alerts_v9');
-    expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v8');
+    expect(NotificationService.channelId, 'duoyi_general_alerts_v18');
+    expect(AlarmService.channelId, 'duoyi_alarm_fullscreen_v18');
+  });
+
+  test('普通通知底层会清理旧渠道，避免继续命中静音 channel', () {
+    final source = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains(
+        "static const String _defaultChannelId = 'duoyi_general_alerts_v18'",
+      ),
+    );
+    for (var version = 2; version <= 16; version++) {
+      expect(source, contains("'duoyi_general_alerts_v$version'"));
+    }
+    expect(source, contains('deleteNotificationChannel(channelId)'));
+  });
+
+  test('普通一次性提醒优先精准注册，失败后降级非精准', () {
+    final source = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('Future<void> scheduleOnce({');
+    final end = source.indexOf('/// 每日固定时间', start);
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final method = source.substring(start, end);
+
+    expect(method, contains('AndroidScheduleMode.exactAllowWhileIdle'));
+    expect(method, contains('on PlatformException catch (e)'));
+    expect(method, contains('if (!_isExactAlarmDenied(e)) rethrow;'));
+    expect(method, contains('AndroidScheduleMode.inexactAllowWhileIdle'));
   });
 
   group('P14 - 通道路由（Todo）', () {
@@ -89,30 +123,28 @@ void main() {
 
         // 每条 push todo 应在 Notification.scheduleOnce 中各出现恰好一次，
         // 且 Alarm 端没有对应 id。
-        final pushIntIds = pushTodos.map(_todoRuleIntId).toSet();
-        final alarmIntIds = alarmTodos.map(_todoRuleIntId).toSet();
+        final pushIntIds = pushTodos.map(_todoRuleIntId).toList();
+        final alarmIntIds = alarmTodos.map(_todoRuleIntId).toList();
 
-        final notifScheduledIds = notif.scheduleOnceCalls
-            .map((c) => c.id)
-            .toSet();
-        final alarmScheduledIds = alarm.scheduleFullScreenCalls
-            .map((c) => c.id)
-            .toSet();
+        final notifScheduledIds = notif.scheduleOnceCalls.map((c) => c.id);
+        final alarmScheduledIds = alarm.scheduleFullScreenCalls.map(
+          (c) => c.id,
+        );
 
         // 精确相等：Scheduler 不应向"另一条通道"外溢。
         expect(
           notifScheduledIds,
-          equals(pushIntIds),
+          unorderedEquals(pushIntIds),
           reason:
-              'iter=$iter — NotificationSink.scheduleOnce 的 id 集合应 == '
-              'push todos 的 id 集合，实际=$notifScheduledIds 期望=$pushIntIds',
+              'iter=$iter — NotificationSink.scheduleOnce 的 id 多重集应 == '
+              'push todos 的 id 多重集，不能用 set 掩盖重复调度。',
         );
         expect(
           alarmScheduledIds,
-          equals(alarmIntIds),
+          unorderedEquals(alarmIntIds),
           reason:
-              'iter=$iter — AlarmSink.scheduleFullScreen 的 id 集合应 == '
-              'alarm todos 的 id 集合，实际=$alarmScheduledIds 期望=$alarmIntIds',
+              'iter=$iter — AlarmSink.scheduleFullScreen 的 id 多重集应 == '
+              'alarm todos 的 id 多重集，不能用 set 掩盖重复调度。',
         );
 
         // alarm-kind 不应"回退"走 scheduleDaily 等 push 路径。
@@ -172,6 +204,53 @@ void main() {
       );
       expect(alarm.scheduleFullScreenCalls.length, 1);
       expect(alarm.scheduleFullScreenCalls.single.id, _todoRuleIntId(t2));
+    });
+
+    test('同一 rule 修改时间或提醒参数会取消旧调度并重新下发', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+
+      final due = DateTime.now().add(const Duration(hours: 2));
+      final rule = ReminderRule(
+        id: 'stable-rule',
+        type: ReminderRuleType.absolute,
+        kind: ReminderKind.alarm,
+        hour: due.hour,
+        minute: due.minute,
+        fullScreen: true,
+        snoozeMinutes: 5,
+      );
+      final todo = TodoItem(
+        title: 'edit-reminder',
+        dueDate: due,
+        reminderPlan: ReminderPlan(enabled: true, rules: [rule]),
+      );
+
+      await scheduler.syncTodos([todo]);
+      expect(alarm.scheduleFullScreenCalls, hasLength(1));
+
+      final editedDue = due.add(const Duration(hours: 1));
+      final editedRule = ReminderRule(
+        id: 'stable-rule',
+        type: ReminderRuleType.absolute,
+        kind: ReminderKind.alarm,
+        hour: editedDue.hour,
+        minute: editedDue.minute,
+        fullScreen: true,
+        snoozeMinutes: 10,
+      );
+      final editedTodo = todo.copyWith(
+        dueDate: editedDue,
+        reminderPlan: ReminderPlan(enabled: true, rules: [editedRule]),
+      );
+
+      await scheduler.syncTodos([editedTodo]);
+
+      expect(alarm.cancelCalls, contains(_todoRuleIntId(todo)));
+      expect(alarm.scheduleFullScreenCalls, hasLength(2));
+      expect(alarm.scheduleFullScreenCalls.last.when.hour, editedDue.hour);
+      expect(alarm.scheduleFullScreenCalls.last.snoozeMinutes, 10);
     });
 
     test('alarm Todo 的 fullScreen 标志会传到底层闹钟调度', () async {
@@ -454,11 +533,16 @@ void main() {
 
       await scheduler.syncTodos([todo]);
 
+      expect(alarm.scheduleFullScreenCalls, isEmpty);
+      expect(notif.scheduleOnceCalls, hasLength(1));
       expect(
         notif.scheduleOnceCalls.map((c) => c.id),
         contains(_todoRuleIntId(todo)),
       );
-      expect(notif.scheduleOnceCalls.single.payload, 'duoyi://todo/${todo.id}');
+      expect(
+        notif.scheduleOnceCalls.single.payload,
+        'duoyi://todo/${todo.id}?fallback=push',
+      );
     });
 
     test('通知权限失败时不会抛出未处理异常，也不会记录为已调度', () async {
@@ -554,27 +638,25 @@ void main() {
 
         await scheduler.syncGoals(goals);
 
-        final pushIntIds = pushGoals.map(_goalRuleIntId).toSet();
-        final alarmIntIds = alarmGoals.map(_goalRuleIntId).toSet();
+        final pushIntIds = pushGoals.map(_goalRuleIntId).toList();
+        final alarmIntIds = alarmGoals.map(_goalRuleIntId).toList();
 
-        final notifScheduledIds = notif.scheduleOnceCalls
-            .map((c) => c.id)
-            .toSet();
-        final alarmScheduledIds = alarm.scheduleFullScreenCalls
-            .map((c) => c.id)
-            .toSet();
+        final notifScheduledIds = notif.scheduleOnceCalls.map((c) => c.id);
+        final alarmScheduledIds = alarm.scheduleFullScreenCalls.map(
+          (c) => c.id,
+        );
 
         expect(
           notifScheduledIds,
-          equals(pushIntIds),
+          unorderedEquals(pushIntIds),
           reason:
-              'iter=$iter — Goal push 的 id 集合应与 Notification.scheduleOnce 精确一致',
+              'iter=$iter — Goal push 的 id 多重集应与 Notification.scheduleOnce 精确一致',
         );
         expect(
           alarmScheduledIds,
-          equals(alarmIntIds),
+          unorderedEquals(alarmIntIds),
           reason:
-              'iter=$iter — Goal alarm 的 id 集合应与 Alarm.scheduleFullScreen 精确一致',
+              'iter=$iter — Goal alarm 的 id 多重集应与 Alarm.scheduleFullScreen 精确一致',
         );
         for (final call in notif.scheduleOnceCalls) {
           expect(call.payload, startsWith('duoyi://goal/'));
@@ -583,8 +665,8 @@ void main() {
     });
   });
 
-  group('P14 - Habit 默认走普通通知', () {
-    test('syncHabits 下发普通通知，不默认全屏响铃', () async {
+  group('P14 - Habit 默认走柔和强提醒', () {
+    test('syncHabits 优先下发闹钟提醒，并携带确认打卡 payload', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
       final scheduler = ReminderScheduler(notif, alarm: alarm);
@@ -599,8 +681,35 @@ void main() {
 
       await scheduler.syncHabits([habit]);
 
-      expect(notif.scheduleHabitReminderCalls, [habit.id]);
+      expect(notif.scheduleHabitReminderCalls, isEmpty);
+      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
+      final call = alarm.scheduleDailyFullScreenCalls.single;
+      expect(call.id, _idFor('habit_${habit.id}'));
+      expect(call.hour, 8);
+      expect(call.minute, 30);
+      expect(call.weekdays, const [1, 3, 5]);
+      expect(call.payload, 'duoyi://habit/${habit.id}?confirm=1');
+      expect(call.fullScreen, isTrue);
+      expect(call.snoozeMinutes, 5);
+    });
+
+    test('syncHabits 在闹钟权限失败时回退到普通通知', () async {
+      final notif = _RecordingNotificationSink();
+      final alarm = _RecordingAlarmSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final habit = Habit(
+        id: 'habit-fallback',
+        name: '晨练',
+        remind: true,
+        remindHour: 7,
+        remindMinute: 15,
+      );
+      alarm.failDailyFullScreenIds.add(_idFor('habit_${habit.id}'));
+
+      await scheduler.syncHabits([habit]);
+
       expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
+      expect(notif.scheduleHabitReminderCalls, [habit.id]);
     });
 
     test('syncHabits 关闭提醒时同时清理旧版 alarm 遗留调度', () async {
@@ -616,9 +725,11 @@ void main() {
       );
 
       await scheduler.syncHabits([habit]);
+      notif.cancelHabitReminderCalls.clear();
+      alarm.cancelCalls.clear();
       await scheduler.syncHabits([habit.copyWith(remind: false)]);
 
-      expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
+      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
       expect(notif.cancelHabitReminderCalls, [habit.id]);
       expect(alarm.cancelCalls, contains(_idFor('habit_${habit.id}')));
     });

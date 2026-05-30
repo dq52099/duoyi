@@ -38,10 +38,7 @@ void main() {
     expect(screen, contains('_CompetitorImportSource.zhijianTime'));
     expect(screen, contains('_CompetitorImportSource.ticktick'));
     expect(screen, contains('_CompetitorImportSource.todoist'));
-    expect(
-      screen,
-      contains('DropdownButtonFormField<_CompetitorImportSource>'),
-    );
+    expect(screen, contains('AppDropdownField<_CompetitorImportSource>'));
     expect(screen, contains('initialValue: source'));
     expect(screen, contains('Future<void> _previewAndImportCompetitorData('));
     expect(screen, contains('Future<bool> _confirmCompetitorImportPreview('));
@@ -89,10 +86,6 @@ void main() {
     );
     expect(
       screen,
-      contains('final countdownProvider = context.read<CountdownProvider>();'),
-    );
-    expect(
-      screen,
       contains('final timeAuditProvider = context.read<TimeAuditProvider>();'),
     );
     expect(screen, contains('todoProvider.importTodos(parsed.todos)'));
@@ -108,8 +101,11 @@ void main() {
     );
     expect(
       screen,
-      contains('countdownProvider.importCountdowns(parsed.countdowns)'),
+      contains('final countdownProvider = context.read<CountdownProvider>();'),
     );
+    expect(screen, contains('importCountdowns(parsed.countdowns)'));
+    expect(screen, contains("_importPreviewChip('倒数日'"));
+    expect(screen, contains("_importResultLine('倒数日'"));
     expect(
       screen,
       contains('timeAuditProvider.importTimeEntries(parsed.timeEntries)'),
@@ -125,7 +121,7 @@ void main() {
       ),
     );
     expect(screen, contains('从其他 App 导入待办'));
-    expect(screen, contains('从其他 App 导入待办/习惯/笔记/日程/纪念日'));
+    expect(screen, contains('从其他 App 导入待办/习惯/笔记/日程/纪念日/倒数日'));
     expect(screen, contains('从文件导入其他 App 数据'));
     expect(
       screen,
@@ -196,36 +192,34 @@ void main() {
     );
   });
 
-  test(
-    'AnniversaryProvider and CountdownProvider expose duplicate-safe imports',
-    () {
-      final anniversaryProvider = File(
-        'lib/providers/anniversary_provider.dart',
-      ).readAsStringSync();
-      final countdownProvider = File(
-        'lib/providers/countdown_provider.dart',
-      ).readAsStringSync();
+  test('AnniversaryProvider exposes duplicate-safe imports', () {
+    final anniversaryProvider = File(
+      'lib/providers/anniversary_provider.dart',
+    ).readAsStringSync();
 
-      expect(anniversaryProvider, contains('class AnniversaryImportSummary'));
-      expect(
-        anniversaryProvider,
-        contains('Future<AnniversaryImportSummary> importAnniversaries('),
-      );
-      expect(
-        anniversaryProvider,
-        contains('item.originDate.toIso8601String()'),
-      );
-      expect(anniversaryProvider, contains('skippedDuplicates++'));
+    expect(anniversaryProvider, contains('class AnniversaryImportSummary'));
+    expect(
+      anniversaryProvider,
+      contains('Future<AnniversaryImportSummary> importAnniversaries('),
+    );
+    expect(anniversaryProvider, contains('item.originDate.toIso8601String()'));
+    expect(anniversaryProvider, contains('skippedDuplicates++'));
+  });
 
-      expect(countdownProvider, contains('class CountdownImportSummary'));
-      expect(
-        countdownProvider,
-        contains('Future<CountdownImportSummary> importCountdowns('),
-      );
-      expect(countdownProvider, contains('item.targetDate.toIso8601String()'));
-      expect(countdownProvider, contains('skippedDuplicates++'));
-    },
-  );
+  test('competitor import supports countdown creation paths', () {
+    final importer = File(
+      'lib/services/competitor_task_importer.dart',
+    ).readAsStringSync();
+    final screen = File('lib/screens/backup_screen.dart').readAsStringSync();
+
+    expect(importer, contains("import '../models/countdown.dart';"));
+    expect(importer, contains('List<CountdownItem>'));
+    expect(importer, contains('CountdownItem? _countdownFromMap'));
+    expect(importer, isNot(contains('当前版本不支持新增倒数日，已跳过')));
+    expect(screen, contains("import '../providers/countdown_provider.dart';"));
+    expect(screen, contains('parsed.countdowns'));
+    expect(screen, contains('countdownInserted'));
+  });
 
   test('TimeAuditProvider exposes duplicate-safe bulk time entry import', () {
     final provider = File(

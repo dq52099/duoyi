@@ -6,6 +6,8 @@ import 'package:duoyi/models/time_entry.dart';
 import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/providers/time_audit_provider.dart';
 
+import '../test_support/recording_reminder_scheduler.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -112,6 +114,23 @@ void main() {
   });
 
   test(
+    'current week progress refreshes immediately after today check-in',
+    () async {
+      final provider = HabitProvider();
+      final todayIndex = DateTime.now().weekday - 1;
+      await provider.addHabit(
+        Habit(id: 'weekly-progress', name: '阅读', targetCount: 1),
+      );
+
+      expect(provider.currentWeekProgress()[todayIndex], 0);
+
+      await provider.incrementHabit('weekly-progress');
+
+      expect(provider.currentWeekProgress()[todayIndex], 1);
+    },
+  );
+
+  test(
     'combined heatmap and weekly completion skip inactive date ranges',
     () async {
       final provider = HabitProvider();
@@ -133,6 +152,65 @@ void main() {
 
       expect(heatmap[todayKey], 0);
       expect(weekly.last, 0);
+    },
+  );
+
+  test('endHabit keeps today visible when today has a record', () async {
+    final provider = HabitProvider();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayKey = Habit(id: 'key-helper', name: 'helper').todayKey();
+    await provider.addHabit(
+      Habit(
+        id: 'completed-today',
+        name: '阅读',
+        targetCount: 1,
+        completions: {todayKey: 1},
+      ),
+    );
+
+    expect(provider.habits.single.isCompletedToday(), isTrue);
+    expect(provider.todayCompletionRate, 1);
+
+    await provider.endHabit('completed-today', at: today);
+
+    final ended = provider.habits.single;
+    expect(ended.endDate, today);
+    expect(ended.isActiveToday(), isTrue);
+    expect(ended.isCompletedToday(), isTrue);
+    expect(provider.todayCompletionRate, 1);
+    expect(provider.todayOverallProgress, 1);
+  });
+
+  test(
+    'habit saves sync reminders immediately when scheduler is injected',
+    () async {
+      final scheduler = RecordingReminderScheduler();
+      final provider = HabitProvider()..scheduler = scheduler;
+      final habit = Habit(
+        id: 'habit-sync',
+        name: '阅读',
+        remind: true,
+        remindHour: 9,
+        remindMinute: 0,
+      );
+
+      await provider.addHabit(habit);
+      expect(scheduler.habitSyncs, [
+        ['habit-sync'],
+      ]);
+
+      await provider.updateHabit(
+        habit.id,
+        habit.copyWith(remindHour: 10, remindMinute: 30),
+      );
+      expect(scheduler.habitSyncs, [
+        ['habit-sync'],
+        ['habit-sync'],
+      ]);
+
+      await provider.deleteHabit(habit.id);
+      expect(scheduler.habitSyncs.last, isEmpty);
     },
   );
 }

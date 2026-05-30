@@ -20,10 +20,17 @@ class AdminPage {
     required int fallbackLimit,
     required int fallbackOffset,
   }) {
-    final items = (json['items'] as List<dynamic>? ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    final rawItems = json['items'];
+    if (rawItems is! List) {
+      throw const ApiException('接口返回结构错误：分页 items 需要列表');
+    }
+    final items = <Map<String, dynamic>>[];
+    for (final item in rawItems) {
+      if (item is! Map) {
+        throw const ApiException('接口返回结构错误：分页 items 只能包含对象');
+      }
+      items.add(Map<String, dynamic>.from(item));
+    }
     final total = ((json['total'] as num?) ?? items.length).toInt();
     final limit = ((json['limit'] as num?) ?? fallbackLimit).toInt();
     final offset = ((json['offset'] as num?) ?? fallbackOffset).toInt();
@@ -58,6 +65,29 @@ class AdminApi {
 
   const AdminApi(this.client);
 
+  Map<String, dynamic> _flattenSystemSettingsPayload(
+    Map<String, dynamic> payload,
+  ) {
+    final flattened = <String, dynamic>{};
+    final runtime = payload['runtime_status'];
+    if (runtime is Map) {
+      flattened.addAll(Map<String, dynamic>.from(runtime));
+    }
+    final settings = payload['settings'];
+    if (settings is List) {
+      for (final item in settings) {
+        if (item is! Map) continue;
+        final key = item['key'];
+        if (key is! String || key.isEmpty) continue;
+        flattened[key] = item['value'];
+      }
+    }
+    if (flattened.isEmpty) {
+      flattened.addAll(payload);
+    }
+    return flattened;
+  }
+
   String _path(String base, Map<String, Object?> params) {
     final query = <String, String>{};
     for (final entry in params.entries) {
@@ -83,17 +113,22 @@ class AdminApi {
       'offset': offset,
     };
     final path = _path(base, pageParams);
-    final json = await client.get(path);
-    if (json.containsKey('items')) {
-      return AdminPage.fromJson(
-        json,
-        fallbackLimit: limit,
-        fallbackOffset: offset,
-      );
+    final raw = await client.getRaw(path);
+    if (raw is Map<String, dynamic>) {
+      if (raw.containsKey('items')) {
+        return AdminPage.fromJson(
+          raw,
+          fallbackLimit: limit,
+          fallbackOffset: offset,
+        );
+      }
+      throw ApiException('接口返回结构错误：$base 缺少 items 分页字段');
     }
-    final legacy = await client.getList(path);
+    if (raw is! List) {
+      throw ApiException('接口返回结构错误：$base 需要分页对象或列表');
+    }
     return AdminPage.fromItems(
-      legacy.cast<Map<String, dynamic>>(),
+      raw.cast<Map<String, dynamic>>(),
       limit: limit,
       offset: offset,
     );
@@ -103,8 +138,66 @@ class AdminApi {
   Future<Map<String, dynamic>> stats() => client.get('/api/admin/stats');
 
   // ---- Settings ----
-  Future<Map<String, dynamic>> getSettings({String? scope}) =>
-      client.get(_path('/api/admin/settings', {'scope': scope}));
+  Future<Map<String, dynamic>> getSettings({String? scope}) async {
+    final path = _path('/api/admin/settings', {'scope': scope});
+    try {
+      return await client.requestWithoutRouteDiagnosis('GET', path);
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e) || scope != null) rethrow;
+    }
+    final payload = await getSystemSettings();
+    return _flattenSystemSettingsPayload(payload);
+  }
+
+  Future<Map<String, dynamic>> getSystemSettings() async {
+    try {
+      return await client.requestWithoutRouteDiagnosis(
+        'GET',
+        '/api/admin/system-settings',
+      );
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+    }
+    final legacy = await client.requestWithoutRouteDiagnosis(
+      'GET',
+      '/api/admin/settings',
+    );
+    return <String, dynamic>{
+      'settings': legacy.entries
+          .map(
+            (entry) => <String, dynamic>{
+              'key': entry.key,
+              'value': entry.value,
+              'category': '',
+              'description': '',
+            },
+          )
+          .toList(),
+      'runtime_status': legacy,
+      'local_backups': const [],
+    };
+  }
+
+  Future<Map<String, dynamic>> updateSystemSettings(
+    Map<String, dynamic> settings,
+  ) async {
+    try {
+      return await client.requestWithoutRouteDiagnosis(
+        'POST',
+        '/api/admin/system-settings',
+        settings,
+      );
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+    }
+    await _sendFirstAvailable(
+      const ['PATCH', 'POST'],
+      const ['/api/admin/settings'],
+      settings,
+      featureName: '管理员系统设置',
+    );
+    return getSystemSettings();
+  }
 
   Future<Map<String, dynamic>> updateSettings({
     bool? inviteCodeRequired,
@@ -117,7 +210,8 @@ class AdminApi {
     String? minimumSupportedVersion,
     String? updateNotes,
     String? updateDownloadUrl,
-  }) {
+    int? defaultRegistrationCoins,
+  }) async {
     final body = <String, dynamic>{};
     if (inviteCodeRequired != null) {
       body['invite_code_required'] = inviteCodeRequired;
@@ -143,7 +237,24 @@ class AdminApi {
     if (updateDownloadUrl != null) {
       body['update_download_url'] = updateDownloadUrl;
     }
-    return client.patch('/api/admin/settings', body);
+    if (defaultRegistrationCoins != null) {
+      body['default_registration_coins'] = defaultRegistrationCoins;
+    }
+    try {
+      return await client.requestWithoutRouteDiagnosis(
+        'PATCH',
+        '/api/admin/settings',
+        body,
+      );
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+    }
+    return _sendFirstAvailable(
+      const ['POST', 'PATCH'],
+      const ['/api/admin/settings', '/api/admin/system-settings'],
+      body,
+      featureName: '管理员更新设置',
+    );
   }
 
   // ---- Users ----
@@ -170,6 +281,8 @@ class AdminApi {
     bool? isAdmin,
     bool? isDisabled,
     String? newPassword,
+    String? groupId,
+    String? roleId,
   }) async {
     final body = <String, dynamic>{};
     if (isAdmin != null) body['is_admin'] = isAdmin;
@@ -177,6 +290,8 @@ class AdminApi {
     if (newPassword != null && newPassword.isNotEmpty) {
       body['new_password'] = newPassword;
     }
+    if (groupId != null) body['group_id'] = groupId;
+    if (roleId != null) body['role_id'] = roleId;
     await client.patch('/api/admin/users/$userId', body);
   }
 
@@ -198,7 +313,20 @@ class AdminApi {
     if (reason != null && reason.trim().isNotEmpty) {
       body['reason'] = reason.trim();
     }
-    return client.post('/api/admin/users/$userId/coins', body);
+    final response = await client.post('/api/admin/users/$userId/coins', body);
+    return _validateCoinAdjustmentResponse(response);
+  }
+
+  Map<String, dynamic> _validateCoinAdjustmentResponse(
+    Map<String, dynamic> response,
+  ) {
+    final balance = response['balance'];
+    final lifetime = response['lifetime'];
+    final serverVersion = response['server_version'];
+    if (balance is! num || lifetime is! num || serverVersion is! num) {
+      throw const ApiException('接口返回结构错误：时光币调整缺少余额字段');
+    }
+    return response;
   }
 
   Future<String> exportUsersCsv({
@@ -225,8 +353,183 @@ class AdminApi {
     'is_disabled': isDisabled,
   });
 
+  Future<AdminPage> listGroupsPage({int limit = 20, int offset = 0}) async {
+    try {
+      return await _getPage('/api/admin/groups', limit: limit, offset: offset);
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+    }
+    ApiException? last404;
+    for (final path in const [
+      '/api/admin/user-groups',
+      '/api/admin/user_groups',
+    ]) {
+      try {
+        return await _getPage(path, limit: limit, offset: offset);
+      } on ApiException catch (e) {
+        if (!_isRouteMissing(e)) rethrow;
+        last404 = e;
+      }
+    }
+    throw last404 ?? const ApiException('404: 接口不存在');
+  }
+
+  Future<List<Map<String, dynamic>>> listGroups() async {
+    Object? raw;
+    try {
+      raw = await client.getRaw('/api/admin/groups?limit=500&offset=0');
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+      raw = await _getRawFirstAvailable(const [
+        '/api/admin/user-groups?limit=500&offset=0',
+        '/api/admin/user_groups?limit=500&offset=0',
+      ]);
+    }
+    final items = raw is Map<String, dynamic> && raw['items'] is List
+        ? raw['items']
+        : raw;
+    if (items is! List) {
+      throw const ApiException('接口返回结构错误：用户组需要列表');
+    }
+    return items.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> saveGroup({
+    String? id,
+    required String name,
+    String description = '',
+    int defaultTimeCoins = 100,
+    int? defaultGenerateQuota,
+    int? defaultEditQuota,
+    int? defaultGenerateHistoryRetention,
+    int? defaultEditHistoryRetention,
+    String imageMode = 'vip',
+    bool isActive = true,
+  }) {
+    final body = <String, dynamic>{
+      'name': name,
+      'description': description,
+      'default_time_coins': defaultTimeCoins,
+      'image_mode': imageMode,
+      'is_active': isActive,
+    };
+    // Nullable quota contract: 'default_generate_quota': ?defaultGenerateQuota, 'default_edit_quota': ?defaultEditQuota.
+    if (defaultGenerateQuota != null) {
+      body['default_generate_quota'] = defaultGenerateQuota;
+    }
+    if (defaultEditQuota != null) {
+      body['default_edit_quota'] = defaultEditQuota;
+    }
+    if (defaultGenerateHistoryRetention != null) {
+      body['default_generate_history_retention'] =
+          defaultGenerateHistoryRetention;
+    }
+    if (defaultEditHistoryRetention != null) {
+      body['default_edit_history_retention'] = defaultEditHistoryRetention;
+    }
+    final groupId = id?.trim();
+    if (groupId == null || groupId.isEmpty) {
+      return _sendFirstAvailable(
+        const ['POST'],
+        const [
+          '/api/admin/groups',
+          '/api/admin/user-groups',
+          '/api/admin/user_groups',
+        ],
+        body,
+      );
+    }
+    return _sendFirstAvailable(
+      const ['PATCH', 'PUT'],
+      [
+        '/api/admin/groups/$groupId',
+        '/api/admin/user-groups/$groupId',
+        '/api/admin/user_groups/$groupId',
+      ],
+      body,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> listRoles() async {
+    final raw = await client.getRaw('/api/admin/roles');
+    if (raw is! List) {
+      throw const ApiException('接口返回结构错误：角色需要列表');
+    }
+    return raw.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> saveRole({
+    String? id,
+    required String name,
+    String description = '',
+    List<String> permissions = const [],
+    bool isActive = true,
+  }) {
+    final body = <String, dynamic>{
+      'name': name,
+      'description': description,
+      'permissions': permissions,
+      'permission_codes': permissions,
+      'is_active': isActive,
+    };
+    final roleId = id?.trim();
+    if (roleId == null || roleId.isEmpty) {
+      return client.post('/api/admin/roles', body);
+    }
+    return client.patch('/api/admin/roles/$roleId', body);
+  }
+
   Future<void> deleteUser(String userId) =>
       client.delete('/api/admin/users/$userId');
+
+  Future<Map<String, dynamic>> _sendFirstAvailable(
+    List<String> methods,
+    List<String> paths,
+    Object? body, {
+    String featureName = '管理员',
+  }) async {
+    ApiException? last404;
+    for (final path in paths) {
+      for (final method in methods) {
+        try {
+          return switch (method) {
+            'PATCH' => await client.requestWithoutRouteDiagnosis(
+              'PATCH',
+              path,
+              body,
+            ),
+            'PUT' => await client.requestWithoutRouteDiagnosis(
+              'PUT',
+              path,
+              body,
+            ),
+            _ => await client.requestWithoutRouteDiagnosis('POST', path, body),
+          };
+        } on ApiException catch (e) {
+          if (!_isRouteMissing(e)) rethrow;
+          last404 = e;
+        }
+      }
+    }
+    throw await client.missingRoutesException(
+      featureName: featureName,
+      paths: paths,
+      fallback: last404,
+    );
+  }
+
+  Future<Object?> _getRawFirstAvailable(List<String> paths) async {
+    ApiException? last404;
+    for (final path in paths) {
+      try {
+        return await client.getRaw(path);
+      } on ApiException catch (e) {
+        if (!_isRouteMissing(e)) rethrow;
+        last404 = e;
+      }
+    }
+    throw last404 ?? const ApiException('404: 接口不存在');
+  }
 
   // ---- Announcements ----
   Future<AdminPage> listAnnouncementsPage({
@@ -302,6 +605,9 @@ class AdminApi {
       offset: 0,
     )).items;
   }
+
+  Future<Map<String, dynamic>> getFeedbackDetail(int id) =>
+      client.get('/api/admin/feedback/$id');
 
   Future<void> replyFeedback({
     required int feedbackId,
@@ -393,8 +699,32 @@ class AdminApi {
   }
 
   // ---- AI diagnostic ----
-  Future<Map<String, dynamic>> testAi() =>
-      client.post('/api/admin/ai/test', null, const Duration(seconds: 75));
+  Future<Map<String, dynamic>> testAi({
+    bool? aiEnabled,
+    String? baseUrl,
+    String? apiKey,
+    String? model,
+  }) async {
+    final payload = <String, Object?>{};
+    if (aiEnabled != null) payload['ai_enabled'] = aiEnabled;
+    if (baseUrl != null) payload['ai_base_url'] = baseUrl;
+    if (apiKey != null) payload['ai_api_key'] = apiKey;
+    if (model != null) payload['ai_model'] = model;
+    final body = payload.isEmpty ? null : payload;
+    try {
+      return await client.post(
+        '/api/admin/ai/test',
+        body,
+        const Duration(seconds: 30),
+      );
+    } on ApiException catch (e) {
+      if (!_isRouteMissing(e)) rethrow;
+      return client.post('/api/admin/provider-healthcheck', {
+        'apply_switch': false,
+        ...payload,
+      }, const Duration(seconds: 30));
+    }
+  }
 
   // ---- Reminder email diagnostic ----
   Future<Map<String, dynamic>> testReminderEmail() =>
@@ -472,4 +802,19 @@ class AdminApi {
 
   Future<Map<String, dynamic>> runServerBackup() =>
       client.post('/api/admin/server-backups/run');
+}
+
+bool _isRouteMissing(ApiException error) {
+  final message = error.message.trimLeft();
+  if (message.startsWith('405:')) {
+    final detail = message.substring(4).split('\n').first.trim().toLowerCase();
+    return detail == 'method not allowed' ||
+        detail == '{"detail":"method not allowed"}';
+  }
+  if (!message.startsWith('404:')) return false;
+  final detail = message.substring(4).split('\n').first.trim().toLowerCase();
+  return detail == 'not found' ||
+      detail == '{"detail":"not found"}' ||
+      detail == '接口不存在' ||
+      detail == 'route not found';
 }

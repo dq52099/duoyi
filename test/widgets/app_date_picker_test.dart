@@ -1,9 +1,55 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/widgets/app_date_picker.dart';
 
 void main() {
+  test('日期和时间选择器避免二级页面大字号和厚边框回退', () {
+    final timePicker = File(
+      'lib/widgets/app_time_picker.dart',
+    ).readAsStringSync();
+    expect(timePicker, isNot(contains('fontSize: 34')));
+    expect(timePicker, contains('fontSize: 24'));
+    expect(timePicker, contains('fontWeight: FontWeight.w400'));
+    expect(
+      timePicker,
+      contains(
+        'Border.all(\n'
+        '                color: cs.primary.withValues(alpha: 0.12),\n'
+        '                width: 0.45,',
+      ),
+    );
+
+    final datePicker = File(
+      'lib/widgets/app_date_picker.dart',
+    ).readAsStringSync();
+    expect(datePicker, isNot(contains('width: 1.2')));
+    expect(
+      datePicker,
+      isNot(contains('Border.all(color: cs.primary.withValues(alpha: 0.18))')),
+    );
+    expect(
+      datePicker,
+      contains(
+        'Border.all(color: cs.primary.withValues(alpha: 0.26), width: 0.45)',
+      ),
+    );
+    expect(
+      datePicker,
+      contains(
+        'Border.all(color: cs.primary.withValues(alpha: 0.14), width: 0.45)',
+      ),
+    );
+    expect(
+      datePicker,
+      isNot(contains('Border.all(color: cs.primary.withValues(alpha: 0.16))')),
+    );
+    expect(datePicker, contains('color: cs.primary.withValues(alpha: 0.16),'));
+    expect(datePicker, contains('width: 0.45,'));
+  });
+
   testWidgets('公历日期选择器显示可点击日期网格', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

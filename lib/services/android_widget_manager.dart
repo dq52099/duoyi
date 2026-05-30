@@ -1,7 +1,9 @@
-import 'dart:io' show Platform;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../core/platform_info.dart';
 
 enum DuoyiWidgetKind {
   todo,
@@ -16,10 +18,34 @@ enum DuoyiWidgetKind {
   diary,
 }
 
+enum AndroidWidgetStyle {
+  compact,
+  standard,
+  detailed;
+
+  static AndroidWidgetStyle fromId(String? id) {
+    return AndroidWidgetStyle.values.firstWhere(
+      (style) => style.id == id,
+      orElse: () => AndroidWidgetStyle.standard,
+    );
+  }
+
+  String get id {
+    return switch (this) {
+      AndroidWidgetStyle.compact => 'compact',
+      AndroidWidgetStyle.standard => 'standard',
+      AndroidWidgetStyle.detailed => 'detailed',
+    };
+  }
+}
+
 enum AndroidWidgetPinResult {
   requested,
   unsupported,
+  unsupportedPlatform,
+  unsupportedLauncher,
   permissionDenied,
+  confirmationBlocked,
   invalidKind,
   unavailable;
 
@@ -27,10 +53,90 @@ enum AndroidWidgetPinResult {
     return switch (id) {
       'requested' => AndroidWidgetPinResult.requested,
       'unsupported' => AndroidWidgetPinResult.unsupported,
+      'unsupported_platform' => AndroidWidgetPinResult.unsupportedPlatform,
+      'unsupported_launcher' => AndroidWidgetPinResult.unsupportedLauncher,
       'permission_denied' => AndroidWidgetPinResult.permissionDenied,
+      'confirmation_blocked' => AndroidWidgetPinResult.confirmationBlocked,
       'invalid_kind' => AndroidWidgetPinResult.invalidKind,
       _ => AndroidWidgetPinResult.unavailable,
     };
+  }
+}
+
+enum AndroidWidgetPinFinalStatus {
+  success,
+  invalidWidgetId,
+  timeout,
+  unavailable,
+}
+
+class AndroidWidgetPinRequest {
+  final AndroidWidgetPinResult result;
+  final String? requestId;
+
+  const AndroidWidgetPinRequest({required this.result, this.requestId});
+
+  bool get isRequested => result == AndroidWidgetPinResult.requested;
+
+  static AndroidWidgetPinRequest fromNativeStatus(String? status) {
+    final raw = status ?? '';
+    if (raw.startsWith('requested:')) {
+      final requestId = raw.substring('requested:'.length).trim();
+      return AndroidWidgetPinRequest(
+        result: AndroidWidgetPinResult.requested,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+    }
+    return AndroidWidgetPinRequest(
+      result: AndroidWidgetPinResult.fromId(status),
+    );
+  }
+}
+
+class AndroidWidgetPinConfirmation {
+  final AndroidWidgetPinFinalStatus status;
+  final String requestId;
+  final String kind;
+  final AndroidWidgetStyle style;
+  final int widgetId;
+  final DateTime? confirmedAt;
+
+  const AndroidWidgetPinConfirmation({
+    required this.status,
+    required this.requestId,
+    this.kind = '',
+    this.style = AndroidWidgetStyle.standard,
+    this.widgetId = -1,
+    this.confirmedAt,
+  });
+
+  bool get isSuccess => status == AndroidWidgetPinFinalStatus.success;
+
+  static AndroidWidgetPinConfirmation? fromMap(Map<Object?, Object?>? raw) {
+    if (raw == null) return null;
+    final requestId = raw['requestId']?.toString() ?? '';
+    if (requestId.isEmpty) return null;
+    final confirmedAtMillis = raw['confirmedAt'];
+    final millis = confirmedAtMillis is int
+        ? confirmedAtMillis
+        : int.tryParse(confirmedAtMillis?.toString() ?? '');
+    final nativeStatus = raw['status']?.toString();
+    return AndroidWidgetPinConfirmation(
+      status: switch (nativeStatus) {
+        'confirmed' => AndroidWidgetPinFinalStatus.success,
+        'invalid_widget_id' => AndroidWidgetPinFinalStatus.invalidWidgetId,
+        _ => AndroidWidgetPinFinalStatus.unavailable,
+      },
+      requestId: requestId,
+      kind: raw['kind']?.toString() ?? '',
+      style: AndroidWidgetStyle.fromId(raw['style']?.toString()),
+      widgetId: raw['widgetId'] is int
+          ? raw['widgetId'] as int
+          : int.tryParse(raw['widgetId']?.toString() ?? '') ?? -1,
+      confirmedAt: millis == null || millis <= 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(millis),
+    );
   }
 }
 
@@ -49,18 +155,18 @@ class AndroidWidgetManager {
     }
   }
 
-  static Future<AndroidWidgetPinResult> requestPinWidget(
-    DuoyiWidgetKind kind,
-  ) async {
-    if (!_isAndroid) return AndroidWidgetPinResult.unsupported;
+  static Future<AndroidWidgetPinResult> checkPinSupport() async {
+    if (!_isAndroid) {
+      return AndroidWidgetPinResult.unsupportedPlatform;
+    }
     try {
-      final status = await _channel.invokeMethod<String>(
-        'requestPinWidget',
-        <String, Object?>{'kind': kind.id},
-      );
-      return AndroidWidgetPinResult.fromId(status);
+      final supported =
+          await _channel.invokeMethod<bool>('canRequestPinWidget') ?? false;
+      return supported
+          ? AndroidWidgetPinResult.requested
+          : AndroidWidgetPinResult.unsupportedLauncher;
     } catch (e, st) {
-      debugPrint('[AndroidWidgetManager] requestPinWidget failed: $e\n$st');
+      debugPrint('[AndroidWidgetManager] checkPinSupport failed: $e\n$st');
       return AndroidWidgetPinResult.unavailable;
     }
   }
@@ -75,13 +181,128 @@ class AndroidWidgetManager {
     }
   }
 
-  static bool get _isAndroid {
-    if (kIsWeb) return false;
+  static Future<bool> canOpenWidgetSettings() async {
+    if (!_isAndroid) return false;
     try {
-      return Platform.isAndroid;
-    } catch (_) {
+      return await _channel.invokeMethod<bool>('canOpenWidgetSettings') ??
+          false;
+    } catch (e, st) {
+      debugPrint(
+        '[AndroidWidgetManager] canOpenWidgetSettings failed: $e\n$st',
+      );
       return false;
     }
+  }
+
+  static Future<AndroidWidgetPinResult> requestPinWidget(
+    DuoyiWidgetKind kind, {
+    AndroidWidgetStyle style = AndroidWidgetStyle.standard,
+  }) async {
+    final request = await requestPinWidgetDetailed(kind, style: style);
+    return request.result;
+  }
+
+  static Future<AndroidWidgetPinRequest> requestPinWidgetDetailed(
+    DuoyiWidgetKind kind, {
+    AndroidWidgetStyle style = AndroidWidgetStyle.standard,
+  }) async {
+    if (!_isAndroid) {
+      return const AndroidWidgetPinRequest(
+        result: AndroidWidgetPinResult.unsupportedPlatform,
+      );
+    }
+    try {
+      final status = await _channel.invokeMethod<String>(
+        'requestPinWidget',
+        <String, Object?>{'kind': kind.id, 'style': style.id},
+      );
+      return AndroidWidgetPinRequest.fromNativeStatus(status);
+    } catch (e, st) {
+      debugPrint('[AndroidWidgetManager] requestPinWidget failed: $e\n$st');
+      return const AndroidWidgetPinRequest(
+        result: AndroidWidgetPinResult.unavailable,
+      );
+    }
+  }
+
+  static Future<AndroidWidgetPinConfirmation?> lastPinResult(
+    String requestId,
+  ) async {
+    if (!_isAndroid || requestId.isEmpty) return null;
+    try {
+      final raw = await _channel.invokeMethod<Object?>(
+        'lastPinResult',
+        <String, Object?>{'requestId': requestId},
+      );
+      if (raw is! Map) return null;
+      return AndroidWidgetPinConfirmation.fromMap(raw);
+    } catch (e, st) {
+      debugPrint('[AndroidWidgetManager] lastPinResult failed: $e\n$st');
+      return null;
+    }
+  }
+
+  static Future<void> clearPinResult(String requestId) async {
+    if (!_isAndroid || requestId.isEmpty) return;
+    try {
+      await _channel.invokeMethod<void>('clearPinResult', <String, Object?>{
+        'requestId': requestId,
+      });
+    } catch (e, st) {
+      debugPrint('[AndroidWidgetManager] clearPinResult failed: $e\n$st');
+    }
+  }
+
+  static Future<void> cancelPinRequest(String requestId) async {
+    if (!_isAndroid || requestId.isEmpty) return;
+    try {
+      await _channel.invokeMethod<void>('cancelPinRequest', <String, Object?>{
+        'requestId': requestId,
+      });
+    } catch (e, st) {
+      debugPrint('[AndroidWidgetManager] cancelPinRequest failed: $e\n$st');
+    }
+  }
+
+  static Future<int?> applyDisplayModeToExistingWidgets(
+    AndroidWidgetStyle style,
+  ) async {
+    if (!_isAndroid) return 0;
+    try {
+      return await _channel.invokeMethod<int>(
+            'applyWidgetDisplayMode',
+            <String, Object?>{'style': style.id},
+          ) ??
+          0;
+    } catch (e, st) {
+      debugPrint(
+        '[AndroidWidgetManager] applyWidgetDisplayMode failed: $e\n$st',
+      );
+      return null;
+    }
+  }
+
+  static Future<AndroidWidgetPinConfirmation> waitForPinResult(
+    String requestId, {
+    Duration timeout = const Duration(seconds: 20),
+    Duration pollInterval = const Duration(milliseconds: 700),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final result = await lastPinResult(requestId);
+      if (result != null) return result;
+      await Future<void>.delayed(pollInterval);
+    }
+    await cancelPinRequest(requestId);
+    return AndroidWidgetPinConfirmation(
+      status: AndroidWidgetPinFinalStatus.timeout,
+      requestId: requestId,
+    );
+  }
+
+  static bool get _isAndroid {
+    if (kIsWeb) return false;
+    return PlatformInfo.isAndroid;
   }
 }
 
