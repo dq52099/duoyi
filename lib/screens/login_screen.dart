@@ -340,7 +340,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   fontSize: 22,
-                                  fontWeight: FontWeight.w500,
                                   color: cs.primary,
                                   height: 1.15,
                                 ),

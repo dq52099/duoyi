@@ -131,7 +131,8 @@ void main() {
         contains('const BrandRouteSurface(child: StatisticsScreen())'),
       );
       expect(main, contains('Future<void> runPostFrameStartupTasks()'));
-      expect(main, contains("_startupGuard('report digest reminders'"));
+      expect(main, contains("'report digest reminders'"));
+      expect(main, contains('syncReportDigestReminders'));
       expect(
         main,
         contains(

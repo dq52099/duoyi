@@ -327,7 +327,6 @@ class MineScreen extends StatelessWidget {
                                   style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         fontSize: 15,
-                                        fontWeight: FontWeight.w500,
                                         color: cs.onSurface,
                                         height: 1.18,
                                       ),

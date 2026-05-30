@@ -7884,14 +7884,12 @@ class _AdminFeedbackSwipeActionsState
                   ),
                 ),
               ),
-            AnimatedContainer(
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: _open ? -_actionRailWidth : 0),
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOutCubic,
-              transform: Matrix4.translationValues(
-                _open ? -_actionRailWidth : 0,
-                0,
-                0,
-              ),
+              builder: (context, dx, child) =>
+                  Transform.translate(offset: Offset(dx, 0), child: child),
               child: widget.child,
             ),
           ],

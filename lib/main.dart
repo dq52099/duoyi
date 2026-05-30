@@ -397,6 +397,7 @@ void main() async {
   Timer? reminderResyncDebounce;
   Completer<void>? reminderResyncDebounceCompleter;
   String reminderResyncReason = 'startup';
+  var startupReminderResyncQueued = false;
   Future<void> resyncReminders() async {
     if (reminderResyncInFlight) {
       reminderResyncQueued = true;
@@ -471,6 +472,15 @@ void main() async {
       }());
     });
     return completer.future;
+  }
+
+  Future<void> queueStartupReminderResync({
+    required Duration delay,
+    required String reason,
+  }) {
+    if (startupReminderResyncQueued) return Future<void>.value();
+    startupReminderResyncQueued = true;
+    return queueFullReminderResync(delay: delay, reason: reason);
   }
 
   _queueFullReminderResyncCallback = queueFullReminderResync;
@@ -771,7 +781,7 @@ void main() async {
   var notificationQuickAddSyncQueued = false;
   Completer<bool>? notificationQuickAddSyncQueuedCompleter;
   var lastNotificationQuickAddSignature = '';
-  Future<bool> syncNotificationQuickAddDeduped({bool force = false}) async {
+  String notificationQuickAddSignature() {
     final todayProgress = preferencesProvider.notificationTodayProgress;
     final progressBody = todayProgress
         ? _todayTaskProgressNotificationBody(
@@ -780,9 +790,12 @@ void main() async {
             goals: goalProvider,
           )
         : '';
-    final signature =
-        '${preferencesProvider.notificationQuickAdd}:'
+    return '${preferencesProvider.notificationQuickAdd}:'
         '$todayProgress:$progressBody';
+  }
+
+  Future<bool> syncNotificationQuickAddDeduped({bool force = false}) async {
+    final signature = notificationQuickAddSignature();
     if (!force && signature == lastNotificationQuickAddSignature) return true;
     if (notificationQuickAddSyncInFlight) {
       notificationQuickAddSyncQueued = true;
@@ -827,6 +840,7 @@ void main() async {
         _notificationStatusBarStartupBuildKey,
         AppVersion.build,
       );
+      lastNotificationQuickAddSignature = notificationQuickAddSignature();
       debugPrint('[NotificationStatusBar] startup show skipped after update');
       return true;
     }
@@ -1017,16 +1031,28 @@ void main() async {
     });
   };
 
+  String? currentAuthReminderIdentity() {
+    final state = authProvider.state;
+    if (!state.isLoggedIn) return null;
+    return state.token;
+  }
+
+  var lastAuthReminderIdentity = currentAuthReminderIdentity();
   authProvider.addListener(() {
     shareProvider.load();
+    final authReminderIdentity = currentAuthReminderIdentity();
+    final authChanged = authReminderIdentity != lastAuthReminderIdentity;
+    lastAuthReminderIdentity = authReminderIdentity;
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
       // ignore: discarded_futures
       unawaited(cloudSyncProvider.syncNow());
       cloudSyncProvider.startRemotePolling();
       // 登录/切号后立刻重放本地提醒；云同步回写后还会幂等重放一次。
-      unawaited(
-        queueFullReminderResync(delay: Duration.zero, reason: 'auth changed'),
-      );
+      if (authChanged) {
+        unawaited(
+          queueFullReminderResync(delay: Duration.zero, reason: 'auth changed'),
+        );
+      }
     } else {
       cloudSyncProvider.stopRemotePolling();
     }
@@ -1157,8 +1183,8 @@ void main() async {
       Future<void>.delayed(const Duration(milliseconds: 250), () async {
         await _startupGuard(
           'initial reminder resync',
-          () => queueFullReminderResync(
-            delay: Duration.zero,
+          () => queueStartupReminderResync(
+            delay: const Duration(milliseconds: 900),
             reason: 'post-frame startup',
           ),
         );
@@ -1166,20 +1192,24 @@ void main() async {
     );
     unawaited(
       Future<void>.delayed(const Duration(milliseconds: 850), () async {
-        await Future.wait([
-          _startupGuard('daily digest reminder', syncDailyDigestReminder),
-          _startupGuard('report digest reminders', syncReportDigestReminders),
-          _startupGuard(
-            'notification quick add',
-            syncNotificationStatusBarOnStartup,
-          ),
-          _startupGuard('initial home widget push', () async {
-            final pushed = await pushHomeWidgetNow();
-            if (!pushed) {
-              debugPrint('[HomeWidget] initial push completed with failures');
-            }
-          }),
-        ]);
+        await _startupGuard('daily digest reminder', syncDailyDigestReminder);
+        await Future<void>.delayed(const Duration(milliseconds: 450));
+        await _startupGuard(
+          'report digest reminders',
+          syncReportDigestReminders,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 450));
+        await _startupGuard(
+          'notification quick add',
+          syncNotificationStatusBarOnStartup,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await _startupGuard('initial home widget push', () async {
+          final pushed = await pushHomeWidgetNow();
+          if (!pushed) {
+            debugPrint('[HomeWidget] initial push completed with failures');
+          }
+        });
       }),
     );
   }

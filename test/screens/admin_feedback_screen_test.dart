@@ -30,8 +30,8 @@ void main() {
       expect(swipeActionsSource, contains('height: 42'));
       expect(swipeActionsSource, contains('if (_open)'));
       expect(swipeActionsSource, contains('Positioned.fill('));
-      expect(swipeActionsSource, contains('Matrix4.translationValues('));
-      expect(swipeActionsSource, contains('AnimatedContainer('));
+      expect(swipeActionsSource, contains('TweenAnimationBuilder<double>('));
+      expect(swipeActionsSource, contains('Transform.translate('));
       expect(swipeActionsSource, contains("tooltip: '查看反馈详情'"));
       expect(swipeActionsSource, contains("tooltip: '回复'"));
       expect(swipeActionsSource, contains("tooltip: '删除'"));

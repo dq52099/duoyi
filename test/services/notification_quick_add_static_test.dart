@@ -187,6 +187,14 @@ void main() {
     expect(main, contains('syncNotificationStatusBarOnStartup'));
     expect(main, contains('_notificationStatusBarStartupBuildKey'));
     expect(main, contains('lastBuild != AppVersion.build'));
+    expect(main, contains('String notificationQuickAddSignature()'));
+    expect(
+      main,
+      contains(
+        'lastNotificationQuickAddSignature = notificationQuickAddSignature();',
+      ),
+      reason: '更新后跳过启动同步时，也要抑制随后 resume/data-change 触发的同内容常驻通知。',
+    );
     expect(main, contains("LocalNotifications.instance.showQuickAddOngoing"));
     expect(main, contains("buildNotificationStatusBarPlan("));
     expect(main, contains("notificationQuickAdd: prefs.notificationQuickAdd"));
