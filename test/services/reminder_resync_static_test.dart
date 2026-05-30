@@ -103,6 +103,31 @@ void main() {
       ]) {
         expect(main, contains("reason: '$reason'"));
       }
+      expect(
+        main,
+        matches(
+          RegExp(
+            r"queueStartupReminderResync\(\s*"
+            r"delay: const Duration\(milliseconds: 1800\),\s*"
+            r"reason: 'initial logged-in startup',",
+            multiLine: true,
+          ),
+        ),
+        reason:
+            '已登录冷启动的全量提醒重放也必须错峰并纳入启动单次队列，'
+            '避免首屏期间重复注册本地通知造成卡顿。',
+      );
+      expect(
+        main,
+        matches(
+          RegExp(
+            r"queueStartupReminderResync\(\s*"
+            r"delay: const Duration\(milliseconds: 1800\),\s*"
+            r"reason: 'post-frame startup',",
+            multiLine: true,
+          ),
+        ),
+      );
 
       final goalProvider = File(
         'lib/providers/goal_provider.dart',

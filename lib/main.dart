@@ -1065,8 +1065,8 @@ void main() async {
     unawaited(cloudSyncProvider.syncNow());
     cloudSyncProvider.startRemotePolling();
     unawaited(
-      queueFullReminderResync(
-        delay: Duration.zero,
+      queueStartupReminderResync(
+        delay: const Duration(milliseconds: 1800),
         reason: 'initial logged-in startup',
       ),
     );
@@ -1184,7 +1184,7 @@ void main() async {
         await _startupGuard(
           'initial reminder resync',
           () => queueStartupReminderResync(
-            delay: const Duration(milliseconds: 900),
+            delay: const Duration(milliseconds: 1800),
             reason: 'post-frame startup',
           ),
         );
