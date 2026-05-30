@@ -50,7 +50,7 @@ class PomodoroTimerRing extends StatelessWidget {
             width: size - 18,
             height: size - 18,
             child: CircularProgressIndicator(
-              value: countUp ? null : progress,
+              value: countUp ? 1.0 : progress,
               strokeWidth: 6,
               strokeCap: StrokeCap.round,
               backgroundColor: Colors.grey.withValues(alpha: 0.1),

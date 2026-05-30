@@ -123,7 +123,7 @@ class AppUpdateService extends ChangeNotifier {
         _latestNotes = _fallbackUpdateNotes(_latestVersion);
       }
     } catch (e) {
-      _error = e.toString();
+      _error = userVisibleApiError(e);
     } finally {
       _checking = false;
       notifyListeners();
@@ -161,7 +161,7 @@ class AppUpdateService extends ChangeNotifier {
         _latestNotes ??= _fallbackUpdateNotes(_latestVersion);
       }
     } catch (e) {
-      _error = e.toString();
+      _error = userVisibleApiError(e);
     } finally {
       _checking = false;
       notifyListeners();

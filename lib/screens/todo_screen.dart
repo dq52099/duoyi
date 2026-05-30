@@ -1973,7 +1973,7 @@ class _KanbanTodoCard extends StatefulWidget {
 
 class _KanbanTodoCardState extends State<_KanbanTodoCard> {
   static const double _swipeActionWidth = _TodoTileState._swipeActionWidth;
-  static const double _swipeOpenThreshold = 44;
+  static const double _swipeOpenThreshold = 36;
 
   double _swipeOffset = 0;
   bool _dragging = false;
@@ -2008,6 +2008,7 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
     BuildContext context,
     TodoProvider provider,
   ) async {
+    _closeSwipe();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AppDialog(
@@ -2741,8 +2742,8 @@ class _TodoTile extends StatefulWidget {
 }
 
 class _TodoTileState extends State<_TodoTile> {
-  static const double _swipeActionWidth = 204;
-  static const double _swipeOpenThreshold = 44;
+  static const double _swipeActionWidth = 144;
+  static const double _swipeOpenThreshold = 36;
 
   double _swipeOffset = 0;
   bool _dragging = false;
@@ -2777,6 +2778,7 @@ class _TodoTileState extends State<_TodoTile> {
     BuildContext context,
     TodoProvider provider,
   ) async {
+    _closeSwipe();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AppDialog(
@@ -3011,46 +3013,41 @@ class _TodoInlineSwipeActions extends StatelessWidget {
         width: _TodoTileState._swipeActionWidth,
         height: double.infinity,
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: _TodoInlineSwipeButton(
-                key: const ValueKey('todo_swipe_detail_button'),
-                icon: Icons.open_in_new,
-                label: '详情',
-                background: cs.primaryContainer.withValues(alpha: 0.78),
-                foreground: cs.onPrimaryContainer,
-                onTap: onDetails,
-              ),
+            _TodoInlineSwipeButton(
+              key: const ValueKey('todo_swipe_detail_button'),
+              icon: Icons.open_in_new,
+              label: '详情',
+              background: cs.primaryContainer.withValues(alpha: 0.60),
+              foreground: cs.primary,
+              onTap: onDetails,
             ),
-            Expanded(
-              child: _TodoInlineSwipeButton(
-                key: ValueKey(
-                  completed
-                      ? 'todo_swipe_reopen_button'
-                      : 'todo_swipe_complete_button',
-                ),
-                icon: completed
-                    ? Icons.undo_outlined
-                    : Icons.check_circle_outline,
-                label: completed ? '恢复' : '完成',
-                background:
-                    (completed ? cs.tertiaryContainer : cs.secondaryContainer)
-                        .withValues(alpha: 0.8),
-                foreground: completed
-                    ? cs.onTertiaryContainer
-                    : cs.onSecondaryContainer,
-                onTap: onToggleCompletion,
+            const SizedBox(width: 6),
+            _TodoInlineSwipeButton(
+              key: ValueKey(
+                completed
+                    ? 'todo_swipe_reopen_button'
+                    : 'todo_swipe_complete_button',
               ),
+              icon: completed
+                  ? Icons.undo_outlined
+                  : Icons.check_circle_outline,
+              label: completed ? '恢复' : '完成',
+              background:
+                  (completed ? cs.tertiaryContainer : cs.secondaryContainer)
+                      .withValues(alpha: 0.60),
+              foreground: completed ? cs.tertiary : cs.secondary,
+              onTap: onToggleCompletion,
             ),
-            Expanded(
-              child: _TodoInlineSwipeButton(
-                key: const ValueKey('todo_swipe_delete_button'),
-                icon: Icons.delete_outline,
-                label: '删除',
-                background: cs.errorContainer.withValues(alpha: 0.86),
-                foreground: cs.onErrorContainer,
-                onTap: onDelete,
-              ),
+            const SizedBox(width: 6),
+            _TodoInlineSwipeButton(
+              key: const ValueKey('todo_swipe_delete_button'),
+              icon: Icons.delete_outline,
+              label: '删除',
+              background: cs.errorContainer.withValues(alpha: 0.64),
+              foreground: cs.error,
+              onTap: onDelete,
             ),
           ],
         ),
@@ -3077,22 +3074,22 @@ class _TodoInlineSwipeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: foreground,
-      fontWeight: FontWeight.w400,
-      height: 1.1,
-    );
-    return Material(
-      color: background,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: foreground, size: 18),
-            const SizedBox(height: 3),
-            Text(label, maxLines: 1, style: textStyle),
-          ],
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: background,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: 40,
+              child: Icon(icon, color: foreground, size: 18),
+            ),
+          ),
         ),
       ),
     );
@@ -3488,11 +3485,7 @@ class _MetaRow extends StatelessWidget {
   }
 }
 
-/// 临期任务的闪烁图标：1s 周期内 opacity 在 0.5↔1.0 之间来回过渡。
-///
-/// 使用 [AnimationController] + `reverse = true` 实现"脉冲"效果，
-/// 给"临期"胶囊上的 alarm / notifications icon 一个可视化的警示感。
-class _BlinkingIcon extends StatefulWidget {
+class _BlinkingIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
   final double size;
@@ -3504,41 +3497,8 @@ class _BlinkingIcon extends StatefulWidget {
   });
 
   @override
-  State<_BlinkingIcon> createState() => _BlinkingIconState();
-}
-
-class _BlinkingIconState extends State<_BlinkingIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    );
-    _opacity = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-    _controller.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacity,
-      child: Icon(widget.icon, size: widget.size, color: widget.color),
-    );
-  }
+  Widget build(BuildContext context) =>
+      Icon(icon, size: size, color: color.withValues(alpha: 0.92));
 }
 
 /// 统一的元信息胶囊（带 12% 底色）。

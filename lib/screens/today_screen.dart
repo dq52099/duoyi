@@ -841,8 +841,8 @@ class _TodayTodoSwipeTile extends StatefulWidget {
 }
 
 class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
-  static const double _swipeActionWidth = 148;
-  static const double _swipeOpenThreshold = 40;
+  static const double _swipeActionWidth = 104;
+  static const double _swipeOpenThreshold = 30;
 
   double _swipeOffset = 0;
   bool _dragging = false;
@@ -879,6 +879,7 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    _closeSwipe();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AppDialog(
@@ -976,34 +977,28 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
               child: SizedBox(
                 width: _swipeActionWidth,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: _TodayTodoSwipeButton(
-                        key: const ValueKey('today_todo_swipe_detail_button'),
-                        icon: Icons.open_in_new,
-                        label: '详情',
-                        background: cs.primaryContainer.withValues(alpha: 0.78),
-                        foreground: cs.onPrimaryContainer,
-                        onTap: _openDetails,
-                      ),
+                    _TodayTodoSwipeButton(
+                      key: const ValueKey('today_todo_swipe_detail_button'),
+                      icon: Icons.open_in_new,
+                      label: '详情',
+                      background: cs.primaryContainer.withValues(alpha: 0.60),
+                      foreground: cs.primary,
+                      onTap: _openDetails,
                     ),
-                    Expanded(
-                      child: _TodayTodoSwipeButton(
-                        key: const ValueKey('today_todo_swipe_delete_button'),
-                        icon: Icons.delete_outline,
-                        label: '删除',
-                        background: canEdit
-                            ? cs.errorContainer.withValues(alpha: 0.86)
-                            : cs.surfaceContainerHighest.withValues(
-                                alpha: 0.78,
-                              ),
-                        foreground: canEdit
-                            ? cs.onErrorContainer
-                            : cs.onSurfaceVariant,
-                        onTap: canEdit
-                            ? () => _confirmDelete(context)
-                            : () => _showReadOnlyMessage('删除任务'),
-                      ),
+                    const SizedBox(width: 8),
+                    _TodayTodoSwipeButton(
+                      key: const ValueKey('today_todo_swipe_delete_button'),
+                      icon: Icons.delete_outline,
+                      label: '删除',
+                      background: canEdit
+                          ? cs.errorContainer.withValues(alpha: 0.64)
+                          : cs.surfaceContainerHighest.withValues(alpha: 0.78),
+                      foreground: canEdit ? cs.error : cs.onSurfaceVariant,
+                      onTap: canEdit
+                          ? () => _confirmDelete(context)
+                          : () => _showReadOnlyMessage('删除任务'),
                     ),
                   ],
                 ),
@@ -1042,28 +1037,21 @@ class _TodayTodoSwipeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox.expand(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: foreground),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  height: 1.05,
-                  color: foreground,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: background,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: 38,
+              child: Icon(icon, size: 17, color: foreground),
+            ),
           ),
         ),
       ),

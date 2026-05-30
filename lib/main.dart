@@ -3639,7 +3639,7 @@ class MainShellState extends State<MainShell> {
       1 => TodoScreen(key: todoKey),
       2 => HabitScreen(key: habitKey),
       3 => CalendarScreen(key: calendarKey),
-      4 => PomodoroScreen(key: pomodoroKey),
+      4 => PomodoroScreen(key: pomodoroKey, useShellBackground: true),
       5 => WidgetScreen(key: widgetKey),
       6 => MineScreen(
         key: mineKey,

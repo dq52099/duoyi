@@ -509,8 +509,11 @@ const defaultUserVisibleBackendErrorMessage = '服务暂不可用，请稍后重
 
 bool isBackendCompatibilityDiagnosticMessage(String message) =>
     message.contains('当前后端未部署本版本接口') ||
+    message.contains('当前后端未部署本版本更新接口') ||
     message.contains('缺少接口契约 api_contract_version') ||
+    (message.contains('接口契约') && message.contains('低于客户端要求')) ||
     message.contains('必备路由摘要') ||
+    message.contains('required_routes_hash') ||
     message.contains('可能是旧后端') ||
     message.contains('反向代理未转发 /api/*');
 

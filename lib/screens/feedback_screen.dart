@@ -772,32 +772,43 @@ class _FeedbackRecordSwipeActionsState
           clipBehavior: Clip.hardEdge,
           children: [
             if (_open)
-              Positioned(
-                right: 0,
-                top: 8,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.18),
-                      width: 0.45,
-                    ),
-                  ),
-                  child: SizedBox(
-                    width: _actionRailWidth,
-                    height: 46,
-                    child: Center(
-                      child: Tooltip(
-                        message: '查看反馈详情',
-                        child: IconButton(
-                          key: const ValueKey('feedback_record_detail_action'),
-                          tooltip: '查看反馈详情',
-                          icon: Icon(
-                            Icons.visibility_outlined,
-                            color: cs.primary,
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4, bottom: 8),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withValues(
+                          alpha: 0.92,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.18),
+                          width: 0.45,
+                        ),
+                      ),
+                      child: SizedBox(
+                        width: _actionRailWidth,
+                        height: 42,
+                        child: Center(
+                          child: IconButton(
+                            key: const ValueKey(
+                              'feedback_record_detail_action',
+                            ),
+                            tooltip: '查看反馈详情',
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(
+                              Icons.visibility_outlined,
+                              color: cs.primary,
+                              size: 18,
+                            ),
+                            onPressed: _showDetail,
                           ),
-                          onPressed: _showDetail,
                         ),
                       ),
                     ),
@@ -814,6 +825,14 @@ class _FeedbackRecordSwipeActionsState
               ),
               child: widget.child,
             ),
+            if (_open)
+              Positioned.fill(
+                right: _actionRailWidth,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => _setOpen(false),
+                ),
+              ),
           ],
         ),
       ),

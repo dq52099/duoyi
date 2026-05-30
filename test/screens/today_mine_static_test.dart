@@ -110,20 +110,20 @@ void main() {
       expect(mine, contains('alpha: isDark ? 0.06 : 0.08'));
       expect(mine, contains('width: 0.45'));
       expect(mine, contains('final compact = constraints.maxWidth < 360'));
-      expect(mine, contains('final avatarSize = compact ? 54.0 : 60.0'));
+      expect(mine, contains('final avatarSize = compact ? 50.0 : 56.0'));
       expect(mine, contains('final metadata = <Widget>['));
       expect(mine, contains('return Row('));
       expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
       expect(mine, contains("key: const ValueKey('mine_avatar_row')"));
       expect(mine, contains('child: avatar'));
-      expect(mine, contains('SizedBox(width: compact ? 12 : 14)'));
+      expect(mine, contains('SizedBox(width: compact ? 10 : 12)'));
       expect(mine, contains("label: '查看个人资料'"));
       expect(mine, contains('onTap: () => _openProfileEditor(context)'));
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
       expect(mine, contains('borderRadius: BorderRadius.circular(14)'));
       expect(mine, contains('Expanded('));
       expect(mine, contains('Wrap('));
-      expect(mine, contains('runSpacing: 6'));
+      expect(mine, contains('runSpacing: 4'));
       expect(mine, contains('class _MineUserLineChip extends StatelessWidget'));
       expect(mine, isNot(contains('maxWidth: compact ? 116 : 150')));
       expect(
@@ -141,10 +141,10 @@ void main() {
         contains("key: const ValueKey('mine_avatar_preview_button')"),
       );
       expect(mine, contains("key: const ValueKey('mine_avatar_edit_button')"));
-      expect(mine, contains('dimension: 28'));
-      expect(mine, contains('width: 24'));
-      expect(mine, contains('height: 24'));
-      expect(mine, contains('size: 13'));
+      expect(mine, contains('dimension: 44'));
+      expect(mine, contains('width: 20'));
+      expect(mine, contains('height: 20'));
+      expect(mine, contains('size: 11'));
       expect(mine, contains('onTap: () => _pickAndSaveAvatar(context)'));
       expect(mine, contains("label: '@\$usernameText'"));
       expect(mine, contains(r"label: '时光币 $coins'"));

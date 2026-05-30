@@ -23,8 +23,9 @@ void main() {
     expect(timerTabSource, contains('availableHeight < 660'));
     expect(timerTabSource, contains('availableHeight < 560'));
     expect(timerTabSource, contains('FittedBox('));
-    expect(timerTabSource, contains('ValueListenableBuilder<int>'));
-    expect(timerTabSource, contains('provider.timerTicks'));
+    expect(timerTabSource, contains('_PomodoroLiveTimer('));
+    expect(source, contains('ValueListenableBuilder<int>'));
+    expect(source, contains('provider.timerTicks'));
     expect(source, isNot(contains('context.watch<PomodoroProvider>().state')));
     expect(timerTabSource, contains('_FocusControlTile'));
     expect(timerTabSource, contains('SingleChildScrollView('));

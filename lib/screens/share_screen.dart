@@ -6,6 +6,7 @@ import '../core/i18n_date_format.dart';
 import '../models/workspace.dart';
 import '../providers/auth_provider.dart';
 import '../providers/share_provider.dart';
+import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'login_screen.dart';
@@ -251,7 +252,7 @@ class _ShareScreenState extends State<ShareScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('创建失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('创建失败: ${_shareError(e)}')));
     }
   }
 
@@ -289,7 +290,7 @@ class _ShareScreenState extends State<ShareScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('加入失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('加入失败: ${_shareError(e)}')));
     }
   }
 }
@@ -565,9 +566,9 @@ class _WorkspaceCard extends StatelessWidget {
                   if (ctx.mounted) Navigator.pop(ctx, created);
                 } catch (e) {
                   if (!ctx.mounted) return;
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(SnackBar(content: Text('生成失败: $e')));
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('生成失败: ${_shareError(e)}')),
+                  );
                 }
               },
               child: const Text('生成'),
@@ -746,10 +747,13 @@ class _WorkspaceCollaborationSheetState
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('发送失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('发送失败: ${_shareError(e)}')));
     }
   }
 }
+
+String _shareError(Object error) =>
+    userVisibleApiError(error, fallbackMessage: '共享空间服务暂不可用，请稍后重试或联系管理员');
 
 class _MentionContextBlock extends StatelessWidget {
   final String targetId;

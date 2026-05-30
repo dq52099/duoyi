@@ -16,18 +16,21 @@ class BrandBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (brand.backgroundAsset != null)
-          Image.asset(
-            brand.backgroundAsset!,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stack) =>
-                Container(color: brand.backgroundOverlay),
-          )
-        else
-          Container(color: brand.backgroundOverlay),
-        Container(
-          color: brand.backgroundOverlay.withValues(
-            alpha: brand.backgroundOverlayOpacity,
+        RepaintBoundary(
+          child: brand.backgroundAsset != null
+              ? Image.asset(
+                  brand.backgroundAsset!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) =>
+                      Container(color: brand.backgroundOverlay),
+                )
+              : Container(color: brand.backgroundOverlay),
+        ),
+        RepaintBoundary(
+          child: Container(
+            color: brand.backgroundOverlay.withValues(
+              alpha: brand.backgroundOverlayOpacity,
+            ),
           ),
         ),
         child,

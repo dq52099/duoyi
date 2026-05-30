@@ -1021,8 +1021,8 @@ const double _habitActionRailWidth =
     _habitUndoButtonWidth +
     _habitActionButtonGap +
     _habitCheckinButtonWidth;
-const double _habitSwipeActionWidth = 156;
-const double _habitSwipeOpenThreshold = 52;
+const double _habitSwipeActionWidth = 144;
+const double _habitSwipeOpenThreshold = 36;
 
 class _HabitCheckinCard extends StatelessWidget {
   final Habit habit;
@@ -1436,6 +1436,16 @@ class _HabitSwipeActionWrapperState extends State<_HabitSwipeActionWrapper> {
   var _swipeOffset = 0.0;
   var _dragging = false;
 
+  void _closeSwipe() {
+    if (!mounted || _swipeOffset == 0) return;
+    setState(() => _swipeOffset = 0);
+  }
+
+  void _runAction(VoidCallback action) {
+    _closeSwipe();
+    action();
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -1457,11 +1467,15 @@ class _HabitSwipeActionWrapperState extends State<_HabitSwipeActionWrapper> {
             child: _HabitInlineSwipeActions(
               margin: widget.actionMargin,
               borderRadius: widget.borderRadius,
-              onDetails: () =>
-                  _handleHabitMenuAction(context, widget.habit, 'detail'),
-              onEnd: () => _handleHabitMenuAction(context, widget.habit, 'end'),
-              onDelete: () =>
-                  _handleHabitMenuAction(context, widget.habit, 'delete'),
+              onDetails: () => _runAction(
+                () => _handleHabitMenuAction(context, widget.habit, 'detail'),
+              ),
+              onEnd: () => _runAction(
+                () => _handleHabitMenuAction(context, widget.habit, 'end'),
+              ),
+              onDelete: () => _runAction(
+                () => _handleHabitMenuAction(context, widget.habit, 'delete'),
+              ),
             ),
           ),
           AnimatedContainer(
@@ -1516,36 +1530,33 @@ class _HabitInlineSwipeActions extends StatelessWidget {
         width: _habitSwipeActionWidth,
         height: double.infinity,
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: _HabitSwipeButton(
-                key: const ValueKey('habit_swipe_detail_button'),
-                icon: Icons.open_in_new,
-                label: '详情',
-                background: cs.primaryContainer.withValues(alpha: 0.78),
-                foreground: cs.onPrimaryContainer,
-                onTap: onDetails,
-              ),
+            _HabitSwipeButton(
+              key: const ValueKey('habit_swipe_detail_button'),
+              icon: Icons.open_in_new,
+              label: '详情',
+              background: cs.primaryContainer.withValues(alpha: 0.60),
+              foreground: cs.primary,
+              onTap: onDetails,
             ),
-            Expanded(
-              child: _HabitSwipeButton(
-                key: const ValueKey('habit_swipe_end_button'),
-                icon: Icons.event_busy_outlined,
-                label: '结束',
-                background: cs.tertiaryContainer.withValues(alpha: 0.78),
-                foreground: cs.onTertiaryContainer,
-                onTap: onEnd,
-              ),
+            const SizedBox(width: 6),
+            _HabitSwipeButton(
+              key: const ValueKey('habit_swipe_end_button'),
+              icon: Icons.event_busy_outlined,
+              label: '结束',
+              background: cs.tertiaryContainer.withValues(alpha: 0.60),
+              foreground: cs.tertiary,
+              onTap: onEnd,
             ),
-            Expanded(
-              child: _HabitSwipeButton(
-                key: const ValueKey('habit_swipe_delete_button'),
-                icon: Icons.delete_outline,
-                label: '删除',
-                background: cs.errorContainer.withValues(alpha: 0.86),
-                foreground: cs.onErrorContainer,
-                onTap: onDelete,
-              ),
+            const SizedBox(width: 6),
+            _HabitSwipeButton(
+              key: const ValueKey('habit_swipe_delete_button'),
+              icon: Icons.delete_outline,
+              label: '删除',
+              background: cs.errorContainer.withValues(alpha: 0.64),
+              foreground: cs.error,
+              onTap: onDelete,
             ),
           ],
         ),
@@ -1572,27 +1583,21 @@ class _HabitSwipeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      child: InkWell(
-        onTap: onTap,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: foreground),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: background,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: 38,
+              child: Icon(icon, size: 16, color: foreground),
+            ),
           ),
         ),
       ),

@@ -135,16 +135,16 @@ class MineScreen extends StatelessWidget {
         children: [
           AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             color: cs.surface.withValues(alpha: 0.82),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(8),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 360;
-                final avatarSize = compact ? 54.0 : 60.0;
+                final avatarSize = compact ? 50.0 : 56.0;
                 final avatar = SizedBox(
-                  width: avatarSize + 10,
-                  height: avatarSize + 10,
+                  width: avatarSize + 6,
+                  height: avatarSize + 6,
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
@@ -202,8 +202,8 @@ class MineScreen extends StatelessWidget {
                         ),
                       ),
                       Positioned(
-                        right: -2,
-                        bottom: -2,
+                        right: -12,
+                        bottom: -12,
                         child: SizedBox.square(
                           key: const ValueKey('mine_avatar_edit_button'),
                           dimension: 44,
@@ -220,8 +220,8 @@ class MineScreen extends StatelessWidget {
                                   onTap: () => _pickAndSaveAvatar(context),
                                   child: Center(
                                     child: Container(
-                                      width: 24,
-                                      height: 24,
+                                      width: 20,
+                                      height: 20,
                                       decoration: BoxDecoration(
                                         color: cs.primary,
                                         shape: BoxShape.circle,
@@ -234,7 +234,7 @@ class MineScreen extends StatelessWidget {
                                       ),
                                       child: Icon(
                                         Icons.edit_outlined,
-                                        size: 13,
+                                        size: 11,
                                         color: cs.onPrimary,
                                       ),
                                     ),
@@ -303,18 +303,18 @@ class MineScreen extends StatelessWidget {
                       key: const ValueKey('mine_avatar_row'),
                       child: avatar,
                     ),
-                    SizedBox(width: compact ? 12 : 14),
+                    SizedBox(width: compact ? 10 : 12),
                     Expanded(
                       child: Semantics(
                         button: true,
                         label: '查看个人资料',
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(8),
                           onTap: () => _openProfileEditor(context),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 7,
+                              vertical: 6,
+                              horizontal: 2,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -331,10 +331,10 @@ class MineScreen extends StatelessWidget {
                                         height: 1.18,
                                       ),
                                 ),
-                                const SizedBox(height: 7),
+                                const SizedBox(height: 5),
                                 Wrap(
-                                  spacing: compact ? 6 : 8,
-                                  runSpacing: 6,
+                                  spacing: compact ? 8 : 10,
+                                  runSpacing: 4,
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: metadata,
                                 ),
@@ -1236,12 +1236,11 @@ class _MineUserLineChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      constraints: const BoxConstraints(minHeight: 27),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      constraints: const BoxConstraints(minHeight: 20),
+      padding: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.11),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1257,7 +1256,7 @@ class _MineUserLineChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: Color.alphaBlend(
-                  color.withValues(alpha: 0.62),
+                  color.withValues(alpha: 0.48),
                   cs.onSurface,
                 ),
                 fontWeight: FontWeight.w400,

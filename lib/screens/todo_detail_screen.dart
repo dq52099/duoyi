@@ -14,6 +14,7 @@ import '../models/location_reminder.dart';
 import '../models/note.dart' show NoteAttachment, NoteBlock, NoteBlockType;
 import '../models/todo.dart';
 import '../models/workspace.dart';
+import '../services/api_client.dart';
 import '../services/alarm_service.dart';
 import '../services/local_notifications.dart';
 import '../services/note_attachment_picker.dart';
@@ -2011,10 +2012,13 @@ class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('评论发送失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('评论发送失败: ${_shareError(e)}')));
     }
   }
 }
+
+String _shareError(Object error) =>
+    userVisibleApiError(error, fallbackMessage: '共享空间服务暂不可用，请稍后重试或联系管理员');
 
 String _formatCommentTime(DateTime value) {
   return I18nDateFormat.shortDateTime(value);

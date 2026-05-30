@@ -254,6 +254,29 @@ void main() {
     expect(seen, ['GET /api/admin/users/missing']);
   });
 
+  test(
+    'user visible API error hides backend compatibility diagnostics only',
+    () {
+      for (final message in const [
+        '当前后端未部署本版本接口：/api/me/profile。缺少接口契约 api_contract_version。',
+        '检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。',
+        '接口契约 2024-01-01.1 低于客户端要求 2026-05-20.1。',
+        '缺少必备路由摘要 required_routes_hash。',
+        '反向代理未转发 /api/*。',
+      ]) {
+        expect(
+          userVisibleApiError(ApiException(message)),
+          defaultUserVisibleBackendErrorMessage,
+        );
+      }
+
+      expect(
+        userVisibleApiError(const ApiException('User not found')),
+        'User not found',
+      );
+    },
+  );
+
   test('upload avatar 404 also explains stale server contract', () async {
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',
