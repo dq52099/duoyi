@@ -73,10 +73,10 @@ void main() {
     expect(header, contains("label: const Text('结束习惯')"));
     expect(header, contains('Icons.event_busy_outlined'));
     expect(header, contains('provider.endHabit(habit.id)'));
-    expect(header, contains('TextButton.icon('));
+    expect(header, contains('_habitDangerOutlinedButtonStyle(context)'));
     expect(header, contains("label: const Text('删除')"));
     expect(header, contains('Icons.delete_outline'));
-    expect(header, contains("title: const Text('删除习惯？')"));
+    expect(source, contains("title: const Text('删除习惯？')"));
     expect(header, contains('deleteHabit('));
     expect(header, contains('_habitIconForToken(habit.icon)'));
     expect(source, contains('IconData _habitIconForToken(String token)'));
@@ -297,9 +297,10 @@ void main() {
     expect(source, contains("import '../core/habit_insights.dart';"));
     expect(source, contains('HabitInsightEngine.buildInsights('));
     expect(source, contains('_HabitInsightCard'));
+    expect(source, contains('_HabitInsightSection(habits: provider.habits)'));
     expect(source, contains('智能习惯洞察'));
     expect(
-      source.indexOf('_HabitInsightCard(insights: insights)'),
+      source.indexOf('_HabitInsightSection(habits: provider.habits)'),
       lessThan(
         source.indexOf("key: const ValueKey('habit_today_checkin_sliver')"),
       ),

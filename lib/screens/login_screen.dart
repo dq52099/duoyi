@@ -9,6 +9,8 @@ import '../services/api_client.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 
+const double _loginContentMaxWidth = 420;
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -306,276 +308,386 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           backgroundColor: Colors.transparent,
         ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          children: [
-            const SizedBox(height: 12),
-            Text(
-              s.appTitle,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w400,
-                color: cs.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isRegister
-                  ? I18n.tr('auth.register.subtitle')
-                  : (_emailLogin
-                        ? I18n.tr('auth.login.subtitle.email_code')
-                        : I18n.tr('auth.login.subtitle.password')),
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
-            ),
-            if (auth.maintenanceMode) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+        body: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontalPadding = constraints.maxWidth < 480
+                  ? 20.0
+                  : 24.0;
+              return ListView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  8,
+                  horizontalPadding,
+                  20,
                 ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.build_circle,
-                      color: Colors.orange,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        auth.maintenanceMessage.isEmpty
-                            ? I18n.tr('auth.maintenance')
-                            : auth.maintenanceMessage,
-                        style: const TextStyle(
-                          color: Colors.orange,
-                          fontSize: 12,
-                        ),
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _loginContentMaxWidth,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 8),
+                          Text(
+                            s.appTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w500,
+                                  color: cs.primary,
+                                  height: 1.15,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _isRegister
+                                ? I18n.tr('auth.register.subtitle')
+                                : (_emailLogin
+                                      ? I18n.tr(
+                                          'auth.login.subtitle.email_code',
+                                        )
+                                      : I18n.tr(
+                                          'auth.login.subtitle.password',
+                                        )),
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          if (auth.maintenanceMode) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.build_circle,
+                                    color: Colors.orange,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      auth.maintenanceMessage.isEmpty
+                                          ? I18n.tr('auth.maintenance')
+                                          : auth.maintenanceMessage,
+                                      style: const TextStyle(
+                                        color: Colors.orange,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          if (!_isRegister) ...[
+                            AppSecondaryControlTheme(
+                              child: SegmentedButton<bool>(
+                                showSelectedIcon: false,
+                                segments: [
+                                  ButtonSegment(
+                                    value: false,
+                                    label: Text(I18n.tr('auth.password_login')),
+                                  ),
+                                  ButtonSegment(
+                                    value: true,
+                                    label: Text(
+                                      I18n.tr('auth.email_code_login'),
+                                    ),
+                                  ),
+                                ],
+                                selected: {_emailLogin},
+                                onSelectionChanged: _busy
+                                    ? null
+                                    : (values) => setState(() {
+                                        _emailLogin = values.first;
+                                        _error = null;
+                                        _message = null;
+                                      }),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          if (!_isRegister && _emailLogin)
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _userCtrl,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: InputDecoration(
+                                  labelText: I18n.tr('auth.verified_email'),
+                                ),
+                              ),
+                            )
+                          else
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _userCtrl,
+                                decoration: InputDecoration(
+                                  labelText: _isRegister
+                                      ? I18n.tr('auth.username')
+                                      : I18n.tr('auth.account'),
+                                ),
+                              ),
+                            ),
+                          if (_isRegister) ...[
+                            const SizedBox(height: 12),
+                            if (!registrationEmailRequired) ...[
+                              AppSecondaryControlTheme(
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            I18n.tr('profile.email.binding'),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            I18n.tr('auth.email.optional'),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: cs.onSurface
+                                                      .withValues(alpha: 0.62),
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Transform.scale(
+                                      scale: 0.86,
+                                      child: Switch.adaptive(
+                                        value: _registerWithEmail,
+                                        onChanged: (_busy || _sendingEmailCode)
+                                            ? null
+                                            : (value) => setState(() {
+                                                _registerWithEmail = value;
+                                                _error = null;
+                                                _message = null;
+                                                if (!value) {
+                                                  _emailCtrl.clear();
+                                                  _emailCodeCtrl.clear();
+                                                }
+                                              }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (shouldBindRegistrationEmail) ...[
+                              if (!registrationEmailRequired)
+                                const SizedBox(height: 12),
+                              AppSecondaryControlTheme(
+                                child: TextField(
+                                  controller: _emailCtrl,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: InputDecoration(
+                                    labelText: registrationEmailRequired
+                                        ? I18n.tr('auth.email')
+                                        : I18n.tr('auth.email.optional'),
+                                    helperText: registrationEmailRequired
+                                        ? I18n.tr('auth.email.required_helper')
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _emailCodeSendField(
+                                controller: _emailCodeCtrl,
+                                labelText: registrationEmailRequired
+                                    ? I18n.tr('auth.email_code')
+                                    : I18n.tr('auth.email_code.optional'),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _displayNameCtrl,
+                                decoration: InputDecoration(
+                                  labelText: I18n.tr(
+                                    'auth.display_name.optional',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (!_isRegister && _emailLogin) ...[
+                            const SizedBox(height: 12),
+                            _emailCodeSendField(
+                              controller: _emailCodeCtrl,
+                              labelText: I18n.tr('auth.email_code'),
+                            ),
+                          ],
+                          if (_isRegister)
+                            const SizedBox(height: 10)
+                          else if (!_emailLogin)
+                            const SizedBox(height: 10),
+                          if (!_emailLogin || _isRegister)
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _pwdCtrl,
+                                decoration: InputDecoration(
+                                  labelText: I18n.tr('auth.password'),
+                                ),
+                                obscureText: true,
+                              ),
+                            ),
+                          if (!_isRegister && !_emailLogin) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(0, 30),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _showPasswordResetDialog(),
+                                child: Text(I18n.tr('auth.forgot_password')),
+                              ),
+                            ),
+                          ],
+                          if (_isRegister) ...[
+                            const SizedBox(height: 12),
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _confirmPwdCtrl,
+                                decoration: InputDecoration(
+                                  labelText: I18n.tr('auth.confirm_password'),
+                                ),
+                                obscureText: true,
+                              ),
+                            ),
+                          ],
+                          if (_isRegister && auth.inviteCodeRequired) ...[
+                            const SizedBox(height: 12),
+                            AppSecondaryControlTheme(
+                              child: TextField(
+                                controller: _inviteCtrl,
+                                decoration: InputDecoration(
+                                  labelText: I18n.tr('auth.invite_code'),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (_isRegister && !auth.registrationEnabled) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              I18n.tr('auth.registration_closed'),
+                              style: TextStyle(color: Colors.red, fontSize: 12),
+                            ),
+                          ],
+                          if (_error != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ],
+                          if (_message != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _message!,
+                              style: TextStyle(color: cs.primary, fontSize: 12),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          FilledButton(
+                            style: appSecondaryFilledButtonStyle(context)
+                                .copyWith(
+                                  minimumSize: const WidgetStatePropertyAll(
+                                    Size(0, 38),
+                                  ),
+                                  padding: const WidgetStatePropertyAll(
+                                    EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 7,
+                                    ),
+                                  ),
+                                ),
+                            onPressed:
+                                _busy ||
+                                    _sendingEmailCode ||
+                                    (_isRegister && !auth.registrationEnabled)
+                                ? null
+                                : _submit,
+                            child: _busy
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _isRegister
+                                        ? I18n.tr('auth.register')
+                                        : I18n.tr('auth.login'),
+                                  ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 34),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: _busy || _sendingEmailCode
+                                ? null
+                                : () => setState(() {
+                                    _isRegister = !_isRegister;
+                                    _emailLogin = false;
+                                    _registerWithEmail = true;
+                                    _emailCodeCtrl.clear();
+                                    _pwdCtrl.clear();
+                                    _confirmPwdCtrl.clear();
+                                    _error = null;
+                                    _message = null;
+                                  }),
+                            child: Text(
+                              _isRegister
+                                  ? I18n.tr('auth.switch_to_login')
+                                  : I18n.tr('auth.switch_to_register'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            if (!_isRegister) ...[
-              SegmentedButton<bool>(
-                segments: [
-                  ButtonSegment(
-                    value: false,
-                    label: Text(I18n.tr('auth.password_login')),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text(I18n.tr('auth.email_code_login')),
                   ),
                 ],
-                selected: {_emailLogin},
-                onSelectionChanged: _busy
-                    ? null
-                    : (values) => setState(() {
-                        _emailLogin = values.first;
-                        _error = null;
-                        _message = null;
-                      }),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (!_isRegister && _emailLogin)
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _userCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.verified_email'),
-                  ),
-                ),
-              )
-            else
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _userCtrl,
-                  decoration: InputDecoration(
-                    labelText: _isRegister
-                        ? I18n.tr('auth.username')
-                        : I18n.tr('auth.account'),
-                  ),
-                ),
-              ),
-            if (_isRegister) ...[
-              if (!registrationEmailRequired) ...[
-                AppSecondaryControlTheme(
-                  child: SwitchListTile.adaptive(
-                    value: _registerWithEmail,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(I18n.tr('profile.email.binding')),
-                    subtitle: Text(I18n.tr('auth.email.optional')),
-                    onChanged: (_busy || _sendingEmailCode)
-                        ? null
-                        : (value) => setState(() {
-                            _registerWithEmail = value;
-                            _error = null;
-                            _message = null;
-                            if (!value) {
-                              _emailCtrl.clear();
-                              _emailCodeCtrl.clear();
-                            }
-                          }),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (shouldBindRegistrationEmail) ...[
-              const SizedBox(height: 12),
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: registrationEmailRequired
-                        ? I18n.tr('auth.email')
-                        : I18n.tr('auth.email.optional'),
-                    helperText: registrationEmailRequired
-                        ? I18n.tr('auth.email.required_helper')
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _emailCodeSendField(
-                controller: _emailCodeCtrl,
-                labelText: registrationEmailRequired
-                    ? I18n.tr('auth.email_code')
-                    : I18n.tr('auth.email_code.optional'),
-              ),
-              ],
-              const SizedBox(height: 12),
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _displayNameCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.display_name.optional'),
-                  ),
-                ),
-              ),
-            ],
-            if (!_isRegister && _emailLogin) ...[
-              const SizedBox(height: 12),
-              _emailCodeSendField(
-                controller: _emailCodeCtrl,
-                labelText: I18n.tr('auth.email_code'),
-              ),
-            ],
-            if (!_isRegister) ...[
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _busy ? null : () => _showPasswordResetDialog(),
-                  child: Text(I18n.tr('auth.forgot_password')),
-                ),
-              ),
-            ],
-            if (_isRegister)
-              const SizedBox(height: 12)
-            else
-              const SizedBox(height: 4),
-            if (!_emailLogin || _isRegister)
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _pwdCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.password'),
-                  ),
-                  obscureText: true,
-                ),
-              ),
-            if (_isRegister) ...[
-              const SizedBox(height: 12),
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _confirmPwdCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.confirm_password'),
-                  ),
-                  obscureText: true,
-                ),
-              ),
-            ],
-            if (_isRegister && auth.inviteCodeRequired) ...[
-              const SizedBox(height: 12),
-              AppSecondaryControlTheme(
-                child: TextField(
-                  controller: _inviteCtrl,
-                  decoration: InputDecoration(
-                    labelText: I18n.tr('auth.invite_code'),
-                  ),
-                ),
-              ),
-            ],
-            if (_isRegister && !auth.registrationEnabled) ...[
-              const SizedBox(height: 12),
-              Text(
-                I18n.tr('auth.registration_closed'),
-                style: TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            ],
-            if (_message != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _message!,
-                style: TextStyle(color: cs.primary, fontSize: 12),
-              ),
-            ],
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed:
-                  _busy ||
-                      _sendingEmailCode ||
-                      (_isRegister && !auth.registrationEnabled)
-                  ? null
-                  : _submit,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        _isRegister
-                            ? I18n.tr('auth.register')
-                            : I18n.tr('auth.login'),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _busy || _sendingEmailCode
-                  ? null
-                  : () => setState(() {
-                      _isRegister = !_isRegister;
-                      _emailLogin = false;
-                      _registerWithEmail = true;
-                      _emailCodeCtrl.clear();
-                      _pwdCtrl.clear();
-                      _confirmPwdCtrl.clear();
-                      _error = null;
-                      _message = null;
-                    }),
-              child: Text(
-                _isRegister
-                    ? I18n.tr('auth.switch_to_login')
-                    : I18n.tr('auth.switch_to_register'),
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -712,53 +824,51 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
       title: Text(I18n.tr('auth.password_reset.title')),
       icon: const Icon(Icons.lock_reset_outlined),
       shiftForKeyboard: true,
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _accountCtrl,
+            enabled: !_requested,
+            keyboardType: TextInputType.text,
+            decoration: InputDecoration(
+              labelText: I18n.tr('auth.reset_account'),
+              helperText: I18n.tr('auth.reset_account.helper'),
+            ),
+          ),
+          if (_requested) ...[
+            const SizedBox(height: 12),
             TextField(
-              controller: _accountCtrl,
-              enabled: !_requested,
-              keyboardType: TextInputType.text,
+              controller: _codeCtrl,
+              keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: I18n.tr('auth.reset_account'),
-                helperText: I18n.tr('auth.reset_account.helper'),
+                labelText: I18n.tr('auth.email_code'),
               ),
             ),
-            if (_requested) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _codeCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.email_code'),
-                ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newPwdCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: I18n.tr('auth.new_password'),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _newPwdCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: I18n.tr('auth.new_password'),
-                ),
-              ),
-            ],
-            if (_message != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _message!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            ],
+            ),
           ],
-        ),
+          if (_message != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _message!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ],
       ),
       actions: [
         TextButton(

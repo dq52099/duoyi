@@ -29,8 +29,9 @@ void main() {
       expect(swipeActionsSource, contains('Stack('));
       expect(swipeActionsSource, contains('height: 42'));
       expect(swipeActionsSource, contains('if (_open)'));
-      expect(swipeActionsSource, isNot(contains('Positioned.fill(')));
-      expect(swipeActionsSource, isNot(contains('Matrix4.translationValues(')));
+      expect(swipeActionsSource, contains('Positioned.fill('));
+      expect(swipeActionsSource, contains('Matrix4.translationValues('));
+      expect(swipeActionsSource, contains('AnimatedContainer('));
       expect(swipeActionsSource, contains("tooltip: '查看反馈详情'"));
       expect(swipeActionsSource, contains("tooltip: '回复'"));
       expect(swipeActionsSource, contains("tooltip: '删除'"));
@@ -41,13 +42,22 @@ void main() {
       expect(feedbackDetailSource, contains('maxWidth: 720'));
       expect(
         feedbackDetailSource,
+        contains('FutureBuilder<Map<String, dynamic>>'),
+      );
+      expect(feedbackDetailSource, contains('initialData: summary'));
+      expect(feedbackDetailSource, contains('详情加载失败，已展示列表摘要'));
+      expect(
+        feedbackDetailSource,
         contains('BoxConstraints(maxWidth: 640, maxHeight: 520)'),
       );
       final feedbackCardSource = source.substring(
         source.indexOf('final feedbackCard ='),
         source.indexOf('return _AdminFeedbackSwipeActions'),
       );
-      expect(feedbackCardSource, contains('final feedbackCard = AppSurfaceCard('));
+      expect(
+        feedbackCardSource,
+        contains('final feedbackCard = AppSurfaceCard('),
+      );
       expect(feedbackCardSource, isNot(contains('_AdminListTileCard(')));
       expect(
         source,

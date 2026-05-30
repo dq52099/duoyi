@@ -173,30 +173,24 @@ void main() {
     );
     expect(
       main,
-      contains("todoProvider.addListener(queueNotificationQuickAddSync)"),
+      contains("todoProvider.addListener(queueNotificationProgressSync)"),
     );
     expect(
       main,
-      contains("habitProvider.addListener(queueNotificationQuickAddSync)"),
+      contains("habitProvider.addListener(queueNotificationProgressSync)"),
     );
     expect(
       main,
-      contains("goalProvider.addListener(queueNotificationQuickAddSync)"),
+      contains("goalProvider.addListener(queueNotificationProgressSync)"),
     );
     expect(main, contains('Future<void> runPostFrameStartupTasks()'));
-    expect(
-      main,
-      contains(
-        "_startupGuard('notification quick add', syncNotificationQuickAddDeduped)",
-      ),
-    );
+    expect(main, contains('syncNotificationStatusBarOnStartup'));
+    expect(main, contains('_notificationStatusBarStartupBuildKey'));
+    expect(main, contains('lastBuild != AppVersion.build'));
     expect(main, contains("LocalNotifications.instance.showQuickAddOngoing"));
     expect(main, contains("buildNotificationStatusBarPlan("));
     expect(main, contains("notificationQuickAdd: prefs.notificationQuickAdd"));
-    expect(
-      main,
-      contains("notificationTodayProgress: prefs.notificationTodayProgress"),
-    );
+    expect(main, contains("notificationTodayProgress: todayProgress"));
     expect(main, contains("enableQuickActions: plan.enableQuickActions"));
     expect(main, contains("LocalNotifications.instance.cancelQuickAddOngoing"));
     expect(main, isNot(contains("LocalNotifications.quickAddNotificationId")));
@@ -205,7 +199,7 @@ void main() {
     expect(main, contains("_refreshNotificationProgressOnResume"));
     expect(
       main,
-      contains("_syncNotificationQuickAddDedupedCallback?.call(force: true)"),
+      contains("_syncNotificationQuickAddDedupedCallback?.call()"),
       reason: 'App 回到前台刷新今日进展时也必须复用同一套去重同步入口。',
     );
     expect(main, contains("_durationUntilNextLocalDay"));

@@ -358,8 +358,13 @@ class LocalNotifications {
     return requestPermission();
   }
 
-  Future<void> _ensureDeliveryPermission(String operation) async {
-    final granted = await ensurePermission();
+  Future<void> _ensureDeliveryPermission(
+    String operation, {
+    bool requestIfNeeded = true,
+  }) async {
+    final granted = requestIfNeeded
+        ? await ensurePermission()
+        : await refreshPermission();
     if (granted) return;
     debugPrint(
       '[LocalNotifications] $operation skipped: notification permission denied',
@@ -610,10 +615,14 @@ class LocalNotifications {
     String? title,
     String? body,
     bool enableQuickActions = true,
+    bool requestIfNeeded = false,
   }) async {
     if (!_isAndroid) return;
     if (!_initialized) await init();
-    await _ensureDeliveryPermission('showQuickAddOngoing');
+    await _ensureDeliveryPermission(
+      'showQuickAddOngoing',
+      requestIfNeeded: requestIfNeeded,
+    );
     final effectiveTitle = title ?? I18n.tr('notification.quick_add.title');
     final effectiveBody = body ?? I18n.tr('notification.quick_add.body');
     final signature = '$effectiveTitle\n$effectiveBody\n$enableQuickActions';
@@ -647,13 +656,17 @@ class LocalNotifications {
     required DateTime when,
     String? payload,
     String? channelId,
+    bool requestIfNeeded = false,
   }) async {
     if (!_initialized) await init();
     if (!when.isAfter(DateTime.now())) {
       throw StateError('提醒时间已过去，未注册到系统通知');
     }
     await _ensureAndroidFallbackChannels();
-    await _ensureDeliveryPermission('scheduleOnce');
+    await _ensureDeliveryPermission(
+      'scheduleOnce',
+      requestIfNeeded: requestIfNeeded,
+    );
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleOnce handoff');
     await cancel(id);
     final scheduledAt = tz.TZDateTime.from(when, tz.local);
@@ -710,10 +723,14 @@ class LocalNotifications {
     String? payload,
     String? channelId,
     List<int>? weekdays,
+    bool requestIfNeeded = false,
   }) async {
     if (!_initialized) await init();
     await _ensureAndroidFallbackChannels();
-    await _ensureDeliveryPermission('scheduleDaily');
+    await _ensureDeliveryPermission(
+      'scheduleDaily',
+      requestIfNeeded: requestIfNeeded,
+    );
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleDaily handoff');
     await cancel(id);
     final details = _details(

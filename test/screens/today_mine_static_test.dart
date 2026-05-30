@@ -87,6 +87,11 @@ void main() {
       expect(today, contains('return _TodayTodoSwipeTile('));
       expect(today, contains('onToggleTodo(todo)'));
       expect(today, contains('onOpenTodo(t.id)'));
+      expect(today, contains("import '../providers/share_provider.dart';"));
+      expect(today, contains('context.select<ShareProvider?, bool>'));
+      expect(today, contains("共享空间只读，不能\$action"));
+      expect(today, contains('void _openDetails()'));
+      expect(today, contains('onTap: _openDetails'));
       expect(today, isNot(contains('Dismissible(')));
     });
 
@@ -106,19 +111,29 @@ void main() {
       expect(mine, contains('width: 0.45'));
       expect(mine, contains('final compact = constraints.maxWidth < 360'));
       expect(mine, contains('final avatarSize = compact ? 54.0 : 60.0'));
-      expect(mine, contains('return Column('));
-      expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.stretch'));
+      expect(mine, contains('final metadata = <Widget>['));
+      expect(mine, contains('return Row('));
+      expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
       expect(mine, contains("key: const ValueKey('mine_avatar_row')"));
       expect(mine, contains('child: avatar'));
-      expect(mine, contains('SizedBox(height: compact ? 10 : 12)'));
+      expect(mine, contains('SizedBox(width: compact ? 12 : 14)'));
       expect(mine, contains("label: '查看个人资料'"));
       expect(mine, contains('onTap: () => _openProfileEditor(context)'));
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
-      expect(mine, contains('return Row('));
-      expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
+      expect(mine, contains('borderRadius: BorderRadius.circular(14)'));
       expect(mine, contains('Expanded('));
+      expect(mine, contains('Wrap('));
+      expect(mine, contains('runSpacing: 6'));
       expect(mine, contains('class _MineUserLineChip extends StatelessWidget'));
       expect(mine, isNot(contains('maxWidth: compact ? 116 : 150')));
+      expect(
+        mine,
+        isNot(
+          contains(
+            'borderRadius: BorderRadius.circular(22),\n            onTap: () => _openProfileEditor(context)',
+          ),
+        ),
+      );
       expect(mine, contains("message: '查看头像'"));
       expect(mine, contains("message: '修改头像'"));
       expect(
@@ -241,7 +256,7 @@ void main() {
         contains('class _UpdateAvailableBadge extends StatelessWidget'),
       );
       expect(mine, contains('_UpdateAvailableBadge('));
-      expect(mine, contains('version: updater.latestVersion'));
+      expect(mine, contains('version: updateLatestVersion'));
       expect(mine, contains('width: 8'));
       expect(mine, contains("'有更新'"));
       expect(mine, contains("'新版 \$version'"));
@@ -255,14 +270,14 @@ void main() {
       );
       expect(mine, contains('onTap: () => _openMoreApplications(context)'));
       expect(mine, contains('class _UnreadDot extends StatelessWidget'));
-      expect(mine, contains('notifService.hasUnreadHistory'));
+      expect(mine, contains('hasUnreadNotificationHistory'));
       expect(
         File('lib/screens/more_apps_screen.dart').readAsStringSync(),
         contains('hiddenBottomNavApps'),
       );
       expect(mine, contains("label: '更多应用'"));
       expect(mine, contains('final coins = auth.state.isLoggedIn'));
-      expect(mine, contains('achievements.coinBalance'));
+      expect(mine, contains('coinBalance'));
       expect(mine, contains('auth.state.coinBalance'));
       expect(mine, contains("label: '通知设置'"));
       expect(

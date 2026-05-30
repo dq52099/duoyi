@@ -133,11 +133,11 @@ void main() {
     expect(end, greaterThan(start));
     final entry = source.substring(start, end);
 
-    expect(entry, contains('notifService.hasUnreadHistory'));
+    expect(entry, contains('hasUnreadNotificationHistory'));
     expect(entry, contains('const _UnreadDot()'));
-    expect(entry, contains('notifService.historyCount == 0'));
+    expect(entry, contains('notificationHistoryCount == 0'));
     expect(entry, contains('? null'));
-    expect(entry, contains(r"'${notifService.historyCount} 条'"));
+    expect(entry, contains(r"'$notificationHistoryCount 条'"));
   });
 
   test(
@@ -164,13 +164,13 @@ void main() {
       );
       expect(
         group,
-        contains('notifService.hasUnreadHistory'),
+        contains('hasUnreadNotificationHistory'),
         reason: '通知记录入口展示未读红点。',
       );
       final settingsEntry = group.substring(group.indexOf("label: '通知设置'"));
       expect(
         settingsEntry,
-        isNot(contains('trailing: notifService.hasUnreadHistory')),
+        isNot(contains('trailing: hasUnreadNotificationHistory')),
         reason: '通知设置是配置入口，不应该因为通知记录未读而挂红点。',
       );
       expect(group, isNot(contains("label: '更多应用'")));
@@ -367,13 +367,13 @@ void main() {
     final supportGroup = mine.substring(supportStart, supportEnd);
     expect(supportGroup, contains("label: '通知记录'"));
     expect(supportGroup, contains("label: '通知设置'"));
-    expect(supportGroup, contains('notifService.hasUnreadHistory'));
+    expect(supportGroup, contains('hasUnreadNotificationHistory'));
     final settingsEntry = supportGroup.substring(
       supportGroup.indexOf("label: '通知设置'"),
     );
     expect(
       settingsEntry,
-      isNot(contains('trailing: notifService.hasUnreadHistory')),
+      isNot(contains('trailing: hasUnreadNotificationHistory')),
       reason: '通知设置不应和通知记录共用未读红点。',
     );
   });
@@ -772,9 +772,10 @@ void main() {
     final localEnd = local.indexOf('/// 每日固定时间', localStart);
     expect(localStart, greaterThanOrEqualTo(0));
     expect(localEnd, greaterThan(localStart));
+    expect(local.substring(localStart, localEnd), contains("'scheduleOnce',"));
     expect(
       local.substring(localStart, localEnd),
-      contains("_ensureDeliveryPermission('scheduleOnce')"),
+      contains('requestIfNeeded: requestIfNeeded'),
     );
   });
 
@@ -808,9 +809,10 @@ void main() {
     final localEnd = local.indexOf('int _subId', localStart);
     expect(localStart, greaterThanOrEqualTo(0));
     expect(localEnd, greaterThan(localStart));
+    expect(local.substring(localStart, localEnd), contains("'scheduleDaily',"));
     expect(
       local.substring(localStart, localEnd),
-      contains("_ensureDeliveryPermission('scheduleDaily')"),
+      contains('requestIfNeeded: requestIfNeeded'),
     );
   });
 

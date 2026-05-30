@@ -133,6 +133,7 @@ class NotificationService extends ChangeNotifier
   static const Duration _visibleNotificationDuplicateWindow = Duration(
     seconds: 3,
   );
+  static const Duration _scheduleIssueDuplicateWindow = Duration(seconds: 30);
   static final Map<String, DateTime> _recentVisibleNotificationSignatures =
       <String, DateTime>{};
   static final Map<String, DateTime>
@@ -148,6 +149,8 @@ class NotificationService extends ChangeNotifier
   final List<NotificationItem> _history = [];
   DateTime? _historyLastSeenAt;
   NotificationScheduleIssue? _lastScheduleIssue;
+  String? _lastScheduleIssueSignature;
+  DateTime? _lastScheduleIssueRecordedAt;
   BrandStrings _strings = BrandStrings.defaultBrand;
 
   int get pendingCount => _pendingNotifications;
@@ -174,7 +177,7 @@ class NotificationService extends ChangeNotifier
     final granted = await LocalNotifications.instance.requestPermission();
     var changed = before != granted;
     if (granted && _lastScheduleIssueIsPermissionOnly) {
-      _lastScheduleIssue = null;
+      _clearScheduleIssueState();
       changed = true;
     }
     if (changed) {
@@ -185,8 +188,14 @@ class NotificationService extends ChangeNotifier
 
   void clearScheduleIssue() {
     if (_lastScheduleIssue == null) return;
-    _lastScheduleIssue = null;
+    _clearScheduleIssueState();
     notifyListeners();
+  }
+
+  void _clearScheduleIssueState() {
+    _lastScheduleIssue = null;
+    _lastScheduleIssueSignature = null;
+    _lastScheduleIssueRecordedAt = null;
   }
 
   bool get _lastScheduleIssueIsPermissionOnly {
@@ -395,10 +404,23 @@ class NotificationService extends ChangeNotifier
     String? relatedId,
     bool blocking = true,
   }) {
+    final now = DateTime.now();
+    final signature =
+        '$title\n$message\n${scheduledTime?.toIso8601String() ?? ''}\n'
+        '${relatedId ?? ''}\n$blocking';
+    final lastRecordedAt = _lastScheduleIssueRecordedAt;
+    if (_lastScheduleIssueSignature == signature &&
+        lastRecordedAt != null &&
+        now.difference(lastRecordedAt) <= _scheduleIssueDuplicateWindow) {
+      debugPrint('[NotificationService] duplicate schedule issue skipped');
+      return;
+    }
+    _lastScheduleIssueSignature = signature;
+    _lastScheduleIssueRecordedAt = now;
     _lastScheduleIssue = NotificationScheduleIssue(
       title: title,
       message: message,
-      happenedAt: DateTime.now(),
+      happenedAt: now,
       scheduledTime: scheduledTime,
       relatedId: relatedId,
       blocking: blocking,
@@ -518,7 +540,7 @@ class NotificationService extends ChangeNotifier
         return true;
       }
       if (_lastScheduleIssue != null && !channelWarningRecorded) {
-        _lastScheduleIssue = null;
+        _clearScheduleIssueState();
         notifyListeners();
       }
       return true;
@@ -586,7 +608,7 @@ class NotificationService extends ChangeNotifier
         return true;
       }
       if (_lastScheduleIssue != null && !channelWarningRecorded) {
-        _lastScheduleIssue = null;
+        _clearScheduleIssueState();
         notifyListeners();
       }
       return true;
@@ -759,7 +781,19 @@ class NotificationService extends ChangeNotifier
 
   void _addScheduledToHistory(NotificationItem item) {
     // 调度记录用于排查“是否注册到系统”，不是用户已经收到的新通知。
-    _addToHistory(item.copyWith(isRead: true));
+    final record = item.copyWith(isRead: true);
+    _history.removeWhere(
+      (existing) => _sameScheduledHistoryRecord(existing, record),
+    );
+    _addToHistory(record);
+  }
+
+  bool _sameScheduledHistoryRecord(NotificationItem a, NotificationItem b) {
+    return a.id == b.id &&
+        a.title == b.title &&
+        a.body == b.body &&
+        a.type == b.type &&
+        a.relatedId == b.relatedId;
   }
 
   Future<bool> ensureReadyForReminder({
@@ -1309,7 +1343,7 @@ class NotificationService extends ChangeNotifier
           blocking: false,
         );
       } else if (_lastScheduleIssue != null && !channelWarningRecorded) {
-        _lastScheduleIssue = null;
+        _clearScheduleIssueState();
       }
     } on NotificationPermissionDeniedException {
       _releaseVisibleNotificationSlot(

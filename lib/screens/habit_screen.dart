@@ -30,17 +30,25 @@ class HabitScreen extends StatefulWidget {
 class _HabitScreenState extends State<HabitScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
+  bool _heatmapTabBuilt = false;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl.addListener(_markHeatmapTabBuilt);
   }
 
   @override
   void dispose() {
+    _tabCtrl.removeListener(_markHeatmapTabBuilt);
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  void _markHeatmapTabBuilt() {
+    if (_heatmapTabBuilt || _tabCtrl.index != 1) return;
+    setState(() => _heatmapTabBuilt = true);
   }
 
   Future<bool> _ensureHabitReminderReady() async {
@@ -588,12 +596,6 @@ class _HabitScreenState extends State<HabitScreen>
     final activeHabits = provider.habits
         .where((h) => h.isActiveToday())
         .toList();
-    final heatmapData = provider.combinedHeatmap(12);
-    final habitGroups = groupHabitsByCategory(provider.habits);
-    final insights = HabitInsightEngine.buildInsights(
-      provider.habits,
-      limit: 3,
-    );
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final routeBackground = theme.brightness == Brightness.dark
@@ -627,11 +629,10 @@ class _HabitScreenState extends State<HabitScreen>
             key: const ValueKey('habit_today_scroll_view'),
             slivers: [
               const SliverToBoxAdapter(child: HabitWeeklyCard()),
-              if (insights.isNotEmpty)
-                SliverToBoxAdapter(
-                  key: const ValueKey('habit_insight_before_today_list'),
-                  child: _HabitInsightCard(insights: insights),
-                ),
+              SliverToBoxAdapter(
+                key: const ValueKey('habit_insight_before_today_list'),
+                child: _HabitInsightSection(habits: provider.habits),
+              ),
               if (activeHabits.isEmpty)
                 SliverToBoxAdapter(
                   key: const ValueKey('habit_today_empty_state_sliver'),
@@ -669,52 +670,16 @@ class _HabitScreenState extends State<HabitScreen>
             ],
           ),
           // Heatmap
-          ListView(
-            children: [
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  s.habitHeatmapHeading,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w400,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              HabitHeatmap(heatmapData: heatmapData),
-              const Divider(),
-              // All habits list
-              if (provider.habits.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: EmptyState(
-                    icon: Icons.folder_open,
-                    message: s.habitEmpty,
-                    actionLabel: s.habitAddAction,
-                    onAction: _showAddDialog,
-                  ),
+          _heatmapTabBuilt
+              ? _HabitHeatmapTab(
+                  provider: provider,
+                  heading: s.habitHeatmapHeading,
+                  streakLabel: s.habitStreakLabel,
+                  emptyMessage: s.habitEmpty,
+                  actionLabel: s.habitAddAction,
+                  onAdd: _showAddDialog,
                 )
-              else ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: Text(
-                    '习惯分组',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: cs.onSurface.withValues(alpha: 0.68),
-                    ),
-                  ),
-                ),
-                for (final group in habitGroups)
-                  _HabitGroupSection(
-                    group: group,
-                    streakLabel: s.habitStreakLabel,
-                  ),
-              ],
-            ],
-          ),
+              : const SizedBox.shrink(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -722,6 +687,83 @@ class _HabitScreenState extends State<HabitScreen>
         child: const Icon(Icons.add),
       ),
     );
+  }
+}
+
+class _HabitHeatmapTab extends StatelessWidget {
+  final HabitProvider provider;
+  final String heading;
+  final String streakLabel;
+  final String emptyMessage;
+  final String actionLabel;
+  final VoidCallback onAdd;
+
+  const _HabitHeatmapTab({
+    required this.provider,
+    required this.heading,
+    required this.streakLabel,
+    required this.emptyMessage,
+    required this.actionLabel,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final heatmapData = provider.combinedHeatmap(12);
+    final habitGroups = groupHabitsByCategory(provider.habits);
+    return ListView(
+      children: [
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            heading,
+            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 15),
+          ),
+        ),
+        HabitHeatmap(heatmapData: heatmapData),
+        const Divider(),
+        if (provider.habits.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: EmptyState(
+              icon: Icons.folder_open,
+              message: emptyMessage,
+              actionLabel: actionLabel,
+              onAction: onAdd,
+            ),
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              '习惯分组',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: cs.onSurface.withValues(alpha: 0.68),
+              ),
+            ),
+          ),
+          for (final group in habitGroups)
+            _HabitGroupSection(group: group, streakLabel: streakLabel),
+        ],
+      ],
+    );
+  }
+}
+
+class _HabitInsightSection extends StatelessWidget {
+  final List<Habit> habits;
+
+  const _HabitInsightSection({required this.habits});
+
+  @override
+  Widget build(BuildContext context) {
+    final insights = HabitInsightEngine.buildInsights(habits, limit: 3);
+    if (insights.isEmpty) return const SizedBox.shrink();
+    return _HabitInsightCard(insights: insights);
   }
 }
 

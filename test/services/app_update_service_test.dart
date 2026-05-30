@@ -255,7 +255,7 @@ void main() {
   });
 
   test(
-    'server policy startup check also fills missing release notes from GitHub',
+    'server policy startup check avoids GitHub and uses fallback notes',
     () async {
       final seen = <String>[];
       final service = AppUpdateService(
@@ -282,13 +282,42 @@ void main() {
 
       await service.checkServerPolicyNow();
 
-      expect(seen, [
-        '/api/mobile/apps/duoyi/update',
-        '/repos/dq52099/duoyi/releases/latest',
-      ]);
+      expect(seen, ['/api/mobile/apps/duoyi/update']);
       expect(service.error, isNull);
       expect(service.mustUpdate, isTrue);
-      expect(service.latestNotesForDisplay, contains('- 强制更新页展示发布说明'));
+      expect(service.latestNotesForDisplay, contains('版本 2.0.0'));
+    },
+  );
+
+  test(
+    'startup policy check hides stale backend compatibility prompt',
+    () async {
+      final seen = <String>[];
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.10',
+        backendBaseUrl: 'https://duoyi.test',
+        httpClient: MockClient((request) async {
+          seen.add(request.url.path);
+          if (request.url.path == '/api/mobile/apps/duoyi/update') {
+            return http.Response('{"detail":"Not Found"}', 404);
+          }
+          if (request.url.path == '/api/config') {
+            return http.Response(
+              '{"version":"3.1.0","registration_enabled":true}',
+              200,
+            );
+          }
+          return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
+        }),
+      );
+
+      await service.checkServerPolicyNow();
+
+      expect(seen, ['/api/mobile/apps/duoyi/update', '/api/config']);
+      expect(service.error, isNull);
+      expect(service.mustUpdate, isFalse);
+      expect(service.latestVersion, isNull);
     },
   );
 

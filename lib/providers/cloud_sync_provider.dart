@@ -111,6 +111,7 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _autoSyncDelay = Duration(seconds: 20);
   static const _autoRetryDelay = Duration(minutes: 3);
   static const _remotePollDelay = Duration(minutes: 2);
+  static const _serviceUnavailableMessage = '云同步暂不可用，请稍后重试或联系管理员';
   static const deletedItemsStorageKey = 'sync_deleted_items';
   static const _serverUpdatedAtStorageKey = 'sync_server_updated_at';
   static const _serverVersionStorageKey = 'sync_server_version';
@@ -170,6 +171,17 @@ class CloudSyncProvider extends ChangeNotifier {
   bool _hasPendingChanges = false;
   int _localChangeGeneration = 0;
   bool get hasPendingChanges => _hasPendingChanges;
+
+  String _userVisibleSyncError(Object error) {
+    debugPrint('[CloudSync] $error');
+    final message = error is ApiException ? error.message : error.toString();
+    if (message.contains('当前后端未部署本版本接口') ||
+        message.contains('缺少接口契约 api_contract_version') ||
+        message.contains('必备路由摘要')) {
+      return _serviceUnavailableMessage;
+    }
+    return message;
+  }
 
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
   /// 标记待同步并排队后台自动同步。
@@ -277,7 +289,7 @@ class CloudSyncProvider extends ChangeNotifier {
         .listen(
           _handleRemoteEventLine,
           onError: (Object error) {
-            _lastError = error.toString();
+            _lastError = _userVisibleSyncError(error);
             _remoteEventSubscription = null;
             _remoteEventName = '';
             _remoteEventDataLines.clear();
@@ -349,7 +361,7 @@ class CloudSyncProvider extends ChangeNotifier {
       // ignore: discarded_futures
       _pullRemoteChanges();
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleSyncError(e);
       notifyListeners();
     }
   }
@@ -439,7 +451,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
       await _pullRemoteChanges();
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleSyncError(e);
       _scheduleRemotePoll(_autoRetryDelay);
       notifyListeners();
     }
@@ -873,7 +885,7 @@ class CloudSyncProvider extends ChangeNotifier {
         await onSynced?.call(applyResult.changedCollections);
       }
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleSyncError(e);
     }
 
     _isSyncing = false;
@@ -931,7 +943,7 @@ class CloudSyncProvider extends ChangeNotifier {
         await onSynced?.call(applyResult.changedCollections);
       }
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleSyncError(e);
     }
 
     _isSyncing = false;

@@ -25,6 +25,31 @@ Future<void> showCountdownEditor(
   );
 }
 
+ButtonStyle _countdownDangerTextButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return TextButton.styleFrom(
+    foregroundColor: cs.error,
+    textStyle: appSecondaryControlTextStyle(context),
+    minimumSize: const Size(0, 30),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+}
+
+ButtonStyle _countdownDangerFilledButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return FilledButton.styleFrom(
+    backgroundColor: cs.error,
+    foregroundColor: cs.onError,
+    textStyle: appSecondaryMenuItemTextStyle(context),
+    minimumSize: const Size(0, 30),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+}
+
 class CountdownScreen extends StatefulWidget {
   final String? initialCountdownId;
 
@@ -434,7 +459,10 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AppDialog(
-        icon: const Icon(Icons.delete_outline),
+        icon: Icon(
+          Icons.delete_outline,
+          color: Theme.of(dialogCtx).colorScheme.error,
+        ),
         title: Text(I18n.tr('anniversary.delete.title')),
         content: Text(
           '"${widget.item.title}" ${I18n.tr('anniversary.delete.content_suffix')}',
@@ -445,6 +473,7 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
+            style: _countdownDangerFilledButtonStyle(dialogCtx),
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: Text(I18n.tr('action.delete')),
           ),
@@ -471,10 +500,11 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
       subtitle: I18n.tr('countdown.editor.subtitle'),
       leadingActions: widget.showDelete
           ? [
-              TextButton(
+              TextButton.icon(
                 onPressed: _delete,
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: Text(I18n.tr('action.delete')),
+                style: _countdownDangerTextButtonStyle(context),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: Text(I18n.tr('action.delete')),
               ),
             ]
           : const [],
@@ -731,7 +761,10 @@ class _CountdownCardState extends State<_CountdownCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AppDialog(
-        icon: const Icon(Icons.delete_outline),
+        icon: Icon(
+          Icons.delete_outline,
+          color: Theme.of(dialogCtx).colorScheme.error,
+        ),
         title: Text(I18n.tr('anniversary.delete.title')),
         content: Text(
           '"${widget.item.title}" ${I18n.tr('anniversary.delete.content_suffix')}',
@@ -742,6 +775,7 @@ class _CountdownCardState extends State<_CountdownCard> {
             child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
+            style: _countdownDangerFilledButtonStyle(dialogCtx),
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: Text(I18n.tr('action.delete')),
           ),

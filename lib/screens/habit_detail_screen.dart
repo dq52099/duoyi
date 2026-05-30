@@ -31,6 +31,66 @@ const List<int> _habitEditColors = <int>[
   0xFF607D8B,
 ];
 
+ButtonStyle _habitDangerFilledButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return FilledButton.styleFrom(
+    backgroundColor: cs.error,
+    foregroundColor: cs.onError,
+    textStyle: appSecondaryMenuItemTextStyle(context),
+    minimumSize: const Size(0, 30),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+}
+
+ButtonStyle _habitDetailActionButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return OutlinedButton.styleFrom(
+    foregroundColor: cs.onSurface,
+    side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.32)),
+    textStyle: appSecondaryControlTextStyle(context),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  );
+}
+
+ButtonStyle _habitDangerOutlinedButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return OutlinedButton.styleFrom(
+    foregroundColor: cs.error,
+    side: BorderSide(color: cs.error.withValues(alpha: 0.42), width: 0.45),
+    textStyle: appSecondaryControlTextStyle(context),
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  );
+}
+
+Future<bool> _confirmHabitDelete(BuildContext context, Habit habit) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AppDialog(
+      icon: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
+      title: const Text('删除习惯？'),
+      content: Text('会删除“${habit.name}”和关联记录，不可恢复。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          style: _habitDangerFilledButtonStyle(ctx),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 Future<void> showHabitEditor(BuildContext context, Habit habit) async {
   final nameCtrl = TextEditingController(text: habit.name);
   final targetCtrl = TextEditingController(text: habit.targetCount.toString());
@@ -521,47 +581,34 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                   context,
                 ).showSnackBar(const SnackBar(content: Text('习惯已结束，历史记录已保留')));
               } else if (value == 'delete') {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AppDialog(
-                    title: const Text('删除习惯？'),
-                    content: const Text('会删除该习惯和关联记录，不可恢复。'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('取消'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('删除'),
-                      ),
-                    ],
-                  ),
-                );
-                if (ok != true) return;
+                final ok = await _confirmHabitDelete(context, habit);
+                if (!ok) return;
                 await provider.deleteHabit(habit.id);
                 if (!context.mounted) return;
                 Navigator.pop(context);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'end',
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.event_busy_outlined),
-                  title: Text('结束习惯'),
+            itemBuilder: (context) {
+              final cs = Theme.of(context).colorScheme;
+              return [
+                const PopupMenuItem(
+                  value: 'end',
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.event_busy_outlined),
+                    title: Text('结束习惯'),
+                  ),
                 ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.delete_outline),
-                  title: Text('删除习惯'),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.delete_outline, color: cs.error),
+                    title: Text('删除习惯', style: TextStyle(color: cs.error)),
+                  ),
                 ),
-              ),
-            ],
+              ];
+            },
           ),
           IconButton(
             tooltip: I18n.tr('action.edit'),
@@ -643,14 +690,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     runSpacing: 8,
                     children: [
                       OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                        ),
+                        style: _habitDetailActionButtonStyle(context),
                         onPressed: () async {
                           final provider = context.read<HabitProvider>();
                           await provider.endHabit(habit.id);
@@ -662,35 +702,11 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                         icon: const Icon(Icons.event_busy_outlined, size: 16),
                         label: const Text('结束习惯'),
                       ),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: cs.error,
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                        ),
+                      OutlinedButton.icon(
+                        style: _habitDangerOutlinedButtonStyle(context),
                         onPressed: () async {
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AppDialog(
-                              title: const Text('删除习惯？'),
-                              content: const Text('会删除该习惯和关联记录，不可恢复。'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('取消'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('删除'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (ok != true || !context.mounted) return;
+                          final ok = await _confirmHabitDelete(context, habit);
+                          if (!ok || !context.mounted) return;
                           await context.read<HabitProvider>().deleteHabit(
                             habit.id,
                           );

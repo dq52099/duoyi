@@ -144,14 +144,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('反馈详情'), findsOneWidget);
-    expect(find.byType(SelectableText), findsOneWidget);
-    final detailText = tester.widget<SelectableText>(
-      find.byType(SelectableText),
-    );
-    expect(detailText.data, contains('分类: 问题反馈'));
-    expect(detailText.data, contains('状态: 处理中'));
-    expect(detailText.data, contains('通知没有声音'));
-    expect(detailText.data, contains('已加入排查'));
+    expect(find.text('问题反馈'), findsWidgets);
+    expect(find.text('处理中'), findsWidgets);
+    expect(find.text('内容'), findsOneWidget);
+    expect(find.text('管理员回复'), findsWidgets);
+    final detailText = tester
+        .widgetList<SelectableText>(find.byType(SelectableText))
+        .map((widget) => widget.data ?? '')
+        .join('\n');
+    expect(detailText, contains('通知没有声音'));
+    expect(detailText, contains('已加入排查'));
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
 

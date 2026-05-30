@@ -1175,6 +1175,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
           AppSurfaceCard(
             padding: const EdgeInsets.all(14),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _ProfileAvatarWithEdit(
                   size: 76,
@@ -1620,6 +1621,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
           AppSurfaceCard(
             padding: const EdgeInsets.all(14),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _ProfileAvatarWithEdit(
                   size: 76,
@@ -1640,36 +1642,59 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: appSecondaryRouteTitleTextStyle(context),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: appSecondaryRouteTitleTextStyle(context),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: _profileInlineActionWidth(context),
+                            height: _profileActionButtonHeight,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                textStyle: appSecondaryControlTextStyle(
+                                  context,
+                                ),
+                              ),
+                              onPressed: () => Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const LoginScreen(),
+                                ),
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  I18n.tr('profile.login_account'),
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          height: 1.25,
+                        ),
                       ),
                     ],
-                  ),
-                ),
-                SizedBox(
-                  height: _profileActionButtonHeight,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      textStyle: appSecondaryControlTextStyle(context),
-                    ),
-                    onPressed: () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    ),
-                    child: Text(I18n.tr('profile.login_account')),
                   ),
                 ),
               ],

@@ -15,6 +15,7 @@ import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
+import '../providers/share_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
@@ -42,12 +43,10 @@ class TodayScreen extends StatelessWidget {
 
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
-    context.select<PomodoroProvider, int>(
-      (provider) => provider.persistedRevision,
+    final todayFocusCount = context.select<PomodoroProvider, int>(
+      (provider) => provider.sessionCountToday,
     );
-    final pomoP = context.read<PomodoroProvider>();
     final diaryP = context.watch<DiaryProvider>();
-    final timeAuditP = context.watch<TimeAuditProvider>();
     final anniP = context.watch<AnniversaryProvider>();
     final courseP = context.watch<CourseProvider>();
     final goalP = context.watch<GoalProvider>();
@@ -55,30 +54,6 @@ class TodayScreen extends StatelessWidget {
 
     final now = DateTime.now();
     final todayKey = DateTime(now.year, now.month, now.day);
-    final weekStart = todayKey.subtract(Duration(days: todayKey.weekday - 1));
-    final weekEnd = todayKey;
-    final previousWeekStart = weekStart.subtract(const Duration(days: 7));
-    final previousWeekEnd = weekEnd.subtract(const Duration(days: 7));
-    final weeklyReport = ReportEngine.buildReport(
-      start: weekStart,
-      end: weekEnd,
-      todos: todoP.todos,
-      habits: habitP.habits,
-      sessions: pomoP.sessions,
-      timeEntries: timeAuditP.entries,
-    );
-    final previousWeeklyReport = ReportEngine.buildReport(
-      start: previousWeekStart,
-      end: previousWeekEnd,
-      todos: todoP.todos,
-      habits: habitP.habits,
-      sessions: pomoP.sessions,
-      timeEntries: timeAuditP.entries,
-    );
-    final weeklyComparison = ReportEngine.compare(
-      current: weeklyReport,
-      previous: previousWeeklyReport,
-    );
     final lunar = LunarCalendar.fromSolar(now);
     final term = LunarCalendar.solarTerm(now);
     final festival =
@@ -143,8 +118,7 @@ class TodayScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
-          _TodayProductivityCard(
-            comparison: weeklyComparison,
+          _TodayProductivitySection(
             onTap: () => _go(context, const StatisticsScreen()),
           ),
 
@@ -266,7 +240,7 @@ class TodayScreen extends StatelessWidget {
                   ),
                   AppMetricCard(
                     title: s.navFocus,
-                    value: '${pomoP.sessionCountToday}',
+                    value: '$todayFocusCount',
                     unit: I18n.tr('today.unit.times'),
                     icon: Icons.timer,
                     color: Colors.redAccent,
@@ -567,6 +541,53 @@ class TodayScreen extends StatelessWidget {
   }
 }
 
+class _TodayProductivitySection extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _TodayProductivitySection({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final todoP = context.watch<TodoProvider>();
+    final habitP = context.watch<HabitProvider>();
+    context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final pomoP = context.read<PomodoroProvider>();
+    final timeEntries = context.watch<TimeAuditProvider>().entries;
+
+    final now = DateTime.now();
+    final todayKey = DateTime(now.year, now.month, now.day);
+    final weekStart = todayKey.subtract(Duration(days: todayKey.weekday - 1));
+    final weekEnd = todayKey;
+    final previousWeekStart = weekStart.subtract(const Duration(days: 7));
+    final previousWeekEnd = weekEnd.subtract(const Duration(days: 7));
+    final weeklyReport = ReportEngine.buildReport(
+      start: weekStart,
+      end: weekEnd,
+      todos: todoP.todos,
+      habits: habitP.habits,
+      sessions: pomoP.sessions,
+      timeEntries: timeEntries,
+    );
+    final previousWeeklyReport = ReportEngine.buildReport(
+      start: previousWeekStart,
+      end: previousWeekEnd,
+      todos: todoP.todos,
+      habits: habitP.habits,
+      sessions: pomoP.sessions,
+      timeEntries: timeEntries,
+    );
+    return _TodayProductivityCard(
+      comparison: ReportEngine.compare(
+        current: weeklyReport,
+        previous: previousWeeklyReport,
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
 class _TodayProductivityCard extends StatelessWidget {
   final ReportComparison comparison;
   final VoidCallback onTap;
@@ -820,7 +841,7 @@ class _TodayTodoSwipeTile extends StatefulWidget {
 }
 
 class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
-  static const double _swipeActionWidth = 124;
+  static const double _swipeActionWidth = 148;
   static const double _swipeOpenThreshold = 40;
 
   double _swipeOffset = 0;
@@ -840,6 +861,21 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
   void _closeSwipe() {
     if (!_swipeOpen || !mounted) return;
     setState(() => _swipeOffset = 0);
+  }
+
+  void _openDetails() {
+    _closeSwipe();
+    widget.onOpen();
+  }
+
+  void _showReadOnlyMessage(String action) {
+    _closeSwipe();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('共享空间只读，不能$action'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -872,6 +908,9 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final todo = widget.todo;
+    final canEdit = context.select<ShareProvider?, bool>(
+      (share) => share?.canEdit(todo.workspaceId) ?? true,
+    );
     final tile = Material(
       color: Colors.transparent,
       child: ListTile(
@@ -882,7 +921,9 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
             Checkbox(
               value: todo.isCompleted,
               shape: const CircleBorder(),
-              onChanged: (_) => widget.onToggle(),
+              onChanged: canEdit
+                  ? (_) => widget.onToggle()
+                  : (_) => _showReadOnlyMessage('完成任务'),
             ),
         title: Text(
           widget.title ?? todo.title,
@@ -943,7 +984,7 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
                         label: '详情',
                         background: cs.primaryContainer.withValues(alpha: 0.78),
                         foreground: cs.onPrimaryContainer,
-                        onTap: widget.onOpen,
+                        onTap: _openDetails,
                       ),
                     ),
                     Expanded(
@@ -951,9 +992,17 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
                         key: const ValueKey('today_todo_swipe_delete_button'),
                         icon: Icons.delete_outline,
                         label: '删除',
-                        background: cs.errorContainer.withValues(alpha: 0.86),
-                        foreground: cs.onErrorContainer,
-                        onTap: () => _confirmDelete(context),
+                        background: canEdit
+                            ? cs.errorContainer.withValues(alpha: 0.86)
+                            : cs.surfaceContainerHighest.withValues(
+                                alpha: 0.78,
+                              ),
+                        foreground: canEdit
+                            ? cs.onErrorContainer
+                            : cs.onSurfaceVariant,
+                        onTap: canEdit
+                            ? () => _confirmDelete(context)
+                            : () => _showReadOnlyMessage('删除任务'),
                       ),
                     ),
                   ],
@@ -1008,8 +1057,8 @@ class _TodayTodoSwipeButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10,
-                  height: 1,
+                  fontSize: 11,
+                  height: 1.05,
                   color: foreground,
                   fontWeight: FontWeight.w400,
                 ),

@@ -4,6 +4,8 @@ import '../models/workspace.dart';
 import '../services/api_client.dart';
 
 class ShareProvider extends ChangeNotifier {
+  static const _serviceUnavailableMessage = '共享空间服务暂不可用，请稍后重试或联系管理员';
+
   ApiClient? Function()? apiClientGetter;
   String? Function()? userIdGetter;
 
@@ -31,6 +33,17 @@ class ShareProvider extends ChangeNotifier {
     final id = _activeWorkspaceId;
     if (id == null) return null;
     return workspaceById(id);
+  }
+
+  String _userVisibleWorkspaceError(Object error) {
+    debugPrint('[ShareProvider] $error');
+    final message = error is ApiException ? error.message : error.toString();
+    if (message.contains('当前后端未部署本版本接口') ||
+        message.contains('缺少接口契约 api_contract_version') ||
+        message.contains('必备路由摘要')) {
+      return _serviceUnavailableMessage;
+    }
+    return message;
   }
 
   Workspace? workspaceById(String id) {
@@ -108,7 +121,7 @@ class ShareProvider extends ChangeNotifier {
         _mentions = const <WorkspaceMention>[];
       }
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleWorkspaceError(e);
     }
     _loading = false;
     notifyListeners();
@@ -120,7 +133,7 @@ class ShareProvider extends ChangeNotifier {
     try {
       await _loadMentionInboxFrom(client);
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleWorkspaceError(e);
     }
     notifyListeners();
   }
@@ -192,7 +205,7 @@ class ShareProvider extends ChangeNotifier {
           .where((entry) => entry.userId.isNotEmpty)
           .toList();
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = _userVisibleWorkspaceError(e);
     }
     _detailLoading = false;
     notifyListeners();

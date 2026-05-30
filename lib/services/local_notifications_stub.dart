@@ -43,6 +43,7 @@ class LocalNotifications {
     String? title,
     String? body,
     bool enableQuickActions = true,
+    bool requestIfNeeded = false,
   }) async {}
   Future<void> cancelQuickAddOngoing() async {}
 
@@ -53,6 +54,7 @@ class LocalNotifications {
     required DateTime when,
     String? payload,
     String? channelId,
+    bool requestIfNeeded = false,
   }) async {}
 
   Future<void> scheduleDaily({
@@ -64,6 +66,7 @@ class LocalNotifications {
     String? payload,
     String? channelId,
     List<int>? weekdays,
+    bool requestIfNeeded = false,
   }) async {}
 
   Future<void> cancel(int id) async {}

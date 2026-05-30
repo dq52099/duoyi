@@ -128,28 +128,55 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final reply = (item['admin_reply'] ?? '').toString();
     final createdAt = (item['created_at'] ?? '').toString();
     final updatedAt = (item['updated_at'] ?? '').toString();
-    final lines = [
-      '分类: ${_categoryLabel(category)}',
-      '状态: ${_statusLabel(status)}',
-      if (createdAt.isNotEmpty) '提交: $createdAt',
-      if (updatedAt.isNotEmpty) '更新: $updatedAt',
-      '',
-      '内容:',
-      content,
-      if (reply.trim().isNotEmpty) ...[
-        '',
-        '${I18n.tr('feedback.admin_reply')}:',
-        reply,
-      ],
-    ];
     showDialog<void>(
       context: context,
       builder: (ctx) => AppDialog(
+        maxWidth: 620,
         icon: const Icon(Icons.feedback_outlined),
         title: const Text('反馈详情'),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(child: SelectableText(lines.join('\n'))),
+          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 520),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _FeedbackDetailBadge(
+                      label: _categoryLabel(category),
+                      icon: Icons.category_outlined,
+                      color: Theme.of(ctx).colorScheme.primary,
+                    ),
+                    _FeedbackDetailBadge(
+                      label: _statusLabel(status),
+                      icon: Icons.radio_button_checked,
+                      color: _statusColor(ctx, status),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (createdAt.isNotEmpty)
+                  _FeedbackDetailField(label: '提交', value: createdAt),
+                if (updatedAt.isNotEmpty)
+                  _FeedbackDetailField(label: '更新', value: updatedAt),
+                _FeedbackDetailField(
+                  label: '内容',
+                  value: content.trim().isEmpty ? '暂无内容' : content,
+                  multiline: true,
+                ),
+                if (reply.trim().isNotEmpty)
+                  _FeedbackDetailField(
+                    label: I18n.tr('feedback.admin_reply'),
+                    value: reply,
+                    multiline: true,
+                    tint: Theme.of(ctx).colorScheme.primary,
+                  ),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(
@@ -285,6 +312,83 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FeedbackDetailBadge extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const _FeedbackDetailBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppStatusBadge(label: label, color: color, icon: icon);
+  }
+}
+
+class _FeedbackDetailField extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool multiline;
+  final Color? tint;
+
+  const _FeedbackDetailField({
+    required this.label,
+    required this.value,
+    this.multiline = false,
+    this.tint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final accent = tint ?? cs.outlineVariant;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: tint == null ? 0.06 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: accent.withValues(alpha: tint == null ? 0.10 : 0.14),
+          width: 0.45,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: appSecondaryControlLabelStyle(
+              context,
+            ).copyWith(color: cs.onSurface.withValues(alpha: 0.58)),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            value,
+            style:
+                (multiline
+                        ? theme.textTheme.bodyMedium
+                        : theme.textTheme.bodySmall)
+                    ?.copyWith(
+                      color: cs.onSurface.withValues(
+                        alpha: multiline ? 0.84 : 0.70,
+                      ),
+                      height: multiline ? 1.38 : 1.25,
+                      fontWeight: FontWeight.w400,
+                    ),
+          ),
+        ],
       ),
     );
   }
@@ -582,7 +686,7 @@ class _FeedbackRecordCard extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 8),
-              Text(content),
+              Text(content, maxLines: 4, overflow: TextOverflow.ellipsis),
               if (reply.trim().isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -601,7 +705,7 @@ class _FeedbackRecordCard extends StatelessWidget {
                             ?.copyWith(color: cs.onPrimaryContainer),
                       ),
                       const SizedBox(height: 4),
-                      Text(reply),
+                      Text(reply, maxLines: 3, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),

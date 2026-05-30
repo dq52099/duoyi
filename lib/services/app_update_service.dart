@@ -35,6 +35,8 @@ class AppUpdateService extends ChangeNotifier {
   double? _downloadProgress;
   String? _downloadedFilePath;
   String? _error;
+  DateTime? _lastDownloadProgressNotifyAt;
+  double? _lastNotifiedDownloadProgress;
 
   String? get latestVersion => _latestVersion;
   String? get latestUrl => _latestUrl;
@@ -144,7 +146,7 @@ class AppUpdateService extends ChangeNotifier {
       }
       final configLoaded = mobileUpdateLoaded == true
           ? true
-          : await _checkServerConfig();
+          : await _checkServerConfigForStartup();
       if (configLoaded == false) {
         _latestVersion = null;
         _latestUrl = null;
@@ -156,13 +158,25 @@ class AppUpdateService extends ChangeNotifier {
         _serverPolicyLoaded = false;
       }
       if (configLoaded == true) {
-        await _fillMissingDisplayDataFromGitHub();
+        _latestNotes ??= _fallbackUpdateNotes(_latestVersion);
       }
     } catch (e) {
       _error = e.toString();
     } finally {
       _checking = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool?> _checkServerConfigForStartup() async {
+    try {
+      return await _checkServerConfig();
+    } on _BackendUpdateCheckException catch (e) {
+      if (!e.allowGitHubFallback) rethrow;
+      debugPrint(
+        '[AppUpdate] startup backend compatibility fallback: ${e.message}',
+      );
+      return null;
     }
   }
 
@@ -451,13 +465,15 @@ class AppUpdateService extends ChangeNotifier {
     required bool fillMissingOnly,
   }) async {
     final uri = Uri.parse('https://api.github.com/repos/$repo/releases/latest');
-    final resp = await _httpClient.get(
-      uri,
-      headers: {
-        'User-Agent': 'duoyi/1.0',
-        'Accept': 'application/vnd.github+json',
-      },
-    );
+    final resp = await _httpClient
+        .get(
+          uri,
+          headers: {
+            'User-Agent': 'duoyi/1.0',
+            'Accept': 'application/vnd.github+json',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
     if (resp.statusCode == 404) {
       if (!keepServerPolicy) {
         _latestVersion = null;
@@ -566,6 +582,8 @@ class AppUpdateService extends ChangeNotifier {
     _downloading = true;
     _installing = false;
     _downloadProgress = 0;
+    _lastDownloadProgressNotifyAt = null;
+    _lastNotifiedDownloadProgress = null;
     notifyListeners();
 
     try {
@@ -575,7 +593,9 @@ class AppUpdateService extends ChangeNotifier {
         onProgress: (received, total) {
           if (total != null && total > 0) {
             _downloadProgress = (received / total).clamp(0, 1).toDouble();
-            notifyListeners();
+            if (_shouldNotifyDownloadProgress(_downloadProgress!)) {
+              notifyListeners();
+            }
           }
         },
       );
@@ -602,6 +622,22 @@ class AppUpdateService extends ChangeNotifier {
       _installing = false;
       notifyListeners();
     }
+  }
+
+  bool _shouldNotifyDownloadProgress(double progress) {
+    final now = DateTime.now();
+    final lastProgress = _lastNotifiedDownloadProgress;
+    final lastAt = _lastDownloadProgressNotifyAt;
+    if (lastProgress == null ||
+        progress >= 1 ||
+        progress - lastProgress >= 0.01 ||
+        lastAt == null ||
+        now.difference(lastAt) >= const Duration(milliseconds: 160)) {
+      _lastNotifiedDownloadProgress = progress;
+      _lastDownloadProgressNotifyAt = now;
+      return true;
+    }
+    return false;
   }
 
   Map? _selectBestApkAsset(List assets, {String? targetVersion}) {

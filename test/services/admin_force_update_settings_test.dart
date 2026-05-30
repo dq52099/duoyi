@@ -120,7 +120,13 @@ void main() {
     expect(updatePolicy, contains("split('+').first"));
 
     expect(mainApp, contains('void _checkUpdatePolicy({bool force = false})'));
-    expect(mainApp, contains('_checkUpdatePolicy(force: true)'));
+    expect(
+      mainApp,
+      isNot(contains('_checkUpdatePolicy(force: true)')),
+      reason:
+          'Startup already runs checkServerPolicyNow before runApp; '
+          'post-frame checkNow would duplicate the startup update request.',
+    );
     expect(mainApp, contains('_checkUpdatePolicy();'));
     expect(mainApp, contains("'startup app update policy'"));
     expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));

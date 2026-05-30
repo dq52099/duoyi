@@ -7044,7 +7044,14 @@ class _FeedbackTabState extends State<_FeedbackTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text((f['content'] ?? '').toString()),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    (f['content'] ?? '').toString(),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   initialValue: replyText,
@@ -7103,96 +7110,115 @@ class _FeedbackTabState extends State<_FeedbackTab> {
   }
 
   Future<void> _showFeedbackDetail(Map<String, dynamic> feedback) async {
-    var detail = Map<String, dynamic>.from(feedback);
-    try {
-      final id = (feedback['id'] as num?)?.toInt();
-      if (id != null) {
-        detail = {...detail, ...await widget.api.getFeedbackDetail(id)};
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('反馈详情加载失败，已展示列表摘要：${e.message}')),
-        );
-      }
-    }
     if (!mounted) return;
-    final status = (detail['status'] ?? 'open').toString();
-    final category = (detail['category'] ?? '').toString();
-    final username = (detail['username'] ?? '').toString();
-    final displayName = (detail['display_name'] ?? '').toString();
-    final email = (detail['email'] ?? '').toString();
-    final emailVerified = detail['email_verified'] == true;
-    final userLabel = displayName.trim().isNotEmpty
-        ? displayName.trim()
-        : username;
-    final identity = [
-      if (username.trim().isNotEmpty && username.trim() != userLabel)
-        '@${username.trim()}',
-      if (email.trim().isNotEmpty)
-        '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
-    ].join(' · ');
-    final createdAt = (detail['created_at'] ?? '').toString();
-    final updatedAt = (detail['updated_at'] ?? '').toString();
-    final content = (detail['content'] ?? '').toString();
-    final adminReply = (detail['admin_reply'] ?? '').toString();
-    showDialog<void>(
+    final summary = Map<String, dynamic>.from(feedback);
+    final id = (feedback['id'] as num?)?.toInt();
+    final detailFuture = id == null
+        ? Future<Map<String, dynamic>>.value(summary)
+        : widget.api
+              .getFeedbackDetail(id)
+              .then((remote) => <String, dynamic>{...summary, ...remote});
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AppDialog(
-        maxWidth: 720,
-        icon: const Icon(Icons.feedback_outlined),
-        title: const Text('反馈详情'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 520),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _AdminFeedbackDetailField(label: '用户', value: userLabel),
-                if (identity.isNotEmpty)
-                  _AdminFeedbackDetailField(label: '账号', value: identity),
-                _AdminFeedbackDetailField(
-                  label: '分类',
-                  value: _feedbackCategoryLabel(category),
+      builder: (ctx) => FutureBuilder<Map<String, dynamic>>(
+        future: detailFuture,
+        initialData: summary,
+        builder: (ctx, snapshot) {
+          final detail = snapshot.data ?? summary;
+          final loading = snapshot.connectionState != ConnectionState.done;
+          final loadError = snapshot.hasError
+              ? _adminActionErrorMessage(snapshot.error!, '加载反馈详情')
+              : null;
+          final status = (detail['status'] ?? 'open').toString();
+          final category = (detail['category'] ?? '').toString();
+          final username = (detail['username'] ?? '').toString();
+          final displayName = (detail['display_name'] ?? '').toString();
+          final email = (detail['email'] ?? '').toString();
+          final emailVerified = detail['email_verified'] == true;
+          final userLabel = displayName.trim().isNotEmpty
+              ? displayName.trim()
+              : username;
+          final identity = [
+            if (username.trim().isNotEmpty && username.trim() != userLabel)
+              '@${username.trim()}',
+            if (email.trim().isNotEmpty)
+              '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
+          ].join(' · ');
+          final createdAt = (detail['created_at'] ?? '').toString();
+          final updatedAt = (detail['updated_at'] ?? '').toString();
+          final content = (detail['content'] ?? '').toString();
+          final adminReply = (detail['admin_reply'] ?? '').toString();
+          return AppDialog(
+            maxWidth: 720,
+            icon: const Icon(Icons.feedback_outlined),
+            title: const Text('反馈详情'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640, maxHeight: 520),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (loading) ...[
+                      const LinearProgressIndicator(minHeight: 2),
+                      const SizedBox(height: 12),
+                    ],
+                    if (loadError != null) ...[
+                      Text(
+                        '详情加载失败，已展示列表摘要：$loadError',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _AdminFeedbackDetailField(label: '用户', value: userLabel),
+                    if (identity.isNotEmpty)
+                      _AdminFeedbackDetailField(label: '账号', value: identity),
+                    _AdminFeedbackDetailField(
+                      label: '分类',
+                      value: _feedbackCategoryLabel(category),
+                    ),
+                    _AdminFeedbackDetailField(
+                      label: '状态',
+                      value: _adminStatusLabel(status),
+                    ),
+                    if (createdAt.isNotEmpty)
+                      _AdminFeedbackDetailField(label: '提交', value: createdAt),
+                    if (updatedAt.isNotEmpty)
+                      _AdminFeedbackDetailField(label: '更新', value: updatedAt),
+                    const SizedBox(height: 4),
+                    _AdminFeedbackDetailField(
+                      label: '内容',
+                      value: content,
+                      multiline: true,
+                    ),
+                    if (adminReply.trim().isNotEmpty)
+                      _AdminFeedbackDetailField(
+                        label: '管理员回复',
+                        value: adminReply,
+                        multiline: true,
+                      ),
+                  ],
                 ),
-                _AdminFeedbackDetailField(
-                  label: '状态',
-                  value: _adminStatusLabel(status),
-                ),
-                if (createdAt.isNotEmpty)
-                  _AdminFeedbackDetailField(label: '提交', value: createdAt),
-                if (updatedAt.isNotEmpty)
-                  _AdminFeedbackDetailField(label: '更新', value: updatedAt),
-                const SizedBox(height: 4),
-                _AdminFeedbackDetailField(
-                  label: '内容',
-                  value: content,
-                  multiline: true,
-                ),
-                if (adminReply.trim().isNotEmpty)
-                  _AdminFeedbackDetailField(
-                    label: '管理员回复',
-                    value: adminReply,
-                    multiline: true,
-                  ),
-              ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _reply(detail);
-            },
-            child: const Text('回复'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('关闭'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _reply(detail);
+                },
+                child: const Text('回复'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -7709,19 +7735,23 @@ class _AdminFeedbackDetailField extends StatelessWidget {
             ).copyWith(color: cs.onSurface.withValues(alpha: 0.58)),
           ),
           const SizedBox(height: 4),
-          SelectableText(
-            value,
-            style:
-                (multiline
-                        ? theme.textTheme.bodyMedium
-                        : theme.textTheme.bodySmall)
-                    ?.copyWith(
-                      color: cs.onSurface.withValues(
-                        alpha: multiline ? 0.82 : 0.7,
+          SelectionArea(
+            child: Text(
+              value,
+              softWrap: true,
+              overflow: TextOverflow.visible,
+              style:
+                  (multiline
+                          ? theme.textTheme.bodyMedium
+                          : theme.textTheme.bodySmall)
+                      ?.copyWith(
+                        color: cs.onSurface.withValues(
+                          alpha: multiline ? 0.82 : 0.7,
+                        ),
+                        height: multiline ? 1.35 : 1.28,
+                        fontWeight: FontWeight.w400,
                       ),
-                      height: multiline ? 1.35 : 1.28,
-                      fontWeight: FontWeight.w400,
-                    ),
+            ),
           ),
         ],
       ),
@@ -7750,7 +7780,7 @@ class _AdminFeedbackSwipeActions extends StatefulWidget {
 
 class _AdminFeedbackSwipeActionsState
     extends State<_AdminFeedbackSwipeActions> {
-  static const double _actionRailWidth = 96;
+  static const double _actionRailWidth = 128;
   static const double _dragOpenThreshold = 40;
   double _dragDistance = 0;
   bool _open = false;
@@ -7795,60 +7825,75 @@ class _AdminFeedbackSwipeActionsState
         child: Stack(
           clipBehavior: Clip.hardEdge,
           children: [
-            widget.child,
             if (_open)
-              Positioned(
-                right: 4,
-                top: 10,
-                child: SizedBox(
-                  width: _actionRailWidth,
-                  height: 42,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.18),
-                        width: 0.45,
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4, bottom: 8),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
+                      width: _actionRailWidth,
+                      height: 42,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(
+                            alpha: 0.94,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: cs.outlineVariant.withValues(alpha: 0.18),
+                            width: 0.45,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: cs.shadow.withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _AdminFeedbackSwipeButton(
+                              tooltip: '查看反馈详情',
+                              icon: Icons.visibility_outlined,
+                              color: cs.primary,
+                              onPressed: _showDetail,
+                            ),
+                            const SizedBox(width: 4),
+                            _AdminFeedbackSwipeButton(
+                              tooltip: '回复',
+                              icon: Icons.reply_outlined,
+                              color: cs.tertiary,
+                              onPressed: () =>
+                                  unawaited(_runAction(widget.onReply)),
+                            ),
+                            const SizedBox(width: 4),
+                            _AdminFeedbackSwipeButton(
+                              tooltip: '删除',
+                              icon: Icons.delete_outline,
+                              color: cs.error,
+                              onPressed: () =>
+                                  unawaited(_runAction(widget.onDelete)),
+                            ),
+                          ],
+                        ),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.shadow.withValues(alpha: 0.08),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _AdminFeedbackSwipeButton(
-                          tooltip: '查看反馈详情',
-                          icon: Icons.visibility_outlined,
-                          color: cs.primary,
-                          onPressed: _showDetail,
-                        ),
-                        const SizedBox(width: 2),
-                        _AdminFeedbackSwipeButton(
-                          tooltip: '回复',
-                          icon: Icons.reply_outlined,
-                          color: cs.tertiary,
-                          onPressed: () =>
-                              unawaited(_runAction(widget.onReply)),
-                        ),
-                        const SizedBox(width: 2),
-                        _AdminFeedbackSwipeButton(
-                          tooltip: '删除',
-                          icon: Icons.delete_outline,
-                          color: cs.error,
-                          onPressed: () =>
-                              unawaited(_runAction(widget.onDelete)),
-                        ),
-                      ],
                     ),
                   ),
                 ),
               ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(
+                _open ? -_actionRailWidth : 0,
+                0,
+                0,
+              ),
+              child: widget.child,
+            ),
           ],
         ),
       ),
@@ -7880,8 +7925,8 @@ class _AdminFeedbackSwipeButton extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onPressed,
           child: SizedBox.square(
-            dimension: 28,
-            child: Icon(icon, size: 15.5, color: color),
+            dimension: 36,
+            child: Icon(icon, size: 17, color: color),
           ),
         ),
       ),

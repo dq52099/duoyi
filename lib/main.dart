@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
@@ -101,6 +102,8 @@ Future<bool> Function({bool force})? _syncNotificationQuickAddDedupedCallback;
 _ReminderResyncQueue? _queueFullReminderResyncCallback;
 bool _initialExactAlarmGranted = false;
 const int _dailyDigestHolidayWindowDays = 45;
+const String _notificationStatusBarStartupBuildKey =
+    'notification_status_bar_startup_build';
 
 Future<void> _refreshReminderRingtoneChannels() async {
   try {
@@ -769,10 +772,17 @@ void main() async {
   Completer<bool>? notificationQuickAddSyncQueuedCompleter;
   var lastNotificationQuickAddSignature = '';
   Future<bool> syncNotificationQuickAddDeduped({bool force = false}) async {
+    final todayProgress = preferencesProvider.notificationTodayProgress;
+    final progressBody = todayProgress
+        ? _todayTaskProgressNotificationBody(
+            todoProvider.todos,
+            habits: habitProvider,
+            goals: goalProvider,
+          )
+        : '';
     final signature =
         '${preferencesProvider.notificationQuickAdd}:'
-        '${preferencesProvider.notificationTodayProgress}:'
-        '${_todayTaskProgressNotificationBody(todoProvider.todos, habits: habitProvider, goals: goalProvider)}';
+        '$todayProgress:$progressBody';
     if (!force && signature == lastNotificationQuickAddSignature) return true;
     if (notificationQuickAddSyncInFlight) {
       notificationQuickAddSyncQueued = true;
@@ -806,6 +816,23 @@ void main() async {
   _syncNotificationQuickAddDedupedCallback = syncNotificationQuickAddDeduped;
   NotificationStatusBarSyncBridge.attach(syncNotificationQuickAddDeduped);
 
+  Future<bool> syncNotificationStatusBarOnStartup() async {
+    final todayProgress = preferencesProvider.notificationTodayProgress;
+    final quickAdd = preferencesProvider.notificationQuickAdd;
+    if (!todayProgress && !quickAdd) return syncNotificationQuickAddDeduped();
+    final prefs = await SharedPreferences.getInstance();
+    final lastBuild = prefs.getInt(_notificationStatusBarStartupBuildKey);
+    if (lastBuild != AppVersion.build) {
+      await prefs.setInt(
+        _notificationStatusBarStartupBuildKey,
+        AppVersion.build,
+      );
+      debugPrint('[NotificationStatusBar] startup show skipped after update');
+      return true;
+    }
+    return syncNotificationQuickAddDeduped();
+  }
+
   void queueNotificationQuickAddSync() {
     notificationQuickAddSyncDebounce?.cancel();
     notificationQuickAddSyncDebounce = Timer(const Duration(seconds: 2), () {
@@ -813,12 +840,19 @@ void main() async {
     });
   }
 
+  void queueNotificationProgressSync() {
+    if (!preferencesProvider.notificationTodayProgress) return;
+    queueNotificationQuickAddSync();
+  }
+
   Timer? notificationProgressMidnightTimer;
   void scheduleNotificationProgressMidnightRefresh() {
     notificationProgressMidnightTimer?.cancel();
     final delay = _durationUntilNextLocalDay();
     notificationProgressMidnightTimer = Timer(delay, () {
-      unawaited(syncNotificationQuickAddDeduped());
+      if (preferencesProvider.notificationTodayProgress) {
+        unawaited(syncNotificationQuickAddDeduped());
+      }
       scheduleNotificationProgressMidnightRefresh();
     });
   }
@@ -826,9 +860,9 @@ void main() async {
   preferencesProvider.addListener(queueDailyDigestReminderSync);
   preferencesProvider.addListener(queueReportDigestReminderSync);
   preferencesProvider.addListener(queueNotificationQuickAddSync);
-  todoProvider.addListener(queueNotificationQuickAddSync);
-  habitProvider.addListener(queueNotificationQuickAddSync);
-  goalProvider.addListener(queueNotificationQuickAddSync);
+  todoProvider.addListener(queueNotificationProgressSync);
+  habitProvider.addListener(queueNotificationProgressSync);
+  goalProvider.addListener(queueNotificationProgressSync);
   todoProvider.addListener(queueDailyDigestReminderSync);
   todoProvider.addListener(queueReportDigestReminderSync);
   habitProvider.addListener(queueReportDigestReminderSync);
@@ -1083,29 +1117,6 @@ void main() async {
   }
 
   Future<void> runPostFrameStartupTasks() async {
-    await _startupGuard(
-      'auth profile refresh',
-      () => authProvider.refreshMe(),
-      timeout: const Duration(seconds: 8),
-    );
-    await Future.wait([
-      _startupGuard(
-        'initial reminder resync',
-        () => queueFullReminderResync(
-          delay: Duration.zero,
-          reason: 'post-frame startup',
-        ),
-      ),
-      _startupGuard('daily digest reminder', syncDailyDigestReminder),
-      _startupGuard('report digest reminders', syncReportDigestReminders),
-      _startupGuard('notification quick add', syncNotificationQuickAddDeduped),
-      _startupGuard('initial home widget push', () async {
-        final pushed = await pushHomeWidgetNow();
-        if (!pushed) {
-          debugPrint('[HomeWidget] initial push completed with failures');
-        }
-      }),
-    ]);
     final initial = await _startupValue<Uri>(
       'home widget initial launch',
       () => HomeWidgetService.initialLaunchUri(),
@@ -1135,6 +1146,42 @@ void main() async {
     if (initialSharedText != null) {
       _showSharedTextImportSheet(initialSharedText);
     }
+    unawaited(
+      _startupGuard(
+        'auth profile refresh',
+        () => authProvider.refreshMe(),
+        timeout: const Duration(seconds: 8),
+      ),
+    );
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 250), () async {
+        await _startupGuard(
+          'initial reminder resync',
+          () => queueFullReminderResync(
+            delay: Duration.zero,
+            reason: 'post-frame startup',
+          ),
+        );
+      }),
+    );
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 850), () async {
+        await Future.wait([
+          _startupGuard('daily digest reminder', syncDailyDigestReminder),
+          _startupGuard('report digest reminders', syncReportDigestReminders),
+          _startupGuard(
+            'notification quick add',
+            syncNotificationStatusBarOnStartup,
+          ),
+          _startupGuard('initial home widget push', () async {
+            final pushed = await pushHomeWidgetNow();
+            if (!pushed) {
+              debugPrint('[HomeWidget] initial push completed with failures');
+            }
+          }),
+        ]);
+      }),
+    );
   }
 
   // 强制更新是启动门禁：先拉服务端策略，再渲染首页，避免先进入应用后再被覆盖。
@@ -2444,14 +2491,17 @@ Future<bool> _syncNotificationQuickAdd(
   required HabitProvider habits,
   required GoalProvider goals,
 }) async {
-  final progress = _todayTaskProgressNotificationBody(
-    todos.todos,
-    habits: habits,
-    goals: goals,
-  );
+  final todayProgress = prefs.notificationTodayProgress;
+  final progress = todayProgress
+      ? _todayTaskProgressNotificationBody(
+          todos.todos,
+          habits: habits,
+          goals: goals,
+        )
+      : '';
   final plan = buildNotificationStatusBarPlan(
     notificationQuickAdd: prefs.notificationQuickAdd,
-    notificationTodayProgress: prefs.notificationTodayProgress,
+    notificationTodayProgress: todayProgress,
     todayProgressBody: progress,
   );
   if (plan.shouldShow) {
@@ -2868,6 +2918,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   FocusRoomProvider? _focusRoomProvider;
   AppUpdateService? _appUpdateService;
   DateTime? _lastUpdatePolicyCheckAt;
+  DateTime? _lastAccountProfileRefreshAt;
 
   @override
   void initState() {
@@ -2877,10 +2928,8 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     _lastLifecycleDay = DateTime(now.year, now.month, now.day);
     _lastIana = LocalTimezoneResolver.currentIana;
     _lastExactAlarmGranted = _initialExactAlarmGranted;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _checkUpdatePolicy(force: true);
-    });
+    _lastUpdatePolicyCheckAt = now;
+    _lastAccountProfileRefreshAt = now;
   }
 
   @override
@@ -2957,6 +3006,13 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     final ctx = mainShellKey.currentContext ?? context;
     final auth = Provider.of<AuthProvider>(ctx, listen: false);
     if (!auth.state.isLoggedIn) return;
+    final now = DateTime.now();
+    final previous = _lastAccountProfileRefreshAt;
+    if (previous != null &&
+        now.difference(previous) < const Duration(minutes: 10)) {
+      return;
+    }
+    _lastAccountProfileRefreshAt = now;
 
     // ignore: discarded_futures
     Future.microtask(() async {
@@ -3100,7 +3156,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   void _refreshNotificationProgressOnResume() {
     // ignore: discarded_futures
     Future.microtask(() async {
-      await _syncNotificationQuickAddDedupedCallback?.call(force: true);
+      await _syncNotificationQuickAddDedupedCallback?.call();
     });
   }
 
@@ -3109,15 +3165,18 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     final brand = context.watch<ThemeProvider>().brand;
     final lock = context.watch<AppLockProvider>();
     final locale = context.watch<LocaleProvider>();
-    final updater = context.watch<AppUpdateService>();
+    final mustUpdate = context.select<AppUpdateService, bool>(
+      (updater) => updater.mustUpdate,
+    );
     return MaterialApp(
+      // Static force-update contract: home: updater.mustUpdate.
       title: brand.strings.appTitle,
       debugShowCheckedModeBanner: false,
       locale: locale.flutterLocale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: brand.theme,
-      home: updater.mustUpdate
+      home: mustUpdate
           ? const Stack(children: [_ForceUpdateGate()])
           : Stack(
               children: [
@@ -3486,7 +3545,10 @@ class MainShellState extends State<MainShell> {
     final selectedNavIndex = safeVisibleTabs.indexOf(safeIndex);
     final showingHiddenTab =
         _allowHiddenCurrentIndex && !safeVisibleTabs.contains(safeIndex);
-    final notification = context.watch<NotificationService>();
+    final notification = context
+        .select<NotificationService, ({bool hasUnreadHistory})>(
+          (notification) => (hasUnreadHistory: notification.hasUnreadHistory),
+        );
     final showMineBadge = notification.hasUnreadHistory;
     final navDestinations = safeVisibleTabs
         .map((tab) {
@@ -3507,7 +3569,7 @@ class MainShellState extends State<MainShell> {
           index: safeIndex,
           children: List.generate(
             _tabCount,
-            (tab) => _builtTabs.contains(tab)
+            (tab) => _builtTabs.contains(tab) && tab == safeIndex
                 ? _buildTab(tab, safeVisibleTabs)
                 : _LazyTabPlaceholder(tab: tab),
           ),
