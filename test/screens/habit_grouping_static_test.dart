@@ -23,6 +23,8 @@ void main() {
 
     expect(source, contains('final categoryCtrl = TextEditingController()'));
     expect(source, contains('selectedKind = HabitKind.positive'));
+    expect(source, contains('selectedIcon = habitIconTokenForIcon('));
+    expect(source, contains('t.icon'));
     expect(source, contains('unitCtrl.text = t.localizedUnit'));
     expect(source, contains('categoryCtrl.text = t.localizedCategory'));
     expect(source, contains('flexRuleEnabled = t.hasFlexRule'));
@@ -78,6 +80,7 @@ void main() {
     expect(header, contains('deleteHabit('));
     expect(header, contains('_habitIconForToken(habit.icon)'));
     expect(source, contains('IconData _habitIconForToken(String token)'));
+    expect(source, isNot(contains('IconData(codePoint')));
     expect(source, isNot(contains('child: Icon(Icons.star')));
     expect(source, contains('builder: (ctx) => AppDialog('));
     expect(source, isNot(contains('builder: (ctx) => AlertDialog(')));
@@ -147,6 +150,8 @@ void main() {
     expect(cardSource, contains('minimumSize: const Size('));
     expect(cardSource, contains('_habitCheckinButtonWidth'));
     expect(cardSource, contains('_habitIconForToken(habit.icon)'));
+    expect(source, contains("import '../core/habit_icons.dart';"));
+    expect(source, isNot(contains('IconData(codePoint')));
     expect(cardSource, isNot(contains('Icons.shield_outlined')));
     expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
     expect(cardSource, isNot(contains('Icons.verified_rounded')));

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/i18n.dart';
 import '../core/habit_grouping.dart';
+import '../core/habit_icons.dart';
 import '../core/habit_insights.dart';
 import '../core/habit_templates.dart';
 import '../models/habit.dart';
@@ -186,7 +187,9 @@ class _HabitScreenState extends State<HabitScreen>
                                 onPressed: () {
                                   setSt(() {
                                     selectedKind = HabitKind.positive;
-                                    selectedIcon = t.icon.codePoint.toString();
+                                    selectedIcon = habitIconTokenForIcon(
+                                      t.icon,
+                                    );
                                     nameCtrl.text = t.localizedName;
                                     targetCtrl.text = t.targetCount.toString();
                                     unitCtrl.text = t.localizedUnit;
@@ -1777,27 +1780,7 @@ double _habitContrastRatio(Color a, Color b) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-IconData _habitIconForToken(String token) {
-  final codePoint = int.tryParse(token);
-  if (codePoint != null) {
-    return IconData(codePoint, fontFamily: 'MaterialIcons');
-  }
-  return switch (token) {
-    defaultHabitIconToken => Icons.check_circle_outline,
-    'check' => Icons.check_circle_outline,
-    'star' => Icons.check_circle_outline,
-    'water' => Icons.local_drink,
-    'run' => Icons.directions_run,
-    'book' => Icons.book,
-    'sleep' => Icons.bedtime,
-    'meditation' => Icons.self_improvement,
-    'code' => Icons.code,
-    'school' => Icons.school,
-    'fitness' => Icons.fitness_center,
-    'mood' => Icons.mood,
-    _ => Icons.check_circle_outline,
-  };
-}
+IconData _habitIconForToken(String token) => habitIconForToken(token);
 
 String _habitTemplateFrequencyLabel(HabitTemplate template) {
   if (!template.hasFlexRule) return template.localizedFrequencyLabel;

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../core/design_tokens.dart';
 import '../core/habit_grouping.dart';
+import '../core/habit_icons.dart';
 import '../core/habit_trend.dart';
 import '../models/goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
@@ -1210,27 +1211,7 @@ DateTime? _nextHabitReminderTrigger(ReminderRule rule) {
   return null;
 }
 
-IconData _habitIconForToken(String token) {
-  final codePoint = int.tryParse(token);
-  if (codePoint != null) {
-    return IconData(codePoint, fontFamily: 'MaterialIcons');
-  }
-  return switch (token) {
-    defaultHabitIconToken => Icons.check_circle_outline,
-    'check' => Icons.check_circle_outline,
-    'star' => Icons.check_circle_outline,
-    'water' => Icons.local_drink,
-    'run' => Icons.directions_run,
-    'book' => Icons.book,
-    'sleep' => Icons.bedtime,
-    'meditation' => Icons.self_improvement,
-    'code' => Icons.code,
-    'school' => Icons.school,
-    'fitness' => Icons.fitness_center,
-    'mood' => Icons.mood,
-    _ => Icons.check_circle_outline,
-  };
-}
+IconData _habitIconForToken(String token) => habitIconForToken(token);
 
 class _StatChip extends StatelessWidget {
   final String label;
