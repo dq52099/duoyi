@@ -70,6 +70,17 @@ void main() {
         ),
         isFalse,
       );
+      expect(
+        shouldForceAppUpdate(
+          currentVersion: '1.1.13',
+          latestVersion: '1.1.13',
+          minimumSupportedVersion: '1.1.13',
+          forceUpdateRequired: true,
+          currentVersionCode: 110012,
+          latestVersionCode: 120013,
+        ),
+        isTrue,
+      );
     },
   );
 
@@ -90,6 +101,12 @@ void main() {
     expect(source, contains("_backendUri("));
     expect(source, contains("'/api/mobile/apps/duoyi/update'"));
     expect(source, contains('current_version_code'));
+    expect(source, contains('final int? currentVersionCode;'));
+    expect(source, contains('this.currentVersionCode,'));
+    expect(
+      source,
+      contains('currentVersionCode ?? _versionToCode(currentVersion)'),
+    );
     expect(source, contains('major * 100000 + minor * 10000 + patch'));
     expect(checkNow, contains('bool? mobileUpdateLoaded;'));
     expect(
@@ -252,6 +269,81 @@ void main() {
     expect(service.latestUrl, 'https://cdn.duoyi.test/duoyi-2.0.0.apk');
     expect(service.latestNotesForDisplay, contains('- 修复通知红点状态'));
     expect(service.latestNotesForDisplay, contains('- 更新弹框显示具体说明'));
+  });
+
+  test('backend update request sends real build code when provided', () async {
+    Uri? mobileUri;
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.13',
+      currentVersionCode: 120013,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/mobile/apps/duoyi/update') {
+          mobileUri = request.url;
+          return http.Response(
+            json.encode({
+              'api_contract_version': ApiClient.requiredApiContractVersion,
+              'required_routes_hash': ApiClient.requiredApiContractRoutesHash,
+              'available': false,
+              'latest_version_name': '1.1.13',
+              'latest_version_code': 120013,
+              'minimum_supported_version': '1.1.13',
+              'minimum_supported_version_code': 120013,
+              'download_url': '',
+              'release_notes': '',
+              'force_update': false,
+              'force_update_required': false,
+              'force_app_update_enabled': false,
+            }),
+            200,
+          );
+        }
+        return http.Response('{"detail":"Not Found"}', 404);
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(mobileUri, isNotNull);
+    expect(mobileUri!.queryParameters['current_version'], '1.1.13');
+    expect(mobileUri!.queryParameters['current_version_code'], '120013');
+  });
+
+  test('same version with newer build code still surfaces update', () async {
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.13',
+      currentVersionCode: 110012,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/mobile/apps/duoyi/update') {
+          return http.Response(
+            json.encode(
+              _mobileUpdatePayload(
+                latestVersion: '1.1.13',
+                latestVersionCode: 120013,
+                minimumSupportedVersion: '1.1.13',
+                minimumSupportedVersionCode: 120013,
+                available: true,
+                forceUpdate: true,
+                forceUpdateRequired: true,
+              ),
+            ),
+            200,
+          );
+        }
+        return http.Response('{"detail":"Not Found"}', 404);
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(service.error, isNull);
+    expect(service.latestVersion, '1.1.13');
+    expect(service.latestVersionCode, 120013);
+    expect(service.hasUpdate, isTrue);
+    expect(service.mustUpdate, isTrue);
   });
 
   test(
@@ -497,11 +589,13 @@ Map<String, Object?> _mobileUpdatePayload({
   String requiredRoutesHash = ApiClient.requiredApiContractRoutesHash,
   bool available = true,
   String latestVersion = '2.0.0',
+  int? latestVersionCode,
   bool forceUpdate = true,
   bool forceUpdateRequired = true,
   String minimumSupportedVersion = '1.1.9',
+  int? minimumSupportedVersionCode,
 }) {
-  return {
+  final payload = <String, Object?>{
     'api_contract_version': ApiClient.requiredApiContractVersion,
     'required_routes_hash': requiredRoutesHash,
     'available': available,
@@ -513,4 +607,11 @@ Map<String, Object?> _mobileUpdatePayload({
     'force_update_required': forceUpdateRequired,
     'force_app_update_enabled': forceUpdateRequired,
   };
+  if (latestVersionCode != null) {
+    payload['latest_version_code'] = latestVersionCode;
+  }
+  if (minimumSupportedVersionCode != null) {
+    payload['minimum_supported_version_code'] = minimumSupportedVersionCode;
+  }
+  return payload;
 }

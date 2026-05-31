@@ -11,21 +11,25 @@ import 'app_update_installer.dart';
 class AppUpdateService extends ChangeNotifier {
   final String repo; // e.g. "dq52099/duoyi"
   final String currentVersion; // e.g. "1.0.0"
+  final int? currentVersionCode;
   final String? backendBaseUrl;
   final http.Client _httpClient;
 
   AppUpdateService({
     required this.repo,
     required this.currentVersion,
+    this.currentVersionCode,
     this.backendBaseUrl,
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
   String? _latestVersion;
+  int? _latestVersionCode;
   String? _latestUrl;
   String? _latestAssetName;
   String? _latestNotes;
   String? _minimumSupportedVersion;
+  int? _minimumSupportedVersionCode;
   String? _forceUpdateBlockedReason;
   bool _forceUpdateRequired = false;
   bool _serverPolicyLoaded = false;
@@ -39,10 +43,12 @@ class AppUpdateService extends ChangeNotifier {
   double? _lastNotifiedDownloadProgress;
 
   String? get latestVersion => _latestVersion;
+  int? get latestVersionCode => _latestVersionCode;
   String? get latestUrl => _latestUrl;
   String? get latestAssetName => _latestAssetName;
   String? get latestNotes => _latestNotes;
   String? get minimumSupportedVersion => _minimumSupportedVersion;
+  int? get minimumSupportedVersionCode => _minimumSupportedVersionCode;
   String? get forceUpdateBlockedReason => _forceUpdateBlockedReason;
   bool get forceUpdateRequired => _forceUpdateRequired;
   String get latestNotesForDisplay {
@@ -61,6 +67,7 @@ class AppUpdateService extends ChangeNotifier {
   String? get error => _error;
 
   bool get hasUpdate {
+    if (_hasNewerVersionCode(_latestVersionCode)) return true;
     if (_latestVersion == null) return false;
     return compareAppVersions(_latestVersion!, currentVersion) > 0;
   }
@@ -70,6 +77,9 @@ class AppUpdateService extends ChangeNotifier {
     latestVersion: _latestVersion,
     minimumSupportedVersion: _minimumSupportedVersion,
     forceUpdateRequired: _forceUpdateRequired,
+    currentVersionCode: currentVersionCode,
+    latestVersionCode: _latestVersionCode,
+    minimumSupportedVersionCode: _minimumSupportedVersionCode,
   );
 
   Future<void> checkNow() async {
@@ -103,10 +113,12 @@ class AppUpdateService extends ChangeNotifier {
       }
       if (configLoaded == false) {
         _latestVersion = null;
+        _latestVersionCode = null;
         _latestUrl = null;
         _latestAssetName = null;
         _latestNotes = null;
         _minimumSupportedVersion = null;
+        _minimumSupportedVersionCode = null;
         _forceUpdateBlockedReason = null;
         _forceUpdateRequired = false;
         _serverPolicyLoaded = false;
@@ -149,10 +161,12 @@ class AppUpdateService extends ChangeNotifier {
           : await _checkServerConfigForStartup();
       if (configLoaded == false) {
         _latestVersion = null;
+        _latestVersionCode = null;
         _latestUrl = null;
         _latestAssetName = null;
         _latestNotes = null;
         _minimumSupportedVersion = null;
+        _minimumSupportedVersionCode = null;
         _forceUpdateBlockedReason = null;
         _forceUpdateRequired = false;
         _serverPolicyLoaded = false;
@@ -210,16 +224,21 @@ class AppUpdateService extends ChangeNotifier {
           ? Map<String, dynamic>.from(decoded['app_update'] as Map)
           : rawConfig;
       final latest = _stringValue(data['latest_version']);
+      final latestCode = _intValue(data['latest_version_code']);
       final downloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['update_download_url']),
       );
       final notes = _stringValue(data['update_notes']);
       final minimum = _stringValue(data['minimum_supported_version']);
+      final minimumCode = _intValue(data['minimum_supported_version_code']);
       final hasNewerLatest =
-          latest.isNotEmpty && compareAppVersions(latest, currentVersion) > 0;
+          _hasNewerVersionCode(latestCode) ||
+          (latest.isNotEmpty && compareAppVersions(latest, currentVersion) > 0);
       final hasRaisedMinimum =
-          minimum.isNotEmpty && compareAppVersions(minimum, currentVersion) > 0;
+          _hasNewerVersionCode(minimumCode) ||
+          (minimum.isNotEmpty &&
+              compareAppVersions(minimum, currentVersion) > 0);
       final hasPolicy =
           downloadUrl.isNotEmpty ||
           notes.isNotEmpty ||
@@ -228,10 +247,12 @@ class AppUpdateService extends ChangeNotifier {
           data['force_update_required'] == true;
       if (!hasPolicy) return false;
       _latestVersion = latest.isEmpty ? null : latest;
+      _latestVersionCode = latestCode;
       _latestUrl = downloadUrl.isEmpty ? null : downloadUrl;
       _latestAssetName = _assetNameFromUrl(downloadUrl);
       _latestNotes = notes.isEmpty ? null : notes;
       _minimumSupportedVersion = minimum.isEmpty ? null : minimum;
+      _minimumSupportedVersionCode = minimumCode;
       _forceUpdateBlockedReason = null;
       _forceUpdateRequired = data['force_update_required'] == true;
       _serverPolicyLoaded = true;
@@ -247,13 +268,14 @@ class AppUpdateService extends ChangeNotifier {
     try {
       final base = _serverBaseUrl;
       if (base.isEmpty && !kIsWeb) return null;
-      final currentVersionCode = _versionToCode(currentVersion);
+      final effectiveCurrentVersionCode =
+          currentVersionCode ?? _versionToCode(currentVersion);
       final uri = _backendUri(
         base,
         '/api/mobile/apps/duoyi/update',
         queryParameters: {
           'current_version': currentVersion,
-          'current_version_code': currentVersionCode.toString(),
+          'current_version_code': effectiveCurrentVersionCode.toString(),
         },
       );
       final resp = await _httpClient
@@ -278,18 +300,23 @@ class AppUpdateService extends ChangeNotifier {
         );
       }
       final latest = _stringValue(data['latest_version_name']);
+      final latestCode = _intValue(data['latest_version_code']);
       final downloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['download_url']),
       );
       final notes = _stringValue(data['release_notes']);
       final minimum = _stringValue(data['minimum_supported_version']);
+      final minimumCode = _intValue(data['minimum_supported_version_code']);
       final blockedReason = _stringValue(data['force_update_blocked_reason']);
       final available =
           data['available'] == true ||
+          _hasNewerVersionCode(latestCode) ||
           (latest.isNotEmpty && compareAppVersions(latest, currentVersion) > 0);
       final belowMinimum =
-          minimum.isNotEmpty && compareAppVersions(currentVersion, minimum) < 0;
+          _hasNewerVersionCode(minimumCode) ||
+          (minimum.isNotEmpty &&
+              compareAppVersions(currentVersion, minimum) < 0);
       final policyEnabled =
           data['force_update_required'] == true ||
           data['force_app_update_enabled'] == true;
@@ -300,10 +327,12 @@ class AppUpdateService extends ChangeNotifier {
         return false;
       }
       _latestVersion = latest.isEmpty ? null : latest;
+      _latestVersionCode = latestCode;
       _latestUrl = downloadUrl.isEmpty ? null : downloadUrl;
       _latestAssetName = _assetNameFromUrl(downloadUrl);
       _latestNotes = notes.isEmpty ? null : notes;
       _minimumSupportedVersion = minimum.isEmpty ? null : minimum;
+      _minimumSupportedVersionCode = minimumCode;
       _forceUpdateBlockedReason = blockedReason.isEmpty ? null : blockedReason;
       _forceUpdateRequired = forceUpdate || policyEnabled;
       _serverPolicyLoaded = true;
@@ -318,6 +347,16 @@ class AppUpdateService extends ChangeNotifier {
   String get _serverBaseUrl => backendBaseUrl ?? AppConfig.bakedServerUrl;
 
   String _stringValue(dynamic value) => (value ?? '').toString().trim();
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(_stringValue(value));
+  }
+
+  bool _hasNewerVersionCode(int? code) {
+    final current = currentVersionCode;
+    return current != null && current > 0 && code != null && code > current;
+  }
 
   String _resolveBackendUrl(String base, String value) {
     final raw = value.trim();
@@ -497,6 +536,9 @@ class AppUpdateService extends ChangeNotifier {
     }
     if (!fillMissingOnly) {
       _latestVersion = releaseVersion;
+      _latestVersionCode = releaseVersion == null
+          ? null
+          : _versionToCode(releaseVersion);
       _latestNotes = releaseNotes;
       _latestUrl = asset?['browser_download_url'] as String?;
       _latestAssetName = asset?['name'] as String?;
@@ -540,12 +582,16 @@ class AppUpdateService extends ChangeNotifier {
   @visibleForTesting
   void debugSetUpdatePolicyForTest({
     String? latestVersion,
+    int? latestVersionCode,
     String? minimumSupportedVersion,
+    int? minimumSupportedVersionCode,
     bool forceUpdateRequired = false,
     String? latestUrl,
   }) {
     _latestVersion = latestVersion;
+    _latestVersionCode = latestVersionCode;
     _minimumSupportedVersion = minimumSupportedVersion;
+    _minimumSupportedVersionCode = minimumSupportedVersionCode;
     _forceUpdateRequired = forceUpdateRequired;
     _latestUrl = latestUrl;
     _latestAssetName = _assetNameFromUrl(latestUrl ?? '');

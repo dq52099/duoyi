@@ -97,13 +97,36 @@ Color _highContrastForeground(Color background, Color preferred) {
       : Colors.white;
 }
 
+Color _buttonActionBackground(Color primary, {required bool isDark}) {
+  final preferredForeground = isDark ? const Color(0xFF111827) : Colors.white;
+  if (_contrastRatio(primary, preferredForeground) >= 4.5) return primary;
+
+  final target = isDark ? Colors.white : const Color(0xFF111827);
+  for (final amount in const <double>[0.08, 0.14, 0.20, 0.26, 0.32, 0.38]) {
+    final candidate = Color.lerp(primary, target, amount)!;
+    if (_contrastRatio(candidate, preferredForeground) >= 4.5) {
+      return candidate;
+    }
+  }
+  return Color.lerp(primary, target, isDark ? 0.42 : 0.44)!;
+}
+
 ThemeData _withSharedControls(ThemeData theme) {
   final cs = theme.colorScheme;
   final isDark = theme.brightness == Brightness.dark;
   final surface = cs.surface;
   final primaryForeground = _highContrastForeground(cs.primary, cs.onPrimary);
+  final actionBackground = _buttonActionBackground(cs.primary, isDark: isDark);
+  final actionForeground = _highContrastForeground(
+    actionBackground,
+    isDark ? const Color(0xFF111827) : Colors.white,
+  );
   final surfaceTint = Colors.transparent;
   final outline = cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.14);
+  final actionBorder = Color.alphaBlend(
+    cs.outline.withValues(alpha: isDark ? 0.44 : 0.34),
+    surface,
+  );
   final fill = Color.alphaBlend(
     cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.52 : 0.64),
     surface,
@@ -135,7 +158,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     fontWeight: FontWeight.w400,
   );
   final selectedControlBackground = Color.alphaBlend(
-    cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+    cs.primary.withValues(alpha: isDark ? 0.20 : 0.14),
     surface,
   );
   final selectedControlForeground = _highContrastForeground(
@@ -307,31 +330,51 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: cs.primary,
-        foregroundColor: primaryForeground,
+        backgroundColor: actionBackground,
+        foregroundColor: actionForeground,
         disabledBackgroundColor: cs.onSurface.withValues(alpha: 0.08),
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        minimumSize: const Size(0, 40),
+        overlayColor: actionForeground.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: label,
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: actionBackground,
+        foregroundColor: actionForeground,
+        disabledBackgroundColor: cs.onSurface.withValues(alpha: 0.08),
+        disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        minimumSize: const Size(0, 40),
+        overlayColor: actionForeground.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: cs.onSurface,
-        side: BorderSide(color: outline, width: 0.4),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        side: BorderSide(color: actionBorder, width: 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        minimumSize: const Size(0, 38),
+        overlayColor: cs.primary.withValues(alpha: 0.07),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: cs.primary,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        foregroundColor: actionBackground,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        minimumSize: const Size(0, 36),
+        overlayColor: actionBackground.withValues(alpha: 0.07),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
       ),
@@ -356,11 +399,14 @@ ThemeData _withSharedControls(ThemeData theme) {
         side: WidgetStateProperty.resolveWith<BorderSide?>((states) {
           if (states.contains(WidgetState.selected)) {
             return BorderSide(
-              color: cs.primary.withValues(alpha: 0.28),
-              width: 0.45,
+              color: Color.alphaBlend(
+                cs.primary.withValues(alpha: isDark ? 0.44 : 0.38),
+                surface,
+              ),
+              width: 0.7,
             );
           }
-          return BorderSide(color: outline.withValues(alpha: 0.72), width: 0.4);
+          return BorderSide(color: actionBorder, width: 0.6);
         }),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -379,7 +425,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
-        foregroundColor: cs.onSurfaceVariant,
+        minimumSize: const Size(40, 40),
         padding: const EdgeInsets.all(10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -569,8 +615,8 @@ ThemeData _withSharedControls(ThemeData theme) {
       }),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: cs.primary,
-      foregroundColor: primaryForeground,
+      backgroundColor: actionBackground,
+      foregroundColor: actionForeground,
       elevation: 0,
       focusElevation: 0,
       hoverElevation: 0,
@@ -584,14 +630,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       elevation: 0,
       shadowColor: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
       shape: dialogShape,
-      headerBackgroundColor: cs.primary,
-      headerForegroundColor: primaryForeground,
+      headerBackgroundColor: actionBackground,
+      headerForegroundColor: actionForeground,
       headerHeadlineStyle: theme.textTheme.headlineSmall?.copyWith(
-        color: primaryForeground,
+        color: actionForeground,
         fontWeight: FontWeight.w400,
       ),
       headerHelpStyle: bodyMuted?.copyWith(
-        color: primaryForeground.withValues(alpha: 0.84),
+        color: actionForeground.withValues(alpha: 0.84),
       ),
       weekdayStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onSurfaceVariant,
@@ -603,13 +649,13 @@ ThemeData _withSharedControls(ThemeData theme) {
           return cs.onSurface.withValues(alpha: 0.24);
         }
         if (states.contains(WidgetState.selected)) {
-          return primaryForeground;
+          return actionForeground;
         }
         return cs.onSurface;
       }),
       dayBackgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.selected)) {
-          return cs.primary;
+          return actionBackground;
         }
         return Colors.transparent;
       }),
@@ -628,13 +674,13 @@ ThemeData _withSharedControls(ThemeData theme) {
       yearStyle: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
       yearForegroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.selected)) {
-          return primaryForeground;
+          return actionForeground;
         }
         return cs.onSurface;
       }),
       yearBackgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
         if (states.contains(WidgetState.selected)) {
-          return cs.primary;
+          return actionBackground;
         }
         return Colors.transparent;
       }),
@@ -651,8 +697,8 @@ ThemeData _withSharedControls(ThemeData theme) {
         textStyle: label,
       ),
       confirmButtonStyle: FilledButton.styleFrom(
-        backgroundColor: cs.primary,
-        foregroundColor: primaryForeground,
+        backgroundColor: actionBackground,
+        foregroundColor: actionForeground,
         minimumSize: const Size(0, 40),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,
@@ -683,8 +729,8 @@ ThemeData _withSharedControls(ThemeData theme) {
         fontWeight: FontWeight.w400,
       ),
       confirmButtonStyle: FilledButton.styleFrom(
-        backgroundColor: cs.primary,
-        foregroundColor: primaryForeground,
+        backgroundColor: actionBackground,
+        foregroundColor: actionForeground,
         minimumSize: const Size(0, 40),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: label,

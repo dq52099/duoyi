@@ -21,8 +21,20 @@ bool shouldForceAppUpdate({
   required String? latestVersion,
   required String? minimumSupportedVersion,
   required bool forceUpdateRequired,
+  int? currentVersionCode,
+  int? latestVersionCode,
+  int? minimumSupportedVersionCode,
 }) {
   if (!forceUpdateRequired) return false;
+  if (currentVersionCode != null && currentVersionCode > 0) {
+    if (latestVersionCode != null && latestVersionCode > currentVersionCode) {
+      return true;
+    }
+    if (minimumSupportedVersionCode != null &&
+        minimumSupportedVersionCode > currentVersionCode) {
+      return true;
+    }
+  }
   final latest = latestVersion?.trim();
   if (latest != null &&
       latest.isNotEmpty &&

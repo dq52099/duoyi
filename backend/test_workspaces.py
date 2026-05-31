@@ -2286,9 +2286,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version_code": api._version_to_code(
-                            api.APP_CURRENT_VERSION
-                        )
+                        "current_version_code": api.APP_CURRENT_VERSION_CODE
                     },
                 )
             self.assertEqual(response.status_code, 200)
@@ -2333,9 +2331,7 @@ class WorkspaceApiTest(unittest.TestCase):
                     "/api/mobile/apps/duoyi/update",
                     params={
                         "current_version": api.APP_CURRENT_VERSION,
-                        "current_version_code": api._version_to_code(
-                            api.APP_CURRENT_VERSION
-                        ),
+                        "current_version_code": api.APP_CURRENT_VERSION_CODE,
                     },
                 )
             self.assertEqual(response.status_code, 200)
@@ -2368,9 +2364,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version_code": api._version_to_code(
-                            api.APP_CURRENT_VERSION
-                        )
+                        "current_version_code": api.APP_CURRENT_VERSION_CODE
                     },
                 )
             self.assertEqual(response.status_code, 200)
@@ -2405,9 +2399,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version_code": api._version_to_code(
-                            api.APP_CURRENT_VERSION
-                        )
+                        "current_version_code": api.APP_CURRENT_VERSION_CODE
                     },
                 )
             self.assertEqual(response.status_code, 200)
@@ -2449,7 +2441,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 {
                     "apk_name": "duoyi.apk",
                     "version_name": next_version,
-                    "version_code": api._version_to_code(next_version),
+                    "version_code": api._app_version_code(next_version),
                     "release_notes": "发布通道修复通知和小组件问题",
                 },
                 handle,
@@ -2469,9 +2461,7 @@ class WorkspaceApiTest(unittest.TestCase):
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version_code": api._version_to_code(
-                            api.APP_CURRENT_VERSION
-                        )
+                        "current_version_code": api.APP_CURRENT_VERSION_CODE
                     },
                 )
             self.assertEqual(response.status_code, 200)
@@ -2485,6 +2475,70 @@ class WorkspaceApiTest(unittest.TestCase):
             self.assertIn("/api/mobile/apps/duoyi/download", mobile["download_url"])
         finally:
             api.APP_UPDATE_REPOSITORY = old_repository
+            api.MOBILE_APK_DIR = old_mobile_apk_dir
+
+    def test_stale_release_channel_does_not_downgrade_mobile_update(self):
+        old_github_latest = api._github_latest_mobile_release
+        old_mobile_apk_dir = api.MOBILE_APK_DIR
+        api.MOBILE_APK_DIR = os.path.join(self._tmp.name, "empty_mobile_apps")
+
+        def stale_release():
+            return {
+                "latest_version_name": "1.1.12",
+                "latest_version_code": 110012,
+                "download_url": "https://example.test/duoyi-1.1.12.apk",
+                "release_notes": "旧发布不应覆盖当前版本",
+            }
+
+        api._github_latest_mobile_release = stale_release
+        try:
+            db = api.get_db()
+            try:
+                api._setting_set(db, "latest_version", "1.1.12")
+                api._setting_set(db, "latest_version_name", "1.1.12")
+                api._setting_set(
+                    db,
+                    "download_url",
+                    "https://example.test/duoyi-1.1.12.apk",
+                )
+                api._setting_set(
+                    db,
+                    "update_download_url",
+                    "https://example.test/duoyi-1.1.12.apk",
+                )
+                db.commit()
+            finally:
+                db.close()
+            with TestClient(api.app) as client:
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version": "1.1.12",
+                        "current_version_code": "110012",
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["available"])
+            self.assertEqual(mobile["latest_version_name"], api.APP_CURRENT_VERSION)
+            self.assertEqual(mobile["latest_version_code"], api.APP_CURRENT_VERSION_CODE)
+            self.assertEqual(mobile["download_url"], "")
+            self.assertNotIn("1.1.12", mobile["release_url"])
+
+            current_response = client.get(
+                "/api/mobile/apps/duoyi/update",
+                params={"current_version": api.APP_CURRENT_VERSION},
+            )
+            self.assertEqual(current_response.status_code, 200)
+            current_mobile = current_response.json()
+            self.assertFalse(current_mobile["available"])
+            self.assertEqual(
+                current_mobile["current_version_code"],
+                api.APP_CURRENT_VERSION_CODE,
+            )
+            self.assertEqual(current_mobile["download_url"], "")
+        finally:
+            api._github_latest_mobile_release = old_github_latest
             api.MOBILE_APK_DIR = old_mobile_apk_dir
 
     def test_email_code_login_uses_verified_bound_email(self):

@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.Base64
 import org.gradle.api.GradleException
 
 plugins {
@@ -18,6 +19,25 @@ val keystoreProperties = Properties().apply {
 
 fun ksProp(name: String, env: String): String? =
     (keystoreProperties[name] as? String) ?: System.getenv(env)
+
+fun releaseStoreFile(): File? {
+    val storePath = ksProp("storeFile", "DUOYI_KEYSTORE_PATH")
+    if (!storePath.isNullOrBlank()) {
+        return file(storePath)
+    }
+    val encoded = System.getenv("DUOYI_KEYSTORE_BASE64")?.trim()
+    if (encoded.isNullOrEmpty()) {
+        return null
+    }
+    val target = layout.buildDirectory.file("generated/signing/duoyi-release.jks").get().asFile
+    target.parentFile.mkdirs()
+    try {
+        target.writeBytes(Base64.getMimeDecoder().decode(encoded))
+    } catch (e: IllegalArgumentException) {
+        throw GradleException("DUOYI_KEYSTORE_BASE64 is not valid base64.", e)
+    }
+    return target
+}
 
 android {
     namespace = "com.duoyi.duoyi"
@@ -44,12 +64,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val storePath = ksProp("storeFile", "DUOYI_KEYSTORE_PATH")
+            val store = releaseStoreFile()
             val storePass = ksProp("storePassword", "DUOYI_KEYSTORE_PASSWORD")
             val keyAlias = ksProp("keyAlias", "DUOYI_KEY_ALIAS")
             val keyPass = ksProp("keyPassword", "DUOYI_KEY_PASSWORD")
-            if (storePath != null && storePass != null && keyAlias != null && keyPass != null) {
-                storeFile = file(storePath)
+            if (store != null && storePass != null && keyAlias != null && keyPass != null) {
+                storeFile = store
                 storePassword = storePass
                 this.keyAlias = keyAlias
                 keyPassword = keyPass

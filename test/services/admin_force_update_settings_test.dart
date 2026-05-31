@@ -101,6 +101,7 @@ void main() {
     expect(updateService, contains("'/api/mobile/apps/duoyi/update'"));
     expect(updateService, contains('_checkBackendMobileUpdate'));
     expect(updateService, contains('current_version_code'));
+    expect(mainApp, contains('currentVersionCode: AppVersion.build'));
     expect(updateService, contains("data['release_notes']"));
     expect(updateService, contains("data['force_update']"));
     expect(updateService, contains("'/api/config'"));
@@ -234,7 +235,10 @@ void main() {
     expect(adminApi, contains('Future<AdminPage> listUsersPage'));
     expect(adminApi, contains("'/api/admin/users'"));
     expect(adminApi, contains("final path = _path('/api/admin/settings'"));
-    expect(adminApi, contains('Future<Map<String, dynamic>> getSystemSettings()'));
+    expect(
+      adminApi,
+      contains('Future<Map<String, dynamic>> getSystemSettings()'),
+    );
     expect(
       adminApi,
       contains(

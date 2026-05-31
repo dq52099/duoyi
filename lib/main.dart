@@ -224,6 +224,7 @@ void main() async {
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
     currentVersion: AppVersion.name,
+    currentVersionCode: AppVersion.build,
   );
 
   String firstNonEmptyProfileText(List<String?> values) {

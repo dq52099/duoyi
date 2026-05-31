@@ -68,6 +68,14 @@ def _api_contract_payload() -> dict:
         "features": API_CONTRACT_FEATURES,
     }
 
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
@@ -156,7 +164,11 @@ EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp"
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
 DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
-APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.10"))
+APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.13"))
+APP_CURRENT_VERSION_CODE = _env_int(
+    "APP_CURRENT_VERSION_CODE",
+    _env_int("DUOYI_APP_VERSION_CODE", 120013),
+)
 APP_PACKAGE_NAME = os.getenv("APP_PACKAGE_NAME", "com.duoyi.duoyi")
 APP_UPDATE_REPOSITORY = os.getenv("APP_UPDATE_REPOSITORY", "dq52099/duoyi")
 APP_UPDATE_DEFAULT_NOTES = os.getenv("APP_UPDATE_DEFAULT_NOTES", "包含最新修复与体验优化。")
@@ -391,6 +403,18 @@ def _version_to_code(value: str) -> int:
     return major * 100000 + minor * 10000 + patch
 
 
+def _app_version_code(value: str) -> int:
+    normalized = str(value or "").strip().removeprefix("v")
+    current = str(APP_CURRENT_VERSION or "").strip().removeprefix("v")
+    if normalized == current:
+        return APP_CURRENT_VERSION_CODE
+    computed = _version_to_code(normalized)
+    if _version_gt(normalized, current) and computed <= APP_CURRENT_VERSION_CODE:
+        current_computed = _version_to_code(current)
+        return APP_CURRENT_VERSION_CODE + max(1, computed - current_computed)
+    return computed
+
+
 def _next_patch_version(value: str) -> str:
     parts = _version_parts(value)
     while len(parts) < 3:
@@ -494,7 +518,7 @@ def _update_release_defaults(db) -> dict:
     return {
         "current_version": APP_CURRENT_VERSION,
         "current_version_name": APP_CURRENT_VERSION,
-        "current_version_code": _version_to_code(APP_CURRENT_VERSION),
+        "current_version_code": APP_CURRENT_VERSION_CODE,
         "app_package_name": APP_PACKAGE_NAME,
         "version_options": _update_version_options(
             latest_version,
@@ -504,7 +528,9 @@ def _update_release_defaults(db) -> dict:
         "force_app_update_enabled": force_update_required,
         "latest_version": latest_version,
         "latest_version_name": latest_version,
-        "latest_version_code": _version_to_code(latest_version or APP_CURRENT_VERSION),
+        "latest_version_code": _app_version_code(
+            latest_version or APP_CURRENT_VERSION
+        ),
         "minimum_supported_version": minimum_supported_version,
         "update_notes": update_notes,
         "release_notes": update_notes,
@@ -646,7 +672,7 @@ def _github_latest_mobile_release() -> Optional[dict]:
         return None
     return {
         "latest_version_name": version_name,
-        "latest_version_code": _version_to_code(version_name),
+        "latest_version_code": _app_version_code(version_name),
         "download_url": str((apk_asset or {}).get("browser_download_url") or ""),
         "file_size": int((apk_asset or {}).get("size") or 0),
         "release_notes": str(release.get("body") or APP_UPDATE_DEFAULT_NOTES),
@@ -666,7 +692,7 @@ def _local_mobile_release(request: Request, app_id: str) -> Optional[dict]:
     return {
         "latest_version_name": version_name,
         "latest_version_code": int(
-            manifest.get("version_code") or _version_to_code(version_name)
+            manifest.get("version_code") or _app_version_code(version_name)
         ),
         "download_url": str(request.base_url).rstrip("/") + download_path,
         "download_path": download_path,
@@ -711,6 +737,14 @@ def _is_local_mobile_download_url(value: str, app_id: str) -> bool:
     return normalized == f"/api/mobile/apps/{app_id}/download"
 
 
+def _download_url_matches_version(value: str, version: str) -> bool:
+    clean = str(value or "").strip().lower()
+    normalized_version = str(version or "").strip().lower().removeprefix("v")
+    if not clean or not normalized_version:
+        return False
+    return normalized_version in urllib.parse.unquote(clean)
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -747,7 +781,16 @@ def _mobile_update_response(
         or settings_payload["minimum_supported_version"]
         or ""
     ).strip()
+    if configured_version_name and _version_gt(APP_CURRENT_VERSION, configured_version_name):
+        configured_version_name = ""
     release_version_name = str(release.get("latest_version_name") or "").strip()
+    release_version_is_current_or_newer = bool(
+        release_version_name
+        and not _version_gt(APP_CURRENT_VERSION, release_version_name)
+    )
+    if release and not release_version_is_current_or_newer:
+        release = {}
+        release_version_name = ""
     configured_version_is_newer = bool(
         configured_version_name
         and _version_gt(configured_version_name, APP_CURRENT_VERSION)
@@ -763,20 +806,36 @@ def _mobile_update_response(
         else effective_release_version or configured_version_name or APP_CURRENT_VERSION
     ).strip()
     latest_version_code = (
-        _version_to_code(latest_version_name)
+        _app_version_code(latest_version_name)
         if configured_version_is_newer or not effective_release_version
-        else int(release.get("latest_version_code") or _version_to_code(latest_version_name))
+        else int(
+            release.get("latest_version_code") or _app_version_code(latest_version_name)
+        )
     )
     minimum_supported_version = str(
         settings_payload["minimum_supported_version"] or APP_CURRENT_VERSION
     ).strip()
-    minimum_supported_version_code = _version_to_code(minimum_supported_version)
+    minimum_supported_version_code = _app_version_code(minimum_supported_version)
     if _version_gt(minimum_supported_version, latest_version_name):
         latest_version_name = minimum_supported_version
         latest_version_code = minimum_supported_version_code
-    download_url = str(
-        settings_payload["download_url"] or release.get("download_url") or ""
-    ).strip()
+    configured_download_url = str(settings_payload["download_url"] or "").strip()
+    release_download_url = str(release.get("download_url") or "").strip()
+    configured_download_matches_version = _download_url_matches_version(
+        configured_download_url,
+        latest_version_name,
+    )
+    configured_download_allowed = bool(
+        configured_download_url
+        and (
+            configured_version_is_newer
+            or _version_gt(minimum_supported_version, APP_CURRENT_VERSION)
+            or configured_download_matches_version
+        )
+    )
+    download_url = (
+        configured_download_url if configured_download_allowed else release_download_url
+    )
     if (
         _is_local_mobile_download_url(download_url, normalized_app_id)
         and _resolve_local_mobile_apk(normalized_app_id) is None
@@ -793,7 +852,7 @@ def _mobile_update_response(
     client_version_name = str(current_version or "").strip()
     effective_current_version_code = int(current_version_code or 0)
     if effective_current_version_code <= 0 and client_version_name:
-        effective_current_version_code = _version_to_code(client_version_name)
+        effective_current_version_code = _app_version_code(client_version_name)
     below_minimum = minimum_supported_version_code > effective_current_version_code
     available = latest_version_code > effective_current_version_code
     force_update_required = bool(
@@ -9088,7 +9147,7 @@ def _system_settings_payload(actor: str) -> dict:
             "current_version_name", APP_CURRENT_VERSION
         ),
         "current_version_code": settings_map.get(
-            "current_version_code", _version_to_code(APP_CURRENT_VERSION)
+            "current_version_code", APP_CURRENT_VERSION_CODE
         ),
         "app_package_name": settings_map.get("app_package_name", APP_PACKAGE_NAME),
         "version_options": settings_map.get("version_options", []),
