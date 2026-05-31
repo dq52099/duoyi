@@ -187,12 +187,18 @@ class _CountdownScreenState extends State<CountdownScreen> {
                               Row(
                                 children: [
                                   _SummaryStat(
+                                    key: const ValueKey(
+                                      'countdown_summary_total',
+                                    ),
                                     label: I18n.tr('countdown.summary.total'),
                                     value: '${items.length}',
                                     color: cs.primary,
                                   ),
                                   const SizedBox(width: 14),
                                   _SummaryStat(
+                                    key: const ValueKey(
+                                      'countdown_summary_within_7_days',
+                                    ),
                                     label: I18n.tr(
                                       'countdown.summary.within_7_days',
                                     ),
@@ -676,6 +682,7 @@ class _SummaryStat extends StatelessWidget {
   final Color color;
 
   const _SummaryStat({
+    super.key,
     required this.label,
     required this.value,
     required this.color,
@@ -702,14 +709,14 @@ class _SummaryStat extends StatelessWidget {
           value,
           style: appSecondaryRouteTitleTextStyle(
             context,
-          ).copyWith(fontWeight: FontWeight.w400, color: cs.onSurface),
+          ).copyWith(fontWeight: FontWeight.normal, color: cs.onSurface),
         ),
         const SizedBox(height: 2),
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.62),
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],
@@ -920,7 +927,7 @@ class _CountdownCardState extends State<_CountdownCard> {
                               '$absDays',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: color,
                                 height: 1.0,
                               ),
@@ -931,7 +938,7 @@ class _CountdownCardState extends State<_CountdownCard> {
                               style: TextStyle(
                                 fontSize: 11,
                                 color: color,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ],
@@ -1050,7 +1057,7 @@ class _CountdownInlineSwipeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
       color: foreground,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
       height: 1.1,
     );
     return Material(
@@ -1103,7 +1110,7 @@ class _StatusPill extends StatelessWidget {
             style: TextStyle(
               fontSize: 10,
               color: color,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ],

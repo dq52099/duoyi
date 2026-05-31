@@ -51,6 +51,12 @@ class ReminderRingtoneSettings {
   static const List<int> presets = <int>[40, 60, 80];
   static const List<ReminderRingtoneOption> sounds = <ReminderRingtoneOption>[
     ReminderRingtoneOption(id: 'soft', label: '柔和晨铃'),
+    ReminderRingtoneOption(id: 'forest', label: '林间晨露'),
+    ReminderRingtoneOption(id: 'silver', label: '银铃微光'),
+    ReminderRingtoneOption(id: 'paper', label: '纸页轻响'),
+    ReminderRingtoneOption(id: 'stream', label: '溪流短铃'),
+    ReminderRingtoneOption(id: 'star', label: '星光提示'),
+    ReminderRingtoneOption(id: 'marimba', label: '远山木琴'),
     ReminderRingtoneOption(id: 'lull', label: '轻柔和弦'),
     ReminderRingtoneOption(id: 'glass', label: '玻璃轻响'),
     ReminderRingtoneOption(id: 'bamboo', label: '竹影轻铃'),

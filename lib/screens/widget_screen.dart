@@ -438,7 +438,7 @@ class _WidgetPinSupportBanner extends StatelessWidget {
                   title,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -446,7 +446,7 @@ class _WidgetPinSupportBanner extends StatelessWidget {
                   message,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ],
@@ -544,7 +544,7 @@ class _WidgetDisplayModePanel extends StatelessWidget {
               const Expanded(
                 child: Text(
                   '新添加默认样式',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
                 ),
               ),
             ],
@@ -926,7 +926,7 @@ class WidgetPreviewCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -1411,7 +1411,7 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
           style: const TextStyle(
             color: Colors.blue,
             fontSize: 11,
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ),
@@ -1499,7 +1499,7 @@ class _WidgetPreviewMetric extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
             color: color,
           ),
         ),
@@ -1545,7 +1545,7 @@ class _WidgetPreviewNav extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     color: i == selectedIndex ? accent : cs.onSurfaceVariant,
                   ),
                 ),

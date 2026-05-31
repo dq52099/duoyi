@@ -513,6 +513,23 @@ class CalendarProvider extends ChangeNotifier {
     return map.map((k, v) => MapEntry(k, v.toList()));
   }
 
+  Map<String, int> filteredDateEventCounts(
+    Set<CalendarEventType>? activeTypes, {
+    String? projectKey,
+    String? workspaceId,
+  }) {
+    final map = <String, int>{};
+    for (final e in _events) {
+      if (activeTypes != null && !activeTypes.contains(e.type)) continue;
+      if (!_matchesProject(e, projectKey)) continue;
+      if (!_matchesWorkspace(e, workspaceId)) continue;
+      for (final key in _eventDateKeys(e)) {
+        map[key] = (map[key] ?? 0) + 1;
+      }
+    }
+    return map;
+  }
+
   bool _matchesProject(CalendarEvent event, String? projectKey) {
     if (projectKey == null) return true;
     if (event.type != CalendarEventType.todo) return false;

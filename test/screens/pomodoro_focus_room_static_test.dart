@@ -143,4 +143,86 @@ void main() {
     expect(backup, contains("'duoyi_focus_rooms'"));
     expect(sync, contains("'duoyi_focus_rooms': 'focus_rooms'"));
   });
+
+  test('Focus room tab shows server errors while rendering local fallback', () {
+    final screen = File('lib/screens/pomodoro_screen.dart').readAsStringSync();
+    final tabBlock = _between(
+      screen,
+      'class _FocusRoomTabState',
+      'Future<void> _showFocusRoomInviteSheet',
+    );
+
+    expect(tabBlock, contains('rooms.effectiveRankingFor'));
+    expect(tabBlock, contains('if (rooms.lastRemoteError != null)'));
+    expect(tabBlock, contains("label: '服务端连接异常，已显示本地排行'"));
+    expect(tabBlock, contains('Icons.cloud_off_outlined'));
+    expect(tabBlock, contains('Theme.of(context).colorScheme.outline'));
+    expect(tabBlock, contains('_FocusRoomRankingCard(ranking: ranking)'));
+    expect(screen, contains("label: ranking.remote ? '服务端排行' : '本地排行'"));
+    expect(
+      screen,
+      contains(
+        "ranking.remote\n                    ? Icons.cloud_done_outlined\n                    : Icons.storage_outlined",
+      ),
+    );
+  });
+
+  test(
+    'Focus room tab isolates stopwatch ticks from scrollable ranking work',
+    () {
+      final screen = File(
+        'lib/screens/pomodoro_screen.dart',
+      ).readAsStringSync();
+      final pomodoroProvider = File(
+        'lib/providers/pomodoro_provider.dart',
+      ).readAsStringSync();
+      final tabBlock = _between(
+        screen,
+        'class _FocusRoomTabState',
+        'Future<void> _showFocusRoomInviteSheet',
+      );
+      final tickBlock = _between(
+        pomodoroProvider,
+        'void _notifyTimerTick()',
+        'void _cancelTimer()',
+      );
+
+      expect(
+        tabBlock,
+        contains('with AutomaticKeepAliveClientMixin<_FocusRoomTab>'),
+      );
+      expect(
+        tabBlock,
+        contains("PageStorageKey<String>('focus_room_tab_scroll')"),
+      );
+      expect(tabBlock, contains('context.select<PomodoroProvider, int>'));
+      expect(tabBlock, contains('provider.persistedRevision'));
+      expect(
+        tabBlock,
+        contains(
+          '_scheduleRoomRefresh(context, rooms, pomodoroRevision, displayName)',
+        ),
+      );
+      expect(
+        tabBlock,
+        contains('WidgetsBinding.instance.addPostFrameCallback'),
+      );
+      expect(tabBlock, contains('_refreshScheduled'));
+      expect(tabBlock, isNot(contains('remainingSeconds')));
+      expect(tabBlock, isNot(contains('timerTicks')));
+      expect(tabBlock, isNot(contains('context.watch<PomodoroProvider>()')));
+
+      expect(pomodoroProvider, contains('ValueListenable<int> get timerTicks'));
+      expect(pomodoroProvider, contains('_timerTicks.value++'));
+      expect(tickBlock, isNot(contains('notifyListeners()')));
+    },
+  );
+}
+
+String _between(String source, String start, String end) {
+  final startIndex = source.indexOf(start);
+  expect(startIndex, isNonNegative, reason: start);
+  final endIndex = source.indexOf(end, startIndex);
+  expect(endIndex, isNonNegative, reason: end);
+  return source.substring(startIndex, endIndex);
 }

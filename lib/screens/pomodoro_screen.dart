@@ -619,7 +619,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                           ?.copyWith(
                                             fontSize: tight ? 15 : 17,
                                             color: cs.onSurface,
-                                            fontWeight: FontWeight.w400,
+                                            fontWeight: FontWeight.normal,
                                           ),
                                     ),
                                     const SizedBox(height: 2),
@@ -652,7 +652,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   state.isRunning ? '进行中' : '已暂停',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    fontWeight: FontWeight.w400,
+                                    fontWeight: FontWeight.normal,
                                     color: color,
                                   ),
                                 ),
@@ -720,7 +720,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                                   alpha: 0.72,
                                                 ),
                                                 fontSize: 12,
-                                                fontWeight: FontWeight.w400,
+                                                fontWeight: FontWeight.normal,
                                               ),
                                             ),
                                           ),
@@ -1715,7 +1715,7 @@ class _FocusRoomTile extends StatelessWidget {
                           fontSize: 11,
                           height: 1.05,
                           color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1727,7 +1727,7 @@ class _FocusRoomTile extends StatelessWidget {
                           fontSize: compact ? 12 : 13,
                           height: 1.08,
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
@@ -1828,7 +1828,7 @@ class _StrictFocusTile extends StatelessWidget {
                           fontSize: 11,
                           height: 1.05,
                           color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1840,7 +1840,7 @@ class _StrictFocusTile extends StatelessWidget {
                           fontSize: compact ? 12 : 13,
                           height: 1.08,
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
@@ -2201,7 +2201,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w400),
+                            ?.copyWith(fontWeight: FontWeight.normal),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -2961,7 +2961,7 @@ class _FocusFriendSheetLabel extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.normal,
         ),
       ),
     );
@@ -3025,7 +3025,7 @@ class _FocusFriendRequestTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3115,7 +3115,7 @@ class _FocusFriendTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3204,7 +3204,7 @@ class _FocusRoomInviteTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     letterSpacing: 0,
                   ),
                 ),
@@ -3289,7 +3289,7 @@ class _FocusSocialRankingCard extends StatelessWidget {
                   ranking.title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -3390,14 +3390,14 @@ class _FocusRoomRankingCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 '${ranking.userWeeklyMinutes} / ${ranking.room.weeklyTargetSeconds ~/ 60} 分钟',
-                style: TextStyle(color: color, fontWeight: FontWeight.w400),
+                style: TextStyle(color: color, fontWeight: FontWeight.normal),
               ),
             ],
           ),
@@ -3464,7 +3464,7 @@ class _FocusRankingEntryRow extends StatelessWidget {
             '#${entry.rank}',
             style: TextStyle(
               color: entry.isCurrentUser ? color : cs.onSurfaceVariant,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ),
@@ -3479,7 +3479,7 @@ class _FocusRankingEntryRow extends StatelessWidget {
                   style: TextStyle(
                     color: entry.isCurrentUser ? color : cs.onSurface,
                     fontWeight: entry.isCurrentUser
-                        ? FontWeight.w400
+                        ? FontWeight.normal
                         : FontWeight.normal,
                   ),
                 ),
@@ -3596,7 +3596,7 @@ class _FocusDndTile extends StatelessWidget {
                           fontSize: 11,
                           height: 1.05,
                           color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -3608,7 +3608,7 @@ class _FocusDndTile extends StatelessWidget {
                           fontSize: compact ? 12 : 13,
                           height: 1.08,
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
@@ -3694,7 +3694,7 @@ class _FocusControlTile extends StatelessWidget {
                           fontSize: 11,
                           height: 1.05,
                           color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -3706,7 +3706,7 @@ class _FocusControlTile extends StatelessWidget {
                           fontSize: compact ? 12 : 13,
                           height: 1.08,
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
@@ -3963,7 +3963,7 @@ class _HistoryTab extends StatelessWidget {
                   e.key,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withValues(alpha: 0.62),
@@ -4080,7 +4080,7 @@ class _MiniStat extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
             fontSize: 18,
             color: cs.onSurface,
           ),
@@ -4090,7 +4090,7 @@ class _MiniStat extends StatelessWidget {
           style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.62),
             fontSize: 12,
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],

@@ -1,5 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/models/focus_room.dart';
+import 'package:duoyi/services/api_client.dart';
+import 'package:duoyi/services/focus_room_api.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -374,4 +380,285 @@ void main() {
       contains('test_focus_room_invite_usage_limit_counts_first_join_only'),
     );
   });
+
+  test(
+    'FocusRoomApi calls create join heartbeat leave and ranking paths',
+    () async {
+      final calls = <String>[];
+      final bodies = <String, Map<String, dynamic>>{};
+      final api = FocusRoomApi(
+        ApiClient(
+          baseUrl: 'https://duoyi.test/api',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            final path = request.url.toString().replaceFirst(
+              'https://duoyi.test',
+              '',
+            );
+            final key = '${request.method} $path';
+            calls.add(key);
+            expect(request.headers['Authorization'], 'Bearer token-1');
+            if (request.body.isNotEmpty) {
+              bodies[key] = Map<String, dynamic>.from(jsonDecode(request.body));
+            }
+            return http.Response(
+              jsonEncode(_focusRoomApiResponseFor(key)),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      final room = FocusRoom(
+        id: 'deep/work room',
+        name: '深房',
+        description: 'path check',
+        weeklyTargetSeconds: 3600,
+        accentColor: 0xFF3949AB,
+        members: const <FocusRoomMemberSeed>[],
+        createdAt: DateTime(2026, 5, 31),
+      );
+      final expiresAt = DateTime(2026, 6, 7, 8);
+      final startedAt = DateTime(2026, 5, 31, 9, 30);
+
+      await api.createInvite(room: room, expiresAt: expiresAt, maxUses: 3);
+      await api.acceptInvite(code: 'CODE 123', displayName: '小多');
+      await api.heartbeat(
+        roomId: room.id,
+        displayName: '小多',
+        weeklySeconds: 1500,
+        sessionCount: 1,
+        active: true,
+        startedAt: startedAt,
+      );
+      await api.ranking(room.id);
+      await api.leave(room.id);
+      await api.friendRanking();
+      await api.globalRanking();
+
+      expect(calls, [
+        'POST /api/focus-rooms/deep%2Fwork%20room/invites',
+        'POST /api/focus-room-invites/CODE%20123/accept',
+        'POST /api/focus-rooms/deep%2Fwork%20room/heartbeat',
+        'GET /api/focus-rooms/deep%2Fwork%20room/ranking',
+        'POST /api/focus-rooms/deep%2Fwork%20room/leave',
+        'GET /api/focus-leaderboard/friends',
+        'GET /api/focus-leaderboard/global',
+      ]);
+
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/invites'],
+        containsPair('room_name', '深房'),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/invites'],
+        containsPair('max_uses', 3),
+      );
+      expect(
+        bodies['POST /api/focus-room-invites/CODE%20123/accept'],
+        containsPair('display_name', '小多'),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
+        containsPair('weekly_seconds', 1500),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
+        containsPair('started_at', startedAt.toIso8601String()),
+      );
+    },
+  );
+
+  test('focus room realtime SSE and WebSocket contracts stay aligned', () {
+    final api = File('lib/services/focus_room_api.dart').readAsStringSync();
+    final provider = File(
+      'lib/providers/focus_room_provider.dart',
+    ).readAsStringSync();
+    final backend = File('backend/main.py').readAsStringSync();
+
+    expect(api, contains("line.startsWith('event:')"));
+    expect(api, contains("line.startsWith('data:')"));
+    expect(api, contains("eventName == null || eventName == 'ranking'"));
+    expect(
+      api,
+      contains("if (event != null && event != 'ranking') return null;"),
+    );
+    expect(api, contains("if (data is! Map) return null;"));
+    expect(api, contains("'interval_seconds': intervalSeconds.toString()"));
+    expect(api, contains("'token': client.token!"));
+    expect(api, contains("base.scheme == 'https' ? 'wss' : 'ws'"));
+    expect(api, contains("yield* rankingWebSocketEvents"));
+    expect(api, contains("yield* rankingEvents"));
+    expect(api, contains("yield* globalRankingWebSocketEvents"));
+    expect(api, contains("yield* globalRankingEvents"));
+
+    expect(provider, contains('.realtimeRankingEvents'));
+    expect(provider, contains('.realtimeGlobalRankingEvents'));
+    expect(provider, contains('_lastRemoteError = null;'));
+    expect(provider, contains('_lastRemoteSyncAt = DateTime.now();'));
+    expect(provider, contains('_lastGlobalSyncAt = DateTime.now();'));
+    expect(provider, contains('_realtimeRetryAfter = DateTime.now().add'));
+    expect(provider, contains('const Duration(seconds: 30)'));
+    expect(provider, contains('_queueRealtimeNotify();'));
+
+    expect(backend, contains('@app.get("/api/focus-rooms/{room_id}/events")'));
+    expect(
+      backend,
+      contains('@app.websocket("/ws/focus-rooms/{room_id}/events")'),
+    );
+    expect(
+      backend,
+      contains('@app.get("/api/focus-leaderboard/global/events")'),
+    );
+    expect(
+      backend,
+      contains('@app.websocket("/ws/focus-leaderboard/global/events")'),
+    );
+    expect(backend, contains('"event: ranking\\n"'));
+    expect(
+      backend,
+      contains('f"data: {json.dumps(payload, ensure_ascii=False)}\\n\\n"'),
+    );
+    expect(
+      backend,
+      contains(
+        'await websocket.send_json({"event": "ranking", "data": payload})',
+      ),
+    );
+    expect(backend, contains('event in ("ping", "ranking")'));
+  });
+
+  test('focus room remote DTOs tolerate compatible JSON shapes', () {
+    final ranking = FocusRoomRemoteRanking.fromJson({
+      'room_id': 'room-a',
+      'online_count': 2.0,
+      'updated_at': '2026-05-31T08:00:00Z',
+      'entries': [
+        {
+          'user_id': 'u1',
+          'display_name': '小多',
+          'weekly_seconds': 1200.2,
+          'raw_weekly_seconds': 1800,
+          'session_count': 2,
+          'online': true,
+          'active': false,
+          'is_current_user': true,
+          'rank': 1,
+          'last_seen_at': '2026-05-31T08:01:00Z',
+          'risk_flags': '["heartbeat_throttled","session_count_jump_capped"]',
+          'risk_summary': '服务端校正',
+        },
+        {
+          'user_id': 'u2',
+          'display_name': '同学',
+          'risk_flags': 'daily_cap|future_session',
+        },
+      ],
+    });
+
+    expect(ranking.roomId, 'room-a');
+    expect(ranking.onlineCount, 2);
+    expect(ranking.entries.first.riskFlags, [
+      'heartbeat_throttled',
+      'session_count_jump_capped',
+    ]);
+    expect(ranking.entries.first.riskSummary, '服务端校正');
+    expect(ranking.entries.last.riskFlags, ['daily_cap', 'future_session']);
+    expect(ranking.entries.last.active, isTrue);
+
+    final invite = FocusRoomInvite.fromJson({
+      'id': 'invite-1',
+      'code': 'CODE',
+      'room': {
+        'id': 'room-a',
+        'name': '远程自习室',
+        'description': 'remote',
+        'weeklyTargetSeconds': 2400,
+        'accentColor': 0xFF00897B,
+      },
+      'expires_at': '2026-06-07T08:00:00Z',
+      'max_uses': 5.0,
+      'used_count': 1.0,
+      'last_used_at': '2026-06-01T08:00:00Z',
+      'revoked': 1,
+      'created_at': '2026-05-31T08:00:00Z',
+    });
+    expect(invite.room.id, 'room-a');
+    expect(invite.room.weeklyTargetSeconds, 2400);
+    expect(invite.maxUses, 5);
+    expect(invite.usedCount, 1);
+    expect(invite.revoked, isTrue);
+
+    final acceptResult = FocusRoomInviteAcceptResult.fromJson({'code': 'CODE'});
+    expect(acceptResult.code, 'CODE');
+    expect(acceptResult.room.id, isEmpty);
+    expect(acceptResult.ranking.entries, isEmpty);
+
+    final requests = FocusFriendRequests.fromJson({
+      'items': [
+        {'id': 'in-1', 'direction': 'incoming'},
+        {'id': 'out-1', 'direction': 'outgoing'},
+      ],
+    });
+    expect(requests.incoming.single.id, 'in-1');
+    expect(requests.outgoing.single.id, 'out-1');
+  });
 }
+
+Map<String, dynamic> _focusRoomApiResponseFor(String key) {
+  switch (key) {
+    case 'POST /api/focus-rooms/deep%2Fwork%20room/invites':
+      return {
+        'id': 'invite-1',
+        'code': 'CODE 123',
+        'room': _remoteRoomJson(),
+        'expires_at': '2026-06-07T08:00:00.000',
+        'max_uses': 3,
+        'used_count': 0,
+        'revoked': false,
+        'created_at': '2026-05-31T08:00:00.000',
+      };
+    case 'POST /api/focus-room-invites/CODE%20123/accept':
+      return {
+        'code': 'CODE 123',
+        'room': _remoteRoomJson(),
+        'ranking': _remoteRankingJson(),
+      };
+    case 'POST /api/focus-rooms/deep%2Fwork%20room/heartbeat':
+    case 'GET /api/focus-rooms/deep%2Fwork%20room/ranking':
+    case 'POST /api/focus-rooms/deep%2Fwork%20room/leave':
+    case 'GET /api/focus-leaderboard/friends':
+    case 'GET /api/focus-leaderboard/global':
+      return _remoteRankingJson();
+  }
+  return {'detail': 'unexpected $key'};
+}
+
+Map<String, dynamic> _remoteRoomJson() => {
+  'id': 'deep/work room',
+  'name': '深房',
+  'description': 'path check',
+  'weekly_target_seconds': 3600,
+  'accent_color': 0xFF3949AB,
+};
+
+Map<String, dynamic> _remoteRankingJson() => {
+  'room_id': 'deep/work room',
+  'online_count': 1,
+  'updated_at': '2026-05-31T08:00:00.000',
+  'entries': [
+    {
+      'user_id': 'u1',
+      'display_name': '小多',
+      'weekly_seconds': 1500,
+      'raw_weekly_seconds': 1500,
+      'session_count': 1,
+      'online': true,
+      'active': true,
+      'is_current_user': true,
+      'rank': 1,
+      'risk_flags': [],
+      'risk_summary': '',
+    },
+  ],
+};

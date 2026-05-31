@@ -47,6 +47,11 @@ void main() {
       );
 
       expect(provider.items.map((item) => item.title), contains('补丁发布日期'));
+
+      final reloaded = CountdownProvider();
+      await reloaded.loadFromStorage();
+
+      expect(reloaded.items.map((item) => item.title), ['旧倒数', '补丁发布日期']);
     },
   );
 

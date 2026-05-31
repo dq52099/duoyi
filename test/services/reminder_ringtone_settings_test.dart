@@ -89,6 +89,12 @@ void main() {
       ReminderRingtoneSettings.sounds.map((sound) => sound.id),
       containsAll(<String>[
         'soft',
+        'forest',
+        'silver',
+        'paper',
+        'stream',
+        'star',
+        'marimba',
         'lull',
         'glass',
         'bamboo',
@@ -112,12 +118,54 @@ void main() {
     expect(ReminderRingtoneSettings.sounds.first.label, '柔和晨铃');
     expect(
       ReminderRingtoneSettings.sounds
+          .firstWhere((sound) => sound.id == 'forest')
+          .label,
+      '林间晨露',
+    );
+    expect(
+      ReminderRingtoneSettings.sounds
           .firstWhere((sound) => sound.id == 'classic')
           .label,
       '经典闹钟柔和版',
     );
-    expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(18));
+    expect(ReminderRingtoneSettings.sounds.length, greaterThanOrEqualTo(24));
     expect(ReminderRingtoneSettings.presets, <int>[40, 60, 80]);
+  });
+
+  test('new gentle built-in ringtones use stable Android raw names', () {
+    const newSounds = <String, String>{
+      'forest': '林间晨露',
+      'silver': '银铃微光',
+      'paper': '纸页轻响',
+      'stream': '溪流短铃',
+      'star': '星光提示',
+      'marimba': '远山木琴',
+    };
+    final labelsById = {
+      for (final sound in ReminderRingtoneSettings.sounds)
+        sound.id: sound.label,
+    };
+    final rawFileNames = Directory('android/app/src/main/res/raw')
+        .listSync()
+        .whereType<File>()
+        .map((file) => file.uri.pathSegments.last)
+        .toSet();
+
+    expect(labelsById['soft'], '柔和晨铃');
+    expect(
+      ReminderRingtoneSettings.androidRawResourceNameFor(
+        ReminderRingtoneSettings.defaultSound,
+      ),
+      'duoyi_soft',
+    );
+    for (final entry in newSounds.entries) {
+      expect(labelsById[entry.key], entry.value);
+      expect(
+        ReminderRingtoneSettings.androidRawResourceNameFor(entry.key),
+        'duoyi_${entry.key}',
+      );
+      expect(rawFileNames, contains('duoyi_${entry.key}.wav'));
+    }
   });
 
   test('ringtone changes trigger unified native preview by default', () {
@@ -239,12 +287,18 @@ void main() {
     final service = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
     ).readAsStringSync();
+    final receiver = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt',
+    ).readAsStringSync();
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync();
     final localNotifications = File(
       'lib/services/local_notifications_io.dart',
     ).readAsStringSync();
+    final soundIds = ReminderRingtoneSettings.sounds
+        .map((sound) => sound.id)
+        .toList(growable: false);
 
     for (final sound in ReminderRingtoneSettings.sounds) {
       final file = File('android/app/src/main/res/raw/duoyi_${sound.id}.wav');
@@ -278,6 +332,36 @@ void main() {
       }
       expect(service, contains('R.raw.duoyi_${sound.id}'));
     }
+    expect(soundIds.toSet(), hasLength(soundIds.length));
+    expect(
+      _extractServiceMappedSoundIds(service),
+      unorderedEquals(soundIds),
+      reason: 'Android service soundResId must map every Dart ringtone option.',
+    );
+    expect(
+      _extractNormalizeSoundIds(service),
+      unorderedEquals(soundIds),
+      reason: 'Android service normalizeSoundName must accept every option.',
+    );
+    expect(
+      _extractNormalizeSoundIds(receiver),
+      unorderedEquals(soundIds),
+      reason: 'Fallback notification receiver must accept every option.',
+    );
+    expect(
+      Directory('android/app/src/main/res/raw')
+          .listSync()
+          .whereType<File>()
+          .map((file) => file.uri.pathSegments.last)
+          .where((name) => name.startsWith('duoyi_') && name.endsWith('.wav'))
+          .map(
+            (name) => name
+                .replaceFirst('duoyi_', '')
+                .replaceFirst(RegExp(r'\.wav$'), ''),
+          ),
+      unorderedEquals(soundIds),
+      reason: 'Raw ringtone files should not drift from the in-app catalog.',
+    );
     expect(
       ReminderRingtoneSettings.androidRawResourceNameFor('missing'),
       'duoyi_soft',
@@ -470,4 +554,27 @@ int _wavPcm16Rms(File file) {
     offset = chunkStart + chunkSize + (chunkSize.isOdd ? 1 : 0);
   }
   return 0;
+}
+
+List<String> _extractServiceMappedSoundIds(String source) {
+  final matches = RegExp(
+    r'"([a-z0-9_]+)" -> R\.raw\.duoyi_([a-z0-9_]+)',
+  ).allMatches(source);
+  return [
+    for (final match in matches)
+      if (match.group(1) == match.group(2)) match.group(1)!,
+  ];
+}
+
+List<String> _extractNormalizeSoundIds(String source) {
+  final methodStart = source.indexOf('private fun normalizeSoundName');
+  expect(methodStart, greaterThanOrEqualTo(0));
+  final whenStart = source.indexOf('return when (value) {', methodStart);
+  expect(whenStart, greaterThan(methodStart));
+  final elseStart = source.indexOf('else -> "soft"', whenStart);
+  expect(elseStart, greaterThan(whenStart));
+  final block = source.substring(whenStart, elseStart);
+  return RegExp(
+    r'"([a-z0-9_]+)"',
+  ).allMatches(block).map((match) => match.group(1)!).toList();
 }

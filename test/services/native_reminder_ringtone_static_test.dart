@@ -471,6 +471,12 @@ void main() {
 
     for (final name in [
       'soft',
+      'forest',
+      'silver',
+      'paper',
+      'stream',
+      'star',
+      'marimba',
       'lull',
       'glass',
       'bamboo',

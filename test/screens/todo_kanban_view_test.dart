@@ -148,6 +148,26 @@ void main() {
 
       await tester.tap(find.text('列表'));
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('todo_swipe_detail_button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('todo_swipe_delete_button')),
+        findsNothing,
+      );
+
+      await tester.drag(find.text('左滑任务'), const Offset(120, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('todo_swipe_detail_button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('todo_swipe_delete_button')),
+        findsNothing,
+      );
+
       await tester.drag(find.text('左滑任务'), const Offset(-160, 0));
       await tester.pumpAndSettle();
 
@@ -206,6 +226,26 @@ void main() {
 
     await tester.tap(find.text('看板'));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_swipe_delete_button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.text('看板左滑删除'), const Offset(120, 0));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_swipe_delete_button')),
+      findsNothing,
+    );
+
     await tester.drag(find.text('看板左滑删除'), const Offset(-160, 0));
     await tester.pumpAndSettle();
 

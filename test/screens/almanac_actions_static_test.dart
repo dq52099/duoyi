@@ -26,15 +26,18 @@ void main() {
       source,
       contains(
         "Widget _yijiRow({required String suitable, required String avoid}) {\n"
-        "    return Column(",
+        "    return Row(",
       ),
     );
+    expect(source, contains("title: '宜'"));
+    expect(source, contains('body: suitable'));
+    expect(source, contains("title: '忌'"));
+    expect(source, contains('body: avoid'));
+    expect(source, contains('const SizedBox(width: 10)'));
     expect(
       source,
-      contains(
-        "_yijiCard(title: '宜', body: suitable, color: const Color(0xFF66BB6A)),\n"
-        "        const SizedBox(height: 10),\n"
-        "        _yijiCard(title: '忌', body: avoid, color: const Color(0xFFEF5350)),",
+      isNot(
+        contains("const SizedBox(height: 10),\n        _yijiCard(title: '忌'"),
       ),
     );
     expect(source, isNot(contains('constraints.maxWidth < 520')));
@@ -49,6 +52,11 @@ void main() {
     expect(source, isNot(contains('补水防晒')));
     expect(source, isNot(contains('OpenMeteoAlmanacWeatherClient')));
     expect(source, isNot(contains('AlmanacWeatherClient')));
+    expect(source, isNot(contains('weather')));
+    expect(source, isNot(contains('Weather')));
+    expect(source, isNot(contains('Icons.wb_sunny')));
+    expect(source, isNot(contains('Icons.cloud')));
+    expect(source, isNot(contains('Icons.water_drop')));
     expect(source, isNot(contains("import '../models/diary_entry.dart';")));
     expect(
       source,

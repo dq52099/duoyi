@@ -671,7 +671,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               decoration: const InputDecoration(labelText: '任务名称'),
               style: const TextStyle(
                 fontSize: DesignTokens.fontSizeLg,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
               ),
               onChanged: (_) => _markEditing(),
             ),
@@ -876,7 +876,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 const Text(
                   '子任务',
                   style: TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: DesignTokens.fontSizeMd,
                   ),
                 ),
@@ -885,7 +885,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   '${_todo.subtasks.where((s) => s.isCompleted).length}/${_todo.subtasks.length}',
                   style: TextStyle(
                     color: cs.primary,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ],
@@ -1288,7 +1288,7 @@ class _SectionLabel extends StatelessWidget {
       style: TextStyle(
         fontSize: DesignTokens.fontSizeSm,
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
-        fontWeight: DesignTokens.fontWeightMedium,
+        fontWeight: DesignTokens.fontWeightRegular,
       ),
     );
   }
@@ -1322,9 +1322,9 @@ class _TodoLocationReminderCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '位置提醒',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -1649,7 +1649,7 @@ class _TodoMarkdownPreviewBlock extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 10),
         child: _TodoInlineMarkdownText(
           text: block.text,
-          style: style?.copyWith(fontWeight: FontWeight.w400),
+          style: style?.copyWith(fontWeight: FontWeight.normal),
         ),
       );
     }
@@ -1782,7 +1782,7 @@ class _TodoInlineMarkdownText extends StatelessWidget {
           spans.add(
             TextSpan(
               text: source.substring(i + 2, end),
-              style: base.copyWith(fontWeight: FontWeight.w400),
+              style: base.copyWith(fontWeight: FontWeight.normal),
             ),
           );
           i = end + 2;
@@ -2150,7 +2150,7 @@ class _TodoAttachmentPanel extends StatelessWidget {
               const Expanded(
                 child: Text(
                   '附件',
-                  style: TextStyle(fontWeight: FontWeight.w400),
+                  style: TextStyle(fontWeight: FontWeight.normal),
                 ),
               ),
               IconButton(

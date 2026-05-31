@@ -677,8 +677,10 @@ class _BasicSection extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: selected
                       ? Border.all(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          width: 2,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.58),
+                          width: 0.45,
                         )
                       : null,
                 ),
@@ -855,7 +857,10 @@ class _GoalIconField extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
             borderRadius: DesignTokens.borderRadiusSm,
-            border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
+            border: Border.all(
+              color: cs.outline.withValues(alpha: 0.22),
+              width: 0.45,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -946,7 +951,7 @@ Future<String?> _showGoalIconPicker(BuildContext context, String selected) {
                         color: isSelected
                             ? choice.color
                             : cs.outline.withValues(alpha: 0.16),
-                        width: isSelected ? 1.6 : 1,
+                        width: 0.45,
                       ),
                     ),
                     child: Stack(
@@ -1745,7 +1750,10 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: DesignTokens.borderRadiusLg,
-        border: Border.all(color: cs.outline.withValues(alpha: 0.15)),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: 0.15),
+          width: 0.45,
+        ),
         boxShadow: DesignTokens.shadowXs,
       ),
       child: Theme(
@@ -1770,7 +1778,7 @@ class _SectionCard extends StatelessWidget {
             title,
             style: const TextStyle(
               fontSize: DesignTokens.fontSizeMd,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
             ),
           ),
           subtitle: subtitle == null
@@ -1823,7 +1831,10 @@ class _DateField extends StatelessWidget {
         decoration: BoxDecoration(
           color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
           borderRadius: DesignTokens.borderRadiusMd,
-          border: Border.all(color: cs.outline.withValues(alpha: 0.16)),
+          border: Border.all(
+            color: cs.outline.withValues(alpha: 0.16),
+            width: 0.45,
+          ),
         ),
         child: Row(
           children: [
@@ -1846,7 +1857,7 @@ class _DateField extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: DesignTokens.fontSizeSm,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ],

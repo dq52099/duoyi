@@ -241,7 +241,30 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
 
         private fun normalizeSoundName(value: String): String {
             return when (value) {
-                "soft", "lull", "glass", "bamboo", "dawn", "wood", "water", "harp", "mist", "pebble", "tide", "chime", "bell", "morning", "pearl", "beep", "classic", "alarm" -> value
+                "soft",
+                "forest",
+                "silver",
+                "paper",
+                "stream",
+                "star",
+                "marimba",
+                "lull",
+                "glass",
+                "bamboo",
+                "dawn",
+                "wood",
+                "water",
+                "harp",
+                "mist",
+                "pebble",
+                "tide",
+                "chime",
+                "bell",
+                "morning",
+                "pearl",
+                "beep",
+                "classic",
+                "alarm" -> value
                 else -> "soft"
             }
         }

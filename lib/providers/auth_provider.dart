@@ -239,10 +239,34 @@ class AuthProvider extends ChangeNotifier {
         '/api/me/email_code/send',
         '/api/me/email/send',
         '/api/me/email/send-code',
+        '/api/auth/email-code',
+        '/api/auth/email-code/send',
+        '/api/auth/email_code',
+        '/api/auth/email_code/send',
+        '/api/auth/email/send',
+        '/api/auth/email/send-code',
+        '/api/auth/send-email-code',
+        '/api/auth/send-email_code',
         '/api/email-code',
         '/api/email-code/send',
+        '/api/email_code',
+        '/api/email_code/send',
+        '/api/email/send',
+        '/api/email/send-code',
+        '/api/send-email-code',
+        '/api/send-email_code',
+        '/api/user/email-code',
+        '/api/user/email-code/send',
+        '/api/user/email_code',
+        '/api/user/email_code/send',
+        '/api/user/email/send',
+        '/api/user/email/send-code',
         '/api/account/email-code',
         '/api/account/email-code/send',
+        '/api/account/email_code',
+        '/api/account/email_code/send',
+        '/api/account/email/send',
+        '/api/account/email/send-code',
       ],
       {'email': email, 'purpose': 'bind'},
     );
@@ -278,6 +302,12 @@ class AuthProvider extends ChangeNotifier {
         '/api/auth/login/email-code',
         '/api/auth/email_code_login',
         '/api/auth/login/email_code',
+        '/api/user/email-login',
+        '/api/user/login/email-code',
+        '/api/user/email_code_login',
+        '/api/user/login/email_code',
+        '/api/account/email-login',
+        '/api/account/email_code_login',
         '/api/email-login',
         '/api/email/login',
         '/api/login/email',
@@ -298,7 +328,22 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      if (_state.isLoggedIn) await _client.post('/api/auth/logout');
+      if (_state.isLoggedIn) {
+        await _sendFirstAvailable(
+          const ['POST'],
+          const [
+            '/api/auth/logout',
+            '/api/logout',
+            '/api/me/logout',
+            '/api/user/logout',
+            '/api/account/logout',
+            '/api/auth/signout',
+            '/api/auth/sign-out',
+          ],
+          null,
+          featureName: '退出登录',
+        );
+      }
     } catch (_) {}
     _state = const AuthState();
     _client = ApiClient(baseUrl: _baseUrl);
@@ -321,7 +366,10 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> updateProfile({String? displayName, String? bio}) async {
     final payload = <String, Object?>{};
-    if (displayName != null) payload['display_name'] = displayName;
+    if (displayName != null) {
+      payload['display_name'] = displayName;
+      payload['displayName'] = displayName;
+    }
     if (bio != null) payload['bio'] = bio;
     final res = await _sendFirstAvailable(
       const ['PATCH', 'POST', 'PUT'],
@@ -342,7 +390,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> bindEmail({required String email, required String code}) async {
-    final body = {'email': email, 'code': code, 'email_code': code};
+    final body = {
+      'email': email,
+      'code': code,
+      'email_code': code,
+      'emailCode': code,
+    };
     final res = await _sendFirstAvailable(
       const ['POST', 'PATCH', 'PUT'],
       const [
@@ -377,7 +430,15 @@ class AuthProvider extends ChangeNotifier {
     await _sendFirstAvailable(
       const ['POST'],
       const ['/api/me/password', '/api/auth/change-password'],
-      {'current_password': currentPassword, 'new_password': newPassword},
+      {
+        'current_password': currentPassword,
+        'currentPassword': currentPassword,
+        'old_password': currentPassword,
+        'new_password': newPassword,
+        'newPassword': newPassword,
+        'password': newPassword,
+      },
+      featureName: '密码修改',
     );
   }
 
@@ -399,6 +460,7 @@ class AuthProvider extends ChangeNotifier {
         '/api/account/avatar',
       ],
       fieldName: 'avatar',
+      fieldNameFallbacks: const ['file', 'image'],
       filename: filename,
       bytes: bytes,
       featureName: '头像上传',
@@ -469,7 +531,7 @@ class AuthProvider extends ChangeNotifier {
     Map<String, dynamic> data, {
     bool keepToken = false,
   }) {
-    final source = data['user'];
+    final source = data['user'] ?? data['profile'] ?? data['data'];
     final payload = source is Map<String, dynamic>
         ? source
         : source is Map
@@ -481,16 +543,38 @@ class AuthProvider extends ChangeNotifier {
         'user_id',
         _stringField(payload, 'id', _state.userId),
       ),
-      username: _stringField(payload, 'username', _state.username),
+      username: _stringField(
+        payload,
+        'username',
+        _stringField(payload, 'identifier', _state.username),
+      ),
       email: _stringField(payload, 'email', _state.email),
-      emailVerified: payload.containsKey('email_verified')
-          ? payload['email_verified'] == true
-          : _state.emailVerified,
-      displayName: _stringField(payload, 'display_name', _state.displayName),
+      emailVerified: _boolField(
+        payload,
+        'email_verified',
+        _boolField(payload, 'emailVerified', _state.emailVerified),
+      ),
+      displayName: _stringField(
+        payload,
+        'display_name',
+        _stringField(payload, 'displayName', _state.displayName),
+      ),
       avatar: _avatarField(
         payload,
         'avatar',
-        _avatarField(payload, 'avatar_url', _state.avatar),
+        _avatarField(
+          payload,
+          'avatar_url',
+          _avatarField(
+            payload,
+            'avatarUrl',
+            _avatarField(
+              payload,
+              'url',
+              _avatarField(payload, 'path', _state.avatar),
+            ),
+          ),
+        ),
       ),
       bio: _stringField(payload, 'bio', _state.bio),
       coinBalance: _intField(
@@ -506,11 +590,15 @@ class AuthProvider extends ChangeNotifier {
       token: keepToken
           ? _state.token
           : _stringField(payload, 'token', _state.token),
-      isAdmin: payload.containsKey('is_admin')
-          ? payload['is_admin'] == true
-          : _state.isAdmin,
+      isAdmin: _boolField(
+        payload,
+        'is_admin',
+        _boolField(payload, 'isAdmin', _state.isAdmin),
+      ),
       adminPermissions: payload.containsKey('admin_permissions')
           ? _stringListFromJson(payload['admin_permissions'])
+          : payload.containsKey('permissions')
+          ? _stringListFromJson(payload['permissions'])
           : _state.adminPermissions,
     );
   }
@@ -521,7 +609,22 @@ class AuthProvider extends ChangeNotifier {
     String? fallback,
   ) {
     if (!data.containsKey(key)) return fallback;
-    return data[key] as String?;
+    final value = data[key];
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  bool _boolField(Map<String, dynamic> data, String key, bool fallback) {
+    if (!data.containsKey(key)) return fallback;
+    final value = data[key];
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (['true', '1', 'yes', 'y'].contains(normalized)) return true;
+      if (['false', '0', 'no', 'n'].contains(normalized)) return false;
+    }
+    return fallback;
   }
 
   String? _avatarField(
@@ -619,28 +722,45 @@ class AuthProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> _uploadFirstAvailable(
     List<String> paths, {
     required String fieldName,
+    List<String> fieldNameFallbacks = const [],
     required String filename,
     required Uint8List bytes,
     String featureName = '文件上传',
   }) async {
     ApiException? last404;
+    ApiException? lastRecoverableUploadError;
+    final fieldNames = [
+      fieldName,
+      for (final fallback in fieldNameFallbacks)
+        if (fallback != fieldName) fallback,
+    ];
     for (final path in paths) {
       for (final method in const ['POST', 'PATCH', 'PUT']) {
-        try {
-          return await _client.uploadBytes(
-            path,
-            method: method,
-            fieldName: fieldName,
-            filename: filename,
-            bytes: bytes,
-            diagnoseMissingRoute: false,
-          );
-        } on ApiException catch (e) {
-          if (!_isRouteMissing(e)) rethrow;
-          last404 = e;
+        for (final uploadFieldName in fieldNames) {
+          try {
+            return await _client.uploadBytes(
+              path,
+              method: method,
+              fieldName: uploadFieldName,
+              filename: filename,
+              bytes: bytes,
+              diagnoseMissingRoute: false,
+            );
+          } on ApiException catch (e) {
+            if (_isRouteMissing(e)) {
+              last404 = e;
+              break;
+            }
+            if (_isRecoverableUploadFieldError(e)) {
+              lastRecoverableUploadError = e;
+              continue;
+            }
+            rethrow;
+          }
         }
       }
     }
+    if (lastRecoverableUploadError != null) throw lastRecoverableUploadError;
     throw await _client.missingRoutesException(
       featureName: featureName,
       paths: paths,
@@ -713,6 +833,18 @@ bool _isRouteMissing(ApiException error) {
       detail == '{"detail":"not found"}' ||
       detail == '接口不存在' ||
       detail == 'route not found';
+}
+
+bool _isRecoverableUploadFieldError(ApiException error) {
+  final message = error.message.trim().toLowerCase();
+  if (!(message.startsWith('400:') || message.startsWith('422:'))) {
+    return false;
+  }
+  return message.contains('头像文件不能为空') ||
+      message.contains('file required') ||
+      message.contains('field required') ||
+      message.contains('missing field') ||
+      message.contains('missing required');
 }
 
 void _throwIfEmailCodeNotDelivered(Map<String, dynamic> result) {

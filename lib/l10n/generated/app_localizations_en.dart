@@ -1161,10 +1161,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get habitFlexRule => 'Flexible check-in rule';
 
   @override
-  String get habitFlexWeekly => 'Weekly';
+  String get habitFlexWeekly => 'Period target/week';
 
   @override
-  String get habitFlexMonthly => 'Monthly';
+  String get habitFlexMonthly => 'Period target/month';
 
   @override
   String get habitFlexPeriodTarget => 'Period target';

@@ -119,7 +119,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             I18n.tr('announcement.center'),
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),
@@ -181,7 +181,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                                 _levelLabel(level),
                                 style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: levelColor,
                                 ),
                               ),
@@ -192,7 +192,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                                 (a['title'] ?? '').toString(),
                                 style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.normal,
                                       color: cs.onSurface,
                                     ),
                               ),

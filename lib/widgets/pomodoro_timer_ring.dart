@@ -77,7 +77,7 @@ class PomodoroTimerRing extends StatelessWidget {
                   style: TextStyle(
                     fontSize: progress >= 1.0 ? 14 : 16,
                     color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
             ],

@@ -164,10 +164,10 @@ EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp"
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
 DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
-APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.13"))
+APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.14"))
 APP_CURRENT_VERSION_CODE = _env_int(
     "APP_CURRENT_VERSION_CODE",
-    _env_int("DUOYI_APP_VERSION_CODE", 120013),
+    _env_int("DUOYI_APP_VERSION_CODE", 120014),
 )
 APP_PACKAGE_NAME = os.getenv("APP_PACKAGE_NAME", "com.duoyi.duoyi")
 APP_UPDATE_REPOSITORY = os.getenv("APP_UPDATE_REPOSITORY", "dq52099/duoyi")
@@ -1398,6 +1398,7 @@ def init_db():
         ("users", "last_active_at", "NULL"),
         ("users", "email", "''"),
         ("users", "email_verified", "0"),
+        ("users", "avatar", "''"),
         ("users", "display_name", "''"),
         ("users", "bio", "''"),
         ("users", "group_id", "'group_default'"),
@@ -2756,15 +2757,26 @@ class FeedbackCreate(BaseModel):
 
 
 class FeedbackReply(BaseModel):
-    feedback_id: int
-    reply: str
-    status: str = "resolved"
+    feedback_id: Optional[int] = None
+    feedbackId: Optional[int] = None
+    id: Optional[int] = None
+    reply: Optional[str] = ""
+    note: Optional[str] = None
+    message: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[str] = "resolved"
 
 
 class FeedbackBulkStatus(BaseModel):
-    feedback_ids: list[int]
-    reply: str
-    status: str = "in_progress"
+    feedback_ids: Optional[list[int]] = None
+    feedbackIds: Optional[list[int]] = None
+    ids: Optional[list[int]] = None
+    id: Optional[int] = None
+    reply: Optional[str] = ""
+    note: Optional[str] = None
+    message: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[str] = "in_progress"
 
 
 FEEDBACK_CATEGORIES = {
@@ -2815,6 +2827,40 @@ def _clean_feedback_status(value: str) -> str:
     return status
 
 
+def _feedback_reply_id(req: FeedbackReply) -> int:
+    raw = req.feedback_id or req.feedbackId or req.id
+    try:
+        feedback_id = int(raw)
+    except Exception:
+        feedback_id = 0
+    if feedback_id <= 0:
+        raise HTTPException(status_code=400, detail="反馈不存在")
+    return feedback_id
+
+
+def _feedback_reply_text(req: FeedbackReply) -> str:
+    return (req.reply or req.note or req.message or req.content or "").strip()
+
+
+def _feedback_bulk_ids(req: FeedbackBulkStatus) -> list[int]:
+    values = req.feedback_ids or req.feedbackIds or req.ids or []
+    if req.id is not None:
+        values = [*values, req.id]
+    ids: set[int] = set()
+    for value in values:
+        try:
+            clean = int(value)
+        except Exception:
+            continue
+        if clean > 0:
+            ids.add(clean)
+    return sorted(ids)
+
+
+def _feedback_bulk_text(req: FeedbackBulkStatus) -> str:
+    return (req.reply or req.note or req.message or req.content or "").strip()
+
+
 class AnnouncementCreate(BaseModel):
     title: str
     body: str
@@ -2844,12 +2890,18 @@ class InviteCodeCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
+    isAdmin: Optional[bool] = None
     is_disabled: Optional[bool] = None
+    isDisabled: Optional[bool] = None
     new_password: Optional[str] = None
+    newPassword: Optional[str] = None
     password: Optional[str] = None
     admin_permissions: Optional[list[str]] = None
+    adminPermissions: Optional[list[str]] = None
     group_id: Optional[str] = None
+    groupId: Optional[str] = None
     role_id: Optional[str] = None
+    roleId: Optional[str] = None
     delta: Optional[int] = None
     reason: Optional[str] = None
     coins: Optional[int] = None
@@ -2857,12 +2909,14 @@ class UserUpdate(BaseModel):
     balance: Optional[int] = None
     coin_balance: Optional[int] = None
     target_balance: Optional[int] = None
+    targetBalance: Optional[int] = None
     quota: Optional[int] = None
     time_coins: Optional[int] = None
     time_coin_balance: Optional[int] = None
     timeCoins: Optional[int] = None
     timeCoinBalance: Optional[int] = None
     credit_balance: Optional[int] = None
+    creditBalance: Optional[int] = None
     credits: Optional[int] = None
     coin_delta: Optional[int] = None
     coinDelta: Optional[int] = None
@@ -2875,12 +2929,18 @@ class UserCreate(BaseModel):
     username: str
     password: Optional[str] = None
     display_name: Optional[str] = None
+    displayName: Optional[str] = None
     email: Optional[str] = None
     group_id: Optional[str] = None
+    groupId: Optional[str] = None
     role_id: Optional[str] = None
-    is_admin: Optional[bool] = False
-    is_disabled: Optional[bool] = False
+    roleId: Optional[str] = None
+    is_admin: Optional[bool] = None
+    isAdmin: Optional[bool] = None
+    is_disabled: Optional[bool] = None
+    isDisabled: Optional[bool] = None
     admin_permissions: Optional[list[str]] = None
+    adminPermissions: Optional[list[str]] = None
 
 
 class UserCoinAdjustment(BaseModel):
@@ -2891,12 +2951,14 @@ class UserCoinAdjustment(BaseModel):
     balance: Optional[int] = None
     coin_balance: Optional[int] = None
     target_balance: Optional[int] = None
+    targetBalance: Optional[int] = None
     quota: Optional[int] = None
     time_coins: Optional[int] = None
     time_coin_balance: Optional[int] = None
     timeCoins: Optional[int] = None
     timeCoinBalance: Optional[int] = None
     credit_balance: Optional[int] = None
+    creditBalance: Optional[int] = None
     credits: Optional[int] = None
     coin_delta: Optional[int] = None
     coinDelta: Optional[int] = None
@@ -2933,8 +2995,15 @@ class AdminRoleUpsert(BaseModel):
 
 
 class UserBulkStatus(BaseModel):
-    user_ids: list[str]
-    is_disabled: bool
+    user_ids: Optional[list[str]] = None
+    userIds: Optional[list[str]] = None
+    ids: Optional[list[str]] = None
+    id: Optional[str] = None
+    is_disabled: Optional[bool] = None
+    isDisabled: Optional[bool] = None
+    disabled: Optional[bool] = None
+    is_active: Optional[bool] = None
+    isActive: Optional[bool] = None
 
 
 class BackupBulkWipe(BaseModel):
@@ -5010,6 +5079,18 @@ def _avatar_bytes_match_suffix(raw: bytes, suffix: str) -> bool:
     return False
 
 
+def _avatar_suffix_from_bytes(raw: bytes) -> str:
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if raw.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if raw.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return ".webp"
+    return ""
+
+
 @app.post("/api/auth/register")
 def register(req: RegisterRequest):
     db = get_db()
@@ -5615,6 +5696,7 @@ async def upload_avatar(
         raise HTTPException(status_code=400, detail="头像不能超过 3MB")
     content_type = (avatar.content_type or "").lower()
     suffix = Path(avatar.filename or "").suffix.lower()
+    detected_suffix = _avatar_suffix_from_bytes(raw)
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         if "png" in content_type:
             suffix = ".png"
@@ -5624,10 +5706,14 @@ async def upload_avatar(
             suffix = ".webp"
         elif "gif" in content_type:
             suffix = ".gif"
+        elif detected_suffix:
+            suffix = detected_suffix
         else:
             raise HTTPException(status_code=400, detail="仅支持 jpg/png/webp/gif 头像")
     if not _avatar_bytes_match_suffix(raw, suffix):
-        raise HTTPException(status_code=400, detail="头像文件内容与格式不匹配")
+        if not detected_suffix:
+            raise HTTPException(status_code=400, detail="头像文件内容与格式不匹配")
+        suffix = detected_suffix
     upload_dir = Path(AVATAR_UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{user_id}_{secrets.token_hex(12)}{suffix}"
@@ -5669,6 +5755,12 @@ def get_avatar_upload(filename: str):
 
 
 @app.post("/api/auth/logout")
+@app.post("/api/auth/signout")
+@app.post("/api/auth/sign-out")
+@app.post("/api/logout")
+@app.post("/api/me/logout")
+@app.post("/api/user/logout")
+@app.post("/api/account/logout")
 def logout(user_id: str = Depends(_verify_token)):
     _drop_session(user_id)
     return {"status": "ok"}
@@ -9297,10 +9389,14 @@ def _admin_role_row(db, row) -> dict:
 
 
 @app.get("/api/admin/permissions")
+@app.get("/api/admin/permission-codes")
+@app.get("/api/admin/permission_codes")
+@app.get("/api/admin/user-permissions")
+@app.get("/api/admin/user_permissions")
 def admin_permissions(actor: str = Depends(_require_admin)):
     db = get_db()
     try:
-        _ensure_admin_permission(db, actor, "permissions")
+        _ensure_admin_any_permission(db, actor, ("permissions", "roles", "users"))
         return _admin_permission_catalog()
     finally:
         db.close()
@@ -9309,6 +9405,7 @@ def admin_permissions(actor: str = Depends(_require_admin)):
 @app.get("/api/admin/groups")
 @app.get("/api/admin/user-groups")
 @app.get("/api/admin/user_groups")
+@app.get("/api/admin/userGroups")
 def admin_groups(
     actor: str = Depends(_require_admin),
     limit: Optional[int] = Query(None, ge=1, le=500),
@@ -9349,6 +9446,7 @@ def admin_groups(
 @app.post("/api/admin/groups")
 @app.post("/api/admin/user-groups")
 @app.post("/api/admin/user_groups")
+@app.post("/api/admin/userGroups")
 def admin_create_group(req: AdminGroupUpsert, actor: str = Depends(_require_admin)):
     return _admin_save_group(None, req, actor)
 
@@ -9359,6 +9457,8 @@ def admin_create_group(req: AdminGroupUpsert, actor: str = Depends(_require_admi
 @app.patch("/api/admin/user-groups/{group_id}")
 @app.put("/api/admin/user_groups/{group_id}")
 @app.patch("/api/admin/user_groups/{group_id}")
+@app.put("/api/admin/userGroups/{group_id}")
+@app.patch("/api/admin/userGroups/{group_id}")
 def admin_update_group(
     group_id: str, req: AdminGroupUpsert, actor: str = Depends(_require_admin)
 ):
@@ -9461,6 +9561,10 @@ def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str
 
 
 @app.get("/api/admin/roles")
+@app.get("/api/admin/user-roles")
+@app.get("/api/admin/user_roles")
+@app.get("/api/admin/admin-roles")
+@app.get("/api/admin/admin_roles")
 def admin_roles(actor: str = Depends(_require_admin)):
     db = get_db()
     try:
@@ -9474,12 +9578,24 @@ def admin_roles(actor: str = Depends(_require_admin)):
 
 
 @app.post("/api/admin/roles")
+@app.post("/api/admin/user-roles")
+@app.post("/api/admin/user_roles")
+@app.post("/api/admin/admin-roles")
+@app.post("/api/admin/admin_roles")
 def admin_create_role(req: AdminRoleUpsert, actor: str = Depends(_require_admin)):
     return _admin_save_role(None, req, actor)
 
 
 @app.put("/api/admin/roles/{role_id}")
 @app.patch("/api/admin/roles/{role_id}")
+@app.put("/api/admin/user-roles/{role_id}")
+@app.patch("/api/admin/user-roles/{role_id}")
+@app.put("/api/admin/user_roles/{role_id}")
+@app.patch("/api/admin/user_roles/{role_id}")
+@app.put("/api/admin/admin-roles/{role_id}")
+@app.patch("/api/admin/admin-roles/{role_id}")
+@app.put("/api/admin/admin_roles/{role_id}")
+@app.patch("/api/admin/admin_roles/{role_id}")
 def admin_update_role(
     role_id: str, req: AdminRoleUpsert, actor: str = Depends(_require_admin)
 ):
@@ -9539,18 +9655,34 @@ def admin_create_user(req: UserCreate, actor: str = Depends(_require_admin)):
         username = _clean_username(req.username)
         password = _clean_password(req.password or secrets.token_urlsafe(12))
         email = _clean_email(req.email)
-        display_name = _clean_short_text(req.display_name, 64, "昵称")
-        group_id = (req.group_id or "").strip() or "group_default"
-        role_id = (req.role_id or "").strip() or ("role_admin" if req.is_admin else "role_user")
+        display_name_value = req.display_name
+        if display_name_value is None:
+            display_name_value = req.displayName
+        display_name = _clean_short_text(display_name_value, 64, "昵称")
+        is_admin = bool(req.is_admin if req.is_admin is not None else req.isAdmin)
+        is_disabled = bool(
+            req.is_disabled if req.is_disabled is not None else req.isDisabled
+        )
+        group_id_value = req.group_id if req.group_id is not None else req.groupId
+        role_id_value = req.role_id if req.role_id is not None else req.roleId
+        admin_permissions_value = (
+            req.admin_permissions
+            if req.admin_permissions is not None
+            else req.adminPermissions
+        )
+        group_id = (group_id_value or "").strip() or "group_default"
+        role_id = (role_id_value or "").strip() or ("role_admin" if is_admin else "role_user")
+        if group_id_value is not None:
+            _ensure_admin_any_permission(db, actor, ("groups", "coins"))
         _ensure_active_group(db, group_id)
         if db.execute("SELECT 1 FROM admin_roles WHERE id=?", (role_id,)).fetchone() is None:
             raise HTTPException(status_code=400, detail="角色不存在")
-        if req.is_admin or req.admin_permissions is not None or role_id != "role_user":
+        if is_admin or admin_permissions_value is not None or role_id != "role_user":
             _ensure_admin_management_permission(db, actor)
         _ensure_account_unique(db, username=username, email=email)
         user_id = secrets.token_hex(16)
-        permissions = _normalize_admin_permissions(req.admin_permissions)
-        if req.is_admin and not permissions:
+        permissions = _normalize_admin_permissions(admin_permissions_value)
+        if is_admin and not permissions:
             permissions = _admin_role_permissions(db, role_id) or [ADMIN_ALL_PERMISSION]
         _ensure_admin_can_assign_permissions(db, actor, permissions)
         _ensure_admin_can_assign_role(db, actor, role_id)
@@ -9570,9 +9702,9 @@ def admin_create_user(req: UserCreate, actor: str = Depends(_require_admin)):
                 display_name,
                 group_id,
                 role_id,
-                1 if req.is_admin else 0,
+                1 if is_admin else 0,
                 json.dumps(permissions, ensure_ascii=False),
-                1 if req.is_disabled else 0,
+                1 if is_disabled else 0,
             ),
         )
         db.execute("INSERT INTO sync_data(user_id) VALUES(?)", (user_id,))
@@ -9793,14 +9925,32 @@ def export_users_csv(
 
 
 @app.post("/api/admin/users/bulk-status")
+@app.post("/api/admin/users/batch-status")
+@app.patch("/api/admin/users/bulk-status")
+@app.patch("/api/admin/users/batch-status")
 def admin_bulk_update_user_status(
     req: UserBulkStatus, actor: str = Depends(_require_admin)
 ):
-    user_ids = list(dict.fromkeys(str(user_id).strip() for user_id in req.user_ids))
+    raw_user_ids = req.user_ids or req.userIds or req.ids or []
+    if req.id:
+        raw_user_ids = [*raw_user_ids, req.id]
+    user_ids = list(dict.fromkeys(str(user_id).strip() for user_id in raw_user_ids))
     user_ids = [user_id for user_id in user_ids if user_id]
     if not user_ids:
         raise HTTPException(status_code=400, detail="请选择要操作的用户")
-    if actor in user_ids and req.is_disabled:
+    is_disabled = req.is_disabled
+    if is_disabled is None:
+        is_disabled = req.isDisabled
+    if is_disabled is None:
+        is_disabled = req.disabled
+    if is_disabled is None and req.is_active is not None:
+        is_disabled = not bool(req.is_active)
+    if is_disabled is None and req.isActive is not None:
+        is_disabled = not bool(req.isActive)
+    if is_disabled is None:
+        raise HTTPException(status_code=400, detail="请选择要设置的账号状态")
+    is_disabled = bool(is_disabled)
+    if actor in user_ids and is_disabled:
         raise HTTPException(status_code=400, detail="Cannot disable yourself")
     db = get_db()
     try:
@@ -9814,7 +9964,7 @@ def admin_bulk_update_user_status(
         missing_ids = [user_id for user_id in user_ids if user_id not in found_ids]
         if missing_ids:
             raise HTTPException(status_code=404, detail="User not found")
-        if req.is_disabled:
+        if is_disabled:
             active_admins = db.execute(
                 "SELECT COUNT(*) AS c FROM users WHERE is_admin=1 AND is_disabled=0"
             ).fetchone()["c"]
@@ -9830,9 +9980,9 @@ def admin_bulk_update_user_status(
                 )
         db.execute(
             f"UPDATE users SET is_disabled=? WHERE id IN ({placeholders})",
-            (1 if req.is_disabled else 0, *user_ids),
+            (1 if is_disabled else 0, *user_ids),
         )
-        if req.is_disabled:
+        if is_disabled:
             for user_id in user_ids:
                 _drop_session(user_id)
         _audit(
@@ -9843,7 +9993,7 @@ def admin_bulk_update_user_status(
             target=",".join(user_ids[:20]),
             detail=json.dumps(
                 {
-                    "is_disabled": req.is_disabled,
+                    "is_disabled": is_disabled,
                     "count": len(user_ids),
                 },
                 ensure_ascii=False,
@@ -9861,6 +10011,18 @@ def admin_bulk_update_user_status(
 def admin_update_user(
     user_id: str, req: UserUpdate, actor: str = Depends(_require_admin)
 ):
+    is_admin_value = req.is_admin if req.is_admin is not None else req.isAdmin
+    is_disabled_value = (
+        req.is_disabled if req.is_disabled is not None else req.isDisabled
+    )
+    new_password_value = req.new_password or req.newPassword or req.password
+    admin_permissions_value = (
+        req.admin_permissions
+        if req.admin_permissions is not None
+        else req.adminPermissions
+    )
+    group_id_value = req.group_id if req.group_id is not None else req.groupId
+    role_id_value = req.role_id if req.role_id is not None else req.roleId
     coin_payload = UserCoinAdjustment(
         delta=req.delta,
         reason=req.reason,
@@ -9870,12 +10032,14 @@ def admin_update_user(
         coin_balance=req.coin_balance,
         coinBalance=req.coinBalance,
         target_balance=req.target_balance,
+        targetBalance=req.targetBalance,
         quota=req.quota,
         time_coins=req.time_coins,
         time_coin_balance=req.time_coin_balance,
         timeCoins=req.timeCoins,
         timeCoinBalance=req.timeCoinBalance,
         credit_balance=req.credit_balance,
+        creditBalance=req.creditBalance,
         credits=req.credits,
         coin_delta=req.coin_delta,
         coinDelta=req.coinDelta,
@@ -9892,12 +10056,14 @@ def admin_update_user(
             coin_payload.coin_balance,
             coin_payload.coinBalance,
             coin_payload.target_balance,
+            coin_payload.targetBalance,
             coin_payload.quota,
             coin_payload.time_coins,
             coin_payload.time_coin_balance,
             coin_payload.timeCoins,
             coin_payload.timeCoinBalance,
             coin_payload.credit_balance,
+            coin_payload.creditBalance,
             coin_payload.credits,
             coin_payload.coin_delta,
             coin_payload.coinDelta,
@@ -9908,13 +10074,12 @@ def admin_update_user(
     has_user_update = any(
         value is not None
         for value in (
-            req.is_admin,
-            req.is_disabled,
-            req.new_password,
-            req.password,
-            req.admin_permissions,
-            req.group_id,
-            req.role_id,
+            is_admin_value,
+            is_disabled_value,
+            new_password_value,
+            admin_permissions_value,
+            group_id_value,
+            role_id_value,
         )
     )
     if has_coin_adjustment and not has_user_update:
@@ -9931,19 +10096,19 @@ def admin_update_user(
             raise HTTPException(status_code=404, detail="User not found")
 
         requested_role_id = (
-            (req.role_id or "").strip()
-            if req.role_id is not None
+            (role_id_value or "").strip()
+            if role_id_value is not None
             else (row["role_id"] or "")
         )
         touches_admin_management = (
-            req.is_admin is not None
-            or req.admin_permissions is not None
+            is_admin_value is not None
+            or admin_permissions_value is not None
             or (
-                req.role_id is not None
+                role_id_value is not None
                 and (
                     requested_role_id != "role_user"
                     or bool(row["is_admin"])
-                    or bool(req.is_admin)
+                    or bool(is_admin_value)
                 )
             )
         )
@@ -9951,7 +10116,7 @@ def admin_update_user(
             _ensure_admin_management_permission(db, actor)
 
         # Safeguard: can't demote or disable the last admin
-        if req.is_admin is False and row["is_admin"]:
+        if is_admin_value is False and row["is_admin"]:
             admins = db.execute(
                 "SELECT COUNT(*) AS c FROM users WHERE is_admin=1"
             ).fetchone()["c"]
@@ -9959,7 +10124,7 @@ def admin_update_user(
                 raise HTTPException(
                     status_code=400, detail="Cannot demote the last admin"
                 )
-        if req.is_disabled is True and row["is_admin"]:
+        if is_disabled_value is True and row["is_admin"]:
             admins = db.execute(
                 "SELECT COUNT(*) AS c FROM users WHERE is_admin=1 AND is_disabled=0"
             ).fetchone()["c"]
@@ -9968,26 +10133,28 @@ def admin_update_user(
                     status_code=400, detail="Cannot disable the last active admin"
                 )
 
-        next_is_admin = bool(row["is_admin"]) if req.is_admin is None else bool(req.is_admin)
+        next_is_admin = (
+            bool(row["is_admin"]) if is_admin_value is None else bool(is_admin_value)
+        )
         next_permissions: Optional[list[str]] = None
-        if req.admin_permissions is not None:
-            next_permissions = _normalize_admin_permissions(req.admin_permissions)
-        elif req.is_admin is True and not _admin_permissions_from_text(row["admin_permissions"]):
+        if admin_permissions_value is not None:
+            next_permissions = _normalize_admin_permissions(admin_permissions_value)
+        elif is_admin_value is True and not _admin_permissions_from_text(row["admin_permissions"]):
             next_permissions = [ADMIN_ALL_PERMISSION]
-        elif req.is_admin is False:
+        elif is_admin_value is False:
             next_permissions = []
         if next_permissions is not None:
             _ensure_admin_can_assign_permissions(db, actor, next_permissions)
 
-        if req.is_admin is not None:
+        if is_admin_value is not None:
             db.execute(
                 "UPDATE users SET is_admin=? WHERE id=?",
-                (1 if req.is_admin else 0, user_id),
+                (1 if is_admin_value else 0, user_id),
             )
-            if req.role_id is None:
+            if role_id_value is None:
                 db.execute(
                     "UPDATE users SET role_id=? WHERE id=?",
-                    ("role_admin" if req.is_admin else "role_user", user_id),
+                    ("role_admin" if is_admin_value else "role_user", user_id),
                 )
         if next_permissions is not None:
             db.execute(
@@ -9997,27 +10164,28 @@ def admin_update_user(
                     user_id,
                 ),
             )
-        if req.is_disabled is not None:
+        if is_disabled_value is not None:
             db.execute(
                 "UPDATE users SET is_disabled=? WHERE id=?",
-                (1 if req.is_disabled else 0, user_id),
+                (1 if is_disabled_value else 0, user_id),
             )
-            if req.is_disabled:
+            if is_disabled_value:
                 _drop_session(user_id)
-        if req.group_id is not None:
-            group_id = (req.group_id or "").strip() or "group_default"
+        if group_id_value is not None:
+            _ensure_admin_any_permission(db, actor, ("groups", "coins"))
+            group_id = (group_id_value or "").strip() or "group_default"
             _ensure_active_group(db, group_id)
             previous_group_id = row["group_id"] or "group_default"
             db.execute("UPDATE users SET group_id=? WHERE id=?", (group_id, user_id))
             if group_id != previous_group_id:
                 _grant_group_assignment_coins(db, user_id, group_id)
-        if req.role_id is not None:
-            role_id = (req.role_id or "").strip() or ("role_admin" if next_is_admin else "role_user")
+        if role_id_value is not None:
+            role_id = (role_id_value or "").strip() or ("role_admin" if next_is_admin else "role_user")
             if db.execute("SELECT 1 FROM admin_roles WHERE id=?", (role_id,)).fetchone() is None:
                 raise HTTPException(status_code=400, detail="角色不存在")
             _ensure_admin_can_assign_role(db, actor, role_id)
             db.execute("UPDATE users SET role_id=? WHERE id=?", (role_id, user_id))
-        next_password = req.new_password or req.password
+        next_password = new_password_value
         if next_password:
             db.execute(
                 "UPDATE users SET password_hash=? WHERE id=?",
@@ -10065,6 +10233,8 @@ def _coin_adjustment_delta(req: UserCoinAdjustment, current_balance: int) -> int
         return int(req.coinBalance) - current_balance
     if req.target_balance is not None:
         return int(req.target_balance) - current_balance
+    if req.targetBalance is not None:
+        return int(req.targetBalance) - current_balance
     if req.quota is not None:
         return int(req.quota) - current_balance
     if req.time_coins is not None:
@@ -10077,6 +10247,8 @@ def _coin_adjustment_delta(req: UserCoinAdjustment, current_balance: int) -> int
         return int(req.timeCoinBalance) - current_balance
     if req.credit_balance is not None:
         return int(req.credit_balance) - current_balance
+    if req.creditBalance is not None:
+        return int(req.creditBalance) - current_balance
     if req.credits is not None:
         return int(req.credits) - current_balance
     raise HTTPException(status_code=400, detail="调整数量不能为空")
@@ -10986,6 +11158,9 @@ def admin_feedback_auto_reply(actor: str = Depends(_require_admin)):
 
 
 @app.get("/api/admin/feedback/{fb_id}")
+@app.get("/api/admin/feedback/{fb_id}/detail")
+@app.get("/api/admin/feedback/detail/{fb_id}")
+@app.get("/api/admin/feedbacks/{fb_id}")
 def admin_feedback_detail(fb_id: int, actor: str = Depends(_require_admin)):
     db = get_db()
     try:
@@ -11072,7 +11247,8 @@ def admin_feedback_reply_alias(
 
 @app.post("/api/admin/feedback/reply")
 def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
-    raw_reply = (req.reply or "").strip()
+    feedback_id = _feedback_reply_id(req)
+    raw_reply = _feedback_reply_text(req)
     reply = _clean_feedback_content(raw_reply) if raw_reply else ""
     status = _clean_feedback_status(req.status)
     db = get_db()
@@ -11081,18 +11257,18 @@ def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
         if reply:
             cur = db.execute(
                 "UPDATE feedback SET admin_reply=?, status=?, updated_at=datetime('now') WHERE id=?",
-                (reply, status, req.feedback_id),
+                (reply, status, feedback_id),
             )
         else:
             cur = db.execute(
                 "UPDATE feedback SET status=?, updated_at=datetime('now') WHERE id=?",
-                (status, req.feedback_id),
+                (status, feedback_id),
             )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="反馈不存在")
         _audit(
             db, actor, _get_username(db, actor),
-            "feedback.reply", target=str(req.feedback_id), detail=status
+            "feedback.reply", target=str(feedback_id), detail=status
         )
         db.commit()
         return {"status": "ok"}
@@ -11101,16 +11277,20 @@ def reply_feedback(req: FeedbackReply, actor: str = Depends(_require_admin)):
 
 
 @app.post("/api/admin/feedback/bulk-status")
+@app.post("/api/admin/feedback/bulk_status")
+@app.post("/api/admin/feedback/status/bulk")
+@app.post("/api/admin/feedbacks/bulk-status")
+@app.post("/api/admin/feedbacks/bulk_status")
 def bulk_update_feedback_status(
     req: FeedbackBulkStatus,
     actor: str = Depends(_require_admin),
 ):
-    ids = sorted({int(v) for v in req.feedback_ids if int(v) > 0})
+    ids = _feedback_bulk_ids(req)
     if not ids:
         raise HTTPException(status_code=400, detail="请选择要处理的反馈")
     if len(ids) > 100:
         raise HTTPException(status_code=400, detail="单次最多处理 100 条反馈")
-    raw_reply = (req.reply or "").strip()
+    raw_reply = _feedback_bulk_text(req)
     reply = _clean_feedback_content(raw_reply) if raw_reply else ""
     status = _clean_feedback_status(req.status)
     placeholders = ",".join("?" for _ in ids)
@@ -11157,6 +11337,9 @@ def bulk_update_feedback_status(
 
 
 @app.delete("/api/admin/feedback/{fb_id}")
+@app.delete("/api/admin/feedbacks/{fb_id}")
+@app.post("/api/admin/feedback/{fb_id}/delete")
+@app.post("/api/admin/feedbacks/{fb_id}/delete")
 def delete_feedback(fb_id: int, actor: str = Depends(_require_admin)):
     db = get_db()
     try:

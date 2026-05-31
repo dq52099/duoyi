@@ -390,7 +390,7 @@ class _Badge extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: DesignTokens.fontSizeXs,
-              fontWeight: DesignTokens.fontWeightMedium,
+              fontWeight: DesignTokens.fontWeightRegular,
               color: color,
             ),
           ),

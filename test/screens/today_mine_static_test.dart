@@ -6,6 +6,7 @@ void main() {
   group('今日和我的视觉结构', () {
     test('四个指标卡使用紧凑统一样式', () {
       final today = File('lib/screens/today_screen.dart').readAsStringSync();
+      final todo = File('lib/screens/todo_screen.dart').readAsStringSync();
       final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
       final surface = File(
         'lib/widgets/surface_components.dart',
@@ -23,6 +24,8 @@ void main() {
       expect(surface, contains('Text.rich'));
 
       expect(today, contains("unit: I18n.tr('today.unit.item')"));
+      expect(today, contains('icon: Icons.check_circle_outline'));
+      expect(todo, contains('icon: Icons.check_circle_outline'));
       expect(mine, contains("unit: '%'"));
       expect(mine, contains("unit: '天'"));
       expect(mine, contains("unit: '分钟'"));
@@ -80,6 +83,12 @@ void main() {
         contains('class _TodayTodoSwipeTile extends StatefulWidget'),
       );
       expect(today, contains('Matrix4.translationValues(-_swipeOffset'));
+      expect(
+        today,
+        contains('bool get _swipeActive => _dragging || _swipeOpen'),
+      );
+      expect(today, contains('if (_swipeActive)'));
+      expect(today, contains('RepaintBoundary(child: tile)'));
       expect(today, contains("ValueKey('today_todo_swipe_detail_button')"));
       expect(today, contains("ValueKey('today_todo_swipe_delete_button')"));
       expect(today, contains("title: const Text('删除任务？')"));
@@ -87,6 +96,14 @@ void main() {
       expect(today, contains('return _TodayTodoSwipeTile('));
       expect(today, contains('onToggleTodo(todo)'));
       expect(today, contains('onOpenTodo(t.id)'));
+      expect(today, contains('CompletionVisibilityPolicy.visualState(todo)'));
+      expect(today, contains('todoP.visibleTodayTodos(now)'));
+      expect(today, contains('class _TodayTodoStatusPill'));
+      expect(today, contains('TodoVisualState.completed'));
+      expect(today, contains('TodoVisualState.overdue'));
+      expect(today, contains("Text(label, style: TextStyle(fontSize: 10"));
+      expect(today, contains('effectiveTileBackground'));
+      expect(today, contains('effectiveTileBorderColor'));
       expect(today, contains("import '../providers/share_provider.dart';"));
       expect(today, contains('context.select<ShareProvider?, bool>'));
       expect(today, contains("共享空间只读，不能\$action"));
@@ -199,7 +216,13 @@ void main() {
         mine,
         isNot(contains('class _ProfileInfoRow extends StatelessWidget')),
       );
-      expect(mine, isNot(contains("'退出登录'")));
+      expect(mine, contains("label: '退出登录'"));
+      expect(mine, contains('onTap: () => _confirmLogout(context)'));
+      expect(
+        mine,
+        contains('Future<void> _confirmLogout(BuildContext context)'),
+      );
+      expect(mine, contains('await context.read<AuthProvider>().logout();'));
       expect(mine, isNot(contains('greetingAfternoon')));
       expect(mine, contains('openFile('));
       expect(mine, isNot(contains('photo_library_outlined')));

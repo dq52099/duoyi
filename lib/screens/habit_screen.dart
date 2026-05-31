@@ -132,7 +132,7 @@ class _HabitScreenState extends State<HabitScreen>
                     s.habitCreateTitle,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -142,7 +142,7 @@ class _HabitScreenState extends State<HabitScreen>
                     '推荐目标',
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                       color: Colors.grey,
                     ),
                   ),
@@ -575,7 +575,7 @@ class _HabitScreenState extends State<HabitScreen>
                         '开启新习惯',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ),
@@ -719,7 +719,7 @@ class _HabitHeatmapTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             heading,
-            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 15),
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 15),
           ),
         ),
         HabitHeatmap(heatmapData: heatmapData),
@@ -741,7 +741,7 @@ class _HabitHeatmapTab extends StatelessWidget {
               '习惯分组',
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 color: cs.onSurface.withValues(alpha: 0.68),
               ),
             ),
@@ -809,7 +809,7 @@ class _HabitTodaySummaryCard extends StatelessWidget {
                     '${(progress * 100).toInt()}%',
                     style: TextStyle(
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                       color: cs.primary,
                     ),
                   ),
@@ -825,7 +825,7 @@ class _HabitTodaySummaryCard extends StatelessWidget {
                     '$completedCount / $totalCount $doneLabel',
                     style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                       height: 1.1,
                     ),
                   ),
@@ -922,7 +922,7 @@ class _HabitInsightCard extends StatelessWidget {
                           insight.title,
                           style: const TextStyle(
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 1),
@@ -1123,7 +1123,7 @@ class _HabitCheckinCard extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   fontSize: 12,
                                   height: 1.08,
                                   decoration: isDone && !isNegative
@@ -1297,7 +1297,7 @@ class _HabitCheckinCard extends StatelessWidget {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             textStyle: const TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                             ),
                           ),
                         ),
@@ -1631,7 +1631,7 @@ class _HabitStreakBadge extends StatelessWidget {
             '${habit.currentStreak} ${habit.streakUnitLabel}',
             style: const TextStyle(
               color: Colors.orange,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
               fontSize: 10,
               height: 1.0,
             ),
@@ -1736,7 +1736,7 @@ class _HabitFeedbackBadge extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: 10,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 height: 1.0,
               ),
             ),

@@ -1104,10 +1104,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitFlexRule => '弹性打卡规则';
 
   @override
-  String get habitFlexWeekly => '每周';
+  String get habitFlexWeekly => '周期目标/周';
 
   @override
-  String get habitFlexMonthly => '每月';
+  String get habitFlexMonthly => '周期目标/月';
 
   @override
   String get habitFlexPeriodTarget => '周期目标';

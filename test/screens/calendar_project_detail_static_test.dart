@@ -56,7 +56,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final desiredDetailHeight = availableHeight < 560 \?\s*500\.0\s*:\s*660\.0',
+          r'final desiredDetailHeight = availableHeight < 560 \?\s*220\.0\s*:\s*320\.0',
           multiLine: true,
         ),
       ),
@@ -71,7 +71,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final preferredGridHeight = rows >= 6 \?\s*98\.0\s*:\s*92\.0',
+          r'final preferredGridHeight = rows >= 6 \?\s*360\.0\s*:\s*330\.0',
           multiLine: true,
         ),
       ),
@@ -80,10 +80,19 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final minGridHeight = rows >= 6 \?\s*82\.0\s*:\s*78\.0',
+          r'final minGridHeight = rows >= 6 \?\s*300\.0\s*:\s*270\.0',
           multiLine: true,
         ),
       ),
+    );
+    expect(
+      source,
+      contains('final compactUpperGridHeight = availableHeight <= 120'),
+    );
+    expect(source, contains('final upperGridHeight = compactUpperGridHeight'));
+    expect(
+      source,
+      contains('final lowerGridHeight = minGridHeight < upperGridHeight'),
     );
     expect(source, contains("'calendar_month_detail_scroll_region'"));
     final monthDetailStart = source.indexOf(
@@ -113,6 +122,12 @@ void main() {
     expect(source, contains('? constraints.maxWidth'));
     expect(source, contains(': 380'));
     expect(source, contains('workspaceId: workspaceId'));
+    expect(source, contains('CompletionVisibilityPolicy.visualState('));
+    expect(source, contains('TodoVisualState.completed'));
+    expect(source, contains('TodoVisualState.overdue'));
+    expect(source, contains('Icons.priority_high_rounded'));
+    expect(source, contains('TextDecoration.lineThrough'));
+    expect(source, contains("isCompleted ? '已完成' : '逾期'"));
   });
 
   test('calendar exposes shared workspace filters', () {

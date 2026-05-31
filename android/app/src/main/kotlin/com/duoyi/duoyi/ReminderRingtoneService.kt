@@ -550,6 +550,12 @@ class ReminderRingtoneService : Service() {
         private fun soundResId(context: Context): Int {
             return when (selectedSoundName(context)) {
                 "soft" -> R.raw.duoyi_soft
+                "forest" -> R.raw.duoyi_forest
+                "silver" -> R.raw.duoyi_silver
+                "paper" -> R.raw.duoyi_paper
+                "stream" -> R.raw.duoyi_stream
+                "star" -> R.raw.duoyi_star
+                "marimba" -> R.raw.duoyi_marimba
                 "lull" -> R.raw.duoyi_lull
                 "glass" -> R.raw.duoyi_glass
                 "bamboo" -> R.raw.duoyi_bamboo
@@ -573,7 +579,30 @@ class ReminderRingtoneService : Service() {
 
         private fun normalizeSoundName(value: String): String {
             return when (value) {
-                "soft", "lull", "glass", "bamboo", "dawn", "wood", "water", "harp", "mist", "pebble", "tide", "chime", "bell", "morning", "pearl", "beep", "classic", "alarm" -> value
+                "soft",
+                "forest",
+                "silver",
+                "paper",
+                "stream",
+                "star",
+                "marimba",
+                "lull",
+                "glass",
+                "bamboo",
+                "dawn",
+                "wood",
+                "water",
+                "harp",
+                "mist",
+                "pebble",
+                "tide",
+                "chime",
+                "bell",
+                "morning",
+                "pearl",
+                "beep",
+                "classic",
+                "alarm" -> value
                 else -> "soft"
             }
         }

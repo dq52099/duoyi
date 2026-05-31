@@ -159,7 +159,7 @@ class DiaryScreen extends StatelessWidget {
         Text(
           value,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
             color: cs.onSurface,
           ),
         ),
@@ -168,7 +168,7 @@ class DiaryScreen extends StatelessWidget {
           title,
           style: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.62),
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],
@@ -351,7 +351,7 @@ class _DiaryInsightCard extends StatelessWidget {
               Text(
                 I18n.tr('diary.ai.insights'),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -377,7 +377,7 @@ class _DiaryInsightCard extends StatelessWidget {
                           insight.title,
                           style: const TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -468,7 +468,7 @@ class _DiaryCard extends StatelessWidget {
                             '${entry.date.month}/${entry.date.day}',
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               color: accent,
                             ),
                           ),
@@ -518,7 +518,7 @@ class _DiaryCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               color: cs.onSurface,
                             ),
                           ),
@@ -561,7 +561,7 @@ class _DiaryCard extends StatelessWidget {
                               '#$t',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.7),
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -597,7 +597,7 @@ class _DiaryBadge extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.normal,
           color: cs.onSurface.withValues(alpha: 0.68),
         ),
       ),
@@ -751,7 +751,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                       I18nDateFormat.date(_date),
                       style: TextStyle(
                         color: cs.primary,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     const SizedBox(width: 10),

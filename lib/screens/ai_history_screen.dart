@@ -82,7 +82,7 @@ class AiHistoryScreen extends StatelessWidget {
                               createdAt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.62),
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                             const Spacer(),
@@ -138,7 +138,7 @@ class AiHistoryScreen extends StatelessWidget {
                           e.summary,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.68),
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 8),

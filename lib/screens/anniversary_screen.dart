@@ -233,7 +233,7 @@ class _AnniversaryScreenState extends State<AnniversaryScreen>
                           '${a.daysRemaining}',
                           style: TextStyle(
                             color: Color(a.colorValue),
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                       ),
@@ -541,7 +541,7 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                               style: TextStyle(
                                 fontSize: days == 0 ? 14 : 18,
                                 height: 1,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: color,
                               ),
                             ),
@@ -552,7 +552,7 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: color,
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                 ),
                               ),
                             ],
@@ -672,7 +672,7 @@ class _AnniversaryInlineSwipeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
       color: foreground,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
       height: 1.1,
     );
     return Material(
@@ -717,7 +717,7 @@ class _AnniversaryPill extends StatelessWidget {
         style: TextStyle(
           fontSize: 10,
           color: color,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.normal,
         ),
       ),
     );

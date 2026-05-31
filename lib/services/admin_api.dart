@@ -629,6 +629,13 @@ class AdminApi {
     'status': status,
   });
 
+  Future<void> closeFeedback(int id, {String reply = '已关闭。'}) =>
+      bulkUpdateFeedbackStatus(
+        feedbackIds: [id],
+        reply: reply,
+        status: 'closed',
+      );
+
   Future<String> exportFeedbackCsv({
     String? status,
     String? query,

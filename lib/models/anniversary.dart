@@ -219,9 +219,7 @@ class Anniversary {
     remindDaysBefore: json['remindDaysBefore'] ?? 1,
     remindHour: (json['remindHour'] as num?)?.toInt() ?? 9,
     remindMinute: (json['remindMinute'] as num?)?.toInt() ?? 0,
-    reminderKind: json['reminderKind'] != null
-        ? ReminderKind.values[(json['reminderKind'] as num).toInt()]
-        : ReminderKind.push,
+    reminderKind: _reminderKindFromJson(json['reminderKind']),
     ignoreYear: json['ignoreYear'] == true,
     lunarYear: json['lunarYear'],
     lunarMonth: json['lunarMonth'],
@@ -236,4 +234,19 @@ class Anniversary {
         DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
         DateTime.now(),
   );
+}
+
+ReminderKind _reminderKindFromJson(Object? raw) {
+  if (raw is num) {
+    final index = raw.toInt();
+    if (index >= 0 && index < ReminderKind.values.length) {
+      return ReminderKind.values[index];
+    }
+  }
+  if (raw is String) {
+    for (final kind in ReminderKind.values) {
+      if (kind.name == raw) return kind;
+    }
+  }
+  return ReminderKind.push;
 }

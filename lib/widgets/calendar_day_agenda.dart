@@ -9,6 +9,7 @@ import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
+import '../core/completion_visibility_policy.dart';
 import '../models/calendar_event.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
@@ -151,7 +152,7 @@ class CalendarDayAgenda extends StatelessWidget {
                           Text(
                             c.name,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               fontSize: 13,
                             ),
                           ),
@@ -249,7 +250,7 @@ class CalendarDayAgenda extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     color: cs.primary,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 if (term != null)
@@ -296,7 +297,7 @@ class CalendarDayAgenda extends StatelessWidget {
       style: TextStyle(
         fontSize: 12,
         color: Colors.grey.shade600,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
     ),
   );
@@ -497,6 +498,14 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
     final e = widget.event;
     final compact = widget.compact;
     final cs = Theme.of(context).colorScheme;
+    final visual = _eventVisualState(e);
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    final statusColor = isCompleted
+        ? cs.tertiary
+        : isOverdue
+        ? cs.error
+        : null;
     final radius = BorderRadius.circular(compact ? 8 : 10);
     final card = InkWell(
       borderRadius: radius,
@@ -506,11 +515,18 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
             : const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: cs.surface,
+          color: statusColor == null
+              ? cs.surface
+              : Color.alphaBlend(
+                  statusColor.withValues(alpha: 0.07),
+                  cs.surface,
+                ),
           borderRadius: radius,
           border: Border.all(
             color: e.hasConflict
                 ? cs.error.withValues(alpha: 0.36)
+                : statusColor != null
+                ? statusColor.withValues(alpha: 0.24)
                 : Colors.grey.withValues(alpha: 0.1),
             width: 0.45,
           ),
@@ -531,6 +547,15 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   }
 
   Widget _buildCompactContent(BuildContext context, CalendarEvent e) {
+    final visual = _eventVisualState(e);
+    final cs = Theme.of(context).colorScheme;
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    final statusColor = isCompleted
+        ? cs.tertiary
+        : isOverdue
+        ? cs.error
+        : null;
     return Row(
       children: [
         if (_canDrag) ...[
@@ -544,12 +569,23 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: e.isCompleted ? Colors.grey : null,
-              decoration: e.isCompleted ? TextDecoration.lineThrough : null,
+              fontWeight: FontWeight.normal,
+              color: isCompleted
+                  ? Colors.grey
+                  : isOverdue
+                  ? cs.error
+                  : null,
+              decoration: isCompleted ? TextDecoration.lineThrough : null,
             ),
           ),
         ),
+        if (statusColor != null) ...[
+          const SizedBox(width: 6),
+          _CalendarAgendaStatusBadge(
+            label: isCompleted ? '已完成' : '逾期',
+            color: statusColor,
+          ),
+        ],
         if (e.time != null) ...[
           const SizedBox(width: 6),
           Text(
@@ -576,6 +612,15 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   }
 
   Widget _buildRegularContent(BuildContext context, CalendarEvent e) {
+    final visual = _eventVisualState(e);
+    final cs = Theme.of(context).colorScheme;
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    final statusColor = isCompleted
+        ? cs.tertiary
+        : isOverdue
+        ? cs.error
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -590,12 +635,23 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
                 e.title,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: e.isCompleted ? Colors.grey : null,
-                  decoration: e.isCompleted ? TextDecoration.lineThrough : null,
+                  fontWeight: FontWeight.normal,
+                  color: isCompleted
+                      ? Colors.grey
+                      : isOverdue
+                      ? cs.error
+                      : null,
+                  decoration: isCompleted ? TextDecoration.lineThrough : null,
                 ),
               ),
             ),
+            if (statusColor != null) ...[
+              const SizedBox(width: 6),
+              _CalendarAgendaStatusBadge(
+                label: isCompleted ? '已完成' : '逾期',
+                color: statusColor,
+              ),
+            ],
             if (e.hasConflict)
               Tooltip(
                 message: '时间冲突',
@@ -713,6 +769,39 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   }
 }
 
+TodoVisualState _eventVisualState(CalendarEvent event) {
+  if (event.isCompleted) return TodoVisualState.completed;
+  final dueAt = event.endDate;
+  if (event.type == CalendarEventType.todo &&
+      dueAt != null &&
+      dueAt.isBefore(DateTime.now())) {
+    return TodoVisualState.overdue;
+  }
+  return TodoVisualState.normal;
+}
+
+class _CalendarAgendaStatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _CalendarAgendaStatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.7),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(label, style: TextStyle(fontSize: 10, color: color)),
+      ),
+    );
+  }
+}
+
 DateTime _eventStartOnDay(CalendarEvent event, DateTime day) {
   final dayStart = _dateOnly(day);
   final eventDay = _dateOnly(event.date);
@@ -794,7 +883,7 @@ class _DiaryQuickEntry extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   color: hasEntry ? cs.primary : Colors.grey.shade600,
-                  fontWeight: hasEntry ? FontWeight.w400 : FontWeight.normal,
+                  fontWeight: hasEntry ? FontWeight.normal : FontWeight.normal,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -842,7 +931,7 @@ class _AnniversaryTile extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: 13,
                   ),
                 ),

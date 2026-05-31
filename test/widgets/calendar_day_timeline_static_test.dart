@@ -57,4 +57,26 @@ void main() {
     expect(source, contains('_buildRegularContent(context, e)'));
     expect(source, contains('_DraggableEventCard(event: event'));
   });
+
+  test('日历日程中的待办按完成和逾期状态区分显示', () {
+    final agenda = File(
+      'lib/widgets/calendar_day_agenda.dart',
+    ).readAsStringSync();
+    final week = File(
+      'lib/widgets/calendar_week_strip.dart',
+    ).readAsStringSync();
+
+    for (final source in [agenda, week]) {
+      expect(source, contains('TodoVisualState.completed'));
+      expect(source, contains('TodoVisualState.overdue'));
+      expect(source, contains("label: isCompleted ? '已完成' : '逾期'"));
+      expect(source, contains('dueAt.isBefore(DateTime.now())'));
+      expect(source, contains('Color.alphaBlend('));
+      expect(source, contains('statusColor.withValues(alpha: 0.24)'));
+    }
+    expect(agenda, contains('class _CalendarAgendaStatusBadge'));
+    expect(week, contains('class _WeekEventStatusBadge'));
+    expect(week, contains("import '../models/calendar_event.dart';"));
+    expect(week, contains("import '../providers/calendar_provider.dart';"));
+  });
 }

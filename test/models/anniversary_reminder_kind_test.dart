@@ -61,6 +61,27 @@ void main() {
       expect(a.reminderKind, ReminderKind.alarm);
     });
 
+    test('fromJson 遇到越界 reminderKind 回退到 push', () {
+      final json = {
+        'id': 'test-id',
+        'title': '异常提醒方式纪念日',
+        'originDate': '2026-06-01T00:00:00.000',
+        'type': 0,
+        'calendarType': 0,
+        'colorValue': 0xFFE91E63,
+        'isPinned': false,
+        'remind': true,
+        'remindDaysBefore': 1,
+        'remindHour': 9,
+        'remindMinute': 0,
+        'reminderKind': 999,
+        'lunarIsLeap': false,
+        'createdAt': '2026-01-01T00:00:00.000',
+      };
+      final a = Anniversary.fromJson(json);
+      expect(a.reminderKind, ReminderKind.push);
+    });
+
     test('roundtrip toJson → fromJson 保留 reminderKind 和 updatedAt', () {
       final updatedAt = DateTime(2026, 6, 1, 10, 30);
       final original = Anniversary(

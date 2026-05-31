@@ -143,4 +143,56 @@ void main() {
     expect(abnormal.flagged, isTrue);
     expect(ranking.suspiciousEntryCount, 2);
   });
+
+  test('FocusRoom JSON remains compatible with sparse stored payloads', () {
+    final room = FocusRoom.fromJson({
+      'id': 42,
+      'name': '兼容自习室',
+      'description': null,
+      'weeklyTargetSeconds': 3600.6,
+      'accentColor': 0xFF00897B,
+      'members': [
+        {'id': 7, 'name': null, 'weeklySeconds': 1200.4, 'sessionCount': 3.2},
+        'ignored legacy item',
+      ],
+      'createdAt': '2026-05-31T08:00:00.000Z',
+    });
+
+    expect(room.id, '42');
+    expect(room.name, '兼容自习室');
+    expect(room.description, '');
+    expect(room.weeklyTargetSeconds, 3601);
+    expect(room.accentColor, 0xFF00897B);
+    expect(room.members, hasLength(1));
+    expect(room.members.single.id, '7');
+    expect(room.members.single.name, '同学');
+    expect(room.members.single.weeklySeconds, 1200);
+    expect(room.members.single.sessionCount, 3);
+    expect(room.createdAt.toUtc(), DateTime.utc(2026, 5, 31, 8));
+
+    final encoded = room.toJson();
+    expect(encoded, containsPair('weeklyTargetSeconds', 3601));
+    expect(encoded, containsPair('accentColor', 0xFF00897B));
+    expect(
+      encoded,
+      containsPair('createdAt', room.createdAt.toIso8601String()),
+    );
+
+    final restored = FocusRoom.fromJson(encoded);
+    expect(restored.id, room.id);
+    expect(restored.members.single.toJson(), room.members.single.toJson());
+
+    final sparse = FocusRoom.fromJson({
+      'members': [
+        {'id': 'peer-only'},
+      ],
+      'createdAt': 'not-a-date',
+    });
+    expect(sparse.id, isEmpty);
+    expect(sparse.name, '专注自习室');
+    expect(sparse.weeklyTargetSeconds, 0);
+    expect(sparse.accentColor, 0xFFE53935);
+    expect(sparse.members.single.name, '同学');
+    expect(sparse.createdAt, DateTime.fromMillisecondsSinceEpoch(0));
+  });
 }

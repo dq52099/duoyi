@@ -30,10 +30,19 @@ void main() {
       expect(swipeActionsSource, contains('height: 42'));
       expect(swipeActionsSource, contains('if (_open)'));
       expect(swipeActionsSource, contains('Positioned.fill('));
+      expect(
+        swipeActionsSource,
+        contains('static const double _actionRailWidth = 160'),
+      );
       expect(swipeActionsSource, contains('TweenAnimationBuilder<double>('));
+      expect(
+        swipeActionsSource,
+        contains('Tween<double>(end: _open ? -_actionRailWidth : 0)'),
+      );
       expect(swipeActionsSource, contains('Transform.translate('));
       expect(swipeActionsSource, contains("tooltip: '查看反馈详情'"));
       expect(swipeActionsSource, contains("tooltip: '回复'"));
+      expect(swipeActionsSource, contains("tooltip: '关闭'"));
       expect(swipeActionsSource, contains("tooltip: '删除'"));
       final feedbackDetailSource = source.substring(
         source.indexOf('Future<void> _showFeedbackDetail'),
@@ -196,6 +205,7 @@ void main() {
     expect(find.byTooltip('反馈操作', skipOffstage: false), findsNothing);
     expect(find.byTooltip('查看反馈详情', skipOffstage: false), findsNothing);
     expect(find.byTooltip('回复', skipOffstage: false), findsNothing);
+    expect(find.byTooltip('关闭', skipOffstage: false), findsNothing);
     expect(find.byTooltip('删除', skipOffstage: false), findsNothing);
 
     await tester.tap(find.textContaining('通知没有声音'));
@@ -554,6 +564,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('查看反馈详情', skipOffstage: false), findsNothing);
     expect(find.byTooltip('回复', skipOffstage: false), findsNothing);
+    expect(find.byTooltip('关闭', skipOffstage: false), findsNothing);
     expect(find.byTooltip('删除', skipOffstage: false), findsNothing);
 
     final pagination = find.byKey(const ValueKey('admin_feedback_pagination'));
@@ -563,10 +574,18 @@ void main() {
 
     final paginationRect = tester.getRect(pagination);
     final firstRowRect = tester.getRect(firstRow);
+    final contentRect = tester.getRect(
+      find.textContaining('低高度窄屏下仍然需要先看到反馈正文').first,
+    );
     expect(paginationRect.height, lessThanOrEqualTo(80));
     expect(firstRowRect.top, greaterThanOrEqualTo(0));
     expect(firstRowRect.bottom, lessThan(paginationRect.top));
     expect(firstRowRect.height, greaterThanOrEqualTo(64));
+    expect(
+      contentRect.right,
+      greaterThan(firstRowRect.right - 80),
+      reason: '详情/回复/关闭/删除操作不能在未左滑时预留右侧按钮区域。',
+    );
 
     await tester.tap(find.textContaining('低高度窄屏下仍然需要先看到反馈正文'));
     await tester.pumpAndSettle();
@@ -661,6 +680,80 @@ void main() {
     expect(requests, contains('POST /api/admin/feedback/bulk-status'));
   });
 
+  testWidgets('Admin feedback tab bulk-closes current page resolved feedback', (
+    tester,
+  ) async {
+    final requests = <String>[];
+    final client = ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'admin-token',
+      httpClient: MockClient((request) async {
+        final query = request.url.query.isEmpty ? '' : '?${request.url.query}';
+        requests.add('${request.method} ${request.url.path}$query');
+        if (request.method == 'GET' &&
+            request.url.path == '/api/admin/feedback') {
+          return http.Response(
+            json.encode({
+              'items': [
+                {
+                  'id': 9,
+                  'username': 'done',
+                  'email': 'done@example.com',
+                  'email_verified': true,
+                  'display_name': '已解决用户',
+                  'category': 'wish',
+                  'content': '已解决反馈可批量关闭',
+                  'status': 'resolved',
+                  'admin_reply': '已解决。',
+                },
+              ],
+              'total': 1,
+              'limit': 20,
+              'offset': 0,
+              'has_more': false,
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'POST' &&
+            request.url.path == '/api/admin/feedback/bulk-status') {
+          final body = json.decode(request.body) as Map<String, dynamic>;
+          expect(body['feedback_ids'], [9]);
+          expect(body['reply'], '已归档关闭。');
+          expect(body['status'], 'closed');
+          return http.Response(
+            json.encode({'status': 'ok', 'updated': 1}),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>.value(
+        value: _FakeAuthProvider(
+          state: const AuthState(
+            userId: 'admin',
+            username: 'admin',
+            token: 'admin-token',
+            isAdmin: true,
+          ),
+          client: client,
+        ),
+        child: const MaterialApp(home: AdminScreen(initialTabIndex: 7)),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('本页已解决转关闭'));
+    await tester.pumpAndSettle();
+
+    expect(requests, contains('POST /api/admin/feedback/bulk-status'));
+  });
+
   testWidgets('Admin feedback swipe actions can reply and delete feedback', (
     tester,
   ) async {
@@ -730,6 +823,18 @@ void main() {
             headers: {'content-type': 'application/json'},
           );
         }
+        if (request.method == 'POST' &&
+            request.url.path == '/api/admin/feedback/bulk-status') {
+          final body = json.decode(request.body) as Map<String, dynamic>;
+          expect(body['feedback_ids'], [7]);
+          expect(body['reply'], '已安排排查通知通道');
+          expect(body['status'], 'closed');
+          return http.Response(
+            json.encode({'status': 'ok', 'updated': 1}),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         if (request.method == 'DELETE' &&
             request.url.path == '/api/admin/feedback/7') {
           deleted = true;
@@ -768,6 +873,7 @@ void main() {
     expect(feedbackRow, findsOneWidget);
     expect(find.byTooltip('查看反馈详情', skipOffstage: false), findsNothing);
     expect(find.byTooltip('回复', skipOffstage: false), findsNothing);
+    expect(find.byTooltip('关闭', skipOffstage: false), findsNothing);
     expect(find.byTooltip('删除', skipOffstage: false), findsNothing);
     expect(tester.getRect(feedbackRow).width, greaterThan(260));
     await tester.tap(feedbackRow);
@@ -781,25 +887,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('查看反馈详情'), findsOneWidget);
     expect(find.byTooltip('回复'), findsOneWidget);
+    expect(find.byTooltip('关闭'), findsOneWidget);
     expect(find.byTooltip('删除'), findsOneWidget);
 
     final rowRect = tester.getRect(feedbackRow);
     final detailRect = tester.getRect(find.byTooltip('查看反馈详情'));
     final replyRect = tester.getRect(find.byTooltip('回复'));
+    final closeRect = tester.getRect(find.byTooltip('关闭'));
     final deleteRect = tester.getRect(find.byTooltip('删除'));
     final railLeft = [
       detailRect.left,
       replyRect.left,
+      closeRect.left,
       deleteRect.left,
     ].reduce((a, b) => a < b ? a : b);
     final railRight = [
       detailRect.right,
       replyRect.right,
+      closeRect.right,
       deleteRect.right,
     ].reduce((a, b) => a > b ? a : b);
-    expect(railRight - railLeft, lessThanOrEqualTo(132));
+    expect(railRight - railLeft, lessThanOrEqualTo(164));
     expect(railRight, lessThanOrEqualTo(rowRect.right));
-    expect(railLeft, greaterThanOrEqualTo(rowRect.right - 132));
+    expect(railLeft, greaterThanOrEqualTo(rowRect.right - 164));
 
     await tester.tap(find.byTooltip('查看反馈详情'));
     await tester.pumpAndSettle();
@@ -821,6 +931,14 @@ void main() {
 
     await tester.drag(feedbackRow, const Offset(-180, 0));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('关闭反馈？'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '关闭'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(feedbackRow, const Offset(-180, 0));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('回复'));
     await tester.pumpAndSettle();
@@ -836,6 +954,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requests, contains('POST /api/admin/feedback/reply'));
+    expect(requests, contains('POST /api/admin/feedback/bulk-status'));
     expect(
       requests
           .where((request) => request == 'GET /api/admin/feedback/7')

@@ -1,5 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/models/pomodoro.dart';
+import 'package:duoyi/providers/focus_room_provider.dart';
+import 'package:duoyi/services/api_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -131,4 +137,60 @@ void main() {
     expect(provider, contains('考试冲刺自习室'));
     expect(provider, contains('阅读自习室'));
   });
+
+  test(
+    'FocusRoomProvider surfaces server errors and falls back to local ranking',
+    () async {
+      final provider = FocusRoomProvider();
+      final requests = <String>[];
+      provider.apiClientGetter = () => ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          requests.add('${request.method} ${request.url.path}');
+          return http.Response(
+            jsonEncode({'detail': 'focus room server unavailable'}),
+            500,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      final sessions = [
+        PomodoroSession(
+          id: 'local-session',
+          startTime: DateTime(2026, 5, 25, 9),
+          endTime: DateTime(2026, 5, 25, 9, 25),
+          durationSeconds: 25 * 60,
+          type: PomodoroType.focus,
+          focusRoomId: FocusRoomProvider.defaultRoomId,
+        ),
+      ];
+
+      await provider.syncRemoteRankings(
+        sessions,
+        displayName: '小多',
+        force: true,
+      );
+
+      expect(
+        requests,
+        contains('POST /api/focus-rooms/deep_work_room/heartbeat'),
+      );
+      expect(
+        provider.lastRemoteError,
+        contains('focus room server unavailable'),
+      );
+
+      final ranking = provider.effectiveRankingFor(
+        FocusRoomProvider.defaultRoomId,
+        sessions,
+        now: DateTime(2026, 5, 25, 10),
+        currentUserName: '小多',
+      );
+      final currentUser = ranking.entries.firstWhere((e) => e.isCurrentUser);
+      expect(ranking.remote, isFalse);
+      expect(currentUser.name, '小多');
+      expect(currentUser.weeklySeconds, 25 * 60);
+    },
+  );
 }

@@ -285,8 +285,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   onAction: () => _openSubmit(widget.initialCategory),
                 )
               else ...[
-                ..._items.map(
-                  (item) => _FeedbackRecordSwipeActions(
+                ..._items.map((item) {
+                  final recordId = (item['id'] ?? item['created_at'] ?? '')
+                      .toString();
+                  return _FeedbackRecordSwipeActions(
+                    key: ValueKey('feedback_record_swipe_$recordId'),
+                    recordId: recordId,
                     onDetail: () => _showFeedbackDetail(item),
                     child: _FeedbackRecordCard(
                       item: item,
@@ -295,8 +299,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       statusColor: (status) => _statusColor(context, status),
                       onTap: () => _showFeedbackDetail(item),
                     ),
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(height: 8),
                 _FeedbackPagination(
                   key: const ValueKey('feedback_record_pagination'),
@@ -385,7 +389,7 @@ class _FeedbackDetailField extends StatelessWidget {
                         alpha: multiline ? 0.84 : 0.70,
                       ),
                       height: multiline ? 1.38 : 1.25,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
           ),
         ],
@@ -613,9 +617,10 @@ class _FeedbackCategoryMenu extends StatelessWidget {
                 children: [
                   Text(
                     labelFor(selected),
-                    style: appSecondaryControlTextStyle(
-                      context,
-                    ).copyWith(color: selectedFg, fontWeight: FontWeight.w400),
+                    style: appSecondaryControlTextStyle(context).copyWith(
+                      color: selectedFg,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.arrow_drop_down, color: cs.primary, size: 18),
@@ -719,10 +724,13 @@ class _FeedbackRecordCard extends StatelessWidget {
 }
 
 class _FeedbackRecordSwipeActions extends StatefulWidget {
+  final String recordId;
   final Widget child;
   final VoidCallback onDetail;
 
   const _FeedbackRecordSwipeActions({
+    super.key,
+    required this.recordId,
     required this.child,
     required this.onDetail,
   });
@@ -738,6 +746,15 @@ class _FeedbackRecordSwipeActionsState
   static const double _dragOpenThreshold = 40;
   double _dragDistance = 0;
   bool _open = false;
+
+  @override
+  void didUpdateWidget(covariant _FeedbackRecordSwipeActions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.recordId != oldWidget.recordId) {
+      _dragDistance = 0;
+      _open = false;
+    }
+  }
 
   void _setOpen(bool value) {
     if (_open == value) return;

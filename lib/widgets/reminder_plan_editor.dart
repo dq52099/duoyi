@@ -544,7 +544,7 @@ TextStyle _labelStyle(BuildContext context) {
   return TextStyle(
     fontSize: DesignTokens.fontSizeSm,
     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.68),
-    fontWeight: DesignTokens.fontWeightMedium,
+    fontWeight: DesignTokens.fontWeightRegular,
   );
 }
 

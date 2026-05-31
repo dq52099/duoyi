@@ -163,7 +163,7 @@ class _ExportScreenState extends State<ExportScreen> {
                           I18n.tr('export.hero.title'),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
                               ),
                         ),
@@ -244,7 +244,7 @@ class _ExportScreenState extends State<ExportScreen> {
                             I18n.tr('export.content.title'),
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),

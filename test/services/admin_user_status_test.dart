@@ -179,7 +179,7 @@ void main() {
     expect(adminScreen, contains('width: 54'));
     expect(adminScreen, contains('maxWidth: 300'));
     expect(adminScreen, contains('maxWidth: 260'));
-    expect(adminScreen, contains('fromLTRB(8, 2, 8, 2)'));
+    expect(adminScreen, contains('fromLTRB(8, 1, 8, 1)'));
     expect(
       adminScreen,
       contains("'\${_adminPageSummary(page)} · \${_adminPageNumber(page)}'"),
@@ -198,7 +198,7 @@ void main() {
       greaterThanOrEqualTo(4),
     );
     expect(adminScreen, contains('Widget navButton({'));
-    expect(adminScreen, contains('iconSize: 16'));
+    expect(adminScreen, contains('iconSize: 15'));
     expect(adminScreen, isNot(contains('admin_compact_pagination_inline')));
     expect(adminScreen, isNot(contains('compactHasPageShortcuts')));
     expect(adminScreen, isNot(contains('Expanded(child: previousButton)')));
@@ -207,12 +207,12 @@ void main() {
       adminScreen,
       isNot(contains('minimumSize: const WidgetStatePropertyAll')),
     );
-    expect(adminScreen, contains('dimension: 30'));
+    expect(adminScreen, contains('dimension: 28'));
     expect(adminScreen, isNot(contains('dimension: 26')));
     expect(adminScreen, isNot(contains('height: 22')));
     expect(adminScreen, isNot(contains('dimension: 22')));
     expect(adminScreen, isNot(contains('width: 124')));
-    expect(adminScreen, contains('minHeight: 30'));
+    expect(adminScreen, contains('minHeight: 28'));
     expect(adminScreen, isNot(contains('minHeight: 26')));
     expect(adminScreen, contains('class _AdminGlassControlTheme'));
     expect(adminScreen, contains('selectedFill'));

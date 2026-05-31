@@ -94,6 +94,42 @@ void main() {
     expect(metricChip, contains('Text('));
   });
 
+  test('profile avatar preview entry opens a full-screen viewer', () {
+    final source = File('lib/screens/profile_screen.dart').readAsStringSync();
+    final fullScreenStart = source.indexOf('class _ProfileAvatarFullScreen');
+    final fullImageStart = source.indexOf('class _ProfileAvatarFullImage');
+    final fullImageEnd = source.indexOf(
+      'class _ChangePasswordDialog',
+      fullImageStart,
+    );
+    expect(fullScreenStart, greaterThanOrEqualTo(0));
+    expect(fullImageStart, greaterThan(fullScreenStart));
+    expect(fullImageEnd, greaterThan(fullImageStart));
+
+    final fullScreen = source.substring(fullScreenStart, fullImageEnd);
+    expect(
+      source,
+      contains("key: const ValueKey('profile_avatar_preview_button')"),
+    );
+    expect(
+      source,
+      contains("key: const ValueKey('profile_avatar_edit_button')"),
+    );
+    expect(source, contains("message: '查看头像'"));
+    expect(source, contains("message: '修改头像'"));
+    expect(source, contains('MaterialPageRoute<void>('));
+    expect(fullScreen, contains('return Scaffold('));
+    expect(fullScreen, contains('backgroundColor: Colors.black'));
+    expect(fullScreen, contains("title: const Text('头像')"));
+    expect(fullScreen, contains("tag: 'profile-avatar-preview'"));
+    expect(fullScreen, contains('InteractiveViewer'));
+    expect(fullScreen, contains('fit: BoxFit.contain'));
+    expect(fullScreen, isNot(contains('AppDialog(')));
+    expect(fullScreen, isNot(contains('showDialog(')));
+    expect(fullScreen, isNot(contains('ClipOval')));
+    expect(fullScreen, isNot(contains('BoxFit.cover')));
+  });
+
   test('profile actions keep fixed compact sizes and save flows editable', () {
     final source = File('lib/screens/profile_screen.dart').readAsStringSync();
     final auth = File('lib/providers/auth_provider.dart').readAsStringSync();
@@ -106,7 +142,10 @@ void main() {
     expect(source, contains('width: _profileLongActionButtonWidth'));
     expect(source, contains('height: _profileActionButtonHeight'));
     expect(source, contains('FittedBox('));
-    expect(source, contains("child: Text(I18n.tr('action.save'), maxLines: 1)"));
+    expect(
+      source,
+      contains("child: Text(I18n.tr('action.save'), maxLines: 1)"),
+    );
     expect(
       source,
       contains('titleTextStyle: appSecondaryRouteTitleTextStyle('),
@@ -316,7 +355,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存').last);
     await tester.pumpAndSettle();
 
-    expect(requestBodies.removeAt(0), {'display_name': '新昵称', 'bio': '新的账号简介'});
+    expect(requestBodies.removeAt(0), {
+      'display_name': '新昵称',
+      'displayName': '新昵称',
+      'bio': '新的账号简介',
+    });
     expect(auth.state.username, 'old-user');
     expect(auth.state.avatar, 'https://example.com/old.png');
 
@@ -344,6 +387,7 @@ void main() {
       'email': 'new@example.com',
       'code': '123456',
       'email_code': '123456',
+      'emailCode': '123456',
     });
     expect(auth.state.email, 'new@example.com');
     expect(auth.state.emailVerified, isTrue);
@@ -358,7 +402,11 @@ void main() {
 
     expect(passwordRequests.single, {
       'current_password': 'old-pass',
+      'currentPassword': 'old-pass',
+      'old_password': 'old-pass',
       'new_password': '123456',
+      'newPassword': '123456',
+      'password': '123456',
     });
   });
 }

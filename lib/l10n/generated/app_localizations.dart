@@ -2261,13 +2261,13 @@ abstract class AppLocalizations {
   /// No description provided for @habitFlexWeekly.
   ///
   /// In zh, this message translates to:
-  /// **'每周'**
+  /// **'周期目标/周'**
   String get habitFlexWeekly;
 
   /// No description provided for @habitFlexMonthly.
   ///
   /// In zh, this message translates to:
-  /// **'每月'**
+  /// **'周期目标/月'**
   String get habitFlexMonthly;
 
   /// No description provided for @habitFlexPeriodTarget.

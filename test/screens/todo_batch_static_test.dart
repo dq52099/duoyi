@@ -89,6 +89,11 @@ void main() {
     expect(source, contains('onHorizontalDragUpdate'));
     expect(source, contains('Matrix4.translationValues(-_swipeOffset'));
     expect(source, contains('class _TodoInlineSwipeActions'));
+    expect(
+      source,
+      contains('bool get _swipeActive => _dragging || _swipeOpen'),
+    );
+    expect(source, contains('if (_swipeActive)'));
     expect(source, contains("label: '详情'"));
     expect(source, contains("label: completed ? '恢复' : '完成'"));
     expect(source, contains("label: '删除'"));
@@ -112,5 +117,50 @@ void main() {
     expect(source, isNot(contains('_showSwipeActions(context, provider)')));
     expect(source, isNot(contains("title: '任务操作'")));
     expect(source, isNot(contains('onDismissed:')));
+  });
+
+  test('任务列表减少滑动卡顿和重绘面积', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(source, contains('_TodoViewMode.list => ListView.builder'));
+    expect(source, contains('cacheExtent: 640'));
+    expect(source, contains('RepaintBoundary(child: content)'));
+    expect(source, contains('RepaintBoundary(child: card)'));
+    expect(source, contains('clipBehavior: Clip.hardEdge'));
+    expect(source, isNot(contains('IntrinsicHeight(')));
+  });
+
+  test('任务卡片按逾期完成临期状态和正常任务做视觉区分', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(
+      source,
+      contains(
+        'final stateColor = CompletionVisibilityPolicy.colorFor(visual)',
+      ),
+    );
+    expect(source, contains('final visualAccentColor = switch (visual)'));
+    expect(source, contains('final statusBackground = switch (visual)'));
+    expect(source, contains('final statusBorder = switch (visual)'));
+    expect(source, contains('TodoVisualState.completed'));
+    expect(source, contains('TodoVisualState.overdue'));
+    expect(source, contains('TodoVisualState.dueSoon'));
+    expect(source, contains('Color.alphaBlend('));
+    expect(source, contains('activeColor: visualAccentColor'));
+    expect(
+      source,
+      contains('decoration: BoxDecoration(color: visualAccentColor)'),
+    );
+    expect(
+      source,
+      contains('final statusColor = isCompleted || isOverdue || isDueSoon'),
+    );
+    expect(
+      source,
+      contains('statusBackground = isCompleted || isOverdue || isDueSoon'),
+    );
+    expect(source, contains("'过期'"));
+    expect(source, contains("'已完成'"));
+    expect(source, contains("'临期'"));
   });
 }

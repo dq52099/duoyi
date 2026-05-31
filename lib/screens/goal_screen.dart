@@ -141,7 +141,7 @@ class _GoalCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                             ),
                           ),
                         ),
@@ -180,7 +180,7 @@ class _GoalCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: _statusColor(),
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -203,7 +203,7 @@ class _GoalCard extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',
-                style: TextStyle(color: color, fontWeight: FontWeight.w400),
+                style: TextStyle(color: color, fontWeight: FontWeight.normal),
               ),
             ],
           ),

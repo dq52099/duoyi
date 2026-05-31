@@ -12,7 +12,7 @@ void main() {
     ).readAsStringSync();
     expect(timePicker, isNot(contains('fontSize: 34')));
     expect(timePicker, contains('fontSize: 24'));
-    expect(timePicker, contains('fontWeight: FontWeight.w400'));
+    expect(timePicker, contains('fontWeight: FontWeight.normal'));
     expect(
       timePicker,
       contains(

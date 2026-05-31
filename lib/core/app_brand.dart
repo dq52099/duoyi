@@ -55,7 +55,7 @@ TextTheme _textTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: size,
       height: height,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
       letterSpacing: 0,
       color: color,
     );
@@ -137,6 +137,24 @@ ThemeData _withSharedControls(ThemeData theme) {
   final dialogShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(24),
   );
+  final appBarForeground =
+      theme.appBarTheme.titleTextStyle?.color ??
+      theme.appBarTheme.foregroundColor ??
+      cs.onSurface;
+  final appBarTitleText = (theme.textTheme.titleMedium ?? const TextStyle())
+      .copyWith(
+        color: appBarForeground,
+        fontSize: 14,
+        fontWeight: FontWeight.normal,
+        height: 1.2,
+        letterSpacing: 0,
+      );
+  final appBarToolbarText = (theme.textTheme.bodyMedium ?? const TextStyle())
+      .copyWith(
+        color: appBarForeground,
+        fontWeight: FontWeight.normal,
+        letterSpacing: 0,
+      );
 
   final body = theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface);
   final bodyMuted = theme.textTheme.bodySmall?.copyWith(
@@ -144,18 +162,18 @@ ThemeData _withSharedControls(ThemeData theme) {
   );
   final label = theme.textTheme.labelMedium?.copyWith(
     fontSize: 12,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.normal,
   );
   final secondaryControlText = theme.textTheme.bodySmall?.copyWith(
     fontSize: 11,
     height: 1.2,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.normal,
     color: cs.onSurface,
   );
   final secondaryLabelText = theme.textTheme.labelSmall?.copyWith(
     fontSize: 10,
     height: 1.16,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.normal,
   );
   final selectedControlBackground = Color.alphaBlend(
     cs.primary.withValues(alpha: isDark ? 0.20 : 0.14),
@@ -206,15 +224,15 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     hintStyle: secondaryControlText?.copyWith(
       color: cs.onSurface.withValues(alpha: 0.46),
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
     ),
     labelStyle: secondaryLabelText?.copyWith(
       color: cs.onSurface.withValues(alpha: 0.72),
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
     ),
     floatingLabelStyle: secondaryLabelText?.copyWith(
       color: cs.primary,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.normal,
     ),
     prefixIconColor: WidgetStateColor.resolveWith((states) {
       if (states.contains(WidgetState.disabled)) {
@@ -233,6 +251,19 @@ ThemeData _withSharedControls(ThemeData theme) {
 
   return theme.copyWith(
     materialTapTargetSize: MaterialTapTargetSize.padded,
+    appBarTheme: theme.appBarTheme.copyWith(
+      foregroundColor: appBarForeground,
+      titleTextStyle: appBarTitleText,
+      toolbarTextStyle: appBarToolbarText,
+      iconTheme:
+          theme.appBarTheme.iconTheme?.copyWith(color: appBarForeground) ??
+          IconThemeData(color: appBarForeground),
+      actionsIconTheme:
+          theme.appBarTheme.actionsIconTheme?.copyWith(
+            color: appBarForeground,
+          ) ??
+          IconThemeData(color: appBarForeground),
+    ),
     inputDecorationTheme: inputTheme,
     dialogTheme: DialogThemeData(
       backgroundColor: surface,
@@ -245,7 +276,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titleTextStyle: theme.textTheme.titleLarge?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       contentTextStyle: body,
       iconColor: cs.primary,
@@ -271,7 +302,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       actionTextColor: cs.primary,
       contentTextStyle: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -286,14 +317,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       surfaceTintColor: surfaceTint,
       textStyle: secondaryControlText?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       iconColor: cs.onSurfaceVariant,
     ),
     dropdownMenuTheme: DropdownMenuThemeData(
       textStyle: secondaryControlText?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       inputDecorationTheme: inputTheme,
       menuStyle: MenuStyle(
@@ -440,12 +471,12 @@ ThemeData _withSharedControls(ThemeData theme) {
       labelStyle: theme.textTheme.labelMedium?.copyWith(
         fontSize: 11,
         color: cs.onSurface,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       secondaryLabelStyle: theme.textTheme.labelMedium?.copyWith(
         fontSize: 11,
         color: selectedControlForeground,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       side: BorderSide(
@@ -552,7 +583,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       valueIndicatorColor: cs.primary,
       valueIndicatorTextStyle: theme.textTheme.bodySmall?.copyWith(
         color: primaryForeground,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       trackHeight: 4,
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
@@ -585,10 +616,10 @@ ThemeData _withSharedControls(ThemeData theme) {
       labelColor: selectedTabForeground,
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       overlayColor: WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.08)),
     ),
@@ -602,7 +633,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         final selected = states.contains(WidgetState.selected);
         return theme.textTheme.labelSmall?.copyWith(
           color: selected ? selectedNavigationForeground : cs.onSurfaceVariant,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.normal,
           letterSpacing: 0,
         );
       }),
@@ -634,14 +665,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       headerForegroundColor: actionForeground,
       headerHeadlineStyle: theme.textTheme.headlineSmall?.copyWith(
         color: actionForeground,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       headerHelpStyle: bodyMuted?.copyWith(
         color: actionForeground.withValues(alpha: 0.84),
       ),
       weekdayStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onSurfaceVariant,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       dayStyle: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface),
       dayForegroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
@@ -726,7 +757,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       hourMinuteTextColor: cs.onSurface,
       helpTextStyle: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurfaceVariant,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: actionBackground,
@@ -820,7 +851,7 @@ ThemeData _lightTheme({
       foregroundColor: const Color(0xFF1E2532),
       titleTextStyle: const TextStyle(
         fontSize: 18,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
         color: Color(0xFF1E2532),
       ),
     ),

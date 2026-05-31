@@ -3260,7 +3260,7 @@ class _ForceUpdateGate extends StatelessWidget {
                         '必须更新后才能继续使用',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -3304,7 +3304,7 @@ class _ForceUpdateGate extends StatelessWidget {
                         Text(
                           '更新内容',
                           style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -3428,7 +3428,7 @@ class _ForceUpdateInfoRow extends StatelessWidget {
             child: Text(
               value,
               style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ),

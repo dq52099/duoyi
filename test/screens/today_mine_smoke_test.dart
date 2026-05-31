@@ -43,7 +43,7 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {AuthProvider? authProvider}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => TodoProvider()),
@@ -65,7 +65,10 @@ Widget _wrap(Widget child) {
       ChangeNotifierProvider(create: (_) => ShareProvider()),
       ChangeNotifierProvider(create: (_) => TimeAuditProvider()),
       ChangeNotifierProvider(create: (_) => NotificationService()),
-      ChangeNotifierProvider(create: (_) => AuthProvider()),
+      if (authProvider == null)
+        ChangeNotifierProvider(create: (_) => AuthProvider())
+      else
+        ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
       ChangeNotifierProvider(create: (_) => AiService()),
       ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(create: (_) => LocationReminderProvider()),
@@ -236,6 +239,61 @@ void main() {
     expect(find.text('个人资料'), findsOneWidget);
   });
 
+  testWidgets('MineScreen exposes logout for logged-in accounts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final requests = <String>[];
+    final auth = AuthProvider(
+      initialState: const AuthState(
+        userId: 'u-1',
+        username: 'old-user',
+        displayName: '旧昵称',
+        token: 'token-1',
+      ),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          requests.add('${request.method} ${request.url.path}');
+          if (request.method == 'POST' &&
+              request.url.path == '/api/auth/logout') {
+            return http.Response(
+              json.encode({'status': 'ok'}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('退出登录'),
+      700,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('退出登录'), findsOneWidget);
+
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('退出登录？'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(requests, ['POST /api/auth/logout']);
+    expect(auth.state.isLoggedIn, isFalse);
+    expect(find.text('已退出登录'), findsOneWidget);
+  });
+
   testWidgets('Today todo left swipe exposes detail and delete actions', (
     tester,
   ) async {
@@ -275,6 +333,26 @@ void main() {
     await tester.ensureVisible(find.text('今日左滑删除'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('today_todo_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('today_todo_swipe_delete_button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.text('今日左滑删除'), const Offset(120, 0));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('today_todo_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('today_todo_swipe_delete_button')),
+      findsNothing,
+    );
+
     await tester.drag(find.text('今日左滑删除'), const Offset(-180, 0));
     await tester.pumpAndSettle();
 
@@ -305,6 +383,85 @@ void main() {
 
     expect(todoProvider.todos, isEmpty);
     expect(find.text('今日左滑删除'), findsNothing);
+  });
+
+  testWidgets('Today reminders visually separate overdue and normal items', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final todoProvider = TodoProvider();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '逾期提醒任务',
+        date: today.subtract(const Duration(days: 1)),
+        dueDate: now.subtract(const Duration(hours: 1)),
+      ),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '正常提醒任务',
+        date: today.add(const Duration(days: 1)),
+        dueDate: now.add(const Duration(minutes: 45)),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => PomodoroProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => DiaryProvider()),
+          ChangeNotifierProvider(create: (_) => TimeAuditProvider()),
+          ChangeNotifierProvider(create: (_) => AnniversaryProvider()),
+          ChangeNotifierProvider(create: (_) => CourseProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => UserProvider()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+        ],
+        child: const MaterialApp(home: TodayScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日提醒'), findsOneWidget);
+    expect(find.text('已逾期事项'), findsOneWidget);
+    expect(
+      find.text('今日待提醒事项').evaluate().isNotEmpty ||
+          find.text('即将开始事项').evaluate().isNotEmpty,
+      isTrue,
+    );
+    expect(find.text('逾期提醒任务'), findsOneWidget);
+    expect(find.text('正常提醒任务'), findsOneWidget);
+    expect(find.text('逾期'), findsWidgets);
+
+    final overdueTitle = tester.widget<Text>(find.text('逾期提醒任务'));
+    final normalTitle = tester.widget<Text>(find.text('正常提醒任务'));
+    expect(overdueTitle.style?.color, isNot(equals(normalTitle.style?.color)));
+
+    bool reminderTileDecoration(Widget widget) {
+      if (widget is! Container) return false;
+      return widget.margin ==
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 3) &&
+          widget.decoration is BoxDecoration;
+    }
+
+    final overdueDecoratedTile = find.ancestor(
+      of: find.text('逾期提醒任务'),
+      matching: find.byWidgetPredicate(reminderTileDecoration),
+    );
+    final normalDecoratedTile = find.ancestor(
+      of: find.text('正常提醒任务'),
+      matching: find.byWidgetPredicate(reminderTileDecoration),
+    );
+    expect(overdueDecoratedTile, findsOneWidget);
+    expect(normalDecoratedTile, findsNothing);
   });
 
   testWidgets(
@@ -667,8 +824,13 @@ void main() {
     expect(requests, contains('POST /api/me/profile'));
     expect(requests, contains('POST /api/me/email'));
     expect(requestBodies, [
-      {'display_name': '新昵称', 'bio': '新的账号简介'},
-      {'email': 'new@example.com', 'code': '123456', 'email_code': '123456'},
+      {'display_name': '新昵称', 'displayName': '新昵称', 'bio': '新的账号简介'},
+      {
+        'email': 'new@example.com',
+        'code': '123456',
+        'email_code': '123456',
+        'emailCode': '123456',
+      },
     ]);
     expect(auth.state.username, 'old-user');
     expect(auth.state.email, 'new@example.com');

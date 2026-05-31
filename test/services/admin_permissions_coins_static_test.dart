@@ -107,7 +107,10 @@ void main() {
       contains('SET virtual_rewards=?, sync_version=?, updated_at=?'),
     );
     expect(backend, contains('"user.coins_adjust"'));
-    expect(backend, contains('if req.admin_permissions is not None:'));
+    expect(backend, contains('admin_permissions_value = ('));
+    expect(backend, contains('if req.admin_permissions is not None'));
+    expect(backend, contains('else req.adminPermissions'));
+    expect(backend, contains('if admin_permissions_value is not None:'));
     expect(
       backend,
       contains('UPDATE users SET admin_permissions=? WHERE id=?'),
@@ -182,7 +185,9 @@ void main() {
     expect(backend, contains('_ensure_admin_permission(db, actor, "roles")'));
     expect(
       backend,
-      contains('_ensure_admin_permission(db, actor, "permissions")'),
+      contains(
+        '_ensure_admin_any_permission(db, actor, ("permissions", "roles", "users"))',
+      ),
     );
     expect(
       backend,
@@ -396,5 +401,192 @@ void main() {
     expect(adminScreen, contains("helperText: '正数增加，负数扣减'"));
     expect(adminScreen, contains("SnackBar(content: Text('管理权限已更新'))"));
     expect(adminScreen, contains("SnackBar(content: Text('时光币已调整'))"));
+  });
+
+  test('admin group and coin contracts keep snake case output with camel aliases', () {
+    final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
+    final backend = File('backend/main.py').readAsStringSync();
+
+    final apiUpdateUser = adminApi.substring(
+      adminApi.indexOf('Future<void> updateUser'),
+      adminApi.indexOf('Future<void> setUserAdminPermissions'),
+    );
+    expect(apiUpdateUser, contains("body['group_id'] = groupId"));
+    expect(apiUpdateUser, contains("body['role_id'] = roleId"));
+    expect(apiUpdateUser, isNot(contains("body['groupId']")));
+    expect(apiUpdateUser, isNot(contains("body['roleId']")));
+
+    final apiSaveGroup = adminApi.substring(
+      adminApi.indexOf('Future<Map<String, dynamic>> saveGroup'),
+      adminApi.indexOf('Future<List<Map<String, dynamic>>> listRoles'),
+    );
+    for (final key in [
+      'default_time_coins',
+      'default_generate_quota',
+      'default_edit_quota',
+      'default_generate_history_retention',
+      'default_edit_history_retention',
+      'image_mode',
+      'is_active',
+    ]) {
+      expect(apiSaveGroup, contains("'$key'"));
+    }
+
+    final apiAdjustCoins = adminApi.substring(
+      adminApi.indexOf('Future<Map<String, dynamic>> adjustUserCoins'),
+      adminApi.indexOf('Map<String, dynamic> _validateCoinAdjustmentResponse'),
+    );
+    expect(
+      apiAdjustCoins,
+      contains("final body = <String, dynamic>{'delta': delta};"),
+    );
+    expect(
+      apiAdjustCoins,
+      contains(r"client.post('/api/admin/users/$userId/coins', body)"),
+    );
+
+    final userUpdateModel = backend.substring(
+      backend.indexOf('class UserUpdate'),
+      backend.indexOf('class UserCreate'),
+    );
+    for (final field in [
+      'group_id',
+      'groupId',
+      'role_id',
+      'roleId',
+      'admin_permissions',
+      'adminPermissions',
+      'coin_balance',
+      'coinBalance',
+      'time_coin_balance',
+      'timeCoinBalance',
+      'coin_delta',
+      'coinDelta',
+      'time_coin_delta',
+      'timeCoinDelta',
+    ]) {
+      expect(userUpdateModel, contains('$field: Optional'));
+    }
+
+    final coinModel = backend.substring(
+      backend.indexOf('class UserCoinAdjustment'),
+      backend.indexOf('class AdminGroupUpsert'),
+    );
+    for (final field in [
+      'coin_balance',
+      'coinBalance',
+      'target_balance',
+      'targetBalance',
+      'time_coins',
+      'timeCoins',
+      'time_coin_balance',
+      'timeCoinBalance',
+      'coin_delta',
+      'coinDelta',
+      'time_coin_delta',
+      'timeCoinDelta',
+      'credit_balance',
+      'creditBalance',
+    ]) {
+      expect(coinModel, contains('$field: Optional'));
+    }
+
+    final groupModel = backend.substring(
+      backend.indexOf('class AdminGroupUpsert'),
+      backend.indexOf('class AdminRoleUpsert'),
+    );
+    for (final field in [
+      'default_time_coins',
+      'defaultTimeCoins',
+      'default_generate_quota',
+      'defaultGenerateQuota',
+      'default_edit_quota',
+      'defaultEditQuota',
+      'default_generate_history_retention',
+      'defaultGenerateHistoryRetention',
+      'default_edit_history_retention',
+      'defaultEditHistoryRetention',
+      'image_mode',
+      'imageMode',
+      'is_active',
+      'isActive',
+    ]) {
+      expect(groupModel, contains('$field: Optional'));
+    }
+
+    final saveGroup = backend.substring(
+      backend.indexOf('def _admin_save_group'),
+      backend.indexOf('# ---- Users ----'),
+    );
+    expect(saveGroup, contains('image_mode_value = req.image_mode'));
+    expect(saveGroup, contains('image_mode_value = req.imageMode'));
+    expect(saveGroup, contains('is_active_value = req.is_active'));
+    expect(saveGroup, contains('is_active_value = req.isActive'));
+    expect(
+      saveGroup,
+      contains('group_int("default_time_coins", 100, "defaultTimeCoins")'),
+    );
+    expect(
+      saveGroup,
+      contains(
+        'group_int("default_generate_quota", 100, "defaultGenerateQuota")',
+      ),
+    );
+    expect(
+      saveGroup,
+      contains('group_int("default_edit_quota", 100, "defaultEditQuota")'),
+    );
+    expect(saveGroup, contains('"default_registration_coins"'));
+
+    final createUser = backend.substring(
+      backend.indexOf('def admin_create_user'),
+      backend.indexOf('@app.get("/api/admin/users")'),
+    );
+    expect(
+      createUser,
+      contains(
+        'group_id_value = req.group_id if req.group_id is not None else req.groupId',
+      ),
+    );
+    expect(
+      createUser,
+      contains(
+        'role_id_value = req.role_id if req.role_id is not None else req.roleId',
+      ),
+    );
+    expect(createUser, contains('else req.adminPermissions'));
+
+    final updateUser = backend.substring(
+      backend.indexOf('def admin_update_user'),
+      backend.indexOf('def _coin_adjustment_delta'),
+    );
+    expect(
+      updateUser,
+      contains(
+        'group_id_value = req.group_id if req.group_id is not None else req.groupId',
+      ),
+    );
+    expect(
+      updateUser,
+      contains(
+        'role_id_value = req.role_id if req.role_id is not None else req.roleId',
+      ),
+    );
+    expect(updateUser, contains('else req.adminPermissions'));
+    expect(updateUser, contains('coinBalance=req.coinBalance'));
+    expect(updateUser, contains('timeCoinBalance=req.timeCoinBalance'));
+    expect(updateUser, contains('coinDelta=req.coinDelta'));
+    expect(updateUser, contains('timeCoinDelta=req.timeCoinDelta'));
+
+    final coinDelta = backend.substring(
+      backend.indexOf('def _coin_adjustment_delta'),
+      backend.indexOf('def _admin_adjust_user_coins_impl'),
+    );
+    expect(coinDelta, contains('if req.coin_balance is not None'));
+    expect(coinDelta, contains('if req.coinBalance is not None'));
+    expect(coinDelta, contains('if req.time_coin_balance is not None'));
+    expect(coinDelta, contains('if req.timeCoinBalance is not None'));
+    expect(coinDelta, contains('if req.coin_delta is not None'));
+    expect(coinDelta, contains('if req.coinDelta is not None'));
   });
 }

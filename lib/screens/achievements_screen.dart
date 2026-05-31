@@ -204,7 +204,7 @@ class _ChallengeCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ),
@@ -270,7 +270,7 @@ class _ChallengeCard extends StatelessWidget {
                 '+${challenge.rewardCoins}',
                 style: TextStyle(
                   color: completed ? color : cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                   fontSize: 12,
                 ),
               ),
@@ -333,7 +333,7 @@ class _ProgressHeader extends StatelessWidget {
                   style: TextStyle(
                     color: cs.onPrimary.withValues(alpha: 0.78),
                     fontSize: 12,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -342,7 +342,7 @@ class _ProgressHeader extends StatelessWidget {
                   style: TextStyle(
                     color: cs.onPrimary,
                     fontSize: 24,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -403,7 +403,7 @@ class _LevelCoinPanel extends StatelessWidget {
             style: TextStyle(
               color: cs.onPrimary,
               fontSize: 18,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
             ),
           ),
           Text(
@@ -482,7 +482,7 @@ class _RewardLedgerCard extends StatelessWidget {
                 '最近奖励/兑换',
                 style: Theme.of(
                   context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.normal),
               ),
             ],
           ),
@@ -516,7 +516,7 @@ class _RewardLedgerCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         Text(
@@ -535,7 +535,7 @@ class _RewardLedgerCard extends StatelessWidget {
                     entry.coins >= 0 ? '+${entry.coins}' : '${entry.coins}',
                     style: TextStyle(
                       color: entry.coins >= 0 ? cs.primary : cs.error,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ],
@@ -696,7 +696,7 @@ class _AchievementShareCard extends StatelessWidget {
                     Text(
                       '多仪成就海报',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     Text(
@@ -715,7 +715,7 @@ class _AchievementShareCard extends StatelessWidget {
             '$unlockedCount / $totalCount',
             style: Theme.of(
               context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w400),
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.normal),
           ),
           const SizedBox(height: 6),
           ClipRRect(
@@ -750,7 +750,7 @@ class _AchievementShareCard extends StatelessWidget {
               '最近解锁',
               style: Theme.of(
                 context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w400),
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.normal),
             ),
             const SizedBox(height: 8),
             for (final achievement in achievements)
@@ -820,7 +820,7 @@ class _AchievementShareMetric extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
           ),
           const SizedBox(height: 2),
           Text(
@@ -883,7 +883,7 @@ class _BadgeCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: 13,
                     color: unlocked
                         ? cs.onSurface
@@ -902,7 +902,7 @@ class _BadgeCard extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 10,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),

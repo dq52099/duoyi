@@ -372,7 +372,7 @@ class MineScreen extends StatelessWidget {
                       title: '待办完成',
                       value: '$todoCompletionRate',
                       unit: '%',
-                      icon: Icons.task_alt,
+                      icon: Icons.check_circle_outline,
                       color: Colors.blue,
                     ),
                     StatsOverviewCard(
@@ -649,6 +649,13 @@ class MineScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              if (auth.state.isLoggedIn)
+                _Tile(
+                  icon: Icons.logout,
+                  label: '退出登录',
+                  color: cs.error,
+                  onTap: () => _confirmLogout(context),
+                ),
             ],
           ),
           _TileGroup(
@@ -850,6 +857,34 @@ class MineScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        icon: const Icon(Icons.logout),
+        title: const Text('退出登录？'),
+        content: const Text('退出后可重新登录继续同步账号资料。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: appSecondaryFilledButtonStyle(ctx),
+            child: const Text('退出登录'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await context.read<AuthProvider>().logout();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已退出登录')));
+  }
+
   Future<void> _pickAndSaveAvatar(BuildContext context) async {
     try {
       final file = await openFile(
@@ -983,7 +1018,7 @@ class MineScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     const Text(
                       '发现新版本',
-                      style: TextStyle(fontWeight: FontWeight.w400),
+                      style: TextStyle(fontWeight: FontWeight.normal),
                     ),
                   ] else if (updater.error == null && !updater.checking) ...[
                     const SizedBox(height: 12),
@@ -993,7 +1028,7 @@ class MineScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     const Text(
                       '更新内容',
-                      style: TextStyle(fontWeight: FontWeight.w400),
+                      style: TextStyle(fontWeight: FontWeight.normal),
                     ),
                     const SizedBox(height: 6),
                     ConstrainedBox(
@@ -1215,7 +1250,7 @@ class _ProfileAvatar extends StatelessWidget {
               style: TextStyle(
                 fontSize: radius * 0.62,
                 color: cs.onPrimary,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
               ),
             ),
     );
@@ -1260,7 +1295,7 @@ class _MineUserLineChip extends StatelessWidget {
                   color.withValues(alpha: 0.48),
                   cs.onSurface,
                 ),
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 height: 1.1,
               ),
             ),
@@ -1384,7 +1419,7 @@ class _ProfileAvatarLetter extends StatelessWidget {
       style: TextStyle(
         fontSize: radius * 0.62,
         color: color,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.normal,
       ),
     );
   }
@@ -1562,7 +1597,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
               const SizedBox(width: 8),
               const Text(
                 'AI 每周回顾',
-                style: TextStyle(fontWeight: FontWeight.w400),
+                style: TextStyle(fontWeight: FontWeight.normal),
               ),
               const Spacer(),
               TextButton(
@@ -1645,7 +1680,7 @@ class _TileGroup extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
                 height: 1.15,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 color: cs.onSurface.withValues(alpha: 0.62),
               ),
             ),

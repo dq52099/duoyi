@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:duoyi/models/anniversary.dart';
+import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/countdown_provider.dart';
 import 'package:duoyi/providers/preferences_provider.dart';
@@ -54,6 +56,13 @@ void main() {
 
     expect(provider.items, hasLength(1));
     expect(provider.items.single.title, '版本发布');
+    expect(find.text('暂无倒数日记录'), findsNothing);
+    expect(find.text('全部倒数日'), findsOneWidget);
+    expect(find.text('版本发布'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('countdown_card_${provider.items.single.id}')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('more applications entry opens countdown and can add countdown', (
@@ -96,7 +105,154 @@ void main() {
 
     expect(provider.items, hasLength(1));
     expect(provider.items.single.title, '从入口新增');
+    expect(find.text('从入口新增'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('countdown_card_${provider.items.single.id}')),
+      findsOneWidget,
+    );
   });
+
+  testWidgets('deleting countdown refreshes header totals immediately', (
+    tester,
+  ) async {
+    final provider = CountdownProvider();
+    await provider.loadFromStorage();
+    final today = DateTime.now();
+    final soon = CountdownItem(
+      id: 'soon-countdown',
+      title: '近期事项',
+      targetDate: DateTime(
+        today.year,
+        today.month,
+        today.day,
+      ).add(const Duration(days: 3)),
+    );
+    final later = CountdownItem(
+      id: 'later-countdown',
+      title: '远期事项',
+      targetDate: DateTime(
+        today.year,
+        today.month,
+        today.day,
+      ).add(const Duration(days: 20)),
+    );
+    await provider.addItem(soon);
+    await provider.addItem(later);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: provider,
+        child: const MaterialApp(home: CountdownScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final total = find.byKey(const ValueKey('countdown_summary_total'));
+    final within7 = find.byKey(
+      const ValueKey('countdown_summary_within_7_days'),
+    );
+    expect(
+      find.descendant(of: total, matching: find.text('2')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: within7, matching: find.text('1')),
+      findsOneWidget,
+    );
+
+    await provider.deleteItem(soon.id);
+    await tester.pumpAndSettle();
+
+    expect(provider.items, hasLength(1));
+    expect(find.text('近期事项'), findsNothing);
+    expect(find.text('远期事项'), findsOneWidget);
+    expect(
+      find.descendant(of: total, matching: find.text('1')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: within7, matching: find.text('0')),
+      findsOneWidget,
+    );
+  });
+
+  test(
+    'birthday memorial and countdown cards keep a consistent surface style',
+    () {
+      final countdownSource = File(
+        'lib/screens/countdown_screen.dart',
+      ).readAsStringSync();
+      final anniversarySource = File(
+        'lib/screens/anniversary_screen.dart',
+      ).readAsStringSync();
+      final countdownCard = countdownSource.substring(
+        countdownSource.indexOf('class _CountdownCard'),
+        countdownSource.indexOf('class _CountdownInlineSwipeActions'),
+      );
+      final anniversaryCard = anniversarySource.substring(
+        anniversarySource.indexOf('class _AnniversaryCard'),
+        anniversarySource.indexOf('class _AnniversaryInlineSwipeActions'),
+      );
+
+      for (final card in [countdownCard, anniversaryCard]) {
+        expect(card, contains('child: AppSurfaceCard('));
+        expect(card, contains('margin: const EdgeInsets.only(bottom: 12)'));
+        expect(card, contains('padding: EdgeInsets.zero'));
+        expect(card, contains('borderRadius: BorderRadius.circular(14)'));
+        expect(
+          card,
+          contains(
+            'Border.all(color: color.withValues(alpha: 0.12), width: 0.45)',
+          ),
+        );
+        expect(card, contains('width: 5'));
+        expect(
+          card,
+          contains('padding: const EdgeInsets.fromLTRB(14, 12, 12, 12)'),
+        );
+        expect(card, contains('Wrap('));
+        expect(
+          card,
+          contains('constraints: const BoxConstraints(minWidth: 54)'),
+        );
+        expect(card, contains('TextBaseline.alphabetic'));
+        expect(
+          card,
+          anyOf(
+            contains('fontSize: 18'),
+            contains('fontSize: days == 0 ? 14 : 18'),
+          ),
+        );
+        expect(card, contains('fontWeight: FontWeight.normal'));
+        expect(card, contains('AnimatedContainer('));
+        expect(
+          card,
+          contains('Matrix4.translationValues(-_swipeOffset, 0, 0)'),
+        );
+      }
+
+      expect(
+        countdownSource,
+        contains("ValueKey('countdown_card_\${item.id}')"),
+      );
+      expect(
+        anniversarySource,
+        contains("ValueKey('anniversary_card_\${item.id}')"),
+      );
+      expect(
+        anniversaryCard,
+        contains(
+          "AnniversaryType.birthday => '🎂 \${I18n.tr('anniversary.birthday')}'",
+        ),
+      );
+      expect(
+        anniversaryCard,
+        contains(
+          "AnniversaryType.memorial => '💞 \${I18n.tr('anniversary.title')}'",
+        ),
+      );
+    },
+  );
 
   testWidgets('existing countdown can still be edited', (tester) async {
     SharedPreferences.setMockInitialValues({

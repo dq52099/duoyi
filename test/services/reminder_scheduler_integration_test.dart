@@ -791,6 +791,42 @@ void main() {
       ]);
     });
 
+    test('syncTodos 对重复的每日通知只注册第一条规则', () async {
+      final todo = TodoItem(
+        id: 'duplicate-daily-push',
+        title: '重复每日通知',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'first-daily',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.push,
+              hour: 9,
+              minute: 15,
+            ),
+            ReminderRule(
+              id: 'second-daily',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.push,
+              hour: 9,
+              minute: 15,
+            ),
+          ],
+        ),
+      );
+      final firstId = _idFor('todo:${todo.id}:first-daily');
+      final secondId = _idFor('todo:${todo.id}:second-daily');
+
+      await scheduler.syncTodos([todo]);
+
+      expect(notif.scheduled.map((entry) => entry['id']), [firstId]);
+      expect(notif.pending, contains(firstId));
+      expect(notif.pending, isNot(contains(secondId)));
+      expect(alarm.scheduled, isEmpty);
+      expect(popup.scheduled, isEmpty);
+    });
+
     test('syncTodos 同一时间同时配置通知和闹钟时只保留闹钟', () async {
       final due = DateTime.now().add(const Duration(hours: 2));
       final todo = TodoItem(
@@ -2231,7 +2267,7 @@ void main() {
     test('syncAnniversaries 默认走 push 通道', () async {
       final a = Anniversary(
         title: '生日',
-        originDate: DateTime(2027, 6, 1),
+        originDate: DateTime.now().add(const Duration(days: 30)),
         type: AnniversaryType.birthday,
         remind: true,
         remindDaysBefore: 1,
@@ -2246,7 +2282,7 @@ void main() {
     test('syncAnniversaries kind=alarm 走全屏闹钟', () async {
       final a = Anniversary(
         title: '重要纪念',
-        originDate: DateTime(2027, 6, 1),
+        originDate: DateTime.now().add(const Duration(days: 30)),
         type: AnniversaryType.memorial,
         remind: true,
         remindDaysBefore: 1,
@@ -2947,6 +2983,158 @@ void main() {
       );
     });
 
+    test('syncTodos 通知、弹窗和闹钟都可切换为关闭并清理旧通道', () async {
+      TodoItem item(List<ReminderKind> kinds) {
+        return TodoItem(
+          id: 'todo-disable-three-kinds',
+          title: '关闭提醒方式',
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'push-rule',
+                type: ReminderRuleType.dailyTime,
+                kind: kinds[0],
+                hour: 8,
+                minute: 0,
+              ),
+              ReminderRule(
+                id: 'popup-rule',
+                type: ReminderRuleType.dailyTime,
+                kind: kinds[1],
+                hour: 9,
+                minute: 0,
+              ),
+              ReminderRule(
+                id: 'alarm-rule',
+                type: ReminderRuleType.dailyTime,
+                kind: kinds[2],
+                hour: 10,
+                minute: 0,
+              ),
+            ],
+          ),
+        );
+      }
+
+      final enabled = item(const [
+        ReminderKind.push,
+        ReminderKind.popup,
+        ReminderKind.alarm,
+      ]);
+      final disabled = item(const [
+        ReminderKind.off,
+        ReminderKind.off,
+        ReminderKind.off,
+      ]);
+      final ids = [
+        _idFor('todo:${enabled.id}:push-rule'),
+        _idFor('todo:${enabled.id}:popup-rule'),
+        _idFor('todo:${enabled.id}:alarm-rule'),
+      ];
+
+      await scheduler.syncTodos([enabled]);
+      expect(notif.scheduled.map((entry) => entry['id']), [ids[0]]);
+      expect(popup.scheduled.map((entry) => entry['id']), [ids[1]]);
+      expect(alarm.scheduled.map((entry) => entry['id']), [ids[2]]);
+
+      notif.scheduled.clear();
+      popup.scheduled.clear();
+      alarm.scheduled.clear();
+      email.scheduled.clear();
+      notif.cancelled.clear();
+      alarm.cancelled.clear();
+      popup.cancelled.clear();
+      email.cancelled.clear();
+
+      await scheduler.syncTodos([disabled]);
+
+      expect(notif.scheduled, isEmpty);
+      expect(popup.scheduled, isEmpty);
+      expect(alarm.scheduled, isEmpty);
+      expect(email.scheduled, isEmpty);
+      expect(notif.cancelled, containsAll(ids));
+      expect(popup.cancelled, containsAll(ids));
+      expect(alarm.cancelled, containsAll(ids));
+      expect(email.cancelled, containsAll(ids));
+      for (final id in ids) {
+        expect(notif.pending, isNot(contains(id)));
+        expect(alarm.pending, isNot(contains(id)));
+      }
+    });
+
+    test('syncTodos 每周重复提醒按通知、弹出框、闹钟和关闭分支路由', () async {
+      final todo = TodoItem(
+        id: 'todo-weekly-kind-routing',
+        title: '每周提醒方式分支',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'weekly-push',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.push,
+              hour: 8,
+              minute: 0,
+              weekdays: const [1, 3],
+            ),
+            ReminderRule(
+              id: 'weekly-popup',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.popup,
+              hour: 9,
+              minute: 0,
+              weekdays: const [2],
+            ),
+            ReminderRule(
+              id: 'weekly-alarm',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.alarm,
+              hour: 10,
+              minute: 0,
+              weekdays: const [4, 5],
+            ),
+            ReminderRule(
+              id: 'weekly-off',
+              enabled: true,
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.off,
+              hour: 11,
+              minute: 0,
+              weekdays: const [6],
+            ),
+          ],
+        ),
+      );
+      final pushId = _idFor('todo:${todo.id}:weekly-push');
+      final popupId = _idFor('todo:${todo.id}:weekly-popup');
+      final alarmId = _idFor('todo:${todo.id}:weekly-alarm');
+      final offId = _idFor('todo:${todo.id}:weekly-off');
+
+      await scheduler.syncTodos([todo]);
+
+      expect(notif.scheduled.map((entry) => entry['id']), [pushId]);
+      expect(popup.scheduled.map((entry) => entry['id']), [popupId]);
+      expect(alarm.scheduled.map((entry) => entry['id']), [alarmId]);
+      expect(
+        notif.pending,
+        containsAll([_subId(pushId, 1), _subId(pushId, 3)]),
+      );
+      expect(
+        alarm.pending,
+        containsAll([_subId(alarmId, 4), _subId(alarmId, 5)]),
+      );
+      expect(notif.pending.intersection(alarm.pending), isEmpty);
+      expect(
+        [
+          ...notif.scheduled,
+          ...popup.scheduled,
+          ...alarm.scheduled,
+        ].map((entry) => entry['id']),
+        isNot(contains(offId)),
+      );
+    });
+
     test('syncTodos 同一 rule 在通知、弹出框和闹钟之间切换只保留当前通道', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       TodoItem item(ReminderKind kind) {
@@ -3323,6 +3511,42 @@ void main() {
       expect(alarm.scheduled, isEmpty);
       expect(notif.cancelled, contains(legacyMondayId));
       expect(notif.pending, isNot(contains(legacyMondayId)));
+      expect(alarm.pending, containsAll([mondayId, wednesdayId]));
+    });
+
+    test('syncTodos 每周闹钟规则未变时会清理当前普通通知子 id，避免双弹', () async {
+      final todo = TodoItem(
+        id: 'todo-weekly-alarm-stale-current-push',
+        title: '清理每周当前通知',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'weekly-alarm',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.alarm,
+              hour: 8,
+              minute: 30,
+              weekdays: const [1, 3],
+            ),
+          ],
+        ),
+      );
+      final expectedId = _idFor('todo:${todo.id}:weekly-alarm');
+      final mondayId = _subId(expectedId, 1);
+      final wednesdayId = _subId(expectedId, 3);
+
+      await scheduler.syncTodos([todo]);
+      expect(alarm.scheduled.map((entry) => entry['id']), [expectedId]);
+      expect(alarm.pending, containsAll([mondayId, wednesdayId]));
+
+      notif.pending.add(mondayId);
+      alarm.scheduled.clear();
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduled, isEmpty);
+      expect(notif.cancelled, contains(mondayId));
+      expect(notif.pending, isNot(contains(mondayId)));
       expect(alarm.pending, containsAll([mondayId, wednesdayId]));
     });
 

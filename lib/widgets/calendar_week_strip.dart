@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import '../core/completion_visibility_policy.dart';
 import '../core/i18n_date_format.dart';
-import '../../models/calendar_event.dart';
-import '../../providers/calendar_provider.dart';
+import '../models/calendar_event.dart';
+import '../providers/calendar_provider.dart';
 import 'calendar_event_sheet.dart';
 
 class CalendarWeekStrip extends StatelessWidget {
@@ -128,7 +129,7 @@ class CalendarWeekStrip extends StatelessWidget {
                         '${d.day}',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                           color: isSelected ? selectedForeground : null,
                         ),
                       ),
@@ -253,7 +254,7 @@ class _WeekDaySection extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -284,6 +285,14 @@ class _WeekEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final visual = _weekEventVisualState(event);
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    final statusColor = isCompleted
+        ? cs.tertiary
+        : isOverdue
+        ? cs.error
+        : null;
     final time = event.time == null
         ? null
         : I18nDateFormat.timeOfDay(
@@ -305,11 +314,18 @@ class _WeekEventTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            color: cs.surface,
+            color: statusColor == null
+                ? cs.surface
+                : Color.alphaBlend(
+                    statusColor.withValues(alpha: 0.07),
+                    cs.surface,
+                  ),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: event.hasConflict
                   ? cs.error.withValues(alpha: 0.35)
+                  : statusColor != null
+                  ? statusColor.withValues(alpha: 0.24)
                   : cs.outlineVariant.withValues(alpha: 0.12),
               width: event.hasConflict ? 0.6 : 0.45,
             ),
@@ -320,7 +336,7 @@ class _WeekEventTile extends StatelessWidget {
                 width: 8,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: event.color.withValues(alpha: 0.8),
+                  color: (statusColor ?? event.color).withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -335,18 +351,28 @@ class _WeekEventTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        decoration: event.isCompleted
+                        fontWeight: FontWeight.normal,
+                        decoration: isCompleted
                             ? TextDecoration.lineThrough
                             : null,
-                        color: event.isCompleted
+                        color: isCompleted
                             ? cs.onSurfaceVariant
+                            : isOverdue
+                            ? cs.error
                             : cs.onSurface,
                       ),
                     ),
+                    if (statusColor != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: _WeekEventStatusBadge(
+                          label: isCompleted ? '已完成' : '逾期',
+                          color: statusColor,
+                        ),
+                      ),
                     if (detail != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.only(top: 3),
                         child: Text(
                           detail,
                           maxLines: 1,
@@ -365,6 +391,39 @@ class _WeekEventTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+TodoVisualState _weekEventVisualState(CalendarEvent event) {
+  if (event.isCompleted) return TodoVisualState.completed;
+  final dueAt = event.endDate;
+  if (event.type == CalendarEventType.todo &&
+      dueAt != null &&
+      dueAt.isBefore(DateTime.now())) {
+    return TodoVisualState.overdue;
+  }
+  return TodoVisualState.normal;
+}
+
+class _WeekEventStatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _WeekEventStatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.7),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(label, style: TextStyle(fontSize: 10, color: color)),
       ),
     );
   }

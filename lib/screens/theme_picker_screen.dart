@@ -310,7 +310,7 @@ class ThemePickerScreen extends StatelessWidget {
                           _styleName(currentBrand),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
                               ),
                         ),
@@ -387,7 +387,7 @@ class ThemePickerScreen extends StatelessWidget {
                             _styleName(brand),
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),
@@ -442,7 +442,7 @@ class ThemePickerScreen extends StatelessWidget {
                               style: TextStyle(
                                 color: accent,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -501,7 +501,7 @@ class ThemePickerScreen extends StatelessWidget {
                             backdrop.name,
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),
@@ -546,7 +546,7 @@ class ThemePickerScreen extends StatelessWidget {
                               style: TextStyle(
                                 color: accent,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -601,7 +601,7 @@ class ThemePickerScreen extends StatelessWidget {
                             frame.name,
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),
@@ -646,7 +646,7 @@ class ThemePickerScreen extends StatelessWidget {
                               style: TextStyle(
                                 color: accent,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -701,7 +701,7 @@ class ThemePickerScreen extends StatelessWidget {
                             skin.name,
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),
@@ -746,7 +746,7 @@ class ThemePickerScreen extends StatelessWidget {
                               style: TextStyle(
                                 color: accent,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),

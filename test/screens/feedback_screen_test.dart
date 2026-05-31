@@ -195,6 +195,74 @@ void main() {
     expect(find.text('小组件想要月历'), findsOneWidget);
   });
 
+  testWidgets('Feedback record swipe state resets after pagination', (
+    tester,
+  ) async {
+    final client = ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'token',
+      httpClient: MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/api/feedback/me') {
+          final page = request.url.queryParameters['page'] ?? '1';
+          return http.Response(
+            json.encode({
+              'items': [
+                {
+                  'id': page == '1' ? 1 : 2,
+                  'category': 'bug',
+                  'content': page == '1' ? '第一页反馈' : '第二页反馈',
+                  'status': 'open',
+                  'admin_reply': '',
+                },
+              ],
+              'total': 2,
+              'page': int.parse(page),
+              'page_size': 10,
+              'total_pages': 2,
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        screen: const FeedbackScreen(),
+        auth: _FakeAuthProvider(
+          state: const AuthState(
+            userId: 'u1',
+            username: 'tester',
+            token: 'token',
+          ),
+          client: client,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('feedback_record_swipe_actions')).first,
+      const Offset(-96, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('feedback_record_detail_action')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('下一页'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第二页反馈'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('feedback_record_detail_action')),
+      findsNothing,
+    );
+  });
+
   test(
     'FeedbackScreen separates records page from third-level submit page',
     () {
@@ -227,6 +295,10 @@ void main() {
         source,
         contains("key: const ValueKey('feedback_record_swipe_actions')"),
       );
+      expect(source, contains("ValueKey('feedback_record_swipe_\$recordId')"));
+      expect(source, contains('required this.recordId'));
+      expect(source, contains('void didUpdateWidget('));
+      expect(source, contains('widget.recordId != oldWidget.recordId'));
       expect(source, contains("'feedback_record_detail_action'"));
       expect(source, contains("title: const Text('反馈详情')"));
       expect(source, contains('const int _pageSize = 10'));

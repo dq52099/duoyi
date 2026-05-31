@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/completion_visibility_policy.dart';
 import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
@@ -449,13 +450,22 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   double _monthGridHeightFor(double availableHeight, int rows) {
-    final minGridHeight = rows >= 6 ? 82.0 : 78.0;
-    final preferredGridHeight = rows >= 6 ? 98.0 : 92.0;
+    final minGridHeight = rows >= 6 ? 300.0 : 270.0;
+    final preferredGridHeight = rows >= 6 ? 360.0 : 330.0;
     if (!availableHeight.isFinite) return preferredGridHeight;
-    final desiredDetailHeight = availableHeight < 560 ? 500.0 : 660.0;
+    final desiredDetailHeight = availableHeight < 560 ? 220.0 : 320.0;
     final maxGridForReadableDetail = availableHeight - desiredDetailHeight;
+    final compactUpperGridHeight = availableHeight <= 120
+        ? availableHeight
+        : availableHeight - 96.0;
+    final upperGridHeight = compactUpperGridHeight
+        .clamp(0.0, preferredGridHeight)
+        .toDouble();
+    final lowerGridHeight = minGridHeight < upperGridHeight
+        ? minGridHeight
+        : upperGridHeight;
     return maxGridForReadableDetail
-        .clamp(minGridHeight, preferredGridHeight)
+        .clamp(lowerGridHeight, upperGridHeight)
         .toDouble();
   }
 
@@ -599,6 +609,11 @@ class _CalendarScreenState extends State<CalendarScreen>
         ? _activeProjectKey
         : null;
     final dateTypes = calendarProvider.filteredDateEventTypes(
+      _activeTypes,
+      projectKey: effectiveProjectKey,
+      workspaceId: effectiveWorkspaceId,
+    );
+    final dateCounts = calendarProvider.filteredDateEventCounts(
       _activeTypes,
       projectKey: effectiveProjectKey,
       workspaceId: effectiveWorkspaceId,
@@ -896,6 +911,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                             focusedMonth: _focusedMonth,
                             selectedDay: _selectedDay,
                             dateEventTypes: dateTypes,
+                            dateEventCounts: dateCounts,
                             showLunar: showLunar,
                             onDaySelected: (d) => setState(() {
                               _selectedDay = d;
@@ -1201,24 +1217,68 @@ class _CalendarScreenState extends State<CalendarScreen>
                                   const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final todo = todos[index];
+                                final visual =
+                                    CompletionVisibilityPolicy.visualState(
+                                      todo,
+                                    );
+                                final isCompleted =
+                                    visual == TodoVisualState.completed;
+                                final isOverdue =
+                                    visual == TodoVisualState.overdue;
+                                final statusColor = isCompleted
+                                    ? Theme.of(context).colorScheme.tertiary
+                                    : isOverdue
+                                    ? Theme.of(context).colorScheme.error
+                                    : null;
                                 return ListTile(
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
                                   leading: Icon(
-                                    todo.isCompleted
+                                    isCompleted
                                         ? Icons.check_circle
+                                        : isOverdue
+                                        ? Icons.priority_high_rounded
                                         : Icons.radio_button_unchecked,
                                     size: 18,
+                                    color: statusColor,
                                   ),
                                   title: Text(
                                     todo.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isCompleted
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant
+                                          : isOverdue
+                                          ? Theme.of(context).colorScheme.error
+                                          : null,
+                                      decoration: isCompleted
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
                                   ),
-                                  subtitle: Text(
-                                    '${todo.date.month}/${todo.date.day}${todo.priority != TodoPriority.none ? ' · ${todo.priority.label}' : ''}',
-                                    style: const TextStyle(fontSize: 11),
+                                  subtitle: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${todo.date.month}/${todo.date.day}${todo.priority != TodoPriority.none ? ' · ${todo.priority.label}' : ''}',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      if (statusColor != null)
+                                        Text(
+                                          isCompleted ? '已完成' : '逾期',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: statusColor,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 );
                               },
@@ -1492,7 +1552,7 @@ class _ProjectStat extends StatelessWidget {
             value,
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
               color: cs.primary,
             ),
           ),
@@ -1652,7 +1712,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
                             ),
                             textStyle: TextStyle(
                               fontSize: compact ? 12.5 : 13.5,
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               height: 1.15,
                             ),
                           ),
@@ -1856,7 +1916,7 @@ class _ThreeDayLane extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -1932,6 +1992,15 @@ class _CalendarYearOverview extends StatelessWidget {
         });
         final isSelected =
             selectedDay.year == year && selectedDay.month == month;
+        final selectedFill = Color.alphaBlend(
+          cs.primary.withValues(
+            alpha: Theme.of(context).brightness == Brightness.dark
+                ? 0.20
+                : 0.13,
+          ),
+          cs.surface,
+        );
+        final selectedText = cs.onSurface;
 
         return InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -1939,7 +2008,7 @@ class _CalendarYearOverview extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: isSelected
-                  ? cs.primaryContainer
+                  ? selectedFill
                   : cs.surfaceContainerHighest.withValues(alpha: 0.36),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
@@ -1957,8 +2026,8 @@ class _CalendarYearOverview extends StatelessWidget {
                   '$month 月',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                    color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
+                    fontWeight: FontWeight.normal,
+                    color: isSelected ? selectedText : cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1967,7 +2036,7 @@ class _CalendarYearOverview extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: isSelected
-                        ? cs.onPrimaryContainer.withValues(alpha: 0.78)
+                        ? selectedText.withValues(alpha: 0.70)
                         : cs.onSurfaceVariant,
                   ),
                 ),

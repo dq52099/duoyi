@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../core/i18n.dart';
-import '../../models/calendar_event.dart';
-import '../../core/lunar_calendar.dart';
+import '../core/i18n.dart';
+import '../core/lunar_calendar.dart';
+import '../models/calendar_event.dart';
 
 class CalendarMonthGrid extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime selectedDay;
   final Map<String, List<CalendarEventType>> dateEventTypes;
+  final Map<String, int> dateEventCounts;
   final void Function(DateTime) onDaySelected;
 
   /// 是否显示农历/节气/节日
@@ -17,6 +18,7 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.focusedMonth,
     required this.selectedDay,
     required this.dateEventTypes,
+    this.dateEventCounts = const {},
     required this.onDaySelected,
     this.showLunar = true,
   });
@@ -30,7 +32,7 @@ class CalendarMonthGrid extends StatelessWidget {
     final selectedDotColor = cs.onSurface.withValues(alpha: 0.72);
     final totalCells = startOffset + lastDay.day;
     final rows = (totalCells / 7).ceil();
-    final preferredRowHeight = showLunar ? 48.0 : 34.0;
+    final preferredRowHeight = showLunar ? 54.0 : 40.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -51,6 +53,7 @@ class CalendarMonthGrid extends StatelessWidget {
         final cellHeight = (rowSlotHeight - 2).clamp(8.0, preferredRowHeight);
         final showSubText = showLunar && cellHeight >= 42;
         final showDots = cellHeight >= 29;
+        final showEventCount = cellHeight >= 38;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -69,7 +72,7 @@ class CalendarMonthGrid extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade500,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -96,6 +99,8 @@ class CalendarMonthGrid extends StatelessWidget {
                       final key =
                           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                       final types = dateEventTypes[key] ?? [];
+                      final eventCount = dateEventCounts[key] ?? types.length;
+                      final hasTodo = types.contains(CalendarEventType.todo);
                       final isSelected =
                           date.year == selectedDay.year &&
                           date.month == selectedDay.month &&
@@ -173,7 +178,7 @@ class CalendarMonthGrid extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: dayFontSize,
                                       height: cellHeight < 14 ? 0.95 : 1.05,
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.normal,
                                       color: isSelected
                                           ? selectedForeground
                                           : (isToday
@@ -199,7 +204,23 @@ class CalendarMonthGrid extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                  if (showDots && types.isNotEmpty)
+                                  if (showEventCount && eventCount > 0)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                        top: subText == null ? 3 : 2,
+                                      ),
+                                      child: _eventCountBadge(
+                                        context,
+                                        count: eventCount,
+                                        color: hasTodo
+                                            ? cs.primary
+                                            : cs.tertiary,
+                                        foreground: isSelected
+                                            ? selectedForeground
+                                            : null,
+                                      ),
+                                    )
+                                  else if (showDots && types.isNotEmpty)
                                     Padding(
                                       padding: EdgeInsets.only(
                                         top: subText == null ? 3 : 2,
@@ -296,6 +317,31 @@ class CalendarMonthGrid extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _eventCountBadge(
+    BuildContext context, {
+    required int count,
+    required Color color,
+    Color? foreground,
+  }) {
+    final textColor = foreground ?? color;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.20), width: 0.45),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        child: Text(
+          '$count项',
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: TextStyle(fontSize: 9, height: 1, color: textColor),
+        ),
+      ),
     );
   }
 

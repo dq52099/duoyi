@@ -139,6 +139,13 @@ void main() {
         }, projectKey: 'work')['2026-05-21'],
         [CalendarEventType.todo],
       );
+      expect(provider.filteredDateEventCounts(null)['2026-05-21'], 2);
+      expect(
+        provider.filteredDateEventCounts({
+          CalendarEventType.todo,
+        }, projectKey: 'work')['2026-05-21'],
+        1,
+      );
     },
   );
 

@@ -546,6 +546,9 @@ class CloudSyncProvider extends ChangeNotifier {
     'pref_date_format',
     'pref_app_timezone_iana',
     'pref_app_timezone_mode',
+    'pref_daily_reminder_kind',
+    'pref_daily_reminder_slot2_kind',
+    'pref_daily_reminder_slot3_kind',
     'pref_reminder_ringtone_sound',
   };
 

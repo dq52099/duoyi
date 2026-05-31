@@ -290,7 +290,7 @@ class _TodoScreenState extends State<TodoScreen> {
                           'AI 智能拆解',
                           style: TextStyle(
                             color: Colors.purple,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         backgroundColor: Colors.purple.shade50,
@@ -549,6 +549,7 @@ class _TodoScreenState extends State<TodoScreen> {
       filteredTodos,
       (todo) => todo.listGroupName,
     );
+    final listGroupEntries = listGroups.entries.toList(growable: false);
     final kanbanGroups = <String, List<TodoItem>>{
       for (final column in _kanbanConfig.columns) column.id: <TodoItem>[],
     };
@@ -632,7 +633,7 @@ class _TodoScreenState extends State<TodoScreen> {
       ),
       body: baseTodos.isEmpty
           ? EmptyState(
-              icon: Icons.task_alt,
+              icon: Icons.check_circle_outline,
               message: s.todoEmpty,
               actionLabel: s.todoAddAction,
               onAction: _showAddDialog,
@@ -691,20 +692,21 @@ class _TodoScreenState extends State<TodoScreen> {
                               },
                             ),
                           ),
-                          _TodoViewMode.list => ListView(
-                            children: listGroups.entries
-                                .map(
-                                  (e) => _ListGroupTile(
-                                    groupName: e.key,
-                                    todos: e.value,
-                                    batchMode: _batchMode,
-                                    selectedTodoIds: _selectedTodoIds,
-                                    onToggleSelection: _toggleSelection,
-                                    onEnterBatchMode: (id) =>
-                                        _enterBatchMode(todoId: id),
-                                  ),
-                                )
-                                .toList(),
+                          _TodoViewMode.list => ListView.builder(
+                            cacheExtent: 640,
+                            itemCount: listGroupEntries.length,
+                            itemBuilder: (context, index) {
+                              final entry = listGroupEntries[index];
+                              return _ListGroupTile(
+                                groupName: entry.key,
+                                todos: entry.value,
+                                batchMode: _batchMode,
+                                selectedTodoIds: _selectedTodoIds,
+                                onToggleSelection: _toggleSelection,
+                                onEnterBatchMode: (id) =>
+                                    _enterBatchMode(todoId: id),
+                              );
+                            },
                           ),
                           _TodoViewMode.kanban => _TodoKanbanView(
                             config: _kanbanConfig,
@@ -914,7 +916,7 @@ class _TodoTodaySummaryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1006,7 +1008,7 @@ class _TodoSummaryChip extends StatelessWidget {
             data.value,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: cs.onSurface,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ],
@@ -1444,7 +1446,7 @@ class _TodoBatchActionBar extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: cs.primary,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),
@@ -1569,7 +1571,7 @@ class _BatchMenuButton extends StatelessWidget {
             label,
             style: appSecondaryControlTextStyle(
               context,
-            ).copyWith(color: color, fontWeight: FontWeight.w400),
+            ).copyWith(color: color, fontWeight: FontWeight.normal),
           ),
           const SizedBox(width: 2),
           Icon(Icons.arrow_drop_down, size: 18, color: color),
@@ -1617,6 +1619,7 @@ class _TodoKanbanView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final columns = config.sortedColumns;
     return Column(
       children: [
         if (config.groupMode != TodoKanbanGroupMode.none)
@@ -1637,22 +1640,24 @@ class _TodoKanbanView extends StatelessWidget {
             ),
           ),
         Expanded(
-          child: ListView(
+          child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            children: [
-              for (final column in config.sortedColumns)
-                _KanbanColumn(
-                  column: column,
-                  columns: config.sortedColumns,
-                  groupMode: config.groupMode,
-                  todos: kanbanGroups[column.id] ?? const <TodoItem>[],
-                  batchMode: batchMode,
-                  selectedTodoIds: selectedTodoIds,
-                  onToggleSelection: onToggleSelection,
-                  onEnterBatchMode: onEnterBatchMode,
-                ),
-            ],
+            cacheExtent: 560,
+            itemCount: columns.length,
+            itemBuilder: (context, index) {
+              final column = columns[index];
+              return _KanbanColumn(
+                column: column,
+                columns: columns,
+                groupMode: config.groupMode,
+                todos: kanbanGroups[column.id] ?? const <TodoItem>[],
+                batchMode: batchMode,
+                selectedTodoIds: selectedTodoIds,
+                onToggleSelection: onToggleSelection,
+                onEnterBatchMode: onEnterBatchMode,
+              );
+            },
           ),
         ),
       ],
@@ -1670,6 +1675,15 @@ class _KanbanGroupedTodos {
     required this.sortOrder,
     required this.todos,
   });
+}
+
+class _KanbanColumnListEntry {
+  final _KanbanGroupedTodos? header;
+  final TodoItem? todo;
+
+  const _KanbanColumnListEntry.header(this.header) : todo = null;
+
+  const _KanbanColumnListEntry.todo(this.todo) : header = null;
 }
 
 class _KanbanGroupKey {
@@ -1826,6 +1840,13 @@ class _KanbanColumn extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final color = Color(column.colorValue);
     final groupedTodos = _groupKanbanTodos(todos, groupMode, DateTime.now());
+    final listEntries = <_KanbanColumnListEntry>[
+      for (final group in groupedTodos) ...[
+        if (groupMode != TodoKanbanGroupMode.none)
+          _KanbanColumnListEntry.header(group),
+        for (final todo in group.todos) _KanbanColumnListEntry.todo(todo),
+      ],
+    ];
     return SizedBox(
       width: 280,
       child: DragTarget<String>(
@@ -1867,7 +1888,7 @@ class _KanbanColumn extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ),
@@ -1886,57 +1907,61 @@ class _KanbanColumn extends StatelessWidget {
                             ),
                           ),
                         )
-                      : ListView(
-                          children: [
-                            for (final group in groupedTodos) ...[
-                              if (groupMode != TodoKanbanGroupMode.none)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 2,
-                                    bottom: 8,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          group.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: cs.onSurface.withValues(
-                                              alpha: 0.62,
-                                            ),
-                                            fontWeight: FontWeight.w400,
+                      : ListView.builder(
+                          cacheExtent: 560,
+                          itemCount: listEntries.length,
+                          itemBuilder: (context, index) {
+                            final entry = listEntries[index];
+                            final header = entry.header;
+                            if (header != null) {
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 2,
+                                  bottom: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        header.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.62,
                                           ),
+                                          fontWeight: FontWeight.normal,
                                         ),
                                       ),
-                                      AppStatusBadge(
-                                        label: '${group.todos.length}',
-                                        color: color,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 2,
-                                        ),
+                                    ),
+                                    AppStatusBadge(
+                                      label: '${header.todos.length}',
+                                      color: color,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              for (final todo in group.todos)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _KanbanTodoCard(
-                                    todo: todo,
-                                    columns: columns,
-                                    color: color,
-                                    batchMode: batchMode,
-                                    selected: selectedTodoIds.contains(todo.id),
-                                    onToggleSelection: onToggleSelection,
-                                    onEnterBatchMode: onEnterBatchMode,
-                                  ),
-                                ),
-                            ],
-                          ],
+                              );
+                            }
+
+                            final todo = entry.todo!;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _KanbanTodoCard(
+                                todo: todo,
+                                columns: columns,
+                                color: color,
+                                batchMode: batchMode,
+                                selected: selectedTodoIds.contains(todo.id),
+                                onToggleSelection: onToggleSelection,
+                                onEnterBatchMode: onEnterBatchMode,
+                              ),
+                            );
+                          },
                         ),
                 ),
               ],
@@ -1979,6 +2004,7 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
   bool _dragging = false;
 
   bool get _swipeOpen => _swipeOffset > 0;
+  bool get _swipeActive => _dragging || _swipeOpen;
 
   @override
   void didUpdateWidget(covariant _KanbanTodoCard oldWidget) {
@@ -2045,10 +2071,24 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
     final provider = context.read<TodoProvider>();
     final todo = widget.todo;
     final canEdit = context.watch<ShareProvider>().canEdit(todo.workspaceId);
+    final visual = CompletionVisibilityPolicy.visualState(todo);
+    final stateColor = CompletionVisibilityPolicy.colorFor(visual);
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    final isDueSoon = visual == TodoVisualState.dueSoon;
+    final statusColor = isCompleted || isOverdue || isDueSoon
+        ? stateColor
+        : widget.color;
+    final statusBackground = isCompleted || isOverdue || isDueSoon
+        ? Color.alphaBlend(
+            stateColor.withValues(alpha: isCompleted ? 0.06 : 0.08),
+            cs.surfaceContainerHighest,
+          )
+        : cs.surfaceContainerHighest.withValues(alpha: 0.42);
     final card = Material(
       color: widget.selected
           ? widget.color.withValues(alpha: 0.14)
-          : cs.surfaceContainerHighest.withValues(alpha: 0.42),
+          : statusBackground,
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -2085,8 +2125,15 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w400,
+                        color: isCompleted
+                            ? cs.onSurface.withValues(alpha: 0.54)
+                            : isOverdue
+                            ? cs.error
+                            : cs.onSurface,
+                        decoration: isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                   ),
@@ -2153,7 +2200,34 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
                         todo.dueDate!,
                         omitTimeWhenMidnight: true,
                       ),
-                      color: widget.color,
+                      color: statusColor,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                  if (isCompleted)
+                    AppStatusBadge(
+                      label: '已完成',
+                      color: statusColor,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                  if (isOverdue)
+                    AppStatusBadge(
+                      label: '过期',
+                      color: statusColor,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                    ),
+                  if (isDueSoon)
+                    AppStatusBadge(
+                      label: '临期',
+                      color: statusColor,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 7,
                         vertical: 3,
@@ -2203,23 +2277,27 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
             : 0;
       }),
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: _TodoInlineSwipeActions(
-              margin: EdgeInsets.zero,
-              onDetails: () => _openDetails(context),
-              onToggleCompletion: () => _toggleCompletion(context),
-              onDelete: () => _confirmDelete(context, provider),
-              completed: todo.isCompleted,
+          if (_swipeActive)
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: _TodoInlineSwipeActions(
+                  margin: EdgeInsets.zero,
+                  onDetails: () => _openDetails(context),
+                  onToggleCompletion: () => _toggleCompletion(context),
+                  onDelete: () => _confirmDelete(context, provider),
+                  completed: todo.isCompleted,
+                ),
+              ),
             ),
-          ),
           AnimatedContainer(
             duration: _dragging
                 ? Duration.zero
                 : const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
-            child: card,
+            child: RepaintBoundary(child: card),
           ),
         ],
       ),
@@ -2532,7 +2610,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
             ),
             title: Text(
               widget.groupName,
-              style: const TextStyle(fontWeight: FontWeight.w400),
+              style: const TextStyle(fontWeight: FontWeight.normal),
             ),
             subtitle: workspace == null
                 ? null
@@ -2564,7 +2642,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
                     '${widget.todos.length}',
                     style: TextStyle(
                       color: cs.primary,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),
@@ -2749,6 +2827,7 @@ class _TodoTileState extends State<_TodoTile> {
   bool _dragging = false;
 
   bool get _swipeOpen => _swipeOffset > 0;
+  bool get _swipeActive => _dragging || _swipeOpen;
 
   @override
   void didUpdateWidget(covariant _TodoTile oldWidget) {
@@ -2822,6 +2901,37 @@ class _TodoTileState extends State<_TodoTile> {
     final canEdit = context.watch<ShareProvider>().canEdit(todo.workspaceId);
     final cs = Theme.of(context).colorScheme;
     final qColor = _quadrantColor(todo.quadrant);
+    final stateColor = CompletionVisibilityPolicy.colorFor(visual);
+    final visualAccentColor = switch (visual) {
+      TodoVisualState.completed ||
+      TodoVisualState.overdue ||
+      TodoVisualState.dueSoon => stateColor,
+      _ => qColor,
+    };
+    final statusBackground = switch (visual) {
+      TodoVisualState.completed => Color.alphaBlend(
+        stateColor.withValues(alpha: 0.06),
+        cs.surface,
+      ),
+      TodoVisualState.overdue => Color.alphaBlend(
+        stateColor.withValues(alpha: 0.08),
+        cs.surface,
+      ),
+      TodoVisualState.dueSoon => Color.alphaBlend(
+        stateColor.withValues(alpha: 0.07),
+        cs.surface,
+      ),
+      _ => cs.surface,
+    };
+    final statusBorder = switch (visual) {
+      TodoVisualState.completed ||
+      TodoVisualState.overdue ||
+      TodoVisualState.dueSoon => Border.all(
+        color: stateColor.withValues(alpha: 0.24),
+        width: 0.7,
+      ),
+      _ => null,
+    };
     final content = Container(
       margin: const EdgeInsets.symmetric(
         horizontal: DesignTokens.spaceMd,
@@ -2830,93 +2940,99 @@ class _TodoTileState extends State<_TodoTile> {
       decoration: BoxDecoration(
         color: widget.selected
             ? cs.primary.withValues(alpha: 0.08)
-            : cs.surface,
+            : statusBackground,
         borderRadius: DesignTokens.borderRadiusMd,
         border: widget.selected
             ? Border.all(color: cs.primary.withValues(alpha: 0.28))
-            : null,
+            : statusBorder,
         boxShadow: DesignTokens.shadowXs,
       ),
       child: ClipRRect(
         borderRadius: DesignTokens.borderRadiusMd,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 4, color: qColor),
-              Expanded(
-                child: InkWell(
-                  onTap: widget.batchMode
-                      ? canEdit
-                            ? () => widget.onToggleSelection(todo.id)
-                            : null
-                      : _swipeOpen
-                      ? _closeSwipe
-                      : () => _openDetails(context),
-                  onLongPress: canEdit
-                      ? () => widget.onEnterBatchMode(todo.id)
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      DesignTokens.spaceSm,
-                      DesignTokens.spaceSm,
-                      DesignTokens.spaceSm,
-                      DesignTokens.spaceSm,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            top: DesignTokens.spaceXxs,
-                          ),
-                          child: SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: Checkbox(
-                              value: widget.batchMode
-                                  ? widget.selected
-                                  : todo.isCompleted,
-                              shape: const CircleBorder(),
-                              activeColor: qColor,
-                              onChanged: canEdit
-                                  ? (_) {
-                                      if (widget.batchMode) {
-                                        widget.onToggleSelection(todo.id);
-                                      } else {
-                                        completeTodoWithOptionalTimeRecord(
-                                          context,
-                                          todo,
-                                        );
-                                      }
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: visualAccentColor),
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.batchMode
+                    ? canEdit
+                          ? () => widget.onToggleSelection(todo.id)
+                          : null
+                    : _swipeOpen
+                    ? _closeSwipe
+                    : () => _openDetails(context),
+                onLongPress: canEdit
+                    ? () => widget.onEnterBatchMode(todo.id)
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spaceSm + 4,
+                    DesignTokens.spaceSm,
+                    DesignTokens.spaceSm,
+                    DesignTokens.spaceSm,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: DesignTokens.spaceXxs,
+                        ),
+                        child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: Checkbox(
+                            value: widget.batchMode
+                                ? widget.selected
+                                : todo.isCompleted,
+                            shape: const CircleBorder(),
+                            activeColor: visualAccentColor,
+                            onChanged: canEdit
+                                ? (_) {
+                                    if (widget.batchMode) {
+                                      widget.onToggleSelection(todo.id);
+                                    } else {
+                                      completeTodoWithOptionalTimeRecord(
+                                        context,
+                                        todo,
+                                      );
                                     }
-                                  : null,
+                                  }
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: DesignTokens.spaceXs),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _TitleRow(todo: todo, visual: visual),
+                            const SizedBox(height: DesignTokens.spaceXxs),
+                            _MetaRow(
+                              todo: todo,
+                              quadrantColor: qColor,
+                              visual: visual,
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: DesignTokens.spaceXs),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TitleRow(todo: todo, visual: visual),
-                              const SizedBox(height: DesignTokens.spaceXxs),
-                              _MetaRow(
-                                todo: todo,
-                                quadrantColor: qColor,
-                                visual: visual,
-                              ),
-                            ],
-                          ),
-                        ),
-                        ?widget.trailing,
-                      ],
-                    ),
+                      ),
+                      if (widget.trailing != null) widget.trailing!,
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2956,26 +3072,30 @@ class _TodoTileState extends State<_TodoTile> {
             })
           : null,
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: _TodoInlineSwipeActions(
-              margin: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spaceMd,
-                vertical: DesignTokens.spaceSm,
+          if (_swipeActive)
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: _TodoInlineSwipeActions(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spaceMd,
+                    vertical: DesignTokens.spaceSm,
+                  ),
+                  onDetails: () => _openDetails(context),
+                  onToggleCompletion: () => _toggleCompletion(context),
+                  onDelete: () => _confirmDelete(context, provider),
+                  completed: todo.isCompleted,
+                ),
               ),
-              onDetails: () => _openDetails(context),
-              onToggleCompletion: () => _toggleCompletion(context),
-              onDelete: () => _confirmDelete(context, provider),
-              completed: todo.isCompleted,
             ),
-          ),
           AnimatedContainer(
             duration: _dragging
                 ? Duration.zero
                 : const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
-            child: content,
+            child: RepaintBoundary(child: content),
           ),
         ],
       ),
@@ -3566,18 +3686,19 @@ class QuadrantListScreen extends StatelessWidget {
       appBar: AppBar(title: Text(_title(quadrant))),
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
-          : ListView(
-              children: todos
-                  .map(
-                    (t) => _TodoTile(
-                      todo: t,
-                      batchMode: false,
-                      selected: false,
-                      onToggleSelection: (_) {},
-                      onEnterBatchMode: (_) {},
-                    ),
-                  )
-                  .toList(),
+          : ListView.builder(
+              cacheExtent: 640,
+              itemCount: todos.length,
+              itemBuilder: (context, index) {
+                final todo = todos[index];
+                return _TodoTile(
+                  todo: todo,
+                  batchMode: false,
+                  selected: false,
+                  onToggleSelection: (_) {},
+                  onEnterBatchMode: (_) {},
+                );
+              },
             ),
     );
   }

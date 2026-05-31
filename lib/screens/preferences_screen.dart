@@ -786,7 +786,7 @@ class _SliderSetting extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -810,7 +810,7 @@ class _SliderSetting extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 11,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),

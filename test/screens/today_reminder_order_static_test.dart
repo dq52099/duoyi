@@ -12,17 +12,23 @@ void main() {
     );
     expect(today, contains('class _TodayReminderGroups'));
     expect(today, contains("title: '今日提醒'"));
-    expect(today, contains('今日待提醒 > 即将开始 > 已逾期事项（弱化）'));
+    expect(today, contains('今日待提醒 > 即将开始 > 逾期优先处理'));
     expect(today, contains("title: '今日待提醒事项'"));
     expect(today, contains("title: '即将开始事项'"));
     expect(today, contains("title: '已逾期事项'"));
     expect(today, contains('overdue: true'));
-    expect(
-      today,
-      contains('cs.surfaceContainerHighest.withValues(alpha: 0.18)'),
-    );
-    expect(today, contains('cs.onSurface.withValues(alpha: 0.56)'));
-    expect(today, contains('cs.onSurfaceVariant.withValues(alpha: 0.74)'));
+    expect(today, contains('class _OverdueReminderBadge'));
+    expect(today, contains("Text('逾期'"));
+    expect(today, contains('Icons.priority_high_rounded'));
+    expect(today, contains('cs.error.withValues(alpha: 0.10)'));
+    expect(today, contains('cs.error.withValues(alpha: 0.38)'));
+    expect(today, contains('cs.error.withValues(alpha: 0.08)'));
+    expect(today, contains('cs.error.withValues(alpha: 0.26)'));
+    expect(today, contains('overdueTitleColor = cs.error'));
+    expect(today, contains('overdueSubtitleColor = cs.error'));
+    expect(today, contains('tileBackground: overdue ? overdueBackground'));
+    expect(today, contains('tileBorderColor: overdue ? overdueBorder'));
+    expect(today, contains('titleWidget: overdue'));
     expect(today, contains('ExpansionTile('));
     expect(today, contains('initiallyExpanded: false'));
     expect(today, contains('maintainState: true'));

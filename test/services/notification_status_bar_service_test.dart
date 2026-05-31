@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/notification_status_bar_service.dart';
+import 'package:duoyi/services/notification_status_bar_sync_bridge.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -60,6 +61,25 @@ void main() {
       expect(plan.enableQuickActions, isTrue);
     });
 
+    test('关闭今日进展不会把旧进展摘要留在通知栏', () {
+      final previousProgress = buildNotificationStatusBarPlan(
+        notificationQuickAdd: true,
+        notificationTodayProgress: true,
+        todayProgressBody: '今日还要完成 5 项\n日常 2 / 代表 1 / 目标 2',
+      );
+      final disabledProgress = buildNotificationStatusBarPlan(
+        notificationQuickAdd: true,
+        notificationTodayProgress: false,
+        todayProgressBody: previousProgress.body,
+      );
+
+      expect(previousProgress.title, '今日任务进展');
+      expect(disabledProgress.shouldShow, isTrue);
+      expect(disabledProgress.title, '多仪快捷记录');
+      expect(disabledProgress.body, '下拉通知栏添加待办，或一键开始专注');
+      expect(disabledProgress.body, isNot(contains('今日还要完成')));
+    });
+
     test('通知栏计划和进展摘要跟随英文语言', () {
       I18n.setLocale(AppLocale.en);
       final body = formatNotificationTodayProgressBody(
@@ -112,6 +132,22 @@ void main() {
         bridge,
         isNot(contains('await current(force: force);\n    return true;')),
       );
+    });
+
+    test('状态栏同步桥透传 force 和底层成功状态', () async {
+      final calls = <bool>[];
+      addTearDown(() => NotificationStatusBarSyncBridge.attach(null));
+      NotificationStatusBarSyncBridge.attach(({bool force = false}) async {
+        calls.add(force);
+        return force;
+      });
+
+      expect(await NotificationStatusBarSyncBridge.sync(), isFalse);
+      expect(await NotificationStatusBarSyncBridge.sync(force: true), isTrue);
+      expect(calls, <bool>[false, true]);
+
+      NotificationStatusBarSyncBridge.attach(null);
+      expect(await NotificationStatusBarSyncBridge.sync(force: true), isFalse);
     });
   });
 }

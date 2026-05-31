@@ -121,14 +121,42 @@ void main() {
       await provider.addHabit(
         Habit(id: 'weekly-progress', name: '阅读', targetCount: 1),
       );
+      var refreshesAfterCheckIn = 0;
+      provider.addListener(() => refreshesAfterCheckIn++);
 
       expect(provider.currentWeekProgress()[todayIndex], 0);
 
       await provider.incrementHabit('weekly-progress');
 
+      expect(refreshesAfterCheckIn, greaterThanOrEqualTo(1));
       expect(provider.currentWeekProgress()[todayIndex], 1);
     },
   );
+
+  test('flex period goal labels use period target wording', () {
+    final weekly = Habit(
+      id: 'weekly-flex',
+      name: '每周游泳',
+      targetCount: 1,
+      flexTarget: 3,
+      flexPeriod: HabitFlexPeriod.week,
+    );
+    final monthly = Habit(
+      id: 'monthly-flex',
+      name: '每月复盘',
+      targetCount: 1,
+      flexTarget: 2,
+      flexPeriod: HabitFlexPeriod.month,
+    );
+    final daily = Habit(id: 'daily', name: '每日阅读', targetCount: 1);
+
+    expect(weekly.flexPeriodGoalLabel, '周期目标: 3 次/周');
+    expect(weekly.streakUnitLabel, '周');
+    expect(monthly.flexPeriodGoalLabel, '周期目标: 2 次/月');
+    expect(monthly.streakUnitLabel, '月');
+    expect(daily.flexPeriodGoalLabel, isEmpty);
+    expect(daily.streakUnitLabel, '天');
+  });
 
   test(
     'combined heatmap and weekly completion skip inactive date ranges',

@@ -112,20 +112,31 @@ void main() {
 
     expect(source, contains('double _monthGridHeightFor('));
     expect(source, contains('bool _monthGridShowsLunar('));
-    expect(source, contains('final minGridHeight = rows >= 6 ? 82.0 : 78.0'));
+    expect(source, contains('final minGridHeight = rows >= 6 ? 300.0 : 270.0'));
     expect(
       source,
-      contains('final preferredGridHeight = rows >= 6 ? 98.0 : 92.0'),
+      contains('final preferredGridHeight = rows >= 6 ? 360.0 : 330.0'),
     );
     expect(
       source,
-      contains('final desiredDetailHeight = availableHeight < 560 ? 500.0 : 660.0'),
+      contains(
+        'final desiredDetailHeight = availableHeight < 560 ? 220.0 : 320.0',
+      ),
     );
     expect(
       source,
       contains(
         'final maxGridForReadableDetail = availableHeight - desiredDetailHeight',
       ),
+    );
+    expect(
+      source,
+      contains('final compactUpperGridHeight = availableHeight <= 120'),
+    );
+    expect(source, contains('final upperGridHeight = compactUpperGridHeight'));
+    expect(
+      source,
+      contains('final lowerGridHeight = minGridHeight < upperGridHeight'),
     );
     expect(source, contains("const ValueKey('calendar_fixed_month_grid')"));
     expect(source, contains('height: monthGridHeight'));

@@ -660,7 +660,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       Text(
                         '样例',
                         style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -678,7 +678,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       Text(
                         '解析提示',
                         style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -1283,7 +1283,7 @@ class _BackupScreenState extends State<BackupScreen> {
                           pageTitle,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
                               ),
                         ),
@@ -1411,7 +1411,7 @@ class _BackupScreenState extends State<BackupScreen> {
                             _exportedTitle ?? '导出内容',
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface,
                                 ),
                           ),

@@ -292,7 +292,7 @@ class _TimelineView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
             _rangeViewTitle(rangeLabel, I18n.tr('time_audit.view.timeline')),
-            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
         ),
         for (final entry in entries) ...[
@@ -336,7 +336,7 @@ class _CategoryView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
             I18n.tr('time_audit.category_view'),
-            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
         ),
         AppSurfaceCard(
@@ -362,7 +362,7 @@ class _CategoryView extends StatelessWidget {
               Text(
                 I18n.tr('time_audit.source_breakdown'),
                 style: const TextStyle(
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                   fontSize: 13,
                 ),
               ),
@@ -517,7 +517,7 @@ class _CalendarAuditView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
             I18n.tr('time_audit.calendar_view'),
-            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
         ),
         for (final day in days) ...[
@@ -565,7 +565,7 @@ class _TrendAuditView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
           child: Text(
             I18n.tr('time_audit.trend_view'),
-            style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
         ),
         AppSurfaceCard(
@@ -683,7 +683,7 @@ class _DayGroupCard extends StatelessWidget {
                 child: Text(
                   I18nDateFormat.monthDay(day),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: 14,
                   ),
                 ),
@@ -860,7 +860,7 @@ class _MetricBlock extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                   fontSize: 16,
                 ),
               ),
@@ -974,7 +974,7 @@ class _TimeEntryCard extends StatelessWidget {
                 Text(
                   entry.title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: 14,
                   ),
                 ),

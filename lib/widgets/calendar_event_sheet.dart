@@ -276,7 +276,7 @@ class CalendarEventSheet extends StatelessWidget {
                         _timeText(event),
                         style: const TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],

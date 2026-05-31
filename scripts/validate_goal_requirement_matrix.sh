@@ -179,7 +179,7 @@ if [[ -f "$MATRIX_FILE" ]]; then
     'Countdown remains available' \
     'visible add/search/calendar/export/deep-link flow' \
     'Almanac content removes weather' \
-    'two stacked rows' \
+    'suitable/avoid in one row' \
     'default soft ringtone' \
     'notification/popup/alarm' \
     'Device readiness must be reported' \

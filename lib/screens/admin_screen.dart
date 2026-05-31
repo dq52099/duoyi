@@ -278,10 +278,10 @@ class _AdminGlassControlTheme extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final controlText = appSecondaryControlTextStyle(
       context,
-    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.w400);
+    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.normal);
     final labelText = appSecondaryControlLabelStyle(
       context,
-    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.w400);
+    ).copyWith(color: cs.onSurface, fontWeight: FontWeight.normal);
     final selectedFill = isDark
         ? cs.primary.withValues(alpha: 0.16)
         : cs.primary.withValues(alpha: 0.075);
@@ -663,7 +663,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                     '近 7 天注册',
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurface,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -686,7 +686,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                               row['date'].toString(),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.68),
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -705,7 +705,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                             '${row['count']}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: cs.onSurface,
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                             ),
                           ),
                         ],
@@ -777,7 +777,7 @@ class _GridCards extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.62),
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         Text(
@@ -786,7 +786,7 @@ class _GridCards extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: cs.onSurface,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                       ],
@@ -1293,7 +1293,7 @@ class _AdminPaginationBar extends StatelessWidget {
     );
     return Container(
       key: barKey,
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      padding: const EdgeInsets.fromLTRB(8, 1, 8, 1),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest.withValues(alpha: 0.42),
         border: Border(top: BorderSide(color: topBorderColor, width: 0.35)),
@@ -1359,15 +1359,15 @@ class _AdminPaginationBar extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 1),
                   child: SizedBox.square(
-                    dimension: 30,
+                    dimension: 28,
                     child: IconButton(
                       constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 30,
+                        width: 28,
+                        height: 28,
                       ),
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      iconSize: 16,
+                      iconSize: 15,
                       style: IconButton.styleFrom(
                         backgroundColor: onPressed == null
                             ? Colors.transparent
@@ -1380,7 +1380,7 @@ class _AdminPaginationBar extends StatelessWidget {
                           width: 0.45,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       onPressed: onPressed,
@@ -1517,9 +1517,9 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
         ),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 66, minHeight: 30),
+        constraints: const BoxConstraints(minWidth: 62, minHeight: 28),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1555,6 +1555,7 @@ class _GroupsTabState extends State<_GroupsTab> {
   String? _error;
   int _offset = 0;
   int _pageSize = _adminPageSize;
+  int _loadSerial = 0;
 
   @override
   void initState() {
@@ -1563,6 +1564,7 @@ class _GroupsTabState extends State<_GroupsTab> {
   }
 
   Future<void> _load({int? pageSize, int? offset}) async {
+    final serial = ++_loadSerial;
     final nextPageSize = pageSize ?? _pageSize;
     final nextOffset = offset ?? _offset;
     setState(() {
@@ -1576,19 +1578,19 @@ class _GroupsTabState extends State<_GroupsTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      if (!mounted) return;
+      if (!mounted || serial != _loadSerial) return;
       _page = page;
       _groups
         ..clear()
         ..addAll(page.items);
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || serial != _loadSerial) return;
       _error = userVisibleApiError(e);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || serial != _loadSerial) return;
       _error = e.toString();
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && serial == _loadSerial) setState(() => _loading = false);
     }
   }
 
@@ -3240,7 +3242,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                         _testResult!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.74),
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ),
@@ -6061,7 +6063,7 @@ class _UsersTabState extends State<_UsersTab> {
                   username,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     decoration: disabled ? TextDecoration.lineThrough : null,
                   ),
                 ),
@@ -6705,7 +6707,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               color: cs.onSurface,
                             ),
                           ),
@@ -7254,6 +7256,36 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     }
   }
 
+  Future<void> _closeFeedback(
+    Map<String, dynamic> f,
+    String feedbackUserLabel,
+  ) async {
+    final confirmed = await _confirmAdminDangerAction(
+      context: context,
+      title: '关闭反馈？',
+      message: '将把 $feedbackUserLabel 的这条反馈标记为已关闭。',
+      confirmLabel: '关闭',
+    );
+    if (!confirmed) return;
+    try {
+      final existingReply = (f['admin_reply'] ?? '').toString().trim();
+      await widget.api.closeFeedback(
+        (f['id'] as num).toInt(),
+        reply: existingReply.isEmpty ? '已关闭。' : existingReply,
+      );
+      await _load(offset: _offset);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('反馈已关闭')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -7293,7 +7325,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                             Text(
                               '本页 ${_items.length} 条 · 待处理 ${statusCounts['open'] ?? 0} · 处理中 ${statusCounts['in_progress'] ?? 0} · 已解决 ${statusCounts['resolved'] ?? 0}',
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
                               ),
                             ),
@@ -7432,7 +7464,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           return RefreshIndicator(
             onRefresh: () => _load(offset: _offset),
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 72),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 60),
               itemCount:
                   _items.length +
                   (effectiveFeedbackSummaryCard == null ? 0 : 1),
@@ -7490,7 +7522,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: cs.onSurface,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
@@ -7556,7 +7588,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.68,
                                       ),
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.normal,
                                     ),
                                   ),
                                 ),
@@ -7570,6 +7602,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                 return _AdminFeedbackSwipeActions(
                   key: ValueKey('admin_feedback_swipe_${f['id']}'),
                   onDetail: () => unawaited(_showFeedbackDetail(f)),
+                  onClose: () => _closeFeedback(f, feedbackUserLabel),
                   onReply: () => _reply(f),
                   onDelete: () => _deleteFeedback(f, feedbackUserLabel),
                   child: feedbackCard,
@@ -7749,7 +7782,7 @@ class _AdminFeedbackDetailField extends StatelessWidget {
                           alpha: multiline ? 0.82 : 0.7,
                         ),
                         height: multiline ? 1.35 : 1.28,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
             ),
           ),
@@ -7762,6 +7795,7 @@ class _AdminFeedbackDetailField extends StatelessWidget {
 class _AdminFeedbackSwipeActions extends StatefulWidget {
   final Widget child;
   final VoidCallback onDetail;
+  final Future<void> Function() onClose;
   final Future<void> Function() onReply;
   final Future<void> Function() onDelete;
 
@@ -7769,6 +7803,7 @@ class _AdminFeedbackSwipeActions extends StatefulWidget {
     super.key,
     required this.child,
     required this.onDetail,
+    required this.onClose,
     required this.onReply,
     required this.onDelete,
   });
@@ -7780,7 +7815,7 @@ class _AdminFeedbackSwipeActions extends StatefulWidget {
 
 class _AdminFeedbackSwipeActionsState
     extends State<_AdminFeedbackSwipeActions> {
-  static const double _actionRailWidth = 128;
+  static const double _actionRailWidth = 160;
   static const double _dragOpenThreshold = 40;
   double _dragDistance = 0;
   bool _open = false;
@@ -7868,6 +7903,14 @@ class _AdminFeedbackSwipeActionsState
                               color: cs.tertiary,
                               onPressed: () =>
                                   unawaited(_runAction(widget.onReply)),
+                            ),
+                            const SizedBox(width: 4),
+                            _AdminFeedbackSwipeButton(
+                              tooltip: '关闭',
+                              icon: Icons.inventory_2_outlined,
+                              color: cs.secondary,
+                              onPressed: () =>
+                                  unawaited(_runAction(widget.onClose)),
                             ),
                             const SizedBox(width: 4),
                             _AdminFeedbackSwipeButton(
@@ -8240,7 +8283,7 @@ class _InvitesTabState extends State<_InvitesTab> {
                             c['code'].toString(),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontFamily: 'monospace',
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.normal,
                               color: cs.onSurface,
                             ),
                           ),
@@ -8522,7 +8565,7 @@ class _AuditLogTabState extends State<_AuditLogTab> {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     subtitle: Text(

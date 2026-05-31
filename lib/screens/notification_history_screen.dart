@@ -445,7 +445,7 @@ class _NotificationRecordCard extends StatelessWidget {
                     Text(
                       item.title,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                         color: cs.onSurface,
                       ),
                     ),

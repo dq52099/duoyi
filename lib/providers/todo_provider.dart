@@ -409,11 +409,12 @@ class TodoProvider extends ChangeNotifier {
 
   Future<void> deleteTodo(String id) async {
     final idx = _todos.indexWhere((t) => t.id == id);
-    if (idx != -1) {
-      await CloudSyncProvider.recordDeletedItem('todos', id);
-      await _timeAudit?.deleteBySource(TimeEntrySource.todo, id);
-    }
-    _todos.removeWhere((t) => t.id == id);
+    if (idx == -1) return;
+
+    final removed = _todos[idx];
+    await CloudSyncProvider.recordDeletedItem('todos', removed.id);
+    await _timeAudit?.deleteBySource(TimeEntrySource.todo, removed.id);
+    _todos.removeAt(idx);
     await _saveToStorage();
     _notify();
     await _syncTodoRemindersNow();

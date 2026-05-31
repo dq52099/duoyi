@@ -18,6 +18,7 @@ void main() {
     'lib/screens/widget_screen.dart',
     'lib/screens/anniversary_screen.dart',
     'lib/screens/countdown_screen.dart',
+    'lib/screens/goal_edit_screen.dart',
   ];
 
   test('二级页面避免粗字重、大标题和厚边框回退', () {
@@ -126,6 +127,25 @@ void main() {
         contains('alpha: theme.brightness == Brightness.dark ? 0.22 : 0.12'),
       ),
     );
+
+    final calendar = File(
+      'lib/screens/calendar_screen.dart',
+    ).readAsStringSync();
+    final yearOverview = calendar.substring(
+      calendar.indexOf('class _CalendarYearOverview'),
+      calendar.indexOf('class _MonthDot'),
+    );
+    expect(yearOverview, contains('final selectedFill = Color.alphaBlend('));
+    expect(yearOverview, contains('final selectedText = cs.onSurface'));
+    expect(yearOverview, isNot(contains('cs.primaryContainer')));
+    expect(yearOverview, isNot(contains('cs.onPrimaryContainer')));
+
+    final goalEdit = File(
+      'lib/screens/goal_edit_screen.dart',
+    ).readAsStringSync();
+    expect(goalEdit, contains('width: 0.45'));
+    expect(goalEdit, isNot(matches(RegExp(r'width:\s*2(?:\.0)?\b'))));
+    expect(goalEdit, isNot(contains('width: isSelected ? 1.6 : 1')));
   });
 
   test('管理后台分页条在窄屏保持全宽分组布局', () {
@@ -422,7 +442,7 @@ void main() {
       contains('TextStyle appSecondaryRouteTitleTextStyle'),
     );
     expect(surfaceComponents, contains('fontSize: 14'));
-    expect(surfaceComponents, contains('fontWeight: FontWeight.w400'));
+    expect(surfaceComponents, contains('fontWeight: FontWeight.normal'));
 
     final calendar = File(
       'lib/screens/calendar_screen.dart',
@@ -651,6 +671,97 @@ void main() {
     expect(almanac, isNot(contains('cs.onPrimary.withValues')));
   });
 
+  test('从我的和更多应用跳转后的默认字号不超过主页面常规尺度', () {
+    final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
+    final surfaceComponents = File(
+      'lib/widgets/surface_components.dart',
+    ).readAsStringSync();
+    final brandBackground = File(
+      'lib/widgets/brand_background.dart',
+    ).readAsStringSync();
+    final moreApps = File(
+      'lib/screens/more_apps_screen.dart',
+    ).readAsStringSync();
+
+    final mineProfileHeader = mine.substring(
+      mine.indexOf('Text(\n                                  nameText'),
+      mine.indexOf(
+        'Wrap(',
+        mine.indexOf('Text(\n                                  nameText'),
+      ),
+    );
+    final mainRegularSize = _requiredFontSize(mineProfileHeader);
+    expect(mainRegularSize, equals(15));
+
+    final controlText = surfaceComponents.substring(
+      surfaceComponents.indexOf('TextStyle appSecondaryControlTextStyle'),
+      surfaceComponents.indexOf('TextStyle appSecondaryControlLabelStyle'),
+    );
+    final menuText = surfaceComponents.substring(
+      surfaceComponents.indexOf('TextStyle appSecondaryMenuItemTextStyle'),
+      surfaceComponents.indexOf('TextStyle appSecondaryRouteTitleTextStyle'),
+    );
+    final routeTitle = surfaceComponents.substring(
+      surfaceComponents.indexOf('TextStyle appSecondaryRouteTitleTextStyle'),
+      surfaceComponents.indexOf('Color _appSecondaryActionBackground'),
+    );
+
+    expect(_requiredFontSize(controlText), lessThan(mainRegularSize));
+    expect(_requiredFontSize(menuText), lessThan(mainRegularSize));
+    expect(_requiredFontSize(routeTitle), lessThanOrEqualTo(mainRegularSize));
+    expect(controlText, contains('fontWeight: FontWeight.normal'));
+    expect(menuText, contains('fontWeight: FontWeight.normal'));
+    expect(routeTitle, contains('fontWeight: FontWeight.normal'));
+
+    final secondaryTheme = surfaceComponents.substring(
+      surfaceComponents.indexOf('class AppSecondaryControlTheme'),
+      surfaceComponents.indexOf('class AppSecondaryMenuText'),
+    );
+    for (final textRole in [
+      'titleMedium',
+      'titleSmall',
+      'bodyLarge',
+      'bodyMedium',
+    ]) {
+      expect(
+        secondaryTheme,
+        contains('$textRole: controlText.copyWith'),
+        reason: '$textRole should inherit compact secondary route text.',
+      );
+    }
+    for (final textRole in ['bodySmall', 'labelLarge', 'labelMedium']) {
+      expect(
+        secondaryTheme,
+        contains('$textRole: labelText.copyWith'),
+        reason: '$textRole should inherit smaller secondary label text.',
+      );
+    }
+
+    final routeSurface = brandBackground.substring(
+      brandBackground.indexOf('class BrandRouteSurface'),
+      brandBackground.indexOf('/// A scaffold'),
+    );
+    expect(
+      routeSurface,
+      contains(
+        'BrandBackground(child: AppSecondaryControlTheme(child: child))',
+      ),
+      reason:
+          'Pushed routes must inherit the compact secondary text scale before painting their page content.',
+    );
+
+    final moreApplicationButton = moreApps.substring(
+      moreApps.indexOf('class MoreApplicationButton'),
+    );
+    expect(moreApplicationButton, contains('BrandRouteSurface('));
+    expect(
+      moreApplicationButton,
+      isNot(contains('builder: (_) => app.builder(')),
+      reason:
+          'More-app fallbacks should not bypass the compact route surface when pushed.',
+    );
+  });
+
   test('下拉菜单先收起键盘再按安全区域重算弹出位置', () {
     final source = File(
       'lib/widgets/surface_components.dart',
@@ -856,11 +967,14 @@ void main() {
       contains("key: const ValueKey('calendar_fixed_month_grid')"),
     );
     expect(calendar, contains('final desiredDetailHeight'));
-    expect(calendar, contains('availableHeight < 560 ? 500.0 : 660.0'));
+    expect(calendar, contains('availableHeight < 560 ? 220.0 : 320.0'));
     expect(calendar, contains('const monthGridChromeHeight = 30.0'));
     expect(calendar, contains('final minGridHeight'));
     expect(calendar, contains('final preferredGridHeight'));
     expect(calendar, contains('maxGridForReadableDetail'));
+    expect(calendar, contains('final compactUpperGridHeight'));
+    expect(calendar, contains('final upperGridHeight'));
+    expect(calendar, contains('final lowerGridHeight'));
     expect(calendar, contains('horizontalPadding: 8'));
     expect(calendar, contains('maxLines: 2'));
     expect(calendar, contains('dimension: compact ? 36 : 40'));
@@ -974,6 +1088,12 @@ void main() {
       ),
     );
   });
+}
+
+double _requiredFontSize(String source) {
+  final match = RegExp(r'fontSize:\s*([0-9]+(?:\.[0-9]+)?)').firstMatch(source);
+  expect(match, isNotNull, reason: 'Expected a literal fontSize in:\n$source');
+  return double.parse(match!.group(1)!);
 }
 
 Iterable<String> _calls(String source, String token) sync* {

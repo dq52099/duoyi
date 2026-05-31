@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -28,7 +29,7 @@ void main() {
     expect(menuStyle, contains('fontSize: 11'));
     expect(menuStyle, isNot(contains('fontSize: 12')));
     expect(source, isNot(contains('fontSize: 13.5')));
-    expect(source, contains('fontWeight: FontWeight.w400'));
+    expect(source, contains('fontWeight: FontWeight.normal'));
     expect(source, contains('class AppSecondaryControlTheme'));
     expect(source, contains('class AppSecondaryMenuText'));
     expect(source, contains('class AppPickerSheet'));
@@ -486,4 +487,74 @@ void main() {
     );
     expect(admin, contains('surfaceTintColor: Colors.transparent'));
   });
+
+  test('二级控件选中态浅深主题下保持可读且克制', () {
+    final source = File(
+      'lib/widgets/surface_components.dart',
+    ).readAsStringSync();
+    final controls = source.substring(
+      source.indexOf('final selectedControlBackground'),
+      source.indexOf('return Theme('),
+    );
+
+    expect(controls, contains('Color.alphaBlend('));
+    expect(
+      controls,
+      contains('cs.primary.withValues(alpha: isDark ? 0.14 : 0.09)'),
+    );
+    expect(controls, contains('final selectedControlRenderedBackground'));
+    expect(controls, contains('final selectedControlForeground'));
+    expect(
+      controls,
+      contains(
+        '_appReadableForeground(\n      selectedControlRenderedBackground,\n      cs.onSurface,\n    )',
+      ),
+    );
+    expect(controls, isNot(contains('cs.onPrimary')));
+    expect(controls, isNot(contains('Colors.white')));
+
+    for (final brightness in Brightness.values) {
+      final cs = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF6750A4),
+        brightness: brightness,
+      );
+      final isDark = brightness == Brightness.dark;
+      final selectedBackground = Color.alphaBlend(
+        cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+        cs.surface,
+      );
+      final renderedBackground = Color.alphaBlend(
+        selectedBackground,
+        cs.surface,
+      );
+      final foreground = _readableForeground(renderedBackground, cs.onSurface);
+
+      expect(
+        _contrastRatio(renderedBackground, foreground),
+        greaterThanOrEqualTo(4.5),
+        reason: '$brightness selected control foreground must be readable.',
+      );
+      expect(
+        _contrastRatio(selectedBackground, cs.surface),
+        lessThanOrEqualTo(isDark ? 1.35 : 1.20),
+        reason: '$brightness selected control background should stay subtle.',
+      );
+    }
+  });
+}
+
+Color _readableForeground(Color background, Color preferred) {
+  if (_contrastRatio(background, preferred) >= 4.5) return preferred;
+  const dark = Color(0xFF111827);
+  final darkContrast = _contrastRatio(background, dark);
+  final whiteContrast = _contrastRatio(background, Colors.white);
+  return darkContrast >= whiteContrast ? dark : Colors.white;
+}
+
+double _contrastRatio(Color a, Color b) {
+  final aLum = a.computeLuminance();
+  final bLum = b.computeLuminance();
+  final lighter = aLum > bLum ? aLum : bLum;
+  final darker = aLum > bLum ? bLum : aLum;
+  return (lighter + 0.05) / (darker + 0.05);
 }

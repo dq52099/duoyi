@@ -394,7 +394,7 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 I18n.tr('habit.kind'),
                 style: const TextStyle(
                   fontSize: DesignTokens.fontSizeSm,
-                  fontWeight: DesignTokens.fontWeightMedium,
+                  fontWeight: DesignTokens.fontWeightRegular,
                 ),
               ),
               const SizedBox(height: DesignTokens.spaceXs),
@@ -427,7 +427,7 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 I18n.tr('habit.color'),
                 style: const TextStyle(
                   fontSize: DesignTokens.fontSizeSm,
-                  fontWeight: DesignTokens.fontWeightMedium,
+                  fontWeight: DesignTokens.fontWeightRegular,
                 ),
               ),
               const SizedBox(height: DesignTokens.spaceXs),
@@ -728,7 +728,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             child: Text(
               I18n.tr('habit.heatmap.title'),
               style: TextStyle(
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 fontSize: 15,
                 color: cs.onSurface,
               ),
@@ -745,7 +745,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             child: Text(
               I18n.tr('habit.records.title'),
               style: TextStyle(
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 fontSize: 15,
                 color: cs.onSurface,
               ),
@@ -866,7 +866,7 @@ class _HabitTrendCardState extends State<_HabitTrendCard> {
                 child: Text(
                   I18n.tr('habit.trend.title'),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.normal,
                     fontSize: 14,
                   ),
                 ),
@@ -876,7 +876,7 @@ class _HabitTrendCardState extends State<_HabitTrendCard> {
                 style: TextStyle(
                   fontSize: 13,
                   color: color,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -888,7 +888,7 @@ class _HabitTrendCardState extends State<_HabitTrendCard> {
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               textStyle: WidgetStateProperty.all(
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
               ),
             ),
             segments: [
@@ -998,7 +998,7 @@ class _HabitTrendMetric extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   color: effectiveColor,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -1241,7 +1241,7 @@ class _StatChip extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.w400, fontSize: 16),
+          style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 16),
         ),
         Text(
           label,

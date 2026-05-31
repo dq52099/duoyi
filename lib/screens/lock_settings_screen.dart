@@ -157,7 +157,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                           I18n.tr('app_lock.hero.title'),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
                               ),
                         ),

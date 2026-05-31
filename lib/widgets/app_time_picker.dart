@@ -159,7 +159,7 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
               AppTimePicker.format(_value),
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontSize: 24,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
                 fontFeatures: const [FontFeature.tabularFigures()],
                 color: cs.primary,
               ),

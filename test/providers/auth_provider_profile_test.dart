@@ -57,6 +57,7 @@ void main() {
         'email': 'new@example.com',
         'code': '123456',
         'email_code': '123456',
+        'emailCode': '123456',
       });
       expect(auth.state.username, 'stable-user');
       expect(auth.state.avatar, 'https://example.com/stable.png');
@@ -266,6 +267,117 @@ void main() {
   });
 
   test(
+    'avatar upload success syncs state, prefs and profile callback',
+    () async {
+      final syncedStates = <AuthState>[];
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          avatar: 'https://duoyi.test/api/uploads/avatars/old.png',
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/me/avatar');
+            return http.Response(
+              json.encode({
+                'user_id': 'u-1',
+                'username': 'stable-user',
+                'avatar': '/api/uploads/avatars/new.png',
+                'token': 'ignored',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountProfileChanged = (state) async {
+        syncedStates.add(state);
+      };
+
+      await auth.uploadAvatarBytes(
+        filename: 'avatar.png',
+        bytes: Uint8List.fromList([137, 80, 78, 71]),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+
+      expect(
+        auth.state.avatar,
+        'https://duoyi.test/api/uploads/avatars/new.png',
+      );
+      expect(auth.state.token, 'token-1');
+      expect(persisted['avatar'], auth.state.avatar);
+      expect(persisted['token'], 'token-1');
+      expect(syncedStates.single.avatar, auth.state.avatar);
+    },
+  );
+
+  test(
+    'avatar upload failure keeps previous state and prefs visible',
+    () async {
+      const previous = AuthState(
+        userId: 'u-1',
+        username: 'stable-user',
+        avatar: 'https://duoyi.test/api/uploads/avatars/old.png',
+        token: 'token-1',
+      );
+      SharedPreferences.setMockInitialValues({
+        'auth_state': json.encode(previous.toJson()),
+      });
+      var profileCallbackCalled = false;
+      final auth = AuthProvider(
+        initialState: previous,
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/me/avatar');
+            return http.Response(
+              json.encode({'detail': 'avatar image is too large'}),
+              413,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountProfileChanged = (_) async {
+        profileCallbackCalled = true;
+      };
+
+      await expectLater(
+        auth.uploadAvatarBytes(
+          filename: 'avatar.png',
+          bytes: Uint8List.fromList([137, 80, 78, 71]),
+        ),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            contains('avatar image is too large'),
+          ),
+        ),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+
+      expect(auth.state.avatar, previous.avatar);
+      expect(auth.state.token, previous.token);
+      expect(persisted['avatar'], previous.avatar);
+      expect(persisted['token'], previous.token);
+      expect(profileCallbackCalled, isFalse);
+    },
+  );
+
+  test(
     'avatar upload does not duplicate api prefix when base URL includes /api',
     () async {
       final paths = <String>[];
@@ -304,6 +416,57 @@ void main() {
     },
   );
 
+  test('avatar upload retries compatible multipart field names', () async {
+    final uploadFields = <String>[];
+    final auth = AuthProvider(
+      initialState: const AuthState(username: 'stable-user', token: 'token-1'),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/me/avatar');
+          final body = utf8.decode(request.bodyBytes, allowMalformed: true);
+          final field = body.contains('name="file"') ? 'file' : 'avatar';
+          uploadFields.add(field);
+          if (field == 'avatar') {
+            return http.Response(
+              json.encode({'detail': '头像文件不能为空'}),
+              400,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response(
+            json.encode({
+              'user_id': 'u-1',
+              'identifier': 'stable-user',
+              'emailVerified': true,
+              'displayName': '兼容昵称',
+              'avatarUrl': '/api/uploads/avatars/u-1.png',
+              'permissions': ['feedback.manage'],
+              'token': 'ignored',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+
+    await auth.uploadAvatarBytes(
+      filename: 'avatar.png',
+      bytes: Uint8List.fromList([137, 80, 78, 71]),
+    );
+
+    expect(uploadFields, ['avatar', 'file']);
+    expect(auth.state.username, 'stable-user');
+    expect(auth.state.emailVerified, isTrue);
+    expect(auth.state.displayName, '兼容昵称');
+    expect(auth.state.avatar, 'https://duoyi.test/api/uploads/avatars/u-1.png');
+    expect(auth.state.adminPermissions, ['feedback.manage']);
+    expect(auth.state.token, 'token-1');
+  });
+
   test('updateProfile omits untouched profile fields', () async {
     Map<String, dynamic>? requestBody;
     final auth = AuthProvider(
@@ -338,8 +501,88 @@ void main() {
 
     await auth.updateProfile(displayName: '新昵称', bio: '');
 
-    expect(requestBody, {'display_name': '新昵称', 'bio': ''});
+    expect(requestBody, {
+      'display_name': '新昵称',
+      'displayName': '新昵称',
+      'bio': '',
+    });
     expect(auth.state.email, 'old@example.com');
+  });
+
+  test('updateProfile syncs saved profile into state and prefs', () async {
+    final syncedStates = <AuthState>[];
+    Map<String, dynamic>? requestBody;
+    final auth = AuthProvider(
+      initialState: const AuthState(
+        userId: 'u-1',
+        username: 'stable-user',
+        email: 'old@example.com',
+        emailVerified: false,
+        displayName: 'Old name',
+        avatar: 'https://duoyi.test/api/uploads/avatars/old.png',
+        bio: 'Old bio',
+        token: 'token-1',
+      ),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'PATCH');
+          expect(request.url.path, '/api/me/profile');
+          requestBody = json.decode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            json.encode({
+              'profile': {
+                'user_id': 'u-1',
+                'username': 'stable-user',
+                'email': 'new@example.com',
+                'email_verified': true,
+                'display_name': 'New name',
+                'avatar': '/api/uploads/avatars/new.png',
+                'bio': 'New bio',
+                'coin_balance': 77,
+                'lifetime_coins': 101,
+                'token': 'ignored',
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+    auth.onAccountProfileChanged = (state) async {
+      syncedStates.add(state);
+    };
+
+    await auth.updateProfile(displayName: 'New name', bio: 'New bio');
+    final prefs = await SharedPreferences.getInstance();
+    final persisted =
+        json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+
+    expect(requestBody, {
+      'display_name': 'New name',
+      'displayName': 'New name',
+      'bio': 'New bio',
+    });
+    expect(auth.state.displayName, 'New name');
+    expect(auth.state.bio, 'New bio');
+    expect(auth.state.email, 'new@example.com');
+    expect(auth.state.emailVerified, isTrue);
+    expect(auth.state.avatar, 'https://duoyi.test/api/uploads/avatars/new.png');
+    expect(auth.state.coinBalance, 77);
+    expect(auth.state.lifetimeCoins, 101);
+    expect(auth.state.token, 'token-1');
+    expect(persisted['display_name'], auth.state.displayName);
+    expect(persisted['bio'], auth.state.bio);
+    expect(persisted['email'], auth.state.email);
+    expect(persisted['email_verified'], isTrue);
+    expect(persisted['avatar'], auth.state.avatar);
+    expect(persisted['coin_balance'], 77);
+    expect(persisted['lifetime_coins'], 101);
+    expect(persisted['token'], 'token-1');
+    expect(syncedStates.single.displayName, auth.state.displayName);
+    expect(syncedStates.single.avatar, auth.state.avatar);
   });
 
   test('refreshMe retries compatible me route after 404', () async {
@@ -380,6 +623,99 @@ void main() {
   });
 
   test(
+    'logout retries compatible routes and always clears local state',
+    () async {
+      final paths = <String>[];
+      var loggedOut = false;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            paths.add('${request.method} ${request.url.path}');
+            if (request.url.path == '/api/me/logout') {
+              return http.Response(
+                json.encode({'ok': true}),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              json.encode({'detail': 'Not Found'}),
+              404,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountLoggedOut = () async {
+        loggedOut = true;
+      };
+
+      await auth.logout();
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(paths, [
+        'POST /api/auth/logout',
+        'POST /api/logout',
+        'POST /api/me/logout',
+      ]);
+      expect(auth.state.isLoggedIn, isFalse);
+      expect(auth.state.username, isNull);
+      expect(auth.client.token, isNull);
+      expect(prefs.getString('auth_state'), isNull);
+      expect(loggedOut, isTrue);
+    },
+  );
+
+  test(
+    'logout falls back after primary route misses and clears cache',
+    () async {
+      final paths = <String>[];
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            paths.add('${request.method} ${request.url.path}');
+            if (request.url.path == '/api/logout') {
+              return http.Response(
+                json.encode({'ok': true}),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              json.encode({'detail': 'Not Found'}),
+              404,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_state', json.encode(auth.state.toJson()));
+
+      await auth.logout();
+
+      expect(paths, ['POST /api/auth/logout', 'POST /api/logout']);
+      expect(auth.state.isLoggedIn, isFalse);
+      expect(auth.client.token, isNull);
+      expect(prefs.getString('auth_state'), isNull);
+    },
+  );
+
+  test(
     'changePassword retries RE0-compatible me password route first',
     () async {
       final paths = <String>[];
@@ -416,8 +752,74 @@ void main() {
       expect(paths, ['/api/me/password']);
       expect(requestBody, {
         'current_password': 'oldpass123',
+        'currentPassword': 'oldpass123',
+        'old_password': 'oldpass123',
         'new_password': 'newpass456',
+        'newPassword': 'newpass456',
+        'password': 'newpass456',
       });
+    },
+  );
+
+  test(
+    'changePassword failure exposes backend message and keeps payload',
+    () async {
+      final paths = <String>[];
+      Map<String, dynamic>? requestBody;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            paths.add(request.url.path);
+            requestBody = json.decode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              json.encode({'detail': 'current password is invalid'}),
+              400,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+
+      Object? error;
+      try {
+        await auth.changePassword(
+          currentPassword: 'oldpass123',
+          newPassword: 'newpass456',
+        );
+      } catch (e) {
+        error = e;
+      }
+
+      expect(paths, ['/api/me/password']);
+      expect(requestBody, {
+        'current_password': 'oldpass123',
+        'currentPassword': 'oldpass123',
+        'old_password': 'oldpass123',
+        'new_password': 'newpass456',
+        'newPassword': 'newpass456',
+        'password': 'newpass456',
+      });
+      expect(
+        error,
+        isA<ApiException>().having(
+          (e) => e.message,
+          'message',
+          contains('current password is invalid'),
+        ),
+      );
+      expect(
+        userVisibleApiError(error!, fallbackMessage: 'password change failed'),
+        contains('current password is invalid'),
+      );
+      expect(auth.state.token, 'token-1');
+      expect(auth.client.token, 'token-1');
     },
   );
 

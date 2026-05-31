@@ -27,9 +27,9 @@ class HabitWeeklyCard extends StatelessWidget {
 
     return AppSurfaceCard(
       key: const ValueKey('habit_weekly_overview_card'),
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 7),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      borderRadius: BorderRadius.circular(16),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 9),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+      borderRadius: BorderRadius.circular(18),
       border: Border.all(
         color: primaryColor.withValues(alpha: 0.18),
         width: 0.7,
@@ -42,15 +42,15 @@ class HabitWeeklyCard extends StatelessWidget {
             children: [
               Container(
                 key: const ValueKey('habit_weekly_overview_icon_box'),
-                width: 48,
-                height: 48,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(17),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_rounded,
-                  size: 24,
+                  size: 28,
                   color: primaryColor,
                 ),
               ),
@@ -63,7 +63,7 @@ class HabitWeeklyCard extends StatelessWidget {
                       '本周概述',
                       style: appSecondaryRouteTitleTextStyle(
                         context,
-                      ).copyWith(fontSize: 17),
+                      ).copyWith(fontSize: 19),
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -96,9 +96,9 @@ class HabitWeeklyCard extends StatelessWidget {
                       '$weekPercent%',
                       style: TextStyle(
                         color: primaryColor,
-                        fontSize: 20,
+                        fontSize: 24,
                         height: 1.0,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -119,7 +119,7 @@ class HabitWeeklyCard extends StatelessWidget {
             child: LinearProgressIndicator(
               key: const ValueKey('habit_weekly_overview_progress_bar'),
               value: weekAverage.clamp(0.0, 1.0).toDouble(),
-              minHeight: 8,
+              minHeight: 10,
               backgroundColor: primaryColor.withValues(alpha: 0.10),
               color: primaryColor,
             ),
@@ -152,15 +152,15 @@ class HabitWeeklyCard extends StatelessWidget {
                     labels[i],
                     style: TextStyle(
                       fontSize: 10.5,
-                      fontWeight: isToday ? FontWeight.w400 : FontWeight.normal,
+                      fontWeight: FontWeight.normal,
                       color: isToday ? primaryColor : Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 7),
                   Container(
                     key: ValueKey('habit_weekly_overview_day_$i'),
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: bg,
                       shape: BoxShape.circle,
@@ -186,7 +186,7 @@ class HabitWeeklyCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 9.5,
                           color: textColor,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ),

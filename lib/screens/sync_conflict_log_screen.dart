@@ -103,7 +103,7 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
                                       ? I18n.tr('sync_conflict.keep_remote')
                                       : I18n.tr('sync_conflict.keep_local'),
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w400,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
                               ),

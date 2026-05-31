@@ -246,7 +246,7 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
                         result.solarText,
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: cs.onSurface,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -360,12 +360,12 @@ class _SolarCalendar extends StatelessWidget {
                       style:
                           theme.textTheme.titleMedium?.copyWith(
                             color: cs.onSurface,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ) ??
                           TextStyle(
                             color: cs.onSurface,
                             fontSize: 16,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.normal,
                           ),
                     ),
                   ),
@@ -453,7 +453,7 @@ class _WeekdayLabel extends StatelessWidget {
         label,
         style: theme.textTheme.labelMedium?.copyWith(
           color: cs.primary.withValues(alpha: 0.82),
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.normal,
         ),
       ),
     );
@@ -551,7 +551,7 @@ class _SolarDayCell extends StatelessWidget {
               '${day.day}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: foreground,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ),
