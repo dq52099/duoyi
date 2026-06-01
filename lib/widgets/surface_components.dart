@@ -136,15 +136,29 @@ TextStyle appSecondaryRouteTitleTextStyle(BuildContext context) {
   final theme = Theme.of(context);
   final cs = theme.colorScheme;
   return (theme.textTheme.titleMedium ?? const TextStyle()).copyWith(
-    fontSize: 14,
+    fontSize: DesignTokens.fontSizeMd,
     fontWeight: FontWeight.normal,
     color: cs.onSurface,
     height: 1.2,
   );
 }
 
-Color _appSecondaryActionBackground(ColorScheme cs) {
-  return cs.primary;
+Color _appSecondaryActionBackground(ColorScheme cs, {required bool isDark}) {
+  final base = cs.primary;
+  const darkForeground = Color(0xFF111827);
+  if (_appContrastRatio(base, Colors.white) >= 4.5 ||
+      _appContrastRatio(base, darkForeground) >= 4.5) {
+    return base;
+  }
+  final target = isDark ? Colors.white : Colors.black;
+  for (final amount in const [0.10, 0.16, 0.22, 0.30, 0.38]) {
+    final candidate = Color.lerp(base, target, amount) ?? base;
+    if (_appContrastRatio(candidate, Colors.white) >= 4.5 ||
+        _appContrastRatio(candidate, darkForeground) >= 4.5) {
+      return candidate;
+    }
+  }
+  return Color.lerp(base, target, isDark ? 0.38 : 0.30) ?? base;
 }
 
 Color _appSecondaryActionForeground(Color background) {
@@ -170,7 +184,10 @@ double _appContrastRatio(Color a, Color b) {
 ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
   final theme = Theme.of(context);
   final cs = theme.colorScheme;
-  final background = _appSecondaryActionBackground(cs);
+  final background = _appSecondaryActionBackground(
+    cs,
+    isDark: theme.brightness == Brightness.dark,
+  );
   final disabledBackground =
       Color.lerp(
         cs.surfaceContainerHighest,

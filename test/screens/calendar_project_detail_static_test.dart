@@ -56,7 +56,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final preferredGridHeight = rows >= 6\s*\?\s*332\.0\s*:\s*\(rows == 5 \?\s*306\.0\s*:\s*280\.0\)',
+          r'final preferredGridHeight = rows >= 6\s*\?\s*318\.0\s*:\s*\(rows == 5 \?\s*292\.0\s*:\s*268\.0\)',
           multiLine: true,
         ),
       ),
@@ -65,13 +65,13 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final minGridHeight = rows >= 6\s*\?\s*296\.0\s*:\s*\(rows == 5 \?\s*268\.0\s*:\s*240\.0\)',
+          r'final minGridHeight = rows >= 6\s*\?\s*288\.0\s*:\s*\(rows == 5 \?\s*260\.0\s*:\s*236\.0\)',
           multiLine: true,
         ),
       ),
     );
     expect(source, isNot(contains('if (availableHeight <= 120)')));
-    expect(source, contains('final viewportTarget = availableHeight * 0.52'));
+    expect(source, contains('final viewportTarget = availableHeight * 0.46'));
     expect(
       source,
       contains('viewportTarget.clamp(minGridHeight, preferredGridHeight)'),

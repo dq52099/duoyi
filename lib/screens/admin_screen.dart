@@ -7935,7 +7935,7 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           return RefreshIndicator(
             onRefresh: () => _load(offset: _offset),
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 60),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
               itemCount:
                   _items.length +
                   (effectiveFeedbackSummaryCard == null ? 0 : 1),
@@ -8162,19 +8162,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
               visible: _loading && _page != null,
               label: '正在更新反馈列表',
             ),
-            Expanded(
-              child: Stack(
-                children: [
-                  SizedBox.expand(child: feedbackBody()),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: paginationBar,
-                  ),
-                ],
-              ),
-            ),
+            Expanded(child: feedbackBody()),
+            paginationBar,
           ],
         );
       },

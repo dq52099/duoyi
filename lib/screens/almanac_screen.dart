@@ -86,8 +86,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   Widget build(BuildContext context) {
     const pageTitle = '万年历';
     final lunar = LunarCalendar.fromSolar(_date);
-    final zodiac = LunarCalendar.zodiacOf(lunar.year);
-    final ganzhi = LunarCalendar.ganzhiOf(lunar.year);
+    final ganzhiLine = LunarCalendar.almanacGanzhiLine(_date, lunar);
     final term = LunarCalendar.solarTerm(_date);
     final solarFes = LunarCalendar.solarFestival(_date);
     final lunarFes = LunarCalendar.lunarFestival(lunar);
@@ -137,8 +136,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
               cs: cs,
               weekNames: weekNames,
               lunar: lunar,
-              ganzhi: ganzhi,
-              zodiac: zodiac,
+              ganzhiLine: ganzhiLine,
               detail: almanacDetail,
               term: term,
               solarFestival: solarFes,
@@ -220,8 +218,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     required ColorScheme cs,
     required List<String> weekNames,
     required LunarDate lunar,
-    required String ganzhi,
-    required String zodiac,
+    required String ganzhiLine,
     required LunarAlmanacDetail detail,
     required String? term,
     required String? solarFestival,
@@ -301,7 +298,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$ganzhi年 属$zodiac  ${detail.dayGanzhi}日',
+                        ganzhiLine,
                         style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.62),
                           fontSize: 13,

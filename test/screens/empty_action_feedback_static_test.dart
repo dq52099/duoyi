@@ -50,7 +50,7 @@ void main() {
   test('习惯列表默认不露出结束和删除且按钮文字保持对比', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
 
-    expect(source, contains("message: '查看详情'"));
+    expect(source, contains("message: '编辑'"));
     expect(source, isNot(contains("tooltip: '习惯操作'")));
     expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
     expect(source, isNot(contains("value: 'delete'")));

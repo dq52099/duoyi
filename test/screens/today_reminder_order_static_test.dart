@@ -43,7 +43,7 @@ void main() {
     expect(today, contains('completedTextColor: overdue'));
     expect(today, contains('tileBackground: overdue'));
     expect(today, contains('tileBorderColor: overdue'));
-    expect(today, contains('titleWidget: overdue'));
+    expect(today, contains('showOverdueBadge: overdue'));
     expect(today, contains('showStatusDecoration: true'));
     expect(today, contains('ExpansionTile('));
     expect(today, contains('initiallyExpanded: false'));
@@ -60,7 +60,8 @@ void main() {
     expect(today, contains("iconKeyPrefix = 'today_todo_template_icon'"));
     expect(today, contains('leading: _TodayTodoLeading('));
     expect(today, contains('class _TodayTodoStatusToggle'));
-    expect(today, contains('static const double templateIconSize = 36'));
+    expect(today, contains('class _TodayTodoTitleLine'));
+    expect(today, contains('static const double width = 30'));
     expect(today, contains('static const double statusButtonSize = 22'));
 
     expect(
@@ -73,8 +74,8 @@ void main() {
     final todoIndex = today.indexOf('// 今日待办');
     final goalIndex = today.indexOf('// 目标进度');
     expect(reminderIndex, greaterThanOrEqualTo(0));
-    expect(todoIndex, greaterThan(reminderIndex));
-    expect(goalIndex, greaterThan(todoIndex));
+    expect(reminderIndex, greaterThan(todoIndex));
+    expect(goalIndex, greaterThan(reminderIndex));
 
     final sectionStart = today.indexOf('class _TodayReminderSection');
     final sectionEnd = today.indexOf('class _ReminderGroupBlock');

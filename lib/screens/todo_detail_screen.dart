@@ -599,7 +599,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final provider = context.watch<TodoProvider>();
     if (_missingTodo || !provider.todos.any((t) => t.id == widget.todoId)) {
       return Scaffold(
-        appBar: AppBar(title: const Text('任务详情')),
+        appBar: AppBar(
+          title: const Text('任务详情'),
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(DesignTokens.space3xl),
@@ -674,6 +677,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('任务详情'),
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {

@@ -18,13 +18,13 @@ void main() {
     expect(source, contains('child: ClipRect('));
     expect(source, contains('height: cellHeight < 14 ? 0.95 : 1.05'));
     expect(source, contains('final showDots = cellHeight >= 36'));
-    expect(source, contains('final canShowEventCount = cellHeight >= 52'));
+    expect(source, contains('final canShowEventCount = cellHeight >= 40'));
     expect(source, contains('final showEventCount ='));
-    expect(source, contains('canShowEventCount && eventCount > 3'));
+    expect(source, contains('canShowEventCount && eventCount > 0'));
     expect(source, contains('Widget _eventDots('));
     expect(
       source,
-      contains('final showSubText = showLunar && cellHeight >= 48'),
+      contains('final showSubText = showLunar && cellHeight >= 44'),
     );
   });
 

@@ -150,9 +150,9 @@ void main() {
     );
     final daily = Habit(id: 'daily', name: '每日阅读', targetCount: 1);
 
-    expect(weekly.flexPeriodGoalLabel, '周期目标: 3 次/周');
+    expect(weekly.flexPeriodGoalLabel, '每周目标: 3 次/周');
     expect(weekly.streakUnitLabel, '周');
-    expect(monthly.flexPeriodGoalLabel, '周期目标: 2 次/月');
+    expect(monthly.flexPeriodGoalLabel, '每月目标: 2 次/月');
     expect(monthly.streakUnitLabel, '月');
     expect(daily.flexPeriodGoalLabel, isEmpty);
     expect(daily.streakUnitLabel, '天');

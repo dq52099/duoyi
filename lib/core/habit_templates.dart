@@ -47,12 +47,12 @@ class HabitTemplate {
     return switch (flexPeriod!) {
       HabitFlexPeriod.week =>
         I18n.current == AppLocale.en
-            ? 'Period target $flexTarget times/week'
-            : '周期目标 $flexTarget 次/周',
+            ? 'Weekly target $flexTarget times/week'
+            : '每周目标 $flexTarget 次/周',
       HabitFlexPeriod.month =>
         I18n.current == AppLocale.en
-            ? 'Period target $flexTarget times/month'
-            : '周期目标 $flexTarget 次/月',
+            ? 'Monthly target $flexTarget times/month'
+            : '每月目标 $flexTarget 次/月',
     };
   }
 }

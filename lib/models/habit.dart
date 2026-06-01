@@ -7,7 +7,7 @@ enum HabitKind { positive, negative }
 /// 弹性打卡周期：一周/一月至少完成 N 次。
 enum HabitFlexPeriod { week, month }
 
-const String defaultHabitIconToken = 'check_circle_outline';
+const String defaultHabitIconToken = 'track_changes_outlined';
 
 int _readInt(Object? value, int fallback) {
   if (value is num) return value.toInt();
@@ -438,8 +438,8 @@ class Habit {
   String get flexPeriodGoalLabel {
     if (!hasFlexRule) return '';
     return switch (flexPeriod!) {
-      HabitFlexPeriod.week => '周期目标: $effectiveFlexTarget 次/周',
-      HabitFlexPeriod.month => '周期目标: $effectiveFlexTarget 次/月',
+      HabitFlexPeriod.week => '每周目标: $effectiveFlexTarget 次/周',
+      HabitFlexPeriod.month => '每月目标: $effectiveFlexTarget 次/月',
     };
   }
 

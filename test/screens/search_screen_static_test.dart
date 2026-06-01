@@ -52,6 +52,10 @@ void main() {
       searchScreen,
       contains('CountdownScreen(initialCountdownId: h.sourceId)'),
     );
+    expect(
+      searchScreen,
+      contains('AnniversaryScreen(initialAnniversaryId: h.sourceId)'),
+    );
     expect(searchScreen, contains('case SearchKind.calendarEvent:'));
     expect(searchScreen, contains('CalendarScreen(initialDate: h.when)'));
     expect(searchScreen, contains("I18n.tr('search.hint')"));

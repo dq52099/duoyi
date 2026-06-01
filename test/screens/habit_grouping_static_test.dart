@@ -83,8 +83,12 @@ void main() {
     expect(source, contains("title: Text('结束习惯')"));
     expect(source, contains("value: 'delete'"));
     expect(source, contains("title: Text('删除习惯'"));
-    expect(header, contains('_habitIconForToken(habit.icon)'));
-    expect(source, contains('IconData _habitIconForToken(String token)'));
+    expect(source, isNot(contains("value == 'detail'")));
+    expect(header, contains('habitDisplayIconFor(habit)'));
+    expect(
+      File('lib/core/habit_icons.dart').readAsStringSync(),
+      contains('IconData habitDisplayIconFor(Habit habit)'),
+    );
     expect(source, isNot(contains('IconData(codePoint')));
     expect(source, isNot(contains('child: Icon(Icons.star')));
     expect(source, contains('builder: (ctx) => AppDialog('));
@@ -95,7 +99,7 @@ void main() {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
 
     expect(source, contains("import 'package:flutter/services.dart';"));
-    expect(source, contains('AnimatedScale('));
+    expect(source, isNot(contains('AnimatedScale(')));
     expect(source, contains('AnimatedSwitcher('));
     expect(source, contains('_HabitFeedbackBadge'));
     expect(source, contains('HapticFeedback.mediumImpact()'));
@@ -138,25 +142,25 @@ void main() {
     );
     expect(
       cardSource,
-      contains('padding: const EdgeInsets.fromLTRB(6, 0, 6, 0)'),
+      contains('padding: const EdgeInsets.fromLTRB(8, 4, 6, 4)'),
     );
-    expect(source, contains('const double _habitCheckinCardBodyHeight = 32'));
-    expect(source, contains('const double _habitTitleStatusHeight = 14'));
+    expect(source, contains('const double _habitCheckinCardBodyHeight = 44'));
+    expect(source, contains('const double _habitTitleStatusHeight = 17'));
     expect(source, contains('const double _habitUndoButtonWidth = 30'));
     expect(source, contains('const double _habitMenuButtonWidth = 28'));
     expect(source, contains('const double _habitActionButtonGap = 3'));
     expect(source, contains('const double _habitActionRailWidth'));
     expect(cardSource, contains('height: _habitCheckinCardBodyHeight'));
-    expect(cardSource, contains('width: 17'));
-    expect(cardSource, contains('height: 17'));
+    expect(cardSource, contains('width: 22'));
+    expect(cardSource, contains('height: 22'));
     expect(cardSource, contains('height: 2'));
     expect(cardSource, contains('width: _habitCheckinButtonWidth'));
-    expect(cardSource, contains('height: 25'));
+    expect(cardSource, contains('height: 28'));
     expect(cardSource, contains('minimumSize: const Size('));
     expect(cardSource, contains('_habitCheckinButtonWidth'));
-    expect(cardSource, contains('_habitIconForToken(habit.icon)'));
+    expect(cardSource, contains('_habitDisplayIcon(habit)'));
     expect(source, contains('_HabitSummaryTile'));
-    expect(source, contains('_habitIconForToken(habit.icon)'));
+    expect(source, contains('_habitDisplayIcon(habit)'));
     expect(source, contains("import '../core/habit_icons.dart';"));
     expect(source, isNot(contains('IconData(codePoint')));
     expect(source, isNot(contains('Icon(Icons.star')));
@@ -164,20 +168,19 @@ void main() {
     expect(cardSource, isNot(contains('Icons.shield_outlined')));
     expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
     expect(cardSource, isNot(contains('Icons.verified_rounded')));
-    expect(cardSource, contains('_HabitDetailButton(habit: habit)'));
-    expect(
-      source,
-      contains('class _HabitDetailButton extends StatelessWidget'),
-    );
-    expect(source, contains("message: '查看详情'"));
+    expect(cardSource, contains('_HabitEditButton(habit: habit)'));
+    expect(source, contains('class _HabitEditButton extends StatelessWidget'));
+    expect(source, contains("message: '编辑'"));
     expect(source, isNot(contains("tooltip: '习惯操作'")));
     expect(source, isNot(contains('PopupMenuButton<String>')));
     expect(source, contains('class _HabitInlineSwipeActions'));
+    expect(source, contains("key: const ValueKey('habit_swipe_edit_button')"));
     expect(source, contains("key: const ValueKey('habit_swipe_end_button')"));
     expect(
       source,
       contains("key: const ValueKey('habit_swipe_delete_button')"),
     );
+    expect(source, contains("label: '编辑'"));
     expect(source, contains("label: '结束'"));
     expect(source, contains("label: '删除'"));
     expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
@@ -380,25 +383,11 @@ void main() {
     expect(screen, contains("HabitFlexPeriod.week => '每周目标:"));
     expect(screen, contains("HabitFlexPeriod.month => '每月目标:"));
     expect(screen, contains('habit.streakUnitLabel'));
-    expect(
-      screen,
-      contains(
-        "'\${I18n.tr('habit.flex.period_target')}/\${I18n.tr('habit.unit.week')}'",
-      ),
-    );
-    expect(
-      screen,
-      contains(
-        "'\${I18n.tr('habit.flex.period_target')}/\${I18n.tr('habit.unit.month')}'",
-      ),
-    );
+    expect(screen, contains("I18n.tr('habit.flex.weekly')"));
+    expect(screen, contains("I18n.tr('habit.flex.monthly')"));
     expect(screen, contains('周期目标至少为 1'));
-    expect(
-      screen,
-      contains(
-        "return '\${I18n.tr('habit.flex.period_target')} \${template.flexTarget} \${template.localizedUnit}/\$unit';",
-      ),
-    );
+    expect(screen, contains("HabitFlexPeriod.week => '每周目标'"));
+    expect(screen, contains("HabitFlexPeriod.month => '每月目标'"));
 
     expect(detail, contains("I18n.tr('habit.flex.rule')"));
     expect(detail, contains('flexRuleEnabled = habit.hasFlexRule'));
@@ -408,19 +397,20 @@ void main() {
     expect(detail, contains('localizedHabitCountForDate(habit, d)'));
     expect(detail, contains('_localizedHabitStreakUnit(habit)'));
     expect(detail, contains("'habit.flex.period_target'"));
-    expect(detail, contains("I18n.tr('habit.flex.period_target')"));
+    expect(detail, contains("I18n.tr('habit.flex.weekly_goal_prefix')"));
+    expect(detail, contains("I18n.tr('habit.flex.monthly_goal_prefix')"));
 
     expect(provider, contains('_recalcFlexStreak'));
     expect(provider, contains('h.periodBoundsForDate(DateTime.now())'));
     expect(provider, contains('h.previousPeriodBounds(bounds)'));
 
-    expect(zh, contains('"habitFlexWeekly": "周期目标/周"'));
-    expect(zh, contains('"habitFlexMonthly": "周期目标/月"'));
-    expect(zh, contains('"habitFlexPeriodTarget": "周期目标"'));
-    expect(zh, contains('"habitFlexPeriodTargetHint": "例如周期目标 5 次/周"'));
-    expect(en, contains('"habitFlexWeekly": "Period target/week"'));
-    expect(en, contains('"habitFlexMonthly": "Period target/month"'));
-    expect(en, contains('"habitFlexPeriodTarget": "Period target"'));
+    expect(zh, contains('"habitFlexWeekly": "每周目标"'));
+    expect(zh, contains('"habitFlexMonthly": "每月目标"'));
+    expect(zh, contains('"habitFlexPeriodTarget": "目标次数"'));
+    expect(zh, contains('"habitFlexPeriodTargetHint": "例如每周目标 5 次"'));
+    expect(en, contains('"habitFlexWeekly": "Weekly target"'));
+    expect(en, contains('"habitFlexMonthly": "Monthly target"'));
+    expect(en, contains('"habitFlexPeriodTarget": "Target count"'));
   });
 
   test('习惯创建和详情编辑暴露起止日期并禁用周期外补卡', () {

@@ -128,7 +128,9 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const BrandRouteSurface(child: AnniversaryScreen()),
+            builder: (_) => BrandRouteSurface(
+              child: AnniversaryScreen(initialAnniversaryId: h.sourceId),
+            ),
           ),
         );
         break;

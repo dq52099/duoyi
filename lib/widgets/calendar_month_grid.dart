@@ -53,9 +53,9 @@ class CalendarMonthGrid extends StatelessWidget {
             ? availableRowHeight.clamp(30.0, maxRowHeight)
             : preferredRowHeight;
         final cellHeight = (rowSlotHeight - 4).clamp(28.0, maxRowHeight);
-        final showSubText = showLunar && cellHeight >= 48;
+        final showSubText = showLunar && cellHeight >= 44;
         final showDots = cellHeight >= 36;
-        final canShowEventCount = cellHeight >= 52;
+        final canShowEventCount = cellHeight >= 40;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -103,7 +103,7 @@ class CalendarMonthGrid extends StatelessWidget {
                       final types = dateEventTypes[key] ?? [];
                       final eventCount = dateEventCounts[key] ?? types.length;
                       final showEventCount =
-                          canShowEventCount && eventCount > 3;
+                          canShowEventCount && eventCount > 0;
                       final hasTodo = types.contains(CalendarEventType.todo);
                       final isSelected =
                           date.year == selectedDay.year &&

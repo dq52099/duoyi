@@ -266,6 +266,33 @@ void main() {
     expect(find.byIcon(Icons.star), findsNothing);
   });
 
+  testWidgets('custom habit without icon uses neutral target icon', (
+    tester,
+  ) async {
+    final habitProvider = HabitProvider();
+    await habitProvider.addHabit(Habit(id: 'custom', name: '自定义习惯'));
+
+    await pumpHabitScreen(tester, habitProvider);
+
+    expect(find.byIcon(Icons.track_changes_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+  });
+
+  testWidgets(
+    'template habit falls back to template icon for legacy check icon',
+    (tester) async {
+      final habitProvider = HabitProvider();
+      await habitProvider.addHabit(
+        Habit(id: 'water', name: '每日喝水', icon: 'check_circle_outline'),
+      );
+
+      await pumpHabitScreen(tester, habitProvider);
+
+      expect(find.byIcon(Icons.local_drink), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+    },
+  );
+
   testWidgets('habit row keeps end and delete behind left swipe', (
     tester,
   ) async {
@@ -276,8 +303,9 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    expect(find.byTooltip('查看详情'), findsOneWidget);
+    expect(find.byTooltip('编辑'), findsOneWidget);
     expect(find.byTooltip('习惯操作'), findsNothing);
+    expect(find.byKey(const ValueKey('habit_swipe_edit_button')), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
     expect(
       find.byKey(const ValueKey('habit_swipe_delete_button')),
@@ -287,6 +315,10 @@ void main() {
     await tester.drag(find.text('阅读').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('habit_swipe_edit_button')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('habit_swipe_end_button')),
       findsOneWidget,
@@ -353,7 +385,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('habit_swipe_detail_button')),
+      find.byKey(const ValueKey('habit_swipe_edit_button')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
@@ -377,10 +409,7 @@ void main() {
 
     expect(find.text('专注'), findsOneWidget);
     expect(find.byIcon(Icons.timer), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('habit_swipe_detail_button')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('habit_swipe_edit_button')), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
     expect(
       find.byKey(const ValueKey('habit_swipe_delete_button')),
@@ -390,10 +419,7 @@ void main() {
     await tester.drag(find.text('专注').first, const Offset(160, 0));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('habit_swipe_detail_button')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('habit_swipe_edit_button')), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
     expect(
       find.byKey(const ValueKey('habit_swipe_delete_button')),
@@ -404,7 +430,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('habit_swipe_detail_button')),
+      find.byKey(const ValueKey('habit_swipe_edit_button')),
       findsOneWidget,
     );
     expect(
@@ -444,7 +470,9 @@ void main() {
     expect(habitProvider.habits, isEmpty);
   });
 
-  testWidgets('habit row left swipe can open detail', (tester) async {
+  testWidgets('habit row tap opens detail without duplicate swipe detail', (
+    tester,
+  ) async {
     final habitProvider = HabitProvider();
     await habitProvider.addHabit(
       Habit(id: 'read', name: '阅读', icon: Icons.book.codePoint.toString()),
@@ -452,9 +480,7 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    await tester.drag(find.text('阅读').first, const Offset(-180, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('habit_swipe_detail_button')));
+    await tester.tap(find.text('阅读').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(HabitScreen), findsNothing);

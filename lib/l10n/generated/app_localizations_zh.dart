@@ -1104,16 +1104,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitFlexRule => '弹性打卡规则';
 
   @override
-  String get habitFlexWeekly => '周期目标/周';
+  String get habitFlexWeekly => '每周目标';
 
   @override
-  String get habitFlexMonthly => '周期目标/月';
+  String get habitFlexMonthly => '每月目标';
 
   @override
-  String get habitFlexPeriodTarget => '周期目标';
+  String get habitFlexPeriodTarget => '目标次数';
 
   @override
-  String get habitFlexPeriodTargetHint => '例如周期目标 5 次/周';
+  String get habitFlexPeriodTargetHint => '例如每周目标 5 次';
 
   @override
   String get habitFlexDailyNote => '关闭时按每日目标连续统计';
@@ -1122,10 +1122,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitFlexNegativeNote => '反向戒除按每日不发生统计';
 
   @override
-  String get habitFlexWeeklyGoalPrefix => '周期目标: ';
+  String get habitFlexWeeklyGoalPrefix => '每周目标: ';
 
   @override
-  String get habitFlexMonthlyGoalPrefix => '周期目标: ';
+  String get habitFlexMonthlyGoalPrefix => '每月目标: ';
 
   @override
   String get habitFlexThisWeek => '本周';
@@ -1768,7 +1768,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get syncConflictRemote => '云端';
 
   @override
-  String get todayAlmanacTitle => '打卡万年历';
+  String get todayAlmanacTitle => '万年历';
 
   @override
   String get todayUnitItem => '项';

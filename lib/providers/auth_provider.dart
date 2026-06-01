@@ -223,6 +223,8 @@ class AuthProvider extends ChangeNotifier {
       '/api/email-code/send',
       '/api/email_code',
       '/api/email_code/send',
+      '/api/email/send',
+      '/api/email/send-code',
       '/api/send-email-code',
       '/api/send-email_code',
     ], body);

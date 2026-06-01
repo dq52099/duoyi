@@ -323,13 +323,13 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                                       ButtonSegment(
                                         value: HabitFlexPeriod.week,
                                         label: Text(
-                                          '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.week')}',
+                                          I18n.tr('habit.flex.weekly'),
                                         ),
                                       ),
                                       ButtonSegment(
                                         value: HabitFlexPeriod.month,
                                         label: Text(
-                                          '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.month')}',
+                                          I18n.tr('habit.flex.monthly'),
                                         ),
                                       ),
                                     ],
@@ -524,7 +524,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     final matches = provider.habits.where((h) => h.id == widget.habitId);
     if (matches.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(I18n.tr('habit.detail.title'))),
+        appBar: AppBar(
+          title: Text(I18n.tr('habit.detail.title')),
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(DesignTokens.space3xl),
@@ -569,6 +572,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(habit.name),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         actions: [
           PopupMenuButton<String>(
             tooltip: '更多操作',
@@ -633,7 +637,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Icon(
-                      _habitIconForToken(habit.icon),
+                      habitDisplayIconFor(habit),
                       color: color,
                       size: 32,
                     ),
@@ -1118,9 +1122,9 @@ String localizedFlexPeriodGoalLabel(Habit habit) {
   if (!habit.hasFlexRule) return '';
   return switch (habit.flexPeriod!) {
     HabitFlexPeriod.week =>
-      '${I18n.tr('habit.flex.period_target')}: ${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.week')}',
+      '${I18n.tr('habit.flex.weekly_goal_prefix')}${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.week')}',
     HabitFlexPeriod.month =>
-      '${I18n.tr('habit.flex.period_target')}: ${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.month')}',
+      '${I18n.tr('habit.flex.monthly_goal_prefix')}${habit.effectiveFlexTarget} ${I18n.tr('habit.unit.times')}/${I18n.tr('habit.unit.month')}',
   };
 }
 
@@ -1226,8 +1230,6 @@ DateTime? _nextHabitReminderTrigger(ReminderRule rule) {
   }
   return null;
 }
-
-IconData _habitIconForToken(String token) => habitIconForToken(token);
 
 class _StatChip extends StatelessWidget {
   final String label;

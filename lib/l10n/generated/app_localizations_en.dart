@@ -1161,16 +1161,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get habitFlexRule => 'Flexible check-in rule';
 
   @override
-  String get habitFlexWeekly => 'Period target/week';
+  String get habitFlexWeekly => 'Weekly target';
 
   @override
-  String get habitFlexMonthly => 'Period target/month';
+  String get habitFlexMonthly => 'Monthly target';
 
   @override
-  String get habitFlexPeriodTarget => 'Period target';
+  String get habitFlexPeriodTarget => 'Target count';
 
   @override
-  String get habitFlexPeriodTargetHint => 'For example, period target 5/week';
+  String get habitFlexPeriodTargetHint => 'For example, weekly target 5';
 
   @override
   String get habitFlexDailyNote => 'Off uses the daily target for streaks';
@@ -1180,10 +1180,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Avoid habits are counted by days without records';
 
   @override
-  String get habitFlexWeeklyGoalPrefix => 'Period target: ';
+  String get habitFlexWeeklyGoalPrefix => 'Weekly target: ';
 
   @override
-  String get habitFlexMonthlyGoalPrefix => 'Period target: ';
+  String get habitFlexMonthlyGoalPrefix => 'Monthly target: ';
 
   @override
   String get habitFlexThisWeek => 'This week';
@@ -1849,7 +1849,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncConflictRemote => 'Cloud';
 
   @override
-  String get todayAlmanacTitle => 'Check-in almanac';
+  String get todayAlmanacTitle => 'Almanac';
 
   @override
   String get todayUnitItem => 'items';

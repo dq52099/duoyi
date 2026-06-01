@@ -1,5 +1,7 @@
+import 'package:lunar/lunar.dart' as lunar_pkg;
+
 /// 农历(阴历)日期换算工具。
-/// 支持 1900-2099 年的公历↔农历转换、节气、干支、生肖、宜忌(简版)。
+/// 支持 1900-2099 年的公历↔农历转换、节气、干支、生肖、黄历详情。
 ///
 /// 核心压缩表来源：通行的中国农历压缩表(公版算法，多数开源日历库共用)。
 /// 每年一个十六进制数：闰月位置 + 闰月大小 + 十二个普通月大小。
@@ -196,6 +198,18 @@ class LunarCalendar {
 
   /// 公历 → 农历
   static LunarDate fromSolar(DateTime date) {
+    try {
+      final lunar = _lunarFor(date);
+      final month = lunar.getMonth();
+      return LunarDate(
+        lunar.getYear(),
+        month.abs(),
+        lunar.getDay(),
+        isLeapMonth: month < 0,
+      );
+    } catch (_) {
+      // Keep the bundled table as a fallback for out-of-range or library edge cases.
+    }
     final solarDate = DateTime(date.year, date.month, date.day);
     if (solarDate.isBefore(_baseDate)) {
       return const LunarDate(_baseYear, 1, 1);
@@ -254,6 +268,17 @@ class LunarCalendar {
     int lunarDay, {
     bool isLeap = false,
   }) {
+    try {
+      final lunar = lunar_pkg.Lunar.fromYmd(
+        lunarYear,
+        isLeap ? -lunarMonth : lunarMonth,
+        lunarDay,
+      );
+      final solar = lunar.getSolar();
+      return DateTime(solar.getYear(), solar.getMonth(), solar.getDay());
+    } catch (_) {
+      // Fall back to the bundled table below.
+    }
     int offset = 0;
     for (int y = _baseYear; y < lunarYear; y++) {
       offset += _yearDays(y);
@@ -285,36 +310,45 @@ class LunarCalendar {
 
   /// 干支纪日，如 "戊辰"。
   static String ganzhiDay(DateTime date) {
-    final index = _sexagenaryDayIndex(date);
-    return _ganzhiByIndex(index);
+    return _lunarFor(date).getDayInGanZhi();
   }
 
   static LunarAlmanacDetail almanacDetail(DateTime date) {
-    final index = _sexagenaryDayIndex(date);
+    final lunar = _lunarFor(date);
     return LunarAlmanacDetail(
-      dayGanzhi: _ganzhiByIndex(index),
-      fetalGod: _fetalGodByIndex(index),
-      pengZu: _pengZuByIndex(index),
-      fiveElements: _fiveElementsByIndex(index),
-      mansion: _mansionByDate(date),
-      clash: _clashByIndex(index),
+      dayGanzhi: lunar.getDayInGanZhi(),
+      fetalGod: _compactText(lunar.getDayPositionTai()),
+      pengZu: '${lunar.getPengZuGan()}；${lunar.getPengZuZhi()}',
+      fiveElements: '${lunar.getDayNaYin()}${lunar.getZhiXing()}执位',
+      mansion:
+          '${_mansionDirection(lunar.getGong())}${lunar.getXiu()}${lunar.getZheng()}${lunar.getAnimal()}-${lunar.getXiuLuck()}',
+      clash: _clashText(lunar),
       hourFortunes: hourFortuneSummary(date),
     );
   }
 
+  static String almanacGanzhiLine(DateTime date, LunarDate lunar) {
+    final day = _lunarFor(date);
+    return '${day.getYearInGanZhi()}${day.getYearShengXiao()}年${day.getMonthInGanZhi()}月${day.getDayInGanZhi()}日';
+  }
+
   static String fetalGod(DateTime date) =>
-      _fetalGodByIndex(_sexagenaryDayIndex(date));
+      _compactText(_lunarFor(date).getDayPositionTai());
 
   static String pengZu(DateTime date) =>
-      _pengZuByIndex(_sexagenaryDayIndex(date));
+      '${_lunarFor(date).getPengZuGan()}；${_lunarFor(date).getPengZuZhi()}';
 
   static String fiveElements(DateTime date) =>
-      _fiveElementsByIndex(_sexagenaryDayIndex(date));
+      '${_lunarFor(date).getDayNaYin()}${_lunarFor(date).getZhiXing()}执位';
 
-  static String twentyEightMansion(DateTime date) => _mansionByDate(date);
+  static String twentyEightMansion(DateTime date) {
+    final lunar = _lunarFor(date);
+    return '${_mansionDirection(lunar.getGong())}${lunar.getXiu()}${lunar.getZheng()}${lunar.getAnimal()}-${lunar.getXiuLuck()}';
+  }
 
-  static String clashAndDirection(DateTime date) =>
-      _clashByIndex(_sexagenaryDayIndex(date));
+  static String clashAndDirection(DateTime date) {
+    return _clashText(_lunarFor(date));
+  }
 
   static List<AlmanacHourFortune> hourFortunes(DateTime date) {
     const hourRanges = [
@@ -331,32 +365,15 @@ class LunarCalendar {
       '19:00-20:59',
       '21:00-22:59',
     ];
-    const deities = [
-      '青龙',
-      '明堂',
-      '天刑',
-      '朱雀',
-      '金匮',
-      '天德',
-      '白虎',
-      '玉堂',
-      '天牢',
-      '玄武',
-      '司命',
-      '勾陈',
-    ];
-    const goodDeities = {'青龙', '明堂', '金匮', '天德', '玉堂', '司命'};
-    const qingLongStartByDayBranch = [8, 10, 0, 2, 4, 6, 8, 10, 0, 2, 4, 6];
-
-    final dayIndex = _sexagenaryDayIndex(date);
-    final start = qingLongStartByDayBranch[dayIndex % 12];
-    return List.generate(12, (hourBranch) {
-      final deity = deities[_positiveMod(hourBranch - start, deities.length)];
+    final times = _lunarFor(date).getTimes().take(12).toList();
+    return List.generate(times.length, (index) {
+      final time = times[index];
+      final luck = time.getTianShenLuck();
       return AlmanacHourFortune(
-        branch: _earthlyBranches[hourBranch],
-        range: hourRanges[hourBranch],
-        deity: deity,
-        isAuspicious: goodDeities.contains(deity),
+        branch: time.getZhi(),
+        range: hourRanges[index],
+        deity: time.getTianShen(),
+        isAuspicious: luck == '吉',
       );
     });
   }
@@ -364,231 +381,39 @@ class LunarCalendar {
   static String hourFortuneSummary(DateTime date) =>
       hourFortunes(date).map((item) => item.compactLabel).join(' ');
 
+  static lunar_pkg.Lunar _lunarFor(DateTime date) =>
+      lunar_pkg.Lunar.fromDate(DateTime(date.year, date.month, date.day));
+
+  static String _compactText(String value) => value.replaceAll(' ', '');
+
+  static String _clashText(lunar_pkg.Lunar lunar) =>
+      '${lunar.getDayShengXiao()}日冲${lunar.getDayChongShengXiao()}（${lunar.getDayChongGan()}${lunar.getDayChong()}）煞${lunar.getDaySha()}';
+
+  static String _mansionDirection(String gong) {
+    switch (gong) {
+      case '东':
+        return '东方';
+      case '西':
+        return '西方';
+      case '南':
+        return '南方';
+      case '北':
+        return '北方';
+      default:
+        return gong;
+    }
+  }
+
   static int _positiveMod(int value, int mod) {
     final result = value % mod;
     return result < 0 ? result + mod : result;
   }
 
-  static int _sexagenaryDayIndex(DateTime date) {
-    final day = DateTime(date.year, date.month, date.day);
-    final offset = day.difference(DateTime(2000, 1, 1)).inDays;
-    // 2000-01-01 为戊辰日，戊辰在六十甲子中序号为 4。
-    return _positiveMod(offset + 4, 60);
-  }
-
-  static String _ganzhiByIndex(int index) {
-    final normalized = _positiveMod(index, 60);
-    return '${_heavenlyStems[normalized % 10]}${_earthlyBranches[normalized % 12]}';
-  }
-
-  static String _fetalGodByIndex(int index) {
-    const stemPlaces = [
-      '门',
-      '碓磨',
-      '厨灶',
-      '仓库',
-      '房床',
-      '门',
-      '碓磨',
-      '厨灶',
-      '仓库',
-      '房床',
-    ];
-    const branchPlaces = [
-      '碓',
-      '厕',
-      '炉',
-      '门',
-      '栖',
-      '床',
-      '碓',
-      '厕',
-      '炉',
-      '门',
-      '栖',
-      '床',
-    ];
-    const directions = [
-      '外东南',
-      '外正南',
-      '外西南',
-      '外正西',
-      '外西北',
-      '外正北',
-      '房内北',
-      '房内南',
-      '房内东',
-      '房内西',
-      '门外东',
-      '门外西',
-    ];
-
-    final normalized = _positiveMod(index, 60);
-    final stemPlace = stemPlaces[normalized % 10];
-    final branchPlace = branchPlaces[normalized % 12];
-    final place = stemPlace == branchPlace
-        ? stemPlace
-        : '$stemPlace$branchPlace';
-    return '$place${directions[normalized % directions.length]}';
-  }
-
-  static String _pengZuByIndex(int index) {
-    const stemAvoids = [
-      '甲不开仓，财物耗散',
-      '乙不栽植，千株不长',
-      '丙不修灶，必见灾殃',
-      '丁不剃头，头必生疮',
-      '戊不受田，田主不祥',
-      '己不破券，二比并亡',
-      '庚不经络，织机虚张',
-      '辛不合酱，主人不尝',
-      '壬不汲水，更难提防',
-      '癸不词讼，理弱敌强',
-    ];
-    const branchAvoids = [
-      '子不问卜，自惹祸殃',
-      '丑不冠带，主不还乡',
-      '寅不祭祀，神鬼不尝',
-      '卯不穿井，水泉不香',
-      '辰不哭泣，必主重丧',
-      '巳不远行，财物伏藏',
-      '午不苫盖，屋主更张',
-      '未不服药，毒气入肠',
-      '申不安床，鬼祟入房',
-      '酉不宴客，醉坐颠狂',
-      '戌不吃犬，作怪上床',
-      '亥不嫁娶，不利新郎',
-    ];
-
-    final normalized = _positiveMod(index, 60);
-    return '${stemAvoids[normalized % 10]}；${branchAvoids[normalized % 12]}';
-  }
-
-  static String _fiveElementsByIndex(int index) {
-    const nayin = [
-      '海中金',
-      '炉中火',
-      '大林木',
-      '路旁土',
-      '剑锋金',
-      '山头火',
-      '涧下水',
-      '城头土',
-      '白蜡金',
-      '杨柳木',
-      '泉中水',
-      '屋上土',
-      '霹雳火',
-      '松柏木',
-      '长流水',
-      '沙中金',
-      '山下火',
-      '平地木',
-      '壁上土',
-      '金箔金',
-      '覆灯火',
-      '天河水',
-      '大驿土',
-      '钗钏金',
-      '桑柘木',
-      '大溪水',
-      '沙中土',
-      '天上火',
-      '石榴木',
-      '大海水',
-    ];
-
-    final normalized = _positiveMod(index, 60);
-    return '${_ganzhiByIndex(normalized)}纳音 · ${nayin[normalized ~/ 2]}';
-  }
-
-  static String _mansionByDate(DateTime date) {
-    const mansions = [
-      '角木蛟',
-      '亢金龙',
-      '氐土貉',
-      '房日兔',
-      '心月狐',
-      '尾火虎',
-      '箕水豹',
-      '斗木獬',
-      '牛金牛',
-      '女土蝠',
-      '虚日鼠',
-      '危月燕',
-      '室火猪',
-      '壁水獝',
-      '奎木狼',
-      '娄金狗',
-      '胃土雉',
-      '昴日鸡',
-      '毕月乌',
-      '觜火猴',
-      '参水猿',
-      '井木犴',
-      '鬼金羊',
-      '柳土獐',
-      '星日马',
-      '张月鹿',
-      '翼火蛇',
-      '轸水蚓',
-    ];
-    final day = DateTime(date.year, date.month, date.day);
-    final offset = day.difference(DateTime(2000, 1, 1)).inDays;
-    return mansions[_positiveMod(offset + 23, mansions.length)];
-  }
-
-  static String _clashByIndex(int index) {
-    const clashDirections = [
-      '南',
-      '东',
-      '北',
-      '西',
-      '南',
-      '东',
-      '北',
-      '西',
-      '南',
-      '东',
-      '北',
-      '西',
-    ];
-    final branchIndex = _positiveMod(index, 60) % 12;
-    final clashBranch = (branchIndex + 6) % 12;
-    return '冲${_branchZodiac[clashBranch]}煞${clashDirections[branchIndex]}';
-  }
-
-  /// 是否节气日(简化：返回该日节气名，无则返回 null)
-  /// 使用定气法近似：公历 4,5,6... 每月两个节气，给出固定日期表(允许 ±1 天差)。
+  /// 是否节气日，返回该日节气名，无则返回 null。
+  /// 使用 lunar 库的节气表，和黄历详情保持同源。
   static String? solarTerm(DateTime date) {
-    // 简版：固定日期对照表(近似，非精确天文)
-    const table = <String, String>{
-      '2-4': '立春',
-      '2-19': '雨水',
-      '3-6': '惊蛰',
-      '3-21': '春分',
-      '4-5': '清明',
-      '4-20': '谷雨',
-      '5-6': '立夏',
-      '5-21': '小满',
-      '6-6': '芒种',
-      '6-21': '夏至',
-      '7-7': '小暑',
-      '7-23': '大暑',
-      '8-8': '立秋',
-      '8-23': '处暑',
-      '9-8': '白露',
-      '9-23': '秋分',
-      '10-8': '寒露',
-      '10-23': '霜降',
-      '11-7': '立冬',
-      '11-22': '小雪',
-      '12-7': '大雪',
-      '12-22': '冬至',
-      '1-6': '小寒',
-      '1-20': '大寒',
-    };
-    return table['${date.month}-${date.day}'];
+    final value = _lunarFor(date).getJieQi();
+    return value.isEmpty ? null : value;
   }
 
   /// 公历法定节日
@@ -631,33 +456,22 @@ class LunarCalendar {
     return t[k];
   }
 
-  /// 简版"宜"(根据农历日期取)
+  /// 黄历"宜"。
   static String suitable(DateTime date) {
-    const pool = [
-      '祭祀 祈福 出行 会友',
-      '嫁娶 开市 纳财 动土',
-      '沐浴 修造 栽种 纳畜',
-      '安床 交易 立券 求嗣',
-      '订盟 纳采 安葬 斋醮',
-      '整容 理发 拆卸 扫舍',
-      '开光 塑绘 入学 上梁',
-    ];
-    return pool[date.day % pool.length];
+    final value = _joinAlmanacTerms(_lunarFor(date).getDayYi());
+    return value.isEmpty ? '诸事不宜' : value;
   }
 
-  /// 简版"忌"
+  /// 黄历"忌"。
   static String avoid(DateTime date) {
-    const pool = [
-      '动土 破土 开仓',
-      '嫁娶 安葬 修造',
-      '出行 开光 移徙',
-      '大事勿用',
-      '栽种 探病 作灶',
-      '伐木 打猎 祭祀',
-      '入宅 交易 破屋',
-    ];
-    return pool[(date.day + date.month) % pool.length];
+    final value = _joinAlmanacTerms(_lunarFor(date).getDayJi());
+    return value.isEmpty ? '无' : value;
   }
+
+  static String _joinAlmanacTerms(List<String> values) => values
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' ');
 
   static String _monthName(int m, bool isLeap) {
     const names = [

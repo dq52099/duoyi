@@ -91,11 +91,11 @@ void main() {
     expect(source, contains('class _TodoInlineSwipeActions'));
     expect(source, contains('bool get _swipeActive => _swipeOffset > 0'));
     expect(source, contains('if (_swipeActive)'));
-    expect(source, contains("label: '详情'"));
     expect(source, contains("label: completed ? '恢复' : '完成'"));
     expect(source, contains("label: '删除'"));
     expect(source, contains('if (widget.batchMode) return content;'));
-    expect(source, contains("ValueKey('todo_swipe_detail_button')"));
+    expect(source, isNot(contains("label: '详情'")));
+    expect(source, isNot(contains("ValueKey('todo_swipe_detail_button')")));
     expect(source, contains("'todo_swipe_complete_button'"));
     expect(source, contains("'todo_swipe_reopen_button'"));
     expect(source, contains("ValueKey('todo_swipe_delete_button')"));

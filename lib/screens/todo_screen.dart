@@ -2284,7 +2284,6 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
               child: RepaintBoundary(
                 child: _TodoInlineSwipeActions(
                   margin: EdgeInsets.zero,
-                  onDetails: () => _openDetails(context),
                   onToggleCompletion: () => _toggleCompletion(context),
                   onDelete: () => _confirmDelete(context, provider),
                   completed: todo.isCompleted,
@@ -2820,7 +2819,7 @@ class _TodoTile extends StatefulWidget {
 }
 
 class _TodoTileState extends State<_TodoTile> {
-  static const double _swipeActionWidth = 144;
+  static const double _swipeActionWidth = 98;
   static const double _swipeOpenThreshold = 36;
 
   double _swipeOffset = 0;
@@ -3082,7 +3081,6 @@ class _TodoTileState extends State<_TodoTile> {
                     horizontal: DesignTokens.spaceMd,
                     vertical: DesignTokens.spaceSm,
                   ),
-                  onDetails: () => _openDetails(context),
                   onToggleCompletion: () => _toggleCompletion(context),
                   onDelete: () => _confirmDelete(context, provider),
                   completed: todo.isCompleted,
@@ -3105,14 +3103,12 @@ class _TodoTileState extends State<_TodoTile> {
 
 class _TodoInlineSwipeActions extends StatelessWidget {
   final EdgeInsetsGeometry margin;
-  final VoidCallback onDetails;
   final VoidCallback onToggleCompletion;
   final VoidCallback onDelete;
   final bool completed;
 
   const _TodoInlineSwipeActions({
     required this.margin,
-    required this.onDetails,
     required this.onToggleCompletion,
     required this.onDelete,
     required this.completed,
@@ -3135,15 +3131,6 @@ class _TodoInlineSwipeActions extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _TodoInlineSwipeButton(
-              key: const ValueKey('todo_swipe_detail_button'),
-              icon: Icons.open_in_new,
-              label: '详情',
-              background: cs.primaryContainer.withValues(alpha: 0.60),
-              foreground: cs.primary,
-              onTap: onDetails,
-            ),
-            const SizedBox(width: 6),
             _TodoInlineSwipeButton(
               key: ValueKey(
                 completed
@@ -3683,7 +3670,10 @@ class QuadrantListScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text(_title(quadrant))),
+      appBar: AppBar(
+        title: Text(_title(quadrant)),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+      ),
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
           : ListView.builder(

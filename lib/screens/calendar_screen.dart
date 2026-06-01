@@ -452,10 +452,10 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   double _monthGridHeightFor(double availableHeight, int rows) {
-    final minGridHeight = rows >= 6 ? 296.0 : (rows == 5 ? 268.0 : 240.0);
-    final preferredGridHeight = rows >= 6 ? 332.0 : (rows == 5 ? 306.0 : 280.0);
+    final minGridHeight = rows >= 6 ? 288.0 : (rows == 5 ? 260.0 : 236.0);
+    final preferredGridHeight = rows >= 6 ? 318.0 : (rows == 5 ? 292.0 : 268.0);
     if (!availableHeight.isFinite) return preferredGridHeight;
-    final viewportTarget = availableHeight * 0.52;
+    final viewportTarget = availableHeight * 0.46;
     return viewportTarget.clamp(minGridHeight, preferredGridHeight).toDouble();
   }
 
@@ -516,9 +516,9 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   bool _monthGridShowsLunar(double gridHeight, int rows) {
     if (rows <= 0) return false;
-    const monthGridChromeHeight = 30.0;
+    const monthGridChromeHeight = 36.0;
     final rowHeight = (gridHeight - monthGridChromeHeight) / rows;
-    return rowHeight >= 56;
+    return rowHeight >= 50;
   }
 
   Widget _calendarFilterStrip({

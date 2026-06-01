@@ -78,7 +78,7 @@ void main() {
       expect(progress?.isCompleted, isTrue);
       expect(habit.isCompletedForDate(DateTime(2026, 5, 11)), isTrue);
       expect(habit.streakUnitLabel, '周');
-      expect(habit.flexPeriodGoalLabel, '周期目标: 5 次/周');
+      expect(habit.flexPeriodGoalLabel, '每周目标: 5 次/周');
       expect(habit.completionDatesInRange(DateTime(2026, 5, 11), friday), [
         DateTime(2026, 5, 15, 12),
       ]);

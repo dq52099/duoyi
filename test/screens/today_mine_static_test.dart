@@ -79,7 +79,7 @@ void main() {
       expect(today, isNot(contains("const Text('加入今日')")));
     });
 
-    test('今日页任务条目支持左滑详情和删除操作', () {
+    test('今日页任务条目左滑只保留删除，图标和标题同行', () {
       final today = File('lib/screens/today_screen.dart').readAsStringSync();
 
       expect(
@@ -90,7 +90,10 @@ void main() {
       expect(today, contains('bool get _swipeActive => _swipeOffset > 0'));
       expect(today, contains('if (_swipeActive)'));
       expect(today, contains('RepaintBoundary(child: tile)'));
-      expect(today, contains("ValueKey('today_todo_swipe_detail_button')"));
+      expect(
+        today,
+        isNot(contains("ValueKey('today_todo_swipe_detail_button')")),
+      );
       expect(today, contains("ValueKey('today_todo_swipe_delete_button')"));
       expect(today, contains("title: const Text('删除任务？')"));
       expect(today, contains("await context.read<TodoProvider>().deleteTodo"));
@@ -106,8 +109,8 @@ void main() {
       expect(today, contains('effectiveTileBackground'));
       expect(today, contains('effectiveTileBorderColor'));
       expect(today, contains('class _TodayTodoLeading'));
-      expect(today, contains('static const double width = 60'));
-      expect(today, contains('static const double templateIconSize = 36'));
+      expect(today, contains('static const double width = 30'));
+      expect(today, contains('class _TodayTodoTitleLine'));
       expect(today, contains('class _TodayTodoStatusToggle'));
       expect(today, contains('minLeadingWidth: widget.leading == null'));
       expect(today, contains('TodoVisualState.normal => templateVisual.color'));
@@ -119,8 +122,8 @@ void main() {
       expect(today, contains("import '../providers/share_provider.dart';"));
       expect(today, contains('context.select<ShareProvider?, bool>'));
       expect(today, contains("共享空间只读，不能\$action"));
-      expect(today, contains('void _openDetails()'));
-      expect(today, contains('onTap: _openDetails'));
+      expect(today, isNot(contains('void _openDetails()')));
+      expect(today, isNot(contains('onTap: _openDetails')));
       expect(today, isNot(contains('Dismissible(')));
     });
 

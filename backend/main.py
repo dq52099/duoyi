@@ -241,10 +241,27 @@ DEFAULT_RESEND_FROM = (
     or os.getenv("MAIL_FROM")
     or f"{DEFAULT_EMAIL_TITLE} <noreply@mail.6688667.xyz>"
 )
-APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.14"))
+
+
+def _pubspec_app_version() -> tuple[str, int]:
+    pubspec = Path(__file__).resolve().parents[1] / "pubspec.yaml"
+    try:
+        match = re.search(r"^version:\s*([^\s+]+)(?:\+(\d+))?", pubspec.read_text(), re.M)
+        if match:
+            return match.group(1), int(match.group(2) or "0")
+    except (OSError, ValueError):
+        pass
+    return "1.1.17", 120017
+
+
+_DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()
+APP_CURRENT_VERSION = os.getenv(
+    "APP_CURRENT_VERSION",
+    os.getenv("DUOYI_APP_VERSION", _DEFAULT_APP_VERSION),
+)
 APP_CURRENT_VERSION_CODE = _env_int(
     "APP_CURRENT_VERSION_CODE",
-    _env_int("DUOYI_APP_VERSION_CODE", 120014),
+    _env_int("DUOYI_APP_VERSION_CODE", _DEFAULT_APP_VERSION_CODE),
 )
 APP_PACKAGE_NAME = os.getenv("APP_PACKAGE_NAME", "com.duoyi.duoyi")
 APP_UPDATE_REPOSITORY = os.getenv("APP_UPDATE_REPOSITORY", "dq52099/duoyi")
@@ -819,13 +836,27 @@ def _github_latest_mobile_release() -> Optional[dict]:
         return None
     assets = release.get("assets") if isinstance(release.get("assets"), list) else []
     apk_asset = None
+    version_name = str(release.get("tag_name") or "").strip().removeprefix("v")
     for asset in assets:
         if not isinstance(asset, dict):
             continue
         name = str(asset.get("name") or "").lower()
-        if name.endswith(".apk") and ("duoyi" in name or apk_asset is None):
+        if not name.endswith(".apk"):
+            continue
+        if version_name and name == f"duoyi-v{version_name}.apk":
             apk_asset = asset
-    version_name = str(release.get("tag_name") or "").strip().removeprefix("v")
+            break
+        if version_name and name == f"duoyi-{version_name}.apk":
+            apk_asset = asset
+            break
+        if "universal" in name and ("duoyi" in name or apk_asset is None):
+            apk_asset = asset
+            continue
+        if not re.search(r"-(armeabi-v7a|arm64-v8a|x86_64)\.apk$", name):
+            apk_asset = apk_asset or asset
+            continue
+        if apk_asset is None and "duoyi" in name:
+            apk_asset = asset
     if not version_name:
         return None
     return {

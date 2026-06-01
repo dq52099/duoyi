@@ -59,7 +59,11 @@ void main() {
     expect(source, contains('查看趋势详情'));
     expect(source, contains('_ProductivityTrendDetailScreen'));
     expect(source, contains('MaterialPageRoute('));
-    expect(source, contains("AppBar(title: const Text('趋势详情'))"));
+    expect(source, contains("title: const Text('趋势详情')"));
+    expect(
+      source,
+      contains('titleTextStyle: appSecondaryRouteTitleTextStyle(context)'),
+    );
     expect(source, contains('趋势概览'));
     expect(source, contains('逐周期明细'));
     expect(source, contains('周期明细'));

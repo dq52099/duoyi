@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'habit_templates.dart';
 import '../models/habit.dart';
 
 final Map<String, IconData> _habitIconsByToken = {
-  defaultHabitIconToken: Icons.check_circle_outline,
-  'check': Icons.check_circle_outline,
-  'star': Icons.check_circle_outline,
+  defaultHabitIconToken: Icons.track_changes_outlined,
+  'check': Icons.track_changes_outlined,
+  'check_circle_outline': Icons.track_changes_outlined,
+  'star': Icons.track_changes_outlined,
   'water': Icons.local_drink,
   'local_drink': Icons.local_drink,
   'wb_sunny': Icons.wb_sunny,
@@ -47,6 +49,7 @@ final Map<String, IconData> _habitIconsByToken = {
 };
 
 final Map<int, String> _habitIconTokensByCodePoint = {
+  Icons.track_changes_outlined.codePoint: defaultHabitIconToken,
   Icons.check_circle_outline.codePoint: defaultHabitIconToken,
   Icons.local_drink.codePoint: 'local_drink',
   Icons.wb_sunny.codePoint: 'wb_sunny',
@@ -93,7 +96,24 @@ IconData habitIconForToken(String token) {
     if (legacyToken != null) return _habitIconsByToken[legacyToken]!;
   }
 
-  return Icons.check_circle_outline;
+  return Icons.track_changes_outlined;
+}
+
+IconData habitDisplayIconFor(Habit habit) {
+  final icon = habitIconForToken(habit.icon);
+  final name = habit.name.trim();
+  final matchesTemplate = HabitTemplates.all.where(
+    (template) => template.name == name || template.nameEn == name,
+  );
+  if (matchesTemplate.isEmpty) return icon;
+  final iconLooksDefault =
+      habit.icon.isEmpty ||
+      habit.icon == defaultHabitIconToken ||
+      habit.icon == 'check' ||
+      habit.icon == 'check_circle' ||
+      habit.icon == 'check_circle_outline';
+  if (!iconLooksDefault) return icon;
+  return matchesTemplate.first.icon;
 }
 
 String habitIconTokenForIcon(IconData icon) =>

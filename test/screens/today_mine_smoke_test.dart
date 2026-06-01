@@ -96,6 +96,20 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  testWidgets('Today keeps todo section visible when there is no task', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_wrap(const TodayScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日待办'), findsOneWidget);
+    expect(find.text('今天暂无待办，点击查看或添加任务'), findsOneWidget);
+  });
+
   test('今日和我的概览/入口样式保持独立且不过度放大', () {
     final today = File('lib/screens/today_screen.dart').readAsStringSync();
     final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
@@ -107,7 +121,7 @@ void main() {
     expect(mine, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
     expect(surface, contains('fontSize: 12'));
     expect(surface, contains('fontSize: 11'));
-    expect(surface, contains('fontSize: 14'));
+    expect(surface, contains('fontSize: DesignTokens.fontSizeMd'));
     expect(surface, contains('iconBoxSize = 28'));
 
     expect(mine, contains('class _TileGroup'));
@@ -367,10 +381,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find
-          .byKey(const ValueKey('today_todo_swipe_detail_button'))
-          .hitTestable(),
-      findsOneWidget,
+      find.byKey(const ValueKey('today_todo_swipe_detail_button')),
+      findsNothing,
     );
     expect(
       find
@@ -419,6 +431,15 @@ void main() {
         dueDate: now.add(const Duration(minutes: 45)),
       ),
     );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '已完成提醒任务',
+        date: today,
+        dueDate: now.add(const Duration(minutes: 30)),
+        isCompleted: true,
+        completedAt: now,
+      ),
+    );
 
     await tester.pumpWidget(
       MultiProvider(
@@ -457,11 +478,22 @@ void main() {
     );
     expect(find.text('逾期提醒任务'), findsOneWidget);
     expect(find.text('正常提醒任务'), findsOneWidget);
+    expect(find.text('已完成提醒任务'), findsWidgets);
     expect(find.text('逾期'), findsWidgets);
 
     final overdueTitle = tester.widget<Text>(find.text('逾期提醒任务'));
     final normalTitle = tester.widget<Text>(find.text('正常提醒任务'));
+    final completedTitle = tester
+        .widgetList<Text>(find.text('已完成提醒任务'))
+        .firstWhere(
+          (widget) => widget.style?.decoration == TextDecoration.lineThrough,
+        );
     expect(overdueTitle.style?.color, isNot(equals(normalTitle.style?.color)));
+    expect(completedTitle.style?.decoration, TextDecoration.lineThrough);
+    expect(
+      completedTitle.style?.color,
+      isNot(equals(normalTitle.style?.color)),
+    );
 
     bool reminderTileDecoration(Widget widget) {
       if (widget is! Container) return false;
@@ -507,7 +539,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('今日待办'), findsNothing);
+    expect(find.text('今日待办'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('today_reminder_header_toggle')),
     );

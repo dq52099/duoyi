@@ -434,13 +434,13 @@ class _HabitScreenState extends State<HabitScreen>
                                           ButtonSegment(
                                             value: HabitFlexPeriod.week,
                                             label: Text(
-                                              '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.week')}',
+                                              I18n.tr('habit.flex.weekly'),
                                             ),
                                           ),
                                           ButtonSegment(
                                             value: HabitFlexPeriod.month,
                                             label: Text(
-                                              '${I18n.tr('habit.flex.period_target')}/${I18n.tr('habit.unit.month')}',
+                                              I18n.tr('habit.flex.monthly'),
                                             ),
                                           ),
                                         ],
@@ -984,7 +984,7 @@ class _HabitSummaryTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
-            _habitIconForToken(habit.icon),
+            _habitDisplayIcon(habit),
             color: Color(habit.colorValue),
             size: 18,
           ),
@@ -1005,9 +1005,9 @@ class _HabitSummaryTile extends StatelessWidget {
   }
 }
 
-const double _habitCheckinCardBodyHeight = 32;
-const double _habitTitleStatusHeight = 14;
-const double _habitCheckinButtonWidth = 64;
+const double _habitCheckinCardBodyHeight = 44;
+const double _habitTitleStatusHeight = 17;
+const double _habitCheckinButtonWidth = 58;
 const double _habitUndoButtonWidth = 30;
 const double _habitMenuButtonWidth = 28;
 const double _habitActionButtonGap = 3;
@@ -1073,255 +1073,245 @@ class _HabitCheckinCard extends StatelessWidget {
       habit: habit,
       actionMargin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
       borderRadius: BorderRadius.circular(10),
-      child: AnimatedScale(
-        scale: 1.0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutBack,
-        child: AppSurfaceCard(
-          key: ValueKey('habit_checkin_card_${habit.id}'),
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
-          padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isDone || hasNegativeOccurrence
-                ? habitColor.withValues(alpha: 0.12)
-                : Colors.transparent,
-            width: 0.45,
+      child: AppSurfaceCard(
+        key: ValueKey('habit_checkin_card_${habit.id}'),
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
+        padding: const EdgeInsets.fromLTRB(8, 4, 6, 4),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HabitDetailScreen(habitId: habit.id),
           ),
-          child: SizedBox(
-            height: _habitCheckinCardBodyHeight,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  width: 17,
-                  height: 17,
-                  decoration: BoxDecoration(
-                    color: habitColor.withValues(
-                      alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.15,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
+        ),
+        border: Border.all(
+          color: isDone || hasNegativeOccurrence
+              ? habitColor.withValues(alpha: 0.12)
+              : Colors.transparent,
+          width: 0.45,
+        ),
+        child: SizedBox(
+          height: _habitCheckinCardBodyHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: habitColor.withValues(
+                    alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.15,
                   ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: FadeTransition(opacity: animation, child: child),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    _habitDisplayIcon(habit),
+                    key: ValueKey<String>(
+                      '${habit.id}-${isDone && !hasNegativeOccurrence}-$hasNegativeOccurrence',
                     ),
-                    child: Icon(
-                      _habitIconForToken(habit.icon),
-                      key: ValueKey<String>(
-                        '${habit.id}-${isDone && !hasNegativeOccurrence}-$hasNegativeOccurrence',
-                      ),
-                      color: habitColor,
-                      size: 11,
-                    ),
+                    color: habitColor,
+                    size: 14,
                   ),
                 ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: _habitTitleStatusHeight,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                habit.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.normal,
-                                  fontSize: 12,
-                                  height: 1.08,
-                                  decoration: isDone && !isNegative
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: hasNegativeOccurrence
-                                      ? cs.error
-                                      : (isDone && !isNegative
-                                            ? Colors.grey
-                                            : null),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            SizedBox(
-                              height: _habitTitleStatusHeight,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: habit.hasFlexRule ? 68 : 58,
-                                ),
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 180),
-                                    child: isDone && !isNegative
-                                        ? _HabitFeedbackBadge(
-                                            key: const ValueKey(
-                                              'habit-completed-feedback',
-                                            ),
-                                            icon: Icons.check_circle,
-                                            label: habit.hasFlexRule
-                                                ? '${flexProgress?.labelPrefix ?? '周期'}达标'
-                                                : '已达标',
-                                            color: const Color(0xFF4CAF50),
-                                          )
-                                        : hasNegativeOccurrence
-                                        ? _HabitFeedbackBadge(
-                                            key: const ValueKey(
-                                              'habit-warning-feedback',
-                                            ),
-                                            icon: Icons.info_outline,
-                                            label: '已记录',
-                                            color: cs.error,
-                                          )
-                                        : const SizedBox.shrink(
-                                            key: ValueKey('habit-no-feedback'),
-                                          ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Row(
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: _habitTitleStatusHeight,
+                      child: Row(
                         children: [
                           Expanded(
                             child: Text(
-                              '$targetText · $countText',
+                              habit.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 10,
-                                height: 1.05,
+                                fontWeight: FontWeight.normal,
+                                fontSize: 13,
+                                height: 1.14,
+                                decoration: isDone && !isNegative
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: hasNegativeOccurrence
+                                    ? cs.error
+                                    : (isDone && !isNegative
+                                          ? Colors.grey
+                                          : null),
                               ),
                             ),
                           ),
-                          if (habit.currentStreak > 0) ...[
-                            const SizedBox(width: 8),
-                            _HabitStreakBadge(habit: habit),
-                          ],
+                          const SizedBox(width: 5),
+                          SizedBox(
+                            height: _habitTitleStatusHeight,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: habit.hasFlexRule ? 68 : 58,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  child: isDone && !isNegative
+                                      ? _HabitFeedbackBadge(
+                                          key: const ValueKey(
+                                            'habit-completed-feedback',
+                                          ),
+                                          icon: Icons.check_circle,
+                                          label: habit.hasFlexRule
+                                              ? '${flexProgress?.labelPrefix ?? '周期'}达标'
+                                              : '已达标',
+                                          color: const Color(0xFF4CAF50),
+                                        )
+                                      : hasNegativeOccurrence
+                                      ? _HabitFeedbackBadge(
+                                          key: const ValueKey(
+                                            'habit-warning-feedback',
+                                          ),
+                                          icon: Icons.info_outline,
+                                          label: '已记录',
+                                          color: cs.error,
+                                        )
+                                      : const SizedBox.shrink(
+                                          key: ValueKey('habit-no-feedback'),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 1),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Stack(
-                            children: [
-                              Container(
-                                height: 2,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                height: 2,
-                                width: constraints.maxWidth * progress,
-                                decoration: BoxDecoration(
-                                  color: isDone && !hasNegativeOccurrence
-                                      ? const Color(0xFF4CAF50)
-                                      : habitColor,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 5),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minWidth: _habitActionRailWidth,
-                    maxWidth: _habitActionRailWidth,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Visibility(
-                        visible: todayCount > 0,
-                        maintainSize: true,
-                        maintainAnimation: true,
-                        maintainState: true,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 160),
-                          child: todayCount > 0
-                              ? _HabitUndoButton(
-                                  key: const ValueKey('habit-undo-visible'),
-                                  color: hasNegativeOccurrence
-                                      ? cs.error
-                                      : cs.onSurfaceVariant,
-                                  onPressed: () => _handleUndo(context),
-                                )
-                              : _HabitUndoButton(
-                                  key: const ValueKey('habit-undo-hidden'),
-                                  color: cs.onSurfaceVariant,
-                                  onPressed: null,
-                                ),
-                        ),
-                      ),
-                      const SizedBox(width: _habitActionButtonGap),
-                      SizedBox(
-                        width: _habitCheckinButtonWidth,
-                        height: 25,
-                        child: FilledButton.icon(
-                          onPressed: canCheckIn
-                              ? () => _handleCheckIn(context)
-                              : null,
-                          icon: Icon(
-                            isNegative
-                                ? Icons.add_circle_outline
-                                : (!canCheckIn
-                                      ? Icons.check
-                                      : Icons.check_circle),
-                            size: 12,
-                          ),
-                          label: Text(
-                            _habitCheckInButtonLabel(
-                              habit: habit,
-                              canCheckIn: canCheckIn,
-                              flexProgress: flexProgress,
-                            ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$targetText · $countText',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                          ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: habitColor,
-                            foregroundColor: _habitButtonForeground(habitColor),
-                            disabledBackgroundColor: Colors.grey.shade200,
-                            disabledForegroundColor: Colors.grey.shade600,
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            minimumSize: const Size(
-                              _habitCheckinButtonWidth,
-                              25,
-                            ),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            textStyle: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.normal,
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 11,
+                              height: 1.1,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: _habitActionButtonGap),
-                      _HabitDetailButton(habit: habit),
-                    ],
-                  ),
+                        if (habit.currentStreak > 0) ...[
+                          const SizedBox(width: 8),
+                          _HabitStreakBadge(habit: habit),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 1),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Stack(
+                          children: [
+                            Container(
+                              height: 2,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              height: 2,
+                              width: constraints.maxWidth * progress,
+                              decoration: BoxDecoration(
+                                color: isDone && !hasNegativeOccurrence
+                                    ? const Color(0xFF4CAF50)
+                                    : habitColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: _habitActionRailWidth,
+                  maxWidth: _habitActionRailWidth,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Visibility(
+                      visible: todayCount > 0,
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        child: todayCount > 0
+                            ? _HabitUndoButton(
+                                key: const ValueKey('habit-undo-visible'),
+                                color: hasNegativeOccurrence
+                                    ? cs.error
+                                    : cs.onSurfaceVariant,
+                                onPressed: () => _handleUndo(context),
+                              )
+                            : _HabitUndoButton(
+                                key: const ValueKey('habit-undo-hidden'),
+                                color: cs.onSurfaceVariant,
+                                onPressed: null,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: _habitActionButtonGap),
+                    SizedBox(
+                      width: _habitCheckinButtonWidth,
+                      height: 28,
+                      child: FilledButton(
+                        onPressed: canCheckIn
+                            ? () => _handleCheckIn(context)
+                            : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: habitColor,
+                          foregroundColor: _habitButtonForeground(habitColor),
+                          disabledBackgroundColor: Colors.grey.shade200,
+                          disabledForegroundColor: Colors.grey.shade600,
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          minimumSize: const Size(_habitCheckinButtonWidth, 28),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          textStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        child: Text(
+                          _habitCheckInButtonLabel(
+                            habit: habit,
+                            canCheckIn: canCheckIn,
+                            flexProgress: flexProgress,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: _habitActionButtonGap),
+                    _HabitEditButton(habit: habit),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1484,8 +1474,8 @@ class _HabitSwipeActionWrapperState extends State<_HabitSwipeActionWrapper> {
               child: _HabitInlineSwipeActions(
                 margin: widget.actionMargin,
                 borderRadius: widget.borderRadius,
-                onDetails: () => _runAction(
-                  () => _handleHabitMenuAction(context, widget.habit, 'detail'),
+                onEdit: () => _runAction(
+                  () => _handleHabitMenuAction(context, widget.habit, 'edit'),
                 ),
                 onEnd: () => _runAction(
                   () => _handleHabitMenuAction(context, widget.habit, 'end'),
@@ -1521,7 +1511,7 @@ class _HabitSwipeActionWrapperState extends State<_HabitSwipeActionWrapper> {
 class _HabitInlineSwipeActions extends StatelessWidget {
   final EdgeInsetsGeometry margin;
   final BorderRadiusGeometry borderRadius;
-  final VoidCallback onDetails;
+  final VoidCallback onEdit;
   final VoidCallback onEnd;
   final VoidCallback onDelete;
   final bool showEndAction;
@@ -1529,7 +1519,7 @@ class _HabitInlineSwipeActions extends StatelessWidget {
   const _HabitInlineSwipeActions({
     required this.margin,
     required this.borderRadius,
-    required this.onDetails,
+    required this.onEdit,
     required this.onEnd,
     required this.onDelete,
     this.showEndAction = true,
@@ -1553,12 +1543,12 @@ class _HabitInlineSwipeActions extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _HabitSwipeButton(
-              key: const ValueKey('habit_swipe_detail_button'),
-              icon: Icons.open_in_new,
-              label: '详情',
+              key: const ValueKey('habit_swipe_edit_button'),
+              icon: Icons.edit_outlined,
+              label: '编辑',
               background: cs.primaryContainer.withValues(alpha: 0.60),
               foreground: cs.primary,
-              onTap: onDetails,
+              onTap: onEdit,
             ),
             if (showEndAction) ...[
               const SizedBox(width: 6),
@@ -1702,10 +1692,10 @@ class _HabitUndoButton extends StatelessWidget {
   }
 }
 
-class _HabitDetailButton extends StatelessWidget {
+class _HabitEditButton extends StatelessWidget {
   final Habit habit;
 
-  const _HabitDetailButton({required this.habit});
+  const _HabitEditButton({required this.habit});
 
   @override
   Widget build(BuildContext context) {
@@ -1714,12 +1704,12 @@ class _HabitDetailButton extends StatelessWidget {
       width: _habitMenuButtonWidth,
       height: 26,
       child: Tooltip(
-        message: '查看详情',
+        message: '编辑',
         child: IconButton(
-          key: const ValueKey('habit_inline_detail_button'),
+          key: const ValueKey('habit_inline_edit_button'),
           padding: EdgeInsets.zero,
-          icon: Icon(Icons.open_in_new, size: 16, color: cs.onSurfaceVariant),
-          onPressed: () => _handleHabitMenuAction(context, habit, 'detail'),
+          icon: Icon(Icons.edit_outlined, size: 15, color: cs.onSurfaceVariant),
+          onPressed: () => _handleHabitMenuAction(context, habit, 'edit'),
           style: IconButton.styleFrom(
             fixedSize: const Size(_habitMenuButtonWidth, 26),
             minimumSize: const Size(_habitMenuButtonWidth, 26),
@@ -1781,11 +1771,8 @@ Future<void> _handleHabitMenuAction(
   String value,
 ) async {
   final provider = context.read<HabitProvider>();
-  if (value == 'detail') {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id)),
-    );
+  if (value == 'edit') {
+    await showHabitEditor(context, habit);
     return;
   }
   if (value == 'end') {
@@ -1843,7 +1830,9 @@ double _habitContrastRatio(Color a, Color b) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-IconData _habitIconForToken(String token) => habitIconForToken(token);
+IconData _habitDisplayIcon(Habit habit) {
+  return habitDisplayIconFor(habit);
+}
 
 String _habitTemplateFrequencyLabel(HabitTemplate template) {
   if (!template.hasFlexRule) return template.localizedFrequencyLabel;
@@ -1851,5 +1840,9 @@ String _habitTemplateFrequencyLabel(HabitTemplate template) {
     HabitFlexPeriod.week => I18n.tr('habit.unit.week'),
     HabitFlexPeriod.month => I18n.tr('habit.unit.month'),
   };
-  return '${I18n.tr('habit.flex.period_target')} ${template.flexTarget} ${template.localizedUnit}/$unit';
+  final label = switch (template.flexPeriod!) {
+    HabitFlexPeriod.week => '每周目标',
+    HabitFlexPeriod.month => '每月目标',
+  };
+  return '$label ${template.flexTarget} ${template.localizedUnit}/$unit';
 }

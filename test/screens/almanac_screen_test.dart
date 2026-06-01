@@ -25,7 +25,7 @@ void main() {
     expect(find.text('万年历'), findsWidgets);
     expect(find.text('2026年7月1日 星期三'), findsOneWidget);
     expect(find.textContaining('农历'), findsWidgets);
-    expect(find.textContaining('属'), findsOneWidget);
+    expect(find.textContaining('马年'), findsOneWidget);
     expect(find.text('宜'), findsOneWidget);
     expect(find.text('忌'), findsOneWidget);
     expect(find.text('胎神'), findsOneWidget);
@@ -52,6 +52,23 @@ void main() {
     expect(find.byTooltip('天气'), findsNothing);
     expect(find.byIcon(Icons.wb_sunny_outlined), findsNothing);
     expect(find.byIcon(Icons.cloud_outlined), findsNothing);
+  });
+
+  testWidgets('almanac uses lunar library instead of single-day override', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 5, 31))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026年5月31日 星期日'), findsOneWidget);
+    expect(find.textContaining('丙午马年癸巳月乙巳日'), findsOneWidget);
+    expect(find.textContaining('祭祀 解除 断蚁 会亲友 馀事勿取'), findsOneWidget);
+    expect(find.textContaining('嫁娶 安葬'), findsOneWidget);
+    expect(find.textContaining('碓磨床房内东'), findsOneWidget);
+    expect(find.textContaining('蛇日冲猪（己亥）煞东'), findsOneWidget);
+    expect(find.textContaining('实时天气'), findsNothing);
   });
 
   testWidgets('almanac shows holiday and user date month highlights', (

@@ -11,6 +11,7 @@ import '../providers/habit_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/todo_provider.dart';
 import '../widgets/brand_background.dart';
+import '../widgets/surface_components.dart';
 import 'anniversary_screen.dart';
 import 'course_schedule_screen.dart';
 import 'diary_screen.dart';
@@ -218,7 +219,10 @@ class _DetailFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(DesignTokens.space3xl),

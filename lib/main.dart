@@ -283,7 +283,6 @@ void main() async {
       'countdown storage',
       () => countdownProvider.loadFromStorage(),
     ),
-    _startupGuard('note storage', () => noteProvider.loadFromStorage()),
     _startupGuard(
       'anniversary storage',
       () => anniversaryProvider.loadFromStorage(),
@@ -305,36 +304,46 @@ void main() async {
       () => timeAuditProvider.loadFromStorage(),
     ),
     _startupGuard(
-      'achievement storage',
-      () => achievementProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'custom focus sounds storage',
-      () => customFocusSoundProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'focus room storage',
-      () => focusRoomProvider.loadFromStorage(),
-    ),
-    _startupGuard(
       'auth storage',
       () => authProvider.loadFromStorage(refreshServerConfig: false),
     ),
-    _startupGuard('ai storage', () => aiService.loadFromStorage()),
     _startupGuard('locale storage', () => localeProvider.loadFromStorage()),
-    _startupGuard(
-      'location reminders storage',
-      () => locationReminderProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'calendar subscriptions storage',
-      () => calendarSyncProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'calendar local events',
-      () => calendarProvider.loadFromStorage(),
-    ),
   ]);
+
+  Future<void>? deferredLocalStorageStartup;
+  Future<void> ensureDeferredLocalStorageStartup() {
+    final existing = deferredLocalStorageStartup;
+    if (existing != null) return existing;
+    deferredLocalStorageStartup = Future.wait([
+      _startupGuard('note storage', () => noteProvider.loadFromStorage()),
+      _startupGuard(
+        'achievement storage',
+        () => achievementProvider.loadFromStorage(),
+      ),
+      _startupGuard(
+        'custom focus sounds storage',
+        () => customFocusSoundProvider.loadFromStorage(),
+      ),
+      _startupGuard(
+        'focus room storage',
+        () => focusRoomProvider.loadFromStorage(),
+      ),
+      _startupGuard('ai storage', () => aiService.loadFromStorage()),
+      _startupGuard(
+        'location reminders storage',
+        () => locationReminderProvider.loadFromStorage(),
+      ),
+      _startupGuard(
+        'calendar subscriptions storage',
+        () => calendarSyncProvider.loadFromStorage(),
+      ),
+      _startupGuard(
+        'calendar local events',
+        () => calendarProvider.loadFromStorage(),
+      ),
+    ]);
+    return deferredLocalStorageStartup!;
+  }
 
   Future<void>? deferredPlatformStartup;
   Future<void> ensureDeferredPlatformStartup() {
@@ -1154,6 +1163,7 @@ void main() async {
   }
 
   Future<void> runPostFrameStartupTasks() async {
+    unawaited(ensureDeferredLocalStorageStartup());
     await Future<void>.delayed(const Duration(milliseconds: 350));
     await ensureDeferredPlatformStartup();
     final initialNotificationPayloads = <String>[];

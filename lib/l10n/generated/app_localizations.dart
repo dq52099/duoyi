@@ -2261,25 +2261,25 @@ abstract class AppLocalizations {
   /// No description provided for @habitFlexWeekly.
   ///
   /// In zh, this message translates to:
-  /// **'周期目标/周'**
+  /// **'每周目标'**
   String get habitFlexWeekly;
 
   /// No description provided for @habitFlexMonthly.
   ///
   /// In zh, this message translates to:
-  /// **'周期目标/月'**
+  /// **'每月目标'**
   String get habitFlexMonthly;
 
   /// No description provided for @habitFlexPeriodTarget.
   ///
   /// In zh, this message translates to:
-  /// **'周期目标'**
+  /// **'目标次数'**
   String get habitFlexPeriodTarget;
 
   /// No description provided for @habitFlexPeriodTargetHint.
   ///
   /// In zh, this message translates to:
-  /// **'例如周期目标 5 次/周'**
+  /// **'例如每周目标 5 次'**
   String get habitFlexPeriodTargetHint;
 
   /// No description provided for @habitFlexDailyNote.
@@ -2297,13 +2297,13 @@ abstract class AppLocalizations {
   /// No description provided for @habitFlexWeeklyGoalPrefix.
   ///
   /// In zh, this message translates to:
-  /// **'周期目标: '**
+  /// **'每周目标: '**
   String get habitFlexWeeklyGoalPrefix;
 
   /// No description provided for @habitFlexMonthlyGoalPrefix.
   ///
   /// In zh, this message translates to:
-  /// **'周期目标: '**
+  /// **'每月目标: '**
   String get habitFlexMonthlyGoalPrefix;
 
   /// No description provided for @habitFlexThisWeek.
@@ -3587,7 +3587,7 @@ abstract class AppLocalizations {
   /// No description provided for @todayAlmanacTitle.
   ///
   /// In zh, this message translates to:
-  /// **'打卡万年历'**
+  /// **'万年历'**
   String get todayAlmanacTitle;
 
   /// No description provided for @todayUnitItem.

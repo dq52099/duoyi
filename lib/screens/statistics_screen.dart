@@ -4764,7 +4764,10 @@ class _ProductivityTrendDetailScreen extends StatelessWidget {
     final latest = points.isEmpty ? null : points.last;
     final best = _bestPoint;
     return Scaffold(
-      appBar: AppBar(title: const Text('趋势详情')),
+      appBar: AppBar(
+        title: const Text('趋势详情'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [

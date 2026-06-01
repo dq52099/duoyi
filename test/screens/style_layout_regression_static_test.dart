@@ -437,7 +437,7 @@ void main() {
       surfaceComponents,
       contains('TextStyle appSecondaryRouteTitleTextStyle'),
     );
-    expect(surfaceComponents, contains('fontSize: 14'));
+    expect(surfaceComponents, contains('fontSize: DesignTokens.fontSizeMd'));
     expect(surfaceComponents, contains('fontWeight: FontWeight.normal'));
 
     final calendar = File(
@@ -712,7 +712,7 @@ void main() {
 
     expect(_requiredFontSize(controlText), lessThan(mainRegularSize));
     expect(_requiredFontSize(menuText), lessThan(mainRegularSize));
-    expect(_requiredFontSize(routeTitle), lessThanOrEqualTo(mainRegularSize));
+    expect(routeTitle, contains('fontSize: DesignTokens.fontSizeMd'));
     expect(controlText, contains('fontWeight: FontWeight.normal'));
     expect(menuText, contains('fontWeight: FontWeight.normal'));
     expect(routeTitle, contains('fontWeight: FontWeight.normal'));
@@ -980,7 +980,7 @@ void main() {
       calendar,
       matches(
         RegExp(
-          r'rows >= 6\s*\?\s*296\.0\s*:\s*\(rows == 5 \?\s*268\.0\s*:\s*240\.0\)',
+          r'rows >= 6\s*\?\s*288\.0\s*:\s*\(rows == 5 \?\s*260\.0\s*:\s*236\.0\)',
           multiLine: true,
         ),
       ),
@@ -989,12 +989,12 @@ void main() {
       calendar,
       matches(
         RegExp(
-          r'rows >= 6\s*\?\s*332\.0\s*:\s*\(rows == 5 \?\s*306\.0\s*:\s*280\.0\)',
+          r'rows >= 6\s*\?\s*318\.0\s*:\s*\(rows == 5 \?\s*292\.0\s*:\s*268\.0\)',
           multiLine: true,
         ),
       ),
     );
-    expect(calendar, contains('const monthGridChromeHeight = 30.0'));
+    expect(calendar, contains('const monthGridChromeHeight = 36.0'));
     expect(calendar, contains('final minGridHeight'));
     expect(calendar, contains('final preferredGridHeight'));
     expect(calendar, contains('height: monthGridHeight'));
@@ -1046,7 +1046,7 @@ void main() {
     expect(moreApps, contains('Expanded('));
 
     final habit = File('lib/screens/habit_screen.dart').readAsStringSync();
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 32'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 44'));
     expect(habit, isNot(contains("label: const Text('还原')")));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
   });
@@ -1086,10 +1086,10 @@ void main() {
     expect(habit, contains('SliverList.builder('));
     expect(habit, contains('itemCount: activeHabits.length'));
     expect(habit, contains('_HabitTodaySummaryCard('));
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 32'));
-    expect(habit, contains('const double _habitTitleStatusHeight = 14'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 44'));
+    expect(habit, contains('const double _habitTitleStatusHeight = 17'));
     expect(habit, contains('const double _habitUndoButtonWidth = 30'));
-    expect(habit, contains('const double _habitCheckinButtonWidth = 64'));
+    expect(habit, contains('const double _habitCheckinButtonWidth = 58'));
     expect(habit, contains('minimumSize: const Size('));
     expect(habit, contains('_habitCheckinButtonWidth'));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
