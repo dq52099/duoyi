@@ -4106,6 +4106,12 @@ abstract class AppLocalizations {
   /// **'请先填写倒数日名称'**
   String get countdownValidationTitleRequired;
 
+  /// No description provided for @anniversaryValidationTitleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写标题'**
+  String get anniversaryValidationTitleRequired;
+
   /// No description provided for @countdownSaveFailedPrefix.
   ///
   /// In zh, this message translates to:

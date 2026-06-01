@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../core/app_version.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
@@ -27,6 +28,7 @@ import 'note_screen.dart';
 import 'statistics_screen.dart';
 import 'time_audit_screen.dart';
 import 'pomodoro_screen.dart';
+import 'countdown_screen.dart';
 import 'anniversary_screen.dart' as anniversary;
 import 'diary_screen.dart';
 import 'goal_screen.dart';
@@ -134,10 +136,9 @@ class MineScreen extends StatelessWidget {
       body: ListView(
         children: [
           AppSurfaceCard(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            padding: const EdgeInsets.all(12),
-            color: cs.surface.withValues(alpha: 0.82),
-            borderRadius: BorderRadius.circular(8),
+            margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+            padding: const EdgeInsets.all(14),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 360;
@@ -182,9 +183,9 @@ class MineScreen extends StatelessWidget {
                                         boxShadow: [
                                           BoxShadow(
                                             color: avatarFrame.colors.first
-                                                .withValues(alpha: 0.20),
-                                            blurRadius: 12,
-                                            offset: const Offset(0, 4),
+                                                .withValues(alpha: 0.12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
                                           ),
                                         ],
                                       ),
@@ -223,7 +224,10 @@ class MineScreen extends StatelessWidget {
                                       width: 20,
                                       height: 20,
                                       decoration: BoxDecoration(
-                                        color: cs.primary,
+                                        color: Color.alphaBlend(
+                                          cs.primary.withValues(alpha: 0.90),
+                                          cs.surface,
+                                        ),
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: cs.surface.withValues(
@@ -234,8 +238,8 @@ class MineScreen extends StatelessWidget {
                                       ),
                                       child: Icon(
                                         Icons.edit_outlined,
-                                        size: 11,
-                                        color: cs.onPrimary,
+                                        size: 10,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
@@ -254,12 +258,28 @@ class MineScreen extends StatelessWidget {
                 final coins = auth.state.isLoggedIn
                     ? auth.state.coinBalance
                     : coinBalance;
-                final loginAction = auth.state.isLoggedIn
-                    ? null
-                    : SizedBox(
-                        width: 54,
-                        height: 30,
-                        child: FilledButton(
+                final accountAction = SizedBox(
+                  width: auth.state.isLoggedIn ? 38 : 54,
+                  height: 30,
+                  child: auth.state.isLoggedIn
+                      ? Tooltip(
+                          message: '退出登录',
+                          child: IconButton.filledTonal(
+                            key: const ValueKey('mine_top_logout_button'),
+                            onPressed: () => _confirmLogout(context),
+                            icon: const Icon(Icons.logout, size: 16),
+                            style: IconButton.styleFrom(
+                              backgroundColor: cs.errorContainer.withValues(
+                                alpha: 0.58,
+                              ),
+                              foregroundColor: cs.onErrorContainer,
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        )
+                      : FilledButton(
                           onPressed: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -272,7 +292,7 @@ class MineScreen extends StatelessWidget {
                             child: Text('登录', maxLines: 1),
                           ),
                         ),
-                      );
+                );
                 final nameText = displayName.trim().isEmpty
                     ? '用户'
                     : displayName.trim();
@@ -287,13 +307,10 @@ class MineScreen extends StatelessWidget {
                   _MineUserLineChip(
                     label: '时光币 $coins',
                     icon: Icons.savings_outlined,
-                    color: Colors.amber.shade700,
+                    color: cs.secondary,
                   ),
                   if (auth.state.isLoggedIn && auth.state.isAdmin)
-                    const _MineUserLineChip(
-                      label: '管理员',
-                      color: Colors.deepOrange,
-                    ),
+                    _MineUserLineChip(label: '管理员', color: cs.primary),
                 ];
                 return Row(
                   key: const ValueKey('mine_user_info_row'),
@@ -309,7 +326,9 @@ class MineScreen extends StatelessWidget {
                         button: true,
                         label: '查看个人资料',
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(
+                            DesignTokens.radiusCard,
+                          ),
                           onTap: () => _openProfileEditor(context),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -344,10 +363,8 @@ class MineScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (loginAction != null) ...[
-                      const SizedBox(width: 8),
-                      loginAction,
-                    ],
+                    const SizedBox(width: 8),
+                    accountAction,
                   ],
                 );
               },
@@ -373,27 +390,27 @@ class MineScreen extends StatelessWidget {
                       value: '$todoCompletionRate',
                       unit: '%',
                       icon: Icons.check_circle_outline,
-                      color: Colors.blue,
+                      color: cs.primary,
                     ),
                     StatsOverviewCard(
                       title: '连续打卡',
                       value: '${p.currentStreak}',
                       unit: '天',
                       icon: Icons.repeat,
-                      color: Colors.green,
+                      color: cs.tertiary,
                     ),
                     StatsOverviewCard(
                       title: '本周专注',
                       value: '$weeklyFocus',
                       unit: '分钟',
                       icon: Icons.timer,
-                      color: Colors.red,
+                      color: DesignTokens.defaultError,
                     ),
                     StatsOverviewCard(
                       title: '效率评分',
                       value: '${p.productivityScore}',
                       icon: Icons.auto_awesome,
-                      color: Colors.orange,
+                      color: DesignTokens.defaultWarning,
                     ),
                   ],
                 );
@@ -579,6 +596,18 @@ class MineScreen extends StatelessWidget {
                 ),
               ),
               _Tile(
+                icon: Icons.hourglass_bottom_outlined,
+                label: '倒数日',
+                color: Colors.deepOrange,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const BrandRouteSurface(child: CountdownScreen()),
+                  ),
+                ),
+              ),
+              _Tile(
                 icon: Icons.event_available_outlined,
                 label: '纪念日',
                 color: Colors.pink,
@@ -649,13 +678,6 @@ class MineScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              if (auth.state.isLoggedIn)
-                _Tile(
-                  icon: Icons.logout,
-                  label: '退出登录',
-                  color: cs.error,
-                  onTap: () => _confirmLogout(context),
-                ),
             ],
           ),
           _TileGroup(
@@ -968,8 +990,11 @@ class MineScreen extends StatelessWidget {
         : _firstNonEmpty([profile.avatarUrl, profile.avatarInitials]);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            _AvatarPreviewScreen(avatar: avatar, displayName: displayName),
+        builder: (_) => _AvatarPreviewScreen(
+          avatar: avatar,
+          displayName: displayName,
+          onEdit: () => _pickAndSaveAvatar(context),
+        ),
       ),
     );
   }
@@ -1205,11 +1230,9 @@ class _ProfileAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final value = avatar?.trim() ?? '';
-    final uri = Uri.tryParse(value);
-    final isUrl =
-        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
-    final fallback = (isUrl || localPath != null)
+    final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
     final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
@@ -1217,10 +1240,10 @@ class _ProfileAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: cs.primary,
-      child: isUrl
+      child: networkUrl != null
           ? ClipOval(
               child: Image.network(
-                value,
+                networkUrl,
                 width: radius * 2,
                 height: radius * 2,
                 fit: BoxFit.cover,
@@ -1309,8 +1332,13 @@ class _MineUserLineChip extends StatelessWidget {
 class _AvatarPreviewScreen extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final VoidCallback? onEdit;
 
-  const _AvatarPreviewScreen({required this.avatar, required this.displayName});
+  const _AvatarPreviewScreen({
+    required this.avatar,
+    required this.displayName,
+    this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1324,6 +1352,17 @@ class _AvatarPreviewScreen extends StatelessWidget {
           context,
         ).copyWith(color: Colors.white),
         title: const Text('头像'),
+        actions: [
+          if (onEdit != null)
+            IconButton(
+              tooltip: '修改头像',
+              onPressed: () {
+                Navigator.of(context).pop();
+                WidgetsBinding.instance.addPostFrameCallback((_) => onEdit!());
+              },
+              icon: const Icon(Icons.edit_outlined),
+            ),
+        ],
       ),
       body: Center(
         child: Hero(
@@ -1350,13 +1389,11 @@ class _ProfileAvatarFullImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = avatar?.trim() ?? '';
-    final uri = Uri.tryParse(value);
-    final isUrl =
-        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
-    final image = isUrl
+    final image = networkUrl != null
         ? Image.network(
-            value,
+            networkUrl,
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) => _fallbackAvatar(context),
           )
@@ -1381,11 +1418,9 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     final radius = (size.shortestSide * 0.28).clamp(84.0, 150.0);
     final value = avatar?.trim() ?? '';
-    final uri = Uri.tryParse(value);
-    final isUrl =
-        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
-    final fallback = (isUrl || localPath != null)
+    final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
     final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
@@ -1428,11 +1463,31 @@ class _ProfileAvatarLetter extends StatelessWidget {
 String? _localAvatarPath(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) return null;
+  if (_networkAvatarUrl(trimmed) != null) return null;
   final uri = Uri.tryParse(trimmed);
   if (uri != null && uri.scheme == 'file') {
     return uri.toFilePath();
   }
   if (trimmed.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+String? _networkAvatarUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final uri = Uri.tryParse(trimmed);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    return trimmed;
+  }
+  final pathSegments = Uri.tryParse(trimmed)?.pathSegments ?? const <String>[];
+  if (pathSegments.isNotEmpty &&
+      (pathSegments.first == 'api' || pathSegments.first == 'uploads')) {
+    final base = Uri.base;
+    if (base.scheme == 'http' || base.scheme == 'https') {
+      return base.resolve(trimmed).toString();
+    }
     return trimmed;
   }
   return null;
@@ -1580,7 +1635,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(14),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1667,7 +1722,6 @@ class _TileGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = Theme.of(context).colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Column(
@@ -1685,24 +1739,17 @@ class _TileGroup extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: isDark
-                  ? cs.surface.withValues(alpha: 0.54)
-                  : cs.surface.withValues(alpha: 0.82),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(
-                  alpha: isDark ? 0.07 : 0.09,
-                ),
-                width: 0.45,
-              ),
-            ),
-            padding: const EdgeInsets.all(8),
+          AppSurfaceCard(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Column(
               children: [
                 for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      indent: 44,
+                      color: cs.outlineVariant.withValues(alpha: 0.14),
+                    ),
                   children[i],
                 ],
               ],
@@ -1797,77 +1844,58 @@ class _Tile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: isDark
-                ? cs.surfaceContainerHighest.withValues(alpha: 0.68)
-                : cs.surface.withValues(alpha: 0.86),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: isDark ? 0.06 : 0.08),
-              width: 0.45,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.05 : 0.012),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 28,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: isDark ? 0.18 : 0.12),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(icon, color: color, size: 16),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 28,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+                    borderRadius: BorderRadius.circular(9),
                   ),
+                  child: Icon(icon, color: color, size: 16),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: appSecondaryMenuItemTextStyle(
+                        context,
+                      ).copyWith(height: 1.2, color: cs.onSurface),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
                       Text(
-                        label,
+                        subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: appSecondaryMenuItemTextStyle(
-                          context,
-                        ).copyWith(height: 1.2, color: cs.onSurface),
-                      ),
-                      if (subtitle != null && subtitle!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 11,
-                            height: 1.15,
-                            color: cs.onSurface.withValues(alpha: 0.58),
-                          ),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          height: 1.15,
+                          color: cs.onSurface.withValues(alpha: 0.58),
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                trailing ??
-                    Icon(
-                      Icons.chevron_right,
-                      size: 18,
-                      color: cs.onSurface.withValues(alpha: 0.34),
-                    ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              trailing ??
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: cs.onSurface.withValues(alpha: 0.34),
+                  ),
+            ],
           ),
         ),
       ),

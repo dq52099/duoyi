@@ -35,6 +35,9 @@ void main() {
       'anniversary.field.date_picker_title',
       'anniversary.field.date_picker_subtitle',
       'anniversary.field.color',
+      'anniversary.validation.title_required',
+      'anniversary.saved',
+      'anniversary.save_failed_prefix',
       'anniversary.reminder.register_failed',
       'anniversary.reminder.not_registered',
       'anniversary.reminder.popup_fallback_failed',
@@ -133,8 +136,8 @@ void main() {
     expect(anniversary, contains('children: List.generate(3'));
     expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
     expect(mine, contains('child: anniversary.BirthdayScreen()'));
-    expect(mine, isNot(contains('CountdownScreen')));
-    expect(mine, isNot(contains("label: '倒数日'")));
+    expect(mine, contains('child: CountdownScreen()'));
+    expect(mine, contains("label: '倒数日'"));
     expect(mine, isNot(contains('const AnniversaryScreen(initialTab: 3)')));
     expect(
       anniversary,
@@ -271,12 +274,24 @@ void main() {
     expect(source, contains('.notificationChannelIds()'));
     expect(source, contains('.hasExactAlarmPermission()'));
     expect(source, contains('.hasFullScreenIntentPermission()'));
-    expect(saveMethod, contains('ScaffoldMessenger.of(context).showSnackBar'));
+    expect(source, contains('void _showSnackBarIfPossible'));
+    expect(source, contains('Scaffold.maybeOf(context) == null'));
+    expect(saveMethod, contains('_showSnackBarIfPossible('));
+    expect(saveMethod, contains('ScaffoldMessenger.maybeOf(context)'));
     expect(
       saveMethod.indexOf('await _checkReminderBeforeSave('),
       lessThan(saveMethod.indexOf('await p.add(item)')),
     );
+    final popIndex = saveMethod.indexOf('Navigator.pop(context)');
+    expect(popIndex, greaterThan(saveMethod.indexOf('await p.add(item)')));
+    expect(popIndex, greaterThan(saveMethod.indexOf('await p.update(item)')));
     expect(source, contains('reminderKind: remind ? kind : ReminderKind.off'));
+    expect(source, contains('bool _saving = false'));
+    expect(source, contains('if (_saving) return'));
+    expect(source, contains('setState(() => _saving = true)'));
+    expect(source, contains('onPressed: _saving ? null : _save'));
+    expect(source, contains('CircularProgressIndicator(strokeWidth: 2)'));
+    expect(source, isNot(contains('showAnniversaryEditor(routeContext')));
     expect(
       saveMethod,
       contains('_buildItem(remind: _remind, kind: _reminderKind)'),

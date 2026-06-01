@@ -7,7 +7,7 @@ void main() {
     final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
 
     expect(adminApi, contains('Future<void> setUserAdminPermissions'));
-    expect(adminApi, contains("'admin_permissions': permissions"));
+    expect(adminApi, contains("body['admin_permissions'] = adminPermissions"));
     expect(adminApi, contains('String? groupId'));
     expect(adminApi, contains('String? roleId'));
     expect(adminApi, contains("body['group_id'] = groupId"));
@@ -56,6 +56,7 @@ void main() {
       contains("client.getRaw('/api/admin/groups?limit=500&offset=0')"),
     );
     expect(adminApi, contains('Future<Map<String, dynamic>> saveGroup'));
+    expect(adminApi, contains('Future<Map<String, dynamic>> deleteGroup'));
     expect(adminApi, contains('int? defaultGenerateQuota'));
     expect(adminApi, contains('int? defaultEditQuota'));
     expect(
@@ -73,6 +74,8 @@ void main() {
     expect(adminApi, contains("'/api/admin/user-groups'"));
     expect(adminApi, contains("'/api/admin/user_groups'"));
     expect(adminApi, contains(r"'/api/admin/groups/$groupId'"));
+    expect(adminApi, contains("const ['DELETE']"));
+    expect(adminApi, contains('管理员用户组删除'));
     expect(adminApi, contains('Future<List<Map<String, dynamic>>> listRoles'));
     expect(adminApi, contains("client.getRaw('/api/admin/roles')"));
     expect(adminApi, contains('Future<Map<String, dynamic>> saveRole'));
@@ -177,6 +180,9 @@ void main() {
     expect(backend, contains('@app.post("/api/admin/groups")'));
     expect(backend, contains('@app.put("/api/admin/groups/{group_id}")'));
     expect(backend, contains('@app.patch("/api/admin/groups/{group_id}")'));
+    expect(backend, contains('@app.delete("/api/admin/groups/{group_id}")'));
+    expect(backend, contains('默认用户组不能删除'));
+    expect(backend, contains('fallback_group_id'));
     expect(backend, contains('@app.get("/api/admin/roles")'));
     expect(backend, contains('@app.post("/api/admin/roles")'));
     expect(backend, contains('@app.put("/api/admin/roles/{role_id}")'));
@@ -360,8 +366,16 @@ void main() {
     expect(adminScreen, contains("bool get _canManageCoins"));
     expect(adminScreen, contains("_canUseAdminPermission('coins')"));
     expect(adminScreen, contains("bool get _canManageGroups"));
+    expect(adminScreen, contains("bool get _canAssignGroups"));
+    expect(
+      adminScreen,
+      contains(
+        'bool get _canAssignGroups => _canManageGroups || _canManageCoins',
+      ),
+    );
     expect(adminScreen, contains("bool get _canManageRoles"));
     expect(adminScreen, contains("bool get _canManagePermissions"));
+    expect(adminScreen, contains("bool get _canManageAdminAccess"));
     expect(adminScreen, contains("_canUseAdminPermission('groups')"));
     expect(adminScreen, contains("_canUseAdminPermission('roles')"));
     expect(adminScreen, contains("_canUseAdminPermission('permissions')"));
@@ -375,13 +389,17 @@ void main() {
     expect(adminScreen, contains("value: 'group_role'"));
     expect(adminScreen, contains('设置用户组/角色'));
     expect(adminScreen, contains('缺少用户组或角色管理权限'));
+    expect(
+      adminScreen,
+      contains('isAdmin: _hasAllAdminPermission ? isAdmin : false'),
+    );
     expect(adminScreen, contains('widget.api.updateUser('));
     expect(adminScreen, contains('activeOnly: true'));
     expect(adminScreen, contains("item['is_active'] == false"));
     expect(adminScreen, contains("isInactive ? ' · 停用' : ''"));
     expect(
       adminScreen,
-      contains('groupId: _canManageGroups ? selectedGroupId : null'),
+      contains('groupId: _canAssignGroups ? selectedGroupId : null'),
     );
     expect(
       adminScreen,
@@ -391,7 +409,18 @@ void main() {
     expect(adminScreen, contains('enabled: _canManageCoins'));
     expect(adminScreen, contains("调整时光币（无权限）"));
     expect(adminScreen, contains("缺少时光币管理权限"));
-    expect(adminScreen, contains('widget.api.setUserAdminPermissions('));
+    expect(adminScreen, contains('isAdmin: isAdmin ? null : true'));
+    expect(adminScreen, contains('final roleIdForPromotion ='));
+    expect(adminScreen, contains('existingRoleId.isNotEmpty'));
+    expect(
+      adminScreen,
+      contains('roleId: isAdmin ? null : roleIdForPromotion'),
+    );
+    expect(adminScreen, contains('adminPermissions: permissions'));
+    expect(
+      adminScreen,
+      isNot(contains('await widget.api.setUserAdminPermissions(')),
+    );
     expect(adminScreen, contains('widget.api.adjustUserCoins('));
     expect(adminScreen, contains("u['coin_balance'] = adjusted['balance'];"));
     expect(
@@ -408,7 +437,7 @@ void main() {
     final backend = File('backend/main.py').readAsStringSync();
 
     final apiUpdateUser = adminApi.substring(
-      adminApi.indexOf('Future<void> updateUser'),
+      adminApi.indexOf('Future<Map<String, dynamic>> updateUser'),
       adminApi.indexOf('Future<void> setUserAdminPermissions'),
     );
     expect(apiUpdateUser, contains("body['group_id'] = groupId"));

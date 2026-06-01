@@ -10,10 +10,12 @@ import '../providers/diary_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/todo_templates.dart';
 import '../models/calendar_event.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../models/diary_entry.dart';
+import '../models/todo.dart';
 import '../core/lunar_calendar.dart';
 import '../screens/diary_screen.dart';
 import 'calendar_event_sheet.dart';
@@ -25,6 +27,7 @@ class CalendarDayAgenda extends StatelessWidget {
   final String? projectKey;
   final String? workspaceId;
   final double horizontalPadding;
+  final bool scrollable;
 
   const CalendarDayAgenda({
     super.key,
@@ -34,6 +37,7 @@ class CalendarDayAgenda extends StatelessWidget {
     this.projectKey,
     this.workspaceId,
     this.horizontalPadding = 16,
+    this.scrollable = true,
   });
 
   IconData _icon(CalendarEventType t) {
@@ -59,6 +63,20 @@ class CalendarDayAgenda extends StatelessWidget {
       case CalendarEventType.timeEntry:
         return Icons.timelapse_outlined;
     }
+  }
+
+  _CalendarTodoVisual _todoVisualForEvent(
+    BuildContext context,
+    CalendarEvent event,
+  ) {
+    if (event.type != CalendarEventType.todo || event.sourceId == null) {
+      return _CalendarTodoVisual(icon: _icon(event.type), color: event.color);
+    }
+    final todos = context.read<TodoProvider>().todos;
+    for (final todo in todos) {
+      if (todo.id == event.sourceId) return _calendarTodoVisual(todo);
+    }
+    return _CalendarTodoVisual(icon: _icon(event.type), color: event.color);
   }
 
   @override
@@ -96,122 +114,126 @@ class CalendarDayAgenda extends StatelessWidget {
 
     final todayDiary = diary.entryForDate(date);
 
+    final children = [
+      // 农历 / 节日 / 节气头
+      _dayHeader(context, lunar, term, solarFes, lunarFes),
+
+      // 日记按钮
+      _DiaryQuickEntry(date: date, entry: todayDiary),
+
+      if (hitAnniversaries.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        _sectionTitle('🎉 今日纪念'),
+        ...hitAnniversaries.map(
+          (a) => _AnniversaryTile(
+            title: a.title,
+            color: Color(a.colorValue),
+            subtitle: a.yearsPassed != null
+                ? '第 ${a.yearsPassed! + 1} 次'
+                : null,
+          ),
+        ),
+      ],
+
+      if (todayCourses.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _sectionTitle('📚 今日课程'),
+        ...todayCourses.map(
+          (c) => Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Color(c.colorValue).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Color(c.colorValue).withValues(alpha: 0.2),
+                width: 0.45,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.class_outlined,
+                  color: Color(c.colorValue),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        c.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.normal,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+
+      if (timedEvents.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _sectionTitle('🕘 时间线'),
+        _CalendarDayTimeGrid(date: date, events: timedEvents),
+      ],
+
+      if (untimedEvents.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _sectionTitle('📝 全天/无时间'),
+        ..._buildTimeline(context, untimedEvents),
+      ],
+
+      if (events.isEmpty && hitAnniversaries.isEmpty && todayCourses.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(32),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_busy, size: 48, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  s.calendarEmpty,
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      const SizedBox(height: 24),
+    ];
+
+    if (!scrollable) {
+      return Padding(
+        key: const ValueKey('calendar_day_agenda_inline_content'),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      );
+    }
+
     return Scrollbar(
       child: ListView(
         key: const ValueKey('calendar_day_agenda_scroll_view'),
         primary: false,
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        children: [
-          // 农历 / 节日 / 节气头
-          _dayHeader(context, lunar, term, solarFes, lunarFes),
-
-          // 日记按钮
-          _DiaryQuickEntry(date: date, entry: todayDiary),
-
-          if (hitAnniversaries.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _sectionTitle('🎉 今日纪念'),
-            ...hitAnniversaries.map(
-              (a) => _AnniversaryTile(
-                title: a.title,
-                color: Color(a.colorValue),
-                subtitle: a.yearsPassed != null
-                    ? '第 ${a.yearsPassed! + 1} 次'
-                    : null,
-              ),
-            ),
-          ],
-
-          if (todayCourses.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _sectionTitle('📚 今日课程'),
-            ...todayCourses.map(
-              (c) => Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Color(c.colorValue).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Color(c.colorValue).withValues(alpha: 0.2),
-                    width: 0.45,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.class_outlined,
-                      color: Color(c.colorValue),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            c.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.normal,
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          if (timedEvents.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _sectionTitle('🕘 时间线'),
-            _CalendarDayTimeGrid(date: date, events: timedEvents),
-          ],
-
-          if (untimedEvents.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _sectionTitle('📝 全天/无时间'),
-            ..._buildTimeline(context, untimedEvents),
-          ],
-
-          if (events.isEmpty &&
-              hitAnniversaries.isEmpty &&
-              todayCourses.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.event_busy,
-                      size: 48,
-                      color: Colors.grey.shade300,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      s.calendarEmpty,
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 24),
-        ],
+        children: children,
       ),
     );
   }
@@ -324,7 +346,12 @@ class CalendarDayAgenda extends StatelessWidget {
                       color: e.color.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(_icon(e.type), color: e.color, size: 14),
+                    child: Builder(
+                      builder: (context) {
+                        final visual = _todoVisualForEvent(context, e);
+                        return Icon(visual.icon, color: visual.color, size: 14);
+                      },
+                    ),
                   ),
                   if (!isLast)
                     Expanded(
@@ -412,9 +439,9 @@ class _CalendarDayTimeGrid extends StatelessWidget {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
@@ -548,6 +575,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
 
   Widget _buildCompactContent(BuildContext context, CalendarEvent e) {
     final visual = _eventVisualState(e);
+    final eventVisual = _calendarEventVisual(context, e);
     final cs = Theme.of(context).colorScheme;
     final isCompleted = visual == TodoVisualState.completed;
     final isOverdue = visual == TodoVisualState.overdue;
@@ -562,6 +590,8 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
           Icon(Icons.drag_indicator, size: 14, color: Colors.grey.shade500),
           const SizedBox(width: 3),
         ],
+        Icon(eventVisual.icon, size: 14, color: eventVisual.color),
+        const SizedBox(width: 5),
         Expanded(
           child: Text(
             e.title,
@@ -613,6 +643,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
 
   Widget _buildRegularContent(BuildContext context, CalendarEvent e) {
     final visual = _eventVisualState(e);
+    final eventVisual = _calendarEventVisual(context, e);
     final cs = Theme.of(context).colorScheme;
     final isCompleted = visual == TodoVisualState.completed;
     final isOverdue = visual == TodoVisualState.overdue;
@@ -630,6 +661,8 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               Icon(Icons.drag_indicator, size: 16, color: Colors.grey.shade500),
               const SizedBox(width: 4),
             ],
+            Icon(eventVisual.icon, size: 16, color: eventVisual.color),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 e.title,
@@ -770,14 +803,80 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
 }
 
 TodoVisualState _eventVisualState(CalendarEvent event) {
+  if (event.type != CalendarEventType.todo) return TodoVisualState.normal;
   if (event.isCompleted) return TodoVisualState.completed;
   final dueAt = event.endDate;
-  if (event.type == CalendarEventType.todo &&
-      dueAt != null &&
-      dueAt.isBefore(DateTime.now())) {
+  if (dueAt != null && dueAt.isBefore(DateTime.now())) {
     return TodoVisualState.overdue;
   }
   return TodoVisualState.normal;
+}
+
+class _CalendarTodoVisual {
+  final IconData icon;
+  final Color color;
+
+  const _CalendarTodoVisual({required this.icon, required this.color});
+}
+
+_CalendarTodoVisual _calendarEventVisual(
+  BuildContext context,
+  CalendarEvent event,
+) {
+  if (event.type != CalendarEventType.todo || event.sourceId == null) {
+    return _CalendarTodoVisual(
+      icon: _fallbackEventIcon(event.type),
+      color: event.color,
+    );
+  }
+  final todos = context.read<TodoProvider>().todos;
+  for (final todo in todos) {
+    if (todo.id == event.sourceId) return _calendarTodoVisual(todo);
+  }
+  return _CalendarTodoVisual(
+    icon: _fallbackEventIcon(event.type),
+    color: event.color,
+  );
+}
+
+_CalendarTodoVisual _calendarTodoVisual(TodoItem todo) {
+  final target = todo.listGroupName?.trim();
+  if (target != null && target.isNotEmpty) {
+    for (final template in TodoListTemplates.all) {
+      if (template.name == target) {
+        return _CalendarTodoVisual(icon: template.icon, color: template.color);
+      }
+    }
+  }
+  return _CalendarTodoVisual(
+    icon: switch (todo.quadrant) {
+      EisenhowerQuadrant.urgentImportant => Icons.priority_high_outlined,
+      EisenhowerQuadrant.notUrgentImportant => Icons.flag_outlined,
+      EisenhowerQuadrant.urgentNotImportant => Icons.bolt_outlined,
+      EisenhowerQuadrant.notUrgentNotImportant => Icons.checklist_rounded,
+    },
+    color: switch (todo.quadrant) {
+      EisenhowerQuadrant.urgentImportant => const Color(0xFFE53935),
+      EisenhowerQuadrant.notUrgentImportant => const Color(0xFFF6A339),
+      EisenhowerQuadrant.urgentNotImportant => const Color(0xFF42A5F5),
+      EisenhowerQuadrant.notUrgentNotImportant => const Color(0xFF8E8E8E),
+    },
+  );
+}
+
+IconData _fallbackEventIcon(CalendarEventType t) {
+  return switch (t) {
+    CalendarEventType.event => Icons.event_note_outlined,
+    CalendarEventType.todo => Icons.check_circle_outline,
+    CalendarEventType.habit => Icons.repeat,
+    CalendarEventType.pomodoro => Icons.timer,
+    CalendarEventType.anniversary => Icons.celebration_outlined,
+    CalendarEventType.course => Icons.class_outlined,
+    CalendarEventType.diary => Icons.book_outlined,
+    CalendarEventType.countdown => Icons.hourglass_bottom,
+    CalendarEventType.goal => Icons.flag_circle_outlined,
+    CalendarEventType.timeEntry => Icons.timelapse_outlined,
+  };
 }
 
 class _CalendarAgendaStatusBadge extends StatelessWidget {

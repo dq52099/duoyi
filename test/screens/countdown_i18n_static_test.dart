@@ -58,6 +58,8 @@ void main() {
     expect(source, contains('CircularProgressIndicator(strokeWidth: 2)'));
     expect(source, contains('await provider.updateItem(next)'));
     expect(source, isNot(contains('await provider.addItem(next)')));
+    expect(source, isNot(contains('showCountdownEditor(routeContext')));
+    expect(source, isNot(contains('_isNewItem')));
     expect(source, isNot(contains('FloatingActionButton(')));
     expect(
       source,
@@ -95,6 +97,7 @@ void main() {
       'countdown.field.remind_days',
       'countdown.field.remind_time',
       'countdown.validation.title_required',
+      'countdown.saved',
       'countdown.save_failed_prefix',
       'countdown.reminder.closed',
       'countdown.reminder.before_prefix',

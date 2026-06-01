@@ -972,6 +972,7 @@ class _HabitSummaryTile extends StatelessWidget {
     final streakUnit = habit.streakUnitLabel;
     return _HabitSwipeActionWrapper(
       habit: habit,
+      showEndAction: _habitCanEnd(habit),
       actionMargin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       borderRadius: BorderRadius.circular(10),
       child: ListTile(
@@ -992,11 +993,6 @@ class _HabitSummaryTile extends StatelessWidget {
         subtitle: Text(
           '$streakLabel ${habit.currentStreak} $streakUnit · 最佳 ${habit.bestStreak} $streakUnit',
           style: const TextStyle(fontSize: 12),
-        ),
-        trailing: PopupMenuButton<String>(
-          tooltip: '习惯操作',
-          onSelected: (value) => _handleHabitMenuAction(context, habit, value),
-          itemBuilder: _habitActionMenuItems,
         ),
         onTap: () => Navigator.push(
           context,
@@ -1024,6 +1020,23 @@ const double _habitActionRailWidth =
 const double _habitSwipeActionWidth = 144;
 const double _habitSwipeOpenThreshold = 36;
 
+bool _habitCanEnd(Habit habit) {
+  final endDate = habit.endDate;
+  if (endDate == null) return true;
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final endDay = DateTime(endDate.year, endDate.month, endDate.day);
+  return !endDay.isBefore(today);
+}
+
+String _habitFlexGoalText(Habit habit) {
+  if (!habit.hasFlexRule) return '';
+  return switch (habit.flexPeriod!) {
+    HabitFlexPeriod.week => '每周目标: ${habit.effectiveFlexTarget} 次',
+    HabitFlexPeriod.month => '每月目标: ${habit.effectiveFlexTarget} 次',
+  };
+}
+
 class _HabitCheckinCard extends StatelessWidget {
   final Habit habit;
   const _HabitCheckinCard({required this.habit});
@@ -1048,7 +1061,7 @@ class _HabitCheckinCard extends StatelessWidget {
     final targetText = isNegative
         ? '目标: 不发生'
         : habit.hasFlexRule
-        ? '${habit.flexPeriodGoalLabel} · 单次目标: ${habit.targetCount} ${habit.unit ?? '次'}'
+        ? '${_habitFlexGoalText(habit)} · 单次目标: ${habit.targetCount} ${habit.unit ?? '次'}'
         : '目标: ${habit.targetCount} ${habit.unit ?? '次'}/天';
     final countText = isNegative
         ? '$todayCount ${habit.unit ?? '次'}'
@@ -1303,7 +1316,7 @@ class _HabitCheckinCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: _habitActionButtonGap),
-                      _HabitMoreButton(habit: habit),
+                      _HabitDetailButton(habit: habit),
                     ],
                   ),
                 ),
@@ -1328,7 +1341,7 @@ class _HabitCheckinCard extends StatelessWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            '「${habit.name}」${currentFlexProgress?.labelPrefix ?? '本周期'}周期目标已达标',
+            '「${habit.name}」${currentFlexProgress?.labelPrefix ?? '本周期'}目标已达标',
           ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
@@ -1363,7 +1376,7 @@ class _HabitCheckinCard extends StatelessWidget {
     final flexMessage = flexProgress == null
         ? '已打卡「${displayHabit.name}」 $updatedCount/${displayHabit.targetCount}'
         : flexProgress.isCompleted
-        ? '「${displayHabit.name}」${flexProgress.labelPrefix}周期目标已达标'
+        ? '「${displayHabit.name}」${flexProgress.labelPrefix}目标已达标'
         : '已打卡「${displayHabit.name}」 ${flexProgress.label}';
     await HapticFeedback.mediumImpact();
     await SystemSound.play(SystemSoundType.click);
@@ -1419,12 +1432,14 @@ class _HabitSwipeActionWrapper extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry actionMargin;
   final BorderRadiusGeometry borderRadius;
+  final bool showEndAction;
 
   const _HabitSwipeActionWrapper({
     required this.habit,
     required this.child,
     required this.actionMargin,
     required this.borderRadius,
+    this.showEndAction = true,
   });
 
   @override
@@ -1462,22 +1477,25 @@ class _HabitSwipeActionWrapperState extends State<_HabitSwipeActionWrapper> {
       onHorizontalDragEnd: (_) => _settleSwipe(),
       onHorizontalDragCancel: _settleSwipe,
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: _HabitInlineSwipeActions(
-              margin: widget.actionMargin,
-              borderRadius: widget.borderRadius,
-              onDetails: () => _runAction(
-                () => _handleHabitMenuAction(context, widget.habit, 'detail'),
-              ),
-              onEnd: () => _runAction(
-                () => _handleHabitMenuAction(context, widget.habit, 'end'),
-              ),
-              onDelete: () => _runAction(
-                () => _handleHabitMenuAction(context, widget.habit, 'delete'),
+          if (_swipeOffset > 0)
+            Positioned.fill(
+              child: _HabitInlineSwipeActions(
+                margin: widget.actionMargin,
+                borderRadius: widget.borderRadius,
+                onDetails: () => _runAction(
+                  () => _handleHabitMenuAction(context, widget.habit, 'detail'),
+                ),
+                onEnd: () => _runAction(
+                  () => _handleHabitMenuAction(context, widget.habit, 'end'),
+                ),
+                onDelete: () => _runAction(
+                  () => _handleHabitMenuAction(context, widget.habit, 'delete'),
+                ),
+                showEndAction: widget.showEndAction,
               ),
             ),
-          ),
           AnimatedContainer(
             duration: _dragging
                 ? Duration.zero
@@ -1506,6 +1524,7 @@ class _HabitInlineSwipeActions extends StatelessWidget {
   final VoidCallback onDetails;
   final VoidCallback onEnd;
   final VoidCallback onDelete;
+  final bool showEndAction;
 
   const _HabitInlineSwipeActions({
     required this.margin,
@@ -1513,6 +1532,7 @@ class _HabitInlineSwipeActions extends StatelessWidget {
     required this.onDetails,
     required this.onEnd,
     required this.onDelete,
+    this.showEndAction = true,
   });
 
   @override
@@ -1540,15 +1560,17 @@ class _HabitInlineSwipeActions extends StatelessWidget {
               foreground: cs.primary,
               onTap: onDetails,
             ),
-            const SizedBox(width: 6),
-            _HabitSwipeButton(
-              key: const ValueKey('habit_swipe_end_button'),
-              icon: Icons.event_busy_outlined,
-              label: '结束',
-              background: cs.tertiaryContainer.withValues(alpha: 0.60),
-              foreground: cs.tertiary,
-              onTap: onEnd,
-            ),
+            if (showEndAction) ...[
+              const SizedBox(width: 6),
+              _HabitSwipeButton(
+                key: const ValueKey('habit_swipe_end_button'),
+                icon: Icons.event_busy_outlined,
+                label: '结束',
+                background: cs.tertiaryContainer.withValues(alpha: 0.60),
+                foreground: cs.tertiary,
+                onTap: onEnd,
+              ),
+            ],
             const SizedBox(width: 6),
             _HabitSwipeButton(
               key: const ValueKey('habit_swipe_delete_button'),
@@ -1595,8 +1617,8 @@ class _HabitSwipeButton extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: SizedBox.square(
-              dimension: 38,
-              child: Icon(icon, size: 16, color: foreground),
+              dimension: 40,
+              child: Icon(icon, size: 18, color: foreground),
             ),
           ),
         ),
@@ -1680,10 +1702,10 @@ class _HabitUndoButton extends StatelessWidget {
   }
 }
 
-class _HabitMoreButton extends StatelessWidget {
+class _HabitDetailButton extends StatelessWidget {
   final Habit habit;
 
-  const _HabitMoreButton({required this.habit});
+  const _HabitDetailButton({required this.habit});
 
   @override
   Widget build(BuildContext context) {
@@ -1691,14 +1713,20 @@ class _HabitMoreButton extends StatelessWidget {
     return SizedBox(
       width: _habitMenuButtonWidth,
       height: 26,
-      child: PopupMenuButton<String>(
-        tooltip: '习惯操作',
-        padding: EdgeInsets.zero,
-        icon: Icon(Icons.more_horiz, size: 17, color: cs.onSurfaceVariant),
-        iconSize: 17,
-        position: PopupMenuPosition.under,
-        onSelected: (value) => _handleHabitMenuAction(context, habit, value),
-        itemBuilder: _habitActionMenuItems,
+      child: Tooltip(
+        message: '查看详情',
+        child: IconButton(
+          key: const ValueKey('habit_inline_detail_button'),
+          padding: EdgeInsets.zero,
+          icon: Icon(Icons.open_in_new, size: 16, color: cs.onSurfaceVariant),
+          onPressed: () => _handleHabitMenuAction(context, habit, 'detail'),
+          style: IconButton.styleFrom(
+            fixedSize: const Size(_habitMenuButtonWidth, 26),
+            minimumSize: const Size(_habitMenuButtonWidth, 26),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: EdgeInsets.zero,
+          ),
+        ),
       ),
     );
   }
@@ -1745,18 +1773,6 @@ class _HabitFeedbackBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-List<PopupMenuEntry<String>> _habitActionMenuItems(BuildContext context) {
-  final cs = Theme.of(context).colorScheme;
-  return [
-    const PopupMenuItem(value: 'detail', child: AppSecondaryMenuText('查看详情')),
-    const PopupMenuItem(value: 'end', child: AppSecondaryMenuText('结束习惯')),
-    PopupMenuItem(
-      value: 'delete',
-      child: AppSecondaryMenuText('删除习惯', color: cs.error),
-    ),
-  ];
 }
 
 Future<void> _handleHabitMenuAction(

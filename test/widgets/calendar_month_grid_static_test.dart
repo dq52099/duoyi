@@ -8,15 +8,22 @@ void main() {
       'lib/widgets/calendar_month_grid.dart',
     ).readAsStringSync();
 
-    expect(source, contains('final dayFontSize = cellHeight < 14'));
-    expect(source, contains('(cellHeight * 0.72).clamp(6.0, 9.0).toDouble()'));
-    expect(source, contains('child: ClipRect('));
-    expect(source, contains('height: cellHeight < 14 ? 0.95 : 1.05'));
-    expect(source, contains('final showDots = cellHeight >= 29'));
-    expect(source, contains('final showEventCount = cellHeight >= 38'));
     expect(
       source,
-      contains('final showSubText = showLunar && cellHeight >= 42'),
+      contains('final preferredRowHeight = showLunar ? 76.0 : 58.0'),
+    );
+    expect(source, contains('final maxRowHeight = showLunar ? 104.0 : 82.0'));
+    expect(source, contains('availableRowHeight.clamp(44.0, maxRowHeight)'));
+    expect(source, contains('child: ClipRect('));
+    expect(source, contains('height: cellHeight < 14 ? 0.95 : 1.05'));
+    expect(source, contains('final showDots = cellHeight >= 36'));
+    expect(source, contains('final canShowEventCount = cellHeight >= 62'));
+    expect(source, contains('final showEventCount ='));
+    expect(source, contains('canShowEventCount && eventCount > 3'));
+    expect(source, contains('Widget _eventDots('));
+    expect(
+      source,
+      contains('final showSubText = showLunar && cellHeight >= 48'),
     );
   });
 

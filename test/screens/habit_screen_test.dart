@@ -182,7 +182,7 @@ void main() {
     await pumpHabitScreen(tester, habitProvider);
 
     expect(find.textContaining('目标: 周期目标:'), findsNothing);
-    expect(find.textContaining('周期目标: 3 次/周'), findsOneWidget);
+    expect(find.textContaining('每周目标: 3 次'), findsOneWidget);
     expect(find.textContaining('单次目标: 1 次'), findsOneWidget);
   });
 
@@ -203,7 +203,7 @@ void main() {
     await pumpHabitScreen(tester, habitProvider);
 
     expect(find.textContaining('目标: 周期目标:'), findsNothing);
-    expect(find.textContaining('周期目标: 4 次/月'), findsOneWidget);
+    expect(find.textContaining('每月目标: 4 次'), findsOneWidget);
     expect(find.textContaining('单次目标: 1 次'), findsOneWidget);
   });
 
@@ -266,7 +266,7 @@ void main() {
     expect(find.byIcon(Icons.star), findsNothing);
   });
 
-  testWidgets('habit row exposes end action from today list menu', (
+  testWidgets('habit row keeps end and delete behind left swipe', (
     tester,
   ) async {
     final habitProvider = HabitProvider();
@@ -276,22 +276,34 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    await tester.tap(find.byTooltip('习惯操作').first);
+    expect(find.byTooltip('查看详情'), findsOneWidget);
+    expect(find.byTooltip('习惯操作'), findsNothing);
+    expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.text('阅读').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
 
-    expect(find.text('结束习惯'), findsOneWidget);
-    expect(find.text('删除习惯'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_end_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('结束习惯'));
+    await tester.tap(find.byKey(const ValueKey('habit_swipe_end_button')));
     await tester.pumpAndSettle();
 
     expect(habitProvider.habits.single.isActiveToday(), isFalse);
     expect(find.text('阅读'), findsNothing);
   });
 
-  testWidgets('ending a completed habit keeps today record visible', (
-    tester,
-  ) async {
+  testWidgets('ending a completed habit removes it from today', (tester) async {
     final habitProvider = HabitProvider();
     final todayKey = Habit(id: 'key-helper', name: 'helper').todayKey();
     await habitProvider.addHabit(
@@ -305,19 +317,103 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    await tester.tap(find.byTooltip('习惯操作').first);
+    await tester.drag(find.text('阅读').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('结束习惯'));
+    await tester.tap(find.byKey(const ValueKey('habit_swipe_end_button')));
     await tester.pumpAndSettle();
 
-    expect(habitProvider.habits.single.isActiveToday(), isTrue);
-    expect(habitProvider.habits.single.isCompletedToday(), isTrue);
+    expect(habitProvider.habits.single.isActiveToday(), isFalse);
+    expect(habitProvider.habits.single.isCompletedToday(), isFalse);
+    expect(find.byKey(const ValueKey('habit_checkin_card_read')), findsNothing);
+    expect(find.text('阅读'), findsNothing);
+    expect(find.text('已达标'), findsNothing);
+  });
+
+  testWidgets('ended habit summary row keeps end action hidden behind swipe', (
+    tester,
+  ) async {
+    final habitProvider = HabitProvider();
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    await habitProvider.addHabit(
+      Habit(
+        id: 'ended',
+        name: '已结束习惯',
+        icon: Icons.book.codePoint.toString(),
+        endDate: DateTime(yesterday.year, yesterday.month, yesterday.day),
+      ),
+    );
+
+    await pumpHabitScreen(tester, habitProvider);
+    await tester.tap(find.text('热度图'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
+
+    await tester.drag(find.text('已结束习惯').first, const Offset(-180, 0));
+    await tester.pumpAndSettle();
+
     expect(
-      find.byKey(const ValueKey('habit_checkin_card_read')),
+      find.byKey(const ValueKey('habit_swipe_detail_button')),
       findsOneWidget,
     );
-    expect(find.text('阅读'), findsOneWidget);
-    expect(find.text('已达标'), findsOneWidget);
+    expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('active heatmap habit keeps actions behind left swipe', (
+    tester,
+  ) async {
+    final habitProvider = HabitProvider();
+    await habitProvider.addHabit(
+      Habit(id: 'focus', name: '专注', icon: Icons.timer.codePoint.toString()),
+    );
+
+    await pumpHabitScreen(tester, habitProvider);
+    await tester.tap(find.text('热度图'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('专注'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.text('专注').first, const Offset(160, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('habit_swipe_detail_button')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.text('专注').first, const Offset(-180, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('habit_swipe_detail_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('habit_swipe_end_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('habit_swipe_delete_button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('habit row delete action confirms and removes habit', (
@@ -334,9 +430,9 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    await tester.tap(find.byTooltip('习惯操作').first);
+    await tester.drag(find.text('散步').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('删除习惯'));
+    await tester.tap(find.byKey(const ValueKey('habit_swipe_delete_button')));
     await tester.pumpAndSettle();
 
     expect(find.text('删除习惯？'), findsOneWidget);

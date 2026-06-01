@@ -6,6 +6,7 @@ import 'package:duoyi/providers/focus_room_provider.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -131,6 +132,11 @@ void main() {
     expect(provider, contains('onlineCount: remote.onlineCount'));
     expect(provider, contains('onLocalChanged?.call()'));
     expect(provider, contains('buildFocusRoomRanking'));
+    expect(provider, contains('String _focusRoomRemoteError('));
+    expect(
+      provider,
+      contains('isBackendCompatibilityDiagnosticMessage(message)'),
+    );
     expect(provider, contains("'joinedRoomIds'"));
     expect(provider, contains("'activeRoomId'"));
     expect(provider, contains('深度工作自习室'));
@@ -191,6 +197,98 @@ void main() {
       expect(ranking.remote, isFalse);
       expect(currentUser.name, '小多');
       expect(currentUser.weeklySeconds, 25 * 60);
+    },
+  );
+
+  test('FocusRoomProvider keeps leave-room diagnostics visible', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final provider = FocusRoomProvider();
+    final requests = <String>[];
+    provider.apiClientGetter = () => ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'token-1',
+      httpClient: MockClient((request) async {
+        requests.add('${request.method} ${request.url.path}');
+        return http.Response(
+          jsonEncode({'detail': 'focus room leave unavailable'}),
+          500,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final room = await provider.createRoom(
+      name: '离开失败自习室',
+      description: '服务端错误仍要保留诊断',
+      weeklyTargetMinutes: 60,
+    );
+    await provider.leaveRoom(room.id);
+
+    expect(requests, ['POST /api/focus-rooms/${room.id}/leave']);
+    expect(provider.lastRemoteError, contains('focus room leave unavailable'));
+    expect(provider.joinedRoomIds, isNot(contains(room.id)));
+  });
+
+  test(
+    'FocusRoomProvider preserves backend contract diagnostics for focus outages',
+    () async {
+      final provider = FocusRoomProvider();
+      final requests = <String>[];
+      provider.apiClientGetter = () => ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          requests.add('${request.method} ${request.url.path}');
+          if (request.url.path == '/api/config') {
+            return http.Response(
+              jsonEncode({
+                'version': 'old-backend',
+                'api_contract_version': '2026-05-20.1',
+                'required_routes_hash': 'stale-focus-routes',
+                'features': {'focus_rooms': true},
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response(
+            jsonEncode({'detail': 'Not Found'}),
+            404,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      final sessions = [
+        PomodoroSession(
+          id: 'local-session',
+          startTime: DateTime(2026, 5, 25, 9),
+          endTime: DateTime(2026, 5, 25, 9, 25),
+          durationSeconds: 25 * 60,
+          type: PomodoroType.focus,
+          focusRoomId: FocusRoomProvider.defaultRoomId,
+        ),
+      ];
+
+      await provider.syncRemoteRankings(
+        sessions,
+        displayName: '小多',
+        force: true,
+      );
+
+      expect(requests, [
+        'POST /api/focus-rooms/deep_work_room/heartbeat',
+        'GET /api/config',
+      ]);
+      expect(
+        provider.lastRemoteError,
+        contains('当前后端未部署本版本接口：/api/focus-rooms/deep_work_room/heartbeat'),
+      );
+      expect(provider.lastRemoteError, contains('接口契约 2026-05-20.1'));
+      expect(
+        provider.lastRemoteError,
+        contains('必备路由摘要 stale-focus-routes 与客户端要求'),
+      );
+      expect(provider.lastRemoteError, isNot(equals('自习室服务暂不可用，请稍后重试或联系管理员。')));
     },
   );
 }

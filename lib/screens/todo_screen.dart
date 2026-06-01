@@ -2004,7 +2004,7 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
   bool _dragging = false;
 
   bool get _swipeOpen => _swipeOffset > 0;
-  bool get _swipeActive => _dragging || _swipeOpen;
+  bool get _swipeActive => _swipeOffset > 0;
 
   @override
   void didUpdateWidget(covariant _KanbanTodoCard oldWidget) {
@@ -2827,7 +2827,7 @@ class _TodoTileState extends State<_TodoTile> {
   bool _dragging = false;
 
   bool get _swipeOpen => _swipeOffset > 0;
-  bool get _swipeActive => _dragging || _swipeOpen;
+  bool get _swipeActive => _swipeOffset > 0;
 
   @override
   void didUpdateWidget(covariant _TodoTile oldWidget) {

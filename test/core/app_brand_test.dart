@@ -61,7 +61,7 @@ void main() {
     );
     expect(
       source,
-      contains('cs.primary.withValues(alpha: isDark ? 0.20 : 0.14)'),
+      contains('cs.primary.withValues(alpha: isDark ? 0.18 : 0.10)'),
     );
     expect(source, contains('final selectedControlForeground'));
     expect(source, contains('return selectedControlForeground;'));
@@ -128,7 +128,7 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} filled button foreground must stay readable.',
       );
-      expect(filled.minimumSize?.resolve(const <WidgetState>{})?.height, 40);
+      expect(filled.minimumSize?.resolve(const <WidgetState>{})?.height, 38);
 
       final elevatedBg = _resolveColor(
         elevated!.backgroundColor,
@@ -143,7 +143,7 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} elevated button foreground must stay readable.',
       );
-      expect(elevated.minimumSize?.resolve(const <WidgetState>{})?.height, 40);
+      expect(elevated.minimumSize?.resolve(const <WidgetState>{})?.height, 38);
 
       final outlinedFg = _resolveColor(
         outlined!.foregroundColor,
@@ -154,7 +154,7 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} outlined button text must contrast surface.',
       );
-      expect(outlined.minimumSize?.resolve(const <WidgetState>{})?.height, 38);
+      expect(outlined.minimumSize?.resolve(const <WidgetState>{})?.height, 36);
 
       final textFg = _resolveColor(
         text!.foregroundColor,
@@ -165,7 +165,7 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} text button color must contrast surface.',
       );
-      expect(text.minimumSize?.resolve(const <WidgetState>{})?.height, 36);
+      expect(text.minimumSize?.resolve(const <WidgetState>{})?.height, 34);
 
       final segmentBg = _resolveSelectedColor(
         segmented!.backgroundColor,

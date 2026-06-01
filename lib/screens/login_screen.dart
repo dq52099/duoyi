@@ -569,7 +569,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
                                   style: TextButton.styleFrom(
-                                    minimumSize: const Size(0, 30),
+                                    minimumSize: const Size(0, 36),
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
                                       vertical: 4,

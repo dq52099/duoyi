@@ -15,9 +15,9 @@ import '../services/api_client.dart';
 import '../widgets/surface_components.dart';
 import 'login_screen.dart';
 
-const double _profileActionButtonHeight = 30;
-const double _profileActionButtonWidth = 58;
-const double _profileLongActionButtonWidth = 72;
+const double _profileActionButtonHeight = 36;
+const double _profileActionButtonWidth = 68;
+const double _profileLongActionButtonWidth = 96;
 
 double _profileInlineActionWidth(BuildContext context) {
   return MediaQuery.sizeOf(context).width < 360
@@ -54,20 +54,20 @@ class _ProfileAvatarPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final value = avatar?.trim() ?? '';
-    final uri = Uri.tryParse(value);
-    final isUrl =
-        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
-    final fallback = value.isNotEmpty ? value : displayName;
+    final fallback = (networkUrl != null || localPath != null)
+        ? displayName
+        : (value.isNotEmpty ? value : displayName);
     final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
 
     return CircleAvatar(
       radius: radius,
       backgroundColor: cs.primary,
-      child: isUrl
+      child: networkUrl != null
           ? ClipOval(
               child: Image.network(
-                value,
+                networkUrl,
                 width: radius * 2,
                 height: radius * 2,
                 fit: BoxFit.cover,
@@ -168,9 +168,9 @@ class _ProfileAvatarEditBadge extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.16),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: cs.shadow.withValues(alpha: 0.08),
+            blurRadius: 5,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -275,10 +275,12 @@ class _ProfileAvatarWithEdit extends StatelessWidget {
 class _ProfileAvatarFullScreen extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final VoidCallback? onEdit;
 
   const _ProfileAvatarFullScreen({
     required this.avatar,
     required this.displayName,
+    this.onEdit,
   });
 
   @override
@@ -293,6 +295,17 @@ class _ProfileAvatarFullScreen extends StatelessWidget {
           context,
         ).copyWith(color: Colors.white),
         title: const Text('头像'),
+        actions: [
+          if (onEdit != null)
+            IconButton(
+              tooltip: '修改头像',
+              onPressed: () {
+                Navigator.of(context).pop();
+                WidgetsBinding.instance.addPostFrameCallback((_) => onEdit!());
+              },
+              icon: const Icon(Icons.edit_outlined),
+            ),
+        ],
       ),
       body: Center(
         child: Hero(
@@ -319,13 +332,11 @@ class _ProfileAvatarFullImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = avatar?.trim() ?? '';
-    final uri = Uri.tryParse(value);
-    final isUrl =
-        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
-    final image = isUrl
+    final image = networkUrl != null
         ? Image.network(
-            value,
+            networkUrl,
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) => _fallbackAvatar(context),
           )
@@ -349,9 +360,12 @@ class _ProfileAvatarFullImage extends StatelessWidget {
   Widget _fallbackAvatar(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final radius = (size.shortestSide * 0.28).clamp(84.0, 150.0);
-    final fallback = (avatar?.trim().isNotEmpty ?? false)
-        ? avatar!.trim()
-        : displayName;
+    final value = avatar?.trim() ?? '';
+    final networkUrl = _networkAvatarUrl(value);
+    final localPath = _localAvatarPath(value);
+    final fallback = (networkUrl != null || localPath != null)
+        ? displayName
+        : (value.isNotEmpty ? value : displayName);
     final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
     return CircleAvatar(
       radius: radius,
@@ -1023,8 +1037,11 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         : _avatarCtrl.text.trim();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            _ProfileAvatarFullScreen(avatar: avatar, displayName: displayName),
+        builder: (_) => _ProfileAvatarFullScreen(
+          avatar: avatar,
+          displayName: displayName,
+          onEdit: _uploadAvatar,
+        ),
       ),
     );
   }
@@ -1156,16 +1173,14 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       state.username,
     ]);
     final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
+    final routeBackground = Colors.transparent;
 
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('profile.title')),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         actions: [_saveButton(context)],
       ),
@@ -1514,6 +1529,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: _avatarCtrl.text.trim(),
           displayName: displayName,
+          onEdit: _pickLocalAvatar,
         ),
       ),
     );
@@ -1602,16 +1618,14 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       I18n.tr('profile.local'),
     ]);
     final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
+    final routeBackground = Colors.transparent;
 
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('profile.title')),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         actions: [_saveButton(context)],
       ),
@@ -1786,8 +1800,7 @@ String _accountProfileSnapshot(AuthState state) {
 }
 
 bool _isHttpAvatar(String value) {
-  final uri = Uri.tryParse(value.trim());
-  return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  return _networkAvatarUrl(value) != null;
 }
 
 bool _looksLikeEmail(String value) {
@@ -1797,11 +1810,31 @@ bool _looksLikeEmail(String value) {
 String? _localAvatarPath(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) return null;
+  if (_networkAvatarUrl(trimmed) != null) return null;
   final uri = Uri.tryParse(trimmed);
   if (uri != null && uri.scheme == 'file') {
     return uri.toFilePath();
   }
   if (trimmed.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+String? _networkAvatarUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final uri = Uri.tryParse(trimmed);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    return trimmed;
+  }
+  final pathSegments = Uri.tryParse(trimmed)?.pathSegments ?? const <String>[];
+  if (pathSegments.isNotEmpty &&
+      (pathSegments.first == 'api' || pathSegments.first == 'uploads')) {
+    final base = Uri.base;
+    if (base.scheme == 'http' || base.scheme == 'https') {
+      return base.resolve(trimmed).toString();
+    }
     return trimmed;
   }
   return null;

@@ -7,6 +7,7 @@ import 'cloud_sync_provider.dart';
 
 class AnniversaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_anniversaries_v2';
+  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
   List<Anniversary> _items = [];
   ReminderScheduler? _scheduler;
 
@@ -66,7 +67,9 @@ class AnniversaryProvider extends ChangeNotifier {
     final scheduler = _scheduler;
     if (scheduler == null) return;
     try {
-      await scheduler.syncAnniversaries(List.of(_items));
+      await scheduler
+          .syncAnniversaries(List.of(_items))
+          .timeout(_reminderSyncTimeout);
     } catch (error, stackTrace) {
       debugPrint(
         '[AnniversaryProvider] reminder sync failed: $error\n$stackTrace',
@@ -76,7 +79,12 @@ class AnniversaryProvider extends ChangeNotifier {
 
   Future<void> add(Anniversary item) async {
     item.updatedAt = DateTime.now();
-    _items.add(item);
+    final index = _items.indexWhere((existing) => existing.id == item.id);
+    if (index == -1) {
+      _items.add(item);
+    } else {
+      _items[index] = item;
+    }
     await _save();
     await _syncRemindersNow();
   }

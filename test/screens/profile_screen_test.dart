@@ -121,6 +121,12 @@ void main() {
     expect(fullScreen, contains('return Scaffold('));
     expect(fullScreen, contains('backgroundColor: Colors.black'));
     expect(fullScreen, contains("title: const Text('头像')"));
+    expect(fullScreen, contains('actions: ['));
+    expect(fullScreen, contains("tooltip: '修改头像'"));
+    expect(
+      fullScreen,
+      contains('WidgetsBinding.instance.addPostFrameCallback'),
+    );
     expect(fullScreen, contains("tag: 'profile-avatar-preview'"));
     expect(fullScreen, contains('InteractiveViewer'));
     expect(fullScreen, contains('fit: BoxFit.contain'));
@@ -128,15 +134,24 @@ void main() {
     expect(fullScreen, isNot(contains('showDialog(')));
     expect(fullScreen, isNot(contains('ClipOval')));
     expect(fullScreen, isNot(contains('BoxFit.cover')));
+    expect(source, contains('String? _networkAvatarUrl(String value)'));
+    expect(source, contains("pathSegments.first == 'api'"));
+    expect(source, contains("pathSegments.first == 'uploads'"));
+    expect(
+      source,
+      contains('if (_networkAvatarUrl(trimmed) != null) return null'),
+    );
+    expect(source, contains('final networkUrl = _networkAvatarUrl(value)'));
+    expect(source, contains('networkUrl != null'));
   });
 
   test('profile actions keep fixed compact sizes and save flows editable', () {
     final source = File('lib/screens/profile_screen.dart').readAsStringSync();
     final auth = File('lib/providers/auth_provider.dart').readAsStringSync();
 
-    expect(source, contains('const double _profileActionButtonHeight = 30'));
-    expect(source, contains('const double _profileActionButtonWidth = 58'));
-    expect(source, contains('const double _profileLongActionButtonWidth = 72'));
+    expect(source, contains('const double _profileActionButtonHeight = 36'));
+    expect(source, contains('const double _profileActionButtonWidth = 68'));
+    expect(source, contains('const double _profileLongActionButtonWidth = 96'));
     expect(source, contains('double _profileInlineActionWidth'));
     expect(source, contains('width: _profileActionButtonWidth'));
     expect(source, contains('width: _profileLongActionButtonWidth'));
@@ -226,6 +241,62 @@ void main() {
     expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
   });
+
+  testWidgets(
+    'account profile server-relative avatar uses full-screen network preview',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          displayName: '服务器头像用户',
+          avatar: '/api/uploads/avatars/u-1.png',
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((_) async => http.Response('not found', 404)),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: auth),
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider(create: (_) => AchievementProvider()),
+            ChangeNotifierProvider(create: (_) => UserProvider()),
+          ],
+          child: const MaterialApp(home: ProfileScreen()),
+        ),
+      );
+
+      Finder serverAvatarImage() => find.byWidgetPredicate((widget) {
+        if (widget is! Image || widget.image is! NetworkImage) return false;
+        return (widget.image as NetworkImage).url.contains(
+          '/api/uploads/avatars/u-1.png',
+        );
+      });
+
+      expect(serverAvatarImage(), findsOneWidget);
+
+      final avatarButton = find.byKey(
+        const ValueKey('profile_avatar_preview_button'),
+      );
+      await tester.tapAt(
+        tester.getTopLeft(avatarButton) + const Offset(20, 20),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('头像'), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+    },
+  );
 
   testWidgets('account profile keeps username/avatar stable and binds email', (
     tester,
@@ -408,5 +479,7 @@ void main() {
       'newPassword': '123456',
       'password': '123456',
     });
+    expect(auth.state.isLoggedIn, isFalse);
+    expect(auth.client.token, isNull);
   });
 }

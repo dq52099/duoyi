@@ -56,22 +56,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final desiredDetailHeight = availableHeight < 560 \?\s*220\.0\s*:\s*320\.0',
-          multiLine: true,
-        ),
-      ),
-    );
-    expect(
-      source,
-      contains(
-        'final maxGridForReadableDetail = availableHeight - desiredDetailHeight',
-      ),
-    );
-    expect(
-      source,
-      matches(
-        RegExp(
-          r'final preferredGridHeight = rows >= 6 \?\s*360\.0\s*:\s*330\.0',
+          r'final preferredGridHeight = rows >= 6 \?\s*620\.0\s*:\s*540\.0',
           multiLine: true,
         ),
       ),
@@ -80,21 +65,24 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final minGridHeight = rows >= 6 \?\s*300\.0\s*:\s*270\.0',
+          r'final minGridHeight = rows >= 6 \?\s*470\.0\s*:\s*410\.0',
           multiLine: true,
         ),
       ),
     );
+    expect(source, contains('if (availableHeight <= 120)'));
     expect(
       source,
-      contains('final compactUpperGridHeight = availableHeight <= 120'),
+      matches(
+        RegExp(
+          r'return availableHeight\s*\.clamp\(minGridHeight, preferredGridHeight\)\s*\.toDouble\(\)',
+          multiLine: true,
+        ),
+      ),
     );
-    expect(source, contains('final upperGridHeight = compactUpperGridHeight'));
-    expect(
-      source,
-      contains('final lowerGridHeight = minGridHeight < upperGridHeight'),
-    );
-    expect(source, contains("'calendar_month_detail_scroll_region'"));
+    expect(source, contains("'calendar_month_global_scrollbar'"));
+    expect(source, contains("'calendar_month_global_scroll_view'"));
+    expect(source, isNot(contains("'calendar_month_detail_scroll_region'")));
     final monthDetailStart = source.indexOf(
       "key: const ValueKey('calendar_month_detail_agenda')",
     );
@@ -104,7 +92,9 @@ void main() {
     final monthDetail = source.substring(monthDetailStart, weekViewStart);
     expect(monthDetail, contains('horizontalPadding:'));
     expect(monthDetail, contains('8,'));
-    expect(source, contains('maxGridForReadableDetail'));
+    expect(monthDetail, contains('scrollable: false'));
+    expect(source, isNot(contains('desiredDetailHeight')));
+    expect(source, isNot(contains('maxGridForReadableDetail')));
     expect(source, contains('bool _monthGridShowsLunar('));
     expect(source, contains('maxWidth: 860'));
     expect(source, contains('MediaQuery.sizeOf(context).height * 0.68'));
@@ -113,6 +103,10 @@ void main() {
       'lib/widgets/calendar_day_agenda.dart',
     ).readAsStringSync();
     expect(agenda, contains('return Scrollbar('));
+    expect(
+      agenda,
+      contains("key: const ValueKey('calendar_day_agenda_inline_content')"),
+    );
     expect(
       agenda,
       contains("key: const ValueKey('calendar_day_agenda_scroll_view')"),

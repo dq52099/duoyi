@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/design_tokens.dart';
 import 'surface_components.dart';
 
 class EmptyState extends StatelessWidget {
@@ -40,7 +41,7 @@ class EmptyState extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 240, maxWidth: 520),
               child: AppSurfaceCard(
                 padding: cardPadding,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

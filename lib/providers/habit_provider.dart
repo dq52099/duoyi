@@ -9,6 +9,8 @@ import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
 
 class HabitProvider extends ChangeNotifier {
+  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
+
   List<Habit> _habits = [];
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
@@ -74,7 +76,9 @@ class HabitProvider extends ChangeNotifier {
     final scheduler = _scheduler;
     if (scheduler == null) return;
     try {
-      await scheduler.syncHabits(List.of(_habits));
+      await scheduler
+          .syncHabits(List.of(_habits))
+          .timeout(_reminderSyncTimeout);
     } catch (error, stackTrace) {
       debugPrint('[HabitProvider] reminder sync failed: $error\n$stackTrace');
     }
@@ -311,10 +315,7 @@ class HabitProvider extends ChangeNotifier {
     final base = at ?? DateTime.now();
     final day = DateTime(base.year, base.month, base.day);
     final habit = _habits[idx];
-    final hasRecordOnEndDay = habit.countForDate(day) > 0;
-    final endDate = hasRecordOnEndDay
-        ? day
-        : day.subtract(const Duration(days: 1));
+    final endDate = day.subtract(const Duration(days: 1));
     _habits[idx] = habit.copyWith(endDate: endDate);
     await _save();
     await _syncRemindersNow();

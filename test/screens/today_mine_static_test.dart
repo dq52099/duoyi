@@ -54,6 +54,7 @@ void main() {
       final today = File('lib/screens/today_screen.dart').readAsStringSync();
 
       expect(today, contains("import '../core/report_engine.dart';"));
+      expect(today, contains("import '../core/todo_templates.dart';"));
       expect(
         today,
         contains("import '../providers/time_audit_provider.dart';"),
@@ -63,8 +64,11 @@ void main() {
       expect(today, contains('ReportEngine.buildReport'));
       expect(today, contains('ReportEngine.compare'));
       expect(today, contains('SmartScheduleAdvisor.suggestToday'));
+      expect(today, contains('CompletionVisibilityPolicy.shouldShowInToday'));
       expect(today, contains('limit: 5'));
-      expect(today, contains('scheduleTodoForToday(todo.id, now: now)'));
+      expect(today, contains('final actionNow = DateTime.now();'));
+      expect(today, contains('scheduleTodoForToday('));
+      expect(today, contains('waitForReminderSync: false'));
       expect(today, contains('_TodayProductivityCard'));
       expect(today, contains('_TodayProductivityPill'));
       expect(today, contains("I18n.tr('today.add_to_today')"));
@@ -83,10 +87,7 @@ void main() {
         contains('class _TodayTodoSwipeTile extends StatefulWidget'),
       );
       expect(today, contains('Matrix4.translationValues(-_swipeOffset'));
-      expect(
-        today,
-        contains('bool get _swipeActive => _dragging || _swipeOpen'),
-      );
+      expect(today, contains('bool get _swipeActive => _swipeOffset > 0'));
       expect(today, contains('if (_swipeActive)'));
       expect(today, contains('RepaintBoundary(child: tile)'));
       expect(today, contains("ValueKey('today_todo_swipe_detail_button')"));
@@ -104,6 +105,10 @@ void main() {
       expect(today, contains("Text(label, style: TextStyle(fontSize: 10"));
       expect(today, contains('effectiveTileBackground'));
       expect(today, contains('effectiveTileBorderColor'));
+      expect(today, contains('class _TodayTodoLeading'));
+      expect(today, contains('today_todo_template_icon'));
+      expect(today, contains('class _TodoTemplateAvatar'));
+      expect(today, contains('today_suggestion_template_icon'));
       expect(today, contains("import '../providers/share_provider.dart';"));
       expect(today, contains('context.select<ShareProvider?, bool>'));
       expect(today, contains("共享空间只读，不能\$action"));
@@ -117,15 +122,15 @@ void main() {
 
       expect(mine, contains('class _TileGroup'));
       expect(mine, contains('class _Tile'));
-      expect(mine, contains('border: Border.all'));
+      expect(mine, contains('AppSurfaceCard('));
+      expect(mine, contains('Divider('));
+      expect(mine, contains('indent: 44'));
       expect(
         mine,
-        contains('cs.surfaceContainerHighest.withValues(alpha: 0.68)'),
+        contains(
+          'borderRadius: BorderRadius.circular(DesignTokens.radiusControl)',
+        ),
       );
-      expect(mine, contains('cs.surface.withValues(alpha: 0.86)'));
-      expect(mine, contains('alpha: isDark ? 0.07 : 0.09'));
-      expect(mine, contains('alpha: isDark ? 0.06 : 0.08'));
-      expect(mine, contains('width: 0.45'));
       expect(mine, contains('final compact = constraints.maxWidth < 360'));
       expect(mine, contains('final avatarSize = compact ? 50.0 : 56.0'));
       expect(mine, contains('final metadata = <Widget>['));
@@ -137,7 +142,12 @@ void main() {
       expect(mine, contains("label: '查看个人资料'"));
       expect(mine, contains('onTap: () => _openProfileEditor(context)'));
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
-      expect(mine, contains('borderRadius: BorderRadius.circular(14)'));
+      expect(
+        mine,
+        contains(
+          'borderRadius: BorderRadius.circular(DesignTokens.radiusCard)',
+        ),
+      );
       expect(mine, contains('Expanded('));
       expect(mine, contains('Wrap('));
       expect(mine, contains('runSpacing: 4'));
@@ -161,7 +171,7 @@ void main() {
       expect(mine, contains('dimension: 44'));
       expect(mine, contains('width: 20'));
       expect(mine, contains('height: 20'));
-      expect(mine, contains('size: 11'));
+      expect(mine, contains('size: 10'));
       expect(mine, contains('onTap: () => _pickAndSaveAvatar(context)'));
       expect(mine, contains("label: '@\$usernameText'"));
       expect(mine, contains(r"label: '时光币 $coins'"));
@@ -216,8 +226,9 @@ void main() {
         mine,
         isNot(contains('class _ProfileInfoRow extends StatelessWidget')),
       );
-      expect(mine, contains("label: '退出登录'"));
-      expect(mine, contains('onTap: () => _confirmLogout(context)'));
+      expect(mine, contains("message: '退出登录'"));
+      expect(mine, contains("key: const ValueKey('mine_top_logout_button')"));
+      expect(mine, contains('onPressed: () => _confirmLogout(context)'));
       expect(
         mine,
         contains('Future<void> _confirmLogout(BuildContext context)'),
@@ -251,6 +262,7 @@ void main() {
         "label: '课程表'",
         "label: '纪念日'",
         "label: '生日'",
+        "label: '倒数日'",
         "label: '万年历'",
         "label: '时间足迹'",
         "label: '统计报表'",
@@ -271,7 +283,6 @@ void main() {
       ]) {
         expect(mine, contains(label));
       }
-      expect(mine, isNot(contains("label: '倒数日'")));
       expect(mine, contains("subtitle: '查看隐藏功能和倒数日'"));
       expect(mine, isNot(contains("label: '黄历'")));
       expect(

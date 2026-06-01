@@ -228,6 +228,9 @@ void main() {
       '@app.post("/api/admin/groups")',
       '@app.post("/api/admin/user-groups")',
       '@app.post("/api/admin/user_groups")',
+      '@app.delete("/api/admin/groups/{group_id}")',
+      '@app.delete("/api/admin/user-groups/{group_id}")',
+      '@app.delete("/api/admin/user_groups/{group_id}")',
       '@app.patch("/api/admin/groups/{group_id}")',
       '@app.put("/api/admin/groups/{group_id}")',
       '@app.patch("/api/admin/user-groups/{group_id}")',
@@ -489,6 +492,21 @@ void main() {
       const _RouteContract(
         method: 'POST',
         path: '/api/admin/user_groups',
+        location: '',
+      ),
+      const _RouteContract(
+        method: 'DELETE',
+        path: '/api/admin/groups/{param}',
+        location: '',
+      ),
+      const _RouteContract(
+        method: 'DELETE',
+        path: '/api/admin/user-groups/{param}',
+        location: '',
+      ),
+      const _RouteContract(
+        method: 'DELETE',
+        path: '/api/admin/user_groups/{param}',
         location: '',
       ),
       const _RouteContract(

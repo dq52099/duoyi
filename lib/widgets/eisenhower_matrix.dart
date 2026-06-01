@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/design_tokens.dart';
 import '../models/todo.dart';
 import '../providers/theme_provider.dart';
 
@@ -115,17 +116,17 @@ class _QuadrantCard extends StatelessWidget {
         height: 160,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.018),
+              blurRadius: 7,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

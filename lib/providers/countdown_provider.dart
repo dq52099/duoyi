@@ -7,6 +7,7 @@ import 'cloud_sync_provider.dart';
 
 class CountdownProvider extends ChangeNotifier {
   static const _key = 'duoyi_countdowns';
+  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
   List<CountdownItem> _items = [];
   ReminderScheduler? _scheduler;
 
@@ -58,7 +59,9 @@ class CountdownProvider extends ChangeNotifier {
     final scheduler = _scheduler;
     if (scheduler == null) return;
     try {
-      await scheduler.syncCountdowns(List.of(_items));
+      await scheduler
+          .syncCountdowns(List.of(_items))
+          .timeout(_reminderSyncTimeout);
     } catch (error, stackTrace) {
       debugPrint(
         '[CountdownProvider] reminder sync failed: $error\n$stackTrace',

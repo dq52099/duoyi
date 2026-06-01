@@ -2114,6 +2114,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countdownValidationTitleRequired => 'Enter a countdown name first';
 
   @override
+  String get anniversaryValidationTitleRequired => 'Enter a title first';
+
+  @override
   String get countdownSaveFailedPrefix => 'Failed to save countdown: ';
 
   @override

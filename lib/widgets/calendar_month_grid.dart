@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/lunar_calendar.dart';
 import '../models/calendar_event.dart';
@@ -32,13 +33,14 @@ class CalendarMonthGrid extends StatelessWidget {
     final selectedDotColor = cs.onSurface.withValues(alpha: 0.72);
     final totalCells = startOffset + lastDay.day;
     final rows = (totalCells / 7).ceil();
-    final preferredRowHeight = showLunar ? 54.0 : 40.0;
+    final preferredRowHeight = showLunar ? 76.0 : 58.0;
+    final maxRowHeight = showLunar ? 104.0 : 82.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const verticalPadding = 8.0;
-        const weekdayHeight = 16.0;
-        const weekdayGap = 2.0;
+        const verticalPadding = 12.0;
+        const weekdayHeight = 20.0;
+        const weekdayGap = 4.0;
         final bounded = constraints.hasBoundedHeight;
         final availableRowHeight = bounded
             ? (constraints.maxHeight -
@@ -48,15 +50,15 @@ class CalendarMonthGrid extends StatelessWidget {
                   rows
             : preferredRowHeight;
         final rowSlotHeight = bounded
-            ? availableRowHeight.clamp(10.0, preferredRowHeight)
+            ? availableRowHeight.clamp(44.0, maxRowHeight)
             : preferredRowHeight;
-        final cellHeight = (rowSlotHeight - 2).clamp(8.0, preferredRowHeight);
-        final showSubText = showLunar && cellHeight >= 42;
-        final showDots = cellHeight >= 29;
-        final showEventCount = cellHeight >= 38;
+        final cellHeight = (rowSlotHeight - 4).clamp(40.0, maxRowHeight);
+        final showSubText = showLunar && cellHeight >= 48;
+        final showDots = cellHeight >= 36;
+        final canShowEventCount = cellHeight >= 62;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
           child: Column(
             children: [
               SizedBox(
@@ -71,7 +73,7 @@ class CalendarMonthGrid extends StatelessWidget {
                               d,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey.shade500,
+                                color: cs.onSurfaceVariant,
                                 fontWeight: FontWeight.normal,
                               ),
                             ),
@@ -100,6 +102,8 @@ class CalendarMonthGrid extends StatelessWidget {
                           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                       final types = dateEventTypes[key] ?? [];
                       final eventCount = dateEventCounts[key] ?? types.length;
+                      final showEventCount =
+                          canShowEventCount && eventCount > 3;
                       final hasTodo = types.contains(CalendarEventType.todo);
                       final isSelected =
                           date.year == selectedDay.year &&
@@ -154,14 +158,19 @@ class CalendarMonthGrid extends StatelessWidget {
                           onTap: () => onDaySelected(date),
                           child: Container(
                             height: cellHeight,
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? selectedBackground
                                   : (isToday
                                         ? cs.primary.withValues(alpha: 0.1)
                                         : Colors.transparent),
-                              borderRadius: BorderRadius.circular(9),
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.radiusControl,
+                              ),
                               border: isSelected
                                   ? Border.all(
                                       color: cs.primary.withValues(alpha: 0.26),
@@ -194,7 +203,7 @@ class CalendarMonthGrid extends StatelessWidget {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontSize: 9,
+                                          fontSize: 10,
                                           height: 1,
                                           color: isSelected
                                               ? selectedForeground.withValues(
@@ -204,11 +213,21 @@ class CalendarMonthGrid extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                  if (showEventCount && eventCount > 0)
+                                  if (showDots && types.isNotEmpty)
                                     Padding(
                                       padding: EdgeInsets.only(
                                         top: subText == null ? 3 : 2,
                                       ),
+                                      child: _eventDots(
+                                        context,
+                                        types: types,
+                                        isSelected: isSelected,
+                                        selectedColor: selectedDotColor,
+                                      ),
+                                    ),
+                                  if (showEventCount)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 1),
                                       child: _eventCountBadge(
                                         context,
                                         count: eventCount,
@@ -218,89 +237,6 @@ class CalendarMonthGrid extends StatelessWidget {
                                         foreground: isSelected
                                             ? selectedForeground
                                             : null,
-                                      ),
-                                    )
-                                  else if (showDots && types.isNotEmpty)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        top: subText == null ? 3 : 2,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (types.contains(
-                                            CalendarEventType.event,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFF5B6EE1),
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.todo,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : cs.primary,
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.habit,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : cs.tertiary,
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.pomodoro,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : Colors.red.shade400,
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.anniversary,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFFE91E63),
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.countdown,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFFFF8A65),
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.course,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFF42A5F5),
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.diary,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFF26A69A),
-                                            ),
-                                          if (types.contains(
-                                            CalendarEventType.timeEntry,
-                                          ))
-                                            _dot(
-                                              isSelected
-                                                  ? selectedDotColor
-                                                  : const Color(0xFF78909C),
-                                            ),
-                                        ],
                                       ),
                                     ),
                                 ],
@@ -334,16 +270,48 @@ class CalendarMonthGrid extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.20), width: 0.45),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Text(
           '$count项',
           maxLines: 1,
           overflow: TextOverflow.clip,
-          style: TextStyle(fontSize: 9, height: 1, color: textColor),
+          style: TextStyle(fontSize: 10, height: 1, color: textColor),
         ),
       ),
     );
   }
+
+  Widget _eventDots(
+    BuildContext context, {
+    required List<CalendarEventType> types,
+    required bool isSelected,
+    required Color selectedColor,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: types
+          .take(3)
+          .map(
+            (type) =>
+                _dot(isSelected ? selectedColor : _colorForType(type, cs)),
+          )
+          .toList(),
+    );
+  }
+
+  Color _colorForType(CalendarEventType type, ColorScheme cs) => switch (type) {
+    CalendarEventType.event => const Color(0xFF5B6EE1),
+    CalendarEventType.todo => cs.primary,
+    CalendarEventType.habit => cs.tertiary,
+    CalendarEventType.pomodoro => Colors.red.shade400,
+    CalendarEventType.anniversary => const Color(0xFFE91E63),
+    CalendarEventType.countdown => const Color(0xFFFF8A65),
+    CalendarEventType.course => const Color(0xFF42A5F5),
+    CalendarEventType.diary => const Color(0xFF26A69A),
+    CalendarEventType.goal => const Color(0xFFFFA726),
+    CalendarEventType.timeEntry => const Color(0xFF78909C),
+  };
 
   Widget _dot(Color color) => Container(
     width: 4,

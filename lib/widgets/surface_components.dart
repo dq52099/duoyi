@@ -25,7 +25,7 @@ class AppSurfaceCard extends StatelessWidget {
     this.color,
     this.gradient,
     this.borderRadius = const BorderRadius.all(
-      Radius.circular(DesignTokens.radiusLg),
+      Radius.circular(DesignTokens.radiusCard),
     ),
     this.border,
     this.elevation = 0,
@@ -48,14 +48,12 @@ class AppSurfaceCard extends StatelessWidget {
         cardSkin.id != ThemeProvider.defaultCardSkinId &&
         color == null &&
         gradient == null;
-    final surfaceColor =
-        color ??
-        (isDark
-            ? cs.surface.withValues(alpha: 0.93)
-            : cs.surface.withValues(alpha: 0.94));
-    final glassBorderColor = isDark
-        ? Colors.white.withValues(alpha: 0.045)
-        : Colors.white.withValues(alpha: 0.28);
+    final surfaceColor = color ?? cs.surface;
+    final cardBorderColor = isDark
+        ? cs.outlineVariant.withValues(alpha: 0.18)
+        : (Color.lerp(DesignTokens.defaultBorder, cs.outlineVariant, 0.35) ??
+                  DesignTokens.defaultBorder)
+              .withValues(alpha: 0.72);
     final skinGradient = useCardSkin
         ? LinearGradient(
             colors: [
@@ -75,23 +73,19 @@ class AppSurfaceCard extends StatelessWidget {
           border ??
           Border.all(
             color: useCardSkin
-                ? cardSkin.colors.first.withValues(alpha: 0.06)
-                : glassBorderColor,
-            width: 0.35,
+                ? cardSkin.colors.first.withValues(alpha: 0.10)
+                : cardBorderColor,
+            width: 0.55,
           ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: isDark ? 0.055 : 0.010),
-          blurRadius: 16 + elevation * 2,
-          offset: const Offset(0, 4),
-        ),
-        if (!isDark)
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.42),
-            blurRadius: 1,
-            offset: const Offset(0, 0.5),
-          ),
-      ],
+      boxShadow: elevation <= 0
+          ? const []
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
+                blurRadius: 7 + elevation,
+                offset: const Offset(0, 2),
+              ),
+            ],
     );
 
     final content = Ink(
@@ -114,7 +108,7 @@ class AppSurfaceCard extends StatelessWidget {
 TextStyle appSecondaryControlTextStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: FontWeight.normal,
     height: 1.2,
   );
@@ -123,7 +117,7 @@ TextStyle appSecondaryControlTextStyle(BuildContext context) {
 TextStyle appSecondaryControlLabelStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.labelMedium ?? const TextStyle()).copyWith(
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: FontWeight.normal,
     height: 1.16,
   );
@@ -132,7 +126,7 @@ TextStyle appSecondaryControlLabelStyle(BuildContext context) {
 TextStyle appSecondaryMenuItemTextStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: FontWeight.normal,
     height: 1.18,
   );
@@ -195,8 +189,8 @@ ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
     side: BorderSide(color: background.withValues(alpha: 0.16), width: 0.45),
     visualDensity: VisualDensity.compact,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    minimumSize: const Size(0, 30),
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    minimumSize: const Size(0, 36),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
     textStyle: appSecondaryMenuItemTextStyle(context),
   );
 }
@@ -215,13 +209,13 @@ class AppSecondaryControlTheme extends StatelessWidget {
     final labelText = appSecondaryControlLabelStyle(context);
     OutlineInputBorder inputBorder(Color color, {double width = 0.35}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         borderSide: BorderSide(color: color, width: width),
       );
     }
 
     final subtleBorder = cs.outlineVariant.withValues(
-      alpha: isDark ? 0.055 : 0.075,
+      alpha: isDark ? 0.12 : 0.16,
     );
     final selectedControlBackground = Color.alphaBlend(
       cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
@@ -253,16 +247,16 @@ class AppSecondaryControlTheme extends StatelessWidget {
         inputDecorationTheme: theme.inputDecorationTheme.copyWith(
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 9,
-            vertical: 6,
+            horizontal: 10,
+            vertical: 8,
           ),
           prefixIconConstraints: const BoxConstraints.tightFor(
-            width: 30,
-            height: 30,
+            width: 34,
+            height: 34,
           ),
           suffixIconConstraints: const BoxConstraints.tightFor(
-            width: 30,
-            height: 30,
+            width: 34,
+            height: 34,
           ),
           labelStyle: labelText.copyWith(
             color: cs.onSurfaceVariant,
@@ -301,8 +295,8 @@ class AppSecondaryControlTheme extends StatelessWidget {
           inputDecorationTheme: theme.inputDecorationTheme.copyWith(
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 9,
-              vertical: 6,
+              horizontal: 10,
+              vertical: 8,
             ),
           ),
         ),
@@ -315,8 +309,8 @@ class AppSecondaryControlTheme extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             textStyle: controlText,
-            minimumSize: const Size(0, 30),
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -324,8 +318,8 @@ class AppSecondaryControlTheme extends StatelessWidget {
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             textStyle: controlText,
-            minimumSize: const Size(0, 30),
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -333,8 +327,8 @@ class AppSecondaryControlTheme extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             textStyle: controlText,
-            minimumSize: const Size(0, 30),
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             side: BorderSide(color: subtleBorder, width: 0.4),
@@ -459,9 +453,10 @@ class AppSectionHeader extends StatelessWidget {
                   title,
                   style:
                       titleStyle ??
-                      appSecondaryMenuItemTextStyle(
-                        context,
-                      ).copyWith(color: cs.onSurface),
+                      appSecondaryMenuItemTextStyle(context).copyWith(
+                        color: cs.onSurface,
+                        fontSize: DesignTokens.fontSizeSection,
+                      ),
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -681,13 +676,7 @@ class AppMetricCard extends StatelessWidget {
           color: cs.outlineVariant.withValues(alpha: isDark ? 0.10 : 0.12),
           width: 0.45,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.018),
-            blurRadius: 8,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        boxShadow: const [],
       ),
       child: Padding(
         padding: padding,
@@ -743,7 +732,7 @@ class AppMetricCard extends StatelessWidget {
                             style:
                                 unitStyle ??
                                 theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.normal,
                                   color: cs.onSurface.withValues(alpha: 0.62),
                                   height: 1.08,
@@ -1295,7 +1284,7 @@ class AppModalSheet extends StatelessWidget {
     this.scrollController,
     this.scrollable = true,
     this.showDragHandle = true,
-    this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 20),
+    this.padding = const EdgeInsets.fromLTRB(16, 14, 16, 18),
     this.maxWidth = 720,
     this.shiftForKeyboard = true,
   });
@@ -1331,7 +1320,7 @@ class AppModalSheet extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
       ],
       if (title != null || subtitle != null) ...[
         AppSectionHeader(
@@ -1339,11 +1328,11 @@ class AppModalSheet extends StatelessWidget {
           subtitle: subtitle,
           padding: EdgeInsets.zero,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
       ],
       AppSecondaryControlTheme(child: child),
       if (leadingActions.isNotEmpty || actions.isNotEmpty) ...[
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         AppSecondaryControlTheme(
           child: Wrap(
             alignment: WrapAlignment.end,
@@ -1403,7 +1392,7 @@ class AppModalSheet extends StatelessWidget {
                 elevation: 0,
                 clipBehavior: Clip.antiAlias,
                 shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: body,
               ),
@@ -1837,9 +1826,9 @@ Future<T?> _showAnchoredDropdownMenu<T>({
     ),
     color: cs.surface,
     surfaceTintColor: Colors.transparent,
-    elevation: 4,
+    elevation: 3,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       side: BorderSide(
         color: cs.outlineVariant.withValues(alpha: 0.14),
         width: 0.45,

@@ -17,17 +17,17 @@ void main() {
       source.indexOf('TextStyle appSecondaryControlLabelStyle'),
       source.indexOf('TextStyle appSecondaryMenuItemTextStyle'),
     );
-    expect(controlStyle, contains('fontSize: 11'));
-    expect(controlStyle, isNot(contains('fontSize: 12')));
-    expect(labelStyle, contains('fontSize: 10'));
-    expect(labelStyle, isNot(contains('fontSize: 11')));
+    expect(controlStyle, contains('fontSize: 12'));
+    expect(controlStyle, isNot(contains('fontSize: 11,')));
+    expect(labelStyle, contains('fontSize: 11'));
+    expect(labelStyle, isNot(contains('fontSize: 10')));
     expect(source, contains('TextStyle appSecondaryMenuItemTextStyle'));
     final menuStyle = source.substring(
       source.indexOf('TextStyle appSecondaryMenuItemTextStyle'),
       source.indexOf('Color _appSecondaryActionBackground'),
     );
-    expect(menuStyle, contains('fontSize: 11'));
-    expect(menuStyle, isNot(contains('fontSize: 12')));
+    expect(menuStyle, contains('fontSize: 12'));
+    expect(menuStyle, isNot(contains('fontSize: 11,')));
     expect(source, isNot(contains('fontSize: 13.5')));
     expect(source, contains('fontWeight: FontWeight.normal'));
     expect(source, contains('class AppSecondaryControlTheme'));
@@ -76,9 +76,8 @@ void main() {
       source,
       contains('copyWith(textStyle: WidgetStatePropertyAll(controlText))'),
     );
-    expect(source, contains('minimumSize: const Size(0, 30)'));
+    expect(source, contains('minimumSize: const Size(0, 34)'));
     expect(source, contains('OutlinedButton.styleFrom('));
-    expect(source, isNot(contains('minimumSize: const Size(0, 34)')));
     expect(source, isNot(contains('minimumSize: const Size(0, 40)')));
     expect(source, contains('segmentedButtonTheme'));
     expect(source, contains('SegmentedButtonThemeData'));
@@ -388,7 +387,8 @@ void main() {
     expect(todo, isNot(contains('child: Text(_quadrantLabel(quadrant))')));
     expect(todo, isNot(contains('child: Text(priority.label)')));
     expect(todo, isNot(contains('child: Text(column.title)')));
-    expect(habit, contains("AppSecondaryMenuText('删除习惯'"));
+    expect(habit, isNot(contains("AppSecondaryMenuText('删除习惯'")));
+    expect(habit, contains("key: const ValueKey('habit_swipe_delete_button')"));
     expect(habit, isNot(contains('Colors.red')));
     expect(note, contains('title: AppSecondaryMenuText('));
     expect(note, contains("color: cs.error"));
@@ -473,7 +473,7 @@ void main() {
       admin.indexOf('class _AdminTabContent'),
       admin.indexOf('class _AdminTabLabel'),
     );
-    expect(adminTabContent, contains('maxWidth: 3200'));
+    expect(adminTabContent, contains('maxWidth: 1440'));
     expect(adminTabContent, contains('child: AppSecondaryControlTheme('));
     expect(
       adminTabContent,

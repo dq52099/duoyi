@@ -534,6 +534,14 @@ class WorkspaceApiTest(unittest.TestCase):
                 "POST /api/admin/users/{user_id}/coins",
                 payload["required_routes"],
             )
+            self.assertIn(
+                "WS /ws/focus-rooms/{room_id}/events",
+                payload["required_routes"],
+            )
+            self.assertIn(
+                "WS /ws/focus-leaderboard/global/events",
+                payload["required_routes"],
+            )
             self.assertTrue(payload["features"]["email_code"])
             self.assertTrue(payload["features"]["avatar_upload"])
             self.assertTrue(payload["features"]["admin_coins"])
@@ -560,7 +568,11 @@ class WorkspaceApiTest(unittest.TestCase):
         for route in api.app.routes:
             path = getattr(route, "path", None)
             methods = getattr(route, "methods", None)
-            if not path or not methods:
+            if not path:
+                continue
+            if not methods:
+                if path.startswith("/ws/"):
+                    registered.add(f"WS {path}")
                 continue
             for method in methods:
                 if method == "HEAD":
@@ -1285,6 +1297,26 @@ class WorkspaceApiTest(unittest.TestCase):
             )
         self.assertEqual(denied_create_user.exception.status_code, 403)
 
+        created_non_admin = api.admin_create_user(
+            api.UserCreate(
+                username="limited-roles-non-admin",
+                isAdmin=False,
+                isDisabled=False,
+                adminPermissions=["feedback"],
+            ),
+            actor=actor_id,
+        )
+        self.assertFalse(created_non_admin["is_admin"])
+        self.assertFalse(created_non_admin["is_disabled"])
+        self.assertNotIn("feedback", created_non_admin["permissions"])
+        with self.assertRaises(HTTPException) as denied_hidden_role:
+            api.admin_update_user(
+                created_non_admin["id"],
+                api.UserUpdate(isAdmin=True),
+                actor=actor_id,
+            )
+        self.assertEqual(denied_hidden_role.exception.status_code, 403)
+
         with self.assertRaises(HTTPException) as denied_create_role:
             api.admin_create_role(
                 api.AdminRoleUpsert(
@@ -1306,6 +1338,53 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(target_row["is_admin"], 0)
         self.assertNotEqual(target_row["role_id"], "role_admin")
         self.assertNotIn(api.ADMIN_ALL_PERMISSION, target_row["admin_permissions"])
+
+    def test_admin_create_user_honors_camel_case_status_aliases(self):
+        actor_id = self._make_admin(
+            "create-camel-status-admin",
+            [api.ADMIN_ALL_PERMISSION],
+        )
+
+        created = api.admin_create_user(
+            api.UserCreate(
+                username="created-camel-status-user",
+                isAdmin=True,
+                isDisabled=True,
+            ),
+            actor=actor_id,
+        )
+
+        self.assertTrue(created["is_admin"])
+        self.assertTrue(created["is_disabled"])
+
+    def test_cannot_demote_last_active_admin_when_disabled_admin_exists(self):
+        active_admin = self._make_admin("last-active-admin", [api.ADMIN_ALL_PERMISSION])
+        disabled_admin = self._make_admin(
+            "last-active-disabled-admin",
+            [api.ADMIN_ALL_PERMISSION],
+        )
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_disabled=1 WHERE id=?",
+                (disabled_admin,),
+            )
+            db.execute(
+                "UPDATE users SET is_disabled=1 WHERE is_admin=1 AND id NOT IN (?, ?)",
+                (active_admin, disabled_admin),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        with self.assertRaises(HTTPException) as denied:
+            api.admin_update_user(
+                active_admin,
+                api.UserUpdate(is_admin=False),
+                actor=active_admin,
+            )
+        self.assertEqual(denied.exception.status_code, 400)
+        self.assertIn("last active admin", denied.exception.detail)
 
     def test_admin_group_assignment_grants_target_group_default_coins_once(self):
         admin_id = self._make_admin("group-assignment-admin", ["users", "groups"])
@@ -1341,7 +1420,12 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_admin_group_assignment_requires_group_or_coin_permission(self):
         admin_id = self._make_admin("users-only-group-admin", ["users"])
+        coin_admin_id = self._make_admin("coins-only-group-reader", ["coins"])
+        user_coin_admin_id = self._make_admin(
+            "users-coins-group-admin", ["users", "coins"]
+        )
         target_id = self._register("users-only-group-target")
+        coin_target_id = self._register("users-coins-group-target")
         db = api.get_db()
         try:
             db.execute(
@@ -1355,8 +1439,16 @@ class WorkspaceApiTest(unittest.TestCase):
         finally:
             db.close()
         headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+        coin_headers = {"Authorization": f"Bearer {api.TOKENS[coin_admin_id]}"}
+        user_coin_headers = {
+            "Authorization": f"Bearer {api.TOKENS[user_coin_admin_id]}"
+        }
 
         with TestClient(api.app) as client:
+            groups_for_coin_admin = client.get(
+                "/api/admin/groups",
+                headers=coin_headers,
+            )
             assigned = client.patch(
                 f"/api/admin/users/{target_id}",
                 json={"group_id": "restricted_group"},
@@ -1371,9 +1463,42 @@ class WorkspaceApiTest(unittest.TestCase):
                 },
                 headers=headers,
             )
+            assigned_by_coin = client.patch(
+                f"/api/admin/users/{coin_target_id}",
+                json={"group_id": "restricted_group"},
+                headers=user_coin_headers,
+            )
+            created_by_coin = client.post(
+                "/api/admin/users",
+                json={
+                    "username": "users-coins-created-group-user",
+                    "password": "pass123456",
+                    "group_id": "restricted_group",
+                },
+                headers=user_coin_headers,
+            )
+            coin_only_created_user = client.post(
+                "/api/admin/users",
+                json={
+                    "username": "coins-only-created-user",
+                    "password": "pass123456",
+                },
+                headers=coin_headers,
+            )
 
+        self.assertEqual(groups_for_coin_admin.status_code, 200)
+        self.assertTrue(
+            any(item["id"] == "restricted_group" for item in groups_for_coin_admin.json())
+        )
         self.assertEqual(assigned.status_code, 403)
         self.assertEqual(created_user.status_code, 403)
+        self.assertEqual(assigned_by_coin.status_code, 200, assigned_by_coin.text)
+        self.assertEqual(assigned_by_coin.json()["group_id"], "restricted_group")
+        self.assertEqual(assigned_by_coin.json()["coin_balance"], 90)
+        self.assertEqual(created_by_coin.status_code, 200, created_by_coin.text)
+        self.assertEqual(created_by_coin.json()["group_id"], "restricted_group")
+        self.assertEqual(created_by_coin.json()["coin_balance"], 90)
+        self.assertEqual(coin_only_created_user.status_code, 403)
         db = api.get_db()
         try:
             row = db.execute(
@@ -1879,6 +2004,24 @@ class WorkspaceApiTest(unittest.TestCase):
                 json={"ids": [user_id], "isActive": True},
                 headers=headers,
             )
+            delete_group = client.delete(
+                f"/api/admin/user-groups/{group_id}",
+                headers=headers,
+            )
+            after_delete_user = client.get(
+                "/api/admin/users",
+                params={"q": "admin-p0-target", "limit": 5, "offset": 0},
+                headers=headers,
+            )
+            default_group_delete = client.delete(
+                "/api/admin/groups/group_default",
+                headers=headers,
+            )
+            self_disable = client.patch(
+                f"/api/admin/users/{admin_id}",
+                json={"isDisabled": True},
+                headers=headers,
+            )
 
         self.assertEqual(groups.status_code, 200, groups.text)
         self.assertIn("items", groups.json())
@@ -1893,6 +2036,16 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(coin_balance.json()["balance"], 220)
         self.assertEqual(disable.status_code, 200, disable.text)
         self.assertEqual(enable.status_code, 200, enable.text)
+        self.assertEqual(delete_group.status_code, 200, delete_group.text)
+        self.assertEqual(delete_group.json()["deleted"], 1)
+        self.assertEqual(delete_group.json()["reassigned_users"], 1)
+        self.assertEqual(after_delete_user.status_code, 200, after_delete_user.text)
+        self.assertEqual(
+            after_delete_user.json()["items"][0]["group_id"],
+            "group_default",
+        )
+        self.assertEqual(default_group_delete.status_code, 400, default_group_delete.text)
+        self.assertEqual(self_disable.status_code, 400, self_disable.text)
 
     def test_p0_admin_camel_and_snake_payload_contracts_do_not_outage(self):
         admin_id = self._make_admin(
@@ -1999,13 +2152,28 @@ class WorkspaceApiTest(unittest.TestCase):
                 created_disabled_user,
                 "POST /api/admin/users camel disabled",
             )
+            created_disabled_user_id = created_disabled_user.json()["user_id"]
             mixed_user_update = client.patch(
                 f"/api/admin/users/{created_user_id}",
                 json={
-                    "isDisabled": False,
+                    "isDisabled": True,
                     "targetBalance": 144,
                     "reason": "mixed user update and coin payload",
                 },
+                headers=headers,
+            )
+            after_mixed_users = client.get(
+                "/api/admin/users?q=p0-camel-created-user&limit=10&offset=0",
+                headers=headers,
+            )
+            camel_admin_demote = client.patch(
+                f"/api/admin/users/{created_user_id}",
+                json={"isAdmin": False},
+                headers=headers,
+            )
+            disabled_user_enable = client.patch(
+                f"/api/admin/users/{created_disabled_user_id}",
+                json={"isDisabled": False},
                 headers=headers,
             )
             time_coin_balance = client.post(
@@ -2040,7 +2208,12 @@ class WorkspaceApiTest(unittest.TestCase):
             ("GET /api/admin/user_permissions", user_permissions),
             ("PUT /api/admin/user_roles/{role_id}", updated_role),
             ("GET /api/admin/admin_roles", roles),
-            ("PATCH /api/admin/users/{user_id}", mixed_user_update),
+            ("GET /api/admin/users after mixed reject", after_mixed_users),
+            ("PATCH /api/admin/users/{user_id} isAdmin camel", camel_admin_demote),
+            (
+                "PATCH /api/admin/users/{user_id} isDisabled camel",
+                disabled_user_enable,
+            ),
             ("POST /api/admin/users/{user_id}/time_coin_balance", time_coin_balance),
             ("PUT /api/admin/users/{user_id}/coin_adjustment", coin_delta),
             ("PATCH /api/admin/users/{user_id}/credit-balance", credit_balance),
@@ -2063,7 +2236,12 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(created_disabled_user.json()["is_disabled"])
         self.assertIn("feedback", created_user.json()["permissions"])
         self.assertEqual(created_user.json()["coin_balance"], 99)
-        self.assertEqual(mixed_user_update.json()["balance"], 144)
+        self.assertEqual(mixed_user_update.status_code, 400, mixed_user_update.text)
+        after_mixed_item = after_mixed_users.json()["items"][0]
+        self.assertFalse(after_mixed_item["is_disabled"])
+        self.assertEqual(after_mixed_item["coin_balance"], 99)
+        self.assertFalse(camel_admin_demote.json()["is_admin"])
+        self.assertFalse(disabled_user_enable.json()["is_disabled"])
         self.assertEqual(time_coin_balance.json()["balance"], 150)
         self.assertEqual(coin_delta.json()["balance"], 155)
         self.assertEqual(credit_balance.json()["balance"], 160)
@@ -2113,6 +2291,14 @@ class WorkspaceApiTest(unittest.TestCase):
         ]
 
         with TestClient(api.app) as client:
+            users_page = client.get(
+                "/api/admin/users?q=coin-contract-user&limit=10&offset=0",
+                headers=headers,
+            )
+            self.assertEqual(users_page.status_code, 200, users_page.text)
+            self.assertTrue(
+                any(item["user_id"] == user_id for item in users_page.json()["items"])
+            )
             for index, (method, route_template) in enumerate(route_methods, start=1):
                 path = route_template.format(user_id=user_id)
                 response = getattr(client, method)(
@@ -2502,6 +2688,31 @@ class WorkspaceApiTest(unittest.TestCase):
                         f"{method.upper()} {route}: {response.text}",
                     )
                     self.assertEqual(response.status_code, 200)
+                for route in [
+                    f"/api/admin/groups/{group_id}",
+                    f"/api/admin/user-groups/{group_id}",
+                    f"/api/admin/user_groups/{group_id}",
+                ]:
+                    replacement = client.post(
+                        "/api/admin/groups",
+                        json={
+                            "name": f"404 contract group replacement {route[-1]}",
+                            "default_time_coins": 1,
+                            "is_active": True,
+                        },
+                        headers=admin_headers,
+                    )
+                    self.assertEqual(replacement.status_code, 200, replacement.text)
+                    delete_response = client.delete(
+                        route.replace(group_id, replacement.json()["id"]),
+                        headers=admin_headers,
+                    )
+                    self.assertNotEqual(
+                        delete_response.status_code,
+                        404,
+                        f"DELETE {route}: {delete_response.text}",
+                    )
+                    self.assertEqual(delete_response.status_code, 200)
 
                 for index in range(3):
                     created_feedback = client.post(
@@ -2600,6 +2811,56 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertTrue(settings["hermes_api_key_set"])
         self.assertIn("***", settings["hermes_api_key"])
         self.assertTrue(settings["hermes_configured"])
+
+    def test_re0_email_config_aliases_drive_account_mail_title_and_smtp(self):
+        admin_id = self._make_admin("re0-mail-admin", ["settings", "backup"])
+        default_title_block = inspect.getsource(api).split(
+            "DEFAULT_EMAIL_TITLE = (", 1
+        )[1].split(")\nDEFAULT_EMAIL_SENDER_NAME", 1)[0]
+        self.assertNotIn('os.getenv("TITLE")', default_title_block)
+
+        api.admin_update_system_settings(
+            {
+                "TITLE": "多仪",
+                "EMAIL_ADDRESS": "sender@example.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_SMTP_HOST": "smtp.example.com",
+                "EMAIL_SMTP_PORT": 587,
+                "EMAIL_HOME_ADDRESS": "ops@example.com",
+            },
+            actor=admin_id,
+        )
+
+        db = api.get_db()
+        try:
+            runtime = api._account_mail_runtime(db)
+        finally:
+            db.close()
+
+        self.assertEqual(runtime["email_title"], "多仪")
+        self.assertEqual(runtime["email_smtp_host"], "smtp.example.com")
+        self.assertEqual(runtime["email_smtp_port"], 587)
+        self.assertEqual(runtime["email_smtp_username"], "sender@example.com")
+        self.assertEqual(runtime["email_smtp_from"], "sender@example.com")
+        self.assertFalse(runtime["email_smtp_use_ssl"])
+        self.assertEqual(runtime["system_notice_email_to"], "ops@example.com")
+
+        sent = []
+        old_send = api._smtp_send
+        try:
+            api._smtp_send = lambda **kwargs: sent.append(kwargs)
+            result = api.admin_account_email_test(actor=admin_id)
+        finally:
+            api._smtp_send = old_send
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["recipient"], "ops@example.com")
+        self.assertEqual(result["provider"], "smtp")
+        self.assertEqual(sent[0]["subject"], "多仪账号邮件测试")
+        self.assertEqual(sent[0]["to_addr"], "ops@example.com")
+        self.assertEqual(sent[0]["port"], 587)
+        self.assertFalse(sent[0]["use_ssl"])
+        self.assertIn("sender@example.com", sent[0]["from_addr"])
 
     def test_admin_settings_scope_uses_feature_permissions(self):
         ai_admin = self._make_admin("ai-settings-admin", ["ai"])
@@ -3252,6 +3513,66 @@ class WorkspaceApiTest(unittest.TestCase):
             api.LoginRequest(username="change-password-user", password="newpass456")
         )
         self.assertEqual(logged_in["user_id"], registered["user_id"])
+
+        changed_with_aliases = api.change_password(
+            api.ChangePasswordRequest(
+                currentPassword="newpass456",
+                newPassword="thirdpass456",
+            ),
+            user_id=registered["user_id"],
+        )
+        self.assertTrue(changed_with_aliases["ok"])
+        self.assertNotIn(registered["user_id"], api.TOKENS)
+
+        alias_logged_in = api.login(
+            api.LoginRequest(username="change-password-user", password="thirdpass456")
+        )
+        self.assertEqual(alias_logged_in["user_id"], registered["user_id"])
+
+    def test_email_code_send_failure_does_not_persist_or_cool_down(self):
+        db = api.get_db()
+        try:
+            api._setting_set(db, "registration_email_required", False)
+            api._setting_set(db, "email_code_primary_provider", "smtp")
+            api._setting_set(db, "email_code_backup_provider", "none")
+            api._setting_set(db, "email_smtp_host", "smtp.example.com")
+            api._setting_set(db, "email_smtp_username", "sender@example.com")
+            api._setting_set(db, "email_smtp_password", "secret")
+            db.commit()
+        finally:
+            db.close()
+
+        old_send = api._send_account_email
+        try:
+            api._send_account_email = lambda db, **kwargs: {
+                "sent": False,
+                "provider": "smtp",
+                "message": "SMTP rejected",
+            }
+            with TestClient(api.app) as client:
+                first = client.post(
+                    "/api/auth/email-code",
+                    json={"email": "mail-fail@example.com", "purpose": "bind"},
+                )
+                second = client.post(
+                    "/api/auth/email-code",
+                    json={"email": "mail-fail@example.com", "purpose": "bind"},
+                )
+        finally:
+            api._send_account_email = old_send
+
+        self.assertEqual(first.status_code, 503, first.text)
+        self.assertEqual(second.status_code, 503, second.text)
+        self.assertNotEqual(second.status_code, 429)
+        db = api.get_db()
+        try:
+            count = db.execute(
+                "SELECT COUNT(*) AS c FROM email_verification_codes WHERE email=?",
+                ("mail-fail@example.com",),
+            ).fetchone()["c"]
+        finally:
+            db.close()
+        self.assertEqual(count, 0)
 
     def test_avatar_upload_updates_profile_and_serves_file(self):
         registered = self._register_with_email(
@@ -8153,6 +8474,15 @@ class WorkspaceApiTest(unittest.TestCase):
                 json={"groupId": group_id},
                 headers=headers,
             )
+            mixed_too_large = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={
+                    "isDisabled": True,
+                    "timeCoinDelta": 1000001,
+                    "reason": "mixed update should rollback",
+                },
+                headers=headers,
+            )
             target_balance = client.put(
                 f"/api/admin/users/{target_id}/time-coin-balance",
                 json={"timeCoinBalance": 450, "reason": "P0 目标余额"},
@@ -8207,12 +8537,22 @@ class WorkspaceApiTest(unittest.TestCase):
         for label, response, expected_status in [
             ("POST /api/admin/users/{id}/coins zero", zero_adjustment, 400),
             ("PATCH /api/admin/users/{id}/time_coins/adjust too large", too_large, 400),
+            ("PATCH /api/admin/users/{id} mixed too large", mixed_too_large, 400),
             ("POST /api/admin/users/missing/credit-balance", missing_user, 404),
             ("POST /api/admin/groups forbidden", forbidden_group_create, 403),
             ("PATCH /api/admin/users/{id} disabled group", disabled_assign, 400),
         ]:
             self.assertEqual(response.status_code, expected_status, f"{label}: {response.text}")
             self.assertNotEqual(response.status_code, 500, f"{label}: {response.text}")
+        db = api.get_db()
+        try:
+            row = db.execute(
+                "SELECT is_disabled FROM users WHERE id=?",
+                (target_id,),
+            ).fetchone()
+            self.assertEqual(row["is_disabled"], 0)
+        finally:
+            db.close()
 
     def test_p0_feedback_detail_reply_close_delete_visibility_and_errors(self):
         admin_id = self._make_admin("p0-feedback-admin", ["feedback"])

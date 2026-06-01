@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/app_version.dart';
 import '../core/app_config.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n_date_format.dart';
 import '../providers/auth_provider.dart';
 import '../services/admin_api.dart';
@@ -101,17 +102,20 @@ class _AdminScreenState extends State<AdminScreen>
           controller: _tabs,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
           labelPadding: const EdgeInsets.symmetric(horizontal: 6),
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
           labelStyle: appSecondaryMenuItemTextStyle(context),
           unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
           indicator: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
-            borderRadius: BorderRadius.circular(12),
+            color: Color.alphaBlend(
+              cs.primary.withValues(alpha: 0.10),
+              cs.surface,
+            ),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
             border: Border.all(
-              color: cs.primary.withValues(alpha: 0.12),
+              color: cs.primary.withValues(alpha: 0.20),
               width: 0.45,
             ),
           ),
@@ -119,46 +123,46 @@ class _AdminScreenState extends State<AdminScreen>
           unselectedLabelColor: cs.onSurfaceVariant,
           tabs: const [
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.dashboard_outlined, text: '概览'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.groups_2_outlined, text: '用户组'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.campaign_outlined, text: '公告'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(
                 icon: Icons.feedback_outlined,
                 text: '许愿与反馈',
               ),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(icon: Icons.vpn_key_outlined, text: '邀请码'),
             ),
             Tab(
-              height: 38,
+              height: 34,
               child: _AdminTabLabel(
                 icon: Icons.receipt_long_outlined,
                 text: '日志',
@@ -180,6 +184,7 @@ class _AdminScreenState extends State<AdminScreen>
             child: _SettingsTab(
               key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
               api: api,
+              selfAdminPermissions: auth.state.adminPermissions,
             ),
           ),
           _AdminTabContent(
@@ -207,6 +212,7 @@ class _AdminScreenState extends State<AdminScreen>
             child: _GroupsTab(
               key: ValueKey('admin-groups-${_tabRefreshSerials[5]}'),
               api: api,
+              selfAdminPermissions: auth.state.adminPermissions,
             ),
           ),
           _AdminTabContent(
@@ -251,7 +257,7 @@ class _AdminTabContent extends StatelessWidget {
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 3200),
+            constraints: const BoxConstraints(maxWidth: 1440),
             child: SizedBox(
               width: double.infinity,
               height: constraints.maxHeight,
@@ -298,8 +304,8 @@ class _AdminGlassControlTheme extends StatelessWidget {
       return TextButton.styleFrom(
         foregroundColor: cs.primary,
         textStyle: controlText,
-        minimumSize: const Size(0, 30),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       );
@@ -311,8 +317,8 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.36),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 30),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       );
@@ -326,8 +332,8 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.34),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 30),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       );
@@ -355,7 +361,7 @@ class _AdminGlassControlTheme extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             side: BorderSide(color: selectedBorder, width: 0.45),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           labelPadding: const EdgeInsets.symmetric(horizontal: 4),
         ),
       ),
@@ -1145,8 +1151,8 @@ Future<bool> _confirmAdminDangerAction({
           style: FilledButton.styleFrom(
             backgroundColor: Theme.of(ctx).colorScheme.error,
             foregroundColor: Theme.of(ctx).colorScheme.onError,
-            minimumSize: const Size(0, 30),
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -1280,11 +1286,11 @@ class _AdminPaginationBar extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final topBorderColor = cs.outlineVariant.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.08 : 0.055,
+      alpha: theme.brightness == Brightness.dark ? 0.14 : 0.16,
     );
     final summaryTextStyle = appSecondaryControlLabelStyle(
       context,
-    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62), fontSize: 10.5);
+    ).copyWith(color: cs.onSurface.withValues(alpha: 0.64));
     final glassControlFill = theme.brightness == Brightness.dark
         ? cs.surfaceContainerHighest.withValues(alpha: 0.30)
         : cs.surfaceContainerHighest.withValues(alpha: 0.38);
@@ -1293,10 +1299,10 @@ class _AdminPaginationBar extends StatelessWidget {
     );
     return Container(
       key: barKey,
-      padding: const EdgeInsets.fromLTRB(8, 1, 8, 1),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest.withValues(alpha: 0.42),
-        border: Border(top: BorderSide(color: topBorderColor, width: 0.35)),
+        color: cs.surface.withValues(alpha: 0.92),
+        border: Border(top: BorderSide(color: topBorderColor, width: 0.55)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1359,15 +1365,15 @@ class _AdminPaginationBar extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 1),
                   child: SizedBox.square(
-                    dimension: 28,
+                    dimension: 32,
                     child: IconButton(
                       constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
+                        width: 32,
+                        height: 32,
                       ),
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      iconSize: 15,
+                      iconSize: 16,
                       style: IconButton.styleFrom(
                         backgroundColor: onPressed == null
                             ? Colors.transparent
@@ -1380,7 +1386,9 @@ class _AdminPaginationBar extends StatelessWidget {
                           width: 0.45,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(
+                            DesignTokens.radiusControl,
+                          ),
                         ),
                       ),
                       onPressed: onPressed,
@@ -1421,7 +1429,7 @@ class _AdminPaginationBar extends StatelessWidget {
             );
           }
 
-          final isCompact = constraints.maxWidth < 700;
+          final isCompact = constraints.maxWidth < 720;
           final fullControls = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1438,14 +1446,28 @@ class _AdminPaginationBar extends StatelessWidget {
             alignment: WrapAlignment.end,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 6,
-            runSpacing: 4,
+            runSpacing: 6,
             children: [
               ?pageJump,
               ?pageSizePicker,
               Tooltip(message: '分页导航', child: navigation()),
             ],
           );
+          final isVeryCompact = constraints.maxWidth < 420;
           if (isCompact) {
+            if (isVeryCompact) {
+              return SizedBox(
+                width: double.infinity,
+                key: const ValueKey('admin_compact_pagination_full_width'),
+                child: Row(
+                  children: [
+                    Expanded(child: summary),
+                    const SizedBox(width: 6),
+                    Tooltip(message: '分页导航', child: navigation()),
+                  ],
+                ),
+              );
+            }
             return SizedBox(
               width: double.infinity,
               key: const ValueKey('admin_compact_pagination_full_width'),
@@ -1459,7 +1481,7 @@ class _AdminPaginationBar extends StatelessWidget {
                     spacing: 8,
                     children: [
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
+                        constraints: const BoxConstraints(maxWidth: 300),
                         child: summary,
                       ),
                       compactControls,
@@ -1475,11 +1497,11 @@ class _AdminPaginationBar extends StatelessWidget {
               children: [
                 Expanded(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
+                    constraints: const BoxConstraints(maxWidth: 360),
                     child: summary,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 fullControls,
               ],
             ),
@@ -1510,16 +1532,16 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.08 : 0.10),
-          width: 0.45,
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.14 : 0.16),
+          width: 0.55,
         ),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 62, minHeight: 28),
+        constraints: const BoxConstraints(minWidth: 68, minHeight: 32),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1541,8 +1563,13 @@ class _AdminPaginationLabeledControl extends StatelessWidget {
 
 class _GroupsTab extends StatefulWidget {
   final AdminApi api;
+  final List<String>? selfAdminPermissions;
 
-  const _GroupsTab({super.key, required this.api});
+  const _GroupsTab({
+    super.key,
+    required this.api,
+    required this.selfAdminPermissions,
+  });
 
   @override
   State<_GroupsTab> createState() => _GroupsTabState();
@@ -1556,6 +1583,15 @@ class _GroupsTabState extends State<_GroupsTab> {
   int _offset = 0;
   int _pageSize = _adminPageSize;
   int _loadSerial = 0;
+
+  bool _canUseAdminPermission(String permission) {
+    final permissions = widget.selfAdminPermissions;
+    if (permissions == null) return true;
+    return permissions.contains(_adminAllPermission) ||
+        permissions.contains(permission);
+  }
+
+  bool get _canManageGroups => _canUseAdminPermission('groups');
 
   @override
   void initState() {
@@ -1602,6 +1638,10 @@ class _GroupsTabState extends State<_GroupsTab> {
   }
 
   Future<void> _editGroup([Map<String, dynamic>? group]) async {
+    if (!_canManageGroups) {
+      _showSnack('缺少用户组管理权限');
+      return;
+    }
     final nameCtrl = TextEditingController(
       text: (group?['name'] ?? '').toString(),
     );
@@ -1782,6 +1822,64 @@ class _GroupsTabState extends State<_GroupsTab> {
     }
   }
 
+  Future<void> _deleteGroup(Map<String, dynamic> group) async {
+    if (!_canManageGroups) {
+      _showSnack('缺少用户组管理权限');
+      return;
+    }
+    final id = (group['id'] ?? '').toString();
+    if (id.isEmpty) return;
+    if (id == 'group_default') {
+      _showSnack('默认用户组不能删除');
+      return;
+    }
+    final name = (group['name'] ?? id).toString();
+    final userCount = _adminIntValue(group['user_count']);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: Text('删除用户组 $name'),
+        icon: const Icon(Icons.delete_outline),
+        content: Text(
+          userCount > 0
+              ? '该组内 $userCount 个用户会回退到默认用户组，已有时光币记录保留。'
+              : '删除后不会影响已有用户数据。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final result = await widget.api.deleteGroup(id);
+      await _load(
+        offset: _offsetAfterAdminDelete(
+          offset: _offset,
+          itemCount: _groups.length,
+          pageSize: _pageSize,
+        ),
+      );
+      final reassigned = _adminIntValue(result['reassigned_users']);
+      _showSnack(reassigned > 0 ? '用户组已删除，$reassigned 个用户已回退到默认组' : '用户组已删除');
+    } on ApiException catch (e) {
+      _showSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSnack(e.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _groups.isEmpty) {
@@ -1791,6 +1889,7 @@ class _GroupsTabState extends State<_GroupsTab> {
       return Center(child: Text(_error!));
     }
     final cs = Theme.of(context).colorScheme;
+    final canManageGroups = _canManageGroups;
     final page =
         _page ??
         AdminPage.fromItems(_groups, limit: _pageSize, offset: _offset);
@@ -1818,11 +1917,12 @@ class _GroupsTabState extends State<_GroupsTab> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: () => _editGroup(),
-                          icon: const Icon(Icons.add),
-                          label: const Text('新增用户组'),
-                        ),
+                        if (canManageGroups)
+                          FilledButton.icon(
+                            onPressed: () => _editGroup(),
+                            icon: const Icon(Icons.add),
+                            label: const Text('新增用户组'),
+                          ),
                       ],
                     ),
                   ],
@@ -1855,11 +1955,27 @@ class _GroupsTabState extends State<_GroupsTab> {
                           '${_adminIntValue(group['user_count'])} 人 · '
                           '${group['is_active'] == false ? '停用' : '启用'}',
                         ),
-                        trailing: IconButton(
-                          tooltip: '编辑用户组',
-                          onPressed: () => _editGroup(group),
-                          icon: const Icon(Icons.edit_outlined),
-                        ),
+                        trailing: canManageGroups
+                            ? Wrap(
+                                spacing: 2,
+                                children: [
+                                  IconButton(
+                                    tooltip: '编辑用户组',
+                                    onPressed: () => _editGroup(group),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  if (group['id'] != 'group_default')
+                                    IconButton(
+                                      key: ValueKey(
+                                        'admin_group_delete_${group['id']}',
+                                      ),
+                                      tooltip: '删除用户组',
+                                      onPressed: () => _deleteGroup(group),
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                ],
+                              )
+                            : null,
                       ),
                     ),
               ],
@@ -1889,7 +2005,13 @@ class _GroupsTabState extends State<_GroupsTab> {
 
 class _SettingsTab extends StatefulWidget {
   final AdminApi api;
-  const _SettingsTab({super.key, required this.api});
+  final List<String>? selfAdminPermissions;
+
+  const _SettingsTab({
+    super.key,
+    required this.api,
+    required this.selfAdminPermissions,
+  });
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
 }
@@ -1907,6 +2029,16 @@ class _SettingsTabState extends State<_SettingsTab> {
   final _minimumVersionCtrl = TextEditingController();
   final _defaultCoinsCtrl = TextEditingController(text: '100');
   String _updateVersionPreset = _adminUpdatePresetCurrent;
+
+  bool _canUseAdminPermission(String permission) {
+    final permissions = widget.selfAdminPermissions;
+    if (permissions == null) return true;
+    return permissions.contains(_adminAllPermission) ||
+        permissions.contains(permission);
+  }
+
+  bool get _canManageGroups => _canUseAdminPermission('groups');
+  bool get _canManageRoles => _canUseAdminPermission('roles');
 
   @override
   void initState() {
@@ -2040,6 +2172,10 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Future<void> _editGroup([Map<String, dynamic>? group]) async {
+    if (!_canManageGroups) {
+      _showSettingsSnack('缺少用户组管理权限');
+      return;
+    }
     final nameCtrl = TextEditingController(
       text: (group?['name'] ?? '').toString(),
     );
@@ -2220,6 +2356,10 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Future<void> _editRole([Map<String, dynamic>? role]) async {
+    if (!_canManageRoles) {
+      _showSettingsSnack('缺少角色管理权限');
+      return;
+    }
     final nameCtrl = TextEditingController(
       text: (role?['name'] ?? '').toString(),
     );
@@ -2665,6 +2805,8 @@ class _SettingsTabState extends State<_SettingsTab> {
   Widget _groupRoleManagementSection(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final canManageGroups = _canManageGroups;
+    final canManageRoles = _canManageRoles;
     final groupCards = _groups.take(6).map((group) {
       final active = group['is_active'] != false;
       final name = (group['name'] ?? group['id'] ?? '').toString();
@@ -2684,11 +2826,13 @@ class _SettingsTabState extends State<_SettingsTab> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: IconButton(
-          tooltip: '编辑用户组',
-          onPressed: () => _editGroup(group),
-          icon: const Icon(Icons.edit_outlined),
-        ),
+        trailing: canManageGroups
+            ? IconButton(
+                tooltip: '编辑用户组',
+                onPressed: () => _editGroup(group),
+                icon: const Icon(Icons.edit_outlined),
+              )
+            : null,
       );
     }).toList();
     final roleCards = _roles.take(6).map((role) {
@@ -2711,11 +2855,13 @@ class _SettingsTabState extends State<_SettingsTab> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: IconButton(
-          tooltip: '编辑角色',
-          onPressed: () => _editRole(role),
-          icon: const Icon(Icons.edit_outlined),
-        ),
+        trailing: canManageRoles
+            ? IconButton(
+                tooltip: '编辑角色',
+                onPressed: () => _editRole(role),
+                icon: const Icon(Icons.edit_outlined),
+              )
+            : null,
       );
     }).toList();
 
@@ -2733,17 +2879,19 @@ class _SettingsTabState extends State<_SettingsTab> {
                 ),
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _editGroup(),
-              icon: const Icon(Icons.add),
-              label: const Text('用户组'),
-            ),
-            const SizedBox(width: 6),
-            TextButton.icon(
-              onPressed: () => _editRole(),
-              icon: const Icon(Icons.add),
-              label: const Text('角色'),
-            ),
+            if (canManageGroups)
+              TextButton.icon(
+                onPressed: () => _editGroup(),
+                icon: const Icon(Icons.add),
+                label: const Text('用户组'),
+              ),
+            if (canManageGroups && canManageRoles) const SizedBox(width: 6),
+            if (canManageRoles)
+              TextButton.icon(
+                onPressed: () => _editRole(),
+                icon: const Icon(Icons.add),
+                label: const Text('角色'),
+              ),
           ],
         ),
         const SizedBox(height: 8),
@@ -3337,6 +3485,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   final _reminderSmtpPortCtrl = TextEditingController(text: '465');
   final _reminderSmtpUserCtrl = TextEditingController();
   final _reminderSmtpPasswordCtrl = TextEditingController();
+  final _emailTitleCtrl = TextEditingController(text: '多仪');
   final _emailSenderNameCtrl = TextEditingController(text: '多仪');
   final _openclawMailUserCtrl = TextEditingController();
   final _openclawMailKeyCtrl = TextEditingController();
@@ -3347,6 +3496,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   final _accountSmtpHostCtrl = TextEditingController();
   final _accountSmtpPortCtrl = TextEditingController(text: '465');
   final _accountSmtpUserCtrl = TextEditingController();
+  final _accountSmtpFromCtrl = TextEditingController();
   final _accountSmtpPasswordCtrl = TextEditingController();
   bool _openlistPasswordMasked = false;
   bool _smtpPasswordMasked = false;
@@ -3402,6 +3552,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     _reminderSmtpPortCtrl.dispose();
     _reminderSmtpUserCtrl.dispose();
     _reminderSmtpPasswordCtrl.dispose();
+    _emailTitleCtrl.dispose();
     _emailSenderNameCtrl.dispose();
     _openclawMailUserCtrl.dispose();
     _openclawMailKeyCtrl.dispose();
@@ -3412,6 +3563,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     _accountSmtpHostCtrl.dispose();
     _accountSmtpPortCtrl.dispose();
     _accountSmtpUserCtrl.dispose();
+    _accountSmtpFromCtrl.dispose();
     _accountSmtpPasswordCtrl.dispose();
     _backupSearchCtrl.dispose();
     _serverBackupSearchCtrl.dispose();
@@ -3522,6 +3674,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       _emailActiveSlot = data['email_code_active_slot'] == 'backup'
           ? 'backup'
           : 'primary';
+      _emailTitleCtrl.text = (data['email_title'] ?? '多仪').toString();
       _emailSenderNameCtrl.text = (data['email_sender_name'] ?? '多仪')
           .toString();
       _openclawMailUserCtrl.text = (data['openclaw_mail_user'] ?? '')
@@ -3542,6 +3695,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           (((data['email_smtp_port'] as num?) ?? 465).toInt()).toString();
       _accountSmtpUserCtrl.text = (data['email_smtp_username'] ?? '')
           .toString();
+      _accountSmtpFromCtrl.text = (data['email_smtp_from'] ?? '').toString();
       _accountSmtpPasswordCtrl.text = (data['email_smtp_password'] ?? '')
           .toString();
       _accountSmtpPasswordMasked = data['email_smtp_password_set'] == true;
@@ -3614,6 +3768,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             int.tryParse(_reminderSmtpPortCtrl.text.trim()) ?? 465,
         'reminder_email_smtp_username': _reminderSmtpUserCtrl.text.trim(),
         'email_service_enabled': _accountEmailEnabled,
+        'email_title': _emailTitleCtrl.text.trim(),
         'email_sender_name': _emailSenderNameCtrl.text.trim(),
         'email_code_primary_provider': _emailPrimaryProvider,
         'email_code_backup_provider': _emailBackupProvider,
@@ -3630,6 +3785,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         'email_smtp_port':
             int.tryParse(_accountSmtpPortCtrl.text.trim()) ?? 465,
         'email_smtp_username': _accountSmtpUserCtrl.text.trim(),
+        'email_smtp_from': _accountSmtpFromCtrl.text.trim(),
         'email_smtp_use_ssl': _accountSmtpUseSsl,
       };
       if (!(_openlistPasswordMasked && openlistPassword.contains('***'))) {
@@ -4538,6 +4694,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             ),
             const SizedBox(height: 10),
             TextField(
+              controller: _emailTitleCtrl,
+              decoration: const InputDecoration(
+                labelText: '账号邮件标题',
+                helperText: '兼容 RE0 的 TITLE，默认使用多仪',
+                prefixIcon: Icon(Icons.title_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
               controller: _emailSenderNameCtrl,
               decoration: const InputDecoration(
                 labelText: '账号邮件发件人显示名',
@@ -4708,6 +4873,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _accountSmtpFromCtrl,
+              decoration: const InputDecoration(
+                labelText: '账号 SMTP 发件地址',
+                helperText: '留空时使用账号 SMTP 用户名',
+                prefixIcon: Icon(Icons.outgoing_mail),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -4913,9 +5087,23 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   bool get _canManageCoins => _canUseAdminPermission('coins');
+  bool get _canManageUsers => _canUseAdminPermission('users');
   bool get _canManageGroups => _canUseAdminPermission('groups');
   bool get _canManageRoles => _canUseAdminPermission('roles');
   bool get _canManagePermissions => _canUseAdminPermission('permissions');
+  bool get _canAssignGroups => _canManageGroups || _canManageCoins;
+  bool get _canManageAdminAccess => _canManageRoles || _canManagePermissions;
+  bool get _canManageUserAdminAccess =>
+      _canManageUsers && _canManageAdminAccess;
+  bool get _hasAllAdminPermission {
+    final permissions = widget.selfAdminPermissions;
+    return permissions == null || permissions.contains(_adminAllPermission);
+  }
+
+  bool _canToggleAdminFor(bool currentAdmin) {
+    if (!_canManageUsers) return false;
+    return currentAdmin ? _canManageAdminAccess : _hasAllAdminPermission;
+  }
 
   @override
   void initState() {
@@ -5001,7 +5189,7 @@ class _UsersTabState extends State<_UsersTab> {
         limit: nextPageSize,
         offset: nextOffset,
       );
-      final groupsFuture = _groups.isEmpty && _canManageGroups
+      final groupsFuture = _groups.isEmpty && _canAssignGroups
           ? _loadUserGroupsForUsers(groupsRolesErrors)
           : Future<List<Map<String, dynamic>>>.value(_groups);
       final rolesFuture = _roles.isEmpty && _canManageRoles
@@ -5118,6 +5306,24 @@ class _UsersTabState extends State<_UsersTab> {
     return result;
   }
 
+  List<DropdownMenuItem<String>> _roleEntityItems(
+    String currentId,
+    String currentFallback, {
+    bool activeOnly = false,
+  }) {
+    final roles = _hasAllAdminPermission
+        ? _roles
+        : _roles
+              .where((role) => (role['id'] ?? '').toString() != 'role_admin')
+              .toList(growable: false);
+    return _adminEntityItems(
+      roles,
+      currentId,
+      currentFallback,
+      activeOnly: activeOnly,
+    );
+  }
+
   void _applySearch() {
     _load(query: _searchCtrl.text.trim(), offset: 0);
   }
@@ -5149,8 +5355,208 @@ class _UsersTabState extends State<_UsersTab> {
     return status;
   }
 
+  Future<void> _createUser() async {
+    if (!_canManageUsers) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
+      return;
+    }
+    if (_canAssignGroups && _groups.isEmpty ||
+        _canManageRoles && _roles.isEmpty) {
+      await _load(quiet: true);
+    }
+    if (!mounted) return;
+
+    final usernameCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    final displayNameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final assignableRoles = _hasAllAdminPermission
+        ? _roles
+        : _roles
+              .where((role) => (role['id'] ?? '').toString() != 'role_admin')
+              .toList(growable: false);
+    var selectedGroupId = _groups.any((g) => g['id'] == 'group_default')
+        ? 'group_default'
+        : (_groups.isNotEmpty ? _groups.first['id'].toString() : '');
+    var selectedRoleId = assignableRoles.any((r) => r['id'] == 'role_user')
+        ? 'role_user'
+        : (assignableRoles.isNotEmpty
+              ? assignableRoles.first['id'].toString()
+              : '');
+    var isAdmin = false;
+    var isDisabled = false;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: const Text('新增用户'),
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: usernameCtrl,
+                    decoration: const InputDecoration(labelText: '用户名'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: passwordCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '初始密码',
+                      helperText: '留空时由服务器生成随机密码',
+                    ),
+                    obscureText: true,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: displayNameCtrl,
+                    decoration: const InputDecoration(labelText: '昵称 (可选)'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: emailCtrl,
+                    decoration: const InputDecoration(labelText: '邮箱 (可选)'),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  if (_canAssignGroups && _groups.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    AppDropdownField<String>(
+                      initialValue: selectedGroupId,
+                      labelText: '用户组',
+                      prefixIcon: const Icon(Icons.groups_2_outlined),
+                      items: _adminEntityItems(
+                        _groups,
+                        selectedGroupId,
+                        '默认组',
+                        activeOnly: true,
+                      ),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setSt(() => selectedGroupId = value);
+                        }
+                      },
+                    ),
+                  ],
+                  if (_canManageRoles && assignableRoles.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    AppDropdownField<String>(
+                      initialValue: selectedRoleId,
+                      labelText: '角色',
+                      prefixIcon: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                      ),
+                      items: _adminEntityItems(
+                        assignableRoles,
+                        selectedRoleId,
+                        '普通角色',
+                        activeOnly: true,
+                      ),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setSt(() => selectedRoleId = value);
+                        }
+                      },
+                    ),
+                  ],
+                  if (_hasAllAdminPermission) ...[
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      value: isAdmin,
+                      title: const Text('管理员账号'),
+                      onChanged: (value) => setSt(() {
+                        isAdmin = value;
+                        if (value && selectedRoleId == 'role_user') {
+                          selectedRoleId =
+                              _roles.any((r) => r['id'] == 'role_admin')
+                              ? 'role_admin'
+                              : selectedRoleId;
+                        } else if (!value && selectedRoleId == 'role_admin') {
+                          selectedRoleId =
+                              _roles.any((r) => r['id'] == 'role_user')
+                              ? 'role_user'
+                              : selectedRoleId;
+                        }
+                      }),
+                    ),
+                  ],
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: isDisabled,
+                    title: const Text('创建后先禁用'),
+                    onChanged: (value) => setSt(() => isDisabled = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final username = usernameCtrl.text.trim();
+    if (username.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请填写用户名')));
+      return;
+    }
+    try {
+      await widget.api.createUser(
+        username: username,
+        password: passwordCtrl.text,
+        displayName: displayNameCtrl.text,
+        email: emailCtrl.text,
+        groupId: _canAssignGroups ? selectedGroupId : null,
+        roleId: _canManageRoles ? selectedRoleId : null,
+        isAdmin: _hasAllAdminPermission ? isAdmin : false,
+        isDisabled: isDisabled,
+      );
+      await _load(offset: 0);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('用户已创建')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+    }
+  }
+
   Future<void> _toggleAdmin(Map<String, dynamic> u) async {
     final becomeAdmin = !(u['is_admin'] == true);
+    if (becomeAdmin && !_hasAllAdminPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少超级管理员权限')));
+      return;
+    }
     try {
       await widget.api.updateUser(u['user_id'], isAdmin: becomeAdmin);
       u['is_admin'] = becomeAdmin;
@@ -5165,6 +5571,13 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   Future<void> _toggleDisable(Map<String, dynamic> u) async {
+    if (u['user_id'].toString() == widget.selfId) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('不能禁用当前登录账号')));
+      return;
+    }
     final disable = !(u['is_disabled'] == true);
     try {
       await widget.api.updateUser(u['user_id'], isDisabled: disable);
@@ -5219,10 +5632,13 @@ class _UsersTabState extends State<_UsersTab> {
     }
   }
 
-  List<String> get _selectableCurrentPageUserIds => _users
-      .map((u) => u['user_id'].toString())
-      .where((id) => id.isNotEmpty && id != widget.selfId)
-      .toList();
+  List<String> get _selectableCurrentPageUserIds {
+    if (!_canManageUsers) return const [];
+    return _users
+        .map((u) => u['user_id'].toString())
+        .where((id) => id.isNotEmpty && id != widget.selfId)
+        .toList();
+  }
 
   List<String> get _selectedCurrentPageUserIds =>
       _selectableCurrentPageUserIds.where(_selectedUserIds.contains).toList();
@@ -5323,6 +5739,12 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   Future<void> _editAdminPermissions(Map<String, dynamic> u) async {
+    if (!_canManageUserAdminAccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少权限管理权限')));
+      return;
+    }
     final userId = u['user_id'].toString();
     final username = u['username'].toString();
     final isAdmin = u['is_admin'] == true;
@@ -5398,18 +5820,25 @@ class _UsersTabState extends State<_UsersTab> {
       ),
     );
     if (saved != true) return;
+    final selectedAllPermissions =
+        selected.length == _adminPermissionLabels.length;
     final permissions = selected.isEmpty
         ? const [_adminNoPermission]
-        : (selected.length == _adminPermissionLabels.length
+        : (selectedAllPermissions && _hasAllAdminPermission
               ? const [_adminAllPermission]
               : selected.toList());
     try {
-      if (!isAdmin) {
-        await widget.api.updateUser(userId, isAdmin: true);
-      }
-      await widget.api.setUserAdminPermissions(
+      final existingRoleId = (u['role_id'] ?? '').toString();
+      final roleIdForPromotion =
+          existingRoleId.isNotEmpty &&
+              (existingRoleId != 'role_admin' || _hasAllAdminPermission)
+          ? existingRoleId
+          : 'role_user';
+      await widget.api.updateUser(
         userId,
-        permissions: permissions,
+        isAdmin: isAdmin ? null : true,
+        roleId: isAdmin ? null : roleIdForPromotion,
+        adminPermissions: permissions,
       );
       await _load(quiet: true);
       if (!mounted) return;
@@ -5426,14 +5855,20 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   Future<void> _editUserGroupRole(Map<String, dynamic> u) async {
-    if (!_canManageGroups && !_canManageRoles) {
+    if (!_canManageUsers) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
+      return;
+    }
+    if (!_canAssignGroups && !_canManageRoles) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('缺少用户组或角色管理权限')));
       return;
     }
-    if (_canManageGroups && _groups.isEmpty ||
-        _canManageRoles && _roles.isEmpty) {
+    if ((_canAssignGroups && _groups.isEmpty) ||
+        (_canManageRoles && _roles.isEmpty)) {
       await _load(quiet: true);
     }
     if (!mounted) return;
@@ -5442,6 +5877,15 @@ class _UsersTabState extends State<_UsersTab> {
     var selectedRoleId =
         (u['role_id'] ?? (u['is_admin'] == true ? 'role_admin' : 'role_user'))
             .toString();
+    final canEditRoleForTarget =
+        _canManageRoles &&
+        (_hasAllAdminPermission || selectedRoleId != 'role_admin');
+    if (!_canAssignGroups && !canEditRoleForTarget) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少可用的角色管理权限')));
+      return;
+    }
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -5453,7 +5897,7 @@ class _UsersTabState extends State<_UsersTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_canManageGroups) ...[
+                if (_canAssignGroups) ...[
                   AppDropdownField<String>(
                     initialValue: selectedGroupId,
                     labelText: '用户组',
@@ -5472,13 +5916,12 @@ class _UsersTabState extends State<_UsersTab> {
                   ),
                   const SizedBox(height: 10),
                 ],
-                if (_canManageRoles)
+                if (canEditRoleForTarget)
                   AppDropdownField<String>(
                     initialValue: selectedRoleId,
                     labelText: '管理员角色',
                     prefixIcon: const Icon(Icons.admin_panel_settings_outlined),
-                    items: _adminEntityItems(
-                      _roles,
+                    items: _roleEntityItems(
                       selectedRoleId,
                       '当前角色',
                       activeOnly: true,
@@ -5509,8 +5952,8 @@ class _UsersTabState extends State<_UsersTab> {
     try {
       await widget.api.updateUser(
         u['user_id'].toString(),
-        groupId: _canManageGroups ? selectedGroupId : null,
-        roleId: _canManageRoles ? selectedRoleId : null,
+        groupId: _canAssignGroups ? selectedGroupId : null,
+        roleId: canEditRoleForTarget ? selectedRoleId : null,
       );
       await _load(quiet: true);
       if (!mounted) return;
@@ -5742,16 +6185,16 @@ class _UsersTabState extends State<_UsersTab> {
             await _showUserDetails(u);
             break;
           case 'admin':
-            if (_canManageRoles || _canManagePermissions) {
+            if (_canToggleAdminFor(admin)) {
               await _toggleAdmin(u);
             } else if (mounted) {
               ScaffoldMessenger.of(
                 context,
-              ).showSnackBar(const SnackBar(content: Text('缺少角色或权限管理权限')));
+              ).showSnackBar(const SnackBar(content: Text('缺少超级管理员权限')));
             }
             break;
           case 'permissions':
-            if (_canManagePermissions) {
+            if (_canManageUserAdminAccess) {
               await _editAdminPermissions(u);
             } else if (mounted) {
               ScaffoldMessenger.of(
@@ -5760,7 +6203,13 @@ class _UsersTabState extends State<_UsersTab> {
             }
             break;
           case 'group_role':
-            await _editUserGroupRole(u);
+            if (_canManageUsers) {
+              await _editUserGroupRole(u);
+            } else if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
+            }
             break;
           case 'coins':
             if (_canManageCoins) {
@@ -5772,13 +6221,19 @@ class _UsersTabState extends State<_UsersTab> {
             }
             break;
           case 'disable':
-            await _toggleDisable(u);
+            if (_canManageUsers) {
+              await _toggleDisable(u);
+            }
             break;
           case 'reset':
-            await _resetPassword(u);
+            if (_canManageUsers) {
+              await _resetPassword(u);
+            }
             break;
           case 'delete':
-            await _delete(u);
+            if (_canManageUsers) {
+              await _delete(u);
+            }
             break;
           case 'copy_id':
             await Clipboard.setData(
@@ -5800,27 +6255,23 @@ class _UsersTabState extends State<_UsersTab> {
             value: 'details',
             child: AppSecondaryMenuText('查看详情'),
           ),
-          PopupMenuItem(
-            value: 'admin',
-            enabled: _canManageRoles || _canManagePermissions,
-            child: AppSecondaryMenuText(
-              _canManageRoles || _canManagePermissions
-                  ? (admin ? '撤销管理员权限' : '授予管理员权限')
-                  : '授予管理员权限（无权限）',
+          if (_canToggleAdminFor(admin))
+            PopupMenuItem(
+              value: 'admin',
+              child: AppSecondaryMenuText(admin ? '撤销管理员权限' : '授予管理员权限'),
             ),
-          ),
           PopupMenuItem(
             value: 'permissions',
-            enabled: _canManagePermissions,
+            enabled: _canManageUserAdminAccess,
             child: AppSecondaryMenuText(
-              _canManagePermissions ? '设置管理权限' : '设置管理权限（无权限）',
+              _canManageUserAdminAccess ? '设置管理权限' : '设置管理权限（无权限）',
             ),
           ),
           PopupMenuItem(
             value: 'group_role',
-            enabled: _canManageGroups || _canManageRoles,
+            enabled: _canManageUsers && (_canAssignGroups || _canManageRoles),
             child: AppSecondaryMenuText(
-              _canManageGroups || _canManageRoles
+              _canManageUsers && (_canAssignGroups || _canManageRoles)
                   ? '设置用户组/角色'
                   : '设置用户组/角色（无权限）',
             ),
@@ -5832,19 +6283,21 @@ class _UsersTabState extends State<_UsersTab> {
               _canManageCoins ? '调整时光币' : '调整时光币（无权限）',
             ),
           ),
-          PopupMenuItem(
-            value: 'disable',
-            child: AppSecondaryMenuText(disabled ? '恢复账号登录' : '禁用账号登录'),
-          ),
-          const PopupMenuItem(
-            value: 'reset',
-            child: AppSecondaryMenuText('重置登录密码'),
-          ),
+          if (_canManageUsers && !isSelf)
+            PopupMenuItem(
+              value: 'disable',
+              child: AppSecondaryMenuText(disabled ? '恢复账号登录' : '禁用账号登录'),
+            ),
+          if (_canManageUsers)
+            const PopupMenuItem(
+              value: 'reset',
+              child: AppSecondaryMenuText('重置登录密码'),
+            ),
           const PopupMenuItem(
             value: 'copy_id',
             child: AppSecondaryMenuText('复制用户 ID'),
           ),
-          if (!isSelf)
+          if (_canManageUsers && !isSelf)
             PopupMenuItem(
               value: 'delete',
               child: AppSecondaryMenuText('删除账号与数据', color: cs.error),
@@ -5869,7 +6322,8 @@ class _UsersTabState extends State<_UsersTab> {
     final permissionsText = _adminPermissionsLabel(permissions, isAdmin: admin);
     final coinBalance = _adminIntValue(u['coin_balance']);
     final lifetimeCoins = _adminIntValue(u['lifetime_coins']);
-    final selected = _selectedUserIds.contains(userId);
+    final canSelectForBulk = _canManageUsers;
+    final selected = canSelectForBulk && _selectedUserIds.contains(userId);
     final registeredAt = _formatServerTime(u['created_at']);
     final lastLoginAt = _formatLastLogin(u['last_login_at']);
     final lastActiveAt = _formatLastActive(u['last_active_at']);
@@ -5934,16 +6388,17 @@ class _UsersTabState extends State<_UsersTab> {
             onTap: () => _showUserDetails(u),
             child: Row(
               children: [
-                SizedBox(
-                  width: 34,
-                  child: Checkbox(
-                    value: selected,
-                    onChanged: isSelf
-                        ? null
-                        : (value) =>
-                              _toggleUserSelection(userId, value == true),
+                if (canSelectForBulk)
+                  SizedBox(
+                    width: 34,
+                    child: Checkbox(
+                      value: selected,
+                      onChanged: isSelf
+                          ? null
+                          : (value) =>
+                                _toggleUserSelection(userId, value == true),
+                    ),
                   ),
-                ),
                 SizedBox(
                   width: 220,
                   child: Row(
@@ -6041,12 +6496,13 @@ class _UsersTabState extends State<_UsersTab> {
           leading: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Checkbox(
-                value: selected,
-                onChanged: isSelf
-                    ? null
-                    : (value) => _toggleUserSelection(userId, value == true),
-              ),
+              if (canSelectForBulk)
+                Checkbox(
+                  value: selected,
+                  onChanged: isSelf
+                      ? null
+                      : (value) => _toggleUserSelection(userId, value == true),
+                ),
               CircleAvatar(
                 backgroundColor: admin
                     ? Colors.deepOrange.withValues(alpha: 0.2)
@@ -6105,7 +6561,7 @@ class _UsersTabState extends State<_UsersTab> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compactAdminFilters = constraints.maxWidth < 700;
+        final compactAdminFilters = constraints.maxWidth < 720;
         final userFilterChips = [
           _userFilterChip('全部账号', ''),
           _userFilterChip('可登录', 'active'),
@@ -6154,11 +6610,19 @@ class _UsersTabState extends State<_UsersTab> {
                         onPressed: _applySearch,
                         icon: const Icon(Icons.manage_search),
                       ),
-                      IconButton(
-                        tooltip: '导出用户筛选结果',
-                        onPressed: _loading ? null : _exportUsersCsv,
-                        icon: const Icon(Icons.download_outlined),
-                      ),
+                      if (_canManageUsers)
+                        IconButton(
+                          key: const ValueKey('admin_create_user_button'),
+                          tooltip: '新增用户',
+                          onPressed: _loading ? null : _createUser,
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
+                        ),
+                      if (_canManageUsers)
+                        IconButton(
+                          tooltip: '导出用户筛选结果',
+                          onPressed: _loading ? null : _exportUsersCsv,
+                          icon: const Icon(Icons.download_outlined),
+                        ),
                       IconButton(
                         tooltip: '刷新用户列表',
                         onPressed: _loading
@@ -6236,10 +6700,13 @@ class _UsersTabState extends State<_UsersTab> {
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
+                          final summaryText = !_canManageUsers
+                              ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'
+                              : (selectedIds.isEmpty
+                                    ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 可勾选后批量禁用或恢复'
+                                    : '已选 ${selectedIds.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 批量操作仅作用于当前页勾选项');
                           final summary = Text(
-                            selectedIds.isEmpty
-                                ? '本页 ${_users.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 可勾选后批量禁用或恢复'
-                                : '已选 ${selectedIds.length} 个账号 · 本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins · 批量操作仅作用于当前页勾选项',
+                            summaryText,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: cs.onSurface.withValues(alpha: 0.68),
                             ),
@@ -6248,33 +6715,39 @@ class _UsersTabState extends State<_UsersTab> {
                             spacing: 8,
                             runSpacing: 4,
                             crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              FilterChip(
-                                label: Text(
-                                  allCurrentPageSelected ? '取消全选本页' : '全选本页',
-                                ),
-                                selected: allCurrentPageSelected,
-                                onSelected: selectableIds.isEmpty
-                                    ? null
-                                    : (_) => _toggleCurrentPageSelection(
-                                        !allCurrentPageSelected,
+                            children: _canManageUsers
+                                ? [
+                                    FilterChip(
+                                      label: Text(
+                                        allCurrentPageSelected
+                                            ? '取消全选本页'
+                                            : '全选本页',
                                       ),
-                              ),
-                              TextButton.icon(
-                                onPressed: selectedIds.isEmpty || _loading
-                                    ? null
-                                    : () => _bulkSetDisabled(true),
-                                icon: const Icon(Icons.block_outlined),
-                                label: const Text('批量禁用'),
-                              ),
-                              TextButton.icon(
-                                onPressed: selectedIds.isEmpty || _loading
-                                    ? null
-                                    : () => _bulkSetDisabled(false),
-                                icon: const Icon(Icons.lock_open_outlined),
-                                label: const Text('批量恢复'),
-                              ),
-                            ],
+                                      selected: allCurrentPageSelected,
+                                      onSelected: selectableIds.isEmpty
+                                          ? null
+                                          : (_) => _toggleCurrentPageSelection(
+                                              !allCurrentPageSelected,
+                                            ),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: selectedIds.isEmpty || _loading
+                                          ? null
+                                          : () => _bulkSetDisabled(true),
+                                      icon: const Icon(Icons.block_outlined),
+                                      label: const Text('批量禁用'),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: selectedIds.isEmpty || _loading
+                                          ? null
+                                          : () => _bulkSetDisabled(false),
+                                      icon: const Icon(
+                                        Icons.lock_open_outlined,
+                                      ),
+                                      label: const Text('批量恢复'),
+                                    ),
+                                  ]
+                                : const [],
                           );
                           if (compactAdminFilters ||
                               constraints.maxWidth < 560) {
@@ -7405,10 +7878,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
         : null;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compactAdminFilters = constraints.maxWidth < 700;
-        final constrainedFeedbackHeight =
-            constraints.maxWidth < 700 && constraints.maxHeight < 560;
-        final effectiveFeedbackSummaryCard = constrainedFeedbackHeight
+        final compactAdminFilters = constraints.maxWidth < 720;
+        final effectiveFeedbackSummaryCard = compactAdminFilters
             ? null
             : feedbackSummaryCard;
         final statusChips = [
@@ -7881,9 +8352,9 @@ class _AdminFeedbackSwipeActionsState
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: cs.shadow.withValues(alpha: 0.08),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                              color: cs.shadow.withValues(alpha: 0.04),
+                              blurRadius: 7,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),

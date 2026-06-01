@@ -22,10 +22,28 @@ class DesignTokens {
   static const double space4xl = 40;
   static const double space5xl = 48;
 
+  // ----- Default palette -----
+  static const Color defaultPageBackground = Color(0xFFF6F7F9);
+  static const Color defaultSurface = Color(0xFFFFFFFF);
+  static const Color defaultSurfaceMuted = Color(0xFFF1F3F6);
+  static const Color defaultText = Color(0xFF1F2933);
+  static const Color defaultTextMuted = Color(0xFF667085);
+  static const Color defaultBorder = Color(0xFFD9E0E8);
+  static const Color defaultPrimary = Color(0xFFC85656);
+  static const Color defaultPrimarySoft = Color(0xFFF7E3E3);
+  static const Color defaultPrimaryPressed = Color(0xFFA94444);
+  static const Color defaultAccent = Color(0xFF2F8F83);
+  static const Color defaultInfo = Color(0xFF2F6FAE);
+  static const Color defaultSuccess = Color(0xFF2E7D62);
+  static const Color defaultWarning = Color(0xFFB7791F);
+  static const Color defaultError = Color(0xFFC64747);
+
   // ----- Radius -----
   static const double radiusXs = 4;
   static const double radiusSm = 8;
-  static const double radiusMd = 12;
+  static const double radiusControl = 10;
+  static const double radiusMd = 10;
+  static const double radiusCard = 12;
   static const double radiusLg = 16;
   static const double radiusXl = 20;
   static const double radiusXxl = 28;
@@ -49,6 +67,7 @@ class DesignTokens {
   static const double fontSizeXs = 11;
   static const double fontSizeSm = 12;
   static const double fontSizeBase = 14;
+  static const double fontSizeSection = 15;
   static const double fontSizeMd = 16;
   static const double fontSizeLg = 18;
   static const double fontSizeXl = 22;
@@ -60,30 +79,30 @@ class DesignTokens {
   // ----- Elevation / Shadow -----
   static const List<BoxShadow> shadowXs = [
     BoxShadow(
-      color: Color(0x14000000), // #000 8%
+      color: Color(0x0F000000), // #000 6%
       blurRadius: 4,
       offset: Offset(0, 1),
     ),
   ];
   static const List<BoxShadow> shadowSm = [
     BoxShadow(
-      color: Color(0x1F000000), // #000 12%
-      blurRadius: 8,
+      color: Color(0x14000000), // #000 8%
+      blurRadius: 7,
       offset: Offset(0, 2),
     ),
   ];
   static const List<BoxShadow> shadowMd = [
     BoxShadow(
-      color: Color(0x29000000), // #000 16%
-      blurRadius: 16,
-      offset: Offset(0, 4),
+      color: Color(0x1A000000), // #000 10%
+      blurRadius: 12,
+      offset: Offset(0, 3),
     ),
   ];
   static const List<BoxShadow> shadowLg = [
     BoxShadow(
-      color: Color(0x33000000), // #000 20%
-      blurRadius: 24,
-      offset: Offset(0, 8),
+      color: Color(0x24000000), // #000 14%
+      blurRadius: 18,
+      offset: Offset(0, 6),
     ),
   ];
 

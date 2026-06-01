@@ -11,6 +11,7 @@ void main() {
 
     for (final key in [
       'email_service_enabled',
+      'email_title',
       'email_sender_name',
       'email_code_primary_provider',
       'email_code_backup_provider',
@@ -26,6 +27,7 @@ void main() {
       'email_smtp_port',
       'email_smtp_username',
       'email_smtp_password',
+      'email_smtp_from',
       'reminder_email_enabled',
       'reminder_email_to',
       'reminder_email_from',
@@ -38,6 +40,8 @@ void main() {
       expect(backend, contains(key));
     }
     expect(adminScreen, contains('账号验证码邮件'));
+    expect(adminScreen, contains('账号邮件标题'));
+    expect(adminScreen, contains('兼容 RE0 的 TITLE，默认使用多仪'));
     expect(adminScreen, contains('注册验证、邮箱登录和找回密码共用主备通道'));
     expect(adminScreen, contains('Claw163'));
     expect(adminScreen, contains('Resend'));
@@ -48,6 +52,10 @@ void main() {
     expect(adminScreen, contains('_resendApiKeyMasked'));
     expect(adminScreen, contains('_accountSmtpPasswordMasked'));
     expect(adminScreen, contains("payload['email_smtp_password']"));
+    expect(
+      adminScreen,
+      contains("'email_smtp_from': _accountSmtpFromCtrl.text.trim()"),
+    );
     expect(adminScreen, contains("payload['openclaw_mail_api_key']"));
     expect(adminScreen, contains("payload['resend_api_key']"));
     expect(
@@ -75,8 +83,12 @@ void main() {
     expect(adminScreen, contains('_reminderSmtpPasswordMasked'));
     expect(adminScreen, contains("payload['reminder_email_smtp_password']"));
     expect(backend, contains('"reminder_email_smtp_password",'));
-    expect(backend, contains('default="claw163"'));
+    expect(backend, contains('account_primary_provider_default'));
     expect(backend, contains('default="resend"'));
+    expect(backend, contains('TITLE, EMAIL_ADDRESS'));
+    expect(backend, contains('"title": "email_title"'));
+    expect(backend, contains('"email_address": "email_smtp_username"'));
+    expect(backend, contains('"smtp_host": "email_smtp_host"'));
     expect(backend, contains('smtp_fallback'));
     expect(backend, contains('f"{secret_key}_set"'));
     expect(backend, contains('@app.post("/api/admin/reminders/email/test")'));

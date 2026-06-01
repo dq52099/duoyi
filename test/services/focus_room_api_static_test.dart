@@ -475,6 +475,7 @@ void main() {
       'lib/providers/focus_room_provider.dart',
     ).readAsStringSync();
     final backend = File('backend/main.py').readAsStringSync();
+    final deploy = File('DEPLOY.md').readAsStringSync();
 
     expect(api, contains("line.startsWith('event:')"));
     expect(api, contains("line.startsWith('data:')"));
@@ -506,6 +507,7 @@ void main() {
       backend,
       contains('@app.websocket("/ws/focus-rooms/{room_id}/events")'),
     );
+    expect(backend, contains('"WS /ws/focus-rooms/{room_id}/events"'));
     expect(
       backend,
       contains('@app.get("/api/focus-leaderboard/global/events")'),
@@ -514,6 +516,7 @@ void main() {
       backend,
       contains('@app.websocket("/ws/focus-leaderboard/global/events")'),
     );
+    expect(backend, contains('"WS /ws/focus-leaderboard/global/events"'));
     expect(backend, contains('"event: ranking\\n"'));
     expect(
       backend,
@@ -526,6 +529,9 @@ void main() {
       ),
     );
     expect(backend, contains('event in ("ping", "ranking")'));
+    expect(deploy, contains('location /ws/'));
+    expect(deploy, contains(r'proxy_set_header Upgrade $http_upgrade;'));
+    expect(deploy, contains('proxy_set_header Connection "upgrade";'));
   });
 
   test('focus room remote DTOs tolerate compatible JSON shapes', () {

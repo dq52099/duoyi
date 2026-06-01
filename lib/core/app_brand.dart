@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'brand_strings.dart';
+import 'design_tokens.dart';
 
 const String _cnFontFamily = 'sans-serif';
 const List<String> _cnFontFallback = [
@@ -62,14 +63,14 @@ TextTheme _textTheme({
   }
 
   return TextTheme(
-    displayLarge: style(57, headingColor, height: 1.12),
-    displayMedium: style(45, headingColor, height: 1.16),
-    displaySmall: style(36, headingColor, height: 1.2),
-    headlineLarge: style(32, headingColor, height: 1.22),
-    headlineMedium: style(28, headingColor, height: 1.24),
-    headlineSmall: style(25, headingColor, height: 1.28),
-    titleLarge: style(22, headingColor, height: 1.24),
-    titleMedium: style(18, headingColor, height: 1.28),
+    displayLarge: style(40, headingColor, height: 1.12),
+    displayMedium: style(34, headingColor, height: 1.16),
+    displaySmall: style(28, headingColor, height: 1.2),
+    headlineLarge: style(26, headingColor, height: 1.22),
+    headlineMedium: style(22, headingColor, height: 1.24),
+    headlineSmall: style(20, headingColor, height: 1.28),
+    titleLarge: style(18, headingColor, height: 1.24),
+    titleMedium: style(16, headingColor, height: 1.28),
     titleSmall: style(14, headingColor, height: 1.3),
     bodyLarge: style(16, bodyColor, height: 1.56),
     bodyMedium: style(14, bodyColor, height: 1.58),
@@ -132,10 +133,10 @@ ThemeData _withSharedControls(ThemeData theme) {
     surface,
   );
   final sheetShape = const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
   );
   final dialogShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(24),
+    borderRadius: BorderRadius.circular(18),
   );
   final appBarForeground =
       theme.appBarTheme.titleTextStyle?.color ??
@@ -144,7 +145,7 @@ ThemeData _withSharedControls(ThemeData theme) {
   final appBarTitleText = (theme.textTheme.titleMedium ?? const TextStyle())
       .copyWith(
         color: appBarForeground,
-        fontSize: 14,
+        fontSize: DesignTokens.fontSizeMd,
         fontWeight: FontWeight.normal,
         height: 1.2,
         letterSpacing: 0,
@@ -161,22 +162,22 @@ ThemeData _withSharedControls(ThemeData theme) {
     color: cs.onSurface.withValues(alpha: 0.68),
   );
   final label = theme.textTheme.labelMedium?.copyWith(
-    fontSize: 12,
+    fontSize: DesignTokens.fontSizeBase,
     fontWeight: FontWeight.normal,
   );
   final secondaryControlText = theme.textTheme.bodySmall?.copyWith(
-    fontSize: 11,
+    fontSize: DesignTokens.fontSizeSm,
     height: 1.2,
     fontWeight: FontWeight.normal,
     color: cs.onSurface,
   );
   final secondaryLabelText = theme.textTheme.labelSmall?.copyWith(
-    fontSize: 10,
+    fontSize: DesignTokens.fontSizeXs,
     height: 1.16,
     fontWeight: FontWeight.normal,
   );
   final selectedControlBackground = Color.alphaBlend(
-    cs.primary.withValues(alpha: isDark ? 0.20 : 0.14),
+    cs.primary.withValues(alpha: isDark ? 0.18 : 0.10),
     surface,
   );
   final selectedControlForeground = _highContrastForeground(
@@ -184,7 +185,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     cs.onSurface,
   );
   final selectedTabBackground = Color.alphaBlend(
-    cs.primary.withValues(alpha: 0.12),
+    cs.primary.withValues(alpha: isDark ? 0.16 : 0.09),
     surface,
   );
   final selectedTabForeground = _highContrastForeground(
@@ -192,7 +193,7 @@ ThemeData _withSharedControls(ThemeData theme) {
     cs.primary,
   );
   final selectedNavigationBackground = Color.alphaBlend(
-    cs.primary.withValues(alpha: 0.14),
+    cs.primary.withValues(alpha: isDark ? 0.18 : 0.10),
     surface,
   );
   final selectedNavigationForeground = _highContrastForeground(
@@ -201,7 +202,7 @@ ThemeData _withSharedControls(ThemeData theme) {
   );
   OutlineInputBorder fieldBorder(Color color, {double width = 0.4}) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
       borderSide: BorderSide(color: color, width: width),
     );
   }
@@ -213,7 +214,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       surface,
     ),
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
     border: fieldBorder(outline),
     enabledBorder: fieldBorder(outline),
     focusedBorder: fieldBorder(cs.primary.withValues(alpha: 0.18), width: 0.45),
@@ -274,7 +275,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       actionsPadding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
       barrierColor: Colors.black.withValues(alpha: isDark ? 0.56 : 0.36),
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      titleTextStyle: theme.textTheme.titleLarge?.copyWith(
+      titleTextStyle: theme.textTheme.titleMedium?.copyWith(
         color: cs.onSurface,
         fontWeight: FontWeight.normal,
       ),
@@ -288,8 +289,8 @@ ThemeData _withSharedControls(ThemeData theme) {
       surfaceTintColor: surfaceTint,
       modalBarrierColor: Colors.black.withValues(alpha: isDark ? 0.48 : 0.32),
       elevation: 0,
-      modalElevation: 10,
-      shadowColor: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
+      modalElevation: 4,
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
       shape: sheetShape,
       showDragHandle: true,
       dragHandleColor: cs.outlineVariant,
@@ -305,15 +306,15 @@ ThemeData _withSharedControls(ThemeData theme) {
         fontWeight: FontWeight.normal,
       ),
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       behavior: SnackBarBehavior.floating,
       insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
       surfaceTintColor: surfaceTint,
       textStyle: secondaryControlText?.copyWith(
         color: cs.onSurface,
@@ -330,12 +331,12 @@ ThemeData _withSharedControls(ThemeData theme) {
       menuStyle: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(surface),
         shadowColor: WidgetStatePropertyAll(
-          Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
+          Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
         ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        elevation: const WidgetStatePropertyAll(8),
+        elevation: const WidgetStatePropertyAll(4),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(vertical: 8),
@@ -347,12 +348,12 @@ ThemeData _withSharedControls(ThemeData theme) {
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(surface),
         shadowColor: WidgetStatePropertyAll(
-          Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
+          Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
         ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        elevation: const WidgetStatePropertyAll(8),
+        elevation: const WidgetStatePropertyAll(4),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(vertical: 8),
@@ -367,9 +368,11 @@ ThemeData _withSharedControls(ThemeData theme) {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        minimumSize: const Size(0, 40),
+        minimumSize: const Size(0, 38),
         overlayColor: actionForeground.withValues(alpha: 0.10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
         textStyle: label,
       ),
     ),
@@ -383,9 +386,11 @@ ThemeData _withSharedControls(ThemeData theme) {
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        minimumSize: const Size(0, 40),
+        minimumSize: const Size(0, 38),
         overlayColor: actionForeground.withValues(alpha: 0.10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
         textStyle: label,
       ),
     ),
@@ -394,9 +399,11 @@ ThemeData _withSharedControls(ThemeData theme) {
         foregroundColor: cs.onSurface,
         side: BorderSide(color: actionBorder, width: 0.7),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        minimumSize: const Size(0, 38),
+        minimumSize: const Size(0, 36),
         overlayColor: cs.primary.withValues(alpha: 0.07),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
         textStyle: label,
       ),
     ),
@@ -404,9 +411,11 @@ ThemeData _withSharedControls(ThemeData theme) {
       style: TextButton.styleFrom(
         foregroundColor: actionBackground,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        minimumSize: const Size(0, 36),
+        minimumSize: const Size(0, 34),
         overlayColor: actionBackground.withValues(alpha: 0.07),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
         textStyle: label,
       ),
     ),
@@ -440,7 +449,9 @@ ThemeData _withSharedControls(ThemeData theme) {
           return BorderSide(color: actionBorder, width: 0.6);
         }),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          ),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -456,9 +467,9 @@ ThemeData _withSharedControls(ThemeData theme) {
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
-        minimumSize: const Size(40, 40),
-        padding: const EdgeInsets.all(10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        minimumSize: const Size(36, 36),
+        padding: const EdgeInsets.all(8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
     chipTheme: ChipThemeData(
@@ -624,7 +635,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       overlayColor: WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.08)),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      height: 64,
+      height: 60,
       elevation: 0,
       backgroundColor: surface.withValues(alpha: isDark ? 0.92 : 0.96),
       indicatorColor: selectedNavigationBackground,
@@ -652,7 +663,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       focusElevation: 0,
       hoverElevation: 0,
       highlightElevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       extendedTextStyle: label,
     ),
     datePickerTheme: DatePickerThemeData(
@@ -730,8 +741,8 @@ ThemeData _withSharedControls(ThemeData theme) {
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: actionBackground,
         foregroundColor: actionForeground,
-        minimumSize: const Size(0, 40),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        minimumSize: const Size(0, 38),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         textStyle: label,
       ),
     ),
@@ -762,8 +773,8 @@ ThemeData _withSharedControls(ThemeData theme) {
       confirmButtonStyle: FilledButton.styleFrom(
         backgroundColor: actionBackground,
         foregroundColor: actionForeground,
-        minimumSize: const Size(0, 40),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        minimumSize: const Size(0, 38),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         textStyle: label,
       ),
       cancelButtonStyle: TextButton.styleFrom(
@@ -800,39 +811,46 @@ ThemeData _lightTheme({
     fontFamilyFallback: _cnFontFallback,
     textTheme: _textTheme(
       brightness: Brightness.light,
-      bodyColor: const Color(0xFF2C323D),
-      mutedColor: const Color(0xFF8B95A6),
-      headingColor: const Color(0xFF1E2532),
+      bodyColor: DesignTokens.defaultText,
+      mutedColor: DesignTokens.defaultTextMuted,
+      headingColor: DesignTokens.defaultText,
     ),
     colorScheme: ColorScheme.light(
       primary: primary,
       secondary: secondary,
       surface: surface,
       error: error,
+      onSurface: DesignTokens.defaultText,
     ),
     scaffoldBackgroundColor: background,
     cardTheme: CardThemeData(
       color: surface,
       elevation: 0,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shadowColor: Colors.black.withValues(alpha: 0.05),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shadowColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+        side: BorderSide(
+          color: DesignTokens.defaultBorder.withValues(alpha: 0.72),
+          width: 0.55,
+        ),
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surface.withValues(alpha: 0.8),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      fillColor: DesignTokens.defaultSurfaceMuted,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderSide: BorderSide(color: DesignTokens.defaultBorder),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primary, width: 1.5),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderSide: BorderSide(color: primary.withValues(alpha: 0.54)),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
@@ -840,8 +858,10 @@ ThemeData _lightTheme({
         backgroundColor: primary,
         foregroundColor: _highContrastForeground(primary, Colors.white),
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
       ),
     ),
     appBarTheme: AppBarTheme(
@@ -850,7 +870,7 @@ ThemeData _lightTheme({
       centerTitle: true,
       foregroundColor: const Color(0xFF1E2532),
       titleTextStyle: const TextStyle(
-        fontSize: 18,
+        fontSize: DesignTokens.fontSizeMd,
         fontWeight: FontWeight.normal,
         color: Color(0xFF1E2532),
       ),
@@ -885,32 +905,36 @@ ThemeData _darkTheme({
     ),
     scaffoldBackgroundColor: background,
     cardTheme: CardThemeData(
-      color: surface.withValues(alpha: 0.9),
+      color: surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: primary.withValues(alpha: 0.24)),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.black.withValues(alpha: 0.64),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      fillColor: Colors.white.withValues(alpha: 0.06),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary.withValues(alpha: 0.42)),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary, width: 2),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderSide: BorderSide(color: primary.withValues(alpha: 0.60)),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.black,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
       ),
     ),
     appBarTheme: AppBarTheme(
@@ -943,29 +967,34 @@ final _re0Theme = _withSharedControls(
     scaffoldBackgroundColor: const Color(0xFFFDFDFD),
     cardTheme: CardThemeData(
       color: Colors.white.withValues(alpha: 0.9),
-      elevation: 8,
-      shadowColor: const Color(0xFF4682B4).withValues(alpha: 0.2),
+      elevation: 0,
+      shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
         side: BorderSide(
-          color: const Color(0xFFE6E6FA).withValues(alpha: 0.5),
-          width: 1.5,
+          color: const Color(0xFF4682B4).withValues(alpha: 0.14),
+          width: 0.55,
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white.withValues(alpha: 0.96),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         borderSide: BorderSide(
-          color: const Color(0xFF4682B4).withValues(alpha: 0.34),
+          color: const Color(0xFF4682B4).withValues(alpha: 0.16),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF4682B4), width: 2),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderSide: BorderSide(
+          color: const Color(0xFF4682B4).withValues(alpha: 0.30),
+          width: 0.55,
+        ),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
@@ -975,9 +1004,11 @@ final _re0Theme = _withSharedControls(
           const Color(0xFF4682B4),
           Colors.white,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        elevation: 4,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        ),
+        elevation: 0,
       ),
     ),
     appBarTheme: const AppBarTheme(
@@ -1085,10 +1116,11 @@ final _botwTheme = _withSharedControls(
 );
 
 final _defaultTheme = _lightTheme(
-  primary: const Color(0xFFFF7474),
-  secondary: const Color(0xFFFFB088),
-  surface: const Color(0xFFFFFFFF),
-  background: const Color(0xFFF7F8FA),
+  primary: DesignTokens.defaultPrimary,
+  secondary: DesignTokens.defaultAccent,
+  surface: DesignTokens.defaultSurface,
+  background: DesignTokens.defaultPageBackground,
+  error: DesignTokens.defaultError,
 );
 
 class AppBrands {
@@ -1096,7 +1128,7 @@ class AppBrands {
     style: BrandStyle.defaultBrand,
     name: '多仪',
     theme: _defaultTheme,
-    backgroundOverlay: const Color(0xFFFFF8F0),
+    backgroundOverlay: DesignTokens.defaultPageBackground,
     backgroundOverlayOpacity: 1.0,
   );
   static final re0 = AppBrand(

@@ -10,6 +10,7 @@ import 'time_audit_provider.dart';
 
 class GoalProvider extends ChangeNotifier {
   static const _key = 'duoyi_goals';
+  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
   List<GoalItem> _goals = [];
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
@@ -71,7 +72,7 @@ class GoalProvider extends ChangeNotifier {
     final scheduler = _scheduler;
     if (scheduler == null) return;
     try {
-      await scheduler.syncGoals(List.of(_goals));
+      await scheduler.syncGoals(List.of(_goals)).timeout(_reminderSyncTimeout);
     } catch (error, stackTrace) {
       debugPrint('[GoalProvider] reminder sync failed: $error\n$stackTrace');
     }

@@ -64,10 +64,12 @@ void main() {
       expect(
         method(
           'Future<TodoImportSummary> importTodos(',
-          'Future<void> updateTodo(String id, TodoItem updated)',
+          'Future<void> updateTodo(',
         ),
         contains('await _syncTodoRemindersNow();'),
       );
+      expect(source, contains('bool waitForReminderSync = true'));
+      expect(source, contains('unawaited(_syncTodoRemindersNow())'));
       expect(
         method(
           'Future<int> completeTodos(',
@@ -198,10 +200,16 @@ void main() {
       source,
       contains('final today = DateTime(base.year, base.month, base.day)'),
     );
+    expect(source, contains('date: today,'));
+    expect(source, contains('dueDate: nextDue'));
     expect(
       source,
-      contains('todo.copyWith(date: today, isArchivedAfterRollover: false)'),
+      contains(
+        'final endOfToday = DateTime(today.year, today.month, today.day, 23, 59, 59)',
+      ),
     );
+    expect(source, contains('preferredDue.isBefore(endOfToday)'));
+    expect(source, contains('waitForReminderSync = true'));
     expect(source, contains('return true;'));
   });
 

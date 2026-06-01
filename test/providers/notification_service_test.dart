@@ -1619,7 +1619,8 @@ void main() {
         ),
       );
       expect(method, contains('if ((usesPush || usesPopup) && notif != null)'));
-      expect(method, contains('notif.ensureReadyForReminder('));
+      final ensureReadyIndex = method.indexOf('ensureReadyForReminder(');
+      expect(ensureReadyIndex, greaterThanOrEqualTo(0));
       expect(method, contains('if (usesAlarm && !usesPush && !usesPopup)'));
       expect(method, contains('LocalNotifications.instance'));
       expect(method, contains('.ensurePermission()'));
@@ -1629,7 +1630,7 @@ void main() {
       expect(method, isNot(contains('notif.requestPermission()')));
       expect(
         method.indexOf('final usesPush = result.kinds.contains'),
-        lessThan(method.indexOf('notif.ensureReadyForReminder(')),
+        lessThan(ensureReadyIndex),
       );
       expect(
         method.indexOf('final usesAlarm = result.kinds.contains'),

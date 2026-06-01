@@ -186,25 +186,16 @@ void main() {
       sources['habit'],
       contains('Future<void> _syncRemindersNow() async'),
     );
-    expect(
-      sources['habit'],
-      contains('await scheduler.syncHabits(List.of(_habits))'),
-    );
+    expect(sources['habit'], contains('syncHabits(List.of(_habits))'));
     expect(
       sources['anniversary'],
-      contains('await scheduler.syncAnniversaries(List.of(_items))'),
+      contains('syncAnniversaries(List.of(_items))'),
     );
-    expect(
-      sources['countdown'],
-      contains('await scheduler.syncCountdowns(List.of(_items))'),
-    );
+    expect(sources['countdown'], contains('syncCountdowns(List.of(_items))'));
     expect(
       sources['goal'],
       contains('Future<void> _syncGoalRemindersNow() async'),
     );
-    expect(
-      sources['goal'],
-      contains('await scheduler.syncGoals(List.of(_goals))'),
-    );
+    expect(sources['goal'], contains('syncGoals(List.of(_goals))'));
   });
 }

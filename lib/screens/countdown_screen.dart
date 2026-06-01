@@ -30,8 +30,8 @@ ButtonStyle _countdownDangerTextButtonStyle(BuildContext context) {
   return TextButton.styleFrom(
     foregroundColor: cs.error,
     textStyle: appSecondaryControlTextStyle(context),
-    minimumSize: const Size(0, 30),
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    minimumSize: const Size(0, 36),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     visualDensity: VisualDensity.compact,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
@@ -43,8 +43,8 @@ ButtonStyle _countdownDangerFilledButtonStyle(BuildContext context) {
     backgroundColor: cs.error,
     foregroundColor: cs.onError,
     textStyle: appSecondaryMenuItemTextStyle(context),
-    minimumSize: const Size(0, 30),
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    minimumSize: const Size(0, 36),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     visualDensity: VisualDensity.compact,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
@@ -253,7 +253,6 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
   late TimeOfDay _remindTime;
   late ReminderKind _reminderKind;
   bool _saving = false;
-
   @override
   void initState() {
     super.initState();
@@ -297,11 +296,16 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
         case ReminderKind.push:
           final notif = context.read<NotificationService?>();
           final ready =
-              await notif?.ensureReadyForReminder(
-                scheduledTime: remindAt,
-                issueTitle: issueTitle,
-                relatedId: item.id,
-              ) ??
+              await notif
+                  ?.ensureReadyForReminder(
+                    scheduledTime: remindAt,
+                    issueTitle: issueTitle,
+                    relatedId: item.id,
+                  )
+                  .timeout(
+                    const Duration(seconds: 5),
+                    onTimeout: () => false,
+                  ) ??
               true;
           if (ready) return const _ReminderPreflightResult.ok();
           final issue = notif?.lastScheduleIssue;
@@ -313,12 +317,22 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
         case ReminderKind.popup:
           final notif = context.read<NotificationService?>();
           final ready =
-              await notif?.ensureReadyForReminder(
-                scheduledTime: remindAt,
-                issueTitle: I18n.tr('countdown.reminder.popup_fallback_failed'),
-                relatedId: item.id,
-              ) ??
-              await LocalNotifications.instance.ensurePermission();
+              await notif
+                  ?.ensureReadyForReminder(
+                    scheduledTime: remindAt,
+                    issueTitle: I18n.tr(
+                      'countdown.reminder.popup_fallback_failed',
+                    ),
+                    relatedId: item.id,
+                  )
+                  .timeout(
+                    const Duration(seconds: 5),
+                    onTimeout: () => false,
+                  ) ??
+              await LocalNotifications.instance.ensurePermission().timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => false,
+              );
           if (!ready) {
             final issue = notif?.lastScheduleIssue;
             return _ReminderPreflightResult.disabled(
@@ -332,7 +346,8 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
           );
         case ReminderKind.alarm:
           final notificationGranted = await LocalNotifications.instance
-              .ensurePermission();
+              .ensurePermission()
+              .timeout(const Duration(seconds: 5), onTimeout: () => false);
           if (!notificationGranted) {
             return _ReminderPreflightResult.disabled(
               I18n.tr('countdown.reminder.alarm_permission_denied'),
@@ -449,16 +464,18 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
       _saving = false;
       return;
     }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final feedback = reminderWarning.isNotEmpty
+        ? reminderWarning
+        : I18n.tr('countdown.saved');
     Navigator.pop(context);
-    if (reminderWarning.isNotEmpty && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(reminderWarning),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(feedback),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _delete() async {
@@ -980,13 +997,15 @@ class _CountdownCardState extends State<_CountdownCard> {
             : 0;
       }),
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: _CountdownInlineSwipeActions(
-              margin: const EdgeInsets.only(bottom: 12),
-              onDelete: () => _confirmDelete(context),
+          if (_swipeOffset > 0)
+            Positioned.fill(
+              child: _CountdownInlineSwipeActions(
+                margin: const EdgeInsets.only(bottom: 12),
+                onDelete: () => _confirmDelete(context),
+              ),
             ),
-          ),
           AnimatedContainer(
             duration: _dragging
                 ? Duration.zero

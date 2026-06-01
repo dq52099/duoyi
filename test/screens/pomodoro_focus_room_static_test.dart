@@ -66,6 +66,11 @@ void main() {
     expect(screen, contains('本地排行'));
     expect(screen, contains("label: '在线 \${ranking.onlineCount}'"));
     expect(screen, contains('服务端连接异常，已显示本地排行'));
+    expect(screen, contains('String _focusRoomErrorText(Object error)'));
+    expect(
+      screen,
+      contains('isBackendCompatibilityDiagnosticMessage(message)'),
+    );
     expect(screen, contains('输入邀请码'));
     expect(screen, contains('自习室邀请码'));
     expect(screen, contains('加入自习室'));
@@ -155,6 +160,10 @@ void main() {
     expect(tabBlock, contains('rooms.effectiveRankingFor'));
     expect(tabBlock, contains('if (rooms.lastRemoteError != null)'));
     expect(tabBlock, contains("label: '服务端连接异常，已显示本地排行'"));
+    expect(
+      tabBlock,
+      contains('Text(\n                        rooms.lastRemoteError!'),
+    );
     expect(tabBlock, contains('Icons.cloud_off_outlined'));
     expect(tabBlock, contains('Theme.of(context).colorScheme.outline'));
     expect(tabBlock, contains('_FocusRoomRankingCard(ranking: ranking)'));

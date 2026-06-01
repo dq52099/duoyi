@@ -622,6 +622,52 @@ void main() {
     expect(auth.state.token, 'token-1');
   });
 
+  for (final rejection in [
+    (status: 401, detail: 'token expired'),
+    (status: 403, detail: 'Account disabled'),
+  ]) {
+    test(
+      'refreshMe clears local session on ${rejection.status} ${rejection.detail}',
+      () async {
+        const previous = AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          token: 'token-1',
+        );
+        SharedPreferences.setMockInitialValues({
+          'auth_state': json.encode(previous.toJson()),
+        });
+        var loggedOut = false;
+        final auth = AuthProvider(
+          initialState: previous,
+          client: ApiClient(
+            baseUrl: 'https://duoyi.test',
+            token: 'token-1',
+            httpClient: MockClient((request) async {
+              expect(request.url.path, '/api/auth/me');
+              return http.Response(
+                json.encode({'detail': rejection.detail}),
+                rejection.status,
+                headers: {'content-type': 'application/json'},
+              );
+            }),
+          ),
+        );
+        auth.onAccountLoggedOut = () async {
+          loggedOut = true;
+        };
+
+        await auth.refreshMe();
+        final prefs = await SharedPreferences.getInstance();
+
+        expect(auth.state.isLoggedIn, isFalse);
+        expect(auth.client.token, isNull);
+        expect(prefs.getString('auth_state'), isNull);
+        expect(loggedOut, isTrue);
+      },
+    );
+  }
+
   test(
     'logout retries compatible routes and always clears local state',
     () async {
@@ -743,6 +789,8 @@ void main() {
           }),
         ),
       );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_state', json.encode(auth.state.toJson()));
 
       await auth.changePassword(
         currentPassword: 'oldpass123',
@@ -758,6 +806,9 @@ void main() {
         'newPassword': 'newpass456',
         'password': 'newpass456',
       });
+      expect(auth.state.isLoggedIn, isFalse);
+      expect(auth.client.token, isNull);
+      expect(prefs.getString('auth_state'), isNull);
     },
   );
 

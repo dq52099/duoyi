@@ -181,8 +181,8 @@ ButtonStyle _integrationOutlinedButtonStyle(BuildContext context) =>
     OutlinedButton.styleFrom(
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      minimumSize: const Size(0, 30),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      minimumSize: const Size(0, 36),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       textStyle: appSecondaryMenuItemTextStyle(context),
     );
 
@@ -190,8 +190,8 @@ ButtonStyle _integrationFilledButtonStyle(BuildContext context) =>
     FilledButton.styleFrom(
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      minimumSize: const Size(0, 30),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      minimumSize: const Size(0, 36),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       textStyle: appSecondaryMenuItemTextStyle(context),
     );
 

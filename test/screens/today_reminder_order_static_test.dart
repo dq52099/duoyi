@@ -11,8 +11,17 @@ void main() {
       contains('final reminderGroups = _TodayReminderGroups.build'),
     );
     expect(today, contains('class _TodayReminderGroups'));
-    expect(today, contains("title: '今日提醒'"));
+    expect(today, contains("Text(\n                            '今日提醒'"));
     expect(today, contains('今日待提醒 > 即将开始 > 逾期优先处理'));
+    expect(
+      today,
+      contains("ValueKey('today_reminder_section_collapsed_by_default')"),
+    );
+    expect(today, contains('bool _expanded = false'));
+    expect(
+      today,
+      contains('if (_expanded && widget.groups.dueToday.isNotEmpty)'),
+    );
     expect(today, contains("title: '今日待提醒事项'"));
     expect(today, contains("title: '即将开始事项'"));
     expect(today, contains("title: '已逾期事项'"));
@@ -26,13 +35,25 @@ void main() {
     expect(today, contains('cs.error.withValues(alpha: 0.26)'));
     expect(today, contains('overdueTitleColor = cs.error'));
     expect(today, contains('overdueSubtitleColor = cs.error'));
-    expect(today, contains('tileBackground: overdue ? overdueBackground'));
-    expect(today, contains('tileBorderColor: overdue ? overdueBorder'));
+    expect(today, contains('final completedColor = const Color(0xFF4CAF50)'));
+    expect(today, contains('final completedBackground = Color.alphaBlend'));
+    expect(today, contains('completedToday.add(item)'));
+    expect(today, contains('completed: todo.isCompleted'));
+    expect(today, contains('completed ? TextDecoration.lineThrough : null'));
+    expect(today, contains('tileBackground: overdue'));
+    expect(today, contains('tileBorderColor: overdue'));
     expect(today, contains('titleWidget: overdue'));
     expect(today, contains('ExpansionTile('));
     expect(today, contains('initiallyExpanded: false'));
     expect(today, contains('maintainState: true'));
+    expect(today, contains('class _SuggestionSectionState'));
+    expect(today, contains("final Set<String> _addingTodoIds = <String>{};"));
+    expect(today, contains("ValueKey('today_suggestion_add_"));
     expect(today, contains('默认收起'));
+    expect(today, contains('class _TodoTemplateAvatar'));
+    expect(today, contains('today_suggestion_template_icon'));
+    expect(today, contains('class _TodayTodoLeading'));
+    expect(today, contains('today_todo_template_icon'));
 
     expect(
       today,
@@ -56,7 +77,9 @@ void main() {
     final dueIndex = section.indexOf("title: '今日待提醒事项'");
     final upcomingIndex = section.indexOf("title: '即将开始事项'");
     final overdueIndex = section.indexOf("title: '已逾期事项'");
-    final suggestionIndex = section.indexOf('if (suggestions.isNotEmpty)');
+    final suggestionIndex = section.indexOf(
+      'if (_expanded && widget.suggestions.isNotEmpty)',
+    );
     expect(dueIndex, greaterThanOrEqualTo(0));
     expect(upcomingIndex, greaterThan(dueIndex));
     expect(overdueIndex, greaterThan(upcomingIndex));

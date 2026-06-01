@@ -47,17 +47,18 @@ void main() {
     expect(hiddenSource, isNot(contains('onPressed: () {}')));
   });
 
-  test('习惯列表直接提供结束和删除入口且按钮文字保持对比', () {
+  test('习惯列表默认不露出结束和删除且按钮文字保持对比', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
 
-    expect(source, contains("tooltip: '习惯操作'"));
+    expect(source, contains("message: '查看详情'"));
+    expect(source, isNot(contains("tooltip: '习惯操作'")));
+    expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
+    expect(source, isNot(contains("value: 'delete'")));
+    expect(source, contains("key: const ValueKey('habit_swipe_end_button')"));
     expect(
       source,
-      contains(
-        "const PopupMenuItem(value: 'end', child: AppSecondaryMenuText('结束习惯'))",
-      ),
+      contains("key: const ValueKey('habit_swipe_delete_button')"),
     );
-    expect(source, contains("value: 'delete'"));
     expect(source, contains('await provider.endHabit(habit.id)'));
     expect(source, contains('await provider.deleteHabit(habit.id)'));
     expect(source, contains('Color _habitButtonForeground(Color background)'));

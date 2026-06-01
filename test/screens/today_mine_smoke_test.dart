@@ -43,10 +43,17 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _wrap(Widget child, {AuthProvider? authProvider}) {
+Widget _wrap(
+  Widget child, {
+  AuthProvider? authProvider,
+  TodoProvider? todoProvider,
+}) {
   return MultiProvider(
     providers: [
-      ChangeNotifierProvider(create: (_) => TodoProvider()),
+      if (todoProvider == null)
+        ChangeNotifierProvider(create: (_) => TodoProvider())
+      else
+        ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
       ChangeNotifierProvider(create: (_) => HabitProvider()),
       ChangeNotifierProvider(create: (_) => PomodoroProvider()),
       ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -104,20 +111,22 @@ void main() {
     expect(surface, contains('iconBoxSize = 28'));
 
     expect(mine, contains('class _TileGroup'));
-    expect(mine, contains('border: Border.all'));
+    expect(mine, contains('AppSurfaceCard('));
+    expect(mine, contains('Divider('));
     expect(
       mine,
-      contains('cs.surfaceContainerHighest.withValues(alpha: 0.68)'),
+      contains(
+        'borderRadius: BorderRadius.circular(DesignTokens.radiusControl)',
+      ),
     );
-    expect(mine, contains('cs.surface.withValues(alpha: 0.86)'));
     expect(mine, contains('final compact = constraints.maxWidth < 360'));
     expect(mine, contains("label: '目标管理'"));
     expect(mine, contains("label: '生日'"));
     expect(mine, contains("label: '纪念日'"));
     expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
     expect(mine, contains('child: anniversary.BirthdayScreen()'));
-    expect(mine, isNot(contains("label: '倒数日'")));
-    expect(mine, isNot(contains('child: CountdownScreen()')));
+    expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains('child: CountdownScreen()'));
     expect(mine, contains("label: '备份'"));
     expect(mine, contains("label: '恢复数据'"));
     expect(mine, contains("label: '许愿与反馈'"));
@@ -179,7 +188,7 @@ void main() {
     expect(find.text('综合评分'), findsNothing);
     expect(find.text('纪念日'), findsOneWidget);
     expect(find.text('生日'), findsOneWidget);
-    expect(find.text('倒数日'), findsNothing);
+    expect(find.text('倒数日'), findsOneWidget);
     expect(find.text('黄历'), findsNothing);
     expect(find.text('万年历'), findsOneWidget);
 
@@ -239,7 +248,7 @@ void main() {
     expect(find.text('个人资料'), findsOneWidget);
   });
 
-  testWidgets('MineScreen exposes logout for logged-in accounts', (
+  testWidgets('MineScreen exposes logout in the top user info row', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 900);
@@ -275,14 +284,15 @@ void main() {
     await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('退出登录'),
-      700,
-      scrollable: find.byType(Scrollable).last,
+    final userInfoRow = find.byKey(const ValueKey('mine_user_info_row'));
+    final logoutButton = find.descendant(
+      of: userInfoRow,
+      matching: find.byKey(const ValueKey('mine_top_logout_button')),
     );
-    expect(find.text('退出登录'), findsOneWidget);
+    expect(userInfoRow, findsOneWidget);
+    expect(logoutButton, findsOneWidget);
 
-    await tester.tap(find.text('退出登录'));
+    await tester.tap(logoutButton);
     await tester.pumpAndSettle();
 
     expect(find.text('退出登录？'), findsOneWidget);
@@ -431,6 +441,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('今日提醒'), findsOneWidget);
+    expect(find.text('已逾期事项'), findsNothing);
+    expect(find.text('逾期提醒任务'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('today_reminder_header_toggle')),
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('已逾期事项'), findsOneWidget);
     expect(
       find.text('今日待提醒事项').evaluate().isNotEmpty ||
@@ -462,6 +480,70 @@ void main() {
     );
     expect(overdueDecoratedTile, findsOneWidget);
     expect(normalDecoratedTile, findsNothing);
+  });
+
+  testWidgets('Today suggestion add immediately moves task into today', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final todoProvider = TodoProvider();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '建议加入今日',
+        date: today.add(const Duration(days: 1)),
+        priority: TodoPriority.high,
+        quadrant: EisenhowerQuadrant.notUrgentImportant,
+        listGroupName: '工作',
+      ),
+    );
+
+    await tester.pumpWidget(
+      _wrap(const TodayScreen(), todoProvider: todoProvider),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日待办'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('today_reminder_header_toggle')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(I18n.tr('today.suggestions')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('today_suggestion_template_icon_工作')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text(I18n.tr('today.add_to_today')));
+    await tester.pumpAndSettle();
+
+    final stored = todoProvider.todos.single;
+    expect(
+      DateTime(stored.date.year, stored.date.month, stored.date.day),
+      today,
+    );
+    expect(stored.dueDate, isNotNull);
+    expect(
+      DateTime(
+        stored.dueDate!.year,
+        stored.dueDate!.month,
+        stored.dueDate!.day,
+      ),
+      today,
+    );
+    expect(find.text('今日待提醒事项'), findsOneWidget);
+    expect(find.text('今日待办'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('today_todo_template_icon_工作')),
+      findsWidgets,
+    );
+    expect(find.text(I18n.tr('today.add_to_today')), findsNothing);
   });
 
   testWidgets(

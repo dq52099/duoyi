@@ -56,9 +56,14 @@ void main() {
 
     expect(provider.items, hasLength(1));
     expect(provider.items.single.title, '版本发布');
+    expect(find.text('倒数日已保存'), findsOneWidget);
     expect(find.text('暂无倒数日记录'), findsNothing);
     expect(find.text('全部倒数日'), findsOneWidget);
     expect(find.text('版本发布'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('countdown_swipe_delete_button')),
+      findsNothing,
+    );
     expect(
       find.byKey(ValueKey('countdown_card_${provider.items.single.id}')),
       findsOneWidget,
@@ -105,6 +110,7 @@ void main() {
 
     expect(provider.items, hasLength(1));
     expect(provider.items.single.title, '从入口新增');
+    expect(find.text('倒数日已保存'), findsOneWidget);
     expect(find.text('从入口新增'), findsOneWidget);
     expect(
       find.byKey(ValueKey('countdown_card_${provider.items.single.id}')),
@@ -435,6 +441,9 @@ void main() {
     expect(provider.birthdays, hasLength(1));
     expect(provider.memorials, isEmpty);
     expect(provider.countdowns, isEmpty);
+    expect(find.widgetWithText(FilledButton, '添加'), findsNothing);
+    expect(find.text('测试生日'), findsOneWidget);
+    expect(find.text('还没有任何纪念'), findsNothing);
   });
 
   testWidgets('MemorialAnniversaryScreen add creates memorial anniversary', (
@@ -468,6 +477,9 @@ void main() {
     expect(provider.birthdays, isEmpty);
     expect(provider.memorials, hasLength(1));
     expect(provider.countdowns, isEmpty);
+    expect(find.widgetWithText(FilledButton, '添加'), findsNothing);
+    expect(find.text('测试纪念日'), findsOneWidget);
+    expect(find.text('还没有任何纪念'), findsNothing);
   });
 
   testWidgets('anniversary card left swipe reveals matching delete action', (
@@ -500,6 +512,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('生日提醒'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('anniversary_swipe_delete_button')),
+      findsNothing,
+    );
 
     await tester.drag(find.text('生日提醒'), const Offset(-500, 0));
     await tester.pumpAndSettle();

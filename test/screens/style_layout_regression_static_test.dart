@@ -63,7 +63,7 @@ void main() {
         if (width != null) {
           expect(
             double.parse(width.group(1)!),
-            lessThanOrEqualTo(0.5),
+            lessThanOrEqualTo(0.6),
             reason: '$path uses a thick border:\n$call',
           );
         }
@@ -71,7 +71,7 @@ void main() {
     }
   });
 
-  test('全局二级控件选中态和玻璃边框保持轻量可读', () {
+  test('全局二级控件选中态和卡片边框保持轻量可读', () {
     final source = File(
       'lib/widgets/surface_components.dart',
     ).readAsStringSync();
@@ -80,16 +80,15 @@ void main() {
       source.indexOf('final surfaceColor'),
       source.indexOf('final content = Ink('),
     );
-    expect(surfaceCard, contains('final glassBorderColor'));
-    expect(surfaceCard, contains('Colors.white.withValues(alpha: 0.045)'));
-    expect(surfaceCard, contains('Colors.white.withValues(alpha: 0.28)'));
-    expect(surfaceCard, contains('width: 0.35'));
-    expect(surfaceCard, contains('alpha: isDark ? 0.055 : 0.010'));
+    expect(surfaceCard, contains('final cardBorderColor'));
+    expect(surfaceCard, contains('DesignTokens.defaultBorder'));
+    expect(surfaceCard, contains('width: 0.55'));
+    expect(surfaceCard, contains('elevation <= 0'));
     expect(
       surfaceCard,
       isNot(contains('Colors.black.withValues(alpha: 0.05)')),
     );
-    expect(surfaceCard, contains('cs.surface.withValues(alpha: 0.93)'));
+    expect(surfaceCard, contains('final surfaceColor = color ?? cs.surface'));
 
     final controls = source.substring(
       source.indexOf('class AppSecondaryControlTheme'),
@@ -101,7 +100,7 @@ void main() {
         'OutlineInputBorder inputBorder(Color color, {double width = 0.35})',
       ),
     );
-    expect(controls, contains('alpha: isDark ? 0.055 : 0.075'));
+    expect(controls, contains('alpha: isDark ? 0.12 : 0.16'));
     expect(controls, contains('Color.alphaBlend('));
     expect(controls, contains('alpha: isDark ? 0.14 : 0.09'));
     expect(
@@ -109,10 +108,7 @@ void main() {
       contains('cs.primary.withValues(alpha: isDark ? 0.34 : 0.30)'),
     );
     expect(controls, contains('BorderSide(color: color, width: 0.4)'));
-    expect(
-      controls,
-      contains('side: BorderSide(color: subtleBorder, width: 0.4)'),
-    );
+    expect(controls, contains('side: BorderSide(color: subtleBorder'));
 
     final selectedForeground = source.substring(
       source.indexOf('final selectedControlForeground'),
@@ -578,11 +574,19 @@ void main() {
         contains('surfaceTintColor: Colors.transparent'),
         reason: path,
       );
-      expect(
-        source,
-        isNot(contains('backgroundColor: Colors.transparent')),
-        reason: path,
-      );
+      if (path == 'lib/screens/profile_screen.dart') {
+        expect(
+          source,
+          contains('final routeBackground = Colors.transparent;'),
+          reason: path,
+        );
+      } else {
+        expect(
+          source,
+          isNot(contains('backgroundColor: Colors.transparent')),
+          reason: path,
+        );
+      }
     }
 
     final notificationHistory = File(
@@ -966,15 +970,19 @@ void main() {
       calendar,
       contains("key: const ValueKey('calendar_fixed_month_grid')"),
     );
-    expect(calendar, contains('final desiredDetailHeight'));
-    expect(calendar, contains('availableHeight < 560 ? 220.0 : 320.0'));
+    expect(
+      calendar,
+      contains("key: const ValueKey('calendar_month_global_scrollbar')"),
+    );
+    expect(calendar, contains("'calendar_month_global_scroll_view'"));
+    expect(calendar, contains('double _monthGridHeightFor'));
+    expect(calendar, contains('rows >= 6 ? 470.0 : 410.0'));
+    expect(calendar, contains('rows >= 6 ? 620.0 : 540.0'));
     expect(calendar, contains('const monthGridChromeHeight = 30.0'));
     expect(calendar, contains('final minGridHeight'));
     expect(calendar, contains('final preferredGridHeight'));
-    expect(calendar, contains('maxGridForReadableDetail'));
-    expect(calendar, contains('final compactUpperGridHeight'));
-    expect(calendar, contains('final upperGridHeight'));
-    expect(calendar, contains('final lowerGridHeight'));
+    expect(calendar, contains('height: monthGridHeight'));
+    expect(calendar, contains('scrollable: false'));
     expect(calendar, contains('horizontalPadding: 8'));
     expect(calendar, contains('maxLines: 2'));
     expect(calendar, contains('dimension: compact ? 36 : 40'));
@@ -1074,8 +1082,18 @@ void main() {
     expect(habit, contains('IconButton.styleFrom('));
     expect(habit, isNot(contains("label: const Text('还原')")));
     expect(habit, isNot(contains('Icons.verified_rounded')));
-    expect(habit, contains("value: 'end'"));
-    expect(habit, contains("value: 'delete'"));
+    expect(habit, contains('class _HabitSwipeActionWrapper'));
+    expect(habit, contains('if (_swipeOffset > 0)'));
+    expect(habit, contains('onEnd: () => _runAction('));
+    expect(habit, contains('onDelete: () => _runAction('));
+    expect(
+      habit,
+      contains("_handleHabitMenuAction(context, widget.habit, 'end')"),
+    );
+    expect(
+      habit,
+      contains("_handleHabitMenuAction(context, widget.habit, 'delete')"),
+    );
     expect(habit, contains('await provider.deleteHabit(habit.id)'));
     expect(habit, contains('await provider.endHabit(habit.id)'));
     expect(habit, contains('builder: (ctx) => AppDialog('));

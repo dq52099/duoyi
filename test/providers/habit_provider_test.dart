@@ -183,7 +183,7 @@ void main() {
     },
   );
 
-  test('endHabit keeps today visible when today has a record', () async {
+  test('endHabit removes a completed habit from today immediately', () async {
     final provider = HabitProvider();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -203,11 +203,11 @@ void main() {
     await provider.endHabit('completed-today', at: today);
 
     final ended = provider.habits.single;
-    expect(ended.endDate, today);
-    expect(ended.isActiveToday(), isTrue);
-    expect(ended.isCompletedToday(), isTrue);
-    expect(provider.todayCompletionRate, 1);
-    expect(provider.todayOverallProgress, 1);
+    expect(ended.endDate, today.subtract(const Duration(days: 1)));
+    expect(ended.isActiveToday(), isFalse);
+    expect(ended.isCompletedToday(), isFalse);
+    expect(provider.todayCompletionRate, 0);
+    expect(provider.todayOverallProgress, 0);
   });
 
   test(

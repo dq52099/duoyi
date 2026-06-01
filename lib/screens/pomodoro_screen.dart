@@ -13,6 +13,7 @@ import '../providers/auth_provider.dart';
 import '../providers/focus_room_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/api_client.dart';
 import '../services/focus_room_api.dart';
 import '../services/focus_sound_service.dart';
 import '../widgets/app_date_picker.dart';
@@ -22,6 +23,12 @@ import '../widgets/pomodoro_timer_ring.dart';
 import '../widgets/pomodoro_session_card.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+
+String _focusRoomErrorText(Object error) {
+  final message = error is ApiException ? error.message : error.toString();
+  if (isBackendCompatibilityDiagnosticMessage(message)) return message;
+  return userVisibleApiError(error, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
+}
 
 Future<void> showPomodoroSessionEditor(
   BuildContext context,
@@ -2135,10 +2142,24 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
               if (rooms.lastRemoteError != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: AppStatusBadge(
-                    label: '服务端连接异常，已显示本地排行',
-                    color: Theme.of(context).colorScheme.outline,
-                    icon: Icons.cloud_off_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppStatusBadge(
+                        label: '服务端连接异常，已显示本地排行',
+                        color: Theme.of(context).colorScheme.outline,
+                        icon: Icons.cloud_off_outlined,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        rooms.lastRemoteError!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.68),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               if (rankings.isEmpty)
@@ -2290,7 +2311,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2395,7 +2416,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2514,7 +2535,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2638,7 +2659,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2760,7 +2781,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     ).catchError((Object e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2840,7 +2861,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2865,7 +2886,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2890,7 +2911,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2915,7 +2936,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2940,7 +2961,7 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(_focusRoomErrorText(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );

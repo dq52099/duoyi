@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
@@ -247,6 +248,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         item.type.index,
         item.calendarType.index,
         item.colorValue,
+        item.ignoreYear,
         item.updatedAt.millisecondsSinceEpoch,
       ),
   ]);
@@ -450,23 +452,13 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   double _monthGridHeightFor(double availableHeight, int rows) {
-    final minGridHeight = rows >= 6 ? 300.0 : 270.0;
-    final preferredGridHeight = rows >= 6 ? 360.0 : 330.0;
+    final minGridHeight = rows >= 6 ? 470.0 : 410.0;
+    final preferredGridHeight = rows >= 6 ? 620.0 : 540.0;
     if (!availableHeight.isFinite) return preferredGridHeight;
-    final desiredDetailHeight = availableHeight < 560 ? 220.0 : 320.0;
-    final maxGridForReadableDetail = availableHeight - desiredDetailHeight;
-    final compactUpperGridHeight = availableHeight <= 120
-        ? availableHeight
-        : availableHeight - 96.0;
-    final upperGridHeight = compactUpperGridHeight
-        .clamp(0.0, preferredGridHeight)
-        .toDouble();
-    final lowerGridHeight = minGridHeight < upperGridHeight
-        ? minGridHeight
-        : upperGridHeight;
-    return maxGridForReadableDetail
-        .clamp(lowerGridHeight, upperGridHeight)
-        .toDouble();
+    if (availableHeight <= 120) {
+      return availableHeight.clamp(0.0, minGridHeight).toDouble();
+    }
+    return availableHeight.clamp(minGridHeight, preferredGridHeight).toDouble();
   }
 
   Widget _calendarFilterChip({
@@ -488,10 +480,12 @@ class _CalendarScreenState extends State<CalendarScreen>
         visualDensity: VisualDensity.compact,
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         side: BorderSide(
-          color: cs.outlineVariant.withValues(alpha: 0.08),
+          color: selected
+              ? cs.primary.withValues(alpha: 0.24)
+              : cs.outlineVariant.withValues(alpha: 0.16),
           width: 0.45,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
         labelPadding: const EdgeInsets.symmetric(horizontal: 2),
       ),
     );
@@ -512,10 +506,10 @@ class _CalendarScreenState extends State<CalendarScreen>
         visualDensity: VisualDensity.compact,
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         side: BorderSide(
-          color: cs.outlineVariant.withValues(alpha: 0.08),
+          color: cs.outlineVariant.withValues(alpha: 0.16),
           width: 0.45,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
         labelPadding: const EdgeInsets.symmetric(horizontal: 2),
         onPressed: onPressed,
       ),
@@ -527,6 +521,113 @@ class _CalendarScreenState extends State<CalendarScreen>
     const monthGridChromeHeight = 30.0;
     final rowHeight = (gridHeight - monthGridChromeHeight) / rows;
     return rowHeight >= 44;
+  }
+
+  Widget _calendarFilterStrip({
+    required List<_CalendarWorkspaceOption> workspaceOptions,
+    required String? effectiveWorkspaceId,
+    required List<_CalendarProjectOption> projectOptions,
+    required String? effectiveProjectKey,
+    required List<TodoItem> workspaceTodos,
+  }) {
+    return SizedBox(
+      key: const ValueKey('calendar_unified_filter_strip'),
+      height: 36,
+      child: DefaultTextStyle.merge(
+        style: appSecondaryControlLabelStyle(context),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: [
+            _calendarFilterChip(
+              label: const Text('全部'),
+              selected: _activeTypes == null,
+              onSelected: (_) => setState(() => _activeTypes = null),
+            ),
+            if (projectOptions.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              _calendarFilterChip(
+                avatar: const Icon(Icons.folder_outlined, size: 16),
+                label: const Text('全部项目'),
+                selected: effectiveProjectKey == null,
+                onSelected: (_) => setState(() => _activeProjectKey = null),
+              ),
+              for (final option in projectOptions)
+                _calendarFilterChip(
+                  label: Text('${option.name} ${option.count}'),
+                  selected: effectiveProjectKey == option.key,
+                  onSelected: (_) {
+                    setState(() {
+                      _activeProjectKey = option.key;
+                      if (_activeTypes != null &&
+                          !_activeTypes!.contains(CalendarEventType.todo)) {
+                        _activeTypes = {CalendarEventType.todo};
+                      }
+                    });
+                  },
+                ),
+              if (effectiveProjectKey != null)
+                _calendarActionChip(
+                  avatar: const Icon(Icons.info_outline, size: 16),
+                  label: const Text('项目详情'),
+                  onPressed: () {
+                    final option = projectOptions.firstWhere(
+                      (item) => item.key == effectiveProjectKey,
+                    );
+                    _showProjectDetail(
+                      context,
+                      option,
+                      _projectTodos(workspaceTodos, option.key),
+                    );
+                  },
+                ),
+            ],
+            if (workspaceOptions.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              _calendarFilterChip(
+                avatar: const Icon(Icons.groups_2_outlined, size: 16),
+                label: const Text('全部空间'),
+                selected: effectiveWorkspaceId == null,
+                onSelected: (_) => setState(() => _activeWorkspaceId = null),
+              ),
+              for (final option in workspaceOptions)
+                _calendarFilterChip(
+                  avatar: Icon(
+                    option.isPrivate
+                        ? Icons.lock_outline
+                        : Icons.groups_2_outlined,
+                    size: 16,
+                  ),
+                  label: Text('${option.name} ${option.count}'),
+                  selected: effectiveWorkspaceId == option.id,
+                  onSelected: (_) {
+                    setState(() {
+                      _activeWorkspaceId = option.id;
+                    });
+                  },
+                ),
+            ],
+            for (final type in CalendarEventType.values)
+              _calendarFilterChip(
+                label: Text(type.label),
+                selected: _activeTypes?.contains(type) ?? false,
+                onSelected: (selected) {
+                  setState(() {
+                    if (_activeTypes == null) {
+                      _activeTypes = {type};
+                    } else if (selected) {
+                      _activeTypes = {..._activeTypes!, type};
+                    } else {
+                      final next = {..._activeTypes!}..remove(type);
+                      _activeTypes = next.isEmpty ? null : next;
+                    }
+                  });
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   DateTime _clampSelectedDayToFocusedMonth() {
@@ -637,6 +738,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       backgroundColor: routeBackground,
       appBar: AppBar(
         title: const Text('日历'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         actions: [
@@ -761,131 +863,13 @@ class _CalendarScreenState extends State<CalendarScreen>
               unselectedLabelColor: cs.onSurfaceVariant,
             ),
           ),
-          // Type filter chips
-          SizedBox(
-            key: const ValueKey('calendar_type_filter_compact_strip'),
-            height: 28,
-            child: DefaultTextStyle.merge(
-              style: appSecondaryControlLabelStyle(context),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: [
-                  _calendarFilterChip(
-                    label: const Text('全部'),
-                    selected: _activeTypes == null,
-                    onSelected: (_) => setState(() => _activeTypes = null),
-                  ),
-                  for (final type in CalendarEventType.values)
-                    _calendarFilterChip(
-                      label: Text(type.label),
-                      selected: _activeTypes?.contains(type) ?? false,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (_activeTypes == null) {
-                            _activeTypes = {type};
-                          } else if (selected) {
-                            _activeTypes = {..._activeTypes!, type};
-                          } else {
-                            final next = {..._activeTypes!}..remove(type);
-                            _activeTypes = next.isEmpty ? null : next;
-                          }
-                        });
-                      },
-                    ),
-                ],
-              ),
-            ),
+          _calendarFilterStrip(
+            workspaceOptions: workspaceOptions,
+            effectiveWorkspaceId: effectiveWorkspaceId,
+            projectOptions: projectOptions,
+            effectiveProjectKey: effectiveProjectKey,
+            workspaceTodos: workspaceTodos,
           ),
-          if (workspaceOptions.isNotEmpty)
-            SizedBox(
-              key: const ValueKey('calendar_workspace_filter_compact_strip'),
-              height: 28,
-              child: DefaultTextStyle.merge(
-                style: appSecondaryControlLabelStyle(context),
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    _calendarFilterChip(
-                      avatar: const Icon(Icons.groups_2_outlined, size: 16),
-                      label: const Text('全部空间'),
-                      selected: effectiveWorkspaceId == null,
-                      onSelected: (_) =>
-                          setState(() => _activeWorkspaceId = null),
-                    ),
-                    for (final option in workspaceOptions)
-                      _calendarFilterChip(
-                        avatar: Icon(
-                          option.isPrivate
-                              ? Icons.lock_outline
-                              : Icons.groups_2_outlined,
-                          size: 16,
-                        ),
-                        label: Text('${option.name} ${option.count}'),
-                        selected: effectiveWorkspaceId == option.id,
-                        onSelected: (_) {
-                          setState(() {
-                            _activeWorkspaceId = option.id;
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          if (projectOptions.isNotEmpty)
-            SizedBox(
-              key: const ValueKey('calendar_project_filter_compact_strip'),
-              height: 28,
-              child: DefaultTextStyle.merge(
-                style: appSecondaryControlLabelStyle(context),
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    _calendarFilterChip(
-                      avatar: const Icon(Icons.folder_outlined, size: 16),
-                      label: const Text('全部项目'),
-                      selected: effectiveProjectKey == null,
-                      onSelected: (_) =>
-                          setState(() => _activeProjectKey = null),
-                    ),
-                    for (final option in projectOptions)
-                      _calendarFilterChip(
-                        label: Text('${option.name} ${option.count}'),
-                        selected: effectiveProjectKey == option.key,
-                        onSelected: (_) {
-                          setState(() {
-                            _activeProjectKey = option.key;
-                            if (_activeTypes != null &&
-                                !_activeTypes!.contains(
-                                  CalendarEventType.todo,
-                                )) {
-                              _activeTypes = {CalendarEventType.todo};
-                            }
-                          });
-                        },
-                      ),
-                    if (effectiveProjectKey != null)
-                      _calendarActionChip(
-                        avatar: const Icon(Icons.info_outline, size: 16),
-                        label: const Text('项目详情'),
-                        onPressed: () {
-                          final option = projectOptions.firstWhere(
-                            (item) => item.key == effectiveProjectKey,
-                          );
-                          _showProjectDetail(
-                            context,
-                            option,
-                            _projectTodos(workspaceTodos, option.key),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -902,36 +886,37 @@ class _CalendarScreenState extends State<CalendarScreen>
                       monthGridHeight,
                       monthRows,
                     );
-                    return Column(
-                      children: [
-                        SizedBox(
-                          key: const ValueKey('calendar_fixed_month_grid'),
-                          height: monthGridHeight,
-                          child: CalendarMonthGrid(
-                            focusedMonth: _focusedMonth,
-                            selectedDay: _selectedDay,
-                            dateEventTypes: dateTypes,
-                            dateEventCounts: dateCounts,
-                            showLunar: showLunar,
-                            onDaySelected: (d) => setState(() {
-                              _selectedDay = d;
-                              _focusedMonth = DateTime(d.year, d.month);
-                            }),
-                          ),
+                    return Scrollbar(
+                      key: const ValueKey('calendar_month_global_scrollbar'),
+                      child: ListView(
+                        key: const ValueKey(
+                          'calendar_month_global_scroll_view',
                         ),
-                        Divider(
-                          height: 1,
-                          thickness: 0.5,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outlineVariant.withValues(alpha: 0.18),
-                        ),
-                        Expanded(
-                          key: const ValueKey('calendar_month_detail_agenda'),
-                          child: ColoredBox(
-                            key: const ValueKey(
-                              'calendar_month_detail_scroll_region',
+                        primary: false,
+                        children: [
+                          SizedBox(
+                            key: const ValueKey('calendar_fixed_month_grid'),
+                            height: monthGridHeight,
+                            child: CalendarMonthGrid(
+                              focusedMonth: _focusedMonth,
+                              selectedDay: _selectedDay,
+                              dateEventTypes: dateTypes,
+                              dateEventCounts: dateCounts,
+                              showLunar: showLunar,
+                              onDaySelected: (d) => setState(() {
+                                _selectedDay = d;
+                                _focusedMonth = DateTime(d.year, d.month);
+                              }),
                             ),
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 0.5,
+                            color: Theme.of(context).colorScheme.outlineVariant
+                                .withValues(alpha: 0.18),
+                          ),
+                          ColoredBox(
+                            key: const ValueKey('calendar_month_detail_agenda'),
                             color: routeBackground,
                             child: CalendarDayAgenda(
                               date: _selectedDay,
@@ -940,10 +925,11 @@ class _CalendarScreenState extends State<CalendarScreen>
                               projectKey: effectiveProjectKey,
                               workspaceId: effectiveWorkspaceId,
                               horizontalPadding: 8,
+                              scrollable: false,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -1668,7 +1654,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
                 key: const ValueKey('calendar_navigation_header_bar'),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
                   border: Border.all(
                     color: cs.outlineVariant.withValues(alpha: 0.10),
                     width: 0.45,

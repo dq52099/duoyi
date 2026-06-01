@@ -2029,6 +2029,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get countdownValidationTitleRequired => '请先填写倒数日名称';
 
   @override
+  String get anniversaryValidationTitleRequired => '请先填写标题';
+
+  @override
   String get countdownSaveFailedPrefix => '倒数日保存失败：';
 
   @override

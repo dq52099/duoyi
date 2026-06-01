@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/todo_detail_screen.dart';
@@ -167,6 +168,44 @@ void main() {
       expect(stored.hasReminder, isTrue);
       // ignore: deprecated_member_use_from_same_package
       expect(stored.reminderAt, isNotNull);
+    });
+
+    testWidgets('逾期提醒未改动时编辑标题仍可保存返回', (tester) async {
+      final provider = TodoProvider();
+      final overdue = DateTime.now().subtract(const Duration(days: 1));
+      final item = TodoItem(
+        title: '逾期提醒标题',
+        notes: '原始备注',
+        dueDate: overdue,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'past-reminder',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: overdue.hour,
+              minute: overdue.minute,
+            ),
+          ],
+        ),
+      );
+      await provider.addTodo(item);
+
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextField, '任务名称'), '只修改标题');
+      await tester.pump();
+
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(find.text('home-root'), findsOneWidget);
+      expect(provider.todos.single.title, '只修改标题');
     });
   });
 

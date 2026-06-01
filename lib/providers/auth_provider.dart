@@ -345,6 +345,10 @@ class AuthProvider extends ChangeNotifier {
         );
       }
     } catch (_) {}
+    await _clearLocalSession();
+  }
+
+  Future<void> _clearLocalSession() async {
     _state = const AuthState();
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
@@ -361,7 +365,11 @@ class AuthProvider extends ChangeNotifier {
       await _persistState();
       await _notifyAccountProfileChanged();
       notifyListeners();
-    } catch (_) {}
+    } on ApiException catch (e) {
+      if (_isAuthExpired(e)) {
+        await _clearLocalSession();
+      }
+    }
   }
 
   Future<void> updateProfile({String? displayName, String? bio}) async {
@@ -440,6 +448,7 @@ class AuthProvider extends ChangeNotifier {
       },
       featureName: '密码修改',
     );
+    await _clearLocalSession();
   }
 
   Future<void> uploadAvatarBytes({
@@ -845,6 +854,19 @@ bool _isRecoverableUploadFieldError(ApiException error) {
       message.contains('field required') ||
       message.contains('missing field') ||
       message.contains('missing required');
+}
+
+bool _isAuthExpired(ApiException error) {
+  final message = error.message.trim().toLowerCase();
+  return message.startsWith('401:') ||
+      message.startsWith('403:') ||
+      message.contains('token expired') ||
+      message.contains('invalid token') ||
+      message.contains('account disabled') ||
+      message.contains('user not found') ||
+      message.contains('账号已禁用') ||
+      message.contains('用户不存在') ||
+      message.contains('登录已过期');
 }
 
 void _throwIfEmailCodeNotDelivered(Map<String, dynamic> result) {

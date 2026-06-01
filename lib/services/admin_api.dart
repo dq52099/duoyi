@@ -276,13 +276,51 @@ class AdminApi {
     return (await listUsersPage(query: query, limit: 100, offset: 0)).items;
   }
 
-  Future<void> updateUser(
+  Future<Map<String, dynamic>> createUser({
+    required String username,
+    String? password,
+    String? displayName,
+    String? email,
+    String? groupId,
+    String? roleId,
+    bool isAdmin = false,
+    bool isDisabled = false,
+    List<String>? adminPermissions,
+  }) {
+    final body = <String, dynamic>{
+      'username': username,
+      'is_admin': isAdmin,
+      'is_disabled': isDisabled,
+    };
+    if (password != null && password.trim().isNotEmpty) {
+      body['password'] = password.trim();
+    }
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      body['display_name'] = displayName.trim();
+    }
+    if (email != null && email.trim().isNotEmpty) {
+      body['email'] = email.trim();
+    }
+    if (groupId != null && groupId.trim().isNotEmpty) {
+      body['group_id'] = groupId.trim();
+    }
+    if (roleId != null && roleId.trim().isNotEmpty) {
+      body['role_id'] = roleId.trim();
+    }
+    if (adminPermissions != null) {
+      body['admin_permissions'] = adminPermissions;
+    }
+    return client.post('/api/admin/users', body);
+  }
+
+  Future<Map<String, dynamic>> updateUser(
     String userId, {
     bool? isAdmin,
     bool? isDisabled,
     String? newPassword,
     String? groupId,
     String? roleId,
+    List<String>? adminPermissions,
   }) async {
     final body = <String, dynamic>{};
     if (isAdmin != null) body['is_admin'] = isAdmin;
@@ -292,16 +330,17 @@ class AdminApi {
     }
     if (groupId != null) body['group_id'] = groupId;
     if (roleId != null) body['role_id'] = roleId;
-    await client.patch('/api/admin/users/$userId', body);
+    if (adminPermissions != null) {
+      body['admin_permissions'] = adminPermissions;
+    }
+    return client.patch('/api/admin/users/$userId', body);
   }
 
   Future<void> setUserAdminPermissions(
     String userId, {
     required List<String> permissions,
   }) async {
-    await client.patch('/api/admin/users/$userId', {
-      'admin_permissions': permissions,
-    });
+    await updateUser(userId, adminPermissions: permissions);
   }
 
   Future<Map<String, dynamic>> adjustUserCoins(
@@ -450,6 +489,20 @@ class AdminApi {
     );
   }
 
+  Future<Map<String, dynamic>> deleteGroup(String groupId) {
+    final id = groupId.trim();
+    return _sendFirstAvailable(
+      const ['DELETE'],
+      [
+        '/api/admin/groups/$id',
+        '/api/admin/user-groups/$id',
+        '/api/admin/user_groups/$id',
+      ],
+      null,
+      featureName: '管理员用户组删除',
+    );
+  }
+
   Future<List<Map<String, dynamic>>> listRoles() async {
     final raw = await client.getRaw('/api/admin/roles');
     if (raw is! List) {
@@ -500,6 +553,11 @@ class AdminApi {
             ),
             'PUT' => await client.requestWithoutRouteDiagnosis(
               'PUT',
+              path,
+              body,
+            ),
+            'DELETE' => await client.requestWithoutRouteDiagnosis(
+              'DELETE',
               path,
               body,
             ),

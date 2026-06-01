@@ -37,8 +37,8 @@ ButtonStyle _habitDangerFilledButtonStyle(BuildContext context) {
     backgroundColor: cs.error,
     foregroundColor: cs.onError,
     textStyle: appSecondaryMenuItemTextStyle(context),
-    minimumSize: const Size(0, 30),
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    minimumSize: const Size(0, 36),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     visualDensity: VisualDensity.compact,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );

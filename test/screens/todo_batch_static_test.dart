@@ -89,10 +89,7 @@ void main() {
     expect(source, contains('onHorizontalDragUpdate'));
     expect(source, contains('Matrix4.translationValues(-_swipeOffset'));
     expect(source, contains('class _TodoInlineSwipeActions'));
-    expect(
-      source,
-      contains('bool get _swipeActive => _dragging || _swipeOpen'),
-    );
+    expect(source, contains('bool get _swipeActive => _swipeOffset > 0'));
     expect(source, contains('if (_swipeActive)'));
     expect(source, contains("label: '详情'"));
     expect(source, contains("label: completed ? '恢复' : '完成'"));

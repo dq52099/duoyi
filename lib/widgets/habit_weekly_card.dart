@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/design_tokens.dart';
 import '../providers/habit_provider.dart';
 import 'surface_components.dart';
 
@@ -28,8 +29,8 @@ class HabitWeeklyCard extends StatelessWidget {
     return AppSurfaceCard(
       key: const ValueKey('habit_weekly_overview_card'),
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 9),
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
-      borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       border: Border.all(
         color: primaryColor.withValues(alpha: 0.18),
         width: 0.7,
@@ -46,7 +47,7 @@ class HabitWeeklyCard extends StatelessWidget {
                 height: 56,
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(17),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_rounded,
@@ -96,7 +97,7 @@ class HabitWeeklyCard extends StatelessWidget {
                       '$weekPercent%',
                       style: TextStyle(
                         color: primaryColor,
-                        fontSize: 24,
+                        fontSize: 22,
                         height: 1.0,
                         fontWeight: FontWeight.normal,
                       ),
@@ -173,9 +174,9 @@ class HabitWeeklyCard extends StatelessWidget {
                       boxShadow: isToday && val > 0
                           ? [
                               BoxShadow(
-                                color: bg.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                color: bg.withValues(alpha: 0.22),
+                                blurRadius: 6,
+                                offset: const Offset(0, 1),
                               ),
                             ]
                           : null,

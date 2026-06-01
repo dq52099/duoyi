@@ -109,6 +109,26 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     }.toString();
   }
 
+  bool _reminderSchedulingFieldsChanged(TodoItem before, TodoItem after) {
+    // ignore: deprecated_member_use_from_same_package
+    final beforeHasReminder = before.hasReminder;
+    // ignore: deprecated_member_use_from_same_package
+    final afterHasReminder = after.hasReminder;
+    // ignore: deprecated_member_use_from_same_package
+    final beforeReminderAt = before.reminderAt;
+    // ignore: deprecated_member_use_from_same_package
+    final afterReminderAt = after.reminderAt;
+    final legacyChanged =
+        beforeHasReminder != afterHasReminder ||
+        beforeReminderAt != afterReminderAt;
+    return before.dueDate != after.dueDate ||
+        legacyChanged ||
+        before.reminder.toJson().toString() !=
+            after.reminder.toJson().toString() ||
+        before.reminderPlan.toJson().toString() !=
+            after.reminderPlan.toJson().toString();
+  }
+
   void _load() {
     final provider = context.read<TodoProvider>();
     final matches = provider.todos.where((t) => t.id == widget.todoId);
@@ -201,20 +221,29 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       title: title,
       notes: _notesCtrl.text.trim(),
     );
-    final reminderReady = await preflightTodoReminderSave(
-      context,
-      todo: nextTodo,
-      notificationService: context.read<NotificationService?>(),
-      issueTitle: '待办提醒注册失败',
-    );
-    if (!mounted) return;
-    if (!reminderReady) {
-      setState(() => _state = _EditState.editing);
-      return;
-    }
-
     try {
-      await provider.updateTodo(widget.todoId, nextTodo);
+      final savedTodo = provider.todos.firstWhere(
+        (t) => t.id == widget.todoId,
+        orElse: () => _todo,
+      );
+      if (_reminderSchedulingFieldsChanged(savedTodo, nextTodo)) {
+        final reminderReady = await preflightTodoReminderSave(
+          context,
+          todo: nextTodo,
+          notificationService: context.read<NotificationService?>(),
+          issueTitle: '待办提醒注册失败',
+        );
+        if (!mounted) return;
+        if (!reminderReady) {
+          setState(() => _state = _EditState.editing);
+          return;
+        }
+      }
+      await provider.updateTodo(
+        widget.todoId,
+        nextTodo,
+        waitForReminderSync: false,
+      );
       if (!mounted) return;
 
       // 刷新本地 _todo 引用与基线，便于继续编辑。
@@ -242,7 +271,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       setState(() => _state = _EditState.editing);
       messenger.showSnackBar(
         SnackBar(
-          content: Text('保存失败：$e'),
+          content: Text('保存失败：${userVisibleApiError(e)}'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: cs.error,
           duration: const Duration(seconds: 2),
@@ -1174,11 +1203,13 @@ Future<bool> preflightTodoReminderSave(
   final usesAlarm = result.kinds.contains(ReminderKind.alarm);
   final notif = notificationService ?? context.read<NotificationService?>();
   if ((usesPush || usesPopup) && notif != null) {
-    final ready = await notif.ensureReadyForReminder(
-      scheduledTime: result.firstScheduledTime,
-      issueTitle: issueTitle,
-      relatedId: todo.id,
-    );
+    final ready = await notif
+        .ensureReadyForReminder(
+          scheduledTime: result.firstScheduledTime,
+          issueTitle: issueTitle,
+          relatedId: todo.id,
+        )
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (!context.mounted) return false;
     if (!ready) {
       final issue = notif.lastScheduleIssue;
@@ -1199,7 +1230,8 @@ Future<bool> preflightTodoReminderSave(
 
   if (usesAlarm && !usesPush && !usesPopup) {
     final notificationGranted = await LocalNotifications.instance
-        .ensurePermission();
+        .ensurePermission()
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (!context.mounted) return false;
     if (!notificationGranted) {
       messenger.showSnackBar(
@@ -1217,7 +1249,8 @@ Future<bool> preflightTodoReminderSave(
 
   if (usesPush || usesPopup) {
     final channelIds = await LocalNotifications.instance
-        .notificationChannelIds();
+        .notificationChannelIds()
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
     if (!context.mounted) return false;
     if (channelIds != null &&
         channelIds.isNotEmpty &&
@@ -1228,20 +1261,24 @@ Future<bool> preflightTodoReminderSave(
 
   if (usesAlarm) {
     final alarmChannelIds = await AlarmService.instance
-        .notificationChannelIds();
+        .notificationChannelIds()
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
     if (!context.mounted) return false;
     if (alarmChannelIds != null &&
         alarmChannelIds.isNotEmpty &&
         !alarmChannelIds.contains(AlarmService.channelId)) {
       warnings.add('强提醒渠道未就绪，到点可能不会弹出闹钟通知');
     }
-    final exactGranted = await AlarmService.instance.hasExactAlarmPermission();
+    final exactGranted = await AlarmService.instance
+        .hasExactAlarmPermission()
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (!context.mounted) return false;
     if (!exactGranted) {
       warnings.add('精准闹钟权限未开启，闹钟提醒可能延后或降级');
     }
     final fullScreenGranted = await AlarmService.instance
-        .hasFullScreenIntentPermission();
+        .hasFullScreenIntentPermission()
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (!context.mounted) return false;
     if (!fullScreenGranted) {
       warnings.add('全屏提醒权限未开启，锁屏弹窗可能不可用');

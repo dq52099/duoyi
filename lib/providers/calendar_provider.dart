@@ -299,6 +299,8 @@ class CalendarProvider extends ChangeNotifier {
           a.lunarMonth,
           a.lunarDay,
           a.lunarIsLeap,
+          a.ignoreYear,
+          a.updatedAt.millisecondsSinceEpoch,
         ),
       ),
     );

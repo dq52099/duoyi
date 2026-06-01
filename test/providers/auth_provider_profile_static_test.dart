@@ -270,11 +270,11 @@ void main() {
       );
       expect(source, contains('AppSecondaryControlTheme('));
       expect(source, contains('class _ProfileActionField'));
-      expect(source, contains('const double _profileActionButtonHeight = 30'));
-      expect(source, contains('const double _profileActionButtonWidth = 58'));
+      expect(source, contains('const double _profileActionButtonHeight = 36'));
+      expect(source, contains('const double _profileActionButtonWidth = 68'));
       expect(
         source,
-        contains('const double _profileLongActionButtonWidth = 72'),
+        contains('const double _profileLongActionButtonWidth = 96'),
       );
       expect(source, contains('double _profileInlineActionWidth'));
       expect(source, contains('height: _profileActionButtonHeight'));
@@ -403,6 +403,8 @@ void main() {
       'button: true',
       'class _ProfileAvatarFullScreen',
       'void _showAvatarPreview()',
+      "tooltip: '修改头像'",
+      'WidgetsBinding.instance.addPostFrameCallback',
       'onPreview: _showAvatarPreview',
       'onEdit: _uploadAvatar',
       'onEdit: _pickLocalAvatar',
@@ -411,9 +413,9 @@ void main() {
       'if (mounted) _pickLocalAvatar();',
       'class _ProfileAvatarEditBadge',
       'class _ProfileAvatarWithEdit',
-      'const double _profileActionButtonHeight = 30',
-      'const double _profileActionButtonWidth = 58',
-      'const double _profileLongActionButtonWidth = 72',
+      'const double _profileActionButtonHeight = 36',
+      'const double _profileActionButtonWidth = 68',
+      'const double _profileLongActionButtonWidth = 96',
       'height: _profileActionButtonHeight',
       "setState(() => _error = I18n.tr('auth.error.email_invalid'))",
       '_cooldownSeconds > 0',

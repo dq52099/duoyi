@@ -595,13 +595,15 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
             : 0;
       }),
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: _AnniversaryInlineSwipeActions(
-              margin: const EdgeInsets.only(bottom: 12),
-              onDelete: () => _confirmDelete(context),
+          if (_swipeOffset > 0)
+            Positioned.fill(
+              child: _AnniversaryInlineSwipeActions(
+                margin: const EdgeInsets.only(bottom: 12),
+                onDelete: () => _confirmDelete(context),
+              ),
             ),
-          ),
           AnimatedContainer(
             duration: _dragging
                 ? Duration.zero
@@ -746,6 +748,7 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
   TimeOfDay _remindTime = const TimeOfDay(hour: 9, minute: 0);
   ReminderKind _reminderKind = ReminderKind.push;
   bool _ignoreYear = false;
+  bool _saving = false;
 
   static const _presetColors = <int>[
     0xFFE91E63,
@@ -831,11 +834,16 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
         case ReminderKind.push:
           final notificationService = context.read<NotificationService?>();
           final ready =
-              await notificationService?.ensureReadyForReminder(
-                scheduledTime: remindAt,
-                issueTitle: issueTitle,
-                relatedId: item.id,
-              ) ??
+              await notificationService
+                  ?.ensureReadyForReminder(
+                    scheduledTime: remindAt,
+                    issueTitle: issueTitle,
+                    relatedId: item.id,
+                  )
+                  .timeout(
+                    const Duration(seconds: 5),
+                    onTimeout: () => false,
+                  ) ??
               true;
           if (ready) return const _AnniversaryReminderPreflightResult.ok();
           final issue = notificationService?.lastScheduleIssue;
@@ -847,14 +855,22 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
         case ReminderKind.popup:
           final notificationService = context.read<NotificationService?>();
           final ready =
-              await notificationService?.ensureReadyForReminder(
-                scheduledTime: remindAt,
-                issueTitle: I18n.tr(
-                  'anniversary.reminder.popup_fallback_failed',
-                ),
-                relatedId: item.id,
-              ) ??
-              await LocalNotifications.instance.ensurePermission();
+              await notificationService
+                  ?.ensureReadyForReminder(
+                    scheduledTime: remindAt,
+                    issueTitle: I18n.tr(
+                      'anniversary.reminder.popup_fallback_failed',
+                    ),
+                    relatedId: item.id,
+                  )
+                  .timeout(
+                    const Duration(seconds: 5),
+                    onTimeout: () => false,
+                  ) ??
+              await LocalNotifications.instance.ensurePermission().timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => false,
+              );
           if (!ready) {
             final issue = notificationService?.lastScheduleIssue;
             return _AnniversaryReminderPreflightResult.disabled(
@@ -868,7 +884,8 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
           );
         case ReminderKind.alarm:
           final notificationGranted = await LocalNotifications.instance
-              .ensurePermission();
+              .ensurePermission()
+              .timeout(const Duration(seconds: 5), onTimeout: () => false);
           if (!notificationGranted) {
             return _AnniversaryReminderPreflightResult.disabled(
               I18n.tr('anniversary.reminder.alarm_permission_denied'),
@@ -912,8 +929,23 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
     }
   }
 
+  void _showSnackBarIfPossible(SnackBar snackBar) {
+    if (Scaffold.maybeOf(context) == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
   Future<void> _save() async {
-    if (_title.text.trim().isEmpty) return;
+    if (_saving) return;
+    if (_title.text.trim().isEmpty) {
+      _showSnackBarIfPossible(
+        SnackBar(
+          content: Text(I18n.tr('anniversary.validation.title_required')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
     var item = _buildItem(remind: _remind, kind: _reminderKind);
     var reminderWarning = '';
     if (item.remind) {
@@ -929,7 +961,10 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
         item,
         _remindAtFor(item),
       );
-      if (!mounted) return;
+      if (!mounted) {
+        _saving = false;
+        return;
+      }
       if (preflight.message.isNotEmpty) {
         reminderWarning =
             '${I18n.tr('anniversary.reminder.saved_prefix')}${preflight.message}';
@@ -939,18 +974,43 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
         setState(() => _remind = false);
       }
     }
-    final p = context.read<AnniversaryProvider>();
-    if (widget.editing == null) {
-      await p.add(item);
-    } else {
-      await p.update(item);
-    }
-    if (!mounted) return;
-    Navigator.pop(context);
-    if (reminderWarning.isNotEmpty && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    try {
+      final p = context.read<AnniversaryProvider>();
+      if (widget.editing == null) {
+        await p.add(item);
+      } else {
+        await p.update(item);
+      }
+    } catch (e) {
+      if (!mounted) {
+        _saving = false;
+        return;
+      }
+      setState(() => _saving = false);
+      _showSnackBarIfPossible(
         SnackBar(
-          content: Text(reminderWarning),
+          content: Text('${I18n.tr('anniversary.save_failed_prefix')}$e'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    if (!mounted) {
+      _saving = false;
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final canShowSnackBar = Scaffold.maybeOf(context) != null;
+    Navigator.pop(context);
+    if (canShowSnackBar) {
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            reminderWarning.isNotEmpty
+                ? reminderWarning
+                : I18n.tr('anniversary.saved'),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
         ),
@@ -1028,12 +1088,18 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
               child: Text(I18n.tr('action.cancel')),
             ),
             FilledButton(
-              onPressed: _save,
-              child: Text(
-                widget.editing == null
-                    ? I18n.tr('action.add')
-                    : I18n.tr('action.save'),
-              ),
+              key: const ValueKey('anniversary_editor_save_button'),
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      widget.editing == null
+                          ? I18n.tr('action.add')
+                          : I18n.tr('action.save'),
+                    ),
             ),
           ],
           child: Column(

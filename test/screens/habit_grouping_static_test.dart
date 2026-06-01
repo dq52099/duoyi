@@ -164,19 +164,14 @@ void main() {
     expect(cardSource, isNot(contains('Icons.shield_outlined')));
     expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
     expect(cardSource, isNot(contains('Icons.verified_rounded')));
-    expect(cardSource, contains('_HabitMoreButton(habit: habit)'));
-    expect(source, contains('class _HabitMoreButton extends StatelessWidget'));
-    expect(source, contains("tooltip: '习惯操作'"));
+    expect(cardSource, contains('_HabitDetailButton(habit: habit)'));
     expect(
       source,
-      contains(
-        'onSelected: (value) => _handleHabitMenuAction(context, habit, value)',
-      ),
+      contains('class _HabitDetailButton extends StatelessWidget'),
     );
-    expect(
-      source,
-      contains('List<PopupMenuEntry<String>> _habitActionMenuItems'),
-    );
+    expect(source, contains("message: '查看详情'"));
+    expect(source, isNot(contains("tooltip: '习惯操作'")));
+    expect(source, isNot(contains('PopupMenuButton<String>')));
     expect(source, contains('class _HabitInlineSwipeActions'));
     expect(source, contains("key: const ValueKey('habit_swipe_end_button')"));
     expect(
@@ -185,20 +180,12 @@ void main() {
     );
     expect(source, contains("label: '结束'"));
     expect(source, contains("label: '删除'"));
+    expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
+    expect(source, isNot(contains("value: 'delete'")));
     expect(
       source,
-      contains(
-        "PopupMenuItem(value: 'detail', child: AppSecondaryMenuText('查看详情'))",
-      ),
+      isNot(contains("AppSecondaryMenuText('删除习惯', color: cs.error)")),
     );
-    expect(
-      source,
-      contains(
-        "PopupMenuItem(value: 'end', child: AppSecondaryMenuText('结束习惯'))",
-      ),
-    );
-    expect(source, contains("value: 'delete'"));
-    expect(source, contains("AppSecondaryMenuText('删除习惯', color: cs.error)"));
     expect(cardSource, contains('Visibility('));
     expect(cardSource, contains('maintainSize: true'));
     expect(
@@ -253,12 +240,15 @@ void main() {
     expect(weekly, contains('margin: const EdgeInsets.fromLTRB(12, 8, 12, 9)'));
     expect(
       weekly,
-      contains('padding: const EdgeInsets.fromLTRB(18, 20, 18, 20)'),
+      contains('padding: const EdgeInsets.fromLTRB(16, 18, 16, 18)'),
     );
     expect(weekly, contains('currentWeekProgress()'));
-    expect(weekly, contains('borderRadius: BorderRadius.circular(18)'));
+    expect(
+      weekly,
+      contains('borderRadius: BorderRadius.circular(DesignTokens.radiusCard)'),
+    );
     expect(weekly, contains('fontSize: 19'));
-    expect(weekly, contains('fontSize: 24'));
+    expect(weekly, contains('fontSize: 22'));
     expect(weekly, contains('minHeight: 10'));
     expect(weekly, contains('width: 44'));
     expect(weekly, contains('height: 44'));
@@ -386,7 +376,9 @@ void main() {
     expect(screen, contains("'habit.flex.period_target_hint'"));
     expect(screen, contains('flexTarget: shouldUseFlex ? flexTarget : null'));
     expect(screen, contains('flexPeriod: shouldUseFlex'));
-    expect(screen, contains('habit.flexPeriodGoalLabel'));
+    expect(screen, contains('_habitFlexGoalText(habit)'));
+    expect(screen, contains("HabitFlexPeriod.week => '每周目标:"));
+    expect(screen, contains("HabitFlexPeriod.month => '每月目标:"));
     expect(screen, contains('habit.streakUnitLabel'));
     expect(
       screen,

@@ -51,6 +51,9 @@ void main() {
 
   test('日历聚合不在 build 同步执行', () {
     final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
+    final providerSource = File(
+      'lib/providers/calendar_provider.dart',
+    ).readAsStringSync();
     final buildStart = source.indexOf('Widget build(BuildContext context)');
     final projectOptionsStart = source.indexOf(
       'List<_CalendarProjectOption> _projectOptions',
@@ -74,6 +77,9 @@ void main() {
     expect(buildBody, contains('todoProvider: todoProvider'));
     expect(buildBody, contains('timeAuditProvider: timeAuditProvider'));
     expect(buildBody, isNot(contains('calendarProvider.rebuild(')));
+    expect(source, contains('item.ignoreYear'));
+    expect(providerSource, contains('a.ignoreYear'));
+    expect(providerSource, contains('a.updatedAt.millisecondsSinceEpoch'));
   });
 
   test('日历日期导航头避免窄屏固定最小宽度溢出', () {
@@ -103,7 +109,7 @@ void main() {
     expect(headerSource, isNot(contains('minWidth: 180')));
   });
 
-  test('月视图固定顶部日历并只让日信息区域滚动', () {
+  test('月视图使用整页滚动并保留月格任务标记', () {
     final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
     final monthViewSource = source.substring(
       source.indexOf('// Month'),
@@ -112,44 +118,42 @@ void main() {
 
     expect(source, contains('double _monthGridHeightFor('));
     expect(source, contains('bool _monthGridShowsLunar('));
-    expect(source, contains('final minGridHeight = rows >= 6 ? 300.0 : 270.0'));
+    expect(source, contains('final minGridHeight = rows >= 6 ? 470.0 : 410.0'));
     expect(
       source,
-      contains('final preferredGridHeight = rows >= 6 ? 360.0 : 330.0'),
+      contains('final preferredGridHeight = rows >= 6 ? 620.0 : 540.0'),
     );
+    expect(source, contains('if (availableHeight <= 120)'));
     expect(
       source,
-      contains(
-        'final desiredDetailHeight = availableHeight < 560 ? 220.0 : 320.0',
+      matches(
+        RegExp(
+          r'return availableHeight\s*\.clamp\(minGridHeight, preferredGridHeight\)\s*\.toDouble\(\)',
+          multiLine: true,
+        ),
       ),
-    );
-    expect(
-      source,
-      contains(
-        'final maxGridForReadableDetail = availableHeight - desiredDetailHeight',
-      ),
-    );
-    expect(
-      source,
-      contains('final compactUpperGridHeight = availableHeight <= 120'),
-    );
-    expect(source, contains('final upperGridHeight = compactUpperGridHeight'));
-    expect(
-      source,
-      contains('final lowerGridHeight = minGridHeight < upperGridHeight'),
     );
     expect(source, contains("const ValueKey('calendar_fixed_month_grid')"));
+    expect(
+      source,
+      contains("const ValueKey('calendar_month_global_scrollbar')"),
+    );
+    expect(source, contains("'calendar_month_global_scroll_view'"));
     expect(source, contains('height: monthGridHeight'));
     expect(monthViewSource, contains('SizedBox('));
+    expect(monthViewSource, contains('ListView('));
     expect(monthViewSource, contains('CalendarMonthGrid('));
     expect(
       monthViewSource,
       contains("key: const ValueKey('calendar_month_detail_agenda')"),
     );
-    expect(monthViewSource, contains("'calendar_month_detail_scroll_region'"));
+    expect(
+      monthViewSource,
+      isNot(contains("'calendar_month_detail_scroll_region'")),
+    );
     expect(monthViewSource, contains('horizontalPadding: 8'));
-    expect(monthViewSource, contains('Expanded('));
     expect(monthViewSource, contains('CalendarDayAgenda('));
+    expect(monthViewSource, contains('scrollable: false'));
   });
 
   test('日历详情弹层扩大内容宽高并让详情列表独立滚动', () {
@@ -178,10 +182,10 @@ void main() {
       contains('materialTapTargetSize: MaterialTapTargetSize.shrinkWrap'),
     );
     expect(source, contains('width: 0.45'));
-    expect(source, contains('alpha: 0.08'));
+    expect(source, contains('alpha: 0.16'));
     expect(source, contains('appSecondaryControlLabelStyle(context)'));
     expect(source, contains('Tab(height: 34'));
-    expect(source, contains('height: 28'));
+    expect(source, contains('height: 36'));
     expect(source, contains('AppSecondaryControlTheme('));
     expect(source, contains('AppSecondaryMenuText('));
     expect(source, contains('AppDropdownField<TimeEntryCategory>'));

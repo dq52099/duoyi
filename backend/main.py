@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Iterable, Optional
 import asyncio
 import base64
@@ -28,7 +28,7 @@ from pathlib import Path
 
 app = FastAPI(title="多仪 Sync API", version="3.1.0")
 
-API_CONTRACT_VERSION = "2026-05-25.1"
+API_CONTRACT_VERSION = "2026-05-31.1"
 API_CONTRACT_FEATURES = {
     "email_code": True,
     "avatar_upload": True,
@@ -37,6 +37,8 @@ API_CONTRACT_FEATURES = {
     "admin_groups": True,
     "admin_ai_healthcheck": True,
     "mobile_update": True,
+    "focus_rooms": True,
+    "focus_room_realtime": True,
 }
 API_CONTRACT_REQUIRED_ROUTES = [
     "GET /api/config",
@@ -51,7 +53,29 @@ API_CONTRACT_REQUIRED_ROUTES = [
     "POST /api/admin/users/{user_id}/coins",
     "PATCH /api/admin/users/{user_id}/coins",
     "GET /api/admin/groups",
+    "POST /api/admin/groups",
+    "DELETE /api/admin/groups/{group_id}",
     "POST /api/admin/provider-healthcheck",
+    "POST /api/focus-rooms/{room_id}/heartbeat",
+    "GET /api/focus-rooms/{room_id}/ranking",
+    "GET /api/focus-rooms/{room_id}/events",
+    "WS /ws/focus-rooms/{room_id}/events",
+    "POST /api/focus-rooms/{room_id}/leave",
+    "POST /api/focus-rooms/{room_id}/invites",
+    "GET /api/focus-rooms/{room_id}/invites",
+    "DELETE /api/focus-room-invites/{invite_id}",
+    "POST /api/focus-room-invites/{code}/accept",
+    "GET /api/focus-friends",
+    "GET /api/focus-friends/requests",
+    "POST /api/focus-friends",
+    "DELETE /api/focus-friends/{friend_user_id}",
+    "POST /api/focus-friend-requests/{requester_user_id}/accept",
+    "POST /api/focus-friend-requests/{requester_user_id}/reject",
+    "DELETE /api/focus-friend-requests/{friend_user_id}",
+    "GET /api/focus-leaderboard/friends",
+    "GET /api/focus-leaderboard/global",
+    "GET /api/focus-leaderboard/global/events",
+    "WS /ws/focus-leaderboard/global/events",
 ]
 API_CONTRACT_ROUTES_HASH = hashlib.sha256(
     "\n".join(API_CONTRACT_REQUIRED_ROUTES).encode("utf-8")
@@ -162,8 +186,25 @@ FOCUS_FRIEND_REQUEST_LIMIT_PER_DAY = int(
 )
 EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp", "none"}
 EMAIL_CODE_SLOTS = {"primary", "backup"}
-DEFAULT_EMAIL_SENDER_NAME = os.getenv("EMAIL_SENDER_NAME", "多仪")
-DEFAULT_RESEND_FROM = os.getenv("RESEND_FROM", "多仪 <noreply@mail.6688667.xyz>")
+DEFAULT_EMAIL_TITLE = (
+    os.getenv("DUOYI_TITLE")
+    or os.getenv("EMAIL_TITLE")
+    or os.getenv("APP_TITLE")
+    or "多仪"
+)
+DEFAULT_EMAIL_SENDER_NAME = (
+    os.getenv("EMAIL_SENDER_NAME")
+    or os.getenv("EMAIL_FROM_NAME")
+    or os.getenv("MAIL_FROM_NAME")
+    or os.getenv("SENDER_NAME")
+    or DEFAULT_EMAIL_TITLE
+)
+DEFAULT_RESEND_FROM = (
+    os.getenv("RESEND_FROM")
+    or os.getenv("EMAIL_FROM")
+    or os.getenv("MAIL_FROM")
+    or f"{DEFAULT_EMAIL_TITLE} <noreply@mail.6688667.xyz>"
+)
 APP_CURRENT_VERSION = os.getenv("APP_CURRENT_VERSION", os.getenv("DUOYI_APP_VERSION", "1.1.14"))
 APP_CURRENT_VERSION_CODE = _env_int(
     "APP_CURRENT_VERSION_CODE",
@@ -241,6 +282,16 @@ def _env_int(*names: str, default: int) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _env_present(*names: str) -> bool:
+    return any(os.getenv(name) is not None for name in names)
+
+
+def _env_smtp_use_ssl(default_port: int, *names: str) -> bool:
+    if _env_present(*names):
+        return _env_bool(*names, default=default_port == 465)
+    return default_port == 465
 
 
 def _utc_now() -> datetime:
@@ -539,7 +590,78 @@ def _update_release_defaults(db) -> dict:
     }
 
 
+# RE0 config aliases accepted here include TITLE, EMAIL_ADDRESS,
+# EMAIL_PASSWORD, EMAIL_SMTP_HOST, EMAIL_SMTP_PORT and SMTP_HOST.
+_RE0_EMAIL_SETTING_ALIASES = {
+    "title": "email_title",
+    "app_title": "email_title",
+    "duoyi_title": "email_title",
+    "email_title": "email_title",
+    "email_sender_name": "email_sender_name",
+    "email_from_name": "email_sender_name",
+    "mail_from_name": "email_sender_name",
+    "sender_name": "email_sender_name",
+    "email_address": "email_smtp_username",
+    "email_smtp_username": "email_smtp_username",
+    "smtp_username": "email_smtp_username",
+    "smtp_user": "email_smtp_username",
+    "mail_username": "email_smtp_username",
+    "mail_user": "email_smtp_username",
+    "mail_address": "email_smtp_username",
+    "email_password": "email_smtp_password",
+    "email_smtp_password": "email_smtp_password",
+    "smtp_password": "email_smtp_password",
+    "smtp_pass": "email_smtp_password",
+    "mail_password": "email_smtp_password",
+    "mail_pass": "email_smtp_password",
+    "email_smtp_host": "email_smtp_host",
+    "smtp_host": "email_smtp_host",
+    "mail_smtp_host": "email_smtp_host",
+    "mail_host": "email_smtp_host",
+    "email_smtp_port": "email_smtp_port",
+    "smtp_port": "email_smtp_port",
+    "mail_smtp_port": "email_smtp_port",
+    "mail_port": "email_smtp_port",
+    "email_smtp_from": "email_smtp_from",
+    "email_from": "email_smtp_from",
+    "mail_from": "email_smtp_from",
+    "smtp_from": "email_smtp_from",
+    "email_smtp_use_ssl": "email_smtp_use_ssl",
+    "smtp_use_ssl": "email_smtp_use_ssl",
+    "mail_smtp_use_ssl": "email_smtp_use_ssl",
+    "mail_use_ssl": "email_smtp_use_ssl",
+    "email_home_address": "system_notice_email_to",
+    "email_home_channel": "system_notice_email_to",
+    "system_notice_email_to": "system_notice_email_to",
+}
+
+
+def _normalize_email_setting_aliases(update_items: dict) -> None:
+    for key in list(update_items.keys()):
+        normalized = str(key).strip()
+        canonical = _RE0_EMAIL_SETTING_ALIASES.get(normalized.lower())
+        if not canonical:
+            continue
+        value = update_items.pop(key)
+        if canonical not in update_items:
+            update_items[canonical] = value
+    if (
+        "email_smtp_username" in update_items
+        and "email_smtp_from" not in update_items
+    ):
+        update_items["email_smtp_from"] = update_items["email_smtp_username"]
+    if (
+        "email_smtp_port" in update_items
+        and "email_smtp_use_ssl" not in update_items
+    ):
+        try:
+            update_items["email_smtp_use_ssl"] = int(update_items["email_smtp_port"]) == 465
+        except Exception:
+            pass
+
+
 def _coerce_update_settings(db, update_items: dict) -> None:
+    _normalize_email_setting_aliases(update_items)
     if "force_app_update_enabled" in update_items:
         update_items["force_update_required"] = _as_bool(
             update_items["force_app_update_enabled"]
@@ -1566,6 +1688,87 @@ def init_db():
                 existing_invite_code_required["value"]
             ).strip().lower() in {"1", "true", "yes", "on"}
 
+    email_smtp_host_default = _env_any(
+        "EMAIL_SMTP_HOST",
+        "SMTP_HOST",
+        "MAIL_SMTP_HOST",
+        "MAIL_HOST",
+    )
+    email_smtp_port_default = _env_int(
+        "EMAIL_SMTP_PORT",
+        "SMTP_PORT",
+        "MAIL_SMTP_PORT",
+        "MAIL_PORT",
+        default=465,
+    )
+    email_smtp_username_default = _env_any(
+        "EMAIL_SMTP_USERNAME",
+        "EMAIL_ADDRESS",
+        "SMTP_USERNAME",
+        "SMTP_USER",
+        "MAIL_SMTP_USERNAME",
+        "MAIL_USERNAME",
+        "MAIL_USER",
+        "MAIL_ADDRESS",
+    )
+    email_smtp_password_default = _env_any(
+        "EMAIL_SMTP_PASSWORD",
+        "EMAIL_PASSWORD",
+        "SMTP_PASSWORD",
+        "SMTP_PASS",
+        "MAIL_SMTP_PASSWORD",
+        "MAIL_PASSWORD",
+        "MAIL_PASS",
+    )
+    email_smtp_from_default = _env_any(
+        "EMAIL_SMTP_FROM",
+        "EMAIL_FROM",
+        "MAIL_FROM",
+        "SMTP_FROM",
+        default=email_smtp_username_default,
+    )
+    email_smtp_use_ssl_default = _env_smtp_use_ssl(
+        email_smtp_port_default,
+        "EMAIL_SMTP_USE_SSL",
+        "SMTP_USE_SSL",
+        "MAIL_SMTP_USE_SSL",
+        "MAIL_USE_SSL",
+    )
+    backup_smtp_port_default = _env_int(
+        "BACKUP_EMAIL_SMTP_PORT",
+        "EMAIL_SMTP_PORT",
+        "SMTP_PORT",
+        default=email_smtp_port_default,
+    )
+    backup_smtp_use_ssl_default = _env_smtp_use_ssl(
+        backup_smtp_port_default,
+        "BACKUP_EMAIL_SMTP_USE_SSL",
+        "EMAIL_SMTP_USE_SSL",
+        "SMTP_USE_SSL",
+    )
+    reminder_smtp_port_default = _env_int(
+        "REMINDER_EMAIL_SMTP_PORT",
+        "EMAIL_SMTP_PORT",
+        "SMTP_PORT",
+        default=email_smtp_port_default,
+    )
+    reminder_smtp_use_ssl_default = _env_smtp_use_ssl(
+        reminder_smtp_port_default,
+        "REMINDER_EMAIL_SMTP_USE_SSL",
+        "EMAIL_SMTP_USE_SSL",
+        "SMTP_USE_SSL",
+    )
+    account_primary_provider_default = _env_any(
+        "EMAIL_CODE_PRIMARY_PROVIDER",
+        default=(
+            "smtp"
+            if email_smtp_host_default
+            and email_smtp_username_default
+            and email_smtp_password_default
+            else "claw163"
+        ),
+    )
+
     # Default settings
     default_settings = {
         "invite_code_required": default_invite_code_required,
@@ -1614,25 +1817,26 @@ def init_db():
         "openlist_backup_path": os.getenv("OPENLIST_BACKUP_PATH", "/duoyi-backups"),
         "backup_email_enabled": os.getenv("BACKUP_EMAIL_ENABLED", "false").lower() in {"1", "true", "yes"},
         "backup_email_to": os.getenv("BACKUP_EMAIL_TO", ""),
-        "backup_email_from": os.getenv("BACKUP_EMAIL_FROM", os.getenv("EMAIL_SMTP_USERNAME", "")),
-        "backup_email_smtp_host": os.getenv("EMAIL_SMTP_HOST", ""),
-        "backup_email_smtp_port": int(os.getenv("EMAIL_SMTP_PORT", "465")),
-        "backup_email_smtp_username": os.getenv("EMAIL_SMTP_USERNAME", ""),
-        "backup_email_smtp_password": os.getenv("EMAIL_SMTP_PASSWORD", ""),
-        "backup_email_smtp_use_ssl": os.getenv("EMAIL_SMTP_USE_SSL", "true").lower() in {"1", "true", "yes"},
+        "backup_email_from": os.getenv("BACKUP_EMAIL_FROM", email_smtp_from_default),
+        "backup_email_smtp_host": os.getenv("BACKUP_EMAIL_SMTP_HOST", email_smtp_host_default),
+        "backup_email_smtp_port": backup_smtp_port_default,
+        "backup_email_smtp_username": os.getenv("BACKUP_EMAIL_SMTP_USERNAME", email_smtp_username_default),
+        "backup_email_smtp_password": os.getenv("BACKUP_EMAIL_SMTP_PASSWORD", email_smtp_password_default),
+        "backup_email_smtp_use_ssl": backup_smtp_use_ssl_default,
         # 用户邮件提醒：优先投递到用户登录名中的 email；否则使用 reminder_email_to。
         "reminder_email_enabled": os.getenv("REMINDER_EMAIL_ENABLED", "false").lower() in {"1", "true", "yes"},
         "reminder_email_to": os.getenv("REMINDER_EMAIL_TO", ""),
-        "reminder_email_from": os.getenv("REMINDER_EMAIL_FROM", os.getenv("EMAIL_SMTP_USERNAME", "")),
-        "reminder_email_smtp_host": os.getenv("REMINDER_EMAIL_SMTP_HOST", os.getenv("EMAIL_SMTP_HOST", "")),
-        "reminder_email_smtp_port": int(os.getenv("REMINDER_EMAIL_SMTP_PORT", os.getenv("EMAIL_SMTP_PORT", "465"))),
-        "reminder_email_smtp_username": os.getenv("REMINDER_EMAIL_SMTP_USERNAME", os.getenv("EMAIL_SMTP_USERNAME", "")),
-        "reminder_email_smtp_password": os.getenv("REMINDER_EMAIL_SMTP_PASSWORD", os.getenv("EMAIL_SMTP_PASSWORD", "")),
-        "reminder_email_smtp_use_ssl": os.getenv("REMINDER_EMAIL_SMTP_USE_SSL", os.getenv("EMAIL_SMTP_USE_SSL", "true")).lower() in {"1", "true", "yes"},
+        "reminder_email_from": os.getenv("REMINDER_EMAIL_FROM", email_smtp_from_default),
+        "reminder_email_smtp_host": os.getenv("REMINDER_EMAIL_SMTP_HOST", email_smtp_host_default),
+        "reminder_email_smtp_port": reminder_smtp_port_default,
+        "reminder_email_smtp_username": os.getenv("REMINDER_EMAIL_SMTP_USERNAME", email_smtp_username_default),
+        "reminder_email_smtp_password": os.getenv("REMINDER_EMAIL_SMTP_PASSWORD", email_smtp_password_default),
+        "reminder_email_smtp_use_ssl": reminder_smtp_use_ssl_default,
         # 账号邮箱验证码：兼容 RE0/网关的 openclaw/resend/smtp/email_code 配置，同时保留上面的 duoyi 备份/提醒邮件配置。
         "email_service_enabled": _env_bool("EMAIL_SERVICE_ENABLED", default=True),
+        "email_title": _env_any("DUOYI_TITLE", "EMAIL_TITLE", "APP_TITLE", default=DEFAULT_EMAIL_TITLE),
         "email_sender_name": _env_any("EMAIL_SENDER_NAME", default=DEFAULT_EMAIL_SENDER_NAME),
-        "email_code_primary_provider": _env_any("EMAIL_CODE_PRIMARY_PROVIDER", default="claw163"),
+        "email_code_primary_provider": account_primary_provider_default,
         "email_code_backup_provider": _env_any("EMAIL_CODE_BACKUP_PROVIDER", default="resend"),
         "email_code_active_slot": _env_any("EMAIL_CODE_ACTIVE_SLOT", default="primary"),
         "email_auto_switch_enabled": _env_bool("EMAIL_AUTO_SWITCH_ENABLED", default=False),
@@ -1644,12 +1848,17 @@ def init_db():
         "resend_from": _env_any("RESEND_FROM", default=DEFAULT_RESEND_FROM),
         "hermes_base_url": _env_any("HERMES_BASE_URL"),
         "hermes_api_key": _env_any("HERMES_API_KEY"),
-        "system_notice_email_to": _env_any("SYSTEM_NOTICE_EMAIL_TO"),
-        "email_smtp_host": _env_any("EMAIL_SMTP_HOST"),
-        "email_smtp_port": _env_int("EMAIL_SMTP_PORT", default=465),
-        "email_smtp_username": _env_any("EMAIL_SMTP_USERNAME", "EMAIL_ADDRESS"),
-        "email_smtp_password": _env_any("EMAIL_SMTP_PASSWORD", "EMAIL_PASSWORD"),
-        "email_smtp_use_ssl": _env_bool("EMAIL_SMTP_USE_SSL", default=True),
+        "system_notice_email_to": _env_any(
+            "SYSTEM_NOTICE_EMAIL_TO",
+            "EMAIL_HOME_ADDRESS",
+            "EMAIL_HOME_CHANNEL",
+        ),
+        "email_smtp_host": email_smtp_host_default,
+        "email_smtp_port": email_smtp_port_default,
+        "email_smtp_username": email_smtp_username_default,
+        "email_smtp_password": email_smtp_password_default,
+        "email_smtp_from": email_smtp_from_default,
+        "email_smtp_use_ssl": email_smtp_use_ssl_default,
     }
     for k, v in default_settings.items():
         conn.execute(
@@ -2404,6 +2613,10 @@ def _account_mail_runtime(db) -> dict:
         db,
         [
             "email_smtp_host",
+            "EMAIL_SMTP_HOST",
+            "SMTP_HOST",
+            "MAIL_SMTP_HOST",
+            "MAIL_HOST",
             "reminder_email_smtp_host",
             "backup_email_smtp_host",
         ],
@@ -2413,6 +2626,10 @@ def _account_mail_runtime(db) -> dict:
         db,
         [
             "email_smtp_port",
+            "EMAIL_SMTP_PORT",
+            "SMTP_PORT",
+            "MAIL_SMTP_PORT",
+            "MAIL_PORT",
             "reminder_email_smtp_port",
             "backup_email_smtp_port",
         ],
@@ -2422,6 +2639,14 @@ def _account_mail_runtime(db) -> dict:
         db,
         [
             "email_smtp_username",
+            "EMAIL_SMTP_USERNAME",
+            "EMAIL_ADDRESS",
+            "SMTP_USERNAME",
+            "SMTP_USER",
+            "MAIL_SMTP_USERNAME",
+            "MAIL_USERNAME",
+            "MAIL_USER",
+            "MAIL_ADDRESS",
             "reminder_email_smtp_username",
             "backup_email_smtp_username",
         ],
@@ -2431,6 +2656,13 @@ def _account_mail_runtime(db) -> dict:
         db,
         [
             "email_smtp_password",
+            "EMAIL_SMTP_PASSWORD",
+            "EMAIL_PASSWORD",
+            "SMTP_PASSWORD",
+            "SMTP_PASS",
+            "MAIL_SMTP_PASSWORD",
+            "MAIL_PASSWORD",
+            "MAIL_PASS",
             "reminder_email_smtp_password",
             "backup_email_smtp_password",
         ],
@@ -2440,13 +2672,39 @@ def _account_mail_runtime(db) -> dict:
     if smtp_use_ssl is None:
         smtp_use_ssl = _setting_get(db, "reminder_email_smtp_use_ssl", None)
     if smtp_use_ssl is None:
-        smtp_use_ssl = _setting_get(db, "backup_email_smtp_use_ssl", True)
+        smtp_use_ssl = _setting_get(db, "backup_email_smtp_use_ssl", None)
+    if smtp_use_ssl is None:
+        smtp_use_ssl = int(smtp_port or 465) == 465
     return {
         "email_service_enabled": bool(
             _setting_get(db, "email_service_enabled", True)
         ),
+        "email_title": str(
+            _first_setting(
+                db,
+                [
+                    "email_title",
+                    "EMAIL_TITLE",
+                    "APP_TITLE",
+                    "TITLE",
+                    "DUOYI_TITLE",
+                ],
+                DEFAULT_EMAIL_TITLE,
+            )
+            or DEFAULT_EMAIL_TITLE
+        ),
         "email_sender_name": str(
-            _setting_get(db, "email_sender_name", DEFAULT_EMAIL_SENDER_NAME)
+            _first_setting(
+                db,
+                [
+                    "email_sender_name",
+                    "EMAIL_SENDER_NAME",
+                    "EMAIL_FROM_NAME",
+                    "MAIL_FROM_NAME",
+                    "SENDER_NAME",
+                ],
+                DEFAULT_EMAIL_SENDER_NAME,
+            )
             or DEFAULT_EMAIL_SENDER_NAME
         ),
         "email_code_primary_provider": _normalize_email_code_provider(
@@ -2483,11 +2741,16 @@ def _account_mail_runtime(db) -> dict:
                 db,
                 [
                     "email_smtp_from",
+                    "EMAIL_SMTP_FROM",
+                    "EMAIL_FROM",
+                    "MAIL_FROM",
+                    "SMTP_FROM",
                     "reminder_email_from",
                     "backup_email_from",
                 ],
                 "",
             )
+            or smtp_username
             or ""
         ),
     }
@@ -2634,8 +2897,11 @@ class EmailLoginRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    current_password: Optional[str] = None
+    currentPassword: Optional[str] = None
+    old_password: Optional[str] = None
     new_password: Optional[str] = None
+    newPassword: Optional[str] = None
     password: Optional[str] = None
 
 
@@ -3011,6 +3277,8 @@ class BackupBulkWipe(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     invite_code_required: Optional[bool] = None
     allow_public_registration: Optional[bool] = None
     registration_invite_required: Optional[bool] = None
@@ -3071,6 +3339,7 @@ class SettingsUpdate(BaseModel):
     reminder_email_smtp_use_ssl: Optional[bool] = None
     # 账号邮箱验证码邮件通道，兼容 RE0/boxying-image-gateway 字段
     email_service_enabled: Optional[bool] = None
+    email_title: Optional[str] = None
     email_sender_name: Optional[str] = None
     email_code_primary_provider: Optional[str] = None
     email_code_backup_provider: Optional[str] = None
@@ -3089,6 +3358,7 @@ class SettingsUpdate(BaseModel):
     email_smtp_port: Optional[int] = None
     email_smtp_username: Optional[str] = None
     email_smtp_password: Optional[str] = None
+    email_smtp_from: Optional[str] = None
     email_smtp_use_ssl: Optional[bool] = None
 
 
@@ -3133,6 +3403,7 @@ EMAIL_SETTING_KEYS = {
     "reminder_email_smtp_username",
     "reminder_email_smtp_password",
     "email_service_enabled",
+    "email_title",
     "email_sender_name",
     "email_code_primary_provider",
     "email_code_backup_provider",
@@ -3149,6 +3420,7 @@ EMAIL_SETTING_KEYS = {
     "email_smtp_port",
     "email_smtp_username",
     "email_smtp_password",
+    "email_smtp_from",
     "email_smtp_use_ssl",
 }
 
@@ -3449,11 +3721,12 @@ def admin_reminder_email_test(actor: str = Depends(_require_admin)):
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "settings")
+        title = _account_email_title(_account_mail_runtime(db))
         _send_reminder_email(
             db,
             actor,
-            "多仪邮件提醒测试",
-            "如果你收到这封邮件，说明多仪邮件提醒 SMTP 投递配置可用。",
+            f"{title}邮件提醒测试",
+            f"如果你收到这封邮件，说明{title}邮件提醒 SMTP 投递配置可用。",
         )
         return {"ok": True, "recipient": _reminder_email_recipient(db, actor)}
     except RuntimeError as e:
@@ -3476,12 +3749,15 @@ def admin_account_email_test(actor: str = Depends(_require_admin)):
                 status_code=503,
                 detail="管理员账号未绑定邮箱，也未配置系统通知收件人",
             )
+        runtime = _account_mail_runtime(db)
+        title = _account_email_title(runtime)
         result = _send_account_email(
             db,
             to_addr=recipient,
-            subject="多仪账号邮件测试",
-            body="如果你收到这封邮件，说明多仪账号验证码邮件通道可用。",
-            html="<p>如果你收到这封邮件，说明多仪账号验证码邮件通道可用。</p>",
+            subject=f"{title}账号邮件测试",
+            body=f"如果你收到这封邮件，说明{title}账号验证码邮件通道可用。",
+            html=f"<p>如果你收到这封邮件，说明{html.escape(title)}账号验证码邮件通道可用。</p>",
+            runtime=runtime,
         )
         if not result.get("sent"):
             raise HTTPException(
@@ -3935,34 +4211,50 @@ def _openclaw_mail_send_email(
     return {"sent": False, "detail": str(data.get("error") or "OpenClaw 邮件未返回 sent")}
 
 
-def _email_code_payload(code: str, purpose: str) -> tuple[str, str, str]:
+def _account_email_title(runtime: Optional[dict] = None) -> str:
+    title = str((runtime or {}).get("email_title") or DEFAULT_EMAIL_TITLE).strip()
+    return title or DEFAULT_EMAIL_TITLE
+
+
+def _email_code_payload(
+    code: str,
+    purpose: str,
+    title: str = DEFAULT_EMAIL_TITLE,
+) -> tuple[str, str, str]:
+    title = (title or DEFAULT_EMAIL_TITLE).strip() or DEFAULT_EMAIL_TITLE
     label = {
         "bind": "绑定邮箱",
         "login": "邮箱验证码登录",
         "reset": "找回密码",
     }.get(purpose, "邮箱验证")
-    subject = f"多仪账号{label}验证码"
-    body = f"你的验证码是 {code}，5 分钟内有效。若不是本人操作，请忽略本邮件。"
-    html = (
+    subject = f"{title}账号{label}验证码"
+    body = f"你的 {title} 验证码是 {code}，5 分钟内有效。若不是本人操作，请忽略本邮件。"
+    escaped_title = html.escape(title)
+    html_body = (
         "<p>你好，</p>"
-        f"<p>你的验证码是 <strong>{code}</strong>，5 分钟内有效。</p>"
+        f"<p>你的 {escaped_title} 验证码是 <strong>{code}</strong>，5 分钟内有效。</p>"
         "<p>若不是本人操作，请忽略本邮件。</p>"
     )
-    return subject, body, html
+    return subject, body, html_body
 
 
-def _reset_email_payload(code: str) -> tuple[str, str, str]:
-    subject = "多仪账号找回密码验证码"
+def _reset_email_payload(
+    code: str,
+    title: str = DEFAULT_EMAIL_TITLE,
+) -> tuple[str, str, str]:
+    title = (title or DEFAULT_EMAIL_TITLE).strip() or DEFAULT_EMAIL_TITLE
+    subject = f"{title}账号找回密码验证码"
     body = (
-        f"重置验证码：{code}\n"
+        f"{title} 重置验证码：{code}\n"
         "验证码 30 分钟内有效。如非本人操作，请忽略本邮件。"
     )
-    html = (
+    escaped_title = html.escape(title)
+    html_body = (
         "<p>你好，</p>"
-        f"<p>重置验证码：<strong>{code}</strong></p>"
+        f"<p>{escaped_title} 重置验证码：<strong>{code}</strong></p>"
         "<p>验证码 30 分钟内有效。如非本人操作，请忽略本邮件。</p>"
     )
-    return subject, body, html
+    return subject, body, html_body
 
 
 def _email_code_provider_configured(runtime: dict, provider: str) -> bool:
@@ -3995,6 +4287,7 @@ def _account_email_runtime_status(runtime: dict) -> dict:
     effective_provider = primary_provider if active_slot == "primary" else backup_provider
     return {
         "email_service_enabled": bool(runtime.get("email_service_enabled", True)),
+        "email_title": _account_email_title(runtime),
         "email_sender_name": runtime.get("email_sender_name", DEFAULT_EMAIL_SENDER_NAME),
         "email_code_primary_provider": primary_provider,
         "email_code_backup_provider": backup_provider,
@@ -4027,8 +4320,9 @@ def _send_account_email(
     subject: str,
     body: str,
     html: str = "",
+    runtime: Optional[dict] = None,
 ) -> dict:
-    runtime = _account_mail_runtime(db)
+    runtime = runtime or _account_mail_runtime(db)
     if not runtime.get("email_service_enabled", True):
         return {"sent": False, "provider": "none", "detail": "账号邮件服务未启用"}
     active_slot = _normalize_email_code_slot(runtime.get("email_code_active_slot"))
@@ -4201,13 +4495,18 @@ def _send_password_reset_email(db, row, token: str) -> None:
     to_addr = _account_email_recipient(row)
     if not to_addr:
         raise RuntimeError("账号未绑定邮箱")
-    subject, body, html = _reset_email_payload(token)
+    runtime = _account_mail_runtime(db)
+    subject, body, html = _reset_email_payload(
+        token,
+        _account_email_title(runtime),
+    )
     result = _send_account_email(
         db,
         to_addr=to_addr,
         subject=subject,
         body=body,
         html=html,
+        runtime=runtime,
     )
     if not result.get("sent"):
         raise RuntimeError(str(result.get("detail") or "账号邮件 SMTP 未完整配置"))
@@ -4228,25 +4527,28 @@ def _send_workspace_mention_email(
     comment = body.strip()
     if len(comment) > 600:
         comment = comment[:600] + "..."
+    runtime = _account_mail_runtime(db)
+    title = _account_email_title(runtime)
     location = f"任务/对象：{target_id}\n" if target_id else ""
     text_body = (
         f"{author_name} 在「{workspace_name}」中 @ 了你。\n\n"
         f"{location}"
         f"评论：{comment}\n\n"
-        "打开多仪的共享空间可查看并标记已读。"
+        f"打开{title}的共享空间可查看并标记已读。"
     )
     html_body = (
         f"<p>{html.escape(author_name)} 在「{html.escape(workspace_name)}」中 @ 了你。</p>"
         + (f"<p>任务/对象：{html.escape(target_id)}</p>" if target_id else "")
         + f"<p>评论：{html.escape(comment)}</p>"
-        + "<p>打开多仪的共享空间可查看并标记已读。</p>"
+        + f"<p>打开{html.escape(title)}的共享空间可查看并标记已读。</p>"
     )
     result = _send_account_email(
         db,
         to_addr=to_addr,
-        subject=f"多仪共享空间提及：{workspace_name}",
+        subject=f"{title}共享空间提及：{workspace_name}",
         body=text_body,
         html=html_body,
+        runtime=runtime,
     )
     if not result.get("sent"):
         raise RuntimeError(str(result.get("detail") or "账号邮件 SMTP 未完整配置"))
@@ -5000,9 +5302,11 @@ def _consume_email_code(
 
 
 def _send_email_code_result(db, code_result: dict) -> dict:
+    runtime = _account_mail_runtime(db)
     subject, body, html = _email_code_payload(
         code_result["code"],
         code_result["purpose"],
+        _account_email_title(runtime),
     )
     sent = _send_account_email(
         db,
@@ -5010,8 +5314,8 @@ def _send_email_code_result(db, code_result: dict) -> dict:
         subject=subject,
         body=body,
         html=html,
+        runtime=runtime,
     )
-    runtime = _account_mail_runtime(db)
     payload = {
         "ok": True,
         "email": code_result["email"],
@@ -5323,6 +5627,18 @@ def auth_email_code(
             ip_address=_client_ip(request),
         )
         payload = _send_email_code_result(db, result)
+        if payload.get("sent") is False and not payload.get("dev_code"):
+            db.execute(
+                "DELETE FROM email_verification_codes WHERE id=?",
+                (result["id"],),
+            )
+            db.rollback()
+            raise HTTPException(
+                status_code=503,
+                detail=payload.get("message")
+                or payload.get("detail")
+                or "验证码邮件发送失败，请稍后重试或联系管理员检查邮箱服务。",
+            )
         _audit(
             db,
             result.get("user_id"),
@@ -5625,7 +5941,8 @@ def confirm_password_reset(req: PasswordResetConfirm):
 @app.post("/api/auth/change-password")
 @app.post("/api/me/password")
 def change_password(req: ChangePasswordRequest, user_id: str = Depends(_verify_token)):
-    new_password = _clean_password(req.new_password or req.password or "")
+    current_password = req.current_password or req.currentPassword or req.old_password or ""
+    new_password = _clean_password(req.new_password or req.newPassword or req.password or "")
     db = get_db()
     try:
         row = db.execute(
@@ -5634,14 +5951,15 @@ def change_password(req: ChangePasswordRequest, user_id: str = Depends(_verify_t
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
-        password_hash = _hash_password(req.current_password or "")
-        legacy_hash = _legacy_hash_password(req.current_password or "")
+        password_hash = _hash_password(current_password)
+        legacy_hash = _legacy_hash_password(current_password)
         if row["password_hash"] not in {password_hash, legacy_hash}:
             raise HTTPException(status_code=403, detail="当前密码不正确")
         db.execute(
             "UPDATE users SET password_hash=? WHERE id=?",
             (_hash_password(new_password), user_id),
         )
+        _drop_session(user_id)
         _audit(db, user_id, row["username"], "password.change")
         db.commit()
         return {"ok": True}
@@ -9413,7 +9731,7 @@ def admin_groups(
 ):
     db = get_db()
     try:
-        _ensure_admin_any_permission(db, actor, ("groups", "users"))
+        _ensure_admin_any_permission(db, actor, ("groups", "users", "coins"))
         if limit is not None or offset is not None:
             safe_limit, safe_offset = _admin_page_window(
                 limit if limit is not None else 50,
@@ -9463,6 +9781,52 @@ def admin_update_group(
     group_id: str, req: AdminGroupUpsert, actor: str = Depends(_require_admin)
 ):
     return _admin_save_group(group_id, req, actor)
+
+
+@app.delete("/api/admin/groups/{group_id}")
+@app.delete("/api/admin/user-groups/{group_id}")
+@app.delete("/api/admin/user_groups/{group_id}")
+@app.delete("/api/admin/userGroups/{group_id}")
+def admin_delete_group(group_id: str, actor: str = Depends(_require_admin)):
+    target_id = _clean_entity_id(group_id, "group")
+    if target_id == "group_default":
+        raise HTTPException(status_code=400, detail="默认用户组不能删除")
+    db = get_db()
+    try:
+        _ensure_admin_permission(db, actor, "groups")
+        row = db.execute("SELECT id FROM admin_groups WHERE id=?", (target_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="用户组不存在")
+        reassigned = db.execute(
+            "SELECT COUNT(*) AS c FROM users WHERE group_id=?",
+            (target_id,),
+        ).fetchone()["c"]
+        db.execute(
+            "UPDATE users SET group_id='group_default' WHERE group_id=?",
+            (target_id,),
+        )
+        db.execute("DELETE FROM admin_groups WHERE id=?", (target_id,))
+        _audit(
+            db,
+            actor,
+            _get_username(db, actor),
+            "group.delete",
+            target=target_id,
+            detail=json.dumps(
+                {"reassigned_users": int(reassigned or 0)},
+                ensure_ascii=False,
+            ),
+        )
+        db.commit()
+        return {
+            "status": "ok",
+            "deleted": 1,
+            "id": target_id,
+            "reassigned_users": int(reassigned or 0),
+            "fallback_group_id": "group_default",
+        }
+    finally:
+        db.close()
 
 
 def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str):
@@ -9681,7 +10045,11 @@ def admin_create_user(req: UserCreate, actor: str = Depends(_require_admin)):
             _ensure_admin_management_permission(db, actor)
         _ensure_account_unique(db, username=username, email=email)
         user_id = secrets.token_hex(16)
-        permissions = _normalize_admin_permissions(admin_permissions_value)
+        permissions = (
+            _normalize_admin_permissions(admin_permissions_value)
+            if is_admin
+            else []
+        )
         if is_admin and not permissions:
             permissions = _admin_role_permissions(db, role_id) or [ADMIN_ALL_PERMISSION]
         _ensure_admin_can_assign_permissions(db, actor, permissions)
@@ -9738,7 +10106,7 @@ def admin_list_users(
     db = get_db()
     try:
         actor = _
-        _ensure_admin_permission(db, actor, "users")
+        _ensure_admin_any_permission(db, actor, ("users", "coins"))
         where, params = _user_admin_filters(q=q, status=status)
         if online is not None:
             online_ids = sorted(_online_user_ids())
@@ -10082,18 +10450,24 @@ def admin_update_user(
             role_id_value,
         )
     )
-    if has_coin_adjustment and not has_user_update:
+    if has_coin_adjustment and has_user_update:
+        raise HTTPException(status_code=400, detail="用户资料和时光币调整请分开提交")
+    if has_coin_adjustment:
         return _admin_adjust_user_coins_impl(user_id, coin_payload, actor)
 
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "users")
         row = db.execute(
-            "SELECT id, username, is_admin, admin_permissions, group_id, role_id FROM users WHERE id=?",
+            "SELECT id, username, is_admin, is_disabled, admin_permissions, group_id, role_id FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
+        if has_coin_adjustment:
+            _ensure_admin_permission(db, actor, "coins")
+        if user_id == actor and is_disabled_value is True:
+            raise HTTPException(status_code=400, detail="Cannot disable yourself")
 
         requested_role_id = (
             (role_id_value or "").strip()
@@ -10116,13 +10490,13 @@ def admin_update_user(
             _ensure_admin_management_permission(db, actor)
 
         # Safeguard: can't demote or disable the last admin
-        if is_admin_value is False and row["is_admin"]:
+        if is_admin_value is False and row["is_admin"] and not row["is_disabled"]:
             admins = db.execute(
-                "SELECT COUNT(*) AS c FROM users WHERE is_admin=1"
+                "SELECT COUNT(*) AS c FROM users WHERE is_admin=1 AND is_disabled=0"
             ).fetchone()["c"]
             if admins <= 1:
                 raise HTTPException(
-                    status_code=400, detail="Cannot demote the last admin"
+                    status_code=400, detail="Cannot demote the last active admin"
                 )
         if is_disabled_value is True and row["is_admin"]:
             admins = db.execute(
@@ -10145,6 +10519,12 @@ def admin_update_user(
             next_permissions = []
         if next_permissions is not None:
             _ensure_admin_can_assign_permissions(db, actor, next_permissions)
+        if is_admin_value is not None and role_id_value is None:
+            _ensure_admin_can_assign_role(
+                db,
+                actor,
+                "role_admin" if is_admin_value else "role_user",
+            )
 
         if is_admin_value is not None:
             db.execute(
@@ -10193,6 +10573,15 @@ def admin_update_user(
             )
             _drop_session(user_id)  # force re-login
 
+        coin_adjustment_result = None
+        if has_coin_adjustment:
+            coin_adjustment_result = _admin_adjust_user_coins_in_db(
+                db,
+                user_id,
+                coin_payload,
+                actor,
+            )
+
         _audit(
             db,
             actor,
@@ -10202,8 +10591,8 @@ def admin_update_user(
             detail=json.dumps(req.model_dump(exclude_none=True)),
         )
         db.commit()
-        if has_coin_adjustment:
-            return _admin_adjust_user_coins_impl(user_id, coin_payload, actor)
+        if coin_adjustment_result is not None:
+            return coin_adjustment_result
         fresh = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return _user_response(fresh, db=db)
     finally:
@@ -10259,94 +10648,104 @@ def _admin_adjust_user_coins_impl(
 ):
     db = get_db()
     try:
-        _ensure_admin_permission(db, actor, "coins")
-        user = db.execute(
-            "SELECT id, username FROM users WHERE id=?", (user_id,)
-        ).fetchone()
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
-        row = db.execute(
-            "SELECT virtual_rewards, sync_version FROM sync_data WHERE user_id=?",
-            (user_id,),
-        ).fetchone()
-        rewards = _json_object(row["virtual_rewards"] if row else "{}")
-
-        def _num(value, fallback=0) -> int:
-            try:
-                return int(value)
-            except Exception:
-                return fallback
-
-        now = _utc_now_text()
-        old_balance = _num(rewards.get("balance"))
-        delta = _coin_adjustment_delta(req, old_balance)
-        if delta == 0:
-            raise HTTPException(status_code=400, detail="调整数量不能为 0")
-        if abs(delta) > 1000000:
-            raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
-        old_lifetime = _num(rewards.get("lifetime"), old_balance)
-        balance = max(0, old_balance + delta)
-        lifetime = old_lifetime + max(0, delta)
-        reason = (req.reason or "").strip() or "管理员调整"
-        ledger = rewards.get("ledger")
-        if not isinstance(ledger, list):
-            ledger = []
-        entry = {
-            "id": f"admin:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
-            "title": "管理员调整",
-            "coins": delta,
-            "reason": reason,
-            "awardedAt": now,
-        }
-        rewards.update(
-            {
-                "balance": balance,
-                "lifetime": max(lifetime, balance),
-                "ledger": [entry, *[item for item in ledger if isinstance(item, dict)]][:50],
-                "updatedAt": now,
-            }
-        )
-        next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
-        db.execute(
-            """
-            UPDATE sync_data
-            SET virtual_rewards=?, sync_version=?, updated_at=?
-            WHERE user_id=?
-            """,
-            (
-                json.dumps(rewards, ensure_ascii=False),
-                next_sync_version,
-                now,
-                user_id,
-            ),
-        )
-        _audit(
-            db,
-            actor,
-            _get_username(db, actor),
-            "user.coins_adjust",
-            target=user_id,
-            detail=json.dumps(
-                {
-                    "delta": delta,
-                    "reason": reason,
-                    "balance": balance,
-                    "lifetime": rewards["lifetime"],
-                },
-                ensure_ascii=False,
-            ),
-        )
+        result = _admin_adjust_user_coins_in_db(db, user_id, req, actor)
         db.commit()
-        return {
-            "status": "ok",
-            "balance": balance,
-            "lifetime": rewards["lifetime"],
-            "ledger_entry": entry,
-            "server_version": next_sync_version,
-        }
+        return result
     finally:
         db.close()
+
+
+def _admin_adjust_user_coins_in_db(
+    db,
+    user_id: str,
+    req: UserCoinAdjustment,
+    actor: str,
+):
+    _ensure_admin_permission(db, actor, "coins")
+    user = db.execute(
+        "SELECT id, username FROM users WHERE id=?", (user_id,)
+    ).fetchone()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
+    row = db.execute(
+        "SELECT virtual_rewards, sync_version FROM sync_data WHERE user_id=?",
+        (user_id,),
+    ).fetchone()
+    rewards = _json_object(row["virtual_rewards"] if row else "{}")
+
+    def _num(value, fallback=0) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return fallback
+
+    now = _utc_now_text()
+    old_balance = _num(rewards.get("balance"))
+    delta = _coin_adjustment_delta(req, old_balance)
+    if delta == 0:
+        raise HTTPException(status_code=400, detail="调整数量不能为 0")
+    if abs(delta) > 1000000:
+        raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
+    old_lifetime = _num(rewards.get("lifetime"), old_balance)
+    balance = max(0, old_balance + delta)
+    lifetime = old_lifetime + max(0, delta)
+    reason = (req.reason or "").strip() or "管理员调整"
+    ledger = rewards.get("ledger")
+    if not isinstance(ledger, list):
+        ledger = []
+    entry = {
+        "id": f"admin:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
+        "title": "管理员调整",
+        "coins": delta,
+        "reason": reason,
+        "awardedAt": now,
+    }
+    rewards.update(
+        {
+            "balance": balance,
+            "lifetime": max(lifetime, balance),
+            "ledger": [entry, *[item for item in ledger if isinstance(item, dict)]][:50],
+            "updatedAt": now,
+        }
+    )
+    next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
+    db.execute(
+        """
+        UPDATE sync_data
+        SET virtual_rewards=?, sync_version=?, updated_at=?
+        WHERE user_id=?
+        """,
+        (
+            json.dumps(rewards, ensure_ascii=False),
+            next_sync_version,
+            now,
+            user_id,
+        ),
+    )
+    _audit(
+        db,
+        actor,
+        _get_username(db, actor),
+        "user.coins_adjust",
+        target=user_id,
+        detail=json.dumps(
+            {
+                "delta": delta,
+                "reason": reason,
+                "balance": balance,
+                "lifetime": rewards["lifetime"],
+            },
+            ensure_ascii=False,
+        ),
+    )
+    return {
+        "status": "ok",
+        "balance": balance,
+        "lifetime": rewards["lifetime"],
+        "ledger_entry": entry,
+        "server_version": next_sync_version,
+    }
 
 
 def _grant_registration_coins(db, user_id: str, coins: int) -> None:

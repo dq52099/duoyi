@@ -71,6 +71,15 @@ class FocusRoomProvider extends ChangeNotifier {
   List<FocusRoomInvite> invitesForRoom(String roomId) =>
       List.unmodifiable(_inviteCache[roomId] ?? const <FocusRoomInvite>[]);
 
+  String _focusRoomRemoteError(
+    Object error, {
+    required String fallbackMessage,
+  }) {
+    final message = error is ApiException ? error.message : error.toString();
+    if (isBackendCompatibilityDiagnosticMessage(message)) return message;
+    return userVisibleApiError(error, fallbackMessage: fallbackMessage);
+  }
+
   static const List<FocusRoomMemberSeed> _friendLeaderboardSeeds = [
     FocusRoomMemberSeed(
       id: 'friend-lin',
@@ -321,7 +330,10 @@ class FocusRoomProvider extends ChangeNotifier {
       ];
       return invite;
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _remoteLoading = false;
@@ -345,7 +357,10 @@ class FocusRoomProvider extends ChangeNotifier {
       _inviteCache[roomId] = invites;
       return invites;
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _remoteLoading = false;
@@ -372,7 +387,10 @@ class FocusRoomProvider extends ChangeNotifier {
         return invite.copyWith(revoked: true);
       }).toList();
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _remoteLoading = false;
@@ -413,7 +431,10 @@ class FocusRoomProvider extends ChangeNotifier {
       onLocalChanged?.call();
       return result.room;
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _remoteLoading = false;
@@ -507,7 +528,10 @@ class FocusRoomProvider extends ChangeNotifier {
         await _refreshGlobalRanking(api);
       }
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
     } finally {
       _remoteLoading = false;
       notifyListeners();
@@ -568,7 +592,10 @@ class FocusRoomProvider extends ChangeNotifier {
               )) {
                 _rankingEventSubscriptions.remove(room.id);
               }
-              _lastRemoteError = e.toString();
+              _lastRemoteError = _focusRoomRemoteError(
+                e,
+                fallbackMessage: '自习室实时排行暂不可用，已回退到本地数据。',
+              );
               _realtimeRetryAfter = DateTime.now().add(
                 const Duration(seconds: 30),
               );
@@ -608,7 +635,10 @@ class FocusRoomProvider extends ChangeNotifier {
               if (identical(_globalRankingEventSubscription, subscription)) {
                 _globalRankingEventSubscription = null;
               }
-              _lastRemoteError = e.toString();
+              _lastRemoteError = _focusRoomRemoteError(
+                e,
+                fallbackMessage: '自习室实时排行暂不可用，已回退到本地数据。',
+              );
               _realtimeRetryAfter = DateTime.now().add(
                 const Duration(seconds: 30),
               );
@@ -667,7 +697,10 @@ class FocusRoomProvider extends ChangeNotifier {
       );
       _lastRemoteSyncAt = DateTime.now();
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
     } finally {
       _remoteLoading = false;
       notifyListeners();
@@ -693,7 +726,10 @@ class FocusRoomProvider extends ChangeNotifier {
       final api = FocusRoomApi(client);
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
     } finally {
       _friendLoading = false;
       notifyListeners();
@@ -719,7 +755,10 @@ class FocusRoomProvider extends ChangeNotifier {
       final api = FocusRoomApi(client);
       await _refreshGlobalRanking(api);
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
     } finally {
       _globalLoading = false;
       notifyListeners();
@@ -744,7 +783,10 @@ class FocusRoomProvider extends ChangeNotifier {
       await _refreshFocusFriendsAndRanking(api);
       return friend;
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _friendLoading = false;
@@ -770,7 +812,10 @@ class FocusRoomProvider extends ChangeNotifier {
       await _refreshFocusFriendsAndRanking(api);
       return friend;
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _friendLoading = false;
@@ -795,7 +840,10 @@ class FocusRoomProvider extends ChangeNotifier {
       await api.rejectFriendRequest(clean);
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _friendLoading = false;
@@ -820,7 +868,10 @@ class FocusRoomProvider extends ChangeNotifier {
       await api.cancelFriendRequest(clean);
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _friendLoading = false;
@@ -845,7 +896,10 @@ class FocusRoomProvider extends ChangeNotifier {
       await api.removeFriend(clean);
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
-      _lastRemoteError = e.toString();
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
       rethrow;
     } finally {
       _friendLoading = false;
@@ -933,7 +987,12 @@ class FocusRoomProvider extends ChangeNotifier {
           DateTime.now(),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      _lastRemoteError = _focusRoomRemoteError(
+        e,
+        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
+      );
+    }
   }
 
   void _cancelRealtimeRanking(String roomId) {

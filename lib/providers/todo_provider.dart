@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +22,8 @@ class TodoImportSummary {
 }
 
 class TodoProvider extends ChangeNotifier {
+  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
+
   List<TodoItem> _todos = [];
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
@@ -181,7 +184,7 @@ class TodoProvider extends ChangeNotifier {
       return;
     }
     try {
-      await scheduler.syncTodos(List.of(_todos));
+      await scheduler.syncTodos(List.of(_todos)).timeout(_reminderSyncTimeout);
       _lastReminderSyncIssue = null;
       _lastReminderSyncSucceededAt = DateTime.now();
     } catch (e, st) {
@@ -244,7 +247,11 @@ class TodoProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> updateTodo(String id, TodoItem updated) async {
+  Future<void> updateTodo(
+    String id,
+    TodoItem updated, {
+    bool waitForReminderSync = true,
+  }) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
       final prev = _todos[idx];
@@ -266,7 +273,11 @@ class TodoProvider extends ChangeNotifier {
       }
       await _saveToStorage();
       _notify();
-      await _syncTodoRemindersNow();
+      if (waitForReminderSync) {
+        await _syncTodoRemindersNow();
+      } else {
+        unawaited(_syncTodoRemindersNow());
+      }
       if (next.isCompleted) {
         await _timeAudit?.recordTodoCompletion(
           next,
@@ -544,7 +555,11 @@ class TodoProvider extends ChangeNotifier {
     return changed;
   }
 
-  Future<bool> scheduleTodoForToday(String id, {DateTime? now}) async {
+  Future<bool> scheduleTodoForToday(
+    String id, {
+    DateTime? now,
+    bool waitForReminderSync = true,
+  }) async {
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return false;
     final todo = _todos[idx];
@@ -552,15 +567,64 @@ class TodoProvider extends ChangeNotifier {
 
     final base = now ?? DateTime.now();
     final today = DateTime(base.year, base.month, base.day);
+    final trigger = todo.hasReminder && todo.reminderAt != null
+        ? todo.reminderAt
+        : todo.dueDate;
+    final triggerIsUsableToday =
+        trigger != null && _isSameDay(trigger, today) && trigger.isAfter(base);
+    final shouldUseFallbackDue = !triggerIsUsableToday;
     final currentDay = DateTime(todo.date.year, todo.date.month, todo.date.day);
-    if (currentDay == today && !todo.isArchivedAfterRollover) return false;
+    if (currentDay == today &&
+        !todo.isArchivedAfterRollover &&
+        triggerIsUsableToday) {
+      return false;
+    }
+    final preferredDue = DateTime(
+      today.year,
+      today.month,
+      today.day,
+      base.hour,
+      base.minute,
+    ).add(const Duration(minutes: 30));
+    final endOfToday = DateTime(today.year, today.month, today.day, 23, 59, 59);
+    final fallbackDue = preferredDue.isBefore(endOfToday)
+        ? preferredDue
+        : endOfToday;
+    final nextDue = shouldUseFallbackDue ? fallbackDue : todo.dueDate;
+    final shouldMirrorReminder =
+        shouldUseFallbackDue &&
+        (todo.hasReminder ||
+            todo.reminder.enabled ||
+            todo.reminderPlan.enabled);
 
-    _todos[idx] = todo.copyWith(date: today, isArchivedAfterRollover: false);
+    _todos[idx] = todo.copyWith(
+      date: today,
+      dueDate: nextDue,
+      isArchivedAfterRollover: false,
+      hasReminder: shouldMirrorReminder ? true : null,
+      reminderAt: shouldMirrorReminder ? fallbackDue : todo.reminderAt,
+      reminder: shouldMirrorReminder
+          ? todo.reminder.copyWith(
+              enabled: true,
+              hour: fallbackDue.hour,
+              minute: fallbackDue.minute,
+            )
+          : null,
+    );
     await _saveToStorage();
     _notify();
-    await _syncTodoRemindersNow();
+    if (waitForReminderSync) {
+      await _syncTodoRemindersNow();
+    } else {
+      unawaited(_syncTodoRemindersNow());
+    }
     return true;
   }
+
+  bool _isSameDay(DateTime value, DateTime day) =>
+      value.year == day.year &&
+      value.month == day.month &&
+      value.day == day.day;
 
   Future<void> reorder(List<String> orderedIds) async {
     final map = {for (final t in _todos) t.id: t};

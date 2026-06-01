@@ -74,6 +74,16 @@ void main() {
       expect(source, contains('Color.alphaBlend('));
       expect(source, contains('statusColor.withValues(alpha: 0.24)'));
     }
+    expect(
+      agenda,
+      contains(
+        'if (event.type != CalendarEventType.todo) return TodoVisualState.normal',
+      ),
+    );
+    expect(agenda, contains("import '../core/todo_templates.dart';"));
+    expect(agenda, contains('_CalendarTodoVisual _calendarEventVisual('));
+    expect(agenda, contains('TodoListTemplates.all'));
+    expect(agenda, contains('EisenhowerQuadrant.urgentImportant'));
     expect(agenda, contains('class _CalendarAgendaStatusBadge'));
     expect(week, contains('class _WeekEventStatusBadge'));
     expect(week, contains("import '../models/calendar_event.dart';"));
