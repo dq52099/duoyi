@@ -43,6 +43,7 @@ final Map<String, IconData> _habitIconsByToken = {
   'assignment_turned_in': Icons.assignment_turned_in,
   'record_voice_over': Icons.record_voice_over,
   'local_cafe_outlined': Icons.local_cafe_outlined,
+  'timer': Icons.timer,
 };
 
 final Map<int, String> _habitIconTokensByCodePoint = {
@@ -79,6 +80,7 @@ final Map<int, String> _habitIconTokensByCodePoint = {
   Icons.assignment_turned_in.codePoint: 'assignment_turned_in',
   Icons.record_voice_over.codePoint: 'record_voice_over',
   Icons.local_cafe_outlined.codePoint: 'local_cafe_outlined',
+  Icons.timer.codePoint: 'timer',
 };
 
 IconData habitIconForToken(String token) {
@@ -89,7 +91,6 @@ IconData habitIconForToken(String token) {
   if (codePoint != null) {
     final legacyToken = _habitIconTokensByCodePoint[codePoint];
     if (legacyToken != null) return _habitIconsByToken[legacyToken]!;
-    return IconData(codePoint, fontFamily: 'MaterialIcons');
   }
 
   return Icons.check_circle_outline;

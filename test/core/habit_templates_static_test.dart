@@ -54,12 +54,10 @@ void main() {
   test('习惯图标注册表保留创建时选择的 Material 图标', () {
     final source = File('lib/core/habit_icons.dart').readAsStringSync();
 
-    expect(
-      source,
-      contains("return IconData(codePoint, fontFamily: 'MaterialIcons')"),
-    );
+    expect(source, isNot(contains('IconData(codePoint')));
     expect(source, contains('icon.codePoint.toString()'));
     expect(source, contains('final legacyToken = _habitIconTokensByCodePoint'));
+    expect(source, contains("Icons.timer.codePoint: 'timer'"));
     expect(source, isNot(contains('?? defaultHabitIconToken;')));
   });
 }

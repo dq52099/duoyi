@@ -4106,11 +4106,11 @@ abstract class AppLocalizations {
   /// **'请先填写倒数日名称'**
   String get countdownValidationTitleRequired;
 
-  /// No description provided for @anniversaryValidationTitleRequired.
+  /// No description provided for @countdownSaved.
   ///
   /// In zh, this message translates to:
-  /// **'请先填写标题'**
-  String get anniversaryValidationTitleRequired;
+  /// **'倒数日已保存'**
+  String get countdownSaved;
 
   /// No description provided for @countdownSaveFailedPrefix.
   ///
@@ -4405,6 +4405,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'颜色标识'**
   String get anniversaryFieldColor;
+
+  /// No description provided for @anniversaryValidationTitleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写标题'**
+  String get anniversaryValidationTitleRequired;
+
+  /// No description provided for @anniversarySaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存'**
+  String get anniversarySaved;
+
+  /// No description provided for @anniversarySaveFailedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存失败：'**
+  String get anniversarySaveFailedPrefix;
 
   /// No description provided for @anniversaryReminderRegisterFailed.
   ///

@@ -2029,7 +2029,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get countdownValidationTitleRequired => '请先填写倒数日名称';
 
   @override
-  String get anniversaryValidationTitleRequired => '请先填写标题';
+  String get countdownSaved => '倒数日已保存';
 
   @override
   String get countdownSaveFailedPrefix => '倒数日保存失败：';
@@ -2180,6 +2180,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get anniversaryFieldColor => '颜色标识';
+
+  @override
+  String get anniversaryValidationTitleRequired => '请先填写标题';
+
+  @override
+  String get anniversarySaved => '已保存';
+
+  @override
+  String get anniversarySaveFailedPrefix => '保存失败：';
 
   @override
   String get anniversaryReminderRegisterFailed => '纪念日提醒注册失败';

@@ -2114,7 +2114,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countdownValidationTitleRequired => 'Enter a countdown name first';
 
   @override
-  String get anniversaryValidationTitleRequired => 'Enter a title first';
+  String get countdownSaved => 'Countdown saved';
 
   @override
   String get countdownSaveFailedPrefix => 'Failed to save countdown: ';
@@ -2278,6 +2278,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get anniversaryFieldColor => 'Color marker';
+
+  @override
+  String get anniversaryValidationTitleRequired => 'Enter a title first';
+
+  @override
+  String get anniversarySaved => 'Saved';
+
+  @override
+  String get anniversarySaveFailedPrefix => 'Failed to save anniversary: ';
 
   @override
   String get anniversaryReminderRegisterFailed =>
