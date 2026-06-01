@@ -56,7 +56,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final preferredGridHeight = rows >= 6 \?\s*620\.0\s*:\s*540\.0',
+          r'final preferredGridHeight = rows >= 6\s*\?\s*332\.0\s*:\s*\(rows == 5 \?\s*306\.0\s*:\s*280\.0\)',
           multiLine: true,
         ),
       ),
@@ -65,20 +65,16 @@ void main() {
       source,
       matches(
         RegExp(
-          r'final minGridHeight = rows >= 6 \?\s*470\.0\s*:\s*410\.0',
+          r'final minGridHeight = rows >= 6\s*\?\s*296\.0\s*:\s*\(rows == 5 \?\s*268\.0\s*:\s*240\.0\)',
           multiLine: true,
         ),
       ),
     );
-    expect(source, contains('if (availableHeight <= 120)'));
+    expect(source, isNot(contains('if (availableHeight <= 120)')));
+    expect(source, contains('final viewportTarget = availableHeight * 0.52'));
     expect(
       source,
-      matches(
-        RegExp(
-          r'return availableHeight\s*\.clamp\(minGridHeight, preferredGridHeight\)\s*\.toDouble\(\)',
-          multiLine: true,
-        ),
-      ),
+      contains('viewportTarget.clamp(minGridHeight, preferredGridHeight)'),
     );
     expect(source, contains("'calendar_month_global_scrollbar'"));
     expect(source, contains("'calendar_month_global_scroll_view'"));

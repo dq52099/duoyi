@@ -28,6 +28,42 @@ class LunarDate {
       '$year年${isLeapMonth ? '闰' : ''}${LunarCalendar._monthName(month, false)}${LunarCalendar._dayName(day)}';
 }
 
+class AlmanacHourFortune {
+  final String branch;
+  final String range;
+  final String deity;
+  final bool isAuspicious;
+
+  const AlmanacHourFortune({
+    required this.branch,
+    required this.range,
+    required this.deity,
+    required this.isAuspicious,
+  });
+
+  String get compactLabel => '$branch${isAuspicious ? '吉' : '凶'}';
+}
+
+class LunarAlmanacDetail {
+  final String dayGanzhi;
+  final String fetalGod;
+  final String pengZu;
+  final String fiveElements;
+  final String mansion;
+  final String clash;
+  final String hourFortunes;
+
+  const LunarAlmanacDetail({
+    required this.dayGanzhi,
+    required this.fetalGod,
+    required this.pengZu,
+    required this.fiveElements,
+    required this.mansion,
+    required this.clash,
+    required this.hourFortunes,
+  });
+}
+
 class LunarCalendar {
   // 1900-01-31 是农历 1900 年正月初一
   static const int _baseYear = 1900;
@@ -80,6 +116,47 @@ class LunarCalendar {
     0x0e968, 0x0d520, 0x0daa0, 0x16aa6, 0x056d0, 0x04ae0, 0x0a9d4, 0x0a2d0,
     0x0d150, 0x0f252, // 2090-2099
     0x0d520, // 2100
+  ];
+
+  static const List<String> _heavenlyStems = [
+    '甲',
+    '乙',
+    '丙',
+    '丁',
+    '戊',
+    '己',
+    '庚',
+    '辛',
+    '壬',
+    '癸',
+  ];
+  static const List<String> _earthlyBranches = [
+    '子',
+    '丑',
+    '寅',
+    '卯',
+    '辰',
+    '巳',
+    '午',
+    '未',
+    '申',
+    '酉',
+    '戌',
+    '亥',
+  ];
+  static const List<String> _branchZodiac = [
+    '鼠',
+    '牛',
+    '虎',
+    '兔',
+    '龙',
+    '蛇',
+    '马',
+    '羊',
+    '猴',
+    '鸡',
+    '狗',
+    '猪',
   ];
 
   /// 返回某农历年总天数
@@ -196,17 +273,289 @@ class LunarCalendar {
 
   /// 生肖: 0=鼠 1=牛...11=猪
   static String zodiacOf(int lunarYear) {
-    const names = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
-    return names[(lunarYear - 4) % 12];
+    return _branchZodiac[_positiveMod(lunarYear - 4, 12)];
   }
 
   /// 干支纪年，如 "甲子"
   static String ganzhiOf(int lunarYear) {
-    const gan = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-    const zhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-    final g = (lunarYear - 4) % 10;
-    final z = (lunarYear - 4) % 12;
-    return '${gan[g]}${zhi[z]}';
+    final g = _positiveMod(lunarYear - 4, 10);
+    final z = _positiveMod(lunarYear - 4, 12);
+    return '${_heavenlyStems[g]}${_earthlyBranches[z]}';
+  }
+
+  /// 干支纪日，如 "戊辰"。
+  static String ganzhiDay(DateTime date) {
+    final index = _sexagenaryDayIndex(date);
+    return _ganzhiByIndex(index);
+  }
+
+  static LunarAlmanacDetail almanacDetail(DateTime date) {
+    final index = _sexagenaryDayIndex(date);
+    return LunarAlmanacDetail(
+      dayGanzhi: _ganzhiByIndex(index),
+      fetalGod: _fetalGodByIndex(index),
+      pengZu: _pengZuByIndex(index),
+      fiveElements: _fiveElementsByIndex(index),
+      mansion: _mansionByDate(date),
+      clash: _clashByIndex(index),
+      hourFortunes: hourFortuneSummary(date),
+    );
+  }
+
+  static String fetalGod(DateTime date) =>
+      _fetalGodByIndex(_sexagenaryDayIndex(date));
+
+  static String pengZu(DateTime date) =>
+      _pengZuByIndex(_sexagenaryDayIndex(date));
+
+  static String fiveElements(DateTime date) =>
+      _fiveElementsByIndex(_sexagenaryDayIndex(date));
+
+  static String twentyEightMansion(DateTime date) => _mansionByDate(date);
+
+  static String clashAndDirection(DateTime date) =>
+      _clashByIndex(_sexagenaryDayIndex(date));
+
+  static List<AlmanacHourFortune> hourFortunes(DateTime date) {
+    const hourRanges = [
+      '23:00-00:59',
+      '01:00-02:59',
+      '03:00-04:59',
+      '05:00-06:59',
+      '07:00-08:59',
+      '09:00-10:59',
+      '11:00-12:59',
+      '13:00-14:59',
+      '15:00-16:59',
+      '17:00-18:59',
+      '19:00-20:59',
+      '21:00-22:59',
+    ];
+    const deities = [
+      '青龙',
+      '明堂',
+      '天刑',
+      '朱雀',
+      '金匮',
+      '天德',
+      '白虎',
+      '玉堂',
+      '天牢',
+      '玄武',
+      '司命',
+      '勾陈',
+    ];
+    const goodDeities = {'青龙', '明堂', '金匮', '天德', '玉堂', '司命'};
+    const qingLongStartByDayBranch = [8, 10, 0, 2, 4, 6, 8, 10, 0, 2, 4, 6];
+
+    final dayIndex = _sexagenaryDayIndex(date);
+    final start = qingLongStartByDayBranch[dayIndex % 12];
+    return List.generate(12, (hourBranch) {
+      final deity = deities[_positiveMod(hourBranch - start, deities.length)];
+      return AlmanacHourFortune(
+        branch: _earthlyBranches[hourBranch],
+        range: hourRanges[hourBranch],
+        deity: deity,
+        isAuspicious: goodDeities.contains(deity),
+      );
+    });
+  }
+
+  static String hourFortuneSummary(DateTime date) =>
+      hourFortunes(date).map((item) => item.compactLabel).join(' ');
+
+  static int _positiveMod(int value, int mod) {
+    final result = value % mod;
+    return result < 0 ? result + mod : result;
+  }
+
+  static int _sexagenaryDayIndex(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final offset = day.difference(DateTime(2000, 1, 1)).inDays;
+    // 2000-01-01 为戊辰日，戊辰在六十甲子中序号为 4。
+    return _positiveMod(offset + 4, 60);
+  }
+
+  static String _ganzhiByIndex(int index) {
+    final normalized = _positiveMod(index, 60);
+    return '${_heavenlyStems[normalized % 10]}${_earthlyBranches[normalized % 12]}';
+  }
+
+  static String _fetalGodByIndex(int index) {
+    const stemPlaces = [
+      '门',
+      '碓磨',
+      '厨灶',
+      '仓库',
+      '房床',
+      '门',
+      '碓磨',
+      '厨灶',
+      '仓库',
+      '房床',
+    ];
+    const branchPlaces = [
+      '碓',
+      '厕',
+      '炉',
+      '门',
+      '栖',
+      '床',
+      '碓',
+      '厕',
+      '炉',
+      '门',
+      '栖',
+      '床',
+    ];
+    const directions = [
+      '外东南',
+      '外正南',
+      '外西南',
+      '外正西',
+      '外西北',
+      '外正北',
+      '房内北',
+      '房内南',
+      '房内东',
+      '房内西',
+      '门外东',
+      '门外西',
+    ];
+
+    final normalized = _positiveMod(index, 60);
+    final stemPlace = stemPlaces[normalized % 10];
+    final branchPlace = branchPlaces[normalized % 12];
+    final place = stemPlace == branchPlace
+        ? stemPlace
+        : '$stemPlace$branchPlace';
+    return '$place${directions[normalized % directions.length]}';
+  }
+
+  static String _pengZuByIndex(int index) {
+    const stemAvoids = [
+      '甲不开仓，财物耗散',
+      '乙不栽植，千株不长',
+      '丙不修灶，必见灾殃',
+      '丁不剃头，头必生疮',
+      '戊不受田，田主不祥',
+      '己不破券，二比并亡',
+      '庚不经络，织机虚张',
+      '辛不合酱，主人不尝',
+      '壬不汲水，更难提防',
+      '癸不词讼，理弱敌强',
+    ];
+    const branchAvoids = [
+      '子不问卜，自惹祸殃',
+      '丑不冠带，主不还乡',
+      '寅不祭祀，神鬼不尝',
+      '卯不穿井，水泉不香',
+      '辰不哭泣，必主重丧',
+      '巳不远行，财物伏藏',
+      '午不苫盖，屋主更张',
+      '未不服药，毒气入肠',
+      '申不安床，鬼祟入房',
+      '酉不宴客，醉坐颠狂',
+      '戌不吃犬，作怪上床',
+      '亥不嫁娶，不利新郎',
+    ];
+
+    final normalized = _positiveMod(index, 60);
+    return '${stemAvoids[normalized % 10]}；${branchAvoids[normalized % 12]}';
+  }
+
+  static String _fiveElementsByIndex(int index) {
+    const nayin = [
+      '海中金',
+      '炉中火',
+      '大林木',
+      '路旁土',
+      '剑锋金',
+      '山头火',
+      '涧下水',
+      '城头土',
+      '白蜡金',
+      '杨柳木',
+      '泉中水',
+      '屋上土',
+      '霹雳火',
+      '松柏木',
+      '长流水',
+      '沙中金',
+      '山下火',
+      '平地木',
+      '壁上土',
+      '金箔金',
+      '覆灯火',
+      '天河水',
+      '大驿土',
+      '钗钏金',
+      '桑柘木',
+      '大溪水',
+      '沙中土',
+      '天上火',
+      '石榴木',
+      '大海水',
+    ];
+
+    final normalized = _positiveMod(index, 60);
+    return '${_ganzhiByIndex(normalized)}纳音 · ${nayin[normalized ~/ 2]}';
+  }
+
+  static String _mansionByDate(DateTime date) {
+    const mansions = [
+      '角木蛟',
+      '亢金龙',
+      '氐土貉',
+      '房日兔',
+      '心月狐',
+      '尾火虎',
+      '箕水豹',
+      '斗木獬',
+      '牛金牛',
+      '女土蝠',
+      '虚日鼠',
+      '危月燕',
+      '室火猪',
+      '壁水獝',
+      '奎木狼',
+      '娄金狗',
+      '胃土雉',
+      '昴日鸡',
+      '毕月乌',
+      '觜火猴',
+      '参水猿',
+      '井木犴',
+      '鬼金羊',
+      '柳土獐',
+      '星日马',
+      '张月鹿',
+      '翼火蛇',
+      '轸水蚓',
+    ];
+    final day = DateTime(date.year, date.month, date.day);
+    final offset = day.difference(DateTime(2000, 1, 1)).inDays;
+    return mansions[_positiveMod(offset + 23, mansions.length)];
+  }
+
+  static String _clashByIndex(int index) {
+    const clashDirections = [
+      '南',
+      '东',
+      '北',
+      '西',
+      '南',
+      '东',
+      '北',
+      '西',
+      '南',
+      '东',
+      '北',
+      '西',
+    ];
+    final branchIndex = _positiveMod(index, 60) % 12;
+    final clashBranch = (branchIndex + 6) % 12;
+    return '冲${_branchZodiac[clashBranch]}煞${clashDirections[branchIndex]}';
   }
 
   /// 是否节气日(简化：返回该日节气名，无则返回 null)

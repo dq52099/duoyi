@@ -316,15 +316,10 @@ void main() async {
       'focus room storage',
       () => focusRoomProvider.loadFromStorage(),
     ),
-    _startupGuard('notifications', () => notificationService.init()),
-    _startupGuard('system tray', () => systemTray.init()),
-    _startupGuard('home widget', () async {
-      final initialized = await HomeWidgetService.init();
-      if (!initialized) {
-        debugPrint('[HomeWidget] startup init completed with failures');
-      }
-    }),
-    _startupGuard('auth storage', () => authProvider.loadFromStorage()),
+    _startupGuard(
+      'auth storage',
+      () => authProvider.loadFromStorage(refreshServerConfig: false),
+    ),
     _startupGuard('ai storage', () => aiService.loadFromStorage()),
     _startupGuard('locale storage', () => localeProvider.loadFromStorage()),
     _startupGuard(
@@ -341,12 +336,31 @@ void main() async {
     ),
   ]);
 
-  try {
-    _initialExactAlarmGranted = await AlarmService.instance
-        .hasExactAlarmPermission();
-  } catch (e, st) {
-    debugPrint('[startup] exact alarm probe failed: $e\n$st');
-    _initialExactAlarmGranted = false;
+  Future<void>? deferredPlatformStartup;
+  Future<void> ensureDeferredPlatformStartup() {
+    final existing = deferredPlatformStartup;
+    if (existing != null) return existing;
+    deferredPlatformStartup = () async {
+      await Future.wait([
+        _startupGuard('notifications', () => notificationService.init()),
+        _startupGuard('system tray', () => systemTray.init()),
+        _startupGuard('home widget', () async {
+          final initialized = await HomeWidgetService.init();
+          if (!initialized) {
+            debugPrint('[HomeWidget] startup init completed with failures');
+          }
+        }),
+      ]);
+      try {
+        _initialExactAlarmGranted = await AlarmService.instance
+            .hasExactAlarmPermission()
+            .timeout(const Duration(seconds: 3));
+      } catch (e, st) {
+        debugPrint('[startup] exact alarm probe failed: $e\n$st');
+        _initialExactAlarmGranted = false;
+      }
+    }();
+    return deferredPlatformStartup!;
   }
 
   pomodoroProvider.attachNotifier(notificationService);
@@ -360,17 +374,6 @@ void main() async {
   focusRoomProvider.apiClientGetter = () => authProvider.client;
   // 让 PomodoroProvider 监听 AppLifecycle，以便在 resumed 时恢复白噪音。
   pomodoroProvider.attachLifecycle();
-
-  // 冷启动执行一次 Daily Rollover（归档昨日完成 + 顺延过期 + 派发重复目标）。
-  // 须在 ReminderScheduler 初次同步之前，这样调度器拿到的已经是顺延 / 派发后的最新状态。
-  await _startupGuard(
-    'daily rollover',
-    () => CompletionVisibilityPolicy.runDailyRollover(
-      todoProvider,
-      DateTime.now(),
-      goalProvider: goalProvider,
-    ),
-  );
 
   // 提醒调度器：监听数据变化，幂等地同步本地通知队列
   final reminderScheduler = ReminderScheduler(
@@ -899,6 +902,23 @@ void main() async {
   refreshUserStats();
   refreshAchievements();
 
+  Future<void> runDailyRolloverAfterFirstFrame() async {
+    await _startupGuard(
+      'daily rollover',
+      () => CompletionVisibilityPolicy.runDailyRollover(
+        todoProvider,
+        DateTime.now(),
+        goalProvider: goalProvider,
+      ),
+    );
+    refreshUserStats();
+    refreshAchievements();
+    await queueStartupReminderResync(
+      delay: const Duration(milliseconds: 500),
+      reason: 'daily rollover completed',
+    );
+  }
+
   // 通知点击后的深链接(打开对应 Tab)
   void handleNotificationPayload(String payload) {
     unawaited(NativeReminderRingtone.stopActive());
@@ -909,16 +929,6 @@ void main() async {
 
   LocalNotifications.instance.onTap = handleNotificationPayload;
   AlarmService.instance.onTap = handleNotificationPayload;
-  final initialNotificationPayloads = <String>[];
-  final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
-  if (localLaunchPayload != null && localLaunchPayload.isNotEmpty) {
-    initialNotificationPayloads.add(localLaunchPayload);
-  }
-  final alarmLaunchPayload = AlarmService.instance.takeLaunchPayload();
-  if (alarmLaunchPayload != null && alarmLaunchPayload.isNotEmpty) {
-    initialNotificationPayloads.add(alarmLaunchPayload);
-  }
-
   // AI / CloudSync 依赖 AuthProvider 的 ApiClient
   aiService.attachClient(authProvider.client);
   cloudSyncProvider.apiClientGetter = () => authProvider.client;
@@ -1144,6 +1154,20 @@ void main() async {
   }
 
   Future<void> runPostFrameStartupTasks() async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await ensureDeferredPlatformStartup();
+    final initialNotificationPayloads = <String>[];
+    final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
+    if (localLaunchPayload != null && localLaunchPayload.isNotEmpty) {
+      initialNotificationPayloads.add(localLaunchPayload);
+    }
+    final alarmLaunchPayload = AlarmService.instance.takeLaunchPayload();
+    if (alarmLaunchPayload != null && alarmLaunchPayload.isNotEmpty) {
+      initialNotificationPayloads.add(alarmLaunchPayload);
+    }
+    for (final payload in initialNotificationPayloads.toSet()) {
+      handleNotificationPayload(payload);
+    }
     final initial = await _startupValue<Uri>(
       'home widget initial launch',
       () => HomeWidgetService.initialLaunchUri(),
@@ -1175,13 +1199,20 @@ void main() async {
     }
     unawaited(
       _startupGuard(
+        'server config refresh',
+        () => authProvider.refreshServerConfigFromServer(),
+        timeout: const Duration(seconds: 5),
+      ),
+    );
+    unawaited(
+      _startupGuard(
         'auth profile refresh',
         () => authProvider.refreshMe(),
         timeout: const Duration(seconds: 8),
       ),
     );
     unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 250), () async {
+      Future<void>.delayed(const Duration(milliseconds: 700), () async {
         await _startupGuard(
           'initial reminder resync',
           () => queueStartupReminderResync(
@@ -1192,7 +1223,7 @@ void main() async {
       }),
     );
     unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 850), () async {
+      Future<void>.delayed(const Duration(milliseconds: 1400), () async {
         await _startupGuard('daily digest reminder', syncDailyDigestReminder);
         await Future<void>.delayed(const Duration(milliseconds: 450));
         await _startupGuard(
@@ -1213,14 +1244,22 @@ void main() async {
         });
       }),
     );
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 1800),
+        runDailyRolloverAfterFirstFrame,
+      ),
+    );
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        return _startupGuard(
+          'startup app update policy',
+          () => appUpdate.checkServerPolicyNow(),
+          timeout: const Duration(seconds: 5),
+        );
+      }),
+    );
   }
-
-  // 强制更新是启动门禁：先拉服务端策略，再渲染首页，避免先进入应用后再被覆盖。
-  await _startupGuard(
-    'startup app update policy',
-    () => appUpdate.checkServerPolicyNow(),
-    timeout: const Duration(seconds: 8),
-  );
 
   // 冷启动本地 loadFromStorage 已完成；首帧后的远端刷新和通知重放不再阻塞页面。
   cloudSyncProvider.dirtyMarkEnabled = true;
@@ -1262,13 +1301,6 @@ void main() async {
     ),
   );
 
-  if (initialNotificationPayloads.isNotEmpty) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      for (final payload in initialNotificationPayloads.toSet()) {
-        handleNotificationPayload(payload);
-      }
-    });
-  }
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(runPostFrameStartupTasks());
   });

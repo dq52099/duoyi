@@ -203,6 +203,7 @@ void main() {
       await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
       await tester.pumpAndSettle();
 
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(TodoDetailScreen), findsNothing);
       expect(find.text('home-root'), findsOneWidget);
       expect(provider.todos.single.title, '只修改标题');

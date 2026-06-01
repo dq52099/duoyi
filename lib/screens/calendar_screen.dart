@@ -452,13 +452,11 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   double _monthGridHeightFor(double availableHeight, int rows) {
-    final minGridHeight = rows >= 6 ? 470.0 : 410.0;
-    final preferredGridHeight = rows >= 6 ? 620.0 : 540.0;
+    final minGridHeight = rows >= 6 ? 296.0 : (rows == 5 ? 268.0 : 240.0);
+    final preferredGridHeight = rows >= 6 ? 332.0 : (rows == 5 ? 306.0 : 280.0);
     if (!availableHeight.isFinite) return preferredGridHeight;
-    if (availableHeight <= 120) {
-      return availableHeight.clamp(0.0, minGridHeight).toDouble();
-    }
-    return availableHeight.clamp(minGridHeight, preferredGridHeight).toDouble();
+    final viewportTarget = availableHeight * 0.52;
+    return viewportTarget.clamp(minGridHeight, preferredGridHeight).toDouble();
   }
 
   Widget _calendarFilterChip({
@@ -520,7 +518,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     if (rows <= 0) return false;
     const monthGridChromeHeight = 30.0;
     final rowHeight = (gridHeight - monthGridChromeHeight) / rows;
-    return rowHeight >= 44;
+    return rowHeight >= 56;
   }
 
   Widget _calendarFilterStrip({

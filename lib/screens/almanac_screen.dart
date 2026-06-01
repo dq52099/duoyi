@@ -93,6 +93,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     final lunarFes = LunarCalendar.lunarFestival(lunar);
     final suitable = LunarCalendar.suitable(_date);
     final avoid = LunarCalendar.avoid(_date);
+    final almanacDetail = LunarCalendar.almanacDetail(_date);
     final isHoliday = HolidayCalendar.isHoliday(_date);
     final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(_date);
     final countdownProvider = context.watch<CountdownProvider?>();
@@ -132,33 +133,26 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 940;
-            final summary = _summaryHeroCard(
+            final almanacPanel = _denseAlmanacCard(
               cs: cs,
               weekNames: weekNames,
-              lunarText: lunar.chineseText,
+              lunar: lunar,
               ganzhi: ganzhi,
               zodiac: zodiac,
+              detail: almanacDetail,
               term: term,
-              solarFestival: solarFes,
-              lunarFestival: lunarFes,
-            );
-            final detail = _DateDetailCard(
-              date: _date,
-              lunarText: lunar.chineseText,
-              ganzhi: ganzhi,
-              zodiac: zodiac,
-              solarTerm: term,
               solarFestival: solarFes,
               lunarFestival: lunarFes,
               isHoliday: isHoliday,
               isWorkMakeupDay: isWorkMakeupDay,
+              suitable: suitable,
+              avoid: avoid,
             );
             final miniMonth = _MiniMonth(
               date: _date,
               highlightDays: monthHighlightDays,
               onPick: (d) => setState(() => _date = _clampDate(d)),
             );
-            final yiji = _yijiRow(suitable: suitable, avoid: avoid);
             final highlights = _MonthHighlightsCard(
               selectedDate: _date,
               highlights: monthHighlights,
@@ -179,11 +173,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    summary,
+                                    almanacPanel,
                                     const SizedBox(height: 16),
                                     miniMonth,
-                                    const SizedBox(height: 16),
-                                    highlights,
                                   ],
                                 ),
                               ),
@@ -194,9 +186,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    detail,
-                                    const SizedBox(height: 16),
-                                    yiji,
+                                    highlights,
                                     const SizedBox(height: 16),
                                     _aboutCard(),
                                   ],
@@ -207,15 +197,11 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              summary,
-                              const SizedBox(height: 16),
-                              detail,
+                              almanacPanel,
                               const SizedBox(height: 16),
                               miniMonth,
                               const SizedBox(height: 16),
                               highlights,
-                              const SizedBox(height: 16),
-                              yiji,
                               const SizedBox(height: 16),
                               _aboutCard(),
                             ],
@@ -230,49 +216,50 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     );
   }
 
-  Widget _chip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
-      ),
-    );
-  }
-
-  Widget _summaryHeroCard({
+  Widget _denseAlmanacCard({
     required ColorScheme cs,
     required List<String> weekNames,
-    required String lunarText,
+    required LunarDate lunar,
     required String ganzhi,
     required String zodiac,
+    required LunarAlmanacDetail detail,
     required String? term,
     required String? solarFestival,
     required String? lunarFestival,
+    required bool isHoliday,
+    required bool isWorkMakeupDay,
+    required String suitable,
+    required String avoid,
   }) {
+    final fullDate =
+        '${_date.year}年${_date.month}月${_date.day}日 星期${weekNames[_date.weekday - 1]}';
+    final badges = <(String, Color)>[
+      if (term != null) ('节气 $term', const Color(0xFF2E7D32)),
+      if (solarFestival != null) ('公历 $solarFestival', const Color(0xFFEF6C00)),
+      if (lunarFestival != null && I18n.current == AppLocale.zh)
+        ('农历 $lunarFestival', const Color(0xFFC2185B)),
+      if (isHoliday) ('法定假日', const Color(0xFF00897B)),
+      if (isWorkMakeupDay) ('调休上班', const Color(0xFF5E35B1)),
+    ];
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            cs.primary.withValues(alpha: 0.85),
-            cs.primary.withValues(alpha: 0.6),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.18),
+          width: 0.45,
         ),
-        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.chevron_left, color: Colors.white),
+                tooltip: '前一天',
+                icon: const Icon(Icons.chevron_left),
                 onPressed: _date == _firstSupportedDate
                     ? null
                     : () => _shift(-1),
@@ -283,53 +270,157 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                   child: Column(
                     children: [
                       Text(
-                        '${_date.year} 年 ${_date.month} 月',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                        fullDate,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontSize: 16,
+                              fontWeight: FontWeight.normal,
+                              color: cs.onSurface,
+                            ),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         '${_date.day}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 56,
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontSize: 72,
                           fontWeight: FontWeight.normal,
-                          height: 1.0,
+                          height: 0.98,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '星期${weekNames[_date.weekday - 1]}',
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        '农历 ${lunar.chineseText}',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.72),
                           fontSize: 14,
+                          fontWeight: FontWeight.normal,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$ganzhi年 属$zodiac  ${detail.dayGanzhi}日',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.chevron_right, color: Colors.white),
+                tooltip: '后一天',
+                icon: const Icon(Icons.chevron_right),
                 onPressed: _date == _lastSupportedDate ? null : () => _shift(1),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 10,
-            runSpacing: 4,
-            children: [
-              _chip('${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText'),
-              if (I18n.current == AppLocale.zh) _chip('$ganzhi · 属$zodiac'),
-              if (term != null) _chip('🌿 $term'),
-              if (solarFestival != null) _chip('🎉 $solarFestival'),
-              if (lunarFestival != null && I18n.current == AppLocale.zh)
-                _chip('🏮 $lunarFestival'),
-            ],
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
+              children: badges
+                  .map((badge) => _festivalBadge(badge.$1, badge.$2))
+                  .toList(),
+            ),
+          ],
+          const Divider(height: 22),
+          _yijiRow(suitable: suitable, avoid: avoid),
+          const SizedBox(height: 12),
+          _detailRows(context, detail),
+        ],
+      ),
+    );
+  }
+
+  Widget _festivalBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRows(BuildContext context, LunarAlmanacDetail detail) {
+    final rows = <(String, String)>[
+      ('胎神', detail.fetalGod),
+      ('彭祖', detail.pengZu),
+      ('五行', detail.fiveElements),
+      ('星宿', detail.mansion),
+      ('冲煞', detail.clash),
+      ('时辰吉凶', detail.hourFortunes),
+    ];
+
+    return Column(
+      children: [
+        for (var i = 0; i < rows.length; i++)
+          _detailRow(
+            context,
+            label: rows[i].$1,
+            value: rows[i].$2,
+            isLast: i == rows.length - 1,
+          ),
+      ],
+    );
+  }
+
+  Widget _detailRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required bool isLast,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isLast
+                ? Colors.transparent
+                : cs.outlineVariant.withValues(alpha: 0.18),
+            width: 0.45,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 68,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurface.withValues(alpha: 0.54),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: cs.onSurface.withValues(alpha: 0.82),
+              ),
+            ),
           ),
         ],
       ),
@@ -349,7 +440,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              '万年历覆盖 1900-2099 年，支持公历、农历、节气与宜忌查看。',
+              '万年历覆盖 1900-2099 年，使用本地农历表与黄历规则生成日期详情。',
               style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
             ),
           ),
@@ -364,36 +455,38 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.15), width: 0.45),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 26,
+            height: 26,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             child: Text(
               title,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.normal,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            style: TextStyle(
-              fontSize: 13,
-              color: color.withValues(alpha: 0.85),
-              height: 1.6,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              body,
+              style: TextStyle(
+                fontSize: 13,
+                color: color.withValues(alpha: 0.86),
+                height: 1.45,
+              ),
             ),
           ),
         ],
@@ -717,145 +810,6 @@ class _MonthHighlightsCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DateDetailCard extends StatelessWidget {
-  final DateTime date;
-  final String lunarText;
-  final String ganzhi;
-  final String zodiac;
-  final String? solarTerm;
-  final String? solarFestival;
-  final String? lunarFestival;
-  final bool isHoliday;
-  final bool isWorkMakeupDay;
-
-  const _DateDetailCard({
-    required this.date,
-    required this.lunarText,
-    required this.ganzhi,
-    required this.zodiac,
-    required this.solarTerm,
-    required this.solarFestival,
-    required this.lunarFestival,
-    required this.isHoliday,
-    required this.isWorkMakeupDay,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dayOfYear = date.difference(DateTime(date.year)).inDays + 1;
-    final remainingDays = DateTime(date.year + 1).difference(date).inDays;
-    final items = <(IconData, String, String)>[
-      (
-        Icons.calendar_month_outlined,
-        '公历',
-        '${date.year}-${_two(date.month)}-${_two(date.day)}',
-      ),
-      (Icons.nights_stay_outlined, '农历', lunarText),
-      (Icons.auto_awesome_outlined, '干支生肖', '$ganzhi年 · 属$zodiac'),
-      (Icons.timelapse_outlined, '年进度', '第 $dayOfYear 天 · 还剩 $remainingDays 天'),
-      if (solarTerm != null) (Icons.eco_outlined, '节气', solarTerm!),
-      if (solarFestival != null)
-        (Icons.celebration_outlined, '公历节日', solarFestival!),
-      if (lunarFestival != null)
-        (Icons.local_florist_outlined, '农历节日', lunarFestival!),
-      if (isHoliday) (Icons.beach_access_outlined, '节假日', '法定假日'),
-      if (isWorkMakeupDay) (Icons.work_outline, '调休', '调休上班日'),
-    ];
-    final cs = Theme.of(context).colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.16),
-              width: 0.45,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '日期信息',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ...items.map((item) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: compact
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(item.$1, size: 16, color: cs.primary),
-                                const SizedBox(width: 8),
-                                Text(
-                                  item.$2,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: cs.onSurface.withValues(alpha: 0.58),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 24),
-                              child: Text(
-                                item.$3,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Icon(item.$1, size: 16, color: cs.primary),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 68,
-                              child: Text(
-                                item.$2,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurface.withValues(alpha: 0.58),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                item.$3,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  static String _two(int value) => value.toString().padLeft(2, '0');
 }
 
 class _MiniMonth extends StatelessWidget {

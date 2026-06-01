@@ -13,9 +13,19 @@ void main() {
     expect(source, contains('final wide = constraints.maxWidth >= 940'));
     expect(source, contains('return Scrollbar('));
     expect(source, contains('SingleChildScrollView('));
-    expect(source, contains('Widget _summaryHeroCard({'));
+    expect(source, contains('Widget _denseAlmanacCard({'));
+    expect(source, contains('LunarCalendar.almanacDetail(_date)'));
+    expect(
+      source,
+      contains("'\${_date.year}年\${_date.month}月\${_date.day}日 星期"),
+    );
+    expect(source, contains("('胎神', detail.fetalGod)"));
+    expect(source, contains("('彭祖', detail.pengZu)"));
+    expect(source, contains("('五行', detail.fiveElements)"));
+    expect(source, contains("('星宿', detail.mansion)"));
+    expect(source, contains("('冲煞', detail.clash)"));
+    expect(source, contains("('时辰吉凶', detail.hourFortunes)"));
     expect(source, contains('Widget _aboutCard()'));
-    expect(source, contains('final compact = constraints.maxWidth < 360'));
     expect(
       source,
       contains(

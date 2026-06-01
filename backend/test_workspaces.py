@@ -525,7 +525,15 @@ class WorkspaceApiTest(unittest.TestCase):
                 api.API_CONTRACT_ROUTES_HASH,
             )
             self.assertIn("POST /api/auth/email-code", payload["required_routes"])
+            self.assertIn("POST /api/auth/login", payload["required_routes"])
+            self.assertIn("GET /api/auth/me", payload["required_routes"])
             self.assertIn("PATCH /api/me/profile", payload["required_routes"])
+            self.assertIn("POST /api/me/email", payload["required_routes"])
+            self.assertIn("POST /api/me/password", payload["required_routes"])
+            self.assertIn(
+                "GET /api/uploads/avatars/{filename}",
+                payload["required_routes"],
+            )
             self.assertIn(
                 "PATCH /api/admin/users/{user_id}/coins",
                 payload["required_routes"],
@@ -3699,6 +3707,48 @@ class WorkspaceApiTest(unittest.TestCase):
             api.LoginRequest(username="reset-dev-user", password="newpass456")
         )
         self.assertEqual(logged_in["user_id"], registered["user_id"])
+
+    def test_hermes_mail_configuration_fails_closed_without_dev_code(self):
+        self._register_with_email(
+            "hermes-mail-user",
+            "hermes-mail@example.com",
+        )
+        db = api.get_db()
+        try:
+            api._setting_set(db, "email_code_primary_provider", "none")
+            api._setting_set(db, "email_code_backup_provider", "none")
+            api._setting_set(db, "hermes_base_url", "https://hermes.example.test")
+            api._setting_set(db, "hermes_api_key", "secret")
+            db.commit()
+            runtime = api._account_mail_runtime(db)
+            self.assertTrue(api._any_account_email_provider_configured(runtime))
+        finally:
+            db.close()
+
+        old_hermes_send = api._hermes_send_email
+        try:
+            api._hermes_send_email = lambda **kwargs: {
+                "sent": False,
+                "provider": "hermes",
+                "detail": "Hermes rejected",
+            }
+            with TestClient(api.app) as client:
+                email_code = client.post(
+                    "/api/auth/email-code",
+                    json={"email": "hermes-mail@example.com", "purpose": "login"},
+                )
+                password_reset = client.post(
+                    "/api/auth/password-reset",
+                    json={"account": "hermes-mail-user"},
+                )
+        finally:
+            api._hermes_send_email = old_hermes_send
+
+        self.assertEqual(email_code.status_code, 503, email_code.text)
+        self.assertNotIn("dev_code", email_code.text)
+        self.assertEqual(password_reset.status_code, 200, password_reset.text)
+        self.assertTrue(password_reset.json()["ok"])
+        self.assertNotIn("dev_code", password_reset.json())
 
     def test_password_reset_sends_email_and_changes_password(self):
         registered = self._register_with_email(
@@ -7567,6 +7617,78 @@ class WorkspaceApiTest(unittest.TestCase):
             )
             self.assertTrue(invites_after_revoke.json()["items"][0]["revoked"])
 
+    def test_focus_room_http_accepts_encoded_room_ids_and_payload_aliases(self):
+        owner_id = self._register("focus-room-alias-owner")
+        member_id = self._register("focus-room-alias-member")
+        owner_headers = {"Authorization": f"Bearer {api.TOKENS[owner_id]}"}
+        member_headers = {"Authorization": f"Bearer {api.TOKENS[member_id]}"}
+        encoded_room_id = "deep%2Fwork%20room"
+
+        with TestClient(api.app) as client:
+            heartbeat = client.post(
+                f"/api/focus-rooms/{encoded_room_id}/heartbeat",
+                json={
+                    "displayName": "别名房主",
+                    "weeklySeconds": 2400,
+                    "sessionCount": 2,
+                    "startedAt": "2026-05-20T08:00:00Z",
+                    "active": True,
+                },
+                headers=owner_headers,
+            )
+            ranking = client.get(
+                f"/api/focus-rooms/{encoded_room_id}/ranking",
+                headers=owner_headers,
+            )
+            invite = client.post(
+                f"/api/focus-rooms/{encoded_room_id}/invites",
+                json={
+                    "roomName": "编码路径自习室",
+                    "description": "兼容 encoded slash 和 camelCase payload",
+                    "weeklyTargetSeconds": 7200,
+                    "accentColor": 4281945529,
+                    "maxUses": 2,
+                },
+                headers=owner_headers,
+            )
+            accepted = client.post(
+                f"/api/focus-room-invites/{invite.json()['code']}/accept",
+                json={"displayName": "别名成员"},
+                headers=member_headers,
+            )
+            left = client.post(
+                f"/api/focus-rooms/{encoded_room_id}/leave",
+                headers=member_headers,
+            )
+
+        for label, response in [
+            ("encoded heartbeat", heartbeat),
+            ("encoded ranking", ranking),
+            ("encoded invite", invite),
+            ("camel accept", accepted),
+            ("encoded leave", left),
+        ]:
+            self.assertEqual(response.status_code, 200, f"{label}: {response.text}")
+        self.assertEqual(heartbeat.json()["room_id"], "deep/work room")
+        self.assertEqual(
+            heartbeat.json()["entries"][0]["display_name"],
+            "别名房主",
+        )
+        self.assertEqual(ranking.json()["room_id"], "deep/work room")
+        self.assertEqual(invite.json()["room"]["id"], "deep/work room")
+        self.assertEqual(invite.json()["room"]["name"], "编码路径自习室")
+        self.assertEqual(invite.json()["max_uses"], 2)
+        member_entry = next(
+            entry
+            for entry in accepted.json()["ranking"]["entries"]
+            if entry["user_id"] == member_id
+        )
+        self.assertEqual(member_entry["display_name"], "别名成员")
+        left_member = next(
+            entry for entry in left.json()["entries"] if entry["user_id"] == member_id
+        )
+        self.assertFalse(left_member["online"])
+
     def test_p0_focus_room_http_sse_and_user_id_friend_flow_do_not_outage(self):
         owner_id = self._register("focus-room-p0-owner")
         member_id = self._register("focus-room-p0-member")
@@ -7805,6 +7927,35 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertEqual(first["data"]["online_count"], 1)
         self.assertEqual(first["data"]["entries"][0]["display_name"], "双向同学")
         self.assertEqual(second["event"], "ranking")
+
+    def test_focus_room_events_websocket_accepts_authorization_header(self):
+        registered = self._register_with_email(
+            "focus-room-websocket-auth",
+            "focus-room-websocket-auth@example.com",
+        )
+        user_id = registered["user_id"]
+        token = registered["token"]
+        api.focus_room_heartbeat(
+            "deep/work room",
+            api.FocusRoomHeartbeatRequest(
+                display_name="Header 同学",
+                weekly_seconds=1800,
+                session_count=1,
+                active=True,
+            ),
+            user_id=user_id,
+        )
+
+        with TestClient(api.app) as client:
+            with client.websocket_connect(
+                "/ws/focus-rooms/deep%2Fwork%20room/events?interval_seconds=2",
+                headers={"Authorization": f"Bearer {token}"},
+            ) as websocket:
+                first = websocket.receive_json()
+
+        self.assertEqual(first["event"], "ranking")
+        self.assertEqual(first["data"]["room_id"], "deep/work room")
+        self.assertEqual(first["data"]["entries"][0]["display_name"], "Header 同学")
 
     def test_focus_global_leaderboard_events_streams_ranking_sse(self):
         user_id = self._register("focus-global-events")
@@ -8488,6 +8639,11 @@ class WorkspaceApiTest(unittest.TestCase):
                 json={"timeCoinBalance": 450, "reason": "P0 目标余额"},
                 headers=headers,
             )
+            overdraw_adjustment = client.patch(
+                f"/api/admin/users/{target_id}/coins",
+                json={"delta": -999, "reason": "扣到 0 应按实际扣减记账"},
+                headers=headers,
+            )
             zero_adjustment = client.post(
                 f"/api/admin/users/{target_id}/coins",
                 json={"delta": 0, "reason": "zero should fail"},
@@ -8534,6 +8690,12 @@ class WorkspaceApiTest(unittest.TestCase):
             "PUT /api/admin/users/{id}/time-coin-balance",
         )
         self.assertEqual(target_balance.json()["balance"], 450)
+        self._assert_p0_http_ok(
+            overdraw_adjustment,
+            "PATCH /api/admin/users/{id}/coins overdraw",
+        )
+        self.assertEqual(overdraw_adjustment.json()["balance"], 0)
+        self.assertEqual(overdraw_adjustment.json()["ledger_entry"]["coins"], -450)
         for label, response, expected_status in [
             ("POST /api/admin/users/{id}/coins zero", zero_adjustment, 400),
             ("PATCH /api/admin/users/{id}/time_coins/adjust too large", too_large, 400),
@@ -8553,6 +8715,88 @@ class WorkspaceApiTest(unittest.TestCase):
             self.assertEqual(row["is_disabled"], 0)
         finally:
             db.close()
+
+    def test_normal_user_cannot_adjust_time_coins_end_to_end(self):
+        admin_id = self._make_admin(
+            "normal-time-coin-admin",
+            ["users", "groups", "coins"],
+        )
+        normal_actor_id = self._register("normal-time-coin-actor")
+        target_id = self._register("normal-time-coin-target")
+        admin_headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+        normal_headers = {"Authorization": f"Bearer {api.TOKENS[normal_actor_id]}"}
+
+        with TestClient(api.app) as client:
+            created_group = client.post(
+                "/api/admin/userGroups",
+                json={"name": "normal_time_coin_group", "defaultTimeCoins": 25},
+                headers=admin_headers,
+            )
+            self._assert_p0_http_ok(created_group, "POST /api/admin/userGroups")
+            group_id = created_group.json()["id"]
+
+            created_user = client.post(
+                "/api/admin/users",
+                json={
+                    "username": "normal-time-coin-created",
+                    "password": "pass123456",
+                    "groupId": group_id,
+                    "isAdmin": False,
+                    "isDisabled": False,
+                },
+                headers=admin_headers,
+            )
+            normal_route_adjust = client.post(
+                f"/api/admin/users/{target_id}/coins",
+                json={"delta": 10, "reason": "normal user should fail"},
+                headers=normal_headers,
+            )
+            normal_generic_adjust = client.patch(
+                f"/api/admin/users/{target_id}",
+                json={"timeCoinDelta": 10, "reason": "normal user should fail"},
+                headers=normal_headers,
+            )
+            admin_time_coin_adjust = client.patch(
+                f"/api/admin/users/{created_user.json()['user_id']}/time-coin/adjust",
+                json={"timeCoinDelta": 7, "reason": "singular time coin alias"},
+                headers=admin_headers,
+            )
+            users_page = client.get(
+                "/api/admin/users?q=normal-time-coin-created&limit=10&offset=0",
+                headers=admin_headers,
+            )
+            groups_page = client.get(
+                "/api/admin/userGroups?limit=100&offset=0",
+                headers=admin_headers,
+            )
+
+        self._assert_p0_http_ok(created_user, "POST /api/admin/users camel aliases")
+        self.assertFalse(created_user.json()["is_admin"])
+        self.assertFalse(created_user.json()["is_disabled"])
+        self.assertEqual(created_user.json()["group_id"], group_id)
+        self.assertEqual(created_user.json()["coin_balance"], 25)
+        self.assertEqual(normal_route_adjust.status_code, 403)
+        self.assertEqual(normal_generic_adjust.status_code, 403)
+        self._assert_p0_http_ok(
+            admin_time_coin_adjust,
+            "PATCH /api/admin/users/{id}/time-coin/adjust",
+        )
+        self.assertEqual(admin_time_coin_adjust.json()["balance"], 32)
+        self._assert_p0_http_ok(users_page, "GET /api/admin/users")
+        user_items = users_page.json()["items"]
+        self.assertEqual(len(user_items), 1)
+        self.assertEqual(user_items[0]["group_id"], group_id)
+        self.assertEqual(user_items[0]["coin_balance"], 32)
+        self._assert_p0_http_ok(groups_page, "GET /api/admin/userGroups")
+        group_items = {
+            item["id"]: item
+            for item in groups_page.json()["items"]
+        }
+        self.assertIn(group_id, group_items)
+        self.assertGreaterEqual(group_items[group_id]["user_count"], 1)
+        unchanged = api.sync(api.SyncRequest(), user_id=target_id)
+        self.assertEqual(unchanged["virtual_rewards"].get("balance", 0), 0)
+        self.assertEqual(unchanged["virtual_rewards"].get("lifetime", 0), 0)
 
     def test_p0_feedback_detail_reply_close_delete_visibility_and_errors(self):
         admin_id = self._make_admin("p0-feedback-admin", ["feedback"])

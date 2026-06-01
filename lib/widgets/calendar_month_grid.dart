@@ -33,8 +33,8 @@ class CalendarMonthGrid extends StatelessWidget {
     final selectedDotColor = cs.onSurface.withValues(alpha: 0.72);
     final totalCells = startOffset + lastDay.day;
     final rows = (totalCells / 7).ceil();
-    final preferredRowHeight = showLunar ? 76.0 : 58.0;
-    final maxRowHeight = showLunar ? 104.0 : 82.0;
+    final preferredRowHeight = showLunar ? 58.0 : 48.0;
+    final maxRowHeight = showLunar ? 72.0 : 62.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -50,12 +50,12 @@ class CalendarMonthGrid extends StatelessWidget {
                   rows
             : preferredRowHeight;
         final rowSlotHeight = bounded
-            ? availableRowHeight.clamp(44.0, maxRowHeight)
+            ? availableRowHeight.clamp(30.0, maxRowHeight)
             : preferredRowHeight;
-        final cellHeight = (rowSlotHeight - 4).clamp(40.0, maxRowHeight);
+        final cellHeight = (rowSlotHeight - 4).clamp(28.0, maxRowHeight);
         final showSubText = showLunar && cellHeight >= 48;
         final showDots = cellHeight >= 36;
-        final canShowEventCount = cellHeight >= 62;
+        final canShowEventCount = cellHeight >= 52;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),

@@ -199,14 +199,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       return;
     }
 
-    setState(() => _state = _EditState.saving);
-
     final messenger = ScaffoldMessenger.of(context);
     final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
-      setState(() => _state = _EditState.editing);
       messenger.showSnackBar(
         SnackBar(
           content: const Text('任务名称不能为空'),
@@ -221,6 +218,8 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       title: title,
       notes: _notesCtrl.text.trim(),
     );
+    setState(() => _state = _EditState.saving);
+
     try {
       final savedTodo = provider.todos.firstWhere(
         (t) => t.id == widget.todoId,
@@ -235,7 +234,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         );
         if (!mounted) return;
         if (!reminderReady) {
-          setState(() => _state = _EditState.editing);
+          _restoreEditingAfterSaveInterruption();
           return;
         }
       }
@@ -268,7 +267,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       Navigator.of(context).maybePop(true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _state = _EditState.editing);
+      _restoreEditingAfterSaveInterruption();
       messenger.showSnackBar(
         SnackBar(
           content: Text('保存失败：${userVisibleApiError(e)}'),
@@ -278,6 +277,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         ),
       );
     }
+  }
+
+  void _restoreEditingAfterSaveInterruption() {
+    if (!mounted || _state != _EditState.saving) return;
+    setState(() => _state = _EditState.editing);
   }
 
   /// 用户尝试返回时（系统返回键 / AppBar 返回按钮）。

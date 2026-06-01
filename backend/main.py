@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from typing import Iterable, Optional
 import asyncio
 import base64
@@ -28,11 +28,15 @@ from pathlib import Path
 
 app = FastAPI(title="多仪 Sync API", version="3.1.0")
 
-API_CONTRACT_VERSION = "2026-05-31.1"
+API_CONTRACT_VERSION = "2026-06-01.2"
 API_CONTRACT_FEATURES = {
     "email_code": True,
+    "email_bind": True,
     "avatar_upload": True,
+    "avatar_read": True,
     "profile_update": True,
+    "password_change": True,
+    "auth_session": True,
     "admin_coins": True,
     "admin_groups": True,
     "admin_ai_healthcheck": True,
@@ -43,18 +47,42 @@ API_CONTRACT_FEATURES = {
 API_CONTRACT_REQUIRED_ROUTES = [
     "GET /api/config",
     "GET /api/health",
+    "POST /api/auth/register",
+    "POST /api/auth/login",
+    "GET /api/auth/me",
+    "GET /api/me",
+    "POST /api/auth/logout",
     "GET /api/mobile/apps/duoyi/update",
     "POST /api/auth/email-code",
     "POST /api/auth/email-login",
     "PATCH /api/me/profile",
     "POST /api/me/avatar",
+    "GET /api/uploads/avatars/{filename}",
     "POST /api/me/email-code",
+    "POST /api/me/email",
     "PATCH /api/me/email",
+    "POST /api/me/password",
+    "POST /api/auth/change-password",
     "POST /api/admin/users/{user_id}/coins",
     "PATCH /api/admin/users/{user_id}/coins",
+    "GET /api/admin/users",
+    "POST /api/admin/users",
+    "PATCH /api/admin/users/{user_id}",
+    "PUT /api/admin/users/{user_id}",
+    "DELETE /api/admin/users/{user_id}",
     "GET /api/admin/groups",
     "POST /api/admin/groups",
+    "PATCH /api/admin/groups/{group_id}",
     "DELETE /api/admin/groups/{group_id}",
+    "GET /api/admin/userGroups",
+    "POST /api/admin/userGroups",
+    "PATCH /api/admin/userGroups/{group_id}",
+    "DELETE /api/admin/userGroups/{group_id}",
+    "GET /api/admin/feedback",
+    "GET /api/admin/feedback/{fb_id}",
+    "POST /api/admin/feedback/reply",
+    "POST /api/admin/feedback/bulk-status",
+    "DELETE /api/admin/feedback/{fb_id}",
     "POST /api/admin/provider-healthcheck",
     "POST /api/focus-rooms/{room_id}/heartbeat",
     "GET /api/focus-rooms/{room_id}/ranking",
@@ -184,7 +212,15 @@ FOCUS_ROOM_MAX_SESSION_COUNT_JUMP = 20
 FOCUS_FRIEND_REQUEST_LIMIT_PER_DAY = int(
     os.getenv("FOCUS_FRIEND_REQUEST_LIMIT_PER_DAY", "20")
 )
-EMAIL_CODE_PROVIDERS = {"claw163", "openclaw", "openclaw_mail", "resend", "smtp", "none"}
+EMAIL_CODE_PROVIDERS = {
+    "claw163",
+    "openclaw",
+    "openclaw_mail",
+    "resend",
+    "smtp",
+    "hermes",
+    "none",
+}
 EMAIL_CODE_SLOTS = {"primary", "backup"}
 DEFAULT_EMAIL_TITLE = (
     os.getenv("DUOYI_TITLE")
@@ -2967,25 +3003,62 @@ class SyncItemDeltaRequest(BaseModel):
     collection_hashes: dict = {}
 
 
-class FocusRoomHeartbeatRequest(BaseModel):
-    display_name: Optional[str] = None
-    weekly_seconds: int = 0
-    session_count: int = 0
+class _FocusRoomAliasModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class FocusRoomHeartbeatRequest(_FocusRoomAliasModel):
+    display_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("display_name", "displayName"),
+    )
+    weekly_seconds: int = Field(
+        default=0,
+        validation_alias=AliasChoices("weekly_seconds", "weeklySeconds"),
+    )
+    session_count: int = Field(
+        default=0,
+        validation_alias=AliasChoices("session_count", "sessionCount"),
+    )
     active: bool = True
-    started_at: Optional[str] = None
+    started_at: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("started_at", "startedAt"),
+    )
 
 
-class FocusRoomInviteCreate(BaseModel):
-    room_name: str
+class FocusRoomInviteCreate(_FocusRoomAliasModel):
+    room_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("room_name", "roomName", "name"),
+    )
     description: str = ""
-    weekly_target_seconds: int = 18000
-    accent_color: int = 0xFF3949AB
-    expires_at: Optional[str] = None
-    max_uses: Optional[int] = None
+    weekly_target_seconds: int = Field(
+        default=18000,
+        validation_alias=AliasChoices(
+            "weekly_target_seconds",
+            "weeklyTargetSeconds",
+        ),
+    )
+    accent_color: int = Field(
+        default=0xFF3949AB,
+        validation_alias=AliasChoices("accent_color", "accentColor"),
+    )
+    expires_at: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("expires_at", "expiresAt"),
+    )
+    max_uses: Optional[int] = Field(
+        default=None,
+        validation_alias=AliasChoices("max_uses", "maxUses"),
+    )
 
 
-class FocusRoomInviteAccept(BaseModel):
-    display_name: Optional[str] = None
+class FocusRoomInviteAccept(_FocusRoomAliasModel):
+    display_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("display_name", "displayName"),
+    )
 
 
 class FocusFriendCreate(BaseModel):
@@ -4273,6 +4346,8 @@ def _email_code_provider_configured(runtime: dict, provider: str) -> bool:
             and runtime.get("email_smtp_username")
             and runtime.get("email_smtp_password")
         )
+    if provider == "hermes":
+        return bool(runtime.get("hermes_base_url") and runtime.get("hermes_api_key"))
     return False
 
 
@@ -4304,13 +4379,18 @@ def _account_email_runtime_status(runtime: dict) -> dict:
 
 
 def _any_account_email_provider_configured(runtime: dict) -> bool:
-    return any(
+    configured_provider = any(
+        _email_code_provider_configured(runtime, provider)
+        for provider in ("claw163", "resend", "smtp", "hermes")
+    )
+    configured_slot = any(
         _email_code_provider_configured(
             runtime,
             runtime.get(f"email_code_{slot}_provider", "none"),
         )
         for slot in ("primary", "backup")
     )
+    return configured_provider or configured_slot
 
 
 def _send_account_email(
@@ -4360,6 +4440,14 @@ def _send_account_email(
                 )
             elif provider == "smtp":
                 result = _email_smtp_send(
+                    runtime=runtime,
+                    to_addr=to_addr,
+                    subject=subject,
+                    body=body,
+                    html=html,
+                )
+            elif provider == "hermes":
+                result = _hermes_send_email(
                     runtime=runtime,
                     to_addr=to_addr,
                     subject=subject,
@@ -6502,6 +6590,15 @@ def _focus_global_ranking(db, current_user_id: str) -> dict:
     }
 
 
+def _verify_focus_websocket(websocket: WebSocket) -> str:
+    token = (websocket.query_params.get("token") or "").strip()
+    if not token:
+        authorization = (websocket.headers.get("authorization") or "").strip()
+        if authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+    return _verify_token_value(token)
+
+
 @app.get("/api/focus-friends")
 def list_focus_friends(user_id: str = Depends(_verify_token)):
     db = get_db()
@@ -6838,6 +6935,7 @@ async def focus_global_leaderboard_events(
     )
 
 
+@app.post("/api/focus-rooms/{room_id:path}/invites", include_in_schema=False)
 @app.post("/api/focus-rooms/{room_id}/invites")
 def create_focus_room_invite(
     room_id: str,
@@ -6889,6 +6987,7 @@ def create_focus_room_invite(
         db.close()
 
 
+@app.get("/api/focus-rooms/{room_id:path}/invites", include_in_schema=False)
 @app.get("/api/focus-rooms/{room_id}/invites")
 def list_focus_room_invites(
     room_id: str,
@@ -6911,6 +7010,7 @@ def list_focus_room_invites(
         db.close()
 
 
+@app.delete("/api/focus-room-invites/{invite_id:path}", include_in_schema=False)
 @app.delete("/api/focus-room-invites/{invite_id}")
 def revoke_focus_room_invite(
     invite_id: str,
@@ -6937,6 +7037,7 @@ def revoke_focus_room_invite(
         db.close()
 
 
+@app.post("/api/focus-room-invites/{code:path}/accept", include_in_schema=False)
 @app.post("/api/focus-room-invites/{code}/accept")
 def accept_focus_room_invite(
     code: str,
@@ -6978,14 +7079,29 @@ def accept_focus_room_invite(
             _get_username(db, user_id),
         )
         if first_join:
-            db.execute(
-                """
-                UPDATE focus_room_invites
-                SET used_count=used_count+1, last_used_at=?
-                WHERE id=?
-                """,
-                (now_text, row["id"]),
-            )
+            if max_uses > 0:
+                cursor = db.execute(
+                    """
+                    UPDATE focus_room_invites
+                    SET used_count=used_count+1, last_used_at=?
+                    WHERE id=? AND used_count < max_uses
+                    """,
+                    (now_text, row["id"]),
+                )
+                if cursor.rowcount != 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Focus room invite usage limit reached",
+                    )
+            else:
+                db.execute(
+                    """
+                    UPDATE focus_room_invites
+                    SET used_count=used_count+1, last_used_at=?
+                    WHERE id=?
+                    """,
+                    (now_text, row["id"]),
+                )
         db.execute(
             """
             INSERT INTO focus_room_presence(
@@ -7031,6 +7147,7 @@ def accept_focus_room_invite(
         db.close()
 
 
+@app.post("/api/focus-rooms/{room_id:path}/heartbeat", include_in_schema=False)
 @app.post("/api/focus-rooms/{room_id}/heartbeat")
 def focus_room_heartbeat(
     room_id: str,
@@ -7131,6 +7248,7 @@ def focus_room_heartbeat(
         db.close()
 
 
+@app.get("/api/focus-rooms/{room_id:path}/ranking", include_in_schema=False)
 @app.get("/api/focus-rooms/{room_id}/ranking")
 def focus_room_ranking(room_id: str, user_id: str = Depends(_verify_token)):
     clean_room_id = _clean_focus_room_id(room_id)
@@ -7141,6 +7259,7 @@ def focus_room_ranking(room_id: str, user_id: str = Depends(_verify_token)):
         db.close()
 
 
+@app.get("/api/focus-rooms/{room_id:path}/events", include_in_schema=False)
 @app.get("/api/focus-rooms/{room_id}/events")
 async def focus_room_events(
     room_id: str,
@@ -7172,12 +7291,12 @@ async def focus_room_events(
     )
 
 
+@app.websocket("/ws/focus-rooms/{room_id:path}/events")
 @app.websocket("/ws/focus-rooms/{room_id}/events")
 async def focus_room_events_ws(websocket: WebSocket, room_id: str):
     clean_room_id = _clean_focus_room_id(room_id)
-    token = websocket.query_params.get("token")
     try:
-        user_id = _verify_token_value(token)
+        user_id = _verify_focus_websocket(websocket)
     except HTTPException:
         await websocket.close(code=1008)
         return
@@ -7217,9 +7336,8 @@ async def focus_room_events_ws(websocket: WebSocket, room_id: str):
 
 @app.websocket("/ws/focus-leaderboard/global/events")
 async def focus_global_leaderboard_events_ws(websocket: WebSocket):
-    token = websocket.query_params.get("token")
     try:
-        user_id = _verify_token_value(token)
+        user_id = _verify_focus_websocket(websocket)
     except HTTPException:
         await websocket.close(code=1008)
         return
@@ -7257,6 +7375,7 @@ async def focus_global_leaderboard_events_ws(websocket: WebSocket):
         return
 
 
+@app.post("/api/focus-rooms/{room_id:path}/leave", include_in_schema=False)
 @app.post("/api/focus-rooms/{room_id}/leave")
 def leave_focus_room(room_id: str, user_id: str = Depends(_verify_token)):
     clean_room_id = _clean_focus_room_id(room_id)
@@ -10689,7 +10808,10 @@ def _admin_adjust_user_coins_in_db(
         raise HTTPException(status_code=400, detail="单次调整不能超过 1000000")
     old_lifetime = _num(rewards.get("lifetime"), old_balance)
     balance = max(0, old_balance + delta)
-    lifetime = old_lifetime + max(0, delta)
+    applied_delta = balance - old_balance
+    if applied_delta == 0:
+        raise HTTPException(status_code=400, detail="余额已为 0，不能继续扣减")
+    lifetime = old_lifetime + max(0, applied_delta)
     reason = (req.reason or "").strip() or "管理员调整"
     ledger = rewards.get("ledger")
     if not isinstance(ledger, list):
@@ -10697,7 +10819,7 @@ def _admin_adjust_user_coins_in_db(
     entry = {
         "id": f"admin:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
         "title": "管理员调整",
-        "coins": delta,
+        "coins": applied_delta,
         "reason": reason,
         "awardedAt": now,
     }
@@ -10732,6 +10854,7 @@ def _admin_adjust_user_coins_in_db(
         detail=json.dumps(
             {
                 "delta": delta,
+                "applied_delta": applied_delta,
                 "reason": reason,
                 "balance": balance,
                 "lifetime": rewards["lifetime"],
@@ -10955,12 +11078,18 @@ def admin_create_welfare_grant(
 @app.post("/api/admin/users/{user_id}/time-coins")
 @app.patch("/api/admin/users/{user_id}/time-coins")
 @app.put("/api/admin/users/{user_id}/time-coins")
+@app.post("/api/admin/users/{user_id}/time-coin")
+@app.patch("/api/admin/users/{user_id}/time-coin")
+@app.put("/api/admin/users/{user_id}/time-coin")
 @app.post("/api/admin/users/{user_id}/time-coin-balance")
 @app.patch("/api/admin/users/{user_id}/time-coin-balance")
 @app.put("/api/admin/users/{user_id}/time-coin-balance")
 @app.post("/api/admin/users/{user_id}/time_coins")
 @app.patch("/api/admin/users/{user_id}/time_coins")
 @app.put("/api/admin/users/{user_id}/time_coins")
+@app.post("/api/admin/users/{user_id}/time_coin")
+@app.patch("/api/admin/users/{user_id}/time_coin")
+@app.put("/api/admin/users/{user_id}/time_coin")
 @app.post("/api/admin/users/{user_id}/time_coin_balance")
 @app.patch("/api/admin/users/{user_id}/time_coin_balance")
 @app.put("/api/admin/users/{user_id}/time_coin_balance")
@@ -10979,9 +11108,15 @@ def admin_create_welfare_grant(
 @app.post("/api/admin/users/{user_id}/time-coins/adjust")
 @app.patch("/api/admin/users/{user_id}/time-coins/adjust")
 @app.put("/api/admin/users/{user_id}/time-coins/adjust")
+@app.post("/api/admin/users/{user_id}/time-coin/adjust")
+@app.patch("/api/admin/users/{user_id}/time-coin/adjust")
+@app.put("/api/admin/users/{user_id}/time-coin/adjust")
 @app.post("/api/admin/users/{user_id}/time_coins/adjust")
 @app.patch("/api/admin/users/{user_id}/time_coins/adjust")
 @app.put("/api/admin/users/{user_id}/time_coins/adjust")
+@app.post("/api/admin/users/{user_id}/time_coin/adjust")
+@app.patch("/api/admin/users/{user_id}/time_coin/adjust")
+@app.put("/api/admin/users/{user_id}/time_coin/adjust")
 @app.post("/api/admin/users/{user_id}/time-coin-balance/adjust")
 @app.patch("/api/admin/users/{user_id}/time-coin-balance/adjust")
 @app.put("/api/admin/users/{user_id}/time-coin-balance/adjust")

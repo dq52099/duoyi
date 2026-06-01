@@ -961,58 +961,43 @@ class _TodoListTemplateLabel extends StatelessWidget {
   }
 }
 
-class _TodoTemplateMiniBadge extends StatelessWidget {
-  final TodoItem todo;
-  final String keyPrefix;
-
-  const _TodoTemplateMiniBadge({required this.todo, required this.keyPrefix});
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = _todoTemplateVisual(context, todo);
-    return DecoratedBox(
-      key: ValueKey('${keyPrefix}_${visual.key}'),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          visual.color.withValues(alpha: 0.13),
-          Theme.of(context).colorScheme.surface,
-        ),
-        shape: BoxShape.circle,
-        border: Border.all(color: visual.color.withValues(alpha: 0.26)),
-      ),
-      child: SizedBox(
-        width: 18,
-        height: 18,
-        child: Icon(visual.icon, size: 11, color: visual.color),
-      ),
-    );
-  }
-}
-
 class _TodoTemplateAvatar extends StatelessWidget {
   final TodoItem todo;
   final String keyPrefix;
+  final double radius;
+  final double iconSize;
 
-  const _TodoTemplateAvatar({required this.todo, required this.keyPrefix});
+  const _TodoTemplateAvatar({
+    required this.todo,
+    required this.keyPrefix,
+    this.radius = 14,
+    this.iconSize = 16,
+  });
 
   @override
   Widget build(BuildContext context) {
     final visual = _todoTemplateVisual(context, todo);
     return CircleAvatar(
       key: ValueKey('${keyPrefix}_${visual.key}'),
-      radius: 14,
+      radius: radius,
       backgroundColor: visual.color.withValues(alpha: 0.13),
-      child: Icon(visual.icon, size: 16, color: visual.color),
+      child: Icon(visual.icon, size: iconSize, color: visual.color),
     );
   }
 }
 
 class _TodayTodoLeading extends StatelessWidget {
+  static const double width = 60;
+  static const double height = 44;
+  static const double templateIconSize = 36;
+  static const double statusButtonSize = 22;
+
   final TodoItem todo;
   final Color? statusColor;
   final bool isCompleted;
   final Color? completedCheckColor;
   final ValueChanged<bool?>? onChanged;
+  final String iconKeyPrefix;
 
   const _TodayTodoLeading({
     required this.todo,
@@ -1020,52 +1005,88 @@ class _TodayTodoLeading extends StatelessWidget {
     required this.isCompleted,
     required this.completedCheckColor,
     required this.onChanged,
+    this.iconKeyPrefix = 'today_todo_template_icon',
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 42,
-      height: 42,
+      width: width,
+      height: height,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned(
             left: 0,
-            top: 3,
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: Checkbox(
-                value: todo.isCompleted,
-                shape: const CircleBorder(),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-                side: statusColor == null
-                    ? null
-                    : BorderSide(color: statusColor!, width: 1.1),
-                checkColor: isCompleted ? completedCheckColor : null,
-                fillColor: statusColor == null
-                    ? null
-                    : WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.selected)) {
-                          return statusColor;
-                        }
-                        return statusColor!.withValues(alpha: 0.10);
-                      }),
-                onChanged: onChanged,
-              ),
+            top: 4,
+            child: _TodoTemplateAvatar(
+              todo: todo,
+              keyPrefix: iconKeyPrefix,
+              radius: templateIconSize / 2,
+              iconSize: 20,
             ),
           ),
           Positioned(
             right: 0,
             bottom: 1,
-            child: _TodoTemplateMiniBadge(
-              todo: todo,
-              keyPrefix: 'today_todo_template_icon',
+            child: _TodayTodoStatusToggle(
+              color: statusColor,
+              isCompleted: isCompleted,
+              completedCheckColor: completedCheckColor,
+              onChanged: onChanged,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TodayTodoStatusToggle extends StatelessWidget {
+  final Color? color;
+  final bool isCompleted;
+  final Color? completedCheckColor;
+  final ValueChanged<bool?>? onChanged;
+
+  const _TodayTodoStatusToggle({
+    required this.color,
+    required this.isCompleted,
+    required this.completedCheckColor,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = color ?? cs.primary;
+    final background = isCompleted
+        ? accent
+        : Color.alphaBlend(accent.withValues(alpha: 0.08), cs.surface);
+    final foreground = completedCheckColor ?? cs.onPrimary;
+    final enabled = onChanged != null;
+    return Semantics(
+      button: true,
+      checked: isCompleted,
+      label: isCompleted ? '标记为未完成' : '标记为完成',
+      child: Material(
+        color: background,
+        shape: CircleBorder(
+          side: BorderSide(
+            color: accent.withValues(alpha: isCompleted ? 0.24 : 0.34),
+            width: 0.9,
+          ),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: enabled ? () => onChanged?.call(!isCompleted) : null,
+          child: SizedBox(
+            width: _TodayTodoLeading.statusButtonSize,
+            height: _TodayTodoLeading.statusButtonSize,
+            child: isCompleted
+                ? Icon(Icons.check_rounded, size: 14, color: foreground)
+                : null,
+          ),
+        ),
       ),
     );
   }
@@ -1179,26 +1200,40 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
     final visual = CompletionVisibilityPolicy.visualState(todo);
     final isCompleted = visual == TodoVisualState.completed;
     final isOverdue = visual == TodoVisualState.overdue;
-    final isDueSoon = visual == TodoVisualState.dueSoon;
+    final templateVisual = _todoTemplateVisual(context, todo);
     final statusColor = widget.showStatusDecoration
-        ? (isCompleted
-              ? cs.tertiary
-              : isOverdue
-              ? cs.error
-              : isDueSoon
-              ? Colors.orange.shade700
-              : null)
+        ? switch (visual) {
+            TodoVisualState.completed => cs.tertiary,
+            TodoVisualState.overdue => cs.error,
+            TodoVisualState.dueSoon => Colors.orange.shade700,
+            TodoVisualState.normal => templateVisual.color,
+            TodoVisualState.archived => cs.outline,
+          }
         : null;
+    final backgroundAlpha = switch (visual) {
+      TodoVisualState.completed => 0.06,
+      TodoVisualState.overdue => 0.09,
+      TodoVisualState.dueSoon => 0.07,
+      TodoVisualState.normal => 0.035,
+      TodoVisualState.archived => 0.04,
+    };
+    final borderAlpha = switch (visual) {
+      TodoVisualState.completed => 0.24,
+      TodoVisualState.overdue => 0.30,
+      TodoVisualState.dueSoon => 0.24,
+      TodoVisualState.normal => 0.16,
+      TodoVisualState.archived => 0.18,
+    };
     final effectiveTileBackground =
         widget.tileBackground ??
         (statusColor == null
             ? null
             : Color.alphaBlend(
-                statusColor.withValues(alpha: isCompleted ? 0.06 : 0.08),
+                statusColor.withValues(alpha: backgroundAlpha),
                 cs.surface,
               ));
     final effectiveTileBorderColor =
-        widget.tileBorderColor ?? statusColor?.withValues(alpha: 0.24);
+        widget.tileBorderColor ?? statusColor?.withValues(alpha: borderAlpha);
     final canEdit = context.select<ShareProvider?, bool>(
       (share) => share?.canEdit(todo.workspaceId) ?? true,
     );
@@ -1207,6 +1242,9 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
       child: ListTile(
         dense: true,
         visualDensity: VisualDensity.compact,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        horizontalTitleGap: 8,
+        minLeadingWidth: widget.leading == null ? _TodayTodoLeading.width : 40,
         leading:
             widget.leading ??
             _TodayTodoLeading(
@@ -1879,36 +1917,87 @@ class _TodayReminderTile extends StatelessWidget {
               decoration: completed ? TextDecoration.lineThrough : null,
             ),
           );
+    if (isTodo && todo != null) {
+      return _TodayTodoSwipeTile(
+        todo: todo,
+        onToggle: () => onToggleTodo(todo),
+        onOpen: () => onOpenTodo(item.id),
+        leading: _TodayTodoLeading(
+          todo: todo,
+          statusColor: overdue
+              ? cs.error
+              : completed
+              ? completedColor
+              : _todoTemplateVisual(context, todo).color,
+          isCompleted: completed,
+          completedCheckColor: overdue ? cs.onError : cs.onTertiary,
+          onChanged: (_) => onToggleTodo(todo),
+          iconKeyPrefix: 'today_reminder_template_icon',
+        ),
+        title: item.title,
+        titleWidget: overdue
+            ? _OverdueReminderTitle(
+                title: item.title,
+                color: overdueTitleColor,
+                completed: todo.isCompleted,
+              )
+            : null,
+        titleColor: overdue
+            ? overdueTitleColor
+            : completed
+            ? completedColor
+            : null,
+        subtitle: Text(
+          overdue
+              ? '${item.subtitle} · ${_pastStatusLabel(item, now)}'
+              : item.subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11,
+            color: overdue
+                ? overdueSubtitleColor
+                : completed
+                ? completedColor.withValues(alpha: 0.82)
+                : cs.onSurfaceVariant,
+          ),
+        ),
+        trailing: Text(
+          I18nDateFormat.time(item.time),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: overdue
+                ? overdueTitleColor
+                : completed
+                ? completedColor
+                : cs.onSurfaceVariant,
+          ),
+        ),
+        completedTextColor: overdue
+            ? overdueTitleColor
+            : completed
+            ? completedColor
+            : null,
+        tileBackground: overdue
+            ? overdueBackground
+            : completed
+            ? completedBackground
+            : null,
+        tileBorderColor: overdue
+            ? overdueBorder
+            : completed
+            ? completedBorder
+            : null,
+        showStatusDecoration: true,
+      );
+    }
     Widget tile = ListTile(
       dense: true,
       visualDensity: VisualDensity.compact,
-      leading: isTodo
-          ? Checkbox(
-              value: todo?.isCompleted ?? false,
-              shape: const CircleBorder(),
-              onChanged: todo == null ? null : (_) => onToggleTodo(todo),
-              side: overdue
-                  ? BorderSide(color: cs.error, width: 1.2)
-                  : completed
-                  ? BorderSide(color: completedColor, width: 1.0)
-                  : null,
-              checkColor: overdue ? cs.onError : null,
-              fillColor: overdue
-                  ? WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return cs.error;
-                      }
-                      return cs.error.withValues(alpha: 0.10);
-                    })
-                  : completed
-                  ? WidgetStateProperty.all(completedColor)
-                  : null,
-            )
-          : CircleAvatar(
-              radius: 13,
-              backgroundColor: accent.withValues(alpha: overdue ? 0.18 : 0.14),
-              child: Icon(Icons.menu_book_outlined, size: 14, color: accent),
-            ),
+      leading: CircleAvatar(
+        radius: 13,
+        backgroundColor: accent.withValues(alpha: overdue ? 0.18 : 0.14),
+        child: Icon(Icons.menu_book_outlined, size: 14, color: accent),
+      ),
       title: title,
       subtitle: Text(
         overdue
@@ -1935,7 +2024,7 @@ class _TodayReminderTile extends StatelessWidget {
               : cs.onSurfaceVariant,
         ),
       ),
-      onTap: isTodo ? () => onOpenTodo(item.id) : onOpenCourses,
+      onTap: onOpenCourses,
     );
     if (overdue && !isTodo) {
       tile = Container(
@@ -1948,62 +2037,7 @@ class _TodayReminderTile extends StatelessWidget {
         child: tile,
       );
     }
-    if (!isTodo || todo == null) return tile;
-    return _TodayTodoSwipeTile(
-      todo: todo,
-      onToggle: () => onToggleTodo(todo),
-      onOpen: () => onOpenTodo(item.id),
-      title: item.title,
-      titleWidget: overdue
-          ? _OverdueReminderTitle(
-              title: item.title,
-              color: overdueTitleColor,
-              completed: todo.isCompleted,
-            )
-          : null,
-      titleColor: overdue
-          ? overdueTitleColor
-          : completed
-          ? completedColor
-          : null,
-      subtitle: Text(
-        overdue
-            ? '${item.subtitle} · ${_pastStatusLabel(item, now)}'
-            : item.subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 11,
-          color: overdue
-              ? overdueSubtitleColor
-              : completed
-              ? completedColor.withValues(alpha: 0.82)
-              : cs.onSurfaceVariant,
-        ),
-      ),
-      trailing: Text(
-        I18nDateFormat.time(item.time),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: overdue
-              ? overdueTitleColor
-              : completed
-              ? completedColor
-              : cs.onSurfaceVariant,
-        ),
-      ),
-      completedTextColor: overdue ? overdueTitleColor : null,
-      tileBackground: overdue
-          ? overdueBackground
-          : completed
-          ? completedBackground
-          : null,
-      tileBorderColor: overdue
-          ? overdueBorder
-          : completed
-          ? completedBorder
-          : null,
-      showStatusDecoration: overdue,
-    );
+    return tile;
   }
 
   String _pastStatusLabel(_TodayReminderItem item, DateTime now) {

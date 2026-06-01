@@ -121,16 +121,15 @@ void main() {
     expect(updatePolicy, contains("split('+').first"));
 
     expect(mainApp, contains('void _checkUpdatePolicy({bool force = false})'));
-    expect(
-      mainApp,
-      isNot(contains('_checkUpdatePolicy(force: true)')),
-      reason:
-          'Startup already runs checkServerPolicyNow before runApp; '
-          'post-frame checkNow would duplicate the startup update request.',
-    );
+    expect(mainApp, isNot(contains('_checkUpdatePolicy(force: true)')));
     expect(mainApp, contains('_checkUpdatePolicy();'));
     expect(mainApp, contains("'startup app update policy'"));
     expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));
+    expect(
+      mainApp,
+      contains('Future<void>.delayed(const Duration(seconds: 2), ()'),
+      reason: '启动更新策略检查应首帧后执行，避免冷启动阻塞到无法滑动。',
+    );
     expect(mainApp, contains('home: updater.mustUpdate'));
     expect(
       mainApp,

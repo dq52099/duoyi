@@ -10,14 +10,15 @@ void main() {
 
     expect(
       source,
-      contains('final preferredRowHeight = showLunar ? 76.0 : 58.0'),
+      contains('final preferredRowHeight = showLunar ? 58.0 : 48.0'),
     );
-    expect(source, contains('final maxRowHeight = showLunar ? 104.0 : 82.0'));
-    expect(source, contains('availableRowHeight.clamp(44.0, maxRowHeight)'));
+    expect(source, contains('final maxRowHeight = showLunar ? 72.0 : 62.0'));
+    expect(source, contains('availableRowHeight.clamp(30.0, maxRowHeight)'));
+    expect(source, contains('(rowSlotHeight - 4).clamp(28.0, maxRowHeight)'));
     expect(source, contains('child: ClipRect('));
     expect(source, contains('height: cellHeight < 14 ? 0.95 : 1.05'));
     expect(source, contains('final showDots = cellHeight >= 36'));
-    expect(source, contains('final canShowEventCount = cellHeight >= 62'));
+    expect(source, contains('final canShowEventCount = cellHeight >= 52'));
     expect(source, contains('final showEventCount ='));
     expect(source, contains('canShowEventCount && eventCount > 3'));
     expect(source, contains('Widget _eventDots('));

@@ -106,7 +106,14 @@ void main() {
       expect(today, contains('effectiveTileBackground'));
       expect(today, contains('effectiveTileBorderColor'));
       expect(today, contains('class _TodayTodoLeading'));
+      expect(today, contains('static const double width = 60'));
+      expect(today, contains('static const double templateIconSize = 36'));
+      expect(today, contains('class _TodayTodoStatusToggle'));
+      expect(today, contains('minLeadingWidth: widget.leading == null'));
+      expect(today, contains('TodoVisualState.normal => templateVisual.color'));
       expect(today, contains('today_todo_template_icon'));
+      expect(today, contains('today_reminder_template_icon'));
+      expect(today, contains("iconKeyPrefix = 'today_todo_template_icon'"));
       expect(today, contains('class _TodoTemplateAvatar'));
       expect(today, contains('today_suggestion_template_icon'));
       expect(today, contains("import '../providers/share_provider.dart';"));
@@ -283,7 +290,7 @@ void main() {
       ]) {
         expect(mine, contains(label));
       }
-      expect(mine, contains("subtitle: '查看隐藏功能和倒数日'"));
+      expect(mine, contains("subtitle: '查看隐藏功能'"));
       expect(mine, isNot(contains("label: '黄历'")));
       expect(
         mine,
@@ -402,7 +409,7 @@ void main() {
       );
     });
 
-    test('更多应用只展示隐藏的主导航功能且不包含番茄专注', () {
+    test('更多应用只展示隐藏的主导航功能且不包含番茄专注或倒数日', () {
       final main = File('lib/main.dart').readAsStringSync();
       final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
       final moreApps = File(
@@ -429,7 +436,9 @@ void main() {
       expect(method, isNot(contains('opensStandalone')));
       expect(method, contains('builder: (_) => const TodayScreen()'));
       expect(method, isNot(contains("label: '番茄专注'")));
+      expect(method, isNot(contains("label: '倒数日'")));
       expect(method, isNot(contains('PomodoroScreen')));
+      expect(method, isNot(contains('CountdownScreen')));
       expect(method, contains('!visible.contains(app.tab)'));
       expect(moreApps, isNot(contains('_BottomTabStandaloneScreen')));
       expect(main, contains('visibleBottomNavTabs: safeVisibleTabs'));

@@ -19,8 +19,10 @@ void main() {
       expect(policy, contains('goals: goalProvider.goals'));
       expect(policy, contains('await goalProvider.onTimezoneChanged()'));
 
-      final startup = main.indexOf("'daily rollover'");
-      final startupEnd = main.indexOf('// 提醒调度器', startup);
+      final startup = main.indexOf(
+        'Future<void> runDailyRolloverAfterFirstFrame()',
+      );
+      final startupEnd = main.indexOf('// 通知点击后的深链接', startup);
       expect(startup, greaterThanOrEqualTo(0));
       expect(startupEnd, greaterThan(startup));
       final startupBlock = main.substring(startup, startupEnd);
@@ -29,6 +31,15 @@ void main() {
         contains('CompletionVisibilityPolicy.runDailyRollover'),
       );
       expect(startupBlock, contains('goalProvider: goalProvider'));
+      expect(startupBlock, contains('refreshUserStats();'));
+      expect(startupBlock, contains('refreshAchievements();'));
+      expect(startupBlock, contains("reason: 'daily rollover completed'"));
+      expect(main, contains('runDailyRolloverAfterFirstFrame'));
+      expect(
+        main,
+        contains('WidgetsBinding.instance.addPostFrameCallback'),
+        reason: '冷启动 rollover 应在首帧后运行，避免加载时卡住首页。',
+      );
 
       final resume = main.indexOf('void _maybeRunDailyRolloverOnResume()');
       final resumeEnd = main.indexOf('@override', resume);

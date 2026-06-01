@@ -475,7 +475,7 @@ class MineScreen extends StatelessWidget {
               _Tile(
                 icon: Icons.apps_outlined,
                 label: '更多应用',
-                subtitle: '查看隐藏功能和倒数日',
+                subtitle: '查看隐藏功能',
                 color: Colors.blueGrey,
                 onTap: () => _openMoreApplications(context),
               ),

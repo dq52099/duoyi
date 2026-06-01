@@ -23,10 +23,13 @@ void main() {
     expect(api, contains('_focusRiskFlagsFromRemote'));
     expect(api, contains('final List<String> riskFlags'));
     expect(api, contains('final String riskSummary'));
-    expect(api, contains("json['risk_flags']"));
-    expect(api, contains("json['risk_summary']"));
+    expect(api, contains("const ['risk_flags', 'riskFlags']"));
+    expect(api, contains("const ['risk_summary', 'riskSummary']"));
     expect(api, contains('class FocusFriend'));
-    expect(api, contains('status: json'));
+    expect(
+      api,
+      contains("status: _remoteString(json, const ['status'], 'accepted')"),
+    );
     expect(api, contains('class FocusFriendRequest'));
     expect(api, contains('class FocusFriendRequests'));
     expect(api, contains('Future<List<FocusFriend>> listFriends'));
@@ -127,6 +130,12 @@ void main() {
     expect(api, contains('Future<List<FocusRoomInvite>> listInvites'));
     expect(api, contains('Future<void> revokeInvite'));
     expect(api, contains('Future<FocusRoomInviteAcceptResult> acceptInvite'));
+    expect(api, contains('Object? _remoteValue('));
+    expect(
+      api,
+      contains("const ['weekly_target_seconds', 'weeklyTargetSeconds']"),
+    );
+    expect(api, contains("const ['room_id', 'roomId']"));
     expect(
       api,
       contains('/api/focus-rooms/\${Uri.encodeComponent(room.id)}/invites'),
@@ -144,11 +153,16 @@ void main() {
       contains('/api/focus-room-invites/\${Uri.encodeComponent(code)}/accept'),
     );
     expect(api, contains("'weekly_seconds': weeklySeconds"));
+    expect(api, contains("'weeklySeconds': weeklySeconds"));
     expect(api, contains("'session_count': sessionCount"));
+    expect(api, contains("'sessionCount': sessionCount"));
     expect(api, contains("'active': active"));
     expect(api, contains("'room_name': room.name"));
+    expect(api, contains("'roomName': room.name"));
     expect(api, contains("'max_uses': ?maxUses"));
+    expect(api, contains("'maxUses': ?maxUses"));
     expect(api, contains("'display_name': displayName"));
+    expect(api, contains("'displayName': displayName"));
 
     expect(apiClient, contains('Stream<String> streamLines'));
     expect(apiClient, contains("'Accept'] = 'text/event-stream'"));
@@ -300,9 +314,21 @@ void main() {
       backend,
       contains('@app.post("/api/focus-room-invites/{code}/accept")'),
     );
-    expect(backend, contains('class FocusRoomInviteCreate(BaseModel)'));
-    expect(backend, contains('max_uses: Optional[int] = None'));
-    expect(backend, contains('class FocusRoomInviteAccept(BaseModel)'));
+    expect(
+      backend,
+      contains('class FocusRoomInviteCreate(_FocusRoomAliasModel)'),
+    );
+    expect(backend, contains('class _FocusRoomAliasModel(BaseModel)'));
+    expect(backend, contains('AliasChoices("display_name", "displayName")'));
+    expect(
+      backend,
+      contains('@app.post("/api/focus-rooms/{room_id:path}/heartbeat"'),
+    );
+    expect(backend, contains('max_uses: Optional[int] = Field'));
+    expect(
+      backend,
+      contains('class FocusRoomInviteAccept(_FocusRoomAliasModel)'),
+    );
     expect(backend, contains('Focus room invite usage limit reached'));
     expect(backend, contains('used_count=used_count+1'));
     expect(backend, contains('last_used_at=?'));
@@ -379,6 +405,16 @@ void main() {
       backendTests,
       contains('test_focus_room_invite_usage_limit_counts_first_join_only'),
     );
+    expect(
+      backendTests,
+      contains(
+        'test_focus_room_http_accepts_encoded_room_ids_and_payload_aliases',
+      ),
+    );
+    expect(
+      backendTests,
+      contains('test_focus_room_events_websocket_accepts_authorization_header'),
+    );
   });
 
   test(
@@ -452,11 +488,23 @@ void main() {
       );
       expect(
         bodies['POST /api/focus-rooms/deep%2Fwork%20room/invites'],
+        containsPair('roomName', '深房'),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/invites'],
         containsPair('max_uses', 3),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/invites'],
+        containsPair('maxUses', 3),
       );
       expect(
         bodies['POST /api/focus-room-invites/CODE%20123/accept'],
         containsPair('display_name', '小多'),
+      );
+      expect(
+        bodies['POST /api/focus-room-invites/CODE%20123/accept'],
+        containsPair('displayName', '小多'),
       );
       expect(
         bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
@@ -464,7 +512,15 @@ void main() {
       );
       expect(
         bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
+        containsPair('weeklySeconds', 1500),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
         containsPair('started_at', startedAt.toIso8601String()),
+      );
+      expect(
+        bodies['POST /api/focus-rooms/deep%2Fwork%20room/heartbeat'],
+        containsPair('startedAt', startedAt.toIso8601String()),
       );
     },
   );
@@ -608,6 +664,32 @@ void main() {
     });
     expect(requests.incoming.single.id, 'in-1');
     expect(requests.outgoing.single.id, 'out-1');
+
+    final camelRanking = FocusRoomRemoteRanking.fromJson({
+      'roomId': 'room-camel',
+      'onlineCount': 1,
+      'updatedAt': '2026-05-31T08:00:00Z',
+      'items': [
+        {
+          'userId': 'u-camel',
+          'displayName': '驼峰同学',
+          'weeklySeconds': 900,
+          'rawWeeklySeconds': 1200,
+          'sessionCount': 1,
+          'isCurrentUser': true,
+          'lastSeenAt': '2026-05-31T08:01:00Z',
+          'riskFlags': ['weekly_seconds_capped'],
+          'riskSummary': '兼容驼峰字段',
+        },
+      ],
+    });
+    expect(camelRanking.roomId, 'room-camel');
+    expect(camelRanking.onlineCount, 1);
+    expect(camelRanking.entries.single.userId, 'u-camel');
+    expect(camelRanking.entries.single.displayName, '驼峰同学');
+    expect(camelRanking.entries.single.weeklySeconds, 900);
+    expect(camelRanking.entries.single.isCurrentUser, isTrue);
+    expect(camelRanking.entries.single.riskFlags, ['weekly_seconds_capped']);
   });
 }
 

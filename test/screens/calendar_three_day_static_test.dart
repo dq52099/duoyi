@@ -118,20 +118,29 @@ void main() {
 
     expect(source, contains('double _monthGridHeightFor('));
     expect(source, contains('bool _monthGridShowsLunar('));
-    expect(source, contains('final minGridHeight = rows >= 6 ? 470.0 : 410.0'));
-    expect(
-      source,
-      contains('final preferredGridHeight = rows >= 6 ? 620.0 : 540.0'),
-    );
-    expect(source, contains('if (availableHeight <= 120)'));
     expect(
       source,
       matches(
         RegExp(
-          r'return availableHeight\s*\.clamp\(minGridHeight, preferredGridHeight\)\s*\.toDouble\(\)',
+          r'final minGridHeight = rows >= 6\s*\?\s*296\.0\s*:\s*\(rows == 5 \?\s*268\.0\s*:\s*240\.0\)',
           multiLine: true,
         ),
       ),
+    );
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'final preferredGridHeight = rows >= 6\s*\?\s*332\.0\s*:\s*\(rows == 5 \?\s*306\.0\s*:\s*280\.0\)',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(source, isNot(contains('if (availableHeight <= 120)')));
+    expect(source, contains('final viewportTarget = availableHeight * 0.52'));
+    expect(
+      source,
+      contains('viewportTarget.clamp(minGridHeight, preferredGridHeight)'),
     );
     expect(source, contains("const ValueKey('calendar_fixed_month_grid')"));
     expect(

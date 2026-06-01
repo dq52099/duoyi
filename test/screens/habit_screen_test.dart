@@ -376,6 +376,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('专注'), findsOneWidget);
+    expect(find.byIcon(Icons.timer), findsOneWidget);
     expect(
       find.byKey(const ValueKey('habit_swipe_detail_button')),
       findsNothing,

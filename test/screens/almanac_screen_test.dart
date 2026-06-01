@@ -23,9 +23,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('万年历'), findsWidgets);
-    expect(find.text('日期信息'), findsOneWidget);
+    expect(find.text('2026年7月1日 星期三'), findsOneWidget);
+    expect(find.textContaining('农历'), findsWidgets);
+    expect(find.textContaining('属'), findsOneWidget);
     expect(find.text('宜'), findsOneWidget);
     expect(find.text('忌'), findsOneWidget);
+    expect(find.text('胎神'), findsOneWidget);
+    expect(find.text('彭祖'), findsOneWidget);
+    expect(find.text('五行'), findsOneWidget);
+    expect(find.text('星宿'), findsOneWidget);
+    expect(find.text('冲煞'), findsOneWidget);
+    expect(find.text('时辰吉凶'), findsOneWidget);
     final suitableRect = tester.getRect(find.text('宜'));
     final avoidRect = tester.getRect(find.text('忌'));
     expect(
@@ -91,14 +99,15 @@ void main() {
     expect(find.text('法定假日'), findsWidgets);
     expect(find.text('倒数日 · 版本发布'), findsOneWidget);
     expect(find.text('生日 · 妈妈生日'), findsOneWidget);
-    expect(find.text('节假日'), findsOneWidget);
-    expect(find.text('法定假日'), findsWidgets);
   });
 
   test('almanac suitable and avoid sections stay in one row', () {
     final source = File('lib/screens/almanac_screen.dart').readAsStringSync();
     final start = source.indexOf('Widget _yijiRow');
-    final end = source.indexOf('class _DateDetailCard', start);
+    final end = source.indexOf(
+      'List<_MonthHighlight> _buildMonthHighlights',
+      start,
+    );
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
@@ -118,6 +127,13 @@ void main() {
       expect(source, contains("import '../services/holiday_calendar.dart';"));
       expect(source, contains('context.watch<CountdownProvider?>()'));
       expect(source, contains('context.watch<AnniversaryProvider?>()'));
+      expect(source, contains('LunarCalendar.almanacDetail(_date)'));
+      expect(source, contains("('胎神', detail.fetalGod)"));
+      expect(source, contains("('彭祖', detail.pengZu)"));
+      expect(source, contains("('五行', detail.fiveElements)"));
+      expect(source, contains("('星宿', detail.mansion)"));
+      expect(source, contains("('冲煞', detail.clash)"));
+      expect(source, contains("('时辰吉凶', detail.hourFortunes)"));
       expect(source, contains('Widget _yijiRow'));
       expect(source, contains('class _MonthHighlightsCard'));
       expect(source, contains("'本月重点日期'"));

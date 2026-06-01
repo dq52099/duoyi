@@ -402,6 +402,7 @@ class AdminApi {
     for (final path in const [
       '/api/admin/user-groups',
       '/api/admin/user_groups',
+      '/api/admin/userGroups',
     ]) {
       try {
         return await _getPage(path, limit: limit, offset: offset);
@@ -422,6 +423,7 @@ class AdminApi {
       raw = await _getRawFirstAvailable(const [
         '/api/admin/user-groups?limit=500&offset=0',
         '/api/admin/user_groups?limit=500&offset=0',
+        '/api/admin/userGroups?limit=500&offset=0',
       ]);
     }
     final items = raw is Map<String, dynamic> && raw['items'] is List
@@ -474,6 +476,7 @@ class AdminApi {
           '/api/admin/groups',
           '/api/admin/user-groups',
           '/api/admin/user_groups',
+          '/api/admin/userGroups',
         ],
         body,
       );
@@ -484,6 +487,7 @@ class AdminApi {
         '/api/admin/groups/$groupId',
         '/api/admin/user-groups/$groupId',
         '/api/admin/user_groups/$groupId',
+        '/api/admin/userGroups/$groupId',
       ],
       body,
     );
@@ -497,6 +501,7 @@ class AdminApi {
         '/api/admin/groups/$id',
         '/api/admin/user-groups/$id',
         '/api/admin/user_groups/$id',
+        '/api/admin/userGroups/$id',
       ],
       null,
       featureName: '管理员用户组删除',

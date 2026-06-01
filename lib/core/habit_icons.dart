@@ -89,10 +89,11 @@ IconData habitIconForToken(String token) {
   if (codePoint != null) {
     final legacyToken = _habitIconTokensByCodePoint[codePoint];
     if (legacyToken != null) return _habitIconsByToken[legacyToken]!;
+    return IconData(codePoint, fontFamily: 'MaterialIcons');
   }
 
   return Icons.check_circle_outline;
 }
 
 String habitIconTokenForIcon(IconData icon) =>
-    _habitIconTokensByCodePoint[icon.codePoint] ?? defaultHabitIconToken;
+    _habitIconTokensByCodePoint[icon.codePoint] ?? icon.codePoint.toString();

@@ -58,6 +58,8 @@ void main() {
     expect(moreApps, contains("label: '小组件'"));
     expect(moreApps, contains('builder: (_) => const WidgetScreen()'));
     expect(moreApps, isNot(contains("label: '番茄专注'")));
+    expect(moreApps, isNot(contains("label: '倒数日'")));
+    expect(moreApps, isNot(contains('CountdownScreen')));
   });
 
   test('widget deep links keep hidden routes reachable and detail rows clickable', () {

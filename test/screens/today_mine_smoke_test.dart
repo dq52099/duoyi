@@ -479,7 +479,7 @@ void main() {
       matching: find.byWidgetPredicate(reminderTileDecoration),
     );
     expect(overdueDecoratedTile, findsOneWidget);
-    expect(normalDecoratedTile, findsNothing);
+    expect(normalDecoratedTile, findsOneWidget);
   });
 
   testWidgets('Today suggestion add immediately moves task into today', (

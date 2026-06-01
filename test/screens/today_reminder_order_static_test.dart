@@ -40,9 +40,11 @@ void main() {
     expect(today, contains('completedToday.add(item)'));
     expect(today, contains('completed: todo.isCompleted'));
     expect(today, contains('completed ? TextDecoration.lineThrough : null'));
+    expect(today, contains('completedTextColor: overdue'));
     expect(today, contains('tileBackground: overdue'));
     expect(today, contains('tileBorderColor: overdue'));
     expect(today, contains('titleWidget: overdue'));
+    expect(today, contains('showStatusDecoration: true'));
     expect(today, contains('ExpansionTile('));
     expect(today, contains('initiallyExpanded: false'));
     expect(today, contains('maintainState: true'));
@@ -54,6 +56,12 @@ void main() {
     expect(today, contains('today_suggestion_template_icon'));
     expect(today, contains('class _TodayTodoLeading'));
     expect(today, contains('today_todo_template_icon'));
+    expect(today, contains('today_reminder_template_icon'));
+    expect(today, contains("iconKeyPrefix = 'today_todo_template_icon'"));
+    expect(today, contains('leading: _TodayTodoLeading('));
+    expect(today, contains('class _TodayTodoStatusToggle'));
+    expect(today, contains('static const double templateIconSize = 36'));
+    expect(today, contains('static const double statusButtonSize = 22'));
 
     expect(
       today,

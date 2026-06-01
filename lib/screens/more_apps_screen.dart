@@ -7,7 +7,6 @@ import '../providers/preferences_provider.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import 'calendar_screen.dart';
-import 'countdown_screen.dart';
 import 'habit_screen.dart';
 import 'today_screen.dart';
 import 'todo_screen.dart';
@@ -52,13 +51,6 @@ class MoreApplicationsScreen extends StatelessWidget {
         label: '日历',
         color: Colors.indigo,
         builder: (_) => const CalendarScreen(),
-      ),
-      MoreAppItem(
-        tab: -1,
-        icon: Icons.hourglass_bottom_outlined,
-        label: '倒数日',
-        color: Colors.deepOrange,
-        builder: (_) => const CountdownScreen(),
       ),
       MoreAppItem(
         tab: 5,
@@ -165,7 +157,7 @@ class _MoreApplicationsBody extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '显示未在当前底部导航展示的功能，并保留倒数日等独立入口。',
+                        '显示未在当前底部导航展示的功能。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.62),
                         ),

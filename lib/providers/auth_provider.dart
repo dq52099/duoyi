@@ -137,7 +137,7 @@ class AuthProvider extends ChangeNotifier {
     _client = client ?? ApiClient(baseUrl: _baseUrl, token: _state.token);
   }
 
-  Future<void> loadFromStorage() async {
+  Future<void> loadFromStorage({bool refreshServerConfig = true}) async {
     final prefs = await SharedPreferences.getInstance();
     // 清理旧版本可能遗留的本地服务器覆盖；当前策略不允许 APP 内改地址。
     await prefs.remove('auth_base_url');
@@ -153,10 +153,12 @@ class AuthProvider extends ChangeNotifier {
     }
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     notifyListeners();
-    await _refreshServerConfig();
+    if (refreshServerConfig) {
+      await refreshServerConfigFromServer();
+    }
   }
 
-  Future<void> _refreshServerConfig() async {
+  Future<void> refreshServerConfigFromServer() async {
     if (_baseUrl.isEmpty) {
       // 同域相对路径下也可以拉 /api/config
     }
@@ -200,7 +202,7 @@ class AuthProvider extends ChangeNotifier {
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
-    await _refreshServerConfig();
+    await refreshServerConfigFromServer();
   }
 
   Future<Map<String, dynamic>> sendEmailCode({
@@ -289,7 +291,7 @@ class AuthProvider extends ChangeNotifier {
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
-    await _refreshServerConfig();
+    await refreshServerConfigFromServer();
   }
 
   Future<void> emailLogin({required String email, required String code}) async {
@@ -323,7 +325,7 @@ class AuthProvider extends ChangeNotifier {
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
-    await _refreshServerConfig();
+    await refreshServerConfigFromServer();
   }
 
   Future<void> logout() async {

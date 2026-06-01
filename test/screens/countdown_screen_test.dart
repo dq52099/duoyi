@@ -70,7 +70,7 @@ void main() {
     );
   });
 
-  testWidgets('more applications entry opens countdown and can add countdown', (
+  testWidgets('more applications does not expose countdown entry', (
     tester,
   ) async {
     final provider = CountdownProvider();
@@ -93,29 +93,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MoreApplicationsScreen), findsOneWidget);
-    expect(find.text('倒数日'), findsOneWidget);
-
-    await tester.tap(find.text('倒数日'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(CountdownScreen), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('countdown_add_button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '从入口新增');
-    await tester.pump();
-    await tester.tap(
-      find.byKey(const ValueKey('countdown_editor_save_button')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(provider.items, hasLength(1));
-    expect(provider.items.single.title, '从入口新增');
-    expect(find.text('倒数日已保存'), findsOneWidget);
-    expect(find.text('从入口新增'), findsOneWidget);
-    expect(
-      find.byKey(ValueKey('countdown_card_${provider.items.single.id}')),
-      findsOneWidget,
-    );
+    expect(find.text('倒数日'), findsNothing);
+    expect(provider.items, isEmpty);
   });
 
   testWidgets('deleting countdown refreshes header totals immediately', (

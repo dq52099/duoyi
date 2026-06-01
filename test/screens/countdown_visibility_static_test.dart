@@ -7,6 +7,7 @@ void main() {
     final moreApps = File(
       'lib/screens/more_apps_screen.dart',
     ).readAsStringSync();
+    final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
     final search = File('lib/screens/search_screen.dart').readAsStringSync();
     final calendar = File(
       'lib/screens/calendar_screen.dart',
@@ -17,12 +18,14 @@ void main() {
       'lib/providers/countdown_provider.dart',
     ).readAsStringSync();
 
-    expect(moreApps, contains("label: '倒数日'"));
-    expect(moreApps, contains('CountdownScreen()'));
+    expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains('child: CountdownScreen()'));
+    expect(moreApps, isNot(contains("label: '倒数日'")));
+    expect(moreApps, isNot(contains('CountdownScreen')));
     expect(
       moreApps,
-      contains('保留倒数日等独立入口'),
-      reason: '更多应用需要明确承载独立倒数日入口，不能只暗示底部导航隐藏功能。',
+      isNot(contains('保留倒数日等独立入口')),
+      reason: '倒数日保留在我的日程日期入口，不再由更多应用承载。',
     );
 
     final countdownScreen = File(

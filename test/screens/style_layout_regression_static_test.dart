@@ -976,8 +976,24 @@ void main() {
     );
     expect(calendar, contains("'calendar_month_global_scroll_view'"));
     expect(calendar, contains('double _monthGridHeightFor'));
-    expect(calendar, contains('rows >= 6 ? 470.0 : 410.0'));
-    expect(calendar, contains('rows >= 6 ? 620.0 : 540.0'));
+    expect(
+      calendar,
+      matches(
+        RegExp(
+          r'rows >= 6\s*\?\s*296\.0\s*:\s*\(rows == 5 \?\s*268\.0\s*:\s*240\.0\)',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(
+      calendar,
+      matches(
+        RegExp(
+          r'rows >= 6\s*\?\s*332\.0\s*:\s*\(rows == 5 \?\s*306\.0\s*:\s*280\.0\)',
+          multiLine: true,
+        ),
+      ),
+    );
     expect(calendar, contains('const monthGridChromeHeight = 30.0'));
     expect(calendar, contains('final minGridHeight'));
     expect(calendar, contains('final preferredGridHeight'));
