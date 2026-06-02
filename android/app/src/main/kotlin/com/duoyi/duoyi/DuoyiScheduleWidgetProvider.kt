@@ -37,6 +37,31 @@ open class DuoyiScheduleWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_schedule_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_schedule_root,
+                R.id.widget_schedule_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_schedule_title,
+                    R.id.widget_schedule_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_schedule_1,
+                    R.id.widget_schedule_2,
+                    R.id.widget_schedule_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_schedule_subtitle,
+                    R.id.widget_schedule_nav_todo,
+                    R.id.widget_schedule_nav_habit,
+                    R.id.widget_schedule_nav_focus,
+                ),
+            )
             val todayEventSummary = prefs.getString("today_event_summary", "今日没有日程") ?: "今日没有日程"
 
             views.setTextViewText(

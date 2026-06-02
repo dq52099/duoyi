@@ -37,6 +37,32 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_habit_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_habit_root,
+                R.id.widget_habit_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_habit_title,
+                    R.id.widget_habit_percent,
+                    R.id.widget_habit_nav_habit,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_habit_summary,
+                    R.id.widget_habit_streak,
+                    R.id.widget_habit_hint,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_habit_subtitle,
+                    R.id.widget_habit_nav_todo,
+                    R.id.widget_habit_nav_calendar,
+                    R.id.widget_habit_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_habit_title,

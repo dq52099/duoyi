@@ -108,10 +108,14 @@ class AuthProvider extends ChangeNotifier {
   int _stateMutationSerial = 0;
   int _refreshMeRequestSerial = 0;
   int _lastAppliedRefreshMeRequestSerial = 0;
+  static const _serverConfigRefreshTtl = Duration(seconds: 30);
+  Future<void>? _serverConfigRefreshInFlight;
+  DateTime? _lastServerConfigRefreshAt;
 
   /// 拉取到 /api/config 之后会触发，供 AiService / CloudSyncProvider 订阅。
   void Function(Map<String, dynamic> cfg)? onServerConfigChanged;
   Future<void> Function(AuthState state)? onAccountProfileChanged;
+  Future<void> Function(Map<String, dynamic> payload)? onAccountPayloadChanged;
   Future<void> Function()? onAccountLoggedOut;
 
   AuthState get state => _state;
@@ -161,12 +165,32 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshServerConfigFromServer() async {
+  Future<void> refreshServerConfigFromServer({bool force = false}) {
+    final inFlight = _serverConfigRefreshInFlight;
+    if (inFlight != null) return inFlight;
+    final lastRefreshAt = _lastServerConfigRefreshAt;
+    if (!force &&
+        _serverConfig.isNotEmpty &&
+        lastRefreshAt != null &&
+        DateTime.now().difference(lastRefreshAt) < _serverConfigRefreshTtl) {
+      return Future.value();
+    }
+    final future = _refreshServerConfigFromServerNow();
+    _serverConfigRefreshInFlight = future;
+    return future.whenComplete(() {
+      if (_serverConfigRefreshInFlight == future) {
+        _serverConfigRefreshInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _refreshServerConfigFromServerNow() async {
     if (_baseUrl.isEmpty) {
       // 同域相对路径下也可以拉 /api/config
     }
     try {
       final cfg = await _client.get('/api/config');
+      _lastServerConfigRefreshAt = DateTime.now();
       if (jsonEncode(_serverConfig) == jsonEncode(cfg)) return;
       _serverConfig = cfg;
       onServerConfigChanged?.call(cfg);
@@ -214,6 +238,7 @@ class AuthProvider extends ChangeNotifier {
     _markAccountMutation('register');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
     await refreshServerConfigFromServer();
@@ -306,6 +331,7 @@ class AuthProvider extends ChangeNotifier {
     _markAccountMutation('login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
     await refreshServerConfigFromServer();
@@ -341,6 +367,7 @@ class AuthProvider extends ChangeNotifier {
     _markAccountMutation('email_login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
     await refreshServerConfigFromServer();
@@ -415,11 +442,13 @@ class AuthProvider extends ChangeNotifier {
       final nextState = _stateFromAuthResponse(me, keepToken: true);
       _lastAppliedRefreshMeRequestSerial = requestId;
       if (_authStatesEqual(_state, nextState)) {
+        await _notifyAccountPayloadChanged(me);
         debugPrint('[auth-sync] refreshMe#$requestId skipped: unchanged');
         return;
       }
       _state = nextState;
       await _persistState();
+      await _notifyAccountPayloadChanged(me);
       await _notifyAccountProfileChanged();
       debugPrint(
         '[auth-sync] refreshMe#$requestId applied '
@@ -466,12 +495,14 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
     if (_authStatesEqual(_state, nextState)) {
+      await _notifyAccountPayloadChanged(Map<String, dynamic>.from(data));
       debugPrint('[auth-sync] $reason skipped: unchanged');
       return;
     }
     _state = nextState;
     _markAccountMutation(reason);
     await _persistState();
+    await _notifyAccountPayloadChanged(Map<String, dynamic>.from(data));
     await _notifyAccountProfileChanged();
     notifyListeners();
   }
@@ -523,6 +554,7 @@ class AuthProvider extends ChangeNotifier {
     _state = _stateFromAuthResponse(res, keepToken: true);
     _markAccountMutation('update_profile');
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
   }
@@ -558,6 +590,7 @@ class AuthProvider extends ChangeNotifier {
     _state = _stateFromAuthResponse(res, keepToken: true);
     _markAccountMutation('bind_email');
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
   }
@@ -608,6 +641,7 @@ class AuthProvider extends ChangeNotifier {
     _state = _stateFromAuthResponse(res, keepToken: true);
     _markAccountMutation('upload_avatar');
     await _persistState();
+    await _notifyAccountPayloadChanged(res);
     await _notifyAccountProfileChanged();
     notifyListeners();
   }
@@ -678,6 +712,45 @@ class AuthProvider extends ChangeNotifier {
         : source is Map
         ? Map<String, dynamic>.from(source)
         : data;
+    final rewardsPayload = _mapField(data, const [
+      'virtual_rewards',
+      'virtualRewards',
+      'rewards',
+    ]);
+    final rootCoinBalance = _intField(
+      data,
+      'coin_balance',
+      _intField(
+        data,
+        'coinBalance',
+        rewardsPayload == null
+            ? _state.coinBalance
+            : _intField(
+                rewardsPayload,
+                'balance',
+                _intField(rewardsPayload, 'coin_balance', _state.coinBalance),
+              ),
+      ),
+    );
+    final rootLifetimeCoins = _intField(
+      data,
+      'lifetime_coins',
+      _intField(
+        data,
+        'lifetimeCoins',
+        rewardsPayload == null
+            ? _state.lifetimeCoins
+            : _intField(
+                rewardsPayload,
+                'lifetime',
+                _intField(
+                  rewardsPayload,
+                  'lifetime_coins',
+                  _state.lifetimeCoins,
+                ),
+              ),
+      ),
+    );
     return AuthState(
       userId: _stringField(
         payload,
@@ -721,12 +794,12 @@ class AuthProvider extends ChangeNotifier {
       coinBalance: _intField(
         payload,
         'coin_balance',
-        _intField(payload, 'coinBalance', _state.coinBalance),
+        _intField(payload, 'coinBalance', rootCoinBalance),
       ),
       lifetimeCoins: _intField(
         payload,
         'lifetime_coins',
-        _intField(payload, 'lifetimeCoins', _state.lifetimeCoins),
+        _intField(payload, 'lifetimeCoins', rootLifetimeCoins),
       ),
       token: keepToken
           ? _state.token
@@ -918,6 +991,28 @@ class AuthProvider extends ChangeNotifier {
     return fallback;
   }
 
+  Map<String, dynamic>? _mapField(
+    Map<String, dynamic> data,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is Map<String, dynamic>) return value;
+      if (value is Map) return Map<String, dynamic>.from(value);
+    }
+    for (final wrapperKey in const ['user', 'profile', 'data', 'payload']) {
+      final wrapper = data[wrapperKey];
+      if (wrapper is Map<String, dynamic>) {
+        final nested = _mapField(wrapper, keys);
+        if (nested != null) return nested;
+      } else if (wrapper is Map) {
+        final nested = _mapField(Map<String, dynamic>.from(wrapper), keys);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
+  }
+
   Future<void> _notifyAccountProfileChanged() async {
     if (!_state.isLoggedIn) return;
     final callback = onAccountProfileChanged;
@@ -926,6 +1021,19 @@ class AuthProvider extends ChangeNotifier {
       await callback(_state);
     } catch (e, st) {
       debugPrint('[auth] account profile sync failed: $e\n$st');
+    }
+  }
+
+  Future<void> _notifyAccountPayloadChanged(
+    Map<String, dynamic> payload,
+  ) async {
+    if (!_state.isLoggedIn) return;
+    final callback = onAccountPayloadChanged;
+    if (callback == null) return;
+    try {
+      await callback(payload);
+    } catch (e, st) {
+      debugPrint('[auth] account payload sync failed: $e\n$st');
     }
   }
 

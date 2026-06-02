@@ -21,6 +21,88 @@ private struct DuoyiWidgetConfig {
     let quickActionLink: String
 }
 
+private struct DuoyiWidgetTheme {
+    let primary: Color
+    let background: Color
+    let surface: Color
+    let navBackground: Color
+    let text: Color
+    let mutedText: Color
+    let onPrimary: Color
+    let accentStart: Color
+    let accentEnd: Color
+
+    static let fallback = DuoyiWidgetTheme(
+        primary: color("#FFFF6B6B"),
+        background: color("#FFFFFFFF"),
+        surface: color("#FFFFFFFF"),
+        navBackground: color("#FFFFF6F2"),
+        text: color("#FF333333"),
+        mutedText: color("#FF666666"),
+        onPrimary: color("#FFFFFFFF"),
+        accentStart: color("#FFFF6B6B"),
+        accentEnd: color("#FFFFB088")
+    )
+
+    init(defaults: UserDefaults?) {
+        self.primary = Self.read(defaults, key: "widget_theme_primary", fallback: "#FFFF6B6B")
+        self.background = Self.read(defaults, key: "widget_theme_background", fallback: "#FFFFFFFF")
+        self.surface = Self.read(defaults, key: "widget_theme_surface", fallback: "#FFFFFFFF")
+        self.navBackground = Self.read(defaults, key: "widget_theme_nav_background", fallback: "#FFFFF6F2")
+        self.text = Self.read(defaults, key: "widget_theme_text", fallback: "#FF333333")
+        self.mutedText = Self.read(defaults, key: "widget_theme_muted_text", fallback: "#FF666666")
+        self.onPrimary = Self.read(defaults, key: "widget_theme_on_primary", fallback: "#FFFFFFFF")
+        self.accentStart = Self.read(defaults, key: "widget_theme_accent_start", fallback: "#FFFF6B6B")
+        self.accentEnd = Self.read(defaults, key: "widget_theme_accent_end", fallback: "#FFFFB088")
+    }
+
+    private init(
+        primary: Color,
+        background: Color,
+        surface: Color,
+        navBackground: Color,
+        text: Color,
+        mutedText: Color,
+        onPrimary: Color,
+        accentStart: Color,
+        accentEnd: Color
+    ) {
+        self.primary = primary
+        self.background = background
+        self.surface = surface
+        self.navBackground = navBackground
+        self.text = text
+        self.mutedText = mutedText
+        self.onPrimary = onPrimary
+        self.accentStart = accentStart
+        self.accentEnd = accentEnd
+    }
+
+    private static func read(_ defaults: UserDefaults?, key: String, fallback: String) -> Color {
+        color(defaults?.string(forKey: key) ?? fallback)
+    }
+
+    private static func color(_ raw: String) -> Color {
+        let clean = raw.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        let normalized: String
+        if clean.count == 6 {
+            normalized = "FF\(clean)"
+        } else if clean.count == 8 {
+            normalized = clean
+        } else {
+            normalized = "FFFF6B6B"
+        }
+        guard let value = UInt64(normalized, radix: 16) else {
+            return Color(red: 1.0, green: 0.42, blue: 0.42)
+        }
+        let alpha = Double((value >> 24) & 0xFF) / 255.0
+        let red = Double((value >> 16) & 0xFF) / 255.0
+        let green = Double((value >> 8) & 0xFF) / 255.0
+        let blue = Double(value & 0xFF) / 255.0
+        return Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
 private struct DuoyiTodoRow: Identifiable {
     let index: Int
     let title: String
@@ -81,6 +163,7 @@ private struct DuoyiWidgetEntry: TimelineEntry {
     let focusTimerTotalSeconds: Int
     let focusTimerEndsAtMillis: Int64
     let focusTimerLabel: String
+    let theme: DuoyiWidgetTheme
 
     var focusTimerEndDate: Date? {
         guard focusTimerEndsAtMillis > 0 else {
@@ -114,7 +197,8 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             focusTimerRemainingSeconds: 0,
             focusTimerTotalSeconds: 0,
             focusTimerEndsAtMillis: 0,
-            focusTimerLabel: "专注倒计时"
+            focusTimerLabel: "专注倒计时",
+            theme: .fallback
         )
     }
 
@@ -163,7 +247,8 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             focusTimerRemainingSeconds: readInt(defaults, key: "focus_timer_remaining_seconds"),
             focusTimerTotalSeconds: readInt(defaults, key: "focus_timer_total_seconds"),
             focusTimerEndsAtMillis: readInt64(defaults, key: "focus_timer_ends_at_millis"),
-            focusTimerLabel: readString(defaults, key: "focus_timer_label", fallback: "专注倒计时")
+            focusTimerLabel: readString(defaults, key: "focus_timer_label", fallback: "专注倒计时"),
+            theme: DuoyiWidgetTheme(defaults: defaults)
         )
     }
 
@@ -270,7 +355,7 @@ private struct DuoyiWidgetView: View {
                 }
             }
             .padding(padding)
-            .duoyiWidgetBackground()
+            .duoyiWidgetBackground(entry.theme)
             .widgetURL(URL(string: entry.config.deepLink))
         }
     }
@@ -278,24 +363,25 @@ private struct DuoyiWidgetView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(entry.config.accent)
+                .fill(entry.theme.primary)
                 .frame(width: 8, height: 8)
             Text(entry.config.title)
                 .font(.system(size: 13, weight: .bold))
+                .foregroundColor(entry.theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
             Spacer(minLength: 0)
             Text(entry.brandTitle)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(.tertiaryLabel))
+                .foregroundColor(entry.theme.mutedText)
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let quickURL {
                 Link(destination: quickURL) {
                     Text(entry.config.quickActionTitle)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(entry.config.accent)
+                        .foregroundColor(entry.theme.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -323,12 +409,12 @@ private struct DuoyiWidgetView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .minimumScaleFactor(0.78)
-                    .foregroundColor(entry.config.accent)
+                    .foregroundColor(entry.theme.primary)
                 Text(entry.focusTimerLabel)
                     .font(.system(size: rowSize, weight: .regular))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(entry.theme.mutedText)
             } else {
                 linkedText(entry.primary, target: entry.primaryTarget, primary: true)
             }
@@ -364,7 +450,7 @@ private struct DuoyiWidgetView: View {
             .font(.system(size: primary ? primarySize : rowSize, weight: primary ? .semibold : .regular))
             .lineLimit(primary ? primaryLines : 1)
             .truncationMode(.tail)
-            .foregroundColor(primary ? .primary : .secondary)
+            .foregroundColor(primary ? entry.theme.text : entry.theme.mutedText)
     }
 
     private var todoContent: some View {
@@ -376,7 +462,7 @@ private struct DuoyiWidgetView: View {
                     .font(.system(size: primarySize, weight: .semibold))
                     .lineLimit(primaryLines)
                     .truncationMode(.tail)
-                    .foregroundColor(.primary)
+                    .foregroundColor(entry.theme.text)
             }
             ForEach(visibleTodoRows) { row in
                 todoRow(row, primary: false)
@@ -398,7 +484,7 @@ private struct DuoyiWidgetView: View {
                 Link(destination: completeURL) {
                     Text("完成")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(entry.config.accent)
+                        .foregroundColor(entry.theme.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -411,7 +497,7 @@ private struct DuoyiWidgetView: View {
             .font(.system(size: primary ? primarySize : rowSize, weight: primary ? .semibold : .regular))
             .lineLimit(primary ? primaryLines : 1)
             .truncationMode(.tail)
-            .foregroundColor(primary ? .primary : .secondary)
+            .foregroundColor(primary ? entry.theme.text : entry.theme.mutedText)
     }
 
     @ViewBuilder
@@ -492,6 +578,7 @@ private struct DuoyiWidgetView: View {
     private func navText(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .medium))
+            .foregroundColor(entry.theme.mutedText)
             .lineLimit(1)
             .truncationMode(.tail)
     }
@@ -775,12 +862,22 @@ private struct DuoyiAnyWidget: Widget {
 
 private extension View {
     @ViewBuilder
-    func duoyiWidgetBackground() -> some View {
+    func duoyiWidgetBackground(_ theme: DuoyiWidgetTheme) -> some View {
         if #available(iOSApplicationExtension 17.0, *) {
-            self.containerBackground(.background, for: .widget)
+            self.containerBackground(for: .widget) {
+                duoyiWidgetBackgroundView(theme)
+            }
         } else {
-            self.background(Color(.systemBackground))
+            self.background(duoyiWidgetBackgroundView(theme))
         }
+    }
+
+    private func duoyiWidgetBackgroundView(_ theme: DuoyiWidgetTheme) -> some View {
+        LinearGradient(
+            colors: [theme.background, theme.surface, theme.accentEnd.opacity(0.18)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 

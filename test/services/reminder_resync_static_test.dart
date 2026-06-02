@@ -108,7 +108,7 @@ void main() {
         matches(
           RegExp(
             r"queueStartupReminderResync\(\s*"
-            r"delay: const Duration\(milliseconds: 1800\),\s*"
+            r"delay: const Duration\(milliseconds: 4200\),\s*"
             r"reason: 'initial logged-in startup',",
             multiLine: true,
           ),

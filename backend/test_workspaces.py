@@ -8950,6 +8950,13 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertIn("updatedAt", payload["theme_shop_state"])
         self._assert_p0_http_ok(me_after_purchase, "GET /api/auth/me")
         self.assertEqual(me_after_purchase.json()["coin_balance"], 60)
+        self.assertEqual(
+            me_after_purchase.json()["theme_shop_state"]["activeBrand"], "re0"
+        )
+        self.assertEqual(
+            me_after_purchase.json()["themeShopState"]["activeBrand"], "re0"
+        )
+        self.assertEqual(me_after_purchase.json()["active_brand"], "re0")
         self._assert_p0_http_ok(reused, "POST /api/theme-shop/apply reused")
         self.assertEqual(reused.json()["charged"], 0)
         self.assertEqual(reused.json()["coin_balance"], 60)

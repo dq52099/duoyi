@@ -1325,6 +1325,15 @@ class CloudSyncProvider extends ChangeNotifier {
         skippedCollections.add(remoteKey);
         continue;
       }
+      if (_remoteObjectIsOlderThanLocal(prefs, localKey, value)) {
+        skippedCollections.add(remoteKey);
+        debugPrint(
+          '[CloudSync] skipped stale object $remoteKey remote='
+          '${_remoteItemUpdatedAt(value)} local='
+          '${_remoteItemUpdatedAt(_readLocalObject(prefs, localKey))}',
+        );
+        continue;
+      }
       await _writeLocalObject(prefs, localKey, value);
     }
     final preferences = response['preferences'];
@@ -1651,6 +1660,22 @@ class CloudSyncProvider extends ChangeNotifier {
       return;
     }
     await prefs.setString(localKey, json.encode(value));
+  }
+
+  bool _remoteObjectIsOlderThanLocal(
+    SharedPreferences prefs,
+    String localKey,
+    Map<dynamic, dynamic> remoteValue,
+  ) {
+    if (localKey != 'theme_shop_state' && localKey != 'duoyi_virtual_rewards') {
+      return false;
+    }
+    final local = _readLocalObject(prefs, localKey);
+    final localUpdatedAt = _remoteItemUpdatedAt(local);
+    final remoteUpdatedAt = _remoteItemUpdatedAt(remoteValue);
+    if (localUpdatedAt.isNotEmpty && remoteUpdatedAt.isEmpty) return true;
+    if (localUpdatedAt.isEmpty || remoteUpdatedAt.isEmpty) return false;
+    return _timestampGt(localUpdatedAt, remoteUpdatedAt);
   }
 
   Future<void> _writePreferencesPayload(

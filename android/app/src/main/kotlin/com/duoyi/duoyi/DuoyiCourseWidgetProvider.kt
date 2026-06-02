@@ -37,6 +37,31 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_course_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_course_root,
+                R.id.widget_course_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_course_title,
+                    R.id.widget_course_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_course_1,
+                    R.id.widget_course_2,
+                    R.id.widget_course_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_course_subtitle,
+                    R.id.widget_course_nav_todo,
+                    R.id.widget_course_nav_habit,
+                    R.id.widget_course_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_course_title,

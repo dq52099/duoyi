@@ -40,10 +40,6 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     _date = _clampDate(widget.initialDate ?? DateTime.now());
   }
 
-  void _shift(int days) {
-    setState(() => _date = _clampDate(_date.add(Duration(days: days))));
-  }
-
   DateTime _clampDate(DateTime value) {
     final day = DateTime(value.year, value.month, value.day);
     if (day.isBefore(_firstSupportedDate)) return _firstSupportedDate;
@@ -82,18 +78,79 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     );
   }
 
+  void _shiftMonth(int months) {
+    final targetMonth = DateTime(_date.year, _date.month + months, 1);
+    final lastDay = DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+    final nextDay = _date.day <= lastDay ? _date.day : lastDay;
+    setState(() {
+      _date = _clampDate(
+        DateTime(targetMonth.year, targetMonth.month, nextDay),
+      );
+    });
+  }
+
+  void _showSelectedDateDetail() {
+    final detail = LunarCalendar.almanacDetail(_date);
+    final term = LunarCalendar.solarTerm(_date);
+    final solarFestival = LunarCalendar.solarFestival(_date);
+    final lunarFestival = LunarCalendar.lunarFestival(detail.lunarDate);
+    final badges = _dateBadges(
+      term: term,
+      solarFestival: solarFestival,
+      lunarFestival: lunarFestival,
+      isHoliday: HolidayCalendar.isHoliday(_date),
+      isWorkMakeupDay: HolidayCalendar.isWorkMakeupDay(_date),
+    );
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (context) => _AlmanacDetailSheet(
+        detail: detail,
+        badges: badges,
+        weekNames: const ['一', '二', '三', '四', '五', '六', '日'],
+        yijiRow: _yijiRow,
+        detailRows: _detailRows,
+      ),
+    );
+  }
+
+  List<(String, Color)> _dateBadges({
+    required String? term,
+    required String? solarFestival,
+    required String? lunarFestival,
+    required bool isHoliday,
+    required bool isWorkMakeupDay,
+  }) {
+    return <(String, Color)>[
+      if (term != null) ('节气 $term', const Color(0xFF2E7D32)),
+      if (solarFestival != null) ('公历 $solarFestival', const Color(0xFFEF6C00)),
+      if (lunarFestival != null && I18n.current == AppLocale.zh)
+        ('农历 $lunarFestival', const Color(0xFFC2185B)),
+      if (isHoliday) ('法定假日', const Color(0xFF00897B)),
+      if (isWorkMakeupDay) ('调休上班', const Color(0xFF5E35B1)),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     const pageTitle = '万年历';
     final selectedDate = _date;
     final almanacDetail = LunarCalendar.almanacDetail(selectedDate);
     final lunar = almanacDetail.lunarDate;
-    final ganzhiLine = almanacDetail.ganzhiLine;
     final term = LunarCalendar.solarTerm(selectedDate);
     final solarFes = LunarCalendar.solarFestival(selectedDate);
     final lunarFes = LunarCalendar.lunarFestival(lunar);
     final isHoliday = HolidayCalendar.isHoliday(selectedDate);
     final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(selectedDate);
+    final dateBadges = _dateBadges(
+      term: term,
+      solarFestival: solarFes,
+      lunarFestival: lunarFes,
+      isHoliday: isHoliday,
+      isWorkMakeupDay: isWorkMakeupDay,
+    );
     final countdownProvider = context.watch<CountdownProvider?>();
     final anniversaryProvider = context.watch<AnniversaryProvider?>();
     final monthHighlights = _buildMonthHighlights(
@@ -104,7 +161,6 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     final monthHighlightDays = {
       for (final highlight in monthHighlights) highlight.date.day,
     };
-    final weekNames = ['一', '二', '三', '四', '五', '六', '日'];
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final routeBackground = theme.brightness == Brightness.dark
@@ -131,22 +187,19 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 940;
-            final almanacPanel = _denseAlmanacCard(
-              cs: cs,
-              weekNames: weekNames,
-              lunar: lunar,
-              ganzhiLine: ganzhiLine,
-              detail: almanacDetail,
-              term: term,
-              solarFestival: solarFes,
-              lunarFestival: lunarFes,
-              isHoliday: isHoliday,
-              isWorkMakeupDay: isWorkMakeupDay,
-            );
-            final miniMonth = _MiniMonth(
+            final monthCalendar = _MonthCalendar(
               date: selectedDate,
               highlightDays: monthHighlightDays,
+              highlights: monthHighlights,
               onPick: (d) => setState(() => _date = _clampDate(d)),
+              onPreviousMonth: () => _shiftMonth(-1),
+              onNextMonth: () => _shiftMonth(1),
+              onTitleTap: _pickDate,
+            );
+            final summary = _SelectedDateSummaryCard(
+              detail: almanacDetail,
+              badges: dateBadges,
+              onTap: _showSelectedDateDetail,
             );
             final highlights = _MonthHighlightsCard(
               selectedDate: selectedDate,
@@ -158,193 +211,23 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1160),
-                    child: wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 5,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    almanacPanel,
-                                    const SizedBox(height: 16),
-                                    miniMonth,
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 18),
-                              Expanded(
-                                flex: 6,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    highlights,
-                                    const SizedBox(height: 16),
-                                    _aboutCard(),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              almanacPanel,
-                              const SizedBox(height: 16),
-                              miniMonth,
-                              const SizedBox(height: 16),
-                              highlights,
-                              const SizedBox(height: 16),
-                              _aboutCard(),
-                            ],
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        monthCalendar,
+                        SizedBox(height: wide ? 18 : 14),
+                        summary,
+                        SizedBox(height: wide ? 18 : 14),
+                        highlights,
+                        const SizedBox(height: 14),
+                        _aboutCard(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _denseAlmanacCard({
-    required ColorScheme cs,
-    required List<String> weekNames,
-    required LunarDate lunar,
-    required String ganzhiLine,
-    required LunarAlmanacDetail detail,
-    required String? term,
-    required String? solarFestival,
-    required String? lunarFestival,
-    required bool isHoliday,
-    required bool isWorkMakeupDay,
-  }) {
-    final displayDate = detail.solarDate;
-    final fullDate =
-        '${displayDate.year}年${displayDate.month}月${displayDate.day}日 星期${weekNames[displayDate.weekday - 1]}';
-    final badges = <(String, Color)>[
-      if (term != null) ('节气 $term', const Color(0xFF2E7D32)),
-      if (solarFestival != null) ('公历 $solarFestival', const Color(0xFFEF6C00)),
-      if (lunarFestival != null && I18n.current == AppLocale.zh)
-        ('农历 $lunarFestival', const Color(0xFFC2185B)),
-      if (isHoliday) ('法定假日', const Color(0xFF00897B)),
-      if (isWorkMakeupDay) ('调休上班', const Color(0xFF5E35B1)),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.18),
-          width: 0.45,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: '前一天',
-                icon: const Icon(Icons.chevron_left),
-                onPressed: _date == _firstSupportedDate
-                    ? null
-                    : () => _shift(-1),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: _pickDate,
-                  child: Column(
-                    children: [
-                      Text(
-                        fullDate,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontSize: 16,
-                              fontWeight: FontWeight.normal,
-                              color: cs.onSurface,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${displayDate.day}',
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontSize: 72,
-                          fontWeight: FontWeight.normal,
-                          height: 0.98,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '农历 ${lunar.chineseText}',
-                        style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.72),
-                          fontSize: 14,
-                          fontWeight: FontWeight.normal,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        ganzhiLine,
-                        style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          fontSize: 13,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: '后一天',
-                icon: const Icon(Icons.chevron_right),
-                onPressed: _date == _lastSupportedDate ? null : () => _shift(1),
-              ),
-            ],
-          ),
-          if (badges.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 6,
-              children: badges
-                  .map((badge) => _festivalBadge(badge.$1, badge.$2))
-                  .toList(),
-            ),
-          ],
-          const Divider(height: 22),
-          _yijiRow(suitable: detail.suitable, avoid: detail.avoid),
-          const SizedBox(height: 12),
-          _detailRows(context, detail),
-        ],
-      ),
-    );
-  }
-
-  Widget _festivalBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.normal,
         ),
       ),
     );
@@ -940,14 +823,259 @@ class _MonthHighlightsCard extends StatelessWidget {
   }
 }
 
-class _MiniMonth extends StatelessWidget {
+class _SelectedDateSummaryCard extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+  final List<(String, Color)> badges;
+  final VoidCallback onTap;
+
+  const _SelectedDateSummaryCard({
+    required this.detail,
+    required this.badges,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      detail.lunarDate.chineseText,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.normal,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _spacedGanzhiLine(detail.ganzhiLine),
+                      style: appSecondaryControlTextStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.64)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: cs.onSurface.withValues(alpha: 0.42),
+              ),
+            ],
+          ),
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: badges
+                  .map(
+                    (badge) => _AlmanacBadge(text: badge.$1, color: badge.$2),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          _SummaryYijiLine(label: '宜', text: _summaryTerms(detail.suitable)),
+          const SizedBox(height: 6),
+          _SummaryYijiLine(label: '忌', text: _summaryTerms(detail.avoid)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryYijiLine extends StatelessWidget {
+  final String label;
+  final String text;
+
+  const _SummaryYijiLine({required this.label, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = label == '宜'
+        ? const Color(0xFF2E7D32)
+        : const Color(0xFFC62828);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.normal,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: appSecondaryControlTextStyle(
+              context,
+            ).copyWith(color: cs.onSurface.withValues(alpha: 0.78)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AlmanacDetailSheet extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+  final List<(String, Color)> badges;
+  final List<String> weekNames;
+  final Widget Function({required String suitable, required String avoid})
+  yijiRow;
+  final Widget Function(BuildContext context, LunarAlmanacDetail detail)
+  detailRows;
+
+  const _AlmanacDetailSheet({
+    required this.detail,
+    required this.badges,
+    required this.weekNames,
+    required this.yijiRow,
+    required this.detailRows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final displayDate = detail.solarDate;
+    final fullDate =
+        '${displayDate.year}年${displayDate.month}月${displayDate.day}日 星期${weekNames[displayDate.weekday - 1]}';
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fullDate,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.normal,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${detail.lunarDate.chineseText}  ${_spacedGanzhiLine(detail.ganzhiLine)}',
+                          style: appSecondaryControlTextStyle(context).copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.64),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              if (badges.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: badges
+                      .map(
+                        (badge) =>
+                            _AlmanacBadge(text: badge.$1, color: badge.$2),
+                      )
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 14),
+              yijiRow(suitable: detail.suitable, avoid: detail.avoid),
+              const SizedBox(height: 12),
+              detailRows(context, detail),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AlmanacBadge extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _AlmanacBadge({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthCalendar extends StatelessWidget {
   final DateTime date;
   final Set<int> highlightDays;
+  final List<_MonthHighlight> highlights;
   final ValueChanged<DateTime> onPick;
-  const _MiniMonth({
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+  final VoidCallback onTitleTap;
+
+  const _MonthCalendar({
     required this.date,
     required this.highlightDays,
+    required this.highlights,
     required this.onPick,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+    required this.onTitleTap,
   });
 
   @override
@@ -957,15 +1085,49 @@ class _MiniMonth extends StatelessWidget {
     final offset = first.weekday - 1; // 周一为 0
     final cs = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200, width: 0.45),
-      ),
+    final highlightByDay = {for (final item in highlights) item.date.day: item};
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
       child: Column(
         children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: '上个月',
+                onPressed: onPreviousMonth,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onTitleTap,
+                  child: Column(
+                    children: [
+                      Text(
+                        '${date.month}月',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontSize: 22,
+                          fontWeight: FontWeight.normal,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      Text(
+                        '${date.year}年',
+                        style: appSecondaryControlLabelStyle(
+                          context,
+                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.50)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '下个月',
+                onPressed: onNextMonth,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: const ['一', '二', '三', '四', '五', '六', '日']
@@ -997,6 +1159,17 @@ class _MiniMonth extends StatelessWidget {
                 final lunar = I18n.current == AppLocale.zh
                     ? LunarCalendar.fromSolar(day)
                     : null;
+                final term = LunarCalendar.solarTerm(day);
+                final solarFestival = LunarCalendar.solarFestival(day);
+                final lunarFestival = lunar == null
+                    ? null
+                    : LunarCalendar.lunarFestival(lunar);
+                final dayLabel =
+                    term ??
+                    solarFestival ??
+                    lunarFestival ??
+                    lunar?.shortDayOrMonth ??
+                    '';
                 final isSelected =
                     day.year == date.year &&
                     day.month == date.month &&
@@ -1007,6 +1180,10 @@ class _MiniMonth extends StatelessWidget {
                     day.month == today.month &&
                     day.day == today.day;
                 final hasHighlight = highlightDays.contains(d);
+                final highlight = highlightByDay[d];
+                final isWeekend = day.weekday >= DateTime.saturday;
+                final isHoliday = HolidayCalendar.isHoliday(day);
+                final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(day);
                 final selectedFill = Color.alphaBlend(
                   cs.primary.withValues(
                     alpha: Theme.of(context).brightness == Brightness.dark
@@ -1020,58 +1197,105 @@ class _MiniMonth extends StatelessWidget {
                 return Expanded(
                   child: GestureDetector(
                     onTap: () => onPick(day),
-                    child: Container(
-                      height: 42,
-                      margin: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? selectedFill
-                            : (isToday
-                                  ? cs.primary.withValues(alpha: 0.1)
-                                  : null),
-                        borderRadius: BorderRadius.circular(8),
-                        border: isSelected
-                            ? Border.all(
-                                color: cs.primary.withValues(alpha: 0.26),
-                                width: 0.45,
-                              )
-                            : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$d',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.normal,
-                              color: isSelected
-                                  ? selectedText
-                                  : (isToday ? cs.primary : null),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          height: 52,
+                          margin: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? selectedFill
+                                : (isToday
+                                      ? cs.primary.withValues(alpha: 0.1)
+                                      : isHoliday
+                                      ? const Color(
+                                          0xFFEF5350,
+                                        ).withValues(alpha: 0.06)
+                                      : null),
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(
+                                    color: cs.primary.withValues(alpha: 0.26),
+                                    width: 0.45,
+                                  )
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '$d',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.normal,
+                                  color: isSelected
+                                      ? selectedText
+                                      : isWorkMakeupDay
+                                      ? const Color(0xFF5E35B1)
+                                      : isHoliday || isWeekend
+                                      ? const Color(0xFFC62828)
+                                      : (isToday ? cs.primary : null),
+                                ),
+                              ),
+                              Text(
+                                dayLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: isSelected
+                                      ? selectedText.withValues(alpha: 0.64)
+                                      : term != null
+                                      ? const Color(0xFF2E7D32)
+                                      : solarFestival != null ||
+                                            lunarFestival != null
+                                      ? const Color(0xFFEF6C00)
+                                      : cs.onSurface.withValues(alpha: 0.48),
+                                ),
+                              ),
+                              if (hasHighlight)
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  margin: const EdgeInsets.only(top: 2),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? selectedText
+                                        : cs.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (isHoliday || isWorkMakeupDay)
+                          Positioned(
+                            top: 2,
+                            right: 3,
+                            child: Text(
+                              isWorkMakeupDay ? '班' : '休',
+                              style: TextStyle(
+                                color: isWorkMakeupDay
+                                    ? const Color(0xFF5E35B1)
+                                    : const Color(0xFFC62828),
+                                fontSize: 9,
+                              ),
                             ),
                           ),
-                          if (lunar != null)
-                            Text(
-                              lunar.shortDayOrMonth,
+                        if (highlight != null && highlight.labels.length > 1)
+                          Positioned(
+                            bottom: 3,
+                            right: 4,
+                            child: Text(
+                              '+${highlight.labels.length - 1}',
                               style: TextStyle(
-                                fontSize: 9,
-                                color: isSelected
-                                    ? selectedText.withValues(alpha: 0.64)
-                                    : Colors.grey.shade500,
+                                color: cs.onSurface.withValues(alpha: 0.42),
+                                fontSize: 8,
                               ),
                             ),
-                          if (hasHighlight)
-                            Container(
-                              width: 4,
-                              height: 4,
-                              margin: const EdgeInsets.only(top: 2),
-                              decoration: BoxDecoration(
-                                color: isSelected ? selectedText : cs.primary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                 );
@@ -1082,4 +1306,18 @@ class _MiniMonth extends StatelessWidget {
       ),
     );
   }
+}
+
+String _summaryTerms(String value) {
+  final terms = value
+      .split(RegExp(r'\s+'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .take(6)
+      .toList(growable: false);
+  return terms.isEmpty ? value : terms.join(' ');
+}
+
+String _spacedGanzhiLine(String value) {
+  return value.replaceFirst('年', '年 ').replaceFirst('月', '月 ').trim();
 }

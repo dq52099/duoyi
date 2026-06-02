@@ -190,12 +190,39 @@ class AiService extends ChangeNotifier {
     if (cached != null) return cached.content;
     final summary =
         '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
-    return _runReview(
-      summary,
-      periodLabel,
-      kind: weeklyReviewKind,
-      createdAt: createdAt,
+    final out = await _chat(
+      _weeklyReviewSystemPrompt(periodLabel),
+      '周期：$periodLabel\n'
+      '待办完成：$completedTodos / $totalTodos\n'
+      '专注时长：$weeklyFocusMinutes 分钟\n'
+      '习惯连续打卡：$habitStreak 天\n'
+      '请生成这次周回顾。',
+      temperature: 0.45,
+      maxTokens: 260,
     );
+    final review = _normalizeWeeklyReview(
+      out,
+      periodLabel: periodLabel,
+      completedTodos: completedTodos,
+      totalTodos: totalTodos,
+      weeklyFocusMinutes: weeklyFocusMinutes,
+      habitStreak: habitStreak,
+    );
+    final entry = AiReviewEntry(
+      id: createdAt.millisecondsSinceEpoch.toString(),
+      createdAt: createdAt,
+      content: review,
+      summary: summary,
+      model: _model,
+      kind: weeklyReviewKind,
+    );
+    _reviewHistory.insert(0, entry);
+    if (_reviewHistory.length > 50) {
+      _reviewHistory = _reviewHistory.sublist(0, 50);
+    }
+    await _saveHistory();
+    notifyListeners();
+    return review;
   }
 
   /// 基于 ReportEngine 的 PeriodReport 生成自然语言周/月/年报。
@@ -288,7 +315,7 @@ class AiService extends ChangeNotifier {
     final out = await _chat(
       '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
       '开头必须明确写“$periodLabel回顾：”。语气积极不空洞，先肯定 1-2 点亮点，'
-      '再提 1-2 个具体可执行的下周建议。',
+      '再提 1-2 个具体可执行的下周建议。不要使用 Markdown、表格、emoji、加粗或分隔线。',
       summary,
       temperature: 0.6,
       maxTokens: 400,
@@ -317,6 +344,201 @@ class AiService extends ChangeNotifier {
   bool _looksLikeWeeklyReview(AiReviewEntry entry) {
     if (entry.kind == weeklyReviewKind) return true;
     return RegExp(r'^(本周|上周)数据：').hasMatch(entry.summary);
+  }
+
+  String _weeklyReviewSystemPrompt(String periodLabel) {
+    return '你是多仪的效率回顾助手。基于$periodLabel完成情况输出中文周回顾。'
+        '必须严格遵守：'
+        '1. 输出分层纯文本，不要写成长段落；'
+        '2. 不要 Markdown、表格、emoji、加粗、标题、分隔线或客套结尾；'
+        '3. 不要出现“根据你提供的数据”“随时告诉我”“加油”等套话；'
+        '4. 每行尽量不超过 32 个汉字；'
+        '5. 固定格式如下：\n'
+        '$periodLabel回顾\n'
+        '总览：一句总判断\n'
+        '数据\n'
+        '待办：完成情况\n'
+        '专注：专注时长\n'
+        '习惯：连续打卡\n'
+        '观察：一句关键原因或状态\n'
+        '下周行动\n'
+        '行动一：一个具体动作\n'
+        '行动二：一个具体动作';
+  }
+
+  String _normalizeWeeklyReview(
+    String raw, {
+    required String periodLabel,
+    required int completedTodos,
+    required int totalTodos,
+    required int weeklyFocusMinutes,
+    required int habitStreak,
+  }) {
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .where((line) => !_looksLikeMarkdownTableLine(line))
+        .map(_cleanReviewLine)
+        .where((line) => line.isNotEmpty)
+        .where((line) => !_looksLikeMarkdownTableLine(line))
+        .take(8)
+        .toList(growable: false);
+    final cleaned = lines.join('\n').trim();
+    if (_looksLikeStructuredWeeklyReview(cleaned, periodLabel)) return cleaned;
+    final suggestion = lines
+        .map(
+          (line) => line.replaceFirst(RegExp(r'^(下周建议|建议|行动)[:：]'), '').trim(),
+        )
+        .firstWhere(
+          (line) =>
+              line.length >= 8 &&
+              !line.contains('数据概览') &&
+              !line.startsWith('待办') &&
+              !line.startsWith('专注') &&
+              !line.startsWith('习惯') &&
+              !line.contains('根据你提供的数据') &&
+              !line.contains('随时告诉') &&
+              !line.contains('加油'),
+          orElse: () => '',
+        );
+    return _fallbackWeeklyReview(
+      periodLabel: periodLabel,
+      completedTodos: completedTodos,
+      totalTodos: totalTodos,
+      weeklyFocusMinutes: weeklyFocusMinutes,
+      habitStreak: habitStreak,
+      suggestion: suggestion,
+    );
+  }
+
+  String _cleanReviewLine(String line) {
+    return line
+        .trim()
+        .replaceAll(RegExp(r'^[#>\-\*\d\.\s]+'), '')
+        .replaceAll(RegExp(r'[`*_~|]'), '')
+        .replaceAll(RegExp(r'[\u{1F300}-\u{1FAFF}]', unicode: true), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  bool _looksLikeMarkdownTableLine(String line) {
+    final compact = line.replaceAll(' ', '');
+    if (compact.contains('---')) return true;
+    if (line.contains('指标') && line.contains('完成')) return true;
+    if (line.contains('|')) return true;
+    return false;
+  }
+
+  bool _looksLikeStructuredWeeklyReview(String text, String periodLabel) {
+    final lines = text.split('\n').where((line) => line.trim().isNotEmpty);
+    if (lines.length != 10) return false;
+    return text.startsWith('$periodLabel回顾\n') &&
+        text.contains('\n总览：') &&
+        text.contains('\n数据\n') &&
+        text.contains('\n待办：') &&
+        text.contains('\n专注：') &&
+        text.contains('\n习惯：') &&
+        text.contains('\n观察：') &&
+        text.contains('\n下周行动\n') &&
+        text.contains('\n行动一：') &&
+        text.contains('\n行动二：') &&
+        !RegExp(r'[*_#|]').hasMatch(text) &&
+        !RegExp(r'[\u{1F300}-\u{1FAFF}]', unicode: true).hasMatch(text);
+  }
+
+  String _fallbackWeeklyReview({
+    required String periodLabel,
+    required int completedTodos,
+    required int totalTodos,
+    required int weeklyFocusMinutes,
+    required int habitStreak,
+    required String suggestion,
+  }) {
+    final rate = totalTodos <= 0
+        ? 0
+        : (completedTodos / totalTodos * 100).round();
+    final overview =
+        totalTodos <= 0 && weeklyFocusMinutes <= 0 && habitStreak <= 0
+        ? '记录偏少，先恢复基础节奏。'
+        : totalTodos > 0 && completedTodos >= totalTodos
+        ? '待办推进稳定，继续保持。'
+        : rate >= 70
+        ? '整体完成不错，可以继续加固。'
+        : '节奏还有提升空间。';
+    final todoLine = totalTodos <= 0
+        ? '待办：暂无计划项，先安排关键任务。'
+        : '待办：完成 $completedTodos / $totalTodos 项，完成率 $rate%。';
+    final focusLine = weeklyFocusMinutes <= 0
+        ? '专注：0 分钟，先从每天 10 分钟开始。'
+        : '专注：$weeklyFocusMinutes 分钟，保留固定专注窗口。';
+    final habitLine = habitStreak <= 0
+        ? '习惯：连续 0 天，先重启一个最小习惯。'
+        : '习惯：连续 $habitStreak 天，继续守住当前节奏。';
+    final observation = _weeklyObservation(
+      totalTodos: totalTodos,
+      completedTodos: completedTodos,
+      weeklyFocusMinutes: weeklyFocusMinutes,
+      habitStreak: habitStreak,
+    );
+    final firstAction = suggestion.isEmpty
+        ? _defaultWeeklyAction(totalTodos, weeklyFocusMinutes, habitStreak)
+        : suggestion;
+    final secondAction = _secondaryWeeklyAction(
+      totalTodos,
+      weeklyFocusMinutes,
+      habitStreak,
+    );
+    return [
+      '$periodLabel回顾',
+      '总览：$overview',
+      '数据',
+      todoLine,
+      focusLine,
+      habitLine,
+      '观察：$observation',
+      '下周行动',
+      '行动一：$firstAction',
+      '行动二：$secondAction',
+    ].join('\n');
+  }
+
+  String _weeklyObservation({
+    required int totalTodos,
+    required int completedTodos,
+    required int weeklyFocusMinutes,
+    required int habitStreak,
+  }) {
+    if (totalTodos > 0 && completedTodos > 0 && weeklyFocusMinutes <= 0) {
+      return '待办有推进，但专注时间没有形成记录。';
+    }
+    if (habitStreak <= 0 && weeklyFocusMinutes > 0) {
+      return '专注已经启动，习惯链还需要重新接上。';
+    }
+    if (totalTodos <= 0 && weeklyFocusMinutes <= 0 && habitStreak <= 0) {
+      return '本周更像恢复周，先把记录节奏找回来。';
+    }
+    return '当前节奏可延续，重点是减少目标切换。';
+  }
+
+  String _defaultWeeklyAction(
+    int totalTodos,
+    int weeklyFocusMinutes,
+    int habitStreak,
+  ) {
+    if (weeklyFocusMinutes <= 0) return '每天先排一个 10 分钟专注块。';
+    if (habitStreak <= 0) return '选择一个低门槛习惯连续打卡 3 天。';
+    if (totalTodos <= 0) return '提前列出 3 件本周关键任务。';
+    return '保留 2 件关键任务，完成后再加新任务。';
+  }
+
+  String _secondaryWeeklyAction(
+    int totalTodos,
+    int weeklyFocusMinutes,
+    int habitStreak,
+  ) {
+    if (habitStreak <= 0) return '把喝水或早睡设为本周最小习惯。';
+    if (weeklyFocusMinutes <= 0) return '把专注提醒放到每天固定时段。';
+    if (totalTodos <= 0) return '每天只确认一次任务清单。';
+    return '周中复盘一次，及时删掉低优先级任务。';
   }
 }
 

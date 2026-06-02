@@ -70,8 +70,30 @@ void main() {
     expect(providerSource, contains('await _pullRemoteChanges();'));
     expect(providerSource, contains('_hasPendingChanges || _isSyncing'));
     expect(providerSource, contains('_scheduleRemotePoll();'));
+    expect(mainSource, contains('Future<void> startCloudSyncAfterAuth'));
+    expect(mainSource, contains("'server config before cloud sync'"));
+    expect(mainSource, contains(r"'cloud sync $reason'"));
     expect(mainSource, contains('cloudSyncProvider.startRemotePolling();'));
     expect(mainSource, contains('cloudSyncProvider.stopRemotePolling();'));
+  });
+
+  test('同步回写不会用旧主题或旧时光币对象覆盖本地新状态', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+
+    expect(providerSource, contains('bool _remoteObjectIsOlderThanLocal'));
+    expect(providerSource, contains("localKey != 'theme_shop_state'"));
+    expect(providerSource, contains("localKey != 'duoyi_virtual_rewards'"));
+    expect(
+      providerSource,
+      contains('_timestampGt(localUpdatedAt, remoteUpdatedAt)'),
+    );
+    expect(
+      providerSource,
+      contains('if (localUpdatedAt.isNotEmpty && remoteUpdatedAt.isEmpty)'),
+    );
+    expect(providerSource, contains(r'skipped stale object $remoteKey'));
   });
 
   test('同步事件流收到新版本后即时拉取，轮询仍作为兜底', () {

@@ -127,8 +127,8 @@ void main() {
     expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));
     expect(
       mainApp,
-      contains('Future<void>.delayed(const Duration(seconds: 2), ()'),
-      reason: '启动更新策略检查应首帧后执行，避免冷启动阻塞到无法滑动。',
+      contains('Future<void>.delayed(const Duration(seconds: 6), ()'),
+      reason: '启动更新策略检查应首帧后延后执行，避免冷启动阻塞到无法滑动。',
     );
     expect(mainApp, contains('home: updater.mustUpdate'));
     expect(

@@ -89,13 +89,27 @@ class ThemePickerScreen extends StatelessWidget {
           itemId: itemId,
           title: title,
         );
-        final themeState = res['theme_shop_state'];
+        final themeState = _nestedMapValue(res, const [
+          'theme_shop_state',
+          'themeShopState',
+          'theme',
+        ]);
+        final rewards = _nestedMapValue(res, const [
+          'virtual_rewards',
+          'virtualRewards',
+          'rewards',
+        ]);
         if (themeState is Map) {
-          await themeProvider.applyShopStateFromServer(themeState);
+          await themeProvider.applyShopStateFromServer(
+            themeState,
+            trusted: true,
+          );
         }
-        final rewards = res['virtual_rewards'];
         if (rewards is Map) {
           await achievementProvider.applyRewardsSnapshot(rewards);
+        }
+        if (themeState is! Map) {
+          await applyLocal();
         }
         return true;
       } catch (e) {
@@ -131,6 +145,27 @@ class ThemePickerScreen extends StatelessWidget {
     }
     await applyLocal();
     return true;
+  }
+
+  Object? _nestedMapValue(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      if (data[key] != null) return data[key];
+    }
+    for (final wrapperKey in const ['data', 'result', 'payload']) {
+      final wrapper = data[wrapperKey];
+      if (wrapper is Map) {
+        final nested = _nestedMapValue(
+          Map<String, dynamic>.from(wrapper),
+          keys,
+        );
+        if (nested != null) return nested;
+      }
+    }
+    final user = data['user'];
+    if (user is Map) {
+      return _nestedMapValue(Map<String, dynamic>.from(user), keys);
+    }
+    return null;
   }
 
   Future<void> _handleBrandTap(

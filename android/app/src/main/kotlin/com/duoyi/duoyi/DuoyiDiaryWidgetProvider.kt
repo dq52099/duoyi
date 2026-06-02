@@ -37,6 +37,31 @@ open class DuoyiDiaryWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_diary_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_diary_root,
+                R.id.widget_diary_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_diary_title,
+                    R.id.widget_diary_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_diary_1,
+                    R.id.widget_diary_2,
+                    R.id.widget_diary_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_diary_subtitle,
+                    R.id.widget_diary_nav_todo,
+                    R.id.widget_diary_nav_habit,
+                    R.id.widget_diary_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_diary_title,

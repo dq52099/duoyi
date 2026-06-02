@@ -41,6 +41,36 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_focus_habit_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_focus_habit_root,
+                R.id.widget_focus_habit_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_focus_habit_title,
+                    R.id.widget_focus_count,
+                    R.id.widget_focus_habit_progress,
+                    R.id.widget_focus_streak_count,
+                    R.id.widget_focus_nav_focus,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_focus_summary,
+                    R.id.widget_focus_habit_summary,
+                    R.id.widget_focus_streak_summary,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_focus_habit_date,
+                    R.id.widget_focus_timer_caption,
+                    R.id.widget_focus_nav_todo,
+                    R.id.widget_focus_nav_habit,
+                    R.id.widget_focus_nav_calendar,
+                ),
+                onPrimaryIds = intArrayOf(R.id.widget_focus_quick_start),
+            )
             val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
 
             views.setTextViewText(

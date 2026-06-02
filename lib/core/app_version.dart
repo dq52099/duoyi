@@ -1,5 +1,5 @@
 class AppVersion {
-  static const name = '1.1.18';
-  static const build = 120018;
+  static const name = '1.1.19';
+  static const build = 120019;
   static const display = 'v$name';
 }

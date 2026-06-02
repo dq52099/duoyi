@@ -37,6 +37,31 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_goal_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_goal_root,
+                R.id.widget_goal_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_goal_title,
+                    R.id.widget_goal_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_goal_1,
+                    R.id.widget_goal_2,
+                    R.id.widget_goal_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_goal_subtitle,
+                    R.id.widget_goal_nav_todo,
+                    R.id.widget_goal_nav_habit,
+                    R.id.widget_goal_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_goal_title,

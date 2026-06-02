@@ -38,6 +38,37 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
 
         appWidgetIds.forEach { id ->
             val views = RemoteViews(context.packageName, R.layout.duoyi_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_root,
+                R.id.widget_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_title,
+                    R.id.widget_todo_count,
+                    R.id.widget_habit_progress,
+                    R.id.widget_pomodoro_count,
+                    R.id.widget_quick_open,
+                    R.id.widget_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_today_event,
+                    R.id.widget_goal_summary,
+                    R.id.widget_anniversary_summary,
+                    R.id.widget_course_summary,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_date,
+                    R.id.widget_nav_todo,
+                    R.id.widget_nav_habit,
+                    R.id.widget_nav_focus,
+                ),
+                onPrimaryIds = intArrayOf(R.id.widget_quick_pomodoro),
+            )
             val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
 
             views.setTextViewText(R.id.widget_title, prefs.getString("brand_app_title", "多仪"))

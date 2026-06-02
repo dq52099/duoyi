@@ -37,6 +37,31 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_anniversary_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_anniversary_root,
+                R.id.widget_anniversary_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_anniversary_title,
+                    R.id.widget_anniversary_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_anniversary_1,
+                    R.id.widget_anniversary_2,
+                    R.id.widget_anniversary_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_anniversary_subtitle,
+                    R.id.widget_anniversary_nav_todo,
+                    R.id.widget_anniversary_nav_habit,
+                    R.id.widget_anniversary_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_anniversary_title,

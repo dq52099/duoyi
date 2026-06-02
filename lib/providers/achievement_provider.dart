@@ -68,6 +68,7 @@ class AchievementProvider extends ChangeNotifier {
   int _lifetimeCoins = 0;
   int _persistedRevision = 0;
   String _rewardsUpdatedAt = '';
+  bool _serverConfirmedRewardsChangePending = false;
 
   AchievementProvider({AchievementEngine? engine, DomainEventBus? bus})
     : _engine = engine ?? AchievementEngine(),
@@ -87,6 +88,12 @@ class AchievementProvider extends ChangeNotifier {
   GrowthLevel get growthLevel => GrowthLevels.fromLifetimeCoins(_lifetimeCoins);
   List<RewardLedgerEntry> get rewardLedger =>
       List<RewardLedgerEntry>.unmodifiable(_rewardLedger);
+
+  bool consumeServerConfirmedRewardsChange() {
+    final value = _serverConfirmedRewardsChangePending;
+    _serverConfirmedRewardsChangePending = false;
+    return value;
+  }
 
   int get unlockedCount => _snapshots.where((s) => s.unlocked).length;
   int get totalCount => Achievements.all.length;
@@ -142,6 +149,7 @@ class AchievementProvider extends ChangeNotifier {
     final changed = _loadRewardsFromPrefs(prefs);
     if (!changed) return;
     _persistedRevision++;
+    _serverConfirmedRewardsChangePending = true;
     debugPrint(
       '[reward-sync] applied server snapshot balance=$_coinBalance '
       'lifetime=$_lifetimeCoins revision=$_persistedRevision',

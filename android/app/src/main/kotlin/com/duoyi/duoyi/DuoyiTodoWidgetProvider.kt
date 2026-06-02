@@ -45,6 +45,33 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_todo_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_todo_root,
+                R.id.widget_todo_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_todo_title,
+                    R.id.widget_todo_count,
+                    R.id.widget_todo_nav_todo,
+                    R.id.widget_todo_quick_add,
+                    R.id.widget_todo_today_summary,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_todo_item_1,
+                    R.id.widget_todo_item_2,
+                    R.id.widget_todo_item_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_todo_nav_habit,
+                    R.id.widget_todo_nav_calendar,
+                    R.id.widget_todo_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_todo_title,

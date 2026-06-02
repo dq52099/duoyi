@@ -13,12 +13,21 @@ void main() {
     expect(source, contains('final wide = constraints.maxWidth >= 940'));
     expect(source, contains('return Scrollbar('));
     expect(source, contains('SingleChildScrollView('));
-    expect(source, contains('Widget _denseAlmanacCard({'));
+    expect(source, contains('class _MonthCalendar'));
+    expect(source, contains('class _SelectedDateSummaryCard'));
+    expect(source, contains('class _AlmanacDetailSheet'));
+    expect(source, contains('showModalBottomSheet<void>'));
+    expect(source, isNot(contains('Widget _denseAlmanacCard({')));
     expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
     expect(source, contains('final selectedDate = _date'));
     expect(source, contains('final lunar = almanacDetail.lunarDate'));
-    expect(source, contains('final ganzhiLine = almanacDetail.ganzhiLine'));
     expect(source, contains('final displayDate = detail.solarDate'));
+    final calendarIndex = source.indexOf('monthCalendar,');
+    final summaryIndex = source.indexOf('summary,');
+    final highlightsIndex = source.indexOf('highlights,');
+    expect(calendarIndex, greaterThanOrEqualTo(0));
+    expect(summaryIndex, greaterThan(calendarIndex));
+    expect(highlightsIndex, greaterThan(summaryIndex));
     expect(
       source,
       contains(

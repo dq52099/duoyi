@@ -188,6 +188,7 @@ class ThemeProvider extends ChangeNotifier {
   String _activeAvatarFrameId = defaultAvatarFrameId;
   String _activeCardSkinId = defaultCardSkinId;
   String _shopStateUpdatedAt = '';
+  bool _serverConfirmedChangePending = false;
 
   AppBrand get brand => _brand;
   List<AppBrand> get brands => AppBrands.all;
@@ -205,6 +206,12 @@ class ThemeProvider extends ChangeNotifier {
   CardSkinReward get activeCardSkin => cardSkinById(_activeCardSkinId);
   String get shopStateUpdatedAt => _shopStateUpdatedAt;
   Map<String, dynamic> get shopStateSnapshot => _shopStateJson();
+
+  bool consumeServerConfirmedChange() {
+    final value = _serverConfirmedChangePending;
+    _serverConfirmedChangePending = false;
+    return value;
+  }
 
   bool isBrandUnlocked(String id) =>
       id == AppBrands.defaultBrand.id || _unlockedBrandIds.contains(id);
@@ -254,6 +261,13 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final shopState = _readShopState(prefs);
+    if (shopState != null && _isIncomingShopStateOlder(shopState)) {
+      debugPrint(
+        '[theme-sync] skipped older stored shop state incoming='
+        '${_shopStateUpdatedAtOf(shopState)} current=$_shopStateUpdatedAt',
+      );
+      return;
+    }
     final changed = _applyShopStateMap(
       shopState,
       prefs: prefs,
@@ -262,10 +276,13 @@ class ThemeProvider extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
-  Future<void> applyShopStateFromServer(Map<dynamic, dynamic> state) async {
+  Future<void> applyShopStateFromServer(
+    Map<dynamic, dynamic> state, {
+    bool trusted = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final incoming = Map<String, dynamic>.from(state);
-    if (_isIncomingShopStateOlder(incoming)) {
+    if (!trusted && _isIncomingShopStateOlder(incoming)) {
       debugPrint(
         '[theme-sync] skipped older shop state incoming='
         '${_shopStateUpdatedAtOf(incoming)} current=$_shopStateUpdatedAt',
@@ -284,6 +301,7 @@ class ThemeProvider extends ChangeNotifier {
       _unlockedBrandIds.toList(growable: false),
     );
     await _saveShopState(prefs, touch: false);
+    _serverConfirmedChangePending = true;
     notifyListeners();
   }
 
@@ -294,11 +312,11 @@ class ThemeProvider extends ChangeNotifier {
   }) {
     final before = jsonEncode(_shopStateJson());
     final id =
-        shopState?['activeBrand']?.toString() ??
+        _stringFromAny(shopState, const ['activeBrand', 'active_brand']) ??
         (includeLegacyFallback ? prefs.getString(_storageKey) : null);
     _brand = AppBrands.byId(id);
     _switchCount =
-        (shopState?['switchCount'] as num?)?.toInt() ??
+        _intFromAny(shopState, const ['switchCount', 'switch_count']) ??
         (includeLegacyFallback ? prefs.getInt(_switchCountKey) : null) ??
         0;
     final updatedAt =
@@ -312,7 +330,12 @@ class ThemeProvider extends ChangeNotifier {
     _unlockedBrandIds
       ..clear()
       ..add(AppBrands.defaultBrand.id)
-      ..addAll(_unlockedIdsFromState(shopState))
+      ..addAll(
+        _stringListFromAny(shopState, const [
+          'unlockedBrandIds',
+          'unlocked_brand_ids',
+        ]),
+      )
       ..add(_brand.id);
     if (includeLegacyFallback) {
       _unlockedBrandIds.addAll(
@@ -322,24 +345,48 @@ class ThemeProvider extends ChangeNotifier {
     _unlockedFocusBackdropIds
       ..clear()
       ..add(defaultFocusBackdropId)
-      ..addAll(_unlockedFocusBackdropIdsFromState(shopState));
-    final activeBackdropId = shopState?['activeFocusBackdropId']?.toString();
+      ..addAll(
+        _stringListFromAny(shopState, const [
+          'unlockedFocusBackdropIds',
+          'unlocked_focus_backdrop_ids',
+        ]),
+      );
+    final activeBackdropId = _stringFromAny(shopState, const [
+      'activeFocusBackdropId',
+      'active_focus_backdrop_id',
+    ]);
     _activeFocusBackdropId = isFocusBackdropUnlocked(activeBackdropId ?? '')
         ? activeBackdropId!
         : defaultFocusBackdropId;
     _unlockedAvatarFrameIds
       ..clear()
       ..add(defaultAvatarFrameId)
-      ..addAll(_unlockedAvatarFrameIdsFromState(shopState));
-    final activeAvatarFrameId = shopState?['activeAvatarFrameId']?.toString();
+      ..addAll(
+        _stringListFromAny(shopState, const [
+          'unlockedAvatarFrameIds',
+          'unlocked_avatar_frame_ids',
+        ]),
+      );
+    final activeAvatarFrameId = _stringFromAny(shopState, const [
+      'activeAvatarFrameId',
+      'active_avatar_frame_id',
+    ]);
     _activeAvatarFrameId = isAvatarFrameUnlocked(activeAvatarFrameId ?? '')
         ? activeAvatarFrameId!
         : defaultAvatarFrameId;
     _unlockedCardSkinIds
       ..clear()
       ..add(defaultCardSkinId)
-      ..addAll(_unlockedCardSkinIdsFromState(shopState));
-    final activeCardSkinId = shopState?['activeCardSkinId']?.toString();
+      ..addAll(
+        _stringListFromAny(shopState, const [
+          'unlockedCardSkinIds',
+          'unlocked_card_skin_ids',
+        ]),
+      );
+    final activeCardSkinId = _stringFromAny(shopState, const [
+      'activeCardSkinId',
+      'active_card_skin_id',
+    ]);
     _activeCardSkinId = isCardSkinUnlocked(activeCardSkinId ?? '')
         ? activeCardSkinId!
         : defaultCardSkinId;
@@ -465,30 +512,43 @@ class ThemeProvider extends ChangeNotifier {
     }
   }
 
-  Iterable<String> _unlockedIdsFromState(Map<String, dynamic>? state) {
-    final raw = state?['unlockedBrandIds'];
-    if (raw is! List) return const <String>[];
-    return raw.map((id) => id.toString());
+  String? _stringFromAny(Map<String, dynamic>? state, List<String> keys) {
+    if (state == null) return null;
+    for (final key in keys) {
+      if (!state.containsKey(key)) continue;
+      final value = state[key];
+      if (value == null) continue;
+      final text = value.toString();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
   }
 
-  Iterable<String> _unlockedFocusBackdropIdsFromState(
+  int? _intFromAny(Map<String, dynamic>? state, List<String> keys) {
+    if (state == null) return null;
+    for (final key in keys) {
+      if (!state.containsKey(key)) continue;
+      final value = state[key];
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final parsed = int.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  Iterable<String> _stringListFromAny(
     Map<String, dynamic>? state,
+    List<String> keys,
   ) {
-    final raw = state?['unlockedFocusBackdropIds'];
-    if (raw is! List) return const <String>[];
-    return raw.map((id) => id.toString());
-  }
-
-  Iterable<String> _unlockedAvatarFrameIdsFromState(
-    Map<String, dynamic>? state,
-  ) {
-    final raw = state?['unlockedAvatarFrameIds'];
-    if (raw is! List) return const <String>[];
-    return raw.map((id) => id.toString());
-  }
-
-  Iterable<String> _unlockedCardSkinIdsFromState(Map<String, dynamic>? state) {
-    final raw = state?['unlockedCardSkinIds'];
+    if (state == null) return const <String>[];
+    Object? raw;
+    for (final key in keys) {
+      if (!state.containsKey(key)) continue;
+      raw = state[key];
+      break;
+    }
     if (raw is! List) return const <String>[];
     return raw.map((id) => id.toString());
   }

@@ -732,8 +732,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         ? Theme.of(context).colorScheme.surface
         : Theme.of(context).colorScheme.surfaceContainerLowest;
 
-    return Scaffold(
-      backgroundColor: routeBackground,
+    return BrandScaffold(
       appBar: AppBar(
         title: const Text('日历'),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -915,7 +914,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                           ),
                           ColoredBox(
                             key: const ValueKey('calendar_month_detail_agenda'),
-                            color: routeBackground,
+                            color: routeBackground.withValues(alpha: 0.72),
                             child: CalendarDayAgenda(
                               date: _selectedDay,
                               calendarProvider: calendarProvider,

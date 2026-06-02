@@ -189,13 +189,13 @@ String _pomodoroHomeWidgetSignature(PomodoroProvider provider) {
 
 Future<void> _runSyncReloadTasksInBatches(
   List<Future<void> Function()> tasks, {
-  int batchSize = 3,
+  int batchSize = 1,
 }) async {
   for (var i = 0; i < tasks.length; i += batchSize) {
     final end = (i + batchSize).clamp(0, tasks.length);
     await Future.wait([for (var j = i; j < end; j++) tasks[j]()]);
     if (end < tasks.length) {
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
   }
 }
@@ -271,6 +271,40 @@ void main() async {
       avatarUrl: state.avatar ?? '',
       bio: state.bio ?? '',
     );
+  };
+  Object? accountPayloadValue(Map<dynamic, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      if (data[key] != null) return data[key];
+    }
+    for (final wrapperKey in const ['user', 'profile', 'data', 'payload']) {
+      final wrapper = data[wrapperKey];
+      if (wrapper is Map) {
+        final nested = accountPayloadValue(wrapper, keys);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
+  }
+
+  authProvider.onAccountPayloadChanged = (payload) async {
+    final themeState = accountPayloadValue(payload, const [
+      'theme_shop_state',
+      'themeShopState',
+    ]);
+    final rewards = accountPayloadValue(payload, const [
+      'virtual_rewards',
+      'virtualRewards',
+      'rewards',
+    ]);
+    if (themeState is! Map && rewards is! Map) return;
+    await cloudSyncProvider.suppressDirtyMarkWhile(() async {
+      if (themeState is Map) {
+        await themeProvider.applyShopStateFromServer(themeState);
+      }
+      if (rewards is Map) {
+        await achievementProvider.applyRewardsSnapshot(rewards);
+      }
+    });
   };
   authProvider.onAccountLoggedOut = () =>
       userProvider.clearAccountProfileCache();
@@ -581,12 +615,16 @@ void main() async {
     final next = _achievementPersistedSignature(achievementProvider);
     if (next == lastAchievementDirtySignature) return;
     lastAchievementDirtySignature = next;
+    if (achievementProvider.consumeServerConfirmedRewardsChange()) return;
     markDirty();
   }
 
   achievementProvider.addListener(markAchievementDirtyOnPersistedChange);
   focusRoomProvider.onLocalChanged = markDirty;
-  themeProvider.addListener(markDirty);
+  themeProvider.addListener(() {
+    if (themeProvider.consumeServerConfirmedChange()) return;
+    markDirty();
+  });
   calendarProvider.onLocalEventsChanged = markDirty;
   calendarProvider.localEventReminderCanceller =
       notificationService.cancelCalendarReminder;
@@ -1067,9 +1105,11 @@ void main() async {
       }
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
       if (shouldResyncReminders) {
-        await queueFullReminderResync(
-          delay: Duration.zero,
-          reason: 'cloud sync changed reminders',
+        unawaited(
+          queueFullReminderResync(
+            delay: const Duration(milliseconds: 2500),
+            reason: 'cloud sync changed reminders',
+          ),
         );
       }
     });
@@ -1081,6 +1121,43 @@ void main() async {
     return state.token;
   }
 
+  var cloudSyncStartSerial = 0;
+  Future<void> startCloudSyncAfterAuth({
+    required String reason,
+    Duration delay = const Duration(milliseconds: 1600),
+  }) async {
+    final serial = ++cloudSyncStartSerial;
+    await Future<void>.delayed(delay);
+    if (serial != cloudSyncStartSerial) return;
+    if (!authProvider.state.isLoggedIn || !cloudSyncProvider.config.autoSync) {
+      cloudSyncProvider.stopRemotePolling();
+      return;
+    }
+    await _startupGuard(
+      'server config before cloud sync',
+      () => authProvider.refreshServerConfigFromServer(),
+      timeout: const Duration(seconds: 5),
+    );
+    if (serial != cloudSyncStartSerial) return;
+    if (!authProvider.state.isLoggedIn || !cloudSyncProvider.config.autoSync) {
+      cloudSyncProvider.stopRemotePolling();
+      return;
+    }
+    if (authProvider.serverConfig['backup_enabled'] == false) {
+      cloudSyncProvider.stopRemotePolling();
+      return;
+    }
+    await _startupGuard(
+      'cloud sync $reason',
+      () => cloudSyncProvider.syncNow(),
+      timeout: const Duration(seconds: 12),
+    );
+    if (serial != cloudSyncStartSerial) return;
+    if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
+      cloudSyncProvider.startRemotePolling();
+    }
+  }
+
   var lastAuthReminderIdentity = currentAuthReminderIdentity();
   authProvider.addListener(() {
     final authReminderIdentity = currentAuthReminderIdentity();
@@ -1089,16 +1166,23 @@ void main() async {
     if (!authChanged) return;
     shareProvider.load();
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
-      // ignore: discarded_futures
-      unawaited(cloudSyncProvider.syncNow());
-      cloudSyncProvider.startRemotePolling();
+      unawaited(
+        startCloudSyncAfterAuth(
+          reason: 'auth changed',
+          delay: const Duration(milliseconds: 2600),
+        ),
+      );
       // 登录/切号后立刻重放本地提醒；云同步回写后还会幂等重放一次。
       if (authChanged) {
         unawaited(
-          queueFullReminderResync(delay: Duration.zero, reason: 'auth changed'),
+          queueFullReminderResync(
+            delay: const Duration(milliseconds: 2600),
+            reason: 'auth changed',
+          ),
         );
       }
     } else {
+      cloudSyncStartSerial++;
       cloudSyncProvider.stopRemotePolling();
     }
   });
@@ -1106,12 +1190,15 @@ void main() async {
     shareProvider.load();
   }
   if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
-    // ignore: discarded_futures
-    unawaited(cloudSyncProvider.syncNow());
-    cloudSyncProvider.startRemotePolling();
+    unawaited(
+      startCloudSyncAfterAuth(
+        reason: 'initial logged-in startup',
+        delay: const Duration(seconds: 7),
+      ),
+    );
     unawaited(
       queueStartupReminderResync(
-        delay: const Duration(milliseconds: 1800),
+        delay: const Duration(milliseconds: 4200),
         reason: 'initial logged-in startup',
       ),
     );
@@ -1189,7 +1276,7 @@ void main() async {
 
   Future<void> runPostFrameStartupTasks() async {
     unawaited(ensureDeferredLocalStorageStartup());
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await Future<void>.delayed(const Duration(milliseconds: 900));
     await ensureDeferredPlatformStartup();
     final initialNotificationPayloads = <String>[];
     final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
@@ -1240,14 +1327,16 @@ void main() async {
       ),
     );
     unawaited(
-      _startupGuard(
-        'auth profile refresh',
-        () => authProvider.refreshMe(),
-        timeout: const Duration(seconds: 8),
-      ),
+      Future<void>.delayed(const Duration(milliseconds: 800), () {
+        return _startupGuard(
+          'auth profile refresh',
+          () => authProvider.refreshMe(),
+          timeout: const Duration(seconds: 8),
+        );
+      }),
     );
     unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 700), () async {
+      Future<void>.delayed(const Duration(milliseconds: 1400), () async {
         await _startupGuard(
           'initial reminder resync',
           () => queueStartupReminderResync(
@@ -1258,19 +1347,19 @@ void main() async {
       }),
     );
     unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 1400), () async {
+      Future<void>.delayed(const Duration(milliseconds: 2600), () async {
         await _startupGuard('daily digest reminder', syncDailyDigestReminder);
-        await Future<void>.delayed(const Duration(milliseconds: 450));
+        await Future<void>.delayed(const Duration(milliseconds: 700));
         await _startupGuard(
           'report digest reminders',
           syncReportDigestReminders,
         );
-        await Future<void>.delayed(const Duration(milliseconds: 450));
+        await Future<void>.delayed(const Duration(milliseconds: 700));
         await _startupGuard(
           'notification quick add',
           syncNotificationStatusBarOnStartup,
         );
-        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
         await _startupGuard('initial home widget push', () async {
           final pushed = await pushHomeWidgetNow();
           if (!pushed) {
@@ -1281,12 +1370,12 @@ void main() async {
     );
     unawaited(
       Future<void>.delayed(
-        const Duration(milliseconds: 1800),
+        const Duration(milliseconds: 3600),
         runDailyRolloverAfterFirstFrame,
       ),
     );
     unawaited(
-      Future<void>.delayed(const Duration(seconds: 2), () {
+      Future<void>.delayed(const Duration(seconds: 6), () {
         return _startupGuard(
           'startup app update policy',
           () => appUpdate.checkServerPolicyNow(),
@@ -1515,6 +1604,7 @@ Future<bool> _pushHomeWidget(
     habitQuickCheckLabel: quickCheckHabit == null
         ? '点击进入习惯打卡'
         : '打卡：${quickCheckHabit.name}',
+    theme: HomeWidgetThemePayload.fromThemeProvider(tp),
   );
 }
 

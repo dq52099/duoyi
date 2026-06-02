@@ -37,6 +37,31 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_note_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_note_root,
+                R.id.widget_note_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_note_title,
+                    R.id.widget_note_nav_calendar,
+                ),
+                bodyIds = intArrayOf(
+                    R.id.widget_note_1,
+                    R.id.widget_note_2,
+                    R.id.widget_note_3,
+                ),
+                mutedIds = intArrayOf(
+                    R.id.widget_note_subtitle,
+                    R.id.widget_note_nav_todo,
+                    R.id.widget_note_nav_habit,
+                    R.id.widget_note_nav_focus,
+                ),
+            )
 
             views.setTextViewText(
                 R.id.widget_note_title,

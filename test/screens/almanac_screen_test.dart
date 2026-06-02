@@ -14,44 +14,95 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('almanac shows date details without weather content', (
+  testWidgets(
+    'almanac shows month summary then opens details without weather',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 6, 1))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('万年历'), findsWidgets);
+      expect(find.text('6月'), findsOneWidget);
+      expect(find.text('2026年'), findsOneWidget);
+      expect(find.text('四月十六'), findsOneWidget);
+      expect(find.textContaining('丙午马年 癸巳月 丙午日'), findsOneWidget);
+      expect(find.text('宜'), findsOneWidget);
+      expect(find.text('忌'), findsOneWidget);
+      expect(find.text('2026年6月1日 星期一'), findsNothing);
+      expect(find.text('胎神'), findsNothing);
+      expect(find.text('彭祖'), findsNothing);
+      expect(find.text('五行'), findsNothing);
+      expect(find.text('星宿'), findsNothing);
+      expect(find.text('冲煞'), findsNothing);
+      expect(find.text('时辰吉凶'), findsNothing);
+
+      await tester.tap(find.text('四月十六'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2026年6月1日 星期一'), findsOneWidget);
+      expect(find.text('胎神'), findsOneWidget);
+      expect(find.text('彭祖'), findsOneWidget);
+      expect(find.text('五行'), findsOneWidget);
+      expect(find.text('星宿'), findsOneWidget);
+      expect(find.text('冲煞'), findsOneWidget);
+      expect(find.text('时辰吉凶'), findsOneWidget);
+      final suitableRect = tester.getRect(find.text('宜').last);
+      final avoidRect = tester.getRect(find.text('忌').last);
+      expect(
+        (suitableRect.center.dy - avoidRect.center.dy).abs(),
+        lessThan(4),
+        reason: '详细黄历中的宜和忌应在同一行展示。',
+      );
+      expect(
+        suitableRect.right,
+        lessThan(avoidRect.left),
+        reason: '宜在左侧，忌在右侧。',
+      );
+      expect(find.textContaining('实时天气'), findsNothing);
+      expect(find.textContaining('天气参考'), findsNothing);
+      expect(find.textContaining('Open-Meteo'), findsNothing);
+      expect(find.text('本地天气摘要'), findsNothing);
+      expect(find.text('已记录天气'), findsNothing);
+      expect(find.text('记录天气'), findsNothing);
+      expect(find.byTooltip('记录天气'), findsNothing);
+      expect(find.byTooltip('天气'), findsNothing);
+      expect(find.byIcon(Icons.wb_sunny_outlined), findsNothing);
+      expect(find.byIcon(Icons.cloud_outlined), findsNothing);
+    },
+  );
+
+  testWidgets('almanac supports dark theme on a narrow viewport', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
-      MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 7, 1))),
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: AlmanacScreen(initialDate: DateTime(2026, 6, 1)),
+      ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('万年历'), findsWidgets);
-    expect(find.text('2026年7月1日 星期三'), findsOneWidget);
-    expect(find.textContaining('农历'), findsWidgets);
-    expect(find.textContaining('马年'), findsOneWidget);
-    expect(find.text('宜'), findsOneWidget);
-    expect(find.text('忌'), findsOneWidget);
+    expect(find.text('6月'), findsOneWidget);
+    expect(find.text('四月十六'), findsOneWidget);
+    expect(find.text('本月重点日期'), findsOneWidget);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('四月十六'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026年6月1日 星期一'), findsOneWidget);
     expect(find.text('胎神'), findsOneWidget);
-    expect(find.text('彭祖'), findsOneWidget);
-    expect(find.text('五行'), findsOneWidget);
-    expect(find.text('星宿'), findsOneWidget);
-    expect(find.text('冲煞'), findsOneWidget);
-    expect(find.text('时辰吉凶'), findsOneWidget);
-    final suitableRect = tester.getRect(find.text('宜'));
-    final avoidRect = tester.getRect(find.text('忌'));
-    expect(
-      (suitableRect.center.dy - avoidRect.center.dy).abs(),
-      lessThan(4),
-      reason: '宜和忌应在同一行展示。',
-    );
-    expect(suitableRect.right, lessThan(avoidRect.left), reason: '宜在左侧，忌在右侧。');
-    expect(find.textContaining('实时天气'), findsNothing);
-    expect(find.textContaining('天气参考'), findsNothing);
-    expect(find.textContaining('Open-Meteo'), findsNothing);
-    expect(find.text('本地天气摘要'), findsNothing);
-    expect(find.text('已记录天气'), findsNothing);
-    expect(find.text('记录天气'), findsNothing);
-    expect(find.byTooltip('记录天气'), findsNothing);
-    expect(find.byTooltip('天气'), findsNothing);
-    expect(find.byIcon(Icons.wb_sunny_outlined), findsNothing);
-    expect(find.byIcon(Icons.cloud_outlined), findsNothing);
+
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('四月十六'), findsOneWidget);
+    expect(find.text('胎神'), findsNothing);
   });
 
   testWidgets('almanac uses lunar library instead of single-day override', (
@@ -62,10 +113,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('四月十五'), findsOneWidget);
+    expect(find.textContaining('丙午马年 癸巳月 乙巳日'), findsOneWidget);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('四月十五'));
+    await tester.pumpAndSettle();
+
     expect(find.text('2026年5月31日 星期日'), findsOneWidget);
-    expect(find.textContaining('丙午马年癸巳月乙巳日'), findsOneWidget);
-    expect(find.textContaining('祭祀 解除 断蚁 会亲友 馀事勿取'), findsOneWidget);
-    expect(find.textContaining('嫁娶 安葬'), findsOneWidget);
+    expect(find.textContaining('丙午马年 癸巳月 乙巳日'), findsWidgets);
+    expect(find.textContaining('祭祀 解除 断蚁 会亲友 馀事勿取'), findsWidgets);
+    expect(find.textContaining('嫁娶 安葬'), findsWidgets);
     expect(find.textContaining('碓磨床房内东'), findsOneWidget);
     expect(find.textContaining('蛇日冲猪（己亥）煞东'), findsOneWidget);
     expect(find.textContaining('实时天气'), findsNothing);
@@ -79,11 +137,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('四月十八'), findsOneWidget);
+    expect(find.textContaining('丙午马年 癸巳月 戊申日'), findsOneWidget);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('四月十八'));
+    await tester.pumpAndSettle();
+
     expect(find.text('2026年6月3日 星期三'), findsOneWidget);
-    expect(find.text('农历 四月十八'), findsOneWidget);
-    expect(find.textContaining('丙午马年癸巳月戊申日'), findsOneWidget);
+    expect(find.textContaining('四月十八'), findsWidgets);
+    expect(find.textContaining('丙午马年 癸巳月 戊申日'), findsWidgets);
     expect(find.textContaining('祭祀 沐浴 移徙 破土 安葬 扫舍 平治道涂'), findsOneWidget);
-    expect(find.textContaining('祈福 嫁娶 入宅 安床 作灶'), findsOneWidget);
+    expect(find.textContaining('祈福 嫁娶 入宅 安床 作灶'), findsWidgets);
     expect(find.textContaining('房床炉房内中'), findsOneWidget);
     expect(find.textContaining('戊不受田，田主不祥；申不安床，鬼祟入房'), findsOneWidget);
     expect(find.textContaining('大驿土平执位'), findsOneWidget);
@@ -191,7 +256,10 @@ void main() {
       expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
       expect(source, contains('final selectedDate = _date'));
       expect(source, contains('final lunar = almanacDetail.lunarDate'));
-      expect(source, contains('final ganzhiLine = almanacDetail.ganzhiLine'));
+      expect(source, contains('class _MonthCalendar'));
+      expect(source, contains('class _SelectedDateSummaryCard'));
+      expect(source, contains('class _AlmanacDetailSheet'));
+      expect(source, contains('showModalBottomSheet<void>'));
       expect(source, contains("('胎神', detail.fetalGod)"));
       expect(source, contains("('彭祖', detail.pengZu)"));
       expect(source, contains("('五行', detail.fiveElements)"));

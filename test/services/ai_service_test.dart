@@ -135,11 +135,24 @@ void main() {
           token: 'token',
           httpClient: MockClient((request) async {
             final body = jsonDecode(request.body) as Map<String, dynamic>;
-            expect(body['system'], contains('基于上周完成情况'));
-            expect(body['system'], contains('开头必须明确写“上周回顾：”'));
-            expect(body['user'], contains('上周数据：完成 2 / 3 项待办'));
+            expect(body['system'], contains('输出分层纯文本'));
+            expect(body['system'], contains('不要 Markdown、表格、emoji、加粗'));
+            expect(body['system'], contains('上周回顾\n总览：一句总判断'));
+            expect(body['user'], contains('待办完成：2 / 3'));
             return http.Response(
-              jsonEncode({'content': '上周回顾：完成稳定，建议收敛到两件关键事。'}),
+              jsonEncode({
+                'content':
+                    '上周回顾\n'
+                    '总览：整体推进不错，可以继续加固。\n'
+                    '数据\n'
+                    '待办：完成 2 / 3 项，完成率 67%。\n'
+                    '专注：45 分钟，保留固定专注窗口。\n'
+                    '习惯：连续 4 天，继续守住当前节奏。\n'
+                    '观察：待办有推进，适合减少目标切换。\n'
+                    '下周行动\n'
+                    '行动一：保留两件关键任务。\n'
+                    '行动二：周中复盘一次任务清单。',
+              }),
               200,
               headers: {'content-type': 'application/json'},
             );
@@ -157,7 +170,16 @@ void main() {
         now: today,
       );
 
-      expect(review, startsWith('上周回顾：'));
+      expect(review, startsWith('上周回顾\n'));
+      expect(review, contains('\n总览：'));
+      expect(review, contains('\n数据\n'));
+      expect(review, contains('\n待办：'));
+      expect(review, contains('\n专注：'));
+      expect(review, contains('\n习惯：'));
+      expect(review, contains('\n观察：'));
+      expect(review, contains('\n下周行动\n'));
+      expect(review, contains('\n行动一：'));
+      expect(review, contains('\n行动二：'));
       final cached = service.weeklyReviewForDay(today);
       expect(cached, isNotNull);
       expect(cached!.kind, AiService.weeklyReviewKind);
@@ -165,6 +187,57 @@ void main() {
       expect(cached.summary, startsWith('上周数据：'));
     },
   );
+
+  test('weekly review normalizes markdown-heavy upstream content', () async {
+    final today = DateTime(2026, 6, 2, 9);
+    final service = AiService();
+    service.attachClient(
+      ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token',
+        httpClient: MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'content':
+                  '## 📊 上周数据概览\n\n'
+                  '| 指标 | 完成情况 |\n'
+                  '|---|---|\n'
+                  '| ✅ 待办事项 | **3 / 4 项** |\n'
+                  '如果你需要我帮你制定本周计划，随时告诉我哦！',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+    service.updateFromServerConfig({'ai_enabled': true});
+
+    final review = await service.weeklyReview(
+      completedTodos: 3,
+      totalTodos: 4,
+      weeklyFocusMinutes: 0,
+      habitStreak: 0,
+      periodLabel: '上周',
+      now: today,
+    );
+
+    expect(review, startsWith('上周回顾\n'));
+    expect(review.split('\n'), hasLength(10));
+    expect(review, contains('\n总览：'));
+    expect(review, contains('\n数据\n'));
+    expect(review, contains('待办：完成 3 / 4 项，完成率 75%。'));
+    expect(review, contains('专注：0 分钟'));
+    expect(review, contains('习惯：连续 0 天'));
+    expect(review, contains('\n观察：'));
+    expect(review, contains('\n下周行动\n'));
+    expect(review, contains('\n行动一：'));
+    expect(review, contains('\n行动二：'));
+    expect(review, isNot(contains('|')));
+    expect(review, isNot(contains('**')));
+    expect(review, isNot(contains('📊')));
+    expect(review, isNot(contains('随时告诉我')));
+  });
 
   test(
     'AI schedule creation falls back to local parser when disabled',

@@ -253,7 +253,7 @@ def _pubspec_app_version() -> tuple[str, int]:
             return match.group(1), int(match.group(2) or "0")
     except (OSError, ValueError):
         pass
-    return "1.1.18", 120018
+    return "1.1.19", 120019
 
 
 _DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()
@@ -2721,16 +2721,30 @@ def _user_response(
         "last_login_at": row["last_login_at"],
     }
     if db is not None:
-        rewards = db.execute(
-            "SELECT virtual_rewards FROM sync_data WHERE user_id=?",
+        sync_row = db.execute(
+            "SELECT virtual_rewards, theme_shop_state FROM sync_data WHERE user_id=?",
             (row["id"],),
         ).fetchone()
         coin_balance, lifetime_coins = _virtual_rewards_summary(
-            rewards["virtual_rewards"] if rewards else "{}"
+            sync_row["virtual_rewards"] if sync_row else "{}"
         )
         result["coin_balance"] = coin_balance
         result["lifetime_coins"] = lifetime_coins
-        result.update(_quota_aliases_from_rewards(rewards["virtual_rewards"] if rewards else "{}"))
+        result["virtual_rewards"] = _json_object(
+            sync_row["virtual_rewards"] if sync_row else "{}"
+        )
+        theme_shop_state = _normalize_theme_shop_state(
+            _json_object(sync_row["theme_shop_state"] if sync_row else "{}")
+        )
+        result["theme_shop_state"] = theme_shop_state
+        result["themeShopState"] = theme_shop_state
+        result["active_brand"] = theme_shop_state.get("activeBrand")
+        result["activeBrand"] = theme_shop_state.get("activeBrand")
+        result.update(
+            _quota_aliases_from_rewards(
+                sync_row["virtual_rewards"] if sync_row else "{}"
+            )
+        )
     if token is not None:
         result["token"] = token
     result.update(_quota_aliases_from_rewards(_row_get(row, "virtual_rewards", "{}")))

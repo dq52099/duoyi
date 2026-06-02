@@ -16,6 +16,7 @@ import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
 import '../widgets/reminder_plan_editor.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'habit_detail_screen.dart';
@@ -602,8 +603,7 @@ class _HabitScreenState extends State<HabitScreen>
         ? cs.surface
         : cs.surfaceContainerLowest;
 
-    return Scaffold(
-      backgroundColor: routeBackground,
+    return BrandScaffold(
       appBar: AppBar(
         title: Text(s.habitTitle),
         backgroundColor: routeBackground.withValues(alpha: 0.96),

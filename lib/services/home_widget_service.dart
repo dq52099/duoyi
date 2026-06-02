@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import '../core/brand_strings.dart';
 import '../core/platform_info.dart';
+import '../providers/theme_provider.dart';
 
 /// Pushes today's stats and brand strings out to Android/iOS home widgets.
 /// 在 web / 其他平台下为空实现。
@@ -93,6 +95,7 @@ class HomeWidgetService {
     String focusTimerLabel = '专注倒计时',
     String habitQuickCheckId = '',
     String habitQuickCheckLabel = '点击进入习惯打卡',
+    required HomeWidgetThemePayload theme,
   }) async {
     if (!_supported) return true;
     try {
@@ -344,6 +347,7 @@ class HomeWidgetService {
           'habit_quick_check_label',
           habitQuickCheckLabel,
         ),
+        ...theme.saveOperations(),
       ]);
       return _updateAllWidgets();
     } catch (e, st) {
@@ -413,6 +417,109 @@ class HomeWidgetService {
     if (!_supported) return null;
     return HomeWidget.initiallyLaunchedFromHomeWidget();
   }
+}
+
+class HomeWidgetThemePayload {
+  final String brandId;
+  final bool dark;
+  final Color primary;
+  final Color background;
+  final Color surface;
+  final Color navBackground;
+  final Color text;
+  final Color mutedText;
+  final Color onPrimary;
+  final Color accentStart;
+  final Color accentEnd;
+
+  const HomeWidgetThemePayload({
+    required this.brandId,
+    required this.dark,
+    required this.primary,
+    required this.background,
+    required this.surface,
+    required this.navBackground,
+    required this.text,
+    required this.mutedText,
+    required this.onPrimary,
+    required this.accentStart,
+    required this.accentEnd,
+  });
+
+  factory HomeWidgetThemePayload.fromThemeProvider(ThemeProvider provider) {
+    final brand = provider.brand;
+    final theme = brand.theme;
+    final cs = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final cardSkin = provider.activeCardSkin;
+    final usesCardSkin = cardSkin.id != ThemeProvider.defaultCardSkinId;
+    final accentStart = usesCardSkin ? cardSkin.colors.first : cs.primary;
+    final accentEnd = usesCardSkin ? cardSkin.colors.last : cs.secondary;
+    final baseBackground = Color.alphaBlend(
+      brand.backgroundOverlay.withValues(alpha: brand.backgroundOverlayOpacity),
+      dark ? const Color(0xFF0B0F17) : const Color(0xFFFFFFFF),
+    );
+    final background = Color.alphaBlend(
+      accentStart.withValues(alpha: dark ? 0.20 : 0.10),
+      baseBackground,
+    );
+    final surface = Color.alphaBlend(
+      accentEnd.withValues(alpha: usesCardSkin ? (dark ? 0.24 : 0.16) : 0.06),
+      cs.surface,
+    );
+    final navBackground = Color.alphaBlend(
+      cs.primary.withValues(alpha: dark ? 0.20 : 0.10),
+      surface,
+    );
+    return HomeWidgetThemePayload(
+      brandId: brand.id,
+      dark: dark,
+      primary: cs.primary,
+      background: background,
+      surface: surface,
+      navBackground: navBackground,
+      text: cs.onSurface,
+      mutedText: cs.onSurfaceVariant,
+      onPrimary: cs.onPrimary,
+      accentStart: accentStart,
+      accentEnd: accentEnd,
+    );
+  }
+
+  List<Future<bool?>> saveOperations() => [
+    HomeWidget.saveWidgetData<String>('widget_theme_brand_id', brandId),
+    HomeWidget.saveWidgetData<bool>('widget_theme_dark', dark),
+    HomeWidget.saveWidgetData<String>('widget_theme_primary', _hex(primary)),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_background',
+      _hex(background),
+    ),
+    HomeWidget.saveWidgetData<String>('widget_theme_surface', _hex(surface)),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_nav_background',
+      _hex(navBackground),
+    ),
+    HomeWidget.saveWidgetData<String>('widget_theme_text', _hex(text)),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_muted_text',
+      _hex(mutedText),
+    ),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_on_primary',
+      _hex(onPrimary),
+    ),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_accent_start',
+      _hex(accentStart),
+    ),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_accent_end',
+      _hex(accentEnd),
+    ),
+  ];
+
+  static String _hex(Color color) =>
+      '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
 }
 
 class _HomeWidgetUpdateTarget {

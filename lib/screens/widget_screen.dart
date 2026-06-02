@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/theme_provider.dart';
 import '../services/android_widget_manager.dart';
 import '../services/home_widget_service.dart';
 import '../widgets/surface_components.dart';
@@ -840,6 +842,15 @@ class WidgetPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    ThemeProvider? themeProvider;
+    try {
+      themeProvider = context.watch<ThemeProvider>();
+    } catch (_) {
+      themeProvider = null;
+    }
+    final cardSkin = themeProvider?.activeCardSkin;
+    final usesCardSkin =
+        cardSkin != null && cardSkin.id != ThemeProvider.defaultCardSkinId;
     final accent = switch (kind) {
       WidgetPreviewKind.todo => Colors.blue,
       WidgetPreviewKind.focus => Colors.redAccent,
@@ -864,6 +875,36 @@ class WidgetPreviewCard extends StatelessWidget {
       WidgetPreviewKind.anniversary => '纪念日预览',
       WidgetPreviewKind.diary => '日记预览',
     };
+    final skin = cardSkin;
+    final backgroundStart = usesCardSkin && skin != null
+        ? skin.colors.first
+        : cs.primary;
+    final backgroundEnd = usesCardSkin && skin != null
+        ? skin.colors.last
+        : cs.surface;
+    final previewBackground = Color.alphaBlend(
+      backgroundStart.withValues(
+        alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.12,
+      ),
+      cs.surface,
+    );
+    final previewGradient = LinearGradient(
+      colors: [
+        previewBackground,
+        Color.alphaBlend(
+          backgroundEnd.withValues(
+            alpha: usesCardSkin
+                ? (Theme.of(context).brightness == Brightness.dark
+                      ? 0.20
+                      : 0.14)
+                : 0.05,
+          ),
+          cs.surface,
+        ),
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
     return Semantics(
       label: '$title ${displayMode.previewCellLabel}',
       child: LayoutBuilder(
@@ -884,10 +925,11 @@ class WidgetPreviewCard extends StatelessWidget {
                   clipBehavior: Clip.hardEdge,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.52),
+                    color: previewBackground,
+                    gradient: previewGradient,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.62),
+                      color: cs.primary.withValues(alpha: 0.16),
                       width: 0.45,
                     ),
                   ),

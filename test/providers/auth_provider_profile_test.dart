@@ -709,6 +709,63 @@ void main() {
   );
 
   test(
+    'theme shop apply falls back to virtual rewards balance for auth coins',
+    () async {
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          coinBalance: 200,
+          lifetimeCoins: 200,
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            expect(request.url.path, '/api/theme-shop/apply');
+            return http.Response(
+              json.encode({
+                'status': 'ok',
+                'virtual_rewards': {
+                  'balance': 60,
+                  'lifetime': 200,
+                  'updatedAt': '2026-06-01T00:00:00Z',
+                },
+                'theme_shop_state': {
+                  'activeBrand': 're0',
+                  'unlockedBrandIds': ['defaultBrand', 're0'],
+                  'updatedAt': '2026-06-01T00:00:00Z',
+                },
+                'user': {
+                  'user_id': 'u-1',
+                  'username': 'stable-user',
+                },
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+
+      await auth.applyThemeShopItem(
+        itemType: 'brand',
+        itemId: 're0',
+        title: '兑换主题：从零开始',
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+
+      expect(auth.state.coinBalance, 60);
+      expect(auth.state.lifetimeCoins, 200);
+      expect(persisted['coin_balance'], 60);
+      expect(persisted['lifetime_coins'], 200);
+    },
+  );
+
+  test(
     'stale refreshMe response cannot override a newer account mutation',
     () async {
       final meResponse = Completer<http.Response>();

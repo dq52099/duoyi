@@ -40,6 +40,28 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_calendar_widget)
+            DuoyiWidgetTheme.applyContainer(
+                views,
+                prefs,
+                R.id.widget_calendar_root,
+                R.id.widget_calendar_bottom_nav
+            )
+            DuoyiWidgetTheme.applyTextColors(
+                views,
+                prefs,
+                primaryIds = intArrayOf(
+                    R.id.widget_calendar_title,
+                    R.id.widget_calendar_summary,
+                    R.id.widget_calendar_nav_calendar,
+                ),
+                bodyIds = intArrayOf(R.id.widget_calendar_grid),
+                mutedIds = intArrayOf(
+                    R.id.widget_calendar_month,
+                    R.id.widget_calendar_nav_todo,
+                    R.id.widget_calendar_nav_habit,
+                    R.id.widget_calendar_nav_focus,
+                ),
+            )
             val now = Calendar.getInstance()
             val monthTitle = SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(now.time)
 
