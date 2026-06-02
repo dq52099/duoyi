@@ -57,18 +57,11 @@ void main() {
     );
     expect(adminApi, contains('Future<Map<String, dynamic>> saveGroup'));
     expect(adminApi, contains('Future<Map<String, dynamic>> deleteGroup'));
-    expect(adminApi, contains('int? defaultGenerateQuota'));
-    expect(adminApi, contains('int? defaultEditQuota'));
-    expect(
-      adminApi,
-      contains("'default_generate_quota': ?defaultGenerateQuota"),
-      reason: '保存用户组时不能把隐藏额度字段用 UI 默认值覆盖掉。',
-    );
-    expect(
-      adminApi,
-      contains("'default_edit_quota': ?defaultEditQuota"),
-      reason: '保存用户组时不能把隐藏额度字段用 UI 默认值覆盖掉。',
-    );
+    expect(adminApi, isNot(contains('defaultGenerateQuota')));
+    expect(adminApi, isNot(contains('defaultEditQuota')));
+    expect(adminApi, isNot(contains("'default_generate_quota'")));
+    expect(adminApi, isNot(contains("'default_edit_quota'")));
+    expect(adminApi, isNot(contains("'image_mode'")));
     expect(adminApi, contains('_sendFirstAvailable('));
     expect(adminApi, contains("'/api/admin/groups'"));
     expect(adminApi, contains("'/api/admin/user-groups'"));
@@ -138,7 +131,7 @@ void main() {
       contains(
         'def group_int(field: str, fallback: int, *aliases: str) -> int:',
       ),
-      reason: '后端更新用户组时需要保留前端未提交的隐藏额度字段，并兼容驼峰别名。',
+      reason: '后端更新用户组时需要兼容默认时光币的蛇形和驼峰字段。',
     );
     expect(
       backend,
@@ -216,29 +209,24 @@ void main() {
       adminScreen,
       contains('int _adminIntValueOrDefault(dynamic raw, int fallback)'),
     );
-    for (final entry in {
-      'default_time_coins': 100,
-      'default_generate_quota': 100,
-      'default_edit_quota': 100,
-      'default_generate_history_retention': 50,
-      'default_edit_history_retention': 20,
-    }.entries) {
-      final zeroFallbackPattern = "_adminIntValue(group?['${entry.key}']) == 0";
-      expect(
-        adminScreen,
-        isNot(contains(zeroFallbackPattern)),
-        reason: '${entry.key} 为 0 是有效配置，编辑时不能回填默认值。',
-      );
-      final safeDefaultPattern = RegExp(
-        "_adminIntValueOrDefault\\(\\s*group\\?\\['${entry.key}'\\],\\s*"
-        '${entry.value},\\s*\\)',
-      );
-      expect(
-        safeDefaultPattern.allMatches(adminScreen).length,
-        greaterThanOrEqualTo(2),
-        reason: '两个用户组编辑入口都需要只在缺失/空值时使用默认值。',
-      );
-    }
+    final zeroFallbackPattern =
+        "_adminIntValue(group?['default_time_coins']) == 0";
+    expect(
+      adminScreen,
+      isNot(contains(zeroFallbackPattern)),
+      reason: 'default_time_coins 为 0 是有效配置，编辑时不能回填默认值。',
+    );
+    final safeDefaultPattern = RegExp(
+      "_adminIntValueOrDefault\\(\\s*group\\?\\['default_time_coins'\\],\\s*100,\\s*\\)",
+    );
+    expect(
+      safeDefaultPattern.allMatches(adminScreen).length,
+      greaterThanOrEqualTo(2),
+      reason: '两个用户组编辑入口都需要只在缺失/空值时使用默认值。',
+    );
+    expect(adminScreen, isNot(contains('default_generate_quota')));
+    expect(adminScreen, isNot(contains('default_edit_quota')));
+    expect(adminScreen, isNot(contains('image_mode')));
   });
 
   test('backend feedback history exposes optional pagination', () {
@@ -309,7 +297,13 @@ void main() {
     expect(adminScreen, contains('widget.api.saveGroup('));
     expect(adminScreen, contains('widget.api.saveRole('));
     expect(adminScreen, contains('默认时光币'));
-    expect(adminScreen, contains('图片额度模式'));
+    expect(adminScreen, isNot(contains('图片额度模式')));
+    expect(adminScreen, isNot(contains('生图')));
+    expect(adminScreen, isNot(contains('改图')));
+    expect(adminScreen, contains("title: '基础功能'"));
+    expect(adminScreen, contains("title: '个人数据'"));
+    expect(adminScreen, contains("title: '管理功能'"));
+    expect(adminScreen, contains("title: '系统功能'"));
     expect(adminScreen, contains("u['admin_permissions']"));
     expect(adminScreen, contains("u['group_id']"));
     expect(adminScreen, contains("u['role_id']"));
@@ -319,7 +313,7 @@ void main() {
     expect(adminScreen, contains('final pageLifetimeCoins = _users.fold<int>'));
     expect(
       adminScreen,
-      contains(r'本页时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'),
+      contains(r'时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'),
     );
     final dashboardBody = adminScreen.substring(
       adminScreen.indexOf('class _DashboardTab'),
@@ -327,12 +321,12 @@ void main() {
     );
     expect(dashboardBody, isNot(contains("'时光币余额'")));
     expect(dashboardBody, isNot(contains("'累计时光币'")));
-    expect(adminScreen, contains(r"'权限: $permissionsText'"));
-    expect(adminScreen, contains(r"'用户组: $groupName'"));
-    expect(adminScreen, contains(r"'角色: $roleName'"));
-    expect(adminScreen, contains(r"'时光币: $coinBalance / 累计 $lifetimeCoins'"));
+    expect(adminScreen, contains(r"'管理权限: ${_adminPermissionsLabel"));
+    expect(adminScreen, contains(r"'用户组: ${_adminEntityName"));
+    expect(adminScreen, contains(r"'角色: ${_adminEntityName"));
+    expect(adminScreen, contains(r"'时光币: ${_adminIntValue"));
     expect(adminScreen, contains("label: '细分权限'"));
-    expect(adminScreen, contains(r"'排序: ${_adminUserSortLabel(_sort)}'"));
+    expect(adminScreen, contains(r"'当前排序: ${_adminUserSortLabel(_sort)}'"));
     expect(adminScreen, contains('ListView.separated'));
     expect(adminScreen, contains('_AdminPaginationBar('));
     expect(
@@ -449,16 +443,16 @@ void main() {
       adminApi.indexOf('Future<Map<String, dynamic>> saveGroup'),
       adminApi.indexOf('Future<List<Map<String, dynamic>>> listRoles'),
     );
-    for (final key in [
-      'default_time_coins',
+    expect(apiSaveGroup, contains("'default_time_coins'"));
+    expect(apiSaveGroup, contains("'is_active'"));
+    for (final removed in [
       'default_generate_quota',
       'default_edit_quota',
       'default_generate_history_retention',
       'default_edit_history_retention',
       'image_mode',
-      'is_active',
     ]) {
-      expect(apiSaveGroup, contains("'$key'"));
+      expect(apiSaveGroup, isNot(contains("'$removed'")));
     }
 
     final apiAdjustCoins = adminApi.substring(
@@ -527,6 +521,12 @@ void main() {
     for (final field in [
       'default_time_coins',
       'defaultTimeCoins',
+      'is_active',
+      'isActive',
+    ]) {
+      expect(groupModel, contains('$field: Optional'));
+    }
+    for (final removed in [
       'default_generate_quota',
       'defaultGenerateQuota',
       'default_edit_quota',
@@ -537,33 +537,22 @@ void main() {
       'defaultEditHistoryRetention',
       'image_mode',
       'imageMode',
-      'is_active',
-      'isActive',
     ]) {
-      expect(groupModel, contains('$field: Optional'));
+      expect(groupModel, isNot(contains('$removed: Optional')));
     }
 
     final saveGroup = backend.substring(
       backend.indexOf('def _admin_save_group'),
       backend.indexOf('# ---- Users ----'),
     );
-    expect(saveGroup, contains('image_mode_value = req.image_mode'));
-    expect(saveGroup, contains('image_mode_value = req.imageMode'));
+    expect(saveGroup, isNot(contains('image_mode_value')));
+    expect(saveGroup, isNot(contains('default_generate_quota')));
+    expect(saveGroup, isNot(contains('default_edit_quota')));
     expect(saveGroup, contains('is_active_value = req.is_active'));
     expect(saveGroup, contains('is_active_value = req.isActive'));
     expect(
       saveGroup,
       contains('group_int("default_time_coins", 100, "defaultTimeCoins")'),
-    );
-    expect(
-      saveGroup,
-      contains(
-        'group_int("default_generate_quota", 100, "defaultGenerateQuota")',
-      ),
-    );
-    expect(
-      saveGroup,
-      contains('group_int("default_edit_quota", 100, "defaultEditQuota")'),
     );
     expect(saveGroup, contains('"default_registration_coins"'));
 

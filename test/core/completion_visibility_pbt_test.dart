@@ -12,7 +12,7 @@ import 'package:duoyi/providers/todo_provider.dart';
 /// Feature: app-alignment-overhaul
 /// Property 4 (P4): Today completion non-destructive
 ///   ∀ TodoItem t，当日执行 `toggleTodo(t.id)` 将 `isCompleted` false → true 后：
-///   `t ∈ provider.todos` ∧ `shouldShowInToday(t, now) = true`
+///   `t ∈ provider.todos` ∧ `shouldShowInToday(t, now) = false`
 ///                       ∧ `visualState(t) = completed`。
 ///
 /// Validates: Requirements 3.1
@@ -63,7 +63,7 @@ void main() {
   group('P4 - 当日完成不销毁', () {
     test(
       'forward: 对今日 todos 中随机一条 toggle 为完成后，'
-      '仍在 provider.todos；shouldShowInToday=true；visualState=completed',
+      '仍在 provider.todos；shouldShowInToday=false；visualState=completed',
       () async {
         final rng = Random(kSeed);
 
@@ -131,11 +131,11 @@ void main() {
             reason: 'iter=$iter — completedAt=$ca 不应迟于 $tAfter+2s',
           );
 
-          // P4 断言：仍在今日视图可见。
+          // 本次规则：已完成任务不再展示在今日待办。
           expect(
             CompletionVisibilityPolicy.shouldShowInToday(updated, now),
-            isTrue,
-            reason: 'iter=$iter n=$n — 当日完成的 todo 必须仍被 shouldShowInToday 认可',
+            isFalse,
+            reason: 'iter=$iter n=$n — 已完成 todo 不应出现在今日待办',
           );
 
           // P4 断言：可视状态 = completed。
@@ -223,8 +223,8 @@ void main() {
   });
 
   group('shouldShowInToday - 日期边界', () {
-    test('明日日期的 todo → shouldShowInToday = false；'
-        '昨日日期的 todo → shouldShowInToday = false', () {
+    test('明日截止的 todo → shouldShowInToday = false；'
+        '昨日截止的 todo → shouldShowInToday = false', () {
       final rng = Random(kSeed);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -239,6 +239,13 @@ void main() {
         final tomorrowTodo = TodoItem(
           title: 'tomorrow-$iter',
           date: DateTime(
+            tomorrow.year,
+            tomorrow.month,
+            tomorrow.day,
+            hour,
+            minute,
+          ),
+          dueDate: DateTime(
             tomorrow.year,
             tomorrow.month,
             tomorrow.day,
@@ -262,6 +269,13 @@ void main() {
             hour,
             minute,
           ),
+          dueDate: DateTime(
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            hour,
+            minute,
+          ),
         );
         expect(
           CompletionVisibilityPolicy.shouldShowInToday(yesterdayTodo, now),
@@ -269,6 +283,70 @@ void main() {
           reason: 'iter=$iter offset=-$offsetDays — 过去日期不应出现在今日视图',
         );
       }
+    });
+
+    test('无截止日期未完成任务展示；今天截止展示；逾期/未来/完成不展示', () {
+      final now = DateTime(2026, 6, 1, 12);
+      final today = DateTime(now.year, now.month, now.day);
+      final yesterday = today.subtract(const Duration(days: 1));
+      final tomorrow = today.add(const Duration(days: 1));
+
+      final noDue = TodoItem(
+        title: '无截止日期',
+        date: tomorrow,
+      );
+      final dueToday = TodoItem(
+        title: '今天截止',
+        date: yesterday,
+        dueDate: today.add(const Duration(hours: 18)),
+      );
+      final dueTodayMidnightOnly = TodoItem(
+        title: '今天全天截止',
+        date: yesterday,
+        dueDate: today,
+      );
+      final dueEarlierToday = TodoItem(
+        title: '今天已逾期',
+        date: today,
+        dueDate: today.add(const Duration(hours: 10)),
+      );
+      final overdue = TodoItem(
+        title: '昨天截止',
+        date: today,
+        dueDate: yesterday.add(const Duration(hours: 18)),
+      );
+      final future = TodoItem(
+        title: '明天截止',
+        date: today,
+        dueDate: tomorrow.add(const Duration(hours: 9)),
+      );
+      final completed = TodoItem(
+        title: '已完成',
+        date: today,
+        dueDate: today.add(const Duration(hours: 10)),
+        isCompleted: true,
+        completedAt: now,
+      );
+
+      expect(CompletionVisibilityPolicy.shouldShowInToday(noDue, now), isTrue);
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(dueToday, now),
+        isTrue,
+      );
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(dueTodayMidnightOnly, now),
+        isTrue,
+      );
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(dueEarlierToday, now),
+        isFalse,
+      );
+      expect(CompletionVisibilityPolicy.shouldShowInToday(overdue, now), isFalse);
+      expect(CompletionVisibilityPolicy.shouldShowInToday(future, now), isFalse);
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(completed, now),
+        isFalse,
+      );
     });
   });
 

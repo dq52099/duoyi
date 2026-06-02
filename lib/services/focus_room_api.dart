@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'api_client.dart';
@@ -38,16 +39,14 @@ FocusRoom _focusRoomFromRemote(Map<String, dynamic> json) {
     id: _remoteString(json, const ['id', 'room_id', 'roomId'], ''),
     name: _remoteString(json, const ['name', 'room_name', 'roomName'], '专注自习室'),
     description: _remoteString(json, const ['description'], ''),
-    weeklyTargetSeconds: _remoteInt(
-      json,
-      const ['weekly_target_seconds', 'weeklyTargetSeconds'],
-      5 * 60 * 60,
-    ),
-    accentColor: _remoteInt(
-      json,
-      const ['accent_color', 'accentColor'],
-      0xFF3949AB,
-    ),
+    weeklyTargetSeconds: _remoteInt(json, const [
+      'weekly_target_seconds',
+      'weeklyTargetSeconds',
+    ], 5 * 60 * 60),
+    accentColor: _remoteInt(json, const [
+      'accent_color',
+      'accentColor',
+    ], 0xFF3949AB),
     members: const <FocusRoomMemberSeed>[],
     createdAt: DateTime.now(),
   );
@@ -109,40 +108,36 @@ class FocusRoomRemoteEntry {
   factory FocusRoomRemoteEntry.fromJson(Map<String, dynamic> json) {
     return FocusRoomRemoteEntry(
       userId: _remoteString(json, const ['user_id', 'userId'], ''),
-      displayName: _remoteString(
-        json,
-        const ['display_name', 'displayName', 'username'],
-        '同学',
-      ),
-      weeklySeconds: _remoteInt(
-        json,
-        const ['weekly_seconds', 'weeklySeconds'],
-        0,
-      ),
-      rawWeeklySeconds: _remoteInt(
-        json,
-        const ['raw_weekly_seconds', 'rawWeeklySeconds'],
-        0,
-      ),
-      sessionCount: _remoteInt(
-        json,
-        const ['session_count', 'sessionCount'],
-        0,
-      ),
+      displayName: _remoteString(json, const [
+        'display_name',
+        'displayName',
+        'username',
+      ], '同学'),
+      weeklySeconds: _remoteInt(json, const [
+        'weekly_seconds',
+        'weeklySeconds',
+      ], 0),
+      rawWeeklySeconds: _remoteInt(json, const [
+        'raw_weekly_seconds',
+        'rawWeeklySeconds',
+      ], 0),
+      sessionCount: _remoteInt(json, const [
+        'session_count',
+        'sessionCount',
+      ], 0),
       online: json['online'] == true,
       active: json['active'] != false,
-      isCurrentUser: json['is_current_user'] == true ||
-          json['isCurrentUser'] == true,
+      isCurrentUser:
+          json['is_current_user'] == true || json['isCurrentUser'] == true,
       rank: _remoteInt(json, const ['rank'], 0),
       lastSeenAt: _remoteDate(json, const ['last_seen_at', 'lastSeenAt']),
       riskFlags: _focusRiskFlagsFromRemote(
         _remoteValue(json, const ['risk_flags', 'riskFlags']),
       ),
-      riskSummary: _remoteString(
-        json,
-        const ['risk_summary', 'riskSummary'],
-        '',
-      ),
+      riskSummary: _remoteString(json, const [
+        'risk_summary',
+        'riskSummary',
+      ], ''),
     );
   }
 }
@@ -199,17 +194,14 @@ class FocusFriend {
   factory FocusFriend.fromJson(Map<String, dynamic> json) {
     return FocusFriend(
       userId: _remoteString(json, const ['user_id', 'userId', 'id'], ''),
-      username: _remoteString(
-        json,
-        const ['username', 'display_name', 'displayName'],
-        '同学',
-      ),
+      username: _remoteString(json, const [
+        'username',
+        'display_name',
+        'displayName',
+      ], '同学'),
       status: _remoteString(json, const ['status'], 'accepted'),
       online: json['online'] == true,
-      lastActiveAt: _remoteDate(
-        json,
-        const ['last_active_at', 'lastActiveAt'],
-      ),
+      lastActiveAt: _remoteDate(json, const ['last_active_at', 'lastActiveAt']),
       createdAt: _remoteDate(json, const ['created_at', 'createdAt']),
     );
   }
@@ -241,11 +233,11 @@ class FocusFriendRequest {
     return FocusFriendRequest(
       id: _remoteString(json, const ['id'], ''),
       userId: _remoteString(json, const ['user_id', 'userId'], ''),
-      username: _remoteString(
-        json,
-        const ['username', 'display_name', 'displayName'],
-        '同学',
-      ),
+      username: _remoteString(json, const [
+        'username',
+        'display_name',
+        'displayName',
+      ], '同学'),
       direction: _remoteString(json, const ['direction'], ''),
       status: _remoteString(json, const ['status'], 'pending'),
       online: json['online'] == true,
@@ -313,7 +305,11 @@ class FocusRoomInvite {
     final rawRoom = json['room'];
     return FocusRoomInvite(
       id: _remoteString(json, const ['id'], ''),
-      code: _remoteString(json, const ['code', 'invite_code', 'inviteCode'], ''),
+      code: _remoteString(json, const [
+        'code',
+        'invite_code',
+        'inviteCode',
+      ], ''),
       room: rawRoom is Map
           ? _focusRoomFromRemote(Map<String, dynamic>.from(rawRoom))
           : _focusRoomFromRemote(const <String, dynamic>{}),
@@ -356,7 +352,11 @@ class FocusRoomInviteAcceptResult {
     final rawRoom = json['room'];
     final rawRanking = json['ranking'];
     return FocusRoomInviteAcceptResult(
-      code: _remoteString(json, const ['code', 'invite_code', 'inviteCode'], ''),
+      code: _remoteString(json, const [
+        'code',
+        'invite_code',
+        'inviteCode',
+      ], ''),
       room: rawRoom is Map
           ? _focusRoomFromRemote(Map<String, dynamic>.from(rawRoom))
           : _focusRoomFromRemote(const <String, dynamic>{}),
@@ -374,12 +374,113 @@ class FocusRoomInviteAcceptResult {
   }
 }
 
+const focusRoomRankingUnavailableMessage = '排行榜服务暂不可用，已切换为本地排行';
+
+class FocusRoomRealtimeUnavailableException implements Exception {
+  final String message;
+
+  const FocusRoomRealtimeUnavailableException([
+    this.message = focusRoomRankingUnavailableMessage,
+  ]);
+
+  @override
+  String toString() => message;
+}
+
+bool isFocusRoomRealtimeTransportError(Object error) {
+  final message = error is ApiException ? error.message : error.toString();
+  return error is FocusRoomRealtimeUnavailableException ||
+      message.contains('WebSocketChannelException') ||
+      message.contains('WebSocketException') ||
+      message.contains('/ws/focus-rooms/') ||
+      message.contains('/ws/focus-leaderboard/') ||
+      message.contains('Failed to construct') ||
+      message.contains('Invalid WebSocket');
+}
+
+String sanitizeFocusRoomRealtimeDiagnostic(
+  Object? diagnostic, {
+  String? token,
+}) {
+  var text = diagnostic?.toString() ?? '';
+  final cleanToken = token?.trim();
+  if (cleanToken != null && cleanToken.isNotEmpty) {
+    text = text.replaceAll(cleanToken, '<redacted-token>');
+  }
+  text = text.replaceAllMapped(
+    RegExp(r'([?&](?:access_)?token=)[^&#\s)]+', caseSensitive: false),
+    (match) => '${match.group(1)}<redacted-token>',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'(Bearer\s+)[^\s,;]+', caseSensitive: false),
+    (match) => '${match.group(1)}<redacted-token>',
+  );
+  return text;
+}
+
+void _debugFocusRoomRealtimeError(
+  String label,
+  Object error,
+  StackTrace stackTrace, {
+  String? token,
+}) {
+  if (!kDebugMode) return;
+  debugPrint(
+    '[FocusRoomApi] $label: '
+    '${sanitizeFocusRoomRealtimeDiagnostic(error, token: token)}',
+  );
+  debugPrint(sanitizeFocusRoomRealtimeDiagnostic(stackTrace, token: token));
+}
+
 class FocusRoomApi {
   final ApiClient client;
 
   const FocusRoomApi(this.client);
 
   bool get canUse => client.token != null && client.token!.isNotEmpty;
+
+  static Uri? buildRealtimeWebSocketUri({
+    required String baseUrl,
+    required String path,
+    required String token,
+    required int intervalSeconds,
+  }) {
+    final base = _realtimeBaseUri(baseUrl);
+    final cleanToken = token.trim();
+    if (base == null || cleanToken.isEmpty) return null;
+    final baseScheme = base.scheme.toLowerCase();
+    final scheme = switch (baseScheme) {
+      'https' || 'wss' => 'wss',
+      'http' || 'ws' => 'ws',
+      _ => null,
+    };
+    final host = base.host.trim();
+    if (scheme == null || host.isEmpty) return null;
+    if (base.hasPort && base.port == 0) return null;
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    return Uri(
+      scheme: scheme,
+      host: host,
+      port: base.hasPort ? base.port : null,
+      path: normalizedPath,
+      queryParameters: {
+        'token': cleanToken,
+        'interval_seconds': intervalSeconds.toString(),
+      },
+    );
+  }
+
+  static Uri? _realtimeBaseUri(String baseUrl) {
+    final clean = baseUrl.trim();
+    if (clean.isEmpty) {
+      return Uri.base;
+    }
+    try {
+      return Uri.tryParse(clean);
+    } catch (_) {
+      return null;
+    }
+  }
 
   void _ensureCanUse(String message) {
     if (!canUse) throw ApiException(message);
@@ -456,22 +557,16 @@ class FocusRoomApi {
     String roomId, {
     int intervalSeconds = 15,
   }) {
-    if (client.baseUrl.isEmpty) {
-      throw const ApiException('当前安装包未配置服务器地址，无法连接自习室实时事件。');
-    }
     if (!canUse) {
       throw const ApiException('请先登录后再连接自习室实时事件');
     }
-    final base = Uri.parse(client.baseUrl);
-    final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-    final wsUri = base.replace(
-      scheme: scheme,
+    final wsUri = buildRealtimeWebSocketUri(
+      baseUrl: client.baseUrl,
       path: '/ws/focus-rooms/${Uri.encodeComponent(roomId)}/events',
-      queryParameters: {
-        'token': client.token!,
-        'interval_seconds': intervalSeconds.toString(),
-      },
+      token: client.token!,
+      intervalSeconds: intervalSeconds,
     );
+    if (wsUri == null) throw const FocusRoomRealtimeUnavailableException();
     final channel = WebSocketChannel.connect(wsUri);
     return channel.stream
         .map((raw) {
@@ -495,7 +590,15 @@ class FocusRoomApi {
   }) async* {
     try {
       yield* rankingWebSocketEvents(roomId, intervalSeconds: intervalSeconds);
-    } catch (_) {
+    } on FocusRoomRealtimeUnavailableException {
+      rethrow;
+    } catch (e, stackTrace) {
+      _debugFocusRoomRealtimeError(
+        'room websocket failed, falling back to SSE',
+        e,
+        stackTrace,
+        token: client.token,
+      );
       yield* rankingEvents(roomId, intervalSeconds: intervalSeconds);
     }
   }
@@ -537,22 +640,16 @@ class FocusRoomApi {
   Stream<FocusRoomRemoteRanking> globalRankingWebSocketEvents({
     int intervalSeconds = 15,
   }) {
-    if (client.baseUrl.isEmpty) {
-      throw const ApiException('当前安装包未配置服务器地址，无法连接全局专注榜实时事件。');
-    }
     if (!canUse) {
       throw const ApiException('请先登录后再连接全局专注榜实时事件');
     }
-    final base = Uri.parse(client.baseUrl);
-    final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-    final wsUri = base.replace(
-      scheme: scheme,
+    final wsUri = buildRealtimeWebSocketUri(
+      baseUrl: client.baseUrl,
       path: '/ws/focus-leaderboard/global/events',
-      queryParameters: {
-        'token': client.token!,
-        'interval_seconds': intervalSeconds.toString(),
-      },
+      token: client.token!,
+      intervalSeconds: intervalSeconds,
     );
+    if (wsUri == null) throw const FocusRoomRealtimeUnavailableException();
     final channel = WebSocketChannel.connect(wsUri);
     return channel.stream
         .map((raw) {
@@ -575,7 +672,15 @@ class FocusRoomApi {
   }) async* {
     try {
       yield* globalRankingWebSocketEvents(intervalSeconds: intervalSeconds);
-    } catch (_) {
+    } on FocusRoomRealtimeUnavailableException {
+      rethrow;
+    } catch (e, stackTrace) {
+      _debugFocusRoomRealtimeError(
+        'global websocket failed, falling back to SSE',
+        e,
+        stackTrace,
+        token: client.token,
+      );
       yield* globalRankingEvents(intervalSeconds: intervalSeconds);
     }
   }

@@ -291,6 +291,7 @@
   "authErrorVerifiedEmailRequired": "Enter a verified email",
   "authErrorEmailCodeInputRequired": "Enter the email code",
   "authErrorPasswordRequired": "Enter your password",
+  "authErrorInvalidCredentials": "Incorrect account or password. Please try again.",
   "authErrorResetAccountRequired": "Enter username or bound email",
   "authErrorMailCodeRequired": "Enter the email code",
   "authErrorNewPasswordShort": "New password must be at least 6 characters",

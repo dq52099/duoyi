@@ -187,6 +187,19 @@ String _pomodoroHomeWidgetSignature(PomodoroProvider provider) {
       '${state.totalSeconds}:$remaining';
 }
 
+Future<void> _runSyncReloadTasksInBatches(
+  List<Future<void> Function()> tasks, {
+  int batchSize = 3,
+}) async {
+  for (var i = 0; i < tasks.length; i += batchSize) {
+    final end = (i + batchSize).clamp(0, tasks.length);
+    await Future.wait([for (var j = i; j < end; j++) tasks[j]()]);
+    if (end < tasks.length) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -241,6 +254,15 @@ void main() async {
       state.username,
       '用户',
     ]);
+    final profile = userProvider.profile;
+    if (profile.username == name &&
+        profile.displayName == (state.displayName ?? '') &&
+        profile.email == (state.email ?? '') &&
+        profile.emailVerified == state.emailVerified &&
+        profile.avatarUrl == (state.avatar ?? '') &&
+        profile.bio == (state.bio ?? '')) {
+      return;
+    }
     await userProvider.updateProfile(
       username: name,
       displayName: state.displayName ?? '',
@@ -314,34 +336,36 @@ void main() async {
   Future<void> ensureDeferredLocalStorageStartup() {
     final existing = deferredLocalStorageStartup;
     if (existing != null) return existing;
-    deferredLocalStorageStartup = Future.wait([
-      _startupGuard('note storage', () => noteProvider.loadFromStorage()),
-      _startupGuard(
-        'achievement storage',
-        () => achievementProvider.loadFromStorage(),
-      ),
-      _startupGuard(
-        'custom focus sounds storage',
-        () => customFocusSoundProvider.loadFromStorage(),
-      ),
-      _startupGuard(
-        'focus room storage',
-        () => focusRoomProvider.loadFromStorage(),
-      ),
-      _startupGuard('ai storage', () => aiService.loadFromStorage()),
-      _startupGuard(
-        'location reminders storage',
-        () => locationReminderProvider.loadFromStorage(),
-      ),
-      _startupGuard(
-        'calendar subscriptions storage',
-        () => calendarSyncProvider.loadFromStorage(),
-      ),
-      _startupGuard(
-        'calendar local events',
-        () => calendarProvider.loadFromStorage(),
-      ),
-    ]);
+    deferredLocalStorageStartup = cloudSyncProvider.suppressDirtyMarkWhile(
+      () => Future.wait([
+        _startupGuard('note storage', () => noteProvider.loadFromStorage()),
+        _startupGuard(
+          'achievement storage',
+          () => achievementProvider.loadFromStorage(),
+        ),
+        _startupGuard(
+          'custom focus sounds storage',
+          () => customFocusSoundProvider.loadFromStorage(),
+        ),
+        _startupGuard(
+          'focus room storage',
+          () => focusRoomProvider.loadFromStorage(),
+        ),
+        _startupGuard('ai storage', () => aiService.loadFromStorage()),
+        _startupGuard(
+          'location reminders storage',
+          () => locationReminderProvider.loadFromStorage(),
+        ),
+        _startupGuard(
+          'calendar subscriptions storage',
+          () => calendarSyncProvider.loadFromStorage(),
+        ),
+        _startupGuard(
+          'calendar local events',
+          () => calendarProvider.loadFromStorage(),
+        ),
+      ]),
+    );
     return deferredLocalStorageStartup!;
   }
 
@@ -956,90 +980,90 @@ void main() async {
   cloudSyncProvider.onSynced = (changedCollections) async {
     // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作"脏改动"。
     await cloudSyncProvider.suppressDirtyMarkWhile(() async {
-      final futures = <Future<void>>[];
+      final reloadTasks = <Future<void> Function()>[];
       var shouldResyncReminders = false;
 
       if (changedCollections.contains('todos')) {
-        futures.add(todoProvider.loadFromStorage());
+        reloadTasks.add(todoProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('habits')) {
-        futures.add(habitProvider.loadFromStorage());
+        reloadTasks.add(habitProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('pomodoro_sessions') ||
           changedCollections.contains('focus_penalties') ||
           changedCollections.contains('pomodoro_config')) {
-        futures.add(pomodoroProvider.loadFromStorage());
+        reloadTasks.add(pomodoroProvider.loadFromStorage);
       }
       if (changedCollections.contains('countdowns')) {
-        futures.add(countdownProvider.loadFromStorage());
+        reloadTasks.add(countdownProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('notes')) {
-        futures.add(noteProvider.loadFromStorage());
+        reloadTasks.add(noteProvider.loadFromStorage);
       }
       if (changedCollections.contains('anniversaries')) {
-        futures.add(anniversaryProvider.loadFromStorage());
+        reloadTasks.add(anniversaryProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('diaries')) {
-        futures.add(diaryProvider.loadFromStorage());
+        reloadTasks.add(diaryProvider.loadFromStorage);
       }
       if (changedCollections.contains('goals')) {
-        futures.add(goalProvider.loadFromStorage());
+        reloadTasks.add(goalProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('courses') ||
           changedCollections.contains('course_settings')) {
-        futures.add(courseProvider.loadFromStorage());
+        reloadTasks.add(courseProvider.loadFromStorage);
       }
       if (changedCollections.contains('calendar_events')) {
-        futures.add(calendarProvider.loadFromStorage());
+        reloadTasks.add(calendarProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('user_profile')) {
-        futures.add(userProvider.loadFromStorage());
+        reloadTasks.add(userProvider.loadFromStorage);
       }
       if (changedCollections.contains('time_entries')) {
-        futures.add(timeAuditProvider.loadFromStorage());
+        reloadTasks.add(timeAuditProvider.loadFromStorage);
       }
       if (changedCollections.contains('location_reminders')) {
-        futures.add(locationReminderProvider.loadFromStorage());
+        reloadTasks.add(locationReminderProvider.loadFromStorage);
       }
       if (changedCollections.contains('achievement_states') ||
           changedCollections.contains('virtual_rewards')) {
-        futures.add(achievementProvider.loadFromStorage());
+        reloadTasks.add(achievementProvider.loadFromStorage);
       }
       if (changedCollections.contains('focus_rooms')) {
-        futures.add(focusRoomProvider.loadFromStorage());
+        reloadTasks.add(focusRoomProvider.loadFromStorage);
       }
       if (changedCollections.contains('theme_shop_state')) {
-        futures.add(themeProvider.loadFromStorage());
+        reloadTasks.add(themeProvider.loadFromStorage);
       }
       if (changedCollections.contains('preferences')) {
-        futures.add(preferencesProvider.loadFromStorage());
+        reloadTasks.add(preferencesProvider.loadFromStorage);
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('quick_capture_templates')) {
-        futures.add(quickCaptureTemplateProvider.loadFromStorage());
+        reloadTasks.add(quickCaptureTemplateProvider.loadFromStorage);
       }
 
-      await Future.wait(futures);
+      await _runSyncReloadTasksInBatches(reloadTasks);
 
-      if (changedCollections.contains('user_profile')) {
+      final accountCollectionsChanged =
+          changedCollections.contains('user_profile') ||
+          changedCollections.contains('virtual_rewards');
+      if (accountCollectionsChanged) {
         // 云同步回写本地资料后，再拉一次账号资料，保证其它设备改过的
-        // 昵称、头像、邮箱验证状态等账号字段能覆盖本地展示缓存。
-        await authProvider.refreshMe();
+        // 昵称、头像、邮箱验证状态、时光币等账号字段能覆盖本地展示缓存。
+        await authProvider.refreshMe(reason: 'cloud_sync_account_snapshot');
       }
       if (changedCollections.contains('workspace_payloads')) {
         await shareProvider.load();
       }
       if (changedCollections.contains('preferences')) {
         await ReminderRingtoneSettings.applyPersistedSettingsToNative();
-      }
-      if (changedCollections.contains('location_reminders')) {
-        await syncLocationGeofences();
       }
       // 拉取云端后可能覆盖了本地 reminder，也要重跑一次
       if (shouldResyncReminders) {
@@ -1059,10 +1083,11 @@ void main() async {
 
   var lastAuthReminderIdentity = currentAuthReminderIdentity();
   authProvider.addListener(() {
-    shareProvider.load();
     final authReminderIdentity = currentAuthReminderIdentity();
     final authChanged = authReminderIdentity != lastAuthReminderIdentity;
     lastAuthReminderIdentity = authReminderIdentity;
+    if (!authChanged) return;
+    shareProvider.load();
     if (authProvider.state.isLoggedIn && cloudSyncProvider.config.autoSync) {
       // ignore: discarded_futures
       unawaited(cloudSyncProvider.syncNow());

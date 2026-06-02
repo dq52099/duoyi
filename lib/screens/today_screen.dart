@@ -66,11 +66,15 @@ class TodayScreen extends StatelessWidget {
 
     final todayTodos = todoP.visibleTodayTodos(now);
     final todayTodosCount = todayTodos.length;
-    final todayTodoCompleted = todayTodos
-        .where((todo) => todo.isCompleted)
-        .length;
+    final completedTodayCount = todoP.todos.where((todo) {
+      final completedAt = todo.completedAt;
+      if (!todo.isCompleted || completedAt == null) return false;
+      return completedAt.year == todayKey.year &&
+          completedAt.month == todayKey.month &&
+          completedAt.day == todayKey.day;
+    }).length;
+    final noDueTodayTodos = todayTodos.where((todo) => todo.dueDate == null);
     todayTodos.sort((a, b) {
-      if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
       final dueA = a.dueDate;
       final dueB = b.dueDate;
       if (dueA != null && dueB != null) return dueA.compareTo(dueB);
@@ -293,7 +297,7 @@ class TodayScreen extends StatelessWidget {
           _section(
             I18n.tr('today.todos'),
             subtitle:
-                '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $todayTodoCompleted',
+                '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · 无截止 ${noDueTodayTodos.length}',
             onMore: () =>
                 TodayDetailRouter.open(context, TodaySectionKind.todos),
             child: todayTodos.isEmpty
@@ -860,9 +864,11 @@ class _TodoTodaySubtitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final visual = CompletionVisibilityPolicy.visualState(todo);
     final subtasks = todo.subtasks.take(3).toList();
+    final hasNoDueDate = todo.dueDate == null;
     if (todo.listGroupName == null &&
         subtasks.isEmpty &&
-        visual == TodoVisualState.normal) {
+        visual == TodoVisualState.normal &&
+        !hasNoDueDate) {
       return const SizedBox.shrink();
     }
     final cs = Theme.of(context).colorScheme;
@@ -873,7 +879,8 @@ class _TodoTodaySubtitle extends StatelessWidget {
         children: [
           if (visual != TodoVisualState.normal)
             _TodayTodoStatusPill(visual: visual),
-          if (visual != TodoVisualState.normal &&
+          if (hasNoDueDate) const _TodayNoDueDateLabel(),
+          if ((visual != TodoVisualState.normal || hasNoDueDate) &&
               (todo.listGroupName != null || subtasks.isNotEmpty))
             const SizedBox(height: 3),
           if (todo.listGroupName != null) _TodoListTemplateLabel(todo: todo),
@@ -900,6 +907,19 @@ class _TodoTodaySubtitle extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _TodayNoDueDateLabel extends StatelessWidget {
+  const _TodayNoDueDateLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Text(
+      '无截止日期',
+      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
     );
   }
 }

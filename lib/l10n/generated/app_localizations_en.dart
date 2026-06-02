@@ -945,6 +945,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorPasswordRequired => 'Enter your password';
 
   @override
+  String get authErrorInvalidCredentials =>
+      'Incorrect account or password. Please try again.';
+
+  @override
   String get authErrorResetAccountRequired => 'Enter username or bound email';
 
   @override

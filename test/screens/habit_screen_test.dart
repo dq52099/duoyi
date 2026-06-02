@@ -293,7 +293,7 @@ void main() {
     },
   );
 
-  testWidgets('habit row keeps end and delete behind left swipe', (
+  testWidgets('habit row keeps edit end and delete behind left swipe', (
     tester,
   ) async {
     final habitProvider = HabitProvider();
@@ -303,7 +303,8 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    expect(find.byTooltip('编辑'), findsOneWidget);
+    expect(find.byTooltip('编辑'), findsNothing);
+    expect(find.byKey(const ValueKey('habit_inline_edit_button')), findsNothing);
     expect(find.byTooltip('习惯操作'), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_edit_button')), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);

@@ -354,6 +354,7 @@ const Map<String, String> _zh = <String, String>{
   'auth.error.verified_email_required': '请填写已验证邮箱',
   'auth.error.email_code_input_required': '请填写邮箱验证码',
   'auth.error.password_required': '请填写密码',
+  'auth.error.invalid_credentials': '账号或密码错误，请重新输入',
   'auth.error.reset_account_required': '请填写用户名或已绑定邮箱',
   'auth.error.mail_code_required': '请填写邮件验证码',
   'auth.error.new_password_short': '新密码至少 6 位',
@@ -1277,6 +1278,8 @@ const Map<String, String> _en = <String, String>{
   'auth.error.verified_email_required': 'Enter a verified email',
   'auth.error.email_code_input_required': 'Enter the email code',
   'auth.error.password_required': 'Enter your password',
+  'auth.error.invalid_credentials':
+      'Incorrect account or password. Please try again.',
   'auth.error.reset_account_required': 'Enter username or bound email',
   'auth.error.mail_code_required': 'Enter the email code',
   'auth.error.new_password_short': 'New password must be at least 6 characters',

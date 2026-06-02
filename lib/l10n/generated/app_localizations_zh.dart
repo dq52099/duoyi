@@ -897,6 +897,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authErrorPasswordRequired => '请填写密码';
 
   @override
+  String get authErrorInvalidCredentials => '账号或密码错误，请重新输入';
+
+  @override
   String get authErrorResetAccountRequired => '请填写用户名或已绑定邮箱';
 
   @override

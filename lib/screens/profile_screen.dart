@@ -1258,7 +1258,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                             icon: Icons.savings_outlined,
                             label: I18n.tr('profile.coins'),
                             value:
-                                '${state.coinBalance != 0 ? state.coinBalance : achievements?.coinBalance ?? 0}',
+                                '${state.isLoggedIn ? state.coinBalance : achievements?.coinBalance ?? 0}',
                           ),
                           if (state.username?.trim().isNotEmpty == true)
                             _ProfileMetricChip(

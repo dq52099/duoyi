@@ -14,17 +14,28 @@ void main() {
     expect(source, contains('return Scrollbar('));
     expect(source, contains('SingleChildScrollView('));
     expect(source, contains('Widget _denseAlmanacCard({'));
-    expect(source, contains('LunarCalendar.almanacDetail(_date)'));
+    expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
+    expect(source, contains('final selectedDate = _date'));
+    expect(source, contains('final lunar = almanacDetail.lunarDate'));
+    expect(source, contains('final ganzhiLine = almanacDetail.ganzhiLine'));
+    expect(source, contains('final displayDate = detail.solarDate'));
     expect(
       source,
-      contains("'\${_date.year}年\${_date.month}月\${_date.day}日 星期"),
+      contains(
+        "'\${displayDate.year}年\${displayDate.month}月\${displayDate.day}日 星期",
+      ),
     );
     expect(source, contains("('胎神', detail.fetalGod)"));
     expect(source, contains("('彭祖', detail.pengZu)"));
     expect(source, contains("('五行', detail.fiveElements)"));
     expect(source, contains("('星宿', detail.mansion)"));
     expect(source, contains("('冲煞', detail.clash)"));
-    expect(source, contains("('时辰吉凶', detail.hourFortunes)"));
+    expect(
+      source,
+      contains('_hourFortuneRow(context, detail.hourFortuneItems'),
+    );
+    expect(source, contains('Widget _hourFortuneBlock('));
+    expect(source, contains('Wrap('));
     expect(source, contains('Widget _aboutCard()'));
     expect(
       source,

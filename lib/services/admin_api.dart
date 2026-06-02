@@ -440,34 +440,14 @@ class AdminApi {
     required String name,
     String description = '',
     int defaultTimeCoins = 100,
-    int? defaultGenerateQuota,
-    int? defaultEditQuota,
-    int? defaultGenerateHistoryRetention,
-    int? defaultEditHistoryRetention,
-    String imageMode = 'vip',
     bool isActive = true,
   }) {
     final body = <String, dynamic>{
       'name': name,
       'description': description,
       'default_time_coins': defaultTimeCoins,
-      'image_mode': imageMode,
       'is_active': isActive,
     };
-    // Nullable quota contract: 'default_generate_quota': ?defaultGenerateQuota, 'default_edit_quota': ?defaultEditQuota.
-    if (defaultGenerateQuota != null) {
-      body['default_generate_quota'] = defaultGenerateQuota;
-    }
-    if (defaultEditQuota != null) {
-      body['default_edit_quota'] = defaultEditQuota;
-    }
-    if (defaultGenerateHistoryRetention != null) {
-      body['default_generate_history_retention'] =
-          defaultGenerateHistoryRetention;
-    }
-    if (defaultEditHistoryRetention != null) {
-      body['default_edit_history_retention'] = defaultEditHistoryRetention;
-    }
     final groupId = id?.trim();
     if (groupId == null || groupId.isEmpty) {
       return _sendFirstAvailable(

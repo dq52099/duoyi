@@ -21,6 +21,9 @@ void main() {
     expect(themeProvider, contains('premiumBrandCost'));
     expect(themeProvider, contains('theme_unlocked_brands'));
     expect(themeProvider, contains('theme_shop_state'));
+    expect(themeProvider, contains('updatedAt'));
+    expect(themeProvider, contains('applyShopStateFromServer'));
+    expect(themeProvider, contains('shopStateSnapshot'));
     expect(themeProvider, contains('isBrandUnlocked'));
     expect(themeProvider, contains('unlockBrand'));
     expect(themeProvider, contains('brandCost'));
@@ -49,6 +52,10 @@ void main() {
       themeScreen,
       contains("import '../providers/achievement_provider.dart';"),
     );
+    expect(themeScreen, contains("import '../providers/auth_provider.dart';"));
+    expect(themeScreen, contains('authProvider.applyThemeShopItem('));
+    expect(themeScreen, contains('themeProvider.applyShopStateFromServer'));
+    expect(themeScreen, contains('achievementProvider.applyRewardsSnapshot'));
     expect(themeScreen, contains('achievementProvider.spendCoins('));
     expect(themeScreen, contains('时光币'));
     expect(themeScreen, contains('Icons.lock_outline'));
@@ -62,6 +69,7 @@ void main() {
     expect(themeScreen, contains('兑换卡片皮肤'));
     expect(themeScreen, contains('_cardSkinPreview'));
     expect(achievementProvider, contains('Future<bool> spendCoins'));
+    expect(achievementProvider, contains('Future<void> applyRewardsSnapshot'));
     expect(backup, contains("'theme_shop_state'"));
     expect(cloudSync, contains("'theme_shop_state': 'theme_shop_state'"));
   });

@@ -1058,11 +1058,6 @@ class WorkspaceApiTest(unittest.TestCase):
                     "name": "测试用户组",
                     "description": "RE0 用户组兼容",
                     "default_time_coins": 100,
-                    "default_generate_quota": 12,
-                    "default_edit_quota": 6,
-                    "default_generate_history_retention": 30,
-                    "default_edit_history_retention": 15,
-                    "image_mode": "general",
                     "is_active": True,
                 },
                 headers=headers,
@@ -1074,11 +1069,6 @@ class WorkspaceApiTest(unittest.TestCase):
                     "name": "测试用户组改",
                     "description": "可更新",
                     "default_time_coins": 120,
-                    "default_generate_quota": 14,
-                    "default_edit_quota": 7,
-                    "default_generate_history_retention": 32,
-                    "default_edit_history_retention": 16,
-                    "image_mode": "vip",
                     "is_active": False,
                 },
                 headers=headers,
@@ -1089,7 +1079,6 @@ class WorkspaceApiTest(unittest.TestCase):
                     "name": "测试用户组局部改",
                     "description": "隐藏额度保留",
                     "default_time_coins": 130,
-                    "image_mode": "general",
                     "is_active": True,
                 },
                 headers=headers,
@@ -1100,7 +1089,6 @@ class WorkspaceApiTest(unittest.TestCase):
                     "name": "默认用户组",
                     "description": "默认注册额度",
                     "default_time_coins": 150,
-                    "image_mode": "vip",
                     "is_active": True,
                 },
                 headers=headers,
@@ -1159,14 +1147,11 @@ class WorkspaceApiTest(unittest.TestCase):
         self.assertFalse(update_group.json()["is_active"])
         self.assertEqual(partial_group.status_code, 200)
         self.assertEqual(partial_group.json()["default_time_coins"], 130)
-        self.assertEqual(partial_group.json()["default_generate_quota"], 14)
-        self.assertEqual(partial_group.json()["default_edit_quota"], 7)
-        self.assertEqual(
-            partial_group.json()["default_generate_history_retention"], 32
-        )
-        self.assertEqual(
-            partial_group.json()["default_edit_history_retention"], 16
-        )
+        self.assertNotIn("default_generate_quota", partial_group.json())
+        self.assertNotIn("default_edit_quota", partial_group.json())
+        self.assertNotIn("default_generate_history_retention", partial_group.json())
+        self.assertNotIn("default_edit_history_retention", partial_group.json())
+        self.assertNotIn("image_mode", partial_group.json())
         self.assertTrue(partial_group.json()["is_active"])
         self.assertEqual(default_group_update.status_code, 200)
         self.assertEqual(default_group_update.json()["default_time_coins"], 150)
@@ -1364,6 +1349,77 @@ class WorkspaceApiTest(unittest.TestCase):
 
         self.assertTrue(created["is_admin"])
         self.assertTrue(created["is_disabled"])
+
+    def test_normal_user_never_exposes_or_uses_admin_permissions(self):
+        user_id = self._register("legacy-overpowered-user")
+        db = api.get_db()
+        try:
+            db.execute(
+                """
+                UPDATE users
+                SET is_admin=0, role_id='role_admin', admin_permissions=?
+                WHERE id=?
+                """,
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), user_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+        headers = {"Authorization": f"Bearer {api.TOKENS[user_id]}"}
+
+        with TestClient(api.app) as client:
+            profile = client.get("/api/me", headers=headers)
+            users = client.get("/api/admin/users", headers=headers)
+            groups = client.get("/api/admin/groups", headers=headers)
+
+        self.assertEqual(profile.status_code, 200)
+        self.assertFalse(profile.json()["is_admin"])
+        self.assertEqual(profile.json()["admin_permissions"], [])
+        self.assertEqual(profile.json()["permissions"], [])
+        self.assertEqual(users.status_code, 403)
+        self.assertEqual(groups.status_code, 403)
+
+    def test_admin_with_user_role_and_empty_permissions_has_no_backend_access(self):
+        admin_id = self._make_admin("empty-role-user-admin", [])
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_user', admin_permissions='[]' WHERE id=?",
+                (admin_id,),
+            )
+            db.commit()
+        finally:
+            db.close()
+        headers = {"Authorization": f"Bearer {api.TOKENS[admin_id]}"}
+
+        with TestClient(api.app) as client:
+            users = client.get("/api/admin/users", headers=headers)
+            permissions = client.get("/api/admin/permissions", headers=headers)
+
+        self.assertEqual(users.status_code, 403)
+        self.assertEqual(permissions.status_code, 403)
+
+    def test_default_user_role_migrates_to_no_admin_permissions(self):
+        db = api.get_db()
+        try:
+            db.execute(
+                "UPDATE admin_roles SET permissions=? WHERE id='role_user'",
+                (json.dumps(["users", "settings", api.ADMIN_ALL_PERMISSION]),),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        api.init_db()
+
+        db = api.get_db()
+        try:
+            role_permissions = db.execute(
+                "SELECT permissions FROM admin_roles WHERE id='role_user'"
+            ).fetchone()["permissions"]
+        finally:
+            db.close()
+        self.assertEqual(json.loads(role_permissions), [])
 
     def test_cannot_demote_last_active_admin_when_disabled_admin_exists(self):
         active_admin = self._make_admin("last-active-admin", [api.ADMIN_ALL_PERMISSION])
@@ -2798,7 +2854,10 @@ class WorkspaceApiTest(unittest.TestCase):
         admin_id = self._register("settings-admin")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             api._setting_set(db, "allow_public_registration", False)
             api._setting_set(db, "registration_invite_required", True)
             api._setting_set(db, "hermes_base_url", "https://hermes.example.test")
@@ -5521,7 +5580,10 @@ class WorkspaceApiTest(unittest.TestCase):
         user_id = self._register("normal-online")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.commit()
         finally:
             db.close()
@@ -5593,7 +5655,10 @@ class WorkspaceApiTest(unittest.TestCase):
         user_ids = [self._register(f"paged-user-{i}") for i in range(4)]
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.executemany(
                 "UPDATE sync_data SET sync_version=?, updated_at=? WHERE user_id=?",
                 [
@@ -5676,7 +5741,10 @@ class WorkspaceApiTest(unittest.TestCase):
         )["user_id"]
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.execute(
                 "UPDATE users SET email=?, email_verified=0 WHERE id=?",
                 ("segment-unverified@example.com", unverified_user),
@@ -5740,7 +5808,10 @@ class WorkspaceApiTest(unittest.TestCase):
         offline_user = self._register("bulk-offline")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.commit()
         finally:
             db.close()
@@ -6103,7 +6174,10 @@ class WorkspaceApiTest(unittest.TestCase):
         user_b = self._register("sort-user-b")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.execute(
                 "UPDATE sync_data SET sync_version=1 WHERE user_id IN (?, ?)",
                 (user_a, user_b),
@@ -6198,7 +6272,10 @@ class WorkspaceApiTest(unittest.TestCase):
         )["user_id"]
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.execute(
                 "UPDATE sync_data SET sync_version=0, updated_at=? WHERE user_id=?",
                 (api._format_utc(api._utc_now() - timedelta(days=2)), empty_user),
@@ -6243,7 +6320,10 @@ class WorkspaceApiTest(unittest.TestCase):
         self._register("backup-export-empty")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.execute(
                 "UPDATE sync_data SET sync_version=11, todos=?, updated_at=? WHERE user_id=?",
                 ('[{"id":"todo-1","title":"x"}]', api._utc_now_text(), user_id),
@@ -6324,7 +6404,10 @@ class WorkspaceApiTest(unittest.TestCase):
         user_b = self._register("feedback-export-b")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.execute(
                 "INSERT INTO feedback(user_id, category, content, status, admin_reply) "
                 "VALUES(?,?,?,?,?)",
@@ -6421,7 +6504,10 @@ class WorkspaceApiTest(unittest.TestCase):
         token = api.TOKENS[user_id]
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.commit()
         finally:
             db.close()
@@ -6552,7 +6638,10 @@ class WorkspaceApiTest(unittest.TestCase):
         admin_id = self._register("admin-reminder@example.com")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             for key, value in {
                 "reminder_email_enabled": True,
                 "reminder_email_smtp_host": "smtp.example.com",
@@ -6585,8 +6674,12 @@ class WorkspaceApiTest(unittest.TestCase):
         db = api.get_db()
         try:
             db.execute(
-                "UPDATE users SET is_admin=1 WHERE id IN (?, ?)",
-                (admin_id, fallback_admin_id),
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id IN (?, ?)",
+                (
+                    json.dumps([api.ADMIN_ALL_PERMISSION]),
+                    admin_id,
+                    fallback_admin_id,
+                ),
             )
             for key, value in {
                 "email_service_enabled": True,
@@ -6913,7 +7006,10 @@ class WorkspaceApiTest(unittest.TestCase):
         user_id = self._register("feedback-owner")
         db = api.get_db()
         try:
-            db.execute("UPDATE users SET is_admin=1 WHERE id=?", (admin_id,))
+            db.execute(
+                "UPDATE users SET is_admin=1, role_id='role_admin', admin_permissions=? WHERE id=?",
+                (json.dumps([api.ADMIN_ALL_PERMISSION]), admin_id),
+            )
             db.commit()
         finally:
             db.close()
@@ -8797,6 +8893,96 @@ class WorkspaceApiTest(unittest.TestCase):
         unchanged = api.sync(api.SyncRequest(), user_id=target_id)
         self.assertEqual(unchanged["virtual_rewards"].get("balance", 0), 0)
         self.assertEqual(unchanged["virtual_rewards"].get("lifetime", 0), 0)
+
+    def test_theme_shop_apply_deducts_coins_and_updates_me(self):
+        user_id = self._register("theme-shop-user")
+        headers = {"Authorization": f"Bearer {api.TOKENS[user_id]}"}
+        db = api.get_db()
+        try:
+            rewards = {
+                "balance": 200,
+                "lifetime": 200,
+                "ledger": [],
+                "updatedAt": "2026-06-01T00:00:00Z",
+            }
+            db.execute(
+                """
+                UPDATE sync_data
+                SET virtual_rewards=?
+                WHERE user_id=?
+                """,
+                (json.dumps(rewards), user_id),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        with TestClient(api.app) as client:
+            purchased = client.post(
+                "/api/theme-shop/apply",
+                json={
+                    "itemType": "brand",
+                    "itemId": "re0",
+                    "title": "兑换主题：从零开始",
+                },
+                headers=headers,
+            )
+            me_after_purchase = client.get("/api/auth/me", headers=headers)
+            reused = client.post(
+                "/api/theme-shop/apply",
+                json={"item_type": "brand", "item_id": "re0"},
+                headers=headers,
+            )
+            insufficient = client.post(
+                "/api/me/theme-shop/apply",
+                json={"type": "focus_backdrop", "id": "forest_focus"},
+                headers=headers,
+            )
+
+        self._assert_p0_http_ok(purchased, "POST /api/theme-shop/apply")
+        payload = purchased.json()
+        self.assertEqual(payload["charged"], 140)
+        self.assertEqual(payload["coin_balance"], 60)
+        self.assertEqual(payload["lifetime_coins"], 200)
+        self.assertEqual(payload["user"]["coin_balance"], 60)
+        self.assertEqual(payload["theme_shop_state"]["activeBrand"], "re0")
+        self.assertIn("re0", payload["theme_shop_state"]["unlockedBrandIds"])
+        self.assertIn("updatedAt", payload["theme_shop_state"])
+        self._assert_p0_http_ok(me_after_purchase, "GET /api/auth/me")
+        self.assertEqual(me_after_purchase.json()["coin_balance"], 60)
+        self._assert_p0_http_ok(reused, "POST /api/theme-shop/apply reused")
+        self.assertEqual(reused.json()["charged"], 0)
+        self.assertEqual(reused.json()["coin_balance"], 60)
+        self.assertEqual(insufficient.status_code, 400)
+
+        after = api.sync(api.SyncRequest(), user_id=user_id)
+        self.assertEqual(after["virtual_rewards"]["balance"], 60)
+        self.assertEqual(after["theme_shop_state"]["activeBrand"], "re0")
+        self.assertNotIn(
+            "forest_focus",
+            after["theme_shop_state"].get("unlockedFocusBackdropIds", []),
+        )
+
+    def test_theme_shop_state_merge_unions_unlocks_and_keeps_new_active(self):
+        merged = api._merge_theme_shop_state(
+            {
+                "activeBrand": "re0",
+                "unlockedBrandIds": ["defaultBrand", "re0"],
+                "updatedAt": "2026-06-01T00:00:00Z",
+            },
+            {
+                "activeBrand": "genshin",
+                "unlockedBrandIds": ["defaultBrand", "genshin"],
+                "updatedAt": "2026-06-01T01:00:00Z",
+            },
+        )
+
+        self.assertEqual(merged["activeBrand"], "genshin")
+        self.assertEqual(
+            set(merged["unlockedBrandIds"]),
+            {"defaultBrand", "re0", "genshin"},
+        )
+        self.assertEqual(merged["updatedAt"], "2026-06-01T01:00:00Z")
 
     def test_p0_feedback_detail_reply_close_delete_visibility_and_errors(self):
         admin_id = self._make_admin("p0-feedback-admin", ["feedback"])

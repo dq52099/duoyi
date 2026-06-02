@@ -325,7 +325,11 @@ void main() {
       mainSource,
       contains('cloudSyncProvider.suppressDirtyMarkWhile(() async {'),
     );
-    expect(mainSource, contains('futures.add(userProvider.loadFromStorage())'));
+    expect(
+      mainSource,
+      contains('reloadTasks.add(userProvider.loadFromStorage)'),
+    );
+    expect(mainSource, contains('_runSyncReloadTasksInBatches(reloadTasks)'));
     expect(mainSource, contains('userProvider.addListener(markDirty);'));
   });
 
@@ -368,11 +372,14 @@ void main() {
       contains('cloudSyncProvider.onSynced = (changedCollections)'),
     );
     expect(mainSource, contains("changedCollections.contains('todos')"));
-    expect(mainSource, contains('futures.add(todoProvider.loadFromStorage())'));
+    expect(
+      mainSource,
+      contains('reloadTasks.add(todoProvider.loadFromStorage)'),
+    );
     expect(mainSource, contains("changedCollections.contains('habits')"));
     expect(
       mainSource,
-      contains('futures.add(habitProvider.loadFromStorage())'),
+      contains('reloadTasks.add(habitProvider.loadFromStorage)'),
     );
     expect(
       mainSource,
@@ -380,19 +387,32 @@ void main() {
     );
     expect(
       mainSource,
-      contains('futures.add(pomodoroProvider.loadFromStorage())'),
+      contains('reloadTasks.add(pomodoroProvider.loadFromStorage)'),
     );
     expect(mainSource, contains("changedCollections.contains('user_profile')"));
-    expect(mainSource, contains('await authProvider.refreshMe();'));
+    expect(
+      mainSource,
+      contains(
+        "await authProvider.refreshMe(reason: 'cloud_sync_account_snapshot');",
+      ),
+    );
+    expect(
+      mainSource,
+      contains("changedCollections.contains('virtual_rewards')"),
+    );
+    expect(mainSource, isNot(contains("reason: 'cloud_sync_virtual_rewards'")));
     expect(
       mainSource,
       contains("changedCollections.contains('location_reminders')"),
     );
     expect(
       mainSource,
-      contains('futures.add(locationReminderProvider.loadFromStorage())'),
+      contains('reloadTasks.add(locationReminderProvider.loadFromStorage)'),
     );
-    expect(mainSource, contains('await syncLocationGeofences();'));
+    expect(
+      mainSource,
+      contains('locationReminderProvider.addListener(syncLocationGeofences);'),
+    );
     expect(
       mainSource,
       contains(
@@ -416,7 +436,10 @@ void main() {
       onSyncedBody,
       isNot(contains('await todoProvider.loadFromStorage();')),
     );
-    expect(onSyncedBody, contains('await Future.wait(futures);'));
+    expect(
+      onSyncedBody,
+      contains('await _runSyncReloadTasksInBatches(reloadTasks);'),
+    );
   });
 
   test('同步回写内容相同时跳过 SharedPreferences 写入，降低无效 IO', () {
@@ -672,8 +695,8 @@ void main() {
     for (final field in const [
       'locationReminderProvider.addListener(markDirty);',
       "changedCollections.contains('location_reminders')",
-      'futures.add(locationReminderProvider.loadFromStorage())',
-      'await syncLocationGeofences();',
+      'reloadTasks.add(locationReminderProvider.loadFromStorage)',
+      'locationReminderProvider.addListener(syncLocationGeofences);',
       'preferencesProvider.onChangedKeys = cloudSyncProvider.markPreferencesChanged;',
       'ReminderRingtoneSettings.onChanged = (keys)',
       'cloudSyncProvider.markPreferencesChanged(keys);',

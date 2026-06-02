@@ -294,6 +294,7 @@
   "authErrorVerifiedEmailRequired": "请填写已验证邮箱",
   "authErrorEmailCodeInputRequired": "请填写邮箱验证码",
   "authErrorPasswordRequired": "请填写密码",
+  "authErrorInvalidCredentials": "账号或密码错误，请重新输入",
   "authErrorResetAccountRequired": "请填写用户名或已绑定邮箱",
   "authErrorMailCodeRequired": "请填写邮件验证码",
   "authErrorNewPasswordShort": "新密码至少 6 位",

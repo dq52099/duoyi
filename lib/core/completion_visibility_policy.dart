@@ -26,17 +26,21 @@ enum TodoVisualState { normal, dueSoon, overdue, completed, archived }
 class CompletionVisibilityPolicy {
   CompletionVisibilityPolicy._();
 
-  /// 判断一条 Todo 是否应该出现在"今日"视图。
+  /// 判断一条 Todo 是否应该出现在"今日待办"视图。
   ///
   /// 规则：
-  /// 1. 已经被"次日 00:00 归档"的任务不再在今日列表出现（P5）。
-  /// 2. 其余情况下，以 `t.date` 的本地"日"与 `now` 的本地"日"是否相同决定。
-  ///    完成态不作为隐藏条件 —— 当日完成的任务仍然保留，对应可视状态 `completed`（P4）。
+  /// 1. 已归档、已完成任务不展示。
+  /// 2. 无截止日期的未完成任务展示，避免遗漏。
+  /// 3. 有截止日期时，只展示本地日期等于今天且未逾期的任务；逾期与未来任务不展示。
+  ///    兼容只保存日期、不保存具体时刻的旧数据：当天 00:00 视为全天截止。
   static bool shouldShowInToday(TodoItem t, DateTime now) {
     if (t.isArchivedAfterRollover) return false;
+    if (t.isCompleted) return false;
     final today = dateOnly(now);
-    final day = dateOnly(t.date);
-    return day == today;
+    final due = t.dueDate;
+    if (due == null) return true;
+    if (dateOnly(due) != today) return false;
+    return due == today || !due.isBefore(now);
   }
 
   /// 把一条 Todo 映射到它当前的可视语义状态。
@@ -93,11 +97,7 @@ class CompletionVisibilityPolicy {
   ///    [TodoProvider.archivePastCompletions]，把
   ///    `isCompleted ∧ dateOnly(completedAt) < today` 的条目置为
   ///    `isArchivedAfterRollover = true`。
-  /// 2. **顺延未完成且已过期的任务**：调用
-  ///    [TodoProvider.postponeOverdue]，将 `dueDate < today` 的未完成项
-  ///    迁移到今日同一时刻，并在 `postponeHistory` 追加
-  ///    `reason = 'auto_daily_rollover'`。
-  /// 3. **基于 recurrence 派发今日实例**：`materializeTodayFromRecurring`
+  /// 2. **基于 recurrence 派发今日实例**：`materializeTodayFromRecurring`
   ///    已由冷启动和 `AppLifecycleState.resumed` 跨天路径传入 [GoalProvider]
   ///    接线；命中后触发目标提醒重同步。
   ///
@@ -114,10 +114,7 @@ class CompletionVisibilityPolicy {
     // Step 1: 归档昨日及更早的已完成任务。
     await provider.archivePastCompletions(todayDay);
 
-    // Step 2: 顺延未完成且已过期的任务。
-    await provider.postponeOverdue(todayDay);
-
-    // Step 3: 基于 recurrence 派发今日实例。
+    // Step 2: 基于 recurrence 派发今日实例。
     if (goalProvider != null) {
       final matched = <String>[];
       RecurrenceEngine.materializeTodayFromRecurring(

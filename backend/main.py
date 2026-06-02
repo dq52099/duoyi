@@ -43,6 +43,7 @@ API_CONTRACT_FEATURES = {
     "mobile_update": True,
     "focus_rooms": True,
     "focus_room_realtime": True,
+    "theme_shop": True,
 }
 API_CONTRACT_REQUIRED_ROUTES = [
     "GET /api/config",
@@ -63,6 +64,7 @@ API_CONTRACT_REQUIRED_ROUTES = [
     "PATCH /api/me/email",
     "POST /api/me/password",
     "POST /api/auth/change-password",
+    "POST /api/theme-shop/apply",
     "POST /api/admin/users/{user_id}/coins",
     "PATCH /api/admin/users/{user_id}/coins",
     "GET /api/admin/users",
@@ -251,7 +253,7 @@ def _pubspec_app_version() -> tuple[str, int]:
             return match.group(1), int(match.group(2) or "0")
     except (OSError, ValueError):
         pass
-    return "1.1.17", 120017
+    return "1.1.18", 120018
 
 
 _DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()
@@ -1964,9 +1966,8 @@ def init_db():
                 ("registration_email_required_default_on_migrated", json.dumps(True)),
             )
     conn.execute(
-        "UPDATE users SET admin_permissions=? "
-        "WHERE is_admin=1 AND (admin_permissions IS NULL OR admin_permissions='' OR admin_permissions='[]')",
-        (json.dumps([ADMIN_ALL_PERMISSION]),),
+        "UPDATE users SET admin_permissions=? WHERE is_admin=0",
+        (json.dumps([], ensure_ascii=False),),
     )
     conn.execute(
         """
@@ -2037,13 +2038,29 @@ def init_db():
         ),
     )
     conn.execute(
+        """
+        UPDATE admin_roles
+        SET permissions=?, updated_at=datetime('now')
+        WHERE id='role_user'
+        """,
+        (json.dumps([], ensure_ascii=False),),
+    )
+    conn.execute(
         "UPDATE users SET group_id='group_default' WHERE group_id IS NULL OR group_id=''"
     )
     conn.execute(
         "UPDATE users SET role_id='role_admin' WHERE is_admin=1 AND (role_id IS NULL OR role_id='')"
     )
     conn.execute(
-        "UPDATE users SET role_id='role_user' WHERE is_admin=0 AND (role_id IS NULL OR role_id='')"
+        """
+        UPDATE users
+        SET role_id='role_user'
+        WHERE is_admin=0
+          AND (
+            role_id IS NULL OR role_id='' OR role_id='role_admin'
+            OR role_id NOT IN (SELECT id FROM admin_roles WHERE is_active=1)
+          )
+        """
     )
 
     # Bootstrap admin
@@ -2281,6 +2298,8 @@ def _admin_role_permissions(db, role_id: Optional[str]) -> list[str]:
 
 
 def _merged_admin_permissions(row, db=None) -> list[str]:
+    if row is None or not bool(row["is_admin"]) or bool(row["is_disabled"]):
+        return []
     direct = _admin_permissions_for_response(
         row["admin_permissions"], is_admin=bool(row["is_admin"])
     )
@@ -2313,8 +2332,6 @@ def _admin_permissions_for_response(raw, *, is_admin: bool) -> list[str]:
     permissions = _admin_permissions_from_text(raw)
     if ADMIN_NO_PERMISSION in permissions:
         return []
-    if not permissions and is_admin:
-        return [ADMIN_ALL_PERMISSION]
     return permissions
 
 
@@ -2325,7 +2342,7 @@ def _admin_has_permission(row, permission: str, db=None) -> bool:
     if not permissions and db is not None:
         permissions = _admin_role_permissions(db, _row_get(row, "role_id", ""))
     if not permissions:
-        return True
+        return False
     if ADMIN_NO_PERMISSION in permissions:
         return False
     return ADMIN_ALL_PERMISSION in permissions or permission in permissions
@@ -2397,49 +2414,127 @@ def _virtual_rewards_summary(raw) -> tuple[int, int]:
     )
 
 
+THEME_SHOP_CATALOG = {
+    "brand": {
+        "defaultBrand": 0,
+        "re0": 140,
+        "genshin": 160,
+        "starRail": 180,
+        "wuthering": 200,
+        "zzz": 220,
+        "yanyun": 240,
+        "botw": 260,
+    },
+    "focus_backdrop": {
+        "classic_focus": 0,
+        "morning_focus": 80,
+        "forest_focus": 100,
+        "ocean_focus": 100,
+        "night_focus": 120,
+    },
+    "avatar_frame": {
+        "simple_frame": 0,
+        "golden_frame": 90,
+        "forest_frame": 100,
+        "aurora_frame": 120,
+    },
+    "card_skin": {
+        "plain_card": 0,
+        "paper_card": 90,
+        "mint_card": 100,
+        "starlight_card": 120,
+    },
+}
+
+THEME_SHOP_TYPE_ALIASES = {
+    "brand": "brand",
+    "theme": "brand",
+    "app_brand": "brand",
+    "appBrand": "brand",
+    "focus": "focus_backdrop",
+    "focus_backdrop": "focus_backdrop",
+    "focusBackdrop": "focus_backdrop",
+    "focus-backdrop": "focus_backdrop",
+    "avatar": "avatar_frame",
+    "avatar_frame": "avatar_frame",
+    "avatarFrame": "avatar_frame",
+    "avatar-frame": "avatar_frame",
+    "card": "card_skin",
+    "card_skin": "card_skin",
+    "cardSkin": "card_skin",
+    "card-skin": "card_skin",
+}
+
+THEME_SHOP_DEFAULTS = {
+    "brand": "defaultBrand",
+    "focus_backdrop": "classic_focus",
+    "avatar_frame": "simple_frame",
+    "card_skin": "plain_card",
+}
+
+THEME_SHOP_FIELDS = {
+    "brand": ("activeBrand", "unlockedBrandIds"),
+    "focus_backdrop": ("activeFocusBackdropId", "unlockedFocusBackdropIds"),
+    "avatar_frame": ("activeAvatarFrameId", "unlockedAvatarFrameIds"),
+    "card_skin": ("activeCardSkinId", "unlockedCardSkinIds"),
+}
+
+
+def _theme_shop_type(raw: Optional[str]) -> str:
+    text = str(raw or "").strip()
+    normalized = THEME_SHOP_TYPE_ALIASES.get(text)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="主题商店类型无效")
+    return normalized
+
+
+def _theme_shop_cost(item_type: str, item_id: str) -> int:
+    catalog = THEME_SHOP_CATALOG.get(item_type) or {}
+    if item_id not in catalog:
+        raise HTTPException(status_code=400, detail="主题商店物品不存在")
+    return int(catalog[item_id])
+
+
+def _theme_shop_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _normalize_theme_shop_state(raw: dict) -> dict:
+    state = dict(raw if isinstance(raw, dict) else {})
+    for item_type, default_id in THEME_SHOP_DEFAULTS.items():
+        active_key, unlocked_key = THEME_SHOP_FIELDS[item_type]
+        unlocked = _theme_shop_list(state.get(unlocked_key))
+        if default_id not in unlocked:
+            unlocked.insert(0, default_id)
+        active = str(state.get(active_key) or "").strip()
+        if active in (THEME_SHOP_CATALOG.get(item_type) or {}) and active not in unlocked:
+            unlocked.append(active)
+        if active not in unlocked:
+            active = default_id
+        state[active_key] = active
+        state[unlocked_key] = unlocked
+    try:
+        state["switchCount"] = max(0, int(state.get("switchCount") or 0))
+    except Exception:
+        state["switchCount"] = 0
+    updated_at = str(state.get("updatedAt") or state.get("updated_at") or "").strip()
+    if updated_at:
+        state["updatedAt"] = updated_at
+    state.pop("updated_at", None)
+    return state
+
+
 def _quota_aliases_from_rewards(raw) -> dict:
-    rewards = _json_object(raw)
-
-    def _int_value(*keys, fallback=0) -> int:
-        for key in keys:
-            value = rewards.get(key)
-            if isinstance(value, (int, float)):
-                return int(value)
-            if isinstance(value, str):
-                try:
-                    return int(value)
-                except ValueError:
-                    pass
-        return fallback
-
-    generate_total = max(0, _int_value("generate_quota", "generate_quota_total"))
-    edit_total = max(0, _int_value("edit_quota", "edit_quota_total"))
-    generate_used = max(0, _int_value("generate_quota_used"))
-    edit_used = max(0, _int_value("edit_quota_used"))
-    generate_remaining = max(0, generate_total - generate_used)
-    edit_remaining = max(0, edit_total - edit_used)
-    return {
-        "generate_quota": generate_remaining,
-        "edit_quota": edit_remaining,
-        "generate_quota_total": generate_total,
-        "edit_quota_total": edit_total,
-        "generate_quota_used": generate_used,
-        "edit_quota_used": edit_used,
-        "quota_summary": {
-            "generate": {
-                "total": generate_total,
-                "used": generate_used,
-                "remaining": generate_remaining,
-                "is_unlimited": False,
-            },
-            "edit": {
-                "total": edit_total,
-                "used": edit_used,
-                "remaining": edit_remaining,
-                "is_unlimited": False,
-            },
-        },
-    }
+    # 生图/改图能力当前没有真实端到端实现，旧 rewards 字段仅保留数据兼容，
+    # 不再通过管理接口暴露为可配置能力。
+    return {}
 
 
 def _ai_chat_completions_url(base_url: str) -> str:
@@ -3018,6 +3113,19 @@ class SyncRequest(BaseModel):
     workspace_payloads: dict = {}
 
 
+class ThemeShopApplyRequest(BaseModel):
+    item_type: Optional[str] = None
+    itemType: Optional[str] = None
+    type: Optional[str] = None
+    item_id: Optional[str] = None
+    itemId: Optional[str] = None
+    id: Optional[str] = None
+    title: Optional[str] = None
+    name: Optional[str] = None
+    activate: Optional[bool] = True
+    enabled: Optional[bool] = None
+
+
 class SyncPullRequest(BaseModel):
     collection_hashes: dict = {}
 
@@ -3342,16 +3450,6 @@ class AdminGroupUpsert(BaseModel):
     description: Optional[str] = ""
     default_time_coins: Optional[int] = None
     defaultTimeCoins: Optional[int] = None
-    default_generate_quota: Optional[int] = None
-    defaultGenerateQuota: Optional[int] = None
-    default_edit_quota: Optional[int] = None
-    defaultEditQuota: Optional[int] = None
-    default_generate_history_retention: Optional[int] = None
-    defaultGenerateHistoryRetention: Optional[int] = None
-    default_edit_history_retention: Optional[int] = None
-    defaultEditHistoryRetention: Optional[int] = None
-    image_mode: Optional[str] = None
-    imageMode: Optional[str] = None
     is_active: Optional[bool] = None
     isActive: Optional[bool] = None
 
@@ -5838,6 +5936,157 @@ def me_alias(user_id: str = Depends(_verify_token)):
     return me(user_id=user_id)
 
 
+@app.post("/api/theme-shop/apply")
+@app.post("/api/me/theme-shop/apply")
+def apply_theme_shop_item(
+    req: ThemeShopApplyRequest, user_id: str = Depends(_verify_token)
+):
+    item_type = _theme_shop_type(req.item_type or req.itemType or req.type)
+    item_id = str(req.item_id or req.itemId or req.id or "").strip()
+    if not item_id:
+        raise HTTPException(status_code=400, detail="主题商店物品不能为空")
+    cost = _theme_shop_cost(item_type, item_id)
+    activate = req.activate if req.activate is not None else req.enabled
+    activate = True if activate is None else bool(activate)
+
+    db = get_db()
+    try:
+        user = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        db.execute("INSERT OR IGNORE INTO sync_data(user_id) VALUES(?)", (user_id,))
+        row = db.execute(
+            "SELECT virtual_rewards, theme_shop_state, sync_version FROM sync_data WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+        rewards = _json_object(row["virtual_rewards"] if row else "{}")
+        theme_state = _normalize_theme_shop_state(
+            _json_object(row["theme_shop_state"] if row else "{}")
+        )
+
+        def _num(value, fallback=0) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return fallback
+
+        active_key, unlocked_key = THEME_SHOP_FIELDS[item_type]
+        unlocked = _theme_shop_list(theme_state.get(unlocked_key))
+        default_id = THEME_SHOP_DEFAULTS[item_type]
+        if default_id not in unlocked:
+            unlocked.insert(0, default_id)
+        already_unlocked = item_id in unlocked
+        old_active = str(theme_state.get(active_key) or default_id)
+        charged = 0
+        ledger_entry = None
+        now = _utc_now_text()
+
+        balance = _num(rewards.get("balance"))
+        lifetime = max(_num(rewards.get("lifetime"), balance), balance)
+        if not already_unlocked and cost > 0:
+            if balance < cost:
+                raise HTTPException(status_code=400, detail="时光币不足")
+            balance -= cost
+            charged = cost
+            ledger = rewards.get("ledger")
+            if not isinstance(ledger, list):
+                ledger = []
+            ledger_entry = {
+                "id": f"theme-shop:{int(_utc_now().timestamp() * 1000000)}:{secrets.token_hex(4)}",
+                "title": (req.title or req.name or "兑换主题装饰").strip()
+                or "兑换主题装饰",
+                "coins": -cost,
+                "reason": "主题商店",
+                "awardedAt": now,
+            }
+            rewards.update(
+                {
+                    "balance": balance,
+                    "lifetime": lifetime,
+                    "ledger": [
+                        ledger_entry,
+                        *[item for item in ledger if isinstance(item, dict)],
+                    ][:50],
+                    "updatedAt": now,
+                }
+            )
+        elif "balance" not in rewards or "lifetime" not in rewards:
+            rewards.update(
+                {
+                    "balance": balance,
+                    "lifetime": lifetime,
+                    "updatedAt": str(rewards.get("updatedAt") or now),
+                }
+            )
+
+        changed = False
+        if not already_unlocked:
+            unlocked.append(item_id)
+            changed = True
+        theme_state[unlocked_key] = unlocked
+        if activate and theme_state.get(active_key) != item_id:
+            theme_state[active_key] = item_id
+            changed = True
+            if item_type == "brand" and old_active != item_id:
+                theme_state["switchCount"] = int(theme_state.get("switchCount") or 0) + 1
+        if changed or charged:
+            theme_state["updatedAt"] = now
+            next_sync_version = int(row["sync_version"] or 0) + 1 if row else 1
+            db.execute(
+                """
+                UPDATE sync_data
+                SET virtual_rewards=?, theme_shop_state=?, sync_version=?, updated_at=?
+                WHERE user_id=?
+                """,
+                (
+                    json.dumps(rewards, ensure_ascii=False),
+                    json.dumps(theme_state, ensure_ascii=False),
+                    next_sync_version,
+                    now,
+                    user_id,
+                ),
+            )
+            _audit(
+                db,
+                user_id,
+                user["username"],
+                "theme_shop.apply",
+                target=item_id,
+                detail=json.dumps(
+                    {
+                        "item_type": item_type,
+                        "item_id": item_id,
+                        "charged": charged,
+                        "activate": activate,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            db.commit()
+        else:
+            next_sync_version = int(row["sync_version"] or 0) if row else 0
+
+        fresh = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        user_payload = _user_response(fresh, db=db)
+        return {
+            "status": "ok",
+            "item_type": item_type,
+            "item_id": item_id,
+            "activated": activate,
+            "unlocked": True,
+            "charged": charged,
+            "coin_balance": balance,
+            "lifetime_coins": lifetime,
+            "virtual_rewards": rewards,
+            "theme_shop_state": theme_state,
+            "ledger_entry": ledger_entry,
+            "server_version": next_sync_version,
+            "user": user_payload,
+        }
+    finally:
+        db.close()
+
+
 @app.post("/api/auth/profile")
 @app.patch("/api/auth/profile")
 @app.put("/api/auth/profile")
@@ -7840,6 +8089,51 @@ def _merge_dict(server: dict, client: dict) -> dict:
     return server or client
 
 
+def _merge_theme_shop_state(server: dict, client: dict) -> dict:
+    if not isinstance(server, dict):
+        server = {}
+    if not isinstance(client, dict):
+        client = {}
+    if not server:
+        return _normalize_theme_shop_state(client)
+    if not client:
+        return _normalize_theme_shop_state(server)
+
+    server_state = _normalize_theme_shop_state(server)
+    client_state = _normalize_theme_shop_state(client)
+    server_ts = _item_updated_at(server_state)
+    client_ts = _item_updated_at(client_state)
+    client_is_newer = client_ts and (
+        not server_ts or _timestamp_gt(client_ts, server_ts)
+    )
+    result = dict(client_state if client_is_newer else server_state)
+
+    for item_type, default_id in THEME_SHOP_DEFAULTS.items():
+        active_key, unlocked_key = THEME_SHOP_FIELDS[item_type]
+        unlocked = []
+        for value in [
+            default_id,
+            *_theme_shop_list(server_state.get(unlocked_key)),
+            *_theme_shop_list(client_state.get(unlocked_key)),
+        ]:
+            if value and value not in unlocked:
+                unlocked.append(value)
+        result[unlocked_key] = unlocked
+        active = str(
+            (client_state if client_is_newer else server_state).get(active_key) or ""
+        ).strip()
+        result[active_key] = active if active in unlocked else default_id
+
+    result["switchCount"] = max(
+        int(server_state.get("switchCount") or 0),
+        int(client_state.get("switchCount") or 0),
+    )
+    latest = _latest_timestamp(server_ts, client_ts)
+    if latest:
+        result["updatedAt"] = latest
+    return _normalize_theme_shop_state(result)
+
+
 def _latest_timestamp(*values: str) -> str:
     latest = ""
     for value in values:
@@ -8061,6 +8355,11 @@ def _apply_item_delta_to_payload(payload: dict, req: SyncItemDeltaRequest) -> di
                 current if isinstance(current, dict) else {},
                 value if isinstance(value, dict) else {},
                 deleted_items=deleted_items,
+            )
+        elif key_text == "theme_shop_state":
+            next_payload[key_text] = _merge_theme_shop_state(
+                current if isinstance(current, dict) else {},
+                value if isinstance(value, dict) else {},
             )
         else:
             next_payload[key_text] = _merge_dict(
@@ -8612,7 +8911,7 @@ def _sync_impl(
             server_virtual_rewards, req.virtual_rewards
         )
         merged_focus_rooms = _merge_dict(server_focus_rooms, req.focus_rooms)
-        merged_theme_shop_state = _merge_dict(
+        merged_theme_shop_state = _merge_theme_shop_state(
             server_theme_shop_state, req.theme_shop_state
         )
         merged_preferences = _merge_preferences(server_preferences, req.preferences)
@@ -9823,11 +10122,6 @@ def _admin_group_row(db, row) -> dict:
         "name": row["name"],
         "description": row["description"] or "",
         "default_time_coins": int(row["default_time_coins"] or 0),
-        "default_generate_quota": int(row["default_generate_quota"] or 0),
-        "default_edit_quota": int(row["default_edit_quota"] or 0),
-        "default_generate_history_retention": int(row["default_generate_history_retention"] or 0),
-        "default_edit_history_retention": int(row["default_edit_history_retention"] or 0),
-        "image_mode": row["image_mode"] or "vip",
         "is_active": bool(row["is_active"]),
         "user_count": int(user_count or 0),
         "created_at": row["created_at"],
@@ -9836,8 +10130,13 @@ def _admin_group_row(db, row) -> dict:
 
 
 def _admin_role_row(db, row) -> dict:
-    permissions = _admin_permissions_for_response(
-        row["permissions"], is_admin=row["id"] == "role_admin"
+    role_id = row["id"]
+    permissions = (
+        []
+        if role_id == "role_user"
+        else _admin_permissions_for_response(
+            row["permissions"], is_admin=role_id == "role_admin"
+        )
     )
     user_count = db.execute(
         "SELECT COUNT(*) AS c FROM users WHERE role_id=?",
@@ -9982,10 +10281,6 @@ def admin_delete_group(group_id: str, actor: str = Depends(_require_admin)):
 def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str):
     name = _clean_short_text(req.name, 64, "用户组名称")
     description = _clean_short_text(req.description or "", 280, "用户组描述")
-    image_mode_value = req.image_mode
-    if image_mode_value is None:
-        image_mode_value = req.imageMode
-    image_mode = ""
     target_id = _clean_entity_id(group_id or name, "group")
     db = get_db()
     try:
@@ -9994,11 +10289,6 @@ def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str
             "SELECT * FROM admin_groups WHERE id=?", (target_id,)
         ).fetchone()
         exists = existing_row is not None
-        if image_mode_value is None and existing_row is not None:
-            image_mode_value = existing_row["image_mode"]
-        image_mode = (image_mode_value or "vip").strip()
-        if image_mode not in {"vip", "general"}:
-            image_mode = "vip"
 
         def group_int(field: str, fallback: int, *aliases: str) -> int:
             value = getattr(req, field)
@@ -10024,30 +10314,14 @@ def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str
             name,
             description,
             default_time_coins,
-            group_int("default_generate_quota", 100, "defaultGenerateQuota"),
-            group_int("default_edit_quota", 100, "defaultEditQuota"),
-            group_int(
-                "default_generate_history_retention",
-                50,
-                "defaultGenerateHistoryRetention",
-            ),
-            group_int(
-                "default_edit_history_retention",
-                20,
-                "defaultEditHistoryRetention",
-            ),
-            image_mode,
             1 if is_active_value is not False else 0,
         )
         if not exists:
             db.execute(
                 """
                 INSERT INTO admin_groups(
-                    id, name, description, default_time_coins,
-                    default_generate_quota, default_edit_quota,
-                    default_generate_history_retention,
-                    default_edit_history_retention, image_mode, is_active
-                ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                    id, name, description, default_time_coins, is_active
+                ) VALUES(?,?,?,?,?)
                 """,
                 values,
             )
@@ -10056,9 +10330,6 @@ def _admin_save_group(group_id: Optional[str], req: AdminGroupUpsert, actor: str
                 """
                 UPDATE admin_groups
                 SET name=?, description=?, default_time_coins=?,
-                    default_generate_quota=?, default_edit_quota=?,
-                    default_generate_history_retention=?,
-                    default_edit_history_retention=?, image_mode=?,
                     is_active=?, updated_at=datetime('now')
                 WHERE id=?
                 """,
@@ -10120,7 +10391,11 @@ def _admin_save_role(role_id: Optional[str], req: AdminRoleUpsert, actor: str):
     name = _clean_short_text(req.name, 64, "角色名称")
     description = _clean_short_text(req.description or "", 280, "角色描述")
     target_id = _clean_entity_id(role_id or name, "role")
-    permissions = _normalize_admin_permissions(req.permission_codes or req.permissions or [])
+    permissions = _normalize_admin_permissions(
+        req.permission_codes or req.permissions or []
+    )
+    if target_id == "role_user":
+        permissions = []
     db = get_db()
     try:
         _ensure_admin_permission(db, actor, "roles")
@@ -10201,7 +10476,7 @@ def admin_create_user(req: UserCreate, actor: str = Depends(_require_admin)):
             else []
         )
         if is_admin and not permissions:
-            permissions = _admin_role_permissions(db, role_id) or [ADMIN_ALL_PERMISSION]
+            permissions = _admin_role_permissions(db, role_id)
         _ensure_admin_can_assign_permissions(db, actor, permissions)
         _ensure_admin_can_assign_role(db, actor, role_id)
         db.execute(
@@ -10664,7 +10939,12 @@ def admin_update_user(
         if admin_permissions_value is not None:
             next_permissions = _normalize_admin_permissions(admin_permissions_value)
         elif is_admin_value is True and not _admin_permissions_from_text(row["admin_permissions"]):
-            next_permissions = [ADMIN_ALL_PERMISSION]
+            target_role_id = (
+                (role_id_value or "").strip()
+                if role_id_value is not None
+                else "role_admin"
+            )
+            next_permissions = _admin_role_permissions(db, target_role_id)
         elif is_admin_value is False:
             next_permissions = []
         if next_permissions is not None:

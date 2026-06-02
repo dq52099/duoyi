@@ -85,20 +85,19 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   @override
   Widget build(BuildContext context) {
     const pageTitle = '万年历';
-    final lunar = LunarCalendar.fromSolar(_date);
-    final ganzhiLine = LunarCalendar.almanacGanzhiLine(_date, lunar);
-    final term = LunarCalendar.solarTerm(_date);
-    final solarFes = LunarCalendar.solarFestival(_date);
+    final selectedDate = _date;
+    final almanacDetail = LunarCalendar.almanacDetail(selectedDate);
+    final lunar = almanacDetail.lunarDate;
+    final ganzhiLine = almanacDetail.ganzhiLine;
+    final term = LunarCalendar.solarTerm(selectedDate);
+    final solarFes = LunarCalendar.solarFestival(selectedDate);
     final lunarFes = LunarCalendar.lunarFestival(lunar);
-    final suitable = LunarCalendar.suitable(_date);
-    final avoid = LunarCalendar.avoid(_date);
-    final almanacDetail = LunarCalendar.almanacDetail(_date);
-    final isHoliday = HolidayCalendar.isHoliday(_date);
-    final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(_date);
+    final isHoliday = HolidayCalendar.isHoliday(selectedDate);
+    final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(selectedDate);
     final countdownProvider = context.watch<CountdownProvider?>();
     final anniversaryProvider = context.watch<AnniversaryProvider?>();
     final monthHighlights = _buildMonthHighlights(
-      month: _date,
+      month: selectedDate,
       countdowns: countdownProvider?.items ?? const <CountdownItem>[],
       anniversaries: anniversaryProvider?.items ?? const <Anniversary>[],
     );
@@ -143,16 +142,14 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
               lunarFestival: lunarFes,
               isHoliday: isHoliday,
               isWorkMakeupDay: isWorkMakeupDay,
-              suitable: suitable,
-              avoid: avoid,
             );
             final miniMonth = _MiniMonth(
-              date: _date,
+              date: selectedDate,
               highlightDays: monthHighlightDays,
               onPick: (d) => setState(() => _date = _clampDate(d)),
             );
             final highlights = _MonthHighlightsCard(
-              selectedDate: _date,
+              selectedDate: selectedDate,
               highlights: monthHighlights,
             );
             return Scrollbar(
@@ -225,11 +222,10 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     required String? lunarFestival,
     required bool isHoliday,
     required bool isWorkMakeupDay,
-    required String suitable,
-    required String avoid,
   }) {
+    final displayDate = detail.solarDate;
     final fullDate =
-        '${_date.year}年${_date.month}月${_date.day}日 星期${weekNames[_date.weekday - 1]}';
+        '${displayDate.year}年${displayDate.month}月${displayDate.day}日 星期${weekNames[displayDate.weekday - 1]}';
     final badges = <(String, Color)>[
       if (term != null) ('节气 $term', const Color(0xFF2E7D32)),
       if (solarFestival != null) ('公历 $solarFestival', const Color(0xFFEF6C00)),
@@ -278,7 +274,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_date.day}',
+                        '${displayDate.day}',
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 72,
@@ -328,7 +324,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             ),
           ],
           const Divider(height: 22),
-          _yijiRow(suitable: suitable, avoid: avoid),
+          _yijiRow(suitable: detail.suitable, avoid: detail.avoid),
           const SizedBox(height: 12),
           _detailRows(context, detail),
         ],
@@ -361,7 +357,6 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
       ('五行', detail.fiveElements),
       ('星宿', detail.mansion),
       ('冲煞', detail.clash),
-      ('时辰吉凶', detail.hourFortunes),
     ];
 
     return Column(
@@ -371,8 +366,9 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             context,
             label: rows[i].$1,
             value: rows[i].$2,
-            isLast: i == rows.length - 1,
+            isLast: false,
           ),
+        _hourFortuneRow(context, detail.hourFortuneItems, isLast: true),
       ],
     );
   }
@@ -420,6 +416,141 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _hourFortuneRow(
+    BuildContext context,
+    List<AlmanacHourFortune> fortunes, {
+    required bool isLast,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isLast
+                ? Colors.transparent
+                : cs.outlineVariant.withValues(alpha: 0.18),
+            width: 0.45,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 68,
+            child: Text(
+              '时辰吉凶',
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurface.withValues(alpha: 0.54),
+              ),
+            ),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 6.0;
+                final columns = constraints.maxWidth >= 480
+                    ? 4
+                    : constraints.maxWidth >= 320
+                    ? 3
+                    : 2;
+                final itemWidth =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: fortunes
+                      .map(
+                        (fortune) => _hourFortuneBlock(
+                          context,
+                          fortune,
+                          width: itemWidth,
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hourFortuneBlock(
+    BuildContext context,
+    AlmanacHourFortune fortune, {
+    required double width,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final color = fortune.isAuspicious
+        ? const Color(0xFF2E7D32)
+        : const Color(0xFFC62828);
+    return SizedBox(
+      width: width,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 58),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.16), width: 0.45),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${fortune.branch}时',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.86),
+                      fontSize: 12,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ),
+                Text(
+                  fortune.isAuspicious ? '吉' : '凶',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              fortune.range,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.58),
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${fortune.ganzhi} ${fortune.deity}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.72),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

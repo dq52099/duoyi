@@ -105,6 +105,9 @@ class AuthProvider extends ChangeNotifier {
   late String _baseUrl;
   Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
+  int _stateMutationSerial = 0;
+  int _refreshMeRequestSerial = 0;
+  int _lastAppliedRefreshMeRequestSerial = 0;
 
   /// 拉取到 /api/config 之后会触发，供 AiService / CloudSyncProvider 订阅。
   void Function(Map<String, dynamic> cfg)? onServerConfigChanged;
@@ -164,6 +167,7 @@ class AuthProvider extends ChangeNotifier {
     }
     try {
       final cfg = await _client.get('/api/config');
+      if (jsonEncode(_serverConfig) == jsonEncode(cfg)) return;
       _serverConfig = cfg;
       onServerConfigChanged?.call(cfg);
       notifyListeners();
@@ -175,6 +179,15 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _persistState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_state', json.encode(_state.toJson()));
+  }
+
+  void _markAccountMutation(String reason) {
+    _stateMutationSerial++;
+    debugPrint(
+      '[auth-sync] mutation=$_stateMutationSerial reason=$reason '
+      'user=${_state.userId ?? '-'} coin=${_state.coinBalance} '
+      'lifetime=${_state.lifetimeCoins}',
+    );
   }
 
   Future<void> register({
@@ -198,6 +211,7 @@ class AuthProvider extends ChangeNotifier {
       },
     });
     _state = _stateFromAuthResponse(res);
+    _markAccountMutation('register');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
     await _notifyAccountProfileChanged();
@@ -289,6 +303,7 @@ class AuthProvider extends ChangeNotifier {
       'password': password,
     });
     _state = _stateFromAuthResponse(res);
+    _markAccountMutation('login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
     await _notifyAccountProfileChanged();
@@ -323,6 +338,7 @@ class AuthProvider extends ChangeNotifier {
       {'email': email, 'code': code, 'email_code': code},
     );
     _state = _stateFromAuthResponse(res);
+    _markAccountMutation('email_login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
     await _notifyAccountProfileChanged();
@@ -354,6 +370,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _clearLocalSession() async {
     _state = const AuthState();
+    _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_state');
@@ -361,19 +378,127 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refreshMe() async {
+  Future<void> refreshMe({String reason = 'manual'}) async {
     if (!_state.isLoggedIn) return;
+    final requestId = ++_refreshMeRequestSerial;
+    final mutationSerialAtStart = _stateMutationSerial;
+    final tokenAtStart = _state.token;
+    final userIdAtStart = _state.userId;
+    debugPrint(
+      '[auth-sync] refreshMe#$requestId start reason=$reason '
+      'mutation=$mutationSerialAtStart user=${userIdAtStart ?? '-'}',
+    );
     try {
       final me = await _getFirstAvailable(const ['/api/auth/me', '/api/me']);
-      _state = _stateFromAuthResponse(me, keepToken: true);
+      if (requestId != _refreshMeRequestSerial ||
+          requestId < _lastAppliedRefreshMeRequestSerial) {
+        debugPrint('[auth-sync] refreshMe#$requestId skipped: older response');
+        return;
+      }
+      if (!_state.isLoggedIn || _state.token != tokenAtStart) {
+        debugPrint('[auth-sync] refreshMe#$requestId skipped: token changed');
+        return;
+      }
+      if (userIdAtStart != null &&
+          _state.userId != null &&
+          _state.userId != userIdAtStart) {
+        debugPrint('[auth-sync] refreshMe#$requestId skipped: user changed');
+        return;
+      }
+      if (_stateMutationSerial != mutationSerialAtStart) {
+        debugPrint(
+          '[auth-sync] refreshMe#$requestId skipped: newer account mutation '
+          '$_stateMutationSerial > $mutationSerialAtStart',
+        );
+        return;
+      }
+      final nextState = _stateFromAuthResponse(me, keepToken: true);
+      _lastAppliedRefreshMeRequestSerial = requestId;
+      if (_authStatesEqual(_state, nextState)) {
+        debugPrint('[auth-sync] refreshMe#$requestId skipped: unchanged');
+        return;
+      }
+      _state = nextState;
       await _persistState();
       await _notifyAccountProfileChanged();
+      debugPrint(
+        '[auth-sync] refreshMe#$requestId applied '
+        'coin=${_state.coinBalance} lifetime=${_state.lifetimeCoins}',
+      );
       notifyListeners();
     } on ApiException catch (e) {
       if (_isAuthExpired(e)) {
         await _clearLocalSession();
+      } else {
+        debugPrint('[auth-sync] refreshMe#$requestId failed: ${e.message}');
       }
+    } catch (e, st) {
+      debugPrint('[auth-sync] refreshMe#$requestId failed: $e\n$st');
+      rethrow;
     }
+  }
+
+  Future<void> applyServerAccountSnapshot(
+    Map<dynamic, dynamic> data, {
+    String reason = 'server_snapshot',
+    String? expectedToken,
+    String? expectedUserId,
+  }) async {
+    if (!_state.isLoggedIn) return;
+    if (expectedToken != null && _state.token != expectedToken) {
+      debugPrint('[auth-sync] $reason skipped: token changed');
+      return;
+    }
+    if (expectedUserId != null &&
+        _state.userId != null &&
+        _state.userId != expectedUserId) {
+      debugPrint('[auth-sync] $reason skipped: user changed');
+      return;
+    }
+    final nextState = _stateFromAuthResponse(
+      Map<String, dynamic>.from(data),
+      keepToken: true,
+    );
+    if (expectedUserId != null &&
+        nextState.userId != null &&
+        nextState.userId != expectedUserId) {
+      debugPrint('[auth-sync] $reason skipped: response user mismatch');
+      return;
+    }
+    if (_authStatesEqual(_state, nextState)) {
+      debugPrint('[auth-sync] $reason skipped: unchanged');
+      return;
+    }
+    _state = nextState;
+    _markAccountMutation(reason);
+    await _persistState();
+    await _notifyAccountProfileChanged();
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> applyThemeShopItem({
+    required String itemType,
+    required String itemId,
+    required String title,
+  }) async {
+    if (!_state.isLoggedIn) {
+      throw const ApiException('请先登录后再使用主题商店');
+    }
+    final tokenAtStart = _state.token;
+    final userIdAtStart = _state.userId;
+    final res = await _client.post('/api/theme-shop/apply', {
+      'item_type': itemType,
+      'item_id': itemId,
+      'title': title,
+      'activate': true,
+    });
+    await applyServerAccountSnapshot(
+      res,
+      reason: 'theme_shop_apply',
+      expectedToken: tokenAtStart,
+      expectedUserId: userIdAtStart,
+    );
+    return res;
   }
 
   Future<void> updateProfile({String? displayName, String? bio}) async {
@@ -396,6 +521,7 @@ class AuthProvider extends ChangeNotifier {
       featureName: '个人资料',
     );
     _state = _stateFromAuthResponse(res, keepToken: true);
+    _markAccountMutation('update_profile');
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
@@ -430,6 +556,7 @@ class AuthProvider extends ChangeNotifier {
       featureName: '邮箱绑定',
     );
     _state = _stateFromAuthResponse(res, keepToken: true);
+    _markAccountMutation('bind_email');
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
@@ -479,6 +606,7 @@ class AuthProvider extends ChangeNotifier {
       featureName: '头像上传',
     );
     _state = _stateFromAuthResponse(res, keepToken: true);
+    _markAccountMutation('upload_avatar');
     await _persistState();
     await _notifyAccountProfileChanged();
     notifyListeners();
@@ -827,6 +955,10 @@ List<String> _stringListFromJson(Object? value) {
         .toList(growable: false);
   }
   return const <String>[];
+}
+
+bool _authStatesEqual(AuthState left, AuthState right) {
+  return jsonEncode(left.toJson()) == jsonEncode(right.toJson());
 }
 
 bool _looksLikeEmail(String value) {

@@ -67,6 +67,7 @@ class AchievementProvider extends ChangeNotifier {
   int _coinBalance = 0;
   int _lifetimeCoins = 0;
   int _persistedRevision = 0;
+  String _rewardsUpdatedAt = '';
 
   AchievementProvider({AchievementEngine? engine, DomainEventBus? bus})
     : _engine = engine ?? AchievementEngine(),
@@ -127,8 +128,34 @@ class AchievementProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<void> applyRewardsSnapshot(Map<dynamic, dynamic> rewards) async {
+    final prefs = await SharedPreferences.getInstance();
+    final incoming = Map<String, dynamic>.from(rewards);
+    if (_isIncomingRewardsOlder(incoming)) {
+      debugPrint(
+        '[reward-sync] skipped older snapshot incoming='
+        '${_rewardsUpdatedAtOf(incoming)} current=$_rewardsUpdatedAt',
+      );
+      return;
+    }
+    await prefs.setString(_rewardStorageKey, jsonEncode(incoming));
+    final changed = _loadRewardsFromPrefs(prefs);
+    if (!changed) return;
+    _persistedRevision++;
+    debugPrint(
+      '[reward-sync] applied server snapshot balance=$_coinBalance '
+      'lifetime=$_lifetimeCoins revision=$_persistedRevision',
+    );
+    notifyListeners();
+  }
+
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    final beforeUnlocked = jsonEncode(
+      _unlockedAt.map(
+        (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
+      ),
+    );
     final raw = prefs.getString(_storageKey);
     _unlockedAt.clear();
     if (raw != null && raw.isNotEmpty) {
@@ -140,10 +167,17 @@ class AchievementProvider extends ChangeNotifier {
         }
       }
     }
-    _loadRewardsFromPrefs(prefs);
+    final unlockedChanged =
+        beforeUnlocked !=
+        jsonEncode(
+          _unlockedAt.map(
+            (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
+          ),
+        );
+    final rewardsChanged = _loadRewardsFromPrefs(prefs);
     _subscribe();
     _rebuildSnapshots(notify: false);
-    notifyListeners();
+    if (unlockedChanged || rewardsChanged) notifyListeners();
   }
 
   void updateContext(AchievementContext context) {
@@ -284,10 +318,7 @@ class AchievementProvider extends ChangeNotifier {
     return changed;
   }
 
-  bool _award(
-    RewardGrant grant, {
-    required DateTime awardedAt,
-  }) {
+  bool _award(RewardGrant grant, {required DateTime awardedAt}) {
     if (grant.coins <= 0 || _rewardGrantIds.contains(grant.id)) {
       return false;
     }
@@ -310,17 +341,22 @@ class AchievementProvider extends ChangeNotifier {
     return true;
   }
 
-  void _loadRewardsFromPrefs(SharedPreferences prefs) {
+  bool _loadRewardsFromPrefs(SharedPreferences prefs) {
+    final before = _rewardsSnapshotHash();
     final raw = prefs.getString(_rewardStorageKey);
     _coinBalance = 0;
     _lifetimeCoins = 0;
+    _rewardsUpdatedAt = '';
     _rewardGrantIds.clear();
     _rewardLedger.clear();
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      return before != _rewardsSnapshotHash();
+    }
     final decoded = jsonDecode(raw);
-    if (decoded is! Map) return;
+    if (decoded is! Map) return before != _rewardsSnapshotHash();
     _coinBalance = (decoded['balance'] as num?)?.toInt() ?? 0;
     _lifetimeCoins = (decoded['lifetime'] as num?)?.toInt() ?? _coinBalance;
+    _rewardsUpdatedAt = _rewardsUpdatedAtOf(decoded);
     final grantIds = decoded['grantIds'];
     if (grantIds is List) {
       _rewardGrantIds.addAll(grantIds.map((id) => id.toString()));
@@ -335,6 +371,7 @@ class AchievementProvider extends ChangeNotifier {
         }
       }
     }
+    return before != _rewardsSnapshotHash();
   }
 
   Future<void> _save() async {
@@ -351,6 +388,7 @@ class AchievementProvider extends ChangeNotifier {
 
   Future<void> _saveRewards() async {
     final prefs = await SharedPreferences.getInstance();
+    _rewardsUpdatedAt = DateTime.now().toUtc().toIso8601String();
     await prefs.setString(
       _rewardStorageKey,
       jsonEncode({
@@ -358,9 +396,37 @@ class AchievementProvider extends ChangeNotifier {
         'lifetime': _lifetimeCoins,
         'grantIds': _rewardGrantIds.toList(growable: false),
         'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
-        'updatedAt': DateTime.now().toIso8601String(),
+        'updatedAt': _rewardsUpdatedAt,
       }),
     );
+  }
+
+  bool _isIncomingRewardsOlder(Map<dynamic, dynamic> incoming) {
+    final incomingUpdatedAt = _rewardsUpdatedAtOf(incoming);
+    if (_rewardsUpdatedAt.isEmpty) return false;
+    if (incomingUpdatedAt.isEmpty) return true;
+    final incomingTime = DateTime.tryParse(incomingUpdatedAt);
+    final currentTime = DateTime.tryParse(_rewardsUpdatedAt);
+    if (incomingTime != null && currentTime != null) {
+      return incomingTime.toUtc().isBefore(currentTime.toUtc());
+    }
+    return incomingUpdatedAt.compareTo(_rewardsUpdatedAt) < 0;
+  }
+
+  String _rewardsUpdatedAtOf(Map<dynamic, dynamic> data) {
+    return data['updatedAt']?.toString() ??
+        data['updated_at']?.toString() ??
+        '';
+  }
+
+  String _rewardsSnapshotHash() {
+    return jsonEncode({
+      'balance': _coinBalance,
+      'lifetime': _lifetimeCoins,
+      'grantIds': _rewardGrantIds.toList(growable: false)..sort(),
+      'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
+      'updatedAt': _rewardsUpdatedAt,
+    });
   }
 
   @override

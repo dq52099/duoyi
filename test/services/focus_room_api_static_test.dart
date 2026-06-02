@@ -24,7 +24,8 @@ void main() {
     expect(api, contains('final List<String> riskFlags'));
     expect(api, contains('final String riskSummary'));
     expect(api, contains("const ['risk_flags', 'riskFlags']"));
-    expect(api, contains("const ['risk_summary', 'riskSummary']"));
+    expect(api, contains("'risk_summary'"));
+    expect(api, contains("'riskSummary'"));
     expect(api, contains('class FocusFriend'));
     expect(
       api,
@@ -98,13 +99,17 @@ void main() {
       contains("import 'package:web_socket_channel/web_socket_channel.dart';"),
     );
     expect(api, contains('WebSocketChannel.connect'));
-    expect(api, contains("base.scheme == 'https' ? 'wss' : 'ws'"));
+    expect(api, contains('static Uri? buildRealtimeWebSocketUri'));
+    expect(api, contains("'https' || 'wss' => 'wss'"));
+    expect(api, contains("'http' || 'ws' => 'ws'"));
+    expect(api, contains('base.hasPort && base.port == 0'));
     expect(
       api,
       contains('/ws/focus-rooms/\${Uri.encodeComponent(roomId)}/events'),
     );
     expect(api, contains('/ws/focus-leaderboard/global/events'));
-    expect(api, contains("'token': client.token!"));
+    expect(api, contains('token: client.token!'));
+    expect(api, contains("'token': cleanToken"));
     expect(api, contains("yield* rankingWebSocketEvents"));
     expect(api, contains("yield* rankingEvents"));
     expect(
@@ -131,10 +136,8 @@ void main() {
     expect(api, contains('Future<void> revokeInvite'));
     expect(api, contains('Future<FocusRoomInviteAcceptResult> acceptInvite'));
     expect(api, contains('Object? _remoteValue('));
-    expect(
-      api,
-      contains("const ['weekly_target_seconds', 'weeklyTargetSeconds']"),
-    );
+    expect(api, contains("'weekly_target_seconds'"));
+    expect(api, contains("'weeklyTargetSeconds'"));
     expect(api, contains("const ['room_id', 'roomId']"));
     expect(
       api,
@@ -542,8 +545,10 @@ void main() {
     );
     expect(api, contains("if (data is! Map) return null;"));
     expect(api, contains("'interval_seconds': intervalSeconds.toString()"));
-    expect(api, contains("'token': client.token!"));
-    expect(api, contains("base.scheme == 'https' ? 'wss' : 'ws'"));
+    expect(api, contains('token: client.token!'));
+    expect(api, contains("'token': cleanToken"));
+    expect(api, contains("'https' || 'wss' => 'wss'"));
+    expect(api, contains("'http' || 'ws' => 'ws'"));
     expect(api, contains("yield* rankingWebSocketEvents"));
     expect(api, contains("yield* rankingEvents"));
     expect(api, contains("yield* globalRankingWebSocketEvents"));
@@ -554,8 +559,11 @@ void main() {
     expect(provider, contains('_lastRemoteError = null;'));
     expect(provider, contains('_lastRemoteSyncAt = DateTime.now();'));
     expect(provider, contains('_lastGlobalSyncAt = DateTime.now();'));
-    expect(provider, contains('_realtimeRetryAfter = DateTime.now().add'));
-    expect(provider, contains('const Duration(seconds: 30)'));
+    expect(provider, contains('DateTime.now().add(retryDelay)'));
+    expect(provider, contains('Duration _nextRealtimeRetryDelay()'));
+    expect(provider, contains('Duration(seconds: 10)'));
+    expect(provider, contains('Duration(seconds: 30)'));
+    expect(provider, contains('Duration(seconds: 60)'));
     expect(provider, contains('_queueRealtimeNotify();'));
 
     expect(backend, contains('@app.get("/api/focus-rooms/{room_id}/events")'));
@@ -588,6 +596,67 @@ void main() {
     expect(deploy, contains('location /ws/'));
     expect(deploy, contains(r'proxy_set_header Upgrade $http_upgrade;'));
     expect(deploy, contains('proxy_set_header Connection "upgrade";'));
+  });
+
+  test('focus room websocket URI builder avoids malformed realtime URLs', () {
+    final httpsUri = FocusRoomApi.buildRealtimeWebSocketUri(
+      baseUrl: 'https://duoyi.test:8443/app/#/focus',
+      path: '/ws/focus-rooms/deep_work_room/events',
+      token: 'secret-token',
+      intervalSeconds: 15,
+    );
+    final httpUri = FocusRoomApi.buildRealtimeWebSocketUri(
+      baseUrl: 'http://localhost:8080/#/focus',
+      path: '/ws/focus-leaderboard/global/events',
+      token: 'secret-token',
+      intervalSeconds: 30,
+    );
+
+    expect(httpsUri, isNotNull);
+    expect(httpsUri!.scheme, 'wss');
+    expect(httpsUri.host, 'duoyi.test');
+    expect(httpsUri.port, 8443);
+    expect(httpsUri.fragment, isEmpty);
+    expect(httpsUri.toString(), isNot(contains('http://')));
+    expect(httpsUri.toString(), isNot(contains(':0')));
+    expect(httpsUri.toString(), isNot(endsWith('#')));
+    expect(httpsUri.queryParameters['token'], 'secret-token');
+
+    expect(httpUri, isNotNull);
+    expect(httpUri!.scheme, 'ws');
+    expect(httpUri.host, 'localhost');
+    expect(httpUri.port, 8080);
+    expect(httpUri.fragment, isEmpty);
+    expect(httpUri.toString(), isNot(contains('http://')));
+    expect(httpUri.toString(), isNot(contains(':0')));
+    expect(httpUri.toString(), isNot(endsWith('#')));
+
+    expect(
+      FocusRoomApi.buildRealtimeWebSocketUri(
+        baseUrl: 'http://localhost:0/#/focus',
+        path: '/ws/focus-rooms/deep_work_room/events',
+        token: 'secret-token',
+        intervalSeconds: 15,
+      ),
+      isNull,
+    );
+    expect(
+      FocusRoomApi.buildRealtimeWebSocketUri(
+        baseUrl: '/relative-only',
+        path: '/ws/focus-rooms/deep_work_room/events',
+        token: 'secret-token',
+        intervalSeconds: 15,
+      ),
+      isNull,
+    );
+
+    final sanitized = sanitizeFocusRoomRealtimeDiagnostic(
+      'WebSocketException: ws://duoyi.test/ws?token=secret-token',
+      token: 'secret-token',
+    );
+    expect(sanitized, contains('WebSocketException'));
+    expect(sanitized, isNot(contains('secret-token')));
+    expect(sanitized, contains('token=<redacted-token>'));
   });
 
   test('focus room remote DTOs tolerate compatible JSON shapes', () {

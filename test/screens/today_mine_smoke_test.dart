@@ -110,6 +110,67 @@ void main() {
     expect(find.text('今天暂无待办，点击查看或添加任务'), findsOneWidget);
   });
 
+  testWidgets('Today todo shows no-due and due-today tasks only', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final todoProvider = TodoProvider();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final tomorrow = today.add(const Duration(days: 1));
+
+    await todoProvider.addTodo(
+      TodoItem(title: '无截止任务', date: tomorrow),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '今天截止任务',
+        date: yesterday,
+        dueDate: today,
+      ),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '昨天截止任务',
+        date: today,
+        dueDate: yesterday.add(const Duration(hours: 18)),
+      ),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '明天截止任务',
+        date: today,
+        dueDate: tomorrow.add(const Duration(hours: 9)),
+      ),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '已完成任务',
+        date: today,
+        dueDate: today.add(const Duration(hours: 10)),
+        isCompleted: true,
+        completedAt: now,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _wrap(const TodayScreen(), todoProvider: todoProvider),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日待办'), findsOneWidget);
+    expect(find.text('无截止任务'), findsOneWidget);
+    expect(find.text('无截止日期'), findsOneWidget);
+    expect(find.text('今天截止任务'), findsOneWidget);
+    expect(find.text('昨天截止任务'), findsNothing);
+    expect(find.text('明天截止任务'), findsNothing);
+    expect(find.text('已完成任务'), findsNothing);
+  });
+
   test('今日和我的概览/入口样式保持独立且不过度放大', () {
     final today = File('lib/screens/today_screen.dart').readAsStringSync();
     final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
@@ -477,12 +538,12 @@ void main() {
       isTrue,
     );
     expect(find.text('逾期提醒任务'), findsOneWidget);
-    expect(find.text('正常提醒任务'), findsOneWidget);
+    expect(find.text('正常提醒任务'), findsWidgets);
     expect(find.text('已完成提醒任务'), findsWidgets);
     expect(find.text('逾期'), findsWidgets);
 
     final overdueTitle = tester.widget<Text>(find.text('逾期提醒任务'));
-    final normalTitle = tester.widget<Text>(find.text('正常提醒任务'));
+    final normalTitle = tester.widgetList<Text>(find.text('正常提醒任务')).last;
     final completedTitle = tester
         .widgetList<Text>(find.text('已完成提醒任务'))
         .firstWhere(
@@ -511,7 +572,7 @@ void main() {
       matching: find.byWidgetPredicate(reminderTileDecoration),
     );
     expect(overdueDecoratedTile, findsOneWidget);
-    expect(normalDecoratedTile, findsOneWidget);
+    expect(normalDecoratedTile, findsWidgets);
   });
 
   testWidgets('Today suggestion add immediately moves task into today', (
@@ -528,6 +589,7 @@ void main() {
       TodoItem(
         title: '建议加入今日',
         date: today.add(const Duration(days: 1)),
+        dueDate: today.add(const Duration(days: 1, hours: 18)),
         priority: TodoPriority.high,
         quadrant: EisenhowerQuadrant.notUrgentImportant,
         listGroupName: '工作',

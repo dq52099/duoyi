@@ -133,6 +133,8 @@ class CloudSyncProvider extends ChangeNotifier {
     autoSync: true,
   );
   bool _isSyncing = false;
+  bool _syncQueued = false;
+  bool _notifyQueued = false;
   String? _lastError;
   Timer? _autoSyncTimer;
   Timer? _remotePollTimer;
@@ -172,6 +174,24 @@ class CloudSyncProvider extends ChangeNotifier {
   int _localChangeGeneration = 0;
   bool get hasPendingChanges => _hasPendingChanges;
 
+  void _notifySyncStateChanged() {
+    if (_notifyQueued) return;
+    _notifyQueued = true;
+    scheduleMicrotask(() {
+      _notifyQueued = false;
+      if (hasListeners) notifyListeners();
+    });
+  }
+
+  void _scheduleQueuedSyncIfNeeded() {
+    if (_syncQueued && _config.autoSync) {
+      _syncQueued = false;
+      _scheduleAutoSync(const Duration(milliseconds: 1200));
+    } else {
+      _syncQueued = false;
+    }
+  }
+
   String _userVisibleSyncError(Object error) {
     debugPrint('[CloudSync] $error');
     return userVisibleApiError(
@@ -191,7 +211,7 @@ class CloudSyncProvider extends ChangeNotifier {
     _localChangeGeneration++;
     if (!_hasPendingChanges) {
       _hasPendingChanges = true;
-      notifyListeners();
+      _notifySyncStateChanged();
     }
     _remotePollTimer?.cancel();
     _scheduleAutoSync();
@@ -257,8 +277,12 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void startRemotePolling() {
+    final alreadyPolling =
+        _remoteEventSubscription != null || _remotePollTimer != null;
     _startRemoteEvents();
-    _scheduleRemotePoll(Duration.zero);
+    if (!alreadyPolling) {
+      _scheduleRemotePoll(Duration.zero);
+    }
   }
 
   void stopRemotePolling() {
@@ -292,7 +316,7 @@ class CloudSyncProvider extends ChangeNotifier {
             _remoteEventDataLines.clear();
             _scheduleRemoteEventReconnect(_autoRetryDelay);
             _scheduleRemotePoll(_autoRetryDelay);
-            notifyListeners();
+            _notifySyncStateChanged();
           },
           onDone: () {
             _remoteEventSubscription = null;
@@ -359,7 +383,7 @@ class CloudSyncProvider extends ChangeNotifier {
       _pullRemoteChanges();
     } catch (e) {
       _lastError = _userVisibleSyncError(e);
-      notifyListeners();
+      _notifySyncStateChanged();
     }
   }
 
@@ -442,7 +466,7 @@ class CloudSyncProvider extends ChangeNotifier {
         final hadError = _lastError != null;
         _lastError = null;
         _scheduleRemotePoll();
-        if (hadError) notifyListeners();
+        if (hadError) _notifySyncStateChanged();
         return;
       }
 
@@ -450,7 +474,7 @@ class CloudSyncProvider extends ChangeNotifier {
     } catch (e) {
       _lastError = _userVisibleSyncError(e);
       _scheduleRemotePoll(_autoRetryDelay);
-      notifyListeners();
+      _notifySyncStateChanged();
     }
   }
 
@@ -777,7 +801,7 @@ class CloudSyncProvider extends ChangeNotifier {
             })
             .whereType<SyncMergeDecision>()
             .toList();
-    notifyListeners();
+    _notifySyncStateChanged();
   }
 
   Future<void> setAutoSync(bool value) async {
@@ -792,7 +816,7 @@ class CloudSyncProvider extends ChangeNotifier {
       _autoSyncTimer?.cancel();
       stopRemotePolling();
     }
-    notifyListeners();
+    _notifySyncStateChanged();
   }
 
   Future<void> syncNow() async {
@@ -801,11 +825,14 @@ class CloudSyncProvider extends ChangeNotifier {
     if (!FeatureFlags.cloudSyncV2) {
       return;
     }
-    if (_isSyncing) return;
+    if (_isSyncing) {
+      _syncQueued = true;
+      return;
+    }
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       _lastError = '请先登录';
-      notifyListeners();
+      _notifySyncStateChanged();
       return;
     }
     // 如果服务端关掉了 backup_enabled，就不要浪费网络
@@ -813,13 +840,14 @@ class CloudSyncProvider extends ChangeNotifier {
       final cfg = serverConfigGetter!.call();
       if (cfg != null && cfg['backup_enabled'] == false) {
         _lastError = '管理员已关闭云端备份';
-        notifyListeners();
+        _notifySyncStateChanged();
+        _scheduleQueuedSyncIfNeeded();
         return;
       }
     }
     _isSyncing = true;
     _lastError = null;
-    notifyListeners();
+    _notifySyncStateChanged();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -853,7 +881,8 @@ class CloudSyncProvider extends ChangeNotifier {
         } else {
           _scheduleRemotePoll();
         }
-        notifyListeners();
+        _notifySyncStateChanged();
+        _scheduleQueuedSyncIfNeeded();
         return;
       } else if (itemDelta != null && itemDelta.isNotEmpty) {
         response = await client.post('/api/sync/item-delta', {
@@ -896,11 +925,15 @@ class CloudSyncProvider extends ChangeNotifier {
     } else if (_lastError == null && !_hasPendingChanges) {
       _scheduleRemotePoll();
     }
-    notifyListeners();
+    _notifySyncStateChanged();
+    _scheduleQueuedSyncIfNeeded();
   }
 
   Future<void> _pullRemoteChanges() async {
-    if (_isSyncing) return;
+    if (_isSyncing) {
+      _syncQueued = true;
+      return;
+    }
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
@@ -909,14 +942,14 @@ class CloudSyncProvider extends ChangeNotifier {
       final cfg = serverConfigGetter!.call();
       if (cfg != null && cfg['backup_enabled'] == false) {
         _lastError = '管理员已关闭云端备份';
-        notifyListeners();
+        _notifySyncStateChanged();
         return;
       }
     }
 
     _isSyncing = true;
     _lastError = null;
-    notifyListeners();
+    _notifySyncStateChanged();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -954,7 +987,8 @@ class CloudSyncProvider extends ChangeNotifier {
     } else if (_lastError != null) {
       _scheduleRemotePoll(_autoRetryDelay);
     }
-    notifyListeners();
+    _notifySyncStateChanged();
+    _scheduleQueuedSyncIfNeeded();
   }
 
   Map<String, dynamic> _buildLocalSyncPayload(SharedPreferences prefs) {

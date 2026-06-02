@@ -50,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pwdCtrl = TextEditingController();
   final _confirmPwdCtrl = TextEditingController();
   final _inviteCtrl = TextEditingController();
+  final _pwdFocus = FocusNode();
   bool _isRegister = false;
   bool _emailLogin = false;
   bool _registerWithEmail = true;
@@ -79,6 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _pwdCtrl.dispose();
     _confirmPwdCtrl.dispose();
     _inviteCtrl.dispose();
+    _pwdFocus.dispose();
     super.dispose();
   }
 
@@ -99,6 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
       _message = null;
     });
+    final passwordLogin = !_isRegister && !_emailLogin;
     try {
       if (_isRegister) {
         await auth.register(
@@ -122,7 +125,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (mounted) Navigator.pop(context);
     } on ApiException catch (e) {
-      setState(() => _error = userVisibleApiError(e));
+      if (passwordLogin && _isInvalidCredentialsError(e)) {
+        setState(() {
+          _error = I18n.tr('auth.error.invalid_credentials');
+          _pwdCtrl.clear();
+        });
+        _pwdFocus.requestFocus();
+      } else {
+        setState(() => _error = userVisibleApiError(e));
+      }
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -557,6 +568,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               AppSecondaryControlTheme(
                                 child: TextField(
                                   controller: _pwdCtrl,
+                                  focusNode: _pwdFocus,
                                   decoration: InputDecoration(
                                     labelText: I18n.tr('auth.password'),
                                   ),
@@ -926,4 +938,14 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
 
 bool _looksLikeEmail(String value) {
   return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+}
+
+bool _isInvalidCredentialsError(ApiException error) {
+  final message = error.message.toLowerCase();
+  return message.contains('invalid credentials') ||
+      message.contains('invalid username or password') ||
+      message.contains('incorrect username or password') ||
+      message.contains('账号或密码') ||
+      message.contains('用户名或密码') ||
+      (message.startsWith('401:') && message.contains('credentials'));
 }

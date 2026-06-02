@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../core/app_brand.dart';
 import '../core/i18n.dart';
 import '../providers/achievement_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/api_client.dart';
 import '../widgets/surface_components.dart';
 
 class ThemePickerScreen extends StatelessWidget {
@@ -59,6 +61,78 @@ class ThemePickerScreen extends StatelessWidget {
     );
   }
 
+  int _visibleCoinBalance(
+    AuthProvider authProvider,
+    AchievementProvider achievementProvider,
+  ) {
+    return authProvider.state.isLoggedIn
+        ? authProvider.state.coinBalance
+        : achievementProvider.coinBalance;
+  }
+
+  Future<bool> _applyThemeShopItem(
+    BuildContext context, {
+    required ThemeProvider themeProvider,
+    required AchievementProvider achievementProvider,
+    required String itemType,
+    required String itemId,
+    required String title,
+    required int cost,
+    required bool isUnlocked,
+    required Future<void> Function() applyLocal,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.state.isLoggedIn) {
+      try {
+        final res = await authProvider.applyThemeShopItem(
+          itemType: itemType,
+          itemId: itemId,
+          title: title,
+        );
+        final themeState = res['theme_shop_state'];
+        if (themeState is Map) {
+          await themeProvider.applyShopStateFromServer(themeState);
+        }
+        final rewards = res['virtual_rewards'];
+        if (rewards is Map) {
+          await achievementProvider.applyRewardsSnapshot(rewards);
+        }
+        return true;
+      } catch (e) {
+        if (!context.mounted) return false;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(userVisibleApiError(e, fallbackMessage: '主题保存失败')),
+          ),
+        );
+        return false;
+      }
+    }
+
+    if (!isUnlocked) {
+      final ok = await achievementProvider.spendCoins(
+        coins: cost,
+        title: title,
+        reason: '奖励商店主题装饰',
+      );
+      if (!context.mounted) return false;
+      if (!ok) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('时光币不足，还差 ${cost - achievementProvider.coinBalance}'),
+          ),
+        );
+        return false;
+      }
+    }
+    await applyLocal();
+    return true;
+  }
+
   Future<void> _handleBrandTap(
     BuildContext context,
     ThemeProvider themeProvider,
@@ -66,32 +140,37 @@ class ThemePickerScreen extends StatelessWidget {
     AppBrand brand,
   ) async {
     final isUnlocked = themeProvider.isBrandUnlocked(brand.id);
-    if (isUnlocked) {
-      await themeProvider.setBrand(brand.id);
-      return;
-    }
     final cost = themeProvider.brandCost(brand.id);
-    final ok = await achievementProvider.spendCoins(
-      coins: cost,
+    final ok = await _applyThemeShopItem(
+      context,
+      themeProvider: themeProvider,
+      achievementProvider: achievementProvider,
+      itemType: 'brand',
+      itemId: brand.id,
       title: '兑换主题：${_styleName(brand)}',
-      reason: '奖励商店主题装饰',
+      cost: cost,
+      isUnlocked: isUnlocked,
+      applyLocal: () async {
+        if (!isUnlocked) {
+          await themeProvider.unlockBrand(brand.id);
+        }
+        await themeProvider.setBrand(brand.id);
+      },
     );
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('时光币不足，还差 ${cost - achievementProvider.coinBalance}'),
-        ),
-      );
       return;
     }
-    await themeProvider.unlockBrand(brand.id);
-    await themeProvider.setBrand(brand.id);
-    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(content: Text('已兑换并启用 ${_styleName(brand)}')),
+      SnackBar(
+        content: Text(
+          isUnlocked
+              ? '已启用 ${_styleName(brand)}'
+              : '已兑换并启用 ${_styleName(brand)}',
+        ),
+      ),
     );
   }
 
@@ -102,32 +181,35 @@ class ThemePickerScreen extends StatelessWidget {
     FocusBackdropReward backdrop,
   ) async {
     final isUnlocked = themeProvider.isFocusBackdropUnlocked(backdrop.id);
-    if (isUnlocked) {
-      await themeProvider.setFocusBackdrop(backdrop.id);
-      return;
-    }
-    final ok = await achievementProvider.spendCoins(
-      coins: backdrop.cost,
+    final ok = await _applyThemeShopItem(
+      context,
+      themeProvider: themeProvider,
+      achievementProvider: achievementProvider,
+      itemType: 'focus_backdrop',
+      itemId: backdrop.id,
       title: '兑换专注背景：${backdrop.name}',
-      reason: '奖励商店专注背景',
+      cost: backdrop.cost,
+      isUnlocked: isUnlocked,
+      applyLocal: () async {
+        if (!isUnlocked) {
+          await themeProvider.unlockFocusBackdrop(backdrop.id);
+        }
+        await themeProvider.setFocusBackdrop(backdrop.id);
+      },
     );
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '时光币不足，还差 ${backdrop.cost - achievementProvider.coinBalance}',
-          ),
-        ),
-      );
       return;
     }
-    await themeProvider.unlockFocusBackdrop(backdrop.id);
-    await themeProvider.setFocusBackdrop(backdrop.id);
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text('已兑换并启用 ${backdrop.name}')));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          isUnlocked ? '已启用 ${backdrop.name}' : '已兑换并启用 ${backdrop.name}',
+        ),
+      ),
+    );
   }
 
   Future<void> _handleAvatarFrameTap(
@@ -137,32 +219,35 @@ class ThemePickerScreen extends StatelessWidget {
     AvatarFrameReward frame,
   ) async {
     final isUnlocked = themeProvider.isAvatarFrameUnlocked(frame.id);
-    if (isUnlocked) {
-      await themeProvider.setAvatarFrame(frame.id);
-      return;
-    }
-    final ok = await achievementProvider.spendCoins(
-      coins: frame.cost,
+    final ok = await _applyThemeShopItem(
+      context,
+      themeProvider: themeProvider,
+      achievementProvider: achievementProvider,
+      itemType: 'avatar_frame',
+      itemId: frame.id,
       title: '兑换头像框：${frame.name}',
-      reason: '奖励商店头像框',
+      cost: frame.cost,
+      isUnlocked: isUnlocked,
+      applyLocal: () async {
+        if (!isUnlocked) {
+          await themeProvider.unlockAvatarFrame(frame.id);
+        }
+        await themeProvider.setAvatarFrame(frame.id);
+      },
     );
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '时光币不足，还差 ${frame.cost - achievementProvider.coinBalance}',
-          ),
-        ),
-      );
       return;
     }
-    await themeProvider.unlockAvatarFrame(frame.id);
-    await themeProvider.setAvatarFrame(frame.id);
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text('已兑换并启用 ${frame.name}')));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          isUnlocked ? '已启用 ${frame.name}' : '已兑换并启用 ${frame.name}',
+        ),
+      ),
+    );
   }
 
   Future<void> _handleCardSkinTap(
@@ -172,32 +257,33 @@ class ThemePickerScreen extends StatelessWidget {
     CardSkinReward skin,
   ) async {
     final isUnlocked = themeProvider.isCardSkinUnlocked(skin.id);
-    if (isUnlocked) {
-      await themeProvider.setCardSkin(skin.id);
-      return;
-    }
-    final ok = await achievementProvider.spendCoins(
-      coins: skin.cost,
+    final ok = await _applyThemeShopItem(
+      context,
+      themeProvider: themeProvider,
+      achievementProvider: achievementProvider,
+      itemType: 'card_skin',
+      itemId: skin.id,
       title: '兑换卡片皮肤：${skin.name}',
-      reason: '奖励商店卡片皮肤',
+      cost: skin.cost,
+      isUnlocked: isUnlocked,
+      applyLocal: () async {
+        if (!isUnlocked) {
+          await themeProvider.unlockCardSkin(skin.id);
+        }
+        await themeProvider.setCardSkin(skin.id);
+      },
     );
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '时光币不足，还差 ${skin.cost - achievementProvider.coinBalance}',
-          ),
-        ),
-      );
       return;
     }
-    await themeProvider.unlockCardSkin(skin.id);
-    await themeProvider.setCardSkin(skin.id);
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text('已兑换并启用 ${skin.name}')));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(isUnlocked ? '已启用 ${skin.name}' : '已兑换并启用 ${skin.name}'),
+      ),
+    );
   }
 
   Widget _focusBackdropPreview(FocusBackdropReward backdrop) {
@@ -261,6 +347,7 @@ class ThemePickerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final achievementProvider = context.watch<AchievementProvider>();
+    final authProvider = context.watch<AuthProvider>();
     final currentBrand = themeProvider.brand;
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Theme.of(context).brightness == Brightness.dark
@@ -324,7 +411,7 @@ class ThemePickerScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '时光币 ${achievementProvider.coinBalance}',
+                          '时光币 ${_visibleCoinBalance(authProvider, achievementProvider)}',
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(color: cs.primary),

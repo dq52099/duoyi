@@ -187,6 +187,7 @@ class ThemeProvider extends ChangeNotifier {
   String _activeFocusBackdropId = defaultFocusBackdropId;
   String _activeAvatarFrameId = defaultAvatarFrameId;
   String _activeCardSkinId = defaultCardSkinId;
+  String _shopStateUpdatedAt = '';
 
   AppBrand get brand => _brand;
   List<AppBrand> get brands => AppBrands.all;
@@ -202,6 +203,8 @@ class ThemeProvider extends ChangeNotifier {
   AvatarFrameReward get activeAvatarFrame =>
       avatarFrameById(_activeAvatarFrameId);
   CardSkinReward get activeCardSkin => cardSkinById(_activeCardSkinId);
+  String get shopStateUpdatedAt => _shopStateUpdatedAt;
+  Map<String, dynamic> get shopStateSnapshot => _shopStateJson();
 
   bool isBrandUnlocked(String id) =>
       id == AppBrands.defaultBrand.id || _unlockedBrandIds.contains(id);
@@ -251,19 +254,71 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final shopState = _readShopState(prefs);
+    final changed = _applyShopStateMap(
+      shopState,
+      prefs: prefs,
+      includeLegacyFallback: true,
+    );
+    if (changed) notifyListeners();
+  }
+
+  Future<void> applyShopStateFromServer(Map<dynamic, dynamic> state) async {
+    final prefs = await SharedPreferences.getInstance();
+    final incoming = Map<String, dynamic>.from(state);
+    if (_isIncomingShopStateOlder(incoming)) {
+      debugPrint(
+        '[theme-sync] skipped older shop state incoming='
+        '${_shopStateUpdatedAtOf(incoming)} current=$_shopStateUpdatedAt',
+      );
+      return;
+    }
+    final changed = _applyShopStateMap(
+      incoming,
+      prefs: prefs,
+      includeLegacyFallback: false,
+    );
+    if (!changed) return;
+    await prefs.setString(_storageKey, _brand.id);
+    await prefs.setStringList(
+      _unlockedBrandsKey,
+      _unlockedBrandIds.toList(growable: false),
+    );
+    await _saveShopState(prefs, touch: false);
+    notifyListeners();
+  }
+
+  bool _applyShopStateMap(
+    Map<String, dynamic>? shopState, {
+    required SharedPreferences prefs,
+    required bool includeLegacyFallback,
+  }) {
+    final before = jsonEncode(_shopStateJson());
     final id =
-        shopState?['activeBrand']?.toString() ?? prefs.getString(_storageKey);
+        shopState?['activeBrand']?.toString() ??
+        (includeLegacyFallback ? prefs.getString(_storageKey) : null);
     _brand = AppBrands.byId(id);
     _switchCount =
         (shopState?['switchCount'] as num?)?.toInt() ??
-        prefs.getInt(_switchCountKey) ??
+        (includeLegacyFallback ? prefs.getInt(_switchCountKey) : null) ??
         0;
+    final updatedAt =
+        shopState?['updatedAt']?.toString() ??
+        shopState?['updated_at']?.toString();
+    if (updatedAt != null && updatedAt.isNotEmpty) {
+      _shopStateUpdatedAt = updatedAt;
+    } else if (!includeLegacyFallback && _shopStateUpdatedAt.isEmpty) {
+      _shopStateUpdatedAt = DateTime.now().toUtc().toIso8601String();
+    }
     _unlockedBrandIds
       ..clear()
       ..add(AppBrands.defaultBrand.id)
       ..addAll(_unlockedIdsFromState(shopState))
-      ..addAll(prefs.getStringList(_unlockedBrandsKey) ?? const <String>[])
       ..add(_brand.id);
+    if (includeLegacyFallback) {
+      _unlockedBrandIds.addAll(
+        prefs.getStringList(_unlockedBrandsKey) ?? const <String>[],
+      );
+    }
     _unlockedFocusBackdropIds
       ..clear()
       ..add(defaultFocusBackdropId)
@@ -288,7 +343,7 @@ class ThemeProvider extends ChangeNotifier {
     _activeCardSkinId = isCardSkinUnlocked(activeCardSkinId ?? '')
         ? activeCardSkinId!
         : defaultCardSkinId;
-    notifyListeners();
+    return before != jsonEncode(_shopStateJson());
   }
 
   Future<void> unlockBrand(String id) async {
@@ -313,7 +368,9 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<bool> setFocusBackdrop(String id) async {
     if (!isFocusBackdropUnlocked(id)) return false;
-    _activeFocusBackdropId = focusBackdropById(id).id;
+    final nextId = focusBackdropById(id).id;
+    if (_activeFocusBackdropId == nextId) return true;
+    _activeFocusBackdropId = nextId;
     final prefs = await SharedPreferences.getInstance();
     await _saveShopState(prefs);
     notifyListeners();
@@ -330,7 +387,9 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<bool> setAvatarFrame(String id) async {
     if (!isAvatarFrameUnlocked(id)) return false;
-    _activeAvatarFrameId = avatarFrameById(id).id;
+    final nextId = avatarFrameById(id).id;
+    if (_activeAvatarFrameId == nextId) return true;
+    _activeAvatarFrameId = nextId;
     final prefs = await SharedPreferences.getInstance();
     await _saveShopState(prefs);
     notifyListeners();
@@ -347,7 +406,9 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<bool> setCardSkin(String id) async {
     if (!isCardSkinUnlocked(id)) return false;
-    _activeCardSkinId = cardSkinById(id).id;
+    final nextId = cardSkinById(id).id;
+    if (_activeCardSkinId == nextId) return true;
+    _activeCardSkinId = nextId;
     final prefs = await SharedPreferences.getInstance();
     await _saveShopState(prefs);
     notifyListeners();
@@ -358,22 +419,39 @@ class ThemeProvider extends ChangeNotifier {
     if (!isBrandUnlocked(id)) return false;
     final prev = _brand.id;
     _brand = AppBrands.byId(id);
+    if (prev == _brand.id) return true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_storageKey, _brand.id);
-    if (prev != _brand.id) {
-      _switchCount++;
-      await prefs.setInt(_switchCountKey, _switchCount);
-      DomainEventBus.instance.publish(
-        DomainEvent(
-          type: DomainEventType.themeSwitched,
-          objectId: _brand.id,
-          metadata: {'count': _switchCount},
-        ),
-      );
-    }
+    _switchCount++;
+    await prefs.setInt(_switchCountKey, _switchCount);
+    DomainEventBus.instance.publish(
+      DomainEvent(
+        type: DomainEventType.themeSwitched,
+        objectId: _brand.id,
+        metadata: {'count': _switchCount},
+      ),
+    );
     await _saveShopState(prefs);
     notifyListeners();
     return true;
+  }
+
+  bool _isIncomingShopStateOlder(Map<String, dynamic> incoming) {
+    final incomingUpdatedAt = _shopStateUpdatedAtOf(incoming);
+    if (_shopStateUpdatedAt.isEmpty) return false;
+    if (incomingUpdatedAt.isEmpty) return true;
+    final incomingTime = DateTime.tryParse(incomingUpdatedAt);
+    final currentTime = DateTime.tryParse(_shopStateUpdatedAt);
+    if (incomingTime != null && currentTime != null) {
+      return incomingTime.toUtc().isBefore(currentTime.toUtc());
+    }
+    return incomingUpdatedAt.compareTo(_shopStateUpdatedAt) < 0;
+  }
+
+  String _shopStateUpdatedAtOf(Map<dynamic, dynamic>? state) {
+    return state?['updatedAt']?.toString() ??
+        state?['updated_at']?.toString() ??
+        '';
   }
 
   Map<String, dynamic>? _readShopState(SharedPreferences prefs) {
@@ -415,24 +493,28 @@ class ThemeProvider extends ChangeNotifier {
     return raw.map((id) => id.toString());
   }
 
-  Future<void> _saveShopState(SharedPreferences prefs) async {
-    await prefs.setString(
-      _shopStateKey,
-      jsonEncode({
-        'activeBrand': _brand.id,
-        'switchCount': _switchCount,
-        'unlockedBrandIds': _unlockedBrandIds.toList(growable: false),
-        'activeFocusBackdropId': _activeFocusBackdropId,
-        'unlockedFocusBackdropIds': _unlockedFocusBackdropIds.toList(
-          growable: false,
-        ),
-        'activeAvatarFrameId': _activeAvatarFrameId,
-        'unlockedAvatarFrameIds': _unlockedAvatarFrameIds.toList(
-          growable: false,
-        ),
-        'activeCardSkinId': _activeCardSkinId,
-        'unlockedCardSkinIds': _unlockedCardSkinIds.toList(growable: false),
-      }),
-    );
+  Future<void> _saveShopState(
+    SharedPreferences prefs, {
+    bool touch = true,
+  }) async {
+    if (touch || _shopStateUpdatedAt.isEmpty) {
+      _shopStateUpdatedAt = DateTime.now().toUtc().toIso8601String();
+    }
+    await prefs.setString(_shopStateKey, jsonEncode(_shopStateJson()));
   }
+
+  Map<String, dynamic> _shopStateJson() => {
+    'activeBrand': _brand.id,
+    'switchCount': _switchCount,
+    'unlockedBrandIds': _unlockedBrandIds.toList(growable: false),
+    'activeFocusBackdropId': _activeFocusBackdropId,
+    'unlockedFocusBackdropIds': _unlockedFocusBackdropIds.toList(
+      growable: false,
+    ),
+    'activeAvatarFrameId': _activeAvatarFrameId,
+    'unlockedAvatarFrameIds': _unlockedAvatarFrameIds.toList(growable: false),
+    'activeCardSkinId': _activeCardSkinId,
+    'unlockedCardSkinIds': _unlockedCardSkinIds.toList(growable: false),
+    if (_shopStateUpdatedAt.isNotEmpty) 'updatedAt': _shopStateUpdatedAt,
+  };
 }

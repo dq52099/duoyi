@@ -1009,14 +1009,9 @@ const double _habitCheckinCardBodyHeight = 44;
 const double _habitTitleStatusHeight = 17;
 const double _habitCheckinButtonWidth = 58;
 const double _habitUndoButtonWidth = 30;
-const double _habitMenuButtonWidth = 28;
 const double _habitActionButtonGap = 3;
 const double _habitActionRailWidth =
-    _habitMenuButtonWidth +
-    _habitActionButtonGap +
-    _habitUndoButtonWidth +
-    _habitActionButtonGap +
-    _habitCheckinButtonWidth;
+    _habitUndoButtonWidth + _habitActionButtonGap + _habitCheckinButtonWidth;
 const double _habitSwipeActionWidth = 144;
 const double _habitSwipeOpenThreshold = 36;
 
@@ -1306,8 +1301,6 @@ class _HabitCheckinCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: _habitActionButtonGap),
-                    _HabitEditButton(habit: habit),
                   ],
                 ),
               ),
@@ -1595,25 +1588,26 @@ class _HabitSwipeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: Material(
-          color: background,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox.square(
-              dimension: 40,
-              child: Icon(icon, size: 18, color: foreground),
-            ),
+    final child = Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: background,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 40,
+            child: Icon(icon, size: 18, color: foreground),
           ),
         ),
       ),
     );
+    if (label == '编辑') {
+      return Tooltip(message: '编辑', child: child);
+    }
+    return Tooltip(message: label, child: child);
   }
 }
 
@@ -1685,36 +1679,6 @@ class _HabitUndoButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(9),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HabitEditButton extends StatelessWidget {
-  final Habit habit;
-
-  const _HabitEditButton({required this.habit});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: _habitMenuButtonWidth,
-      height: 26,
-      child: Tooltip(
-        message: '编辑',
-        child: IconButton(
-          key: const ValueKey('habit_inline_edit_button'),
-          padding: EdgeInsets.zero,
-          icon: Icon(Icons.edit_outlined, size: 15, color: cs.onSurfaceVariant),
-          onPressed: () => _handleHabitMenuAction(context, habit, 'edit'),
-          style: IconButton.styleFrom(
-            fixedSize: const Size(_habitMenuButtonWidth, 26),
-            minimumSize: const Size(_habitMenuButtonWidth, 26),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            padding: EdgeInsets.zero,
           ),
         ),
       ),

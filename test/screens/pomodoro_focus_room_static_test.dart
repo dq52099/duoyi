@@ -65,8 +65,9 @@ void main() {
     expect(screen, contains('服务端排行'));
     expect(screen, contains('本地排行'));
     expect(screen, contains("label: '在线 \${ranking.onlineCount}'"));
-    expect(screen, contains('服务端连接异常，已显示本地排行'));
+    expect(screen, contains('focusRoomRankingUnavailableMessage'));
     expect(screen, contains('String _focusRoomErrorText(Object error)'));
+    expect(screen, contains('isFocusRoomRealtimeTransportError(error)'));
     expect(
       screen,
       contains('isBackendCompatibilityDiagnosticMessage(message)'),
@@ -149,24 +150,37 @@ void main() {
     expect(sync, contains("'duoyi_focus_rooms': 'focus_rooms'"));
   });
 
-  test('Focus room tab shows server errors while rendering local fallback', () {
+  test('Focus room tab shows sanitized fallback without raw errors', () {
     final screen = File('lib/screens/pomodoro_screen.dart').readAsStringSync();
     final tabBlock = _between(
       screen,
       'class _FocusRoomTabState',
       'Future<void> _showFocusRoomInviteSheet',
     );
-
-    expect(tabBlock, contains('rooms.effectiveRankingFor'));
-    expect(tabBlock, contains('if (rooms.lastRemoteError != null)'));
-    expect(tabBlock, contains("label: '服务端连接异常，已显示本地排行'"));
-    expect(
-      tabBlock,
-      contains('Text(\n                        rooms.lastRemoteError!'),
+    final rankingSection = _between(
+      screen,
+      'class _JoinedFocusRoomRankingSection',
+      'class _JoinedFocusRoomRankingViewModel',
     );
-    expect(tabBlock, contains('Icons.cloud_off_outlined'));
-    expect(tabBlock, contains('Theme.of(context).colorScheme.outline'));
-    expect(tabBlock, contains('_FocusRoomRankingCard(ranking: ranking)'));
+
+    expect(tabBlock, contains('_JoinedFocusRoomRankingSection'));
+    expect(rankingSection, contains('rooms.effectiveRankingFor'));
+    expect(
+      rankingSection,
+      contains('rooms.fallbackToLocal || rooms.lastRemoteError != null'),
+    );
+    expect(
+      rankingSection,
+      contains('label: focusRoomRankingUnavailableMessage'),
+    );
+    expect(rankingSection, isNot(contains('rooms.lastRemoteError!')));
+    expect(rankingSection, isNot(contains('WebSocketChannelException')));
+    expect(rankingSection, isNot(contains('WebSocketException')));
+    expect(rankingSection, isNot(contains('/ws/focus')));
+    expect(rankingSection, isNot(contains('token')));
+    expect(rankingSection, contains('Icons.cloud_off_outlined'));
+    expect(rankingSection, contains('Theme.of(context).colorScheme.outline'));
+    expect(rankingSection, contains('_FocusRoomRankingCard(ranking: ranking)'));
     expect(screen, contains("label: ranking.remote ? '服务端排行' : '本地排行'"));
     expect(
       screen,
@@ -206,20 +220,42 @@ void main() {
       );
       expect(tabBlock, contains('context.select<PomodoroProvider, int>'));
       expect(tabBlock, contains('provider.persistedRevision'));
-      expect(
-        tabBlock,
-        contains(
-          '_scheduleRoomRefresh(context, rooms, pomodoroRevision, displayName)',
-        ),
-      );
+      expect(tabBlock, contains('_scheduleRoomRefresh('));
+      expect(tabBlock, contains('pomodoroRevision'));
+      expect(tabBlock, contains('joinedRefreshKey'));
       expect(
         tabBlock,
         contains('WidgetsBinding.instance.addPostFrameCallback'),
       );
       expect(tabBlock, contains('_refreshScheduled'));
+      expect(tabBlock, contains('context.read<FocusRoomProvider>()'));
       expect(tabBlock, isNot(contains('remainingSeconds')));
       expect(tabBlock, isNot(contains('timerTicks')));
       expect(tabBlock, isNot(contains('context.watch<PomodoroProvider>()')));
+      expect(tabBlock, isNot(contains('context.watch<FocusRoomProvider>()')));
+      expect(
+        screen,
+        isNot(contains('context.watch<FocusRoomProvider>()')),
+        reason: '排行榜和房间状态刷新不能拖动主计时页整块重建',
+      );
+      expect(
+        screen,
+        isNot(contains('context.watch<CustomFocusSoundProvider>()')),
+        reason: '白噪音名称只应局部订阅，避免声音配置变化重建主计时页',
+      );
+      expect(screen, contains('_ActiveFocusRoomTile'));
+      expect(
+        screen,
+        contains('Selector<FocusRoomProvider, _ActiveFocusRoomTileViewModel>'),
+      );
+      expect(
+        screen,
+        contains('context.select<CustomFocusSoundProvider, String>'),
+      );
+      expect(screen, contains('class _FocusSocialLeaderboardViewModel'));
+      expect(screen, contains('class _JoinedFocusRoomRankingViewModel'));
+      expect(screen, contains('class _FocusRoomCatalogViewModel'));
+      expect(screen, contains('bool operator ==(Object other)'));
 
       expect(pomodoroProvider, contains('ValueListenable<int> get timerTicks'));
       expect(pomodoroProvider, contains('_timerTicks.value++'));

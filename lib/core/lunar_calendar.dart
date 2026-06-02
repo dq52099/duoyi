@@ -31,12 +31,14 @@ class LunarDate {
 }
 
 class AlmanacHourFortune {
+  final String ganzhi;
   final String branch;
   final String range;
   final String deity;
   final bool isAuspicious;
 
   const AlmanacHourFortune({
+    required this.ganzhi,
     required this.branch,
     required this.range,
     required this.deity,
@@ -47,6 +49,11 @@ class AlmanacHourFortune {
 }
 
 class LunarAlmanacDetail {
+  final DateTime solarDate;
+  final LunarDate lunarDate;
+  final String ganzhiLine;
+  final String suitable;
+  final String avoid;
   final String dayGanzhi;
   final String fetalGod;
   final String pengZu;
@@ -54,8 +61,14 @@ class LunarAlmanacDetail {
   final String mansion;
   final String clash;
   final String hourFortunes;
+  final List<AlmanacHourFortune> hourFortuneItems;
 
-  const LunarAlmanacDetail({
+  LunarAlmanacDetail({
+    required this.solarDate,
+    required this.lunarDate,
+    required this.ganzhiLine,
+    required this.suitable,
+    required this.avoid,
     required this.dayGanzhi,
     required this.fetalGod,
     required this.pengZu,
@@ -63,7 +76,8 @@ class LunarAlmanacDetail {
     required this.mansion,
     required this.clash,
     required this.hourFortunes,
-  });
+    required List<AlmanacHourFortune> hourFortuneItems,
+  }) : hourFortuneItems = List.unmodifiable(hourFortuneItems);
 }
 
 class LunarCalendar {
@@ -200,13 +214,7 @@ class LunarCalendar {
   static LunarDate fromSolar(DateTime date) {
     try {
       final lunar = _lunarFor(date);
-      final month = lunar.getMonth();
-      return LunarDate(
-        lunar.getYear(),
-        month.abs(),
-        lunar.getDay(),
-        isLeapMonth: month < 0,
-      );
+      return _lunarDateFromLunar(lunar);
     } catch (_) {
       // Keep the bundled table as a fallback for out-of-range or library edge cases.
     }
@@ -314,29 +322,36 @@ class LunarCalendar {
   }
 
   static LunarAlmanacDetail almanacDetail(DateTime date) {
-    final lunar = _lunarFor(date);
+    final solarDate = _dateOnly(date);
+    final lunar = _lunarFor(solarDate);
+    final hours = _hourFortunesForLunar(lunar);
     return LunarAlmanacDetail(
+      solarDate: solarDate,
+      lunarDate: _lunarDateFromLunar(lunar),
+      ganzhiLine: _ganzhiLineForLunar(lunar),
+      suitable: _suitableForLunar(lunar),
+      avoid: _avoidForLunar(lunar),
       dayGanzhi: lunar.getDayInGanZhi(),
       fetalGod: _compactText(lunar.getDayPositionTai()),
-      pengZu: '${lunar.getPengZuGan()}；${lunar.getPengZuZhi()}',
+      pengZu: _pengZuText(lunar),
       fiveElements: '${lunar.getDayNaYin()}${lunar.getZhiXing()}执位',
       mansion:
           '${_mansionDirection(lunar.getGong())}${lunar.getXiu()}${lunar.getZheng()}${lunar.getAnimal()}-${lunar.getXiuLuck()}',
       clash: _clashText(lunar),
-      hourFortunes: hourFortuneSummary(date),
+      hourFortunes: _hourFortuneSummary(hours),
+      hourFortuneItems: hours,
     );
   }
 
   static String almanacGanzhiLine(DateTime date, LunarDate lunar) {
     final day = _lunarFor(date);
-    return '${day.getYearInGanZhi()}${day.getYearShengXiao()}年${day.getMonthInGanZhi()}月${day.getDayInGanZhi()}日';
+    return _ganzhiLineForLunar(day);
   }
 
   static String fetalGod(DateTime date) =>
       _compactText(_lunarFor(date).getDayPositionTai());
 
-  static String pengZu(DateTime date) =>
-      '${_lunarFor(date).getPengZuGan()}；${_lunarFor(date).getPengZuZhi()}';
+  static String pengZu(DateTime date) => _pengZuText(_lunarFor(date));
 
   static String fiveElements(DateTime date) =>
       '${_lunarFor(date).getDayNaYin()}${_lunarFor(date).getZhiXing()}执位';
@@ -351,6 +366,13 @@ class LunarCalendar {
   }
 
   static List<AlmanacHourFortune> hourFortunes(DateTime date) {
+    return _hourFortunesForLunar(_lunarFor(date));
+  }
+
+  static String hourFortuneSummary(DateTime date) =>
+      _hourFortuneSummary(hourFortunes(date));
+
+  static List<AlmanacHourFortune> _hourFortunesForLunar(lunar_pkg.Lunar lunar) {
     const hourRanges = [
       '23:00-00:59',
       '01:00-02:59',
@@ -365,11 +387,12 @@ class LunarCalendar {
       '19:00-20:59',
       '21:00-22:59',
     ];
-    final times = _lunarFor(date).getTimes().take(12).toList();
-    return List.generate(times.length, (index) {
+    final times = lunar.getTimes();
+    return List.generate(hourRanges.length, (index) {
       final time = times[index];
       final luck = time.getTianShenLuck();
       return AlmanacHourFortune(
+        ganzhi: time.getGanZhi(),
         branch: time.getZhi(),
         range: hourRanges[index],
         deity: time.getTianShen(),
@@ -378,13 +401,38 @@ class LunarCalendar {
     });
   }
 
-  static String hourFortuneSummary(DateTime date) =>
-      hourFortunes(date).map((item) => item.compactLabel).join(' ');
+  static String _hourFortuneSummary(List<AlmanacHourFortune> hours) =>
+      hours.map((item) => item.compactLabel).join(' ');
 
   static lunar_pkg.Lunar _lunarFor(DateTime date) =>
-      lunar_pkg.Lunar.fromDate(DateTime(date.year, date.month, date.day));
+      lunar_pkg.Lunar.fromDate(_dateOnly(date));
+
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  static LunarDate _lunarDateFromLunar(lunar_pkg.Lunar lunar) {
+    final month = lunar.getMonth();
+    return LunarDate(
+      lunar.getYear(),
+      month.abs(),
+      lunar.getDay(),
+      isLeapMonth: month < 0,
+    );
+  }
 
   static String _compactText(String value) => value.replaceAll(' ', '');
+
+  static String _ganzhiLineForLunar(lunar_pkg.Lunar lunar) =>
+      '${lunar.getYearInGanZhi()}${lunar.getYearShengXiao()}年${lunar.getMonthInGanZhi()}月${lunar.getDayInGanZhi()}日';
+
+  static String _pengZuText(lunar_pkg.Lunar lunar) =>
+      '${_punctuatePengZu(lunar.getPengZuGan())}；${_punctuatePengZu(lunar.getPengZuZhi())}';
+
+  static String _punctuatePengZu(String value) {
+    final text = _compactText(value);
+    if (text.contains('，') || text.length <= 4) return text;
+    return '${text.substring(0, 4)}，${text.substring(4)}';
+  }
 
   static String _clashText(lunar_pkg.Lunar lunar) =>
       '${lunar.getDayShengXiao()}日冲${lunar.getDayChongShengXiao()}（${lunar.getDayChongGan()}${lunar.getDayChong()}）煞${lunar.getDaySha()}';
@@ -458,13 +506,21 @@ class LunarCalendar {
 
   /// 黄历"宜"。
   static String suitable(DateTime date) {
-    final value = _joinAlmanacTerms(_lunarFor(date).getDayYi());
-    return value.isEmpty ? '诸事不宜' : value;
+    return _suitableForLunar(_lunarFor(date));
   }
 
   /// 黄历"忌"。
   static String avoid(DateTime date) {
-    final value = _joinAlmanacTerms(_lunarFor(date).getDayJi());
+    return _avoidForLunar(_lunarFor(date));
+  }
+
+  static String _suitableForLunar(lunar_pkg.Lunar lunar) {
+    final value = _joinAlmanacTerms(lunar.getDayYi());
+    return value.isEmpty ? '诸事不宜' : value;
+  }
+
+  static String _avoidForLunar(lunar_pkg.Lunar lunar) {
+    final value = _joinAlmanacTerms(lunar.getDayJi());
     return value.isEmpty ? '无' : value;
   }
 

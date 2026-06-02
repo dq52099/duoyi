@@ -479,7 +479,7 @@ void main() {
       'authProvider.refreshServerConfigFromServer()',
       "'auth profile refresh'",
       'authProvider.refreshMe()',
-      'await authProvider.refreshMe();',
+      "await authProvider.refreshMe(reason: 'cloud_sync_account_snapshot');",
     ]) {
       expect(source, contains(field));
     }
@@ -499,8 +499,9 @@ void main() {
         'refresh account profile failed',
         'cloudSyncProvider.onSynced = (changedCollections)',
         "changedCollections.contains('user_profile')",
-        'futures.add(userProvider.loadFromStorage())',
-        'await authProvider.refreshMe();',
+        'reloadTasks.add(userProvider.loadFromStorage)',
+        "await authProvider.refreshMe(reason: 'cloud_sync_account_snapshot');",
+        "changedCollections.contains('virtual_rewards')",
       ]) {
         expect(source, contains(field));
       }

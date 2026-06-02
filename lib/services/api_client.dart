@@ -7,7 +7,7 @@ import 'package:http_parser/http_parser.dart';
 /// 跨平台 HTTP 封装(web/android/linux 通用)。
 class ApiClient {
   static const String requiredApiContractVersion = '2026-06-01.2';
-  static const String requiredApiContractRoutesHash = '2554d781b96849f9';
+  static const String requiredApiContractRoutesHash = 'aaa003f86a1ff544';
 
   String baseUrl;
   String? token;

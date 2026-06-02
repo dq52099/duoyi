@@ -147,7 +147,7 @@ void main() {
     expect(source, contains('const double _habitCheckinCardBodyHeight = 44'));
     expect(source, contains('const double _habitTitleStatusHeight = 17'));
     expect(source, contains('const double _habitUndoButtonWidth = 30'));
-    expect(source, contains('const double _habitMenuButtonWidth = 28'));
+    expect(source, isNot(contains('const double _habitMenuButtonWidth')));
     expect(source, contains('const double _habitActionButtonGap = 3'));
     expect(source, contains('const double _habitActionRailWidth'));
     expect(cardSource, contains('height: _habitCheckinCardBodyHeight'));
@@ -168,9 +168,10 @@ void main() {
     expect(cardSource, isNot(contains('Icons.shield_outlined')));
     expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
     expect(cardSource, isNot(contains('Icons.verified_rounded')));
-    expect(cardSource, contains('_HabitEditButton(habit: habit)'));
-    expect(source, contains('class _HabitEditButton extends StatelessWidget'));
-    expect(source, contains("message: '编辑'"));
+    expect(cardSource, isNot(contains('_HabitEditButton(habit: habit)')));
+    expect(source, isNot(contains('class _HabitEditButton extends StatelessWidget')));
+    expect(source, isNot(contains("key: const ValueKey('habit_inline_edit_button')")));
+    expect(source, contains('message: label'));
     expect(source, isNot(contains("tooltip: '习惯操作'")));
     expect(source, isNot(contains('PopupMenuButton<String>')));
     expect(source, contains('class _HabitInlineSwipeActions'));

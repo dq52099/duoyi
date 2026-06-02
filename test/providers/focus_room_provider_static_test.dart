@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:duoyi/models/pomodoro.dart';
 import 'package:duoyi/providers/focus_room_provider.dart';
 import 'package:duoyi/services/api_client.dart';
+import 'package:duoyi/services/focus_room_api.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -197,6 +198,50 @@ void main() {
       expect(ranking.remote, isFalse);
       expect(currentUser.name, '小多');
       expect(currentUser.weeklySeconds, 25 * 60);
+    },
+  );
+
+  test(
+    'FocusRoomProvider sanitizes realtime failures and keeps local ranking',
+    () async {
+      final provider = FocusRoomProvider();
+      provider.apiClientGetter = () => ApiClient(
+        baseUrl: 'http://localhost:0/#/focus?token=raw-token',
+        token: 'secret-token',
+      );
+      final sessions = [
+        PomodoroSession(
+          id: 'local-session',
+          startTime: DateTime(2026, 5, 25, 9),
+          endTime: DateTime(2026, 5, 25, 9, 25),
+          durationSeconds: 25 * 60,
+          type: PomodoroType.focus,
+          focusRoomId: FocusRoomProvider.defaultRoomId,
+        ),
+      ];
+
+      provider.watchRealtimeRankings();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(provider.fallbackToLocal, isTrue);
+      expect(provider.lastRemoteError, focusRoomRankingUnavailableMessage);
+      expect(provider.lastRemoteError, isNot(contains('WebSocket')));
+      expect(provider.lastRemoteError, isNot(contains('localhost')));
+      expect(provider.lastRemoteError, isNot(contains('secret-token')));
+      expect(provider.lastRemoteError, isNot(contains('raw-token')));
+      expect(
+        provider.lastRemoteError,
+        isNot(contains('/ws/focus-rooms/deep_work_room/events')),
+      );
+
+      final ranking = provider.effectiveRankingFor(
+        FocusRoomProvider.defaultRoomId,
+        sessions,
+        now: DateTime(2026, 5, 25, 10),
+        currentUserName: '小多',
+      );
+      expect(ranking.remote, isFalse);
+      provider.dispose();
     },
   );
 

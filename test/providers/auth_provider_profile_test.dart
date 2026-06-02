@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -621,6 +622,174 @@ void main() {
     expect(auth.state.displayName, '当前用户');
     expect(auth.state.token, 'token-1');
   });
+
+  test(
+    'theme shop apply updates global auth state, prefs and profile callback',
+    () async {
+      Map<String, dynamic>? requestBody;
+      final syncedStates = <AuthState>[];
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          coinBalance: 200,
+          lifetimeCoins: 200,
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/theme-shop/apply');
+            requestBody = json.decode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              json.encode({
+                'status': 'ok',
+                'coin_balance': 60,
+                'lifetime_coins': 200,
+                'virtual_rewards': {
+                  'balance': 60,
+                  'lifetime': 200,
+                  'ledger': [
+                    {
+                      'id': 'theme-shop:1',
+                      'title': '兑换主题：从零开始',
+                      'coins': -140,
+                      'awardedAt': '2026-06-01T00:00:00Z',
+                    },
+                  ],
+                  'updatedAt': '2026-06-01T00:00:00Z',
+                },
+                'theme_shop_state': {
+                  'activeBrand': 're0',
+                  'unlockedBrandIds': ['defaultBrand', 're0'],
+                  'updatedAt': '2026-06-01T00:00:00Z',
+                },
+                'user': {
+                  'user_id': 'u-1',
+                  'username': 'stable-user',
+                  'coin_balance': 60,
+                  'lifetime_coins': 200,
+                },
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountProfileChanged = (state) async {
+        syncedStates.add(state);
+      };
+
+      final res = await auth.applyThemeShopItem(
+        itemType: 'brand',
+        itemId: 're0',
+        title: '兑换主题：从零开始',
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+
+      expect(requestBody, {
+        'item_type': 'brand',
+        'item_id': 're0',
+        'title': '兑换主题：从零开始',
+        'activate': true,
+      });
+      expect(res['theme_shop_state']['activeBrand'], 're0');
+      expect(auth.state.coinBalance, 60);
+      expect(auth.state.lifetimeCoins, 200);
+      expect(auth.state.token, 'token-1');
+      expect(persisted['coin_balance'], 60);
+      expect(persisted['lifetime_coins'], 200);
+      expect(syncedStates.single.coinBalance, 60);
+    },
+  );
+
+  test(
+    'stale refreshMe response cannot override a newer account mutation',
+    () async {
+      final meResponse = Completer<http.Response>();
+      var meRequested = false;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'u-1',
+          username: 'stable-user',
+          coinBalance: 200,
+          lifetimeCoins: 200,
+          token: 'token-1',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/api/auth/me') {
+              meRequested = true;
+              return meResponse.future;
+            }
+            if (request.url.path == '/api/theme-shop/apply') {
+              return http.Response(
+                json.encode({
+                  'status': 'ok',
+                  'user': {
+                    'user_id': 'u-1',
+                    'username': 'stable-user',
+                    'coin_balance': 60,
+                    'lifetime_coins': 200,
+                  },
+                  'virtual_rewards': {
+                    'balance': 60,
+                    'lifetime': 200,
+                    'updatedAt': '2026-06-01T00:00:01Z',
+                  },
+                  'theme_shop_state': {
+                    'activeBrand': 're0',
+                    'unlockedBrandIds': ['defaultBrand', 're0'],
+                    'updatedAt': '2026-06-01T00:00:01Z',
+                  },
+                }),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              json.encode({'detail': 'Not Found'}),
+              404,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+
+      final refreshFuture = auth.refreshMe(reason: 'test_stale_refresh');
+      await Future<void>.delayed(Duration.zero);
+      expect(meRequested, isTrue);
+
+      await auth.applyThemeShopItem(
+        itemType: 'brand',
+        itemId: 're0',
+        title: '兑换主题：从零开始',
+      );
+      meResponse.complete(
+        http.Response(
+          json.encode({
+            'user_id': 'u-1',
+            'username': 'stable-user',
+            'coin_balance': 200,
+            'lifetime_coins': 200,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      await refreshFuture;
+
+      expect(auth.state.coinBalance, 60);
+      expect(auth.state.lifetimeCoins, 200);
+    },
+  );
 
   for (final rejection in [
     (status: 401, detail: 'token expired'),

@@ -71,6 +71,50 @@ void main() {
     expect(find.textContaining('实时天气'), findsNothing);
   });
 
+  testWidgets('almanac keeps 2026-06-03 detail fields on selected date', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 6, 3))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026年6月3日 星期三'), findsOneWidget);
+    expect(find.text('农历 四月十八'), findsOneWidget);
+    expect(find.textContaining('丙午马年癸巳月戊申日'), findsOneWidget);
+    expect(find.textContaining('祭祀 沐浴 移徙 破土 安葬 扫舍 平治道涂'), findsOneWidget);
+    expect(find.textContaining('祈福 嫁娶 入宅 安床 作灶'), findsOneWidget);
+    expect(find.textContaining('房床炉房内中'), findsOneWidget);
+    expect(find.textContaining('戊不受田，田主不祥；申不安床，鬼祟入房'), findsOneWidget);
+    expect(find.textContaining('大驿土平执位'), findsOneWidget);
+    expect(find.textContaining('东方箕水豹-吉'), findsOneWidget);
+    expect(find.textContaining('猴日冲虎（壬寅）煞南'), findsOneWidget);
+    expect(find.textContaining('2026年6月2日'), findsNothing);
+    expect(find.textContaining('2026年6月4日'), findsNothing);
+    expect(find.textContaining('子吉 丑吉 寅凶'), findsNothing);
+
+    for (final branch in [
+      '子',
+      '丑',
+      '寅',
+      '卯',
+      '辰',
+      '巳',
+      '午',
+      '未',
+      '申',
+      '酉',
+      '戌',
+      '亥',
+    ]) {
+      expect(find.text('$branch时'), findsOneWidget);
+    }
+    expect(find.text('23:00-00:59'), findsOneWidget);
+    expect(find.text('21:00-22:59'), findsOneWidget);
+    expect(find.text('壬子 青龙'), findsOneWidget);
+    expect(find.text('癸亥 勾陈'), findsOneWidget);
+  });
+
   testWidgets('almanac shows holiday and user date month highlights', (
     tester,
   ) async {
@@ -144,13 +188,21 @@ void main() {
       expect(source, contains("import '../services/holiday_calendar.dart';"));
       expect(source, contains('context.watch<CountdownProvider?>()'));
       expect(source, contains('context.watch<AnniversaryProvider?>()'));
-      expect(source, contains('LunarCalendar.almanacDetail(_date)'));
+      expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
+      expect(source, contains('final selectedDate = _date'));
+      expect(source, contains('final lunar = almanacDetail.lunarDate'));
+      expect(source, contains('final ganzhiLine = almanacDetail.ganzhiLine'));
       expect(source, contains("('胎神', detail.fetalGod)"));
       expect(source, contains("('彭祖', detail.pengZu)"));
       expect(source, contains("('五行', detail.fiveElements)"));
       expect(source, contains("('星宿', detail.mansion)"));
       expect(source, contains("('冲煞', detail.clash)"));
-      expect(source, contains("('时辰吉凶', detail.hourFortunes)"));
+      expect(
+        source,
+        contains('_hourFortuneRow(context, detail.hourFortuneItems'),
+      );
+      expect(source, contains('Wrap('));
+      expect(source, contains("'时辰吉凶'"));
       expect(source, contains('Widget _yijiRow'));
       expect(source, contains('class _MonthHighlightsCard'));
       expect(source, contains("'本月重点日期'"));

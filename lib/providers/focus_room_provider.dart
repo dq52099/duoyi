@@ -15,6 +15,11 @@ class FocusRoomProvider extends ChangeNotifier {
   static const _remoteRefreshInterval = Duration(minutes: 2);
   static const _friendRefreshInterval = Duration(minutes: 2);
   static const _globalRefreshInterval = Duration(minutes: 2);
+  static const _realtimeRetryBackoff = [
+    Duration(seconds: 10),
+    Duration(seconds: 30),
+    Duration(seconds: 60),
+  ];
 
   List<FocusRoom> _rooms = _defaultRooms;
   final Set<String> _joinedRoomIds = {defaultRoomId};
@@ -41,6 +46,8 @@ class FocusRoomProvider extends ChangeNotifier {
   String? _realtimeClientKey;
   DateTime? _realtimeRetryAfter;
   Timer? _realtimeNotifyDebounce;
+  bool _fallbackToLocal = false;
+  int _realtimeFailureCount = 0;
 
   ApiClient? Function()? apiClientGetter;
   VoidCallback? onLocalChanged;
@@ -56,6 +63,7 @@ class FocusRoomProvider extends ChangeNotifier {
   DateTime? get lastRemoteSyncAt => _lastRemoteSyncAt;
   DateTime? get lastFriendSyncAt => _lastFriendSyncAt;
   DateTime? get lastGlobalSyncAt => _lastGlobalSyncAt;
+  bool get fallbackToLocal => _fallbackToLocal;
   bool get realtimeRankingsActive =>
       _rankingEventSubscriptions.isNotEmpty ||
       _globalRankingEventSubscription != null;
@@ -76,8 +84,79 @@ class FocusRoomProvider extends ChangeNotifier {
     required String fallbackMessage,
   }) {
     final message = error is ApiException ? error.message : error.toString();
+    if (isFocusRoomRealtimeTransportError(error)) {
+      return focusRoomRankingUnavailableMessage;
+    }
     if (isBackendCompatibilityDiagnosticMessage(message)) return message;
     return userVisibleApiError(error, fallbackMessage: fallbackMessage);
+  }
+
+  void _debugLogRemoteError(
+    String label,
+    Object error, {
+    StackTrace? stackTrace,
+    ApiClient? client,
+  }) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[FocusRoomProvider] $label: '
+      '${sanitizeFocusRoomRealtimeDiagnostic(error, token: client?.token)}',
+    );
+    if (stackTrace != null) {
+      debugPrint(
+        sanitizeFocusRoomRealtimeDiagnostic(stackTrace, token: client?.token),
+      );
+    }
+  }
+
+  void _markRemoteRankingSuccess({bool realtime = false}) {
+    if (!realtime && _realtimeRetryAfter != null && _realtimeFailureCount > 0) {
+      return;
+    }
+    _fallbackToLocal = false;
+    _realtimeFailureCount = 0;
+    _realtimeRetryAfter = null;
+    if (_lastRemoteError == focusRoomRankingUnavailableMessage) {
+      _lastRemoteError = null;
+    }
+  }
+
+  void _markRemoteRankingFailure(
+    Object error, {
+    required String fallbackMessage,
+  }) {
+    _fallbackToLocal = true;
+    _lastRemoteError = _focusRoomRemoteError(
+      error,
+      fallbackMessage: fallbackMessage,
+    );
+  }
+
+  bool _markRealtimeRankingFailure(
+    Object error, {
+    required ApiClient client,
+    StackTrace? stackTrace,
+    required String label,
+  }) {
+    _debugLogRemoteError(label, error, stackTrace: stackTrace, client: client);
+    final retryDelay = _nextRealtimeRetryDelay();
+    final retryAfter = DateTime.now().add(retryDelay);
+    final changed =
+        !_fallbackToLocal ||
+        _lastRemoteError != focusRoomRankingUnavailableMessage ||
+        _realtimeRetryAfter != retryAfter;
+    _fallbackToLocal = true;
+    _lastRemoteError = focusRoomRankingUnavailableMessage;
+    _realtimeRetryAfter = retryAfter;
+    return changed;
+  }
+
+  Duration _nextRealtimeRetryDelay() {
+    final index = _realtimeFailureCount < _realtimeRetryBackoff.length
+        ? _realtimeFailureCount
+        : _realtimeRetryBackoff.length - 1;
+    _realtimeFailureCount += 1;
+    return _realtimeRetryBackoff[index];
   }
 
   static const List<FocusRoomMemberSeed> _friendLeaderboardSeeds = [
@@ -471,13 +550,16 @@ class FocusRoomProvider extends ChangeNotifier {
     DateTime? now,
     String currentUserName = '我',
   }) {
-    return _remoteRankings[roomId] ??
-        rankingFor(
-          roomId,
-          sessions,
-          now: now,
-          currentUserName: currentUserName,
-        );
+    if (!_fallbackToLocal) {
+      final remote = _remoteRankings[roomId];
+      if (remote != null) return remote;
+    }
+    return rankingFor(
+      roomId,
+      sessions,
+      now: now,
+      currentUserName: currentUserName,
+    );
   }
 
   Future<void> syncRemoteRankings(
@@ -527,11 +609,9 @@ class FocusRoomProvider extends ChangeNotifier {
       if (!_globalLoading) {
         await _refreshGlobalRanking(api);
       }
+      _markRemoteRankingSuccess();
     } catch (e) {
-      _lastRemoteError = _focusRoomRemoteError(
-        e,
-        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
-      );
+      _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       _remoteLoading = false;
       notifyListeners();
@@ -542,6 +622,9 @@ class FocusRoomProvider extends ChangeNotifier {
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       _realtimeClientKey = null;
+      _fallbackToLocal = false;
+      _realtimeFailureCount = 0;
+      _realtimeRetryAfter = null;
       _cancelAllRealtimeRankings();
       return;
     }
@@ -549,6 +632,7 @@ class FocusRoomProvider extends ChangeNotifier {
     if (_realtimeClientKey != clientKey) {
       _realtimeClientKey = clientKey;
       _realtimeRetryAfter = null;
+      _realtimeFailureCount = 0;
       _cancelAllRealtimeRankings(notify: false);
     }
     final retryAfter = _realtimeRetryAfter;
@@ -582,24 +666,24 @@ class FocusRoomProvider extends ChangeNotifier {
               );
               _lastRemoteError = null;
               _lastRemoteSyncAt = DateTime.now();
-              _realtimeRetryAfter = null;
+              _markRemoteRankingSuccess(realtime: true);
               _queueRealtimeNotify();
             },
-            onError: (Object e) {
+            onError: (Object e, StackTrace stackTrace) {
               if (identical(
                 _rankingEventSubscriptions[room.id],
                 subscription,
               )) {
                 _rankingEventSubscriptions.remove(room.id);
               }
-              _lastRemoteError = _focusRoomRemoteError(
+              if (_markRealtimeRankingFailure(
                 e,
-                fallbackMessage: '自习室实时排行暂不可用，已回退到本地数据。',
-              );
-              _realtimeRetryAfter = DateTime.now().add(
-                const Duration(seconds: 30),
-              );
-              _queueRealtimeNotify();
+                client: client,
+                stackTrace: stackTrace,
+                label: 'room realtime ranking failed',
+              )) {
+                _queueRealtimeNotify();
+              }
             },
             onDone: () {
               if (identical(
@@ -628,21 +712,21 @@ class FocusRoomProvider extends ChangeNotifier {
               );
               _lastRemoteError = null;
               _lastGlobalSyncAt = DateTime.now();
-              _realtimeRetryAfter = null;
+              _markRemoteRankingSuccess(realtime: true);
               _queueRealtimeNotify();
             },
-            onError: (Object e) {
+            onError: (Object e, StackTrace stackTrace) {
               if (identical(_globalRankingEventSubscription, subscription)) {
                 _globalRankingEventSubscription = null;
               }
-              _lastRemoteError = _focusRoomRemoteError(
+              if (_markRealtimeRankingFailure(
                 e,
-                fallbackMessage: '自习室实时排行暂不可用，已回退到本地数据。',
-              );
-              _realtimeRetryAfter = DateTime.now().add(
-                const Duration(seconds: 30),
-              );
-              _queueRealtimeNotify();
+                client: client,
+                stackTrace: stackTrace,
+                label: 'global realtime ranking failed',
+              )) {
+                _queueRealtimeNotify();
+              }
             },
             onDone: () {
               if (identical(_globalRankingEventSubscription, subscription)) {
@@ -696,11 +780,9 @@ class FocusRoomProvider extends ChangeNotifier {
         DateTime.now(),
       );
       _lastRemoteSyncAt = DateTime.now();
+      _markRemoteRankingSuccess();
     } catch (e) {
-      _lastRemoteError = _focusRoomRemoteError(
-        e,
-        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
-      );
+      _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       _remoteLoading = false;
       notifyListeners();
@@ -725,11 +807,9 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await _refreshFocusFriendsAndRanking(api);
+      _markRemoteRankingSuccess();
     } catch (e) {
-      _lastRemoteError = _focusRoomRemoteError(
-        e,
-        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
-      );
+      _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       _friendLoading = false;
       notifyListeners();
@@ -754,11 +834,9 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await _refreshGlobalRanking(api);
+      _markRemoteRankingSuccess();
     } catch (e) {
-      _lastRemoteError = _focusRoomRemoteError(
-        e,
-        fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
-      );
+      _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       _globalLoading = false;
       notifyListeners();
@@ -913,11 +991,14 @@ class FocusRoomProvider extends ChangeNotifier {
     DateTime? now,
     String currentUserName = '我',
   }) {
-    if (scope == FocusLeaderboardScope.friends &&
+    if (!_fallbackToLocal &&
+        scope == FocusLeaderboardScope.friends &&
         _remoteFriendRanking != null) {
       return _remoteFriendRanking!;
     }
-    if (scope == FocusLeaderboardScope.global && _remoteGlobalRanking != null) {
+    if (!_fallbackToLocal &&
+        scope == FocusLeaderboardScope.global &&
+        _remoteGlobalRanking != null) {
       return _remoteGlobalRanking!;
     }
     return buildFocusSocialRanking(

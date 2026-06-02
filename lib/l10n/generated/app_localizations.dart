@@ -1844,6 +1844,12 @@ abstract class AppLocalizations {
   /// **'请填写密码'**
   String get authErrorPasswordRequired;
 
+  /// No description provided for @authErrorInvalidCredentials.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号或密码错误，请重新输入'**
+  String get authErrorInvalidCredentials;
+
   /// No description provided for @authErrorResetAccountRequired.
   ///
   /// In zh, this message translates to:
