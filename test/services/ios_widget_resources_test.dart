@@ -331,11 +331,13 @@ void main() {
         ).allMatches(project).length;
         expect(widgetTargetBlocks, greaterThanOrEqualTo(3));
         expect(swift, isNot(contains('.foregroundStyle(')));
-        expect(swift, contains('.foregroundColor(Color(.tertiaryLabel))'));
-        expect(swift, contains('.foregroundColor(entry.config.accent)'));
+        expect(swift, contains('.foregroundColor(entry.theme.mutedText)'));
+        expect(swift, contains('.foregroundColor(entry.theme.primary)'));
         expect(
           swift,
-          contains('.foregroundColor(primary ? .primary : .secondary)'),
+          contains(
+            '.foregroundColor(primary ? entry.theme.text : entry.theme.mutedText)',
+          ),
         );
         expect(
           swift,

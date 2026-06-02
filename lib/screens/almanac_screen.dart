@@ -89,6 +89,10 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     });
   }
 
+  void _shiftDay(int days) {
+    setState(() => _date = _clampDate(_date.add(Duration(days: days))));
+  }
+
   void _showSelectedDateDetail() {
     final detail = LunarCalendar.almanacDetail(_date);
     final term = LunarCalendar.solarTerm(_date);
@@ -175,6 +179,16 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         actions: [
+          IconButton(
+            tooltip: '前一天',
+            onPressed: _date == _firstSupportedDate ? null : () => _shiftDay(-1),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          IconButton(
+            tooltip: '后一天',
+            onPressed: _date == _lastSupportedDate ? null : () => _shiftDay(1),
+            icon: const Icon(Icons.chevron_right),
+          ),
           IconButton(
             tooltip: '回到今天',
             onPressed: _goToday,
