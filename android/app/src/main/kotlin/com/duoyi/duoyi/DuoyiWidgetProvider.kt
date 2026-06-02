@@ -69,6 +69,12 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 ),
                 onPrimaryIds = intArrayOf(R.id.widget_quick_pomodoro),
             )
+            DuoyiWidgetTheme.applyButtonSurfaces(
+                views,
+                prefs,
+                primaryIds = intArrayOf(R.id.widget_quick_pomodoro),
+                secondaryIds = intArrayOf(R.id.widget_quick_open),
+            )
             val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
 
             views.setTextViewText(R.id.widget_title, prefs.getString("brand_app_title", "多仪"))

@@ -108,7 +108,7 @@ void main() {
         matches(
           RegExp(
             r"queueStartupReminderResync\(\s*"
-            r"delay: const Duration\(milliseconds: 4200\),\s*"
+            r"delay: const Duration\(seconds: 9\),\s*"
             r"reason: 'initial logged-in startup',",
             multiLine: true,
           ),
@@ -122,11 +122,19 @@ void main() {
         matches(
           RegExp(
             r"queueStartupReminderResync\(\s*"
-            r"delay: const Duration\(milliseconds: 1800\),\s*"
+            r"delay: const Duration\(seconds: 5\),\s*"
             r"reason: 'post-frame startup',",
             multiLine: true,
           ),
         ),
+      );
+      expect(main, contains('Future<void> _runStartupIdleQueue('));
+      expect(main, contains('initialDelay: const Duration(seconds: 3)'));
+      expect(main, contains('gap: const Duration(seconds: 2)'));
+      expect(
+        main,
+        contains("'deferred local storage'"),
+        reason: '首帧后的本地延迟加载必须进入统一 idle 队列，避免和通知/同步并发抢首屏。',
       );
 
       final goalProvider = File(

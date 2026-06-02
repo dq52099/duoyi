@@ -9,7 +9,7 @@ void main() {
     expect(source, contains('void _goToday()'));
     expect(source, contains('LayoutBuilder('));
     expect(source, contains('ConstrainedBox('));
-    expect(source, contains('maxWidth: 1160'));
+    expect(source, contains('maxWidth: 860'));
     expect(source, contains('final wide = constraints.maxWidth >= 940'));
     expect(source, contains('return Scrollbar('));
     expect(source, contains('SingleChildScrollView('));
@@ -45,7 +45,17 @@ void main() {
     );
     expect(source, contains('Widget _hourFortuneBlock('));
     expect(source, contains('Wrap('));
-    expect(source, contains('Widget _aboutCard()'));
+    expect(source, isNot(contains('Widget _aboutCard()')));
+    final monthCalendar = source.substring(
+      source.indexOf('class _MonthCalendar'),
+      source.indexOf('class _MonthNavButton'),
+    );
+    expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
+    expect(monthCalendar, contains('return Column('));
+    expect(source, contains('class _MonthNavButton'));
+    expect(source, contains('class _SoftAlmanacTag'));
+    expect(source, contains('Widget _detailInfoGrid('));
+    expect(source, contains('Widget _detailInfoTile('));
     expect(
       source,
       contains(

@@ -1,7 +1,9 @@
 package com.duoyi.duoyi
 
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.os.Build
 import android.widget.RemoteViews
 
 data class DuoyiWidgetThemePalette(
@@ -42,10 +44,21 @@ object DuoyiWidgetTheme {
         navId: Int = 0,
     ) {
         val theme = read(prefs)
-        views.setInt(rootId, "setBackgroundColor", theme.background)
+        tintRoundedBackground(views, rootId, theme.background)
         if (navId != 0) {
-            views.setInt(navId, "setBackgroundColor", theme.navBackground)
+            tintRoundedBackground(views, navId, theme.navBackground)
         }
+    }
+
+    fun applyButtonSurfaces(
+        views: RemoteViews,
+        prefs: SharedPreferences,
+        primaryIds: IntArray = intArrayOf(),
+        secondaryIds: IntArray = intArrayOf(),
+    ) {
+        val theme = read(prefs)
+        primaryIds.forEach { tintRoundedBackground(views, it, theme.primary) }
+        secondaryIds.forEach { tintRoundedBackground(views, it, theme.navBackground) }
     }
 
     fun applyTextColors(
@@ -73,6 +86,14 @@ object DuoyiWidgetTheme {
             Color.parseColor(if (raw.isNullOrEmpty()) fallback else raw)
         } catch (_: IllegalArgumentException) {
             Color.parseColor(fallback)
+        }
+    }
+
+    private fun tintRoundedBackground(views: RemoteViews, viewId: Int, color: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            views.setColorStateList(viewId, "setBackgroundTintList", ColorStateList.valueOf(color))
+        } else {
+            views.setInt(viewId, "setBackgroundColor", color)
         }
     }
 }

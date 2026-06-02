@@ -15,6 +15,7 @@ class FocusRoomProvider extends ChangeNotifier {
   static const _remoteRefreshInterval = Duration(minutes: 2);
   static const _friendRefreshInterval = Duration(minutes: 2);
   static const _globalRefreshInterval = Duration(minutes: 2);
+  static const _remoteFailureCooldown = Duration(minutes: 1);
   static const _realtimeRetryBackoff = [
     Duration(seconds: 10),
     Duration(seconds: 30),
@@ -43,6 +44,7 @@ class FocusRoomProvider extends ChangeNotifier {
   DateTime? _lastRemoteSyncAt;
   DateTime? _lastFriendSyncAt;
   DateTime? _lastGlobalSyncAt;
+  DateTime? _remoteRetryAfter;
   String? _realtimeClientKey;
   DateTime? _realtimeRetryAfter;
   Timer? _realtimeNotifyDebounce;
@@ -114,6 +116,7 @@ class FocusRoomProvider extends ChangeNotifier {
       return;
     }
     _fallbackToLocal = false;
+    _remoteRetryAfter = null;
     _realtimeFailureCount = 0;
     _realtimeRetryAfter = null;
     if (_lastRemoteError == focusRoomRankingUnavailableMessage) {
@@ -126,6 +129,7 @@ class FocusRoomProvider extends ChangeNotifier {
     required String fallbackMessage,
   }) {
     _fallbackToLocal = true;
+    _remoteRetryAfter = DateTime.now().add(_remoteFailureCooldown);
     _lastRemoteError = _focusRoomRemoteError(
       error,
       fallbackMessage: fallbackMessage,
@@ -144,7 +148,7 @@ class FocusRoomProvider extends ChangeNotifier {
     final changed =
         !_fallbackToLocal ||
         _lastRemoteError != focusRoomRankingUnavailableMessage ||
-        _realtimeRetryAfter != retryAfter;
+        _realtimeRetryAfter == null;
     _fallbackToLocal = true;
     _lastRemoteError = focusRoomRankingUnavailableMessage;
     _realtimeRetryAfter = retryAfter;
@@ -157,6 +161,12 @@ class FocusRoomProvider extends ChangeNotifier {
         : _realtimeRetryBackoff.length - 1;
     _realtimeFailureCount += 1;
     return _realtimeRetryBackoff[index];
+  }
+
+  bool _remoteRequestCoolingDown({bool force = false}) {
+    if (force) return false;
+    final retryAfter = _remoteRetryAfter;
+    return retryAfter != null && DateTime.now().isBefore(retryAfter);
   }
 
   static const List<FocusRoomMemberSeed> _friendLeaderboardSeeds = [
@@ -573,6 +583,7 @@ class FocusRoomProvider extends ChangeNotifier {
       _lastRemoteError = null;
       return;
     }
+    if (_remoteRequestCoolingDown(force: force)) return;
     final roomsToSync = joinedRooms;
     if (roomsToSync.isEmpty || _remoteLoading) return;
     final last = _lastRemoteSyncAt;
@@ -745,7 +756,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
   void _queueRealtimeNotify() {
     _realtimeNotifyDebounce?.cancel();
-    _realtimeNotifyDebounce = Timer(const Duration(milliseconds: 120), () {
+    _realtimeNotifyDebounce = Timer(const Duration(milliseconds: 500), () {
       _realtimeNotifyDebounce = null;
       notifyListeners();
     });
@@ -759,6 +770,7 @@ class FocusRoomProvider extends ChangeNotifier {
     String roomId,
     Iterable<PomodoroSession> sessions, {
     String currentUserName = '我',
+    bool force = false,
   }) async {
     final client = apiClientGetter?.call();
     final room = roomById(roomId);
@@ -768,6 +780,7 @@ class FocusRoomProvider extends ChangeNotifier {
         room == null) {
       return;
     }
+    if (_remoteRequestCoolingDown(force: force)) return;
     _remoteLoading = true;
     _lastRemoteError = null;
     notifyListeners();
@@ -794,6 +807,7 @@ class FocusRoomProvider extends ChangeNotifier {
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
     }
+    if (_remoteRequestCoolingDown(force: force)) return;
     if (_friendLoading) return;
     final last = _lastFriendSyncAt;
     if (!force &&
@@ -821,6 +835,7 @@ class FocusRoomProvider extends ChangeNotifier {
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
     }
+    if (_remoteRequestCoolingDown(force: force)) return;
     if (_globalLoading) return;
     final last = _lastGlobalSyncAt;
     if (!force &&

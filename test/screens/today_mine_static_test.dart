@@ -452,6 +452,11 @@ void main() {
       expect(main, contains('_buildTab(tab, safeVisibleTabs)'));
       expect(
         main,
+        isNot(contains('_builtTabs.contains(tab) && tab == safeIndex')),
+        reason: '已访问底部页签必须继续挂载，避免日历/习惯/专注来回切换整页重建造成卡顿。',
+      );
+      expect(
+        main,
         isNot(
           contains(
             'onOpenHiddenBottomNavTab: (tab) => navigateTo(tab, allowHidden: true)',

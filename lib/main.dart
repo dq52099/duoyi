@@ -195,8 +195,26 @@ Future<void> _runSyncReloadTasksInBatches(
     final end = (i + batchSize).clamp(0, tasks.length);
     await Future.wait([for (var j = i; j < end; j++) tasks[j]()]);
     if (end < tasks.length) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await _yieldForNextFrame();
     }
+  }
+}
+
+Future<void> _yieldForNextFrame([
+  Duration delay = const Duration(milliseconds: 16),
+]) {
+  return Future<void>.delayed(delay);
+}
+
+Future<void> _runStartupIdleQueue(
+  List<Future<void> Function()> tasks, {
+  Duration initialDelay = const Duration(milliseconds: 1400),
+  Duration gap = const Duration(milliseconds: 900),
+}) async {
+  await Future<void>.delayed(initialDelay);
+  for (final task in tasks) {
+    await task();
+    await Future<void>.delayed(gap);
   }
 }
 
@@ -371,30 +389,31 @@ void main() async {
     final existing = deferredLocalStorageStartup;
     if (existing != null) return existing;
     deferredLocalStorageStartup = cloudSyncProvider.suppressDirtyMarkWhile(
-      () => Future.wait([
-        _startupGuard('note storage', () => noteProvider.loadFromStorage()),
-        _startupGuard(
+      () => _runSyncReloadTasksInBatches([
+        () =>
+            _startupGuard('note storage', () => noteProvider.loadFromStorage()),
+        () => _startupGuard(
           'achievement storage',
           () => achievementProvider.loadFromStorage(),
         ),
-        _startupGuard(
+        () => _startupGuard(
           'custom focus sounds storage',
           () => customFocusSoundProvider.loadFromStorage(),
         ),
-        _startupGuard(
+        () => _startupGuard(
           'focus room storage',
           () => focusRoomProvider.loadFromStorage(),
         ),
-        _startupGuard('ai storage', () => aiService.loadFromStorage()),
-        _startupGuard(
+        () => _startupGuard('ai storage', () => aiService.loadFromStorage()),
+        () => _startupGuard(
           'location reminders storage',
           () => locationReminderProvider.loadFromStorage(),
         ),
-        _startupGuard(
+        () => _startupGuard(
           'calendar subscriptions storage',
           () => calendarSyncProvider.loadFromStorage(),
         ),
-        _startupGuard(
+        () => _startupGuard(
           'calendar local events',
           () => calendarProvider.loadFromStorage(),
         ),
@@ -408,10 +427,10 @@ void main() async {
     final existing = deferredPlatformStartup;
     if (existing != null) return existing;
     deferredPlatformStartup = () async {
-      await Future.wait([
-        _startupGuard('notifications', () => notificationService.init()),
-        _startupGuard('system tray', () => systemTray.init()),
-        _startupGuard('home widget', () async {
+      await _runSyncReloadTasksInBatches([
+        () => _startupGuard('notifications', () => notificationService.init()),
+        () => _startupGuard('system tray', () => systemTray.init()),
+        () => _startupGuard('home widget', () async {
           final initialized = await HomeWidgetService.init();
           if (!initialized) {
             debugPrint('[HomeWidget] startup init completed with failures');
@@ -1193,12 +1212,12 @@ void main() async {
     unawaited(
       startCloudSyncAfterAuth(
         reason: 'initial logged-in startup',
-        delay: const Duration(seconds: 7),
+        delay: const Duration(seconds: 14),
       ),
     );
     unawaited(
       queueStartupReminderResync(
-        delay: const Duration(milliseconds: 4200),
+        delay: const Duration(seconds: 9),
         reason: 'initial logged-in startup',
       ),
     );
@@ -1220,16 +1239,36 @@ void main() async {
   );
 
   Timer? homeWidgetPushDebounce;
+  var homeWidgetPushInFlight = false;
+  var homeWidgetPushQueued = false;
   Future<void> runQueuedHomeWidgetPush() async {
-    final pushed = await pushHomeWidgetNow();
-    if (!pushed) {
-      debugPrint('[HomeWidget] queued push completed with failures');
+    if (homeWidgetPushInFlight) {
+      homeWidgetPushQueued = true;
+      return;
+    }
+    homeWidgetPushInFlight = true;
+    try {
+      final pushed = await pushHomeWidgetNow();
+      if (!pushed) {
+        debugPrint('[HomeWidget] queued push completed with failures');
+      }
+    } catch (e, st) {
+      debugPrint('[HomeWidget] queued push failed: $e\n$st');
+    } finally {
+      homeWidgetPushInFlight = false;
+    }
+    if (homeWidgetPushQueued) {
+      homeWidgetPushQueued = false;
+      homeWidgetPushDebounce?.cancel();
+      homeWidgetPushDebounce = Timer(const Duration(milliseconds: 2200), () {
+        unawaited(runQueuedHomeWidgetPush());
+      });
     }
   }
 
   void queueHomeWidgetPush() {
     homeWidgetPushDebounce?.cancel();
-    homeWidgetPushDebounce = Timer(const Duration(milliseconds: 800), () {
+    homeWidgetPushDebounce = Timer(const Duration(milliseconds: 2200), () {
       unawaited(runQueuedHomeWidgetPush());
     });
   }
@@ -1275,8 +1314,13 @@ void main() async {
   }
 
   Future<void> runPostFrameStartupTasks() async {
-    unawaited(ensureDeferredLocalStorageStartup());
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 500),
+        ensureDeferredLocalStorageStartup,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 1600));
     await ensureDeferredPlatformStartup();
     final initialNotificationPayloads = <String>[];
     final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
@@ -1320,68 +1364,53 @@ void main() async {
       _showSharedTextImportSheet(initialSharedText);
     }
     unawaited(
-      _startupGuard(
-        'server config refresh',
-        () => authProvider.refreshServerConfigFromServer(),
-        timeout: const Duration(seconds: 5),
-      ),
-    );
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 800), () {
-        return _startupGuard(
-          'auth profile refresh',
-          () => authProvider.refreshMe(),
-          timeout: const Duration(seconds: 8),
-        );
-      }),
-    );
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 1400), () async {
-        await _startupGuard(
-          'initial reminder resync',
-          () => queueStartupReminderResync(
-            delay: const Duration(milliseconds: 1800),
-            reason: 'post-frame startup',
+      _runStartupIdleQueue(
+        [
+          () => _startupGuard(
+            'deferred local storage',
+            ensureDeferredLocalStorageStartup,
+            timeout: const Duration(seconds: 20),
           ),
-        );
-      }),
-    );
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 2600), () async {
-        await _startupGuard('daily digest reminder', syncDailyDigestReminder);
-        await Future<void>.delayed(const Duration(milliseconds: 700));
-        await _startupGuard(
-          'report digest reminders',
-          syncReportDigestReminders,
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 700));
-        await _startupGuard(
-          'notification quick add',
-          syncNotificationStatusBarOnStartup,
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
-        await _startupGuard('initial home widget push', () async {
-          final pushed = await pushHomeWidgetNow();
-          if (!pushed) {
-            debugPrint('[HomeWidget] initial push completed with failures');
-          }
-        });
-      }),
-    );
-    unawaited(
-      Future<void>.delayed(
-        const Duration(milliseconds: 3600),
-        runDailyRolloverAfterFirstFrame,
+          () => _startupGuard(
+            'server config refresh',
+            () => authProvider.refreshServerConfigFromServer(),
+            timeout: const Duration(seconds: 5),
+          ),
+          () => _startupGuard(
+            'auth profile refresh',
+            () => authProvider.refreshMe(),
+            timeout: const Duration(seconds: 8),
+          ),
+          () => _startupGuard(
+            'initial reminder resync',
+            () => queueStartupReminderResync(
+              delay: const Duration(seconds: 5),
+              reason: 'post-frame startup',
+            ),
+          ),
+          () => _startupGuard('daily digest reminder', syncDailyDigestReminder),
+          () => _startupGuard(
+            'report digest reminders',
+            syncReportDigestReminders,
+          ),
+          () => _startupGuard(
+            'notification quick add',
+            syncNotificationStatusBarOnStartup,
+          ),
+          () => _startupGuard(
+            'initial home widget push',
+            runQueuedHomeWidgetPush,
+          ),
+          runDailyRolloverAfterFirstFrame,
+          () => _startupGuard(
+            'startup app update policy',
+            () => appUpdate.checkServerPolicyNow(),
+            timeout: const Duration(seconds: 5),
+          ),
+        ],
+        initialDelay: const Duration(seconds: 3),
+        gap: const Duration(seconds: 2),
       ),
-    );
-    unawaited(
-      Future<void>.delayed(const Duration(seconds: 6), () {
-        return _startupGuard(
-          'startup app update policy',
-          () => appUpdate.checkServerPolicyNow(),
-          timeout: const Duration(seconds: 5),
-        );
-      }),
     );
   }
 
@@ -3757,7 +3786,7 @@ class MainShellState extends State<MainShell> {
           index: safeIndex,
           children: List.generate(
             _tabCount,
-            (tab) => _builtTabs.contains(tab) && tab == safeIndex
+            (tab) => _builtTabs.contains(tab)
                 ? _buildTab(tab, safeVisibleTabs)
                 : _LazyTabPlaceholder(tab: tab),
           ),

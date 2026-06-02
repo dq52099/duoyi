@@ -71,6 +71,11 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
                 onPrimaryIds = intArrayOf(R.id.widget_focus_quick_start),
             )
+            DuoyiWidgetTheme.applyButtonSurfaces(
+                views,
+                prefs,
+                primaryIds = intArrayOf(R.id.widget_focus_quick_start),
+            )
             val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
 
             views.setTextViewText(

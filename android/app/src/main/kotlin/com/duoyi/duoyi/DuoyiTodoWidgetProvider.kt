@@ -72,6 +72,11 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_todo_nav_focus,
                 ),
             )
+            DuoyiWidgetTheme.applyButtonSurfaces(
+                views,
+                prefs,
+                secondaryIds = intArrayOf(R.id.widget_todo_quick_add),
+            )
 
             views.setTextViewText(
                 R.id.widget_todo_title,

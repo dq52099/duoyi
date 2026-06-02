@@ -143,8 +143,10 @@ void main() {
     );
     expect(provider, contains('Timer? _realtimeNotifyDebounce'));
     expect(provider, contains('void _queueRealtimeNotify()'));
-    expect(provider, contains('const Duration(milliseconds: 120)'));
+    expect(provider, contains('const Duration(milliseconds: 500)'));
     expect(provider, contains('_realtimeNotifyDebounce?.cancel()'));
+    expect(provider, contains('static const _remoteFailureCooldown'));
+    expect(provider, contains('bool _remoteRequestCoolingDown'));
     expect(provider, contains('_queueRealtimeNotify();'));
     expect(backup, contains("'duoyi_focus_rooms'"));
     expect(sync, contains("'duoyi_focus_rooms': 'focus_rooms'"));

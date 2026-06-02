@@ -259,6 +259,14 @@ void main() {
       expect(source, contains('class _MonthCalendar'));
       expect(source, contains('class _SelectedDateSummaryCard'));
       expect(source, contains('class _AlmanacDetailSheet'));
+      final monthCalendar = source.substring(
+        source.indexOf('class _MonthCalendar'),
+        source.indexOf('class _MonthNavButton'),
+      );
+      expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
+      expect(source, contains('class _MonthNavButton'));
+      expect(source, contains('class _SoftAlmanacTag'));
+      expect(source, contains('Widget _detailInfoGrid('));
       expect(source, contains('showModalBottomSheet<void>'));
       expect(source, contains("('胎神', detail.fetalGod)"));
       expect(source, contains("('彭祖', detail.pengZu)"));

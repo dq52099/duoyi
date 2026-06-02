@@ -127,8 +127,15 @@ void main() {
     expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));
     expect(
       mainApp,
-      contains('Future<void>.delayed(const Duration(seconds: 6), ()'),
-      reason: '启动更新策略检查应首帧后延后执行，避免冷启动阻塞到无法滑动。',
+      contains('Future<void> _runStartupIdleQueue('),
+      reason: '启动更新策略检查应进入首帧后的 idle 队列，避免冷启动阻塞到无法滑动。',
+    );
+    expect(mainApp, contains('initialDelay: const Duration(seconds: 3)'));
+    expect(mainApp, contains('gap: const Duration(seconds: 2)'));
+    expect(
+      mainApp,
+      isNot(contains('Future<void>.delayed(const Duration(seconds: 6), ()')),
+      reason: '启动更新策略检查不再使用独立定时器，避免和提醒、通知栏、小组件任务并发抢首屏。',
     );
     expect(mainApp, contains('home: updater.mustUpdate'));
     expect(

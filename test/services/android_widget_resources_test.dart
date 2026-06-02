@@ -325,6 +325,51 @@ void main() {
       }
     });
 
+    test('桌面小组件圆角背景和按钮跟随主题且不被纯色背景覆盖', () {
+      final theme = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetTheme.kt',
+      ).readAsStringSync();
+      final rootBg = File(
+        'android/app/src/main/res/drawable/widget_bg.xml',
+      ).readAsStringSync();
+      final navBg = File(
+        'android/app/src/main/res/drawable/widget_nav_bg.xml',
+      ).readAsStringSync();
+      final primaryButton = File(
+        'android/app/src/main/res/drawable/widget_btn_primary.xml',
+      ).readAsStringSync();
+      final secondaryButton = File(
+        'android/app/src/main/res/drawable/widget_btn_secondary.xml',
+      ).readAsStringSync();
+      final legacyProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt',
+      ).readAsStringSync();
+      final todoProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiTodoWidgetProvider.kt',
+      ).readAsStringSync();
+      final focusProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFocusHabitWidgetProvider.kt',
+      ).readAsStringSync();
+
+      expect(theme, contains('setBackgroundTintList'));
+      expect(theme, contains('fun applyButtonSurfaces('));
+      expect(
+        theme,
+        isNot(contains('views.setInt(rootId, "setBackgroundColor"')),
+      );
+      expect(rootBg, contains('<corners android:radius="16dp" />'));
+      expect(navBg, contains('<corners android:radius="9dp" />'));
+      expect(primaryButton, contains('<corners android:radius="8dp" />'));
+      expect(secondaryButton, contains('<corners android:radius="8dp" />'));
+      expect(legacyProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
+      expect(legacyProvider, contains('R.id.widget_quick_pomodoro'));
+      expect(legacyProvider, contains('R.id.widget_quick_open'));
+      expect(todoProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
+      expect(todoProvider, contains('R.id.widget_todo_quick_add'));
+      expect(focusProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
+      expect(focusProvider, contains('R.id.widget_focus_quick_start'));
+    });
+
     test('历史兼容主小组件不再注册为可见组合入口', () {
       _assertWidgetResource(legacyWidget, registered: false);
       final manifest = File(
@@ -2229,6 +2274,13 @@ void main() {
       expect(main, contains('final Set<int> _builtTabs = <int>{0}'));
       expect(main, contains('_LazyTabPlaceholder'));
       expect(main, contains('_buildTab(tab, safeVisibleTabs)'));
+      expect(main, contains('var homeWidgetPushInFlight = false'));
+      expect(main, contains('homeWidgetPushQueued = true'));
+      expect(
+        main,
+        contains('Timer(const Duration(milliseconds: 2200)'),
+        reason: '小组件推送会重建日程摘要，启动和连续数据变化时必须合并，不能 800ms 高频抢 UI。',
+      );
       expect(main, contains("label: I18n.tr('nav.widget')"));
       expect(main, contains("action == 'quick_todo'"));
       expect(main, contains("action == 'checkin_habit'"));
