@@ -362,6 +362,7 @@ void main() async {
 
   await cloudSyncProvider.suppressDirtyMarkWhile(
     () => _runStartupStoragePhase('critical local storage', [
+      // 关键Provider必须串行加载，避免状态冲突
       () => themeProvider.loadFromStorage(),
       () => authProvider.loadFromStorage(refreshServerConfig: false),
       () => preferencesProvider.loadFromStorage(),
@@ -369,11 +370,15 @@ void main() async {
       () => localeProvider.loadFromStorage(),
       () => userProvider.loadFromStorage(),
       () => cloudSyncProvider.loadFromStorage(),
-      () => todoProvider.loadFromStorage(),
-      () => habitProvider.loadFromStorage(),
-      () => pomodoroProvider.loadFromStorage(),
     ]),
   );
+
+  // 数据Provider可以并行加载，提升启动速度
+  await cloudSyncProvider.suppressDirtyMarkWhile(() => Future.wait([
+    _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
+    _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
+    _startupGuard('pomodoro storage', () => pomodoroProvider.loadFromStorage()),
+  ]));
 
   Future<void>? deferredLocalStorageStartup;
   Future<void> ensureDeferredLocalStorageStartup() {
@@ -3287,19 +3292,22 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   }
 
   void _checkUpdatePolicy({bool force = false}) {
-    final now = DateTime.now();
-    final previous = _lastUpdatePolicyCheckAt;
-    if (!force &&
-        previous != null &&
-        now.difference(previous) < const Duration(minutes: 30)) {
-      return;
-    }
-    _lastUpdatePolicyCheckAt = now;
-    final updater = _appUpdateService;
-    if (updater == null) return;
-    if (updater.checking) return;
-    // ignore: discarded_futures
-    updater.checkNow();
+    // 延迟30秒检查更新，避免阻塞UI和首屏渲染
+    Future.delayed(const Duration(seconds: 30), () {
+      final now = DateTime.now();
+      final previous = _lastUpdatePolicyCheckAt;
+      if (!force &&
+          previous != null &&
+          now.difference(previous) < const Duration(minutes: 30)) {
+        return;
+      }
+      _lastUpdatePolicyCheckAt = now;
+      final updater = _appUpdateService;
+      if (updater == null) return;
+      if (updater.checking) return;
+      // ignore: discarded_futures
+      updater.checkNow();
+    });
   }
 
   /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并排队
