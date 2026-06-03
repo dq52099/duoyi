@@ -97,10 +97,10 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     _openAlmanacDetail(_date);
   }
 
-  void _showPickedDateDetail(DateTime date) {
+  void _onDatePicked(DateTime date) {
     final selectedDate = _clampDate(date);
     setState(() => _date = selectedDate);
-    _openAlmanacDetail(selectedDate);
+    // 仅更新选中日期，不自动打开黄历详情
   }
 
   void _openAlmanacDetail(DateTime selectedDate) {
@@ -198,7 +198,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
               date: selectedDate,
               highlightDays: monthHighlightDays,
               highlights: monthHighlights,
-              onPick: _showPickedDateDetail,
+              onPick: _onDatePicked,
               onPreviousMonth: () => _shiftMonth(-1),
               onNextMonth: () => _shiftMonth(1),
               onTitleTap: _pickDate,
@@ -832,8 +832,8 @@ class _AlmanacDetailNavBar extends StatelessWidget {
                 title,
                 maxLines: 1,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 23.5,
-                  fontWeight: FontWeight.normal,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
                   letterSpacing: 0,
                   color: cs.onSurface,
                 ),

@@ -138,8 +138,8 @@ class ReminderRingtoneService : Service() {
         val volume = volumePercent(this) / 100f
         val selectedResId = soundResId(this)
         if (playRawRingtone(selectedResId, volume, id, "raw_selected")) return true
-        if (selectedResId != R.raw.duoyi_soft && playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")) {
-            Log.w("ReminderRingtoneService", "selected ringtone failed, fell back to built-in soft morning chime")
+        if (selectedResId != R.raw.duoyi_alarm && playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")) {
+            Log.w("ReminderRingtoneService", "selected ringtone failed, fell back to built-in alarm")
             return true
         }
         return playToneFallback(volume, id)
@@ -173,8 +173,8 @@ class ReminderRingtoneService : Service() {
                         Log.w("ReminderRingtoneService", "raw ringtone start failed, trying fallback", error)
                         if (player === preparedPlayer) player = null
                         runCatching { preparedPlayer.release() }
-                        if (resId != R.raw.duoyi_soft) {
-                            playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
+                        if (resId != R.raw.duoyi_alarm) {
+                            playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")
                         } else {
                             playToneFallback(volume, id)
                         }
@@ -183,8 +183,8 @@ class ReminderRingtoneService : Service() {
                 setOnErrorListener { mp, _, _ ->
                     if (player === mp) player = null
                     runCatching { mp.release() }
-                    if (resId != R.raw.duoyi_soft) {
-                        playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
+                    if (resId != R.raw.duoyi_alarm) {
+                        playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")
                     } else {
                         playToneFallback(volume, id)
                     }
@@ -666,69 +666,51 @@ class ReminderRingtoneService : Service() {
 
         private fun soundResId(context: Context): Int {
             return when (selectedSoundName(context)) {
-                "soft" -> R.raw.duoyi_soft
-                "forest" -> R.raw.duoyi_forest
-                "silver" -> R.raw.duoyi_silver
-                "paper" -> R.raw.duoyi_paper
-                "stream" -> R.raw.duoyi_stream
-                "star" -> R.raw.duoyi_star
-                "marimba" -> R.raw.duoyi_marimba
-                "lull" -> R.raw.duoyi_lull
-                "glass" -> R.raw.duoyi_glass
-                "bamboo" -> R.raw.duoyi_bamboo
-                "dawn" -> R.raw.duoyi_dawn
-                "wood" -> R.raw.duoyi_wood
-                "water" -> R.raw.duoyi_water
-                "harp" -> R.raw.duoyi_harp
-                "mist" -> R.raw.duoyi_mist
-                "pebble" -> R.raw.duoyi_pebble
-                "tide" -> R.raw.duoyi_tide
-                "chime" -> R.raw.duoyi_chime
-                "bell" -> R.raw.duoyi_bell
-                "morning" -> R.raw.duoyi_morning
-                "pearl" -> R.raw.duoyi_pearl
-                "cedar" -> R.raw.duoyi_cedar
-                "moon" -> R.raw.duoyi_moon
-                "cloud" -> R.raw.duoyi_cloud
-                "sakura" -> R.raw.duoyi_sakura
-                "beep" -> R.raw.duoyi_beep
-                "classic" -> R.raw.duoyi_classic
                 "alarm" -> R.raw.duoyi_alarm
-                else -> R.raw.duoyi_soft
+                "bamboo" -> R.raw.duoyi_bamboo
+                "beep" -> R.raw.duoyi_beep
+                "bell" -> R.raw.duoyi_bell
+                "cedar" -> R.raw.duoyi_cedar
+                "chime" -> R.raw.duoyi_chime
+                "classic" -> R.raw.duoyi_classic
+                "cloud" -> R.raw.duoyi_cloud
+                "dawn" -> R.raw.duoyi_dawn
+                "forest" -> R.raw.duoyi_forest
+                "glass" -> R.raw.duoyi_glass
+                "harp" -> R.raw.duoyi_harp
+                "lull" -> R.raw.duoyi_lull
+                "marimba" -> R.raw.duoyi_marimba
+                "mist" -> R.raw.duoyi_mist
+                "moon" -> R.raw.duoyi_moon
+                "morning" -> R.raw.duoyi_morning
+                else -> R.raw.duoyi_alarm  // 默认使用alarm作为兜底
             }
         }
 
         private fun normalizeSoundName(value: String): String {
             return when (value) {
-                "soft",
-                "forest",
-                "silver",
-                "paper",
-                "stream",
-                "star",
-                "marimba",
-                "lull",
-                "glass",
+                "alarm",
                 "bamboo",
-                "dawn",
-                "wood",
-                "water",
-                "harp",
-                "mist",
-                "pebble",
-                "tide",
-                "chime",
-                "bell",
-                "morning",
-                "pearl",
-                "cedar",
-                "moon",
-                "cloud",
-                "sakura",
                 "beep",
+                "bell",
+                "cedar",
+                "chime",
                 "classic",
-                "alarm" -> value
-                else -> "soft"
+                "cloud",
+                "dawn",
+                "forest",
+                "glass",
+                "harp",
+                "lull",
+                "marimba",
+                "mist",
+                "moon",
+                "morning" -> value
+                // 旧的铃声名称映射到实际存在的文件
+                "soft" -> "alarm"
+                "silver", "paper", "stream", "star", "wood", "water",
+                "pebble", "tide", "pearl", "sakura" -> "alarm"  // 这些文件不存在，用alarm代替
+                else -> "alarm"
             }
         }
 
