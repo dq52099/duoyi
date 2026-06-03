@@ -48,6 +48,10 @@ void main() {
     expect(themeProvider, contains('setCardSkin'));
     expect(themeProvider, contains('activeCardSkinId'));
     expect(themeProvider, contains('unlockedCardSkinIds'));
+    expect(themeProvider, contains('activeWidgetBackgroundId'));
+    expect(themeProvider, contains('activeWidgetCardSkinId'));
+    expect(themeProvider, contains('setWidgetBackgroundBrand'));
+    expect(themeProvider, contains('setWidgetCardSkin'));
     expect(
       themeScreen,
       contains("import '../providers/achievement_provider.dart';"),
@@ -68,6 +72,10 @@ void main() {
     expect(themeScreen, contains('卡片皮肤'));
     expect(themeScreen, contains('兑换卡片皮肤'));
     expect(themeScreen, contains('_cardSkinPreview'));
+    expect(themeScreen, contains('小组件主题'));
+    expect(themeScreen, contains('_widgetThemeSection'));
+    expect(themeScreen, contains('themeProvider.setWidgetBackgroundBrand'));
+    expect(themeScreen, contains('themeProvider.setWidgetCardSkin'));
     expect(achievementProvider, contains('Future<bool> spendCoins'));
     expect(achievementProvider, contains('Future<void> applyRewardsSnapshot'));
     expect(backup, contains("'theme_shop_state'"));

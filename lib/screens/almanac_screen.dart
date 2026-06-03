@@ -94,28 +94,19 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   }
 
   void _showSelectedDateDetail() {
-    final detail = LunarCalendar.almanacDetail(_date);
-    final term = LunarCalendar.solarTerm(_date);
-    final solarFestival = LunarCalendar.solarFestival(_date);
-    final lunarFestival = LunarCalendar.lunarFestival(detail.lunarDate);
-    final badges = _dateBadges(
-      term: term,
-      solarFestival: solarFestival,
-      lunarFestival: lunarFestival,
-      isHoliday: HolidayCalendar.isHoliday(_date),
-      isWorkMakeupDay: HolidayCalendar.isWorkMakeupDay(_date),
-    );
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (context) => _AlmanacDetailSheet(
-        detail: detail,
-        badges: badges,
-        weekNames: const ['一', '二', '三', '四', '五', '六', '日'],
-        yijiRow: _yijiRow,
-        detailRows: _detailRows,
+    _openAlmanacDetail(_date);
+  }
+
+  void _showPickedDateDetail(DateTime date) {
+    final selectedDate = _clampDate(date);
+    setState(() => _date = selectedDate);
+    _openAlmanacDetail(selectedDate);
+  }
+
+  void _openAlmanacDetail(DateTime selectedDate) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _AlmanacDetailPage(date: selectedDate),
       ),
     );
   }
@@ -207,7 +198,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
               date: selectedDate,
               highlightDays: monthHighlightDays,
               highlights: monthHighlights,
-              onPick: (d) => setState(() => _date = _clampDate(d)),
+              onPick: _showPickedDateDetail,
               onPreviousMonth: () => _shiftMonth(-1),
               onNextMonth: () => _shiftMonth(1),
               onTitleTap: _pickDate,
@@ -249,277 +240,6 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
           },
         ),
       ),
-    );
-  }
-
-  Widget _detailRows(BuildContext context, LunarAlmanacDetail detail) {
-    final rows = <(String, String)>[
-      ('胎神', detail.fetalGod),
-      ('彭祖', detail.pengZu),
-      ('五行', detail.fiveElements),
-      ('星宿', detail.mansion),
-      ('冲煞', detail.clash),
-    ];
-
-    return Column(
-      children: [
-        _detailInfoGrid(context, rows),
-        const SizedBox(height: 12),
-        _hourFortuneRow(context, detail.hourFortuneItems, isLast: true),
-      ],
-    );
-  }
-
-  Widget _detailInfoGrid(BuildContext context, List<(String, String)> rows) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        final columns = constraints.maxWidth >= 560 ? 2 : 1;
-        final itemWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: rows
-              .map(
-                (row) => SizedBox(
-                  width: itemWidth,
-                  child: _detailInfoTile(context, label: row.$1, value: row.$2),
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-
-  Widget _detailInfoTile(
-    BuildContext context, {
-    required String label,
-    required String value,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.42,
-        ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurface.withValues(alpha: 0.54),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.35,
-              color: cs.onSurface.withValues(alpha: 0.82),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hourFortuneRow(
-    BuildContext context,
-    List<AlmanacHourFortune> fortunes, {
-    required bool isLast,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.34,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '时辰吉凶',
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurface.withValues(alpha: 0.54),
-            ),
-          ),
-          const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const spacing = 6.0;
-              final columns = constraints.maxWidth >= 520
-                  ? 4
-                  : constraints.maxWidth >= 330
-                  ? 3
-                  : 2;
-              final itemWidth =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: fortunes
-                    .map(
-                      (fortune) =>
-                          _hourFortuneBlock(context, fortune, width: itemWidth),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hourFortuneBlock(
-    BuildContext context,
-    AlmanacHourFortune fortune, {
-    required double width,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final color = fortune.isAuspicious
-        ? const Color(0xFF2E7D32)
-        : const Color(0xFFC62828);
-    return SizedBox(
-      width: width,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 58),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.16), width: 0.45),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${fortune.branch}时',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.86),
-                      fontSize: 12,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                ),
-                Text(
-                  fortune.isAuspicious ? '吉' : '凶',
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              fortune.range,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.58),
-                fontSize: 11,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${fortune.ganzhi} ${fortune.deity}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.72),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _yijiCard({
-    required String title,
-    required String body,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.45),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              body,
-              style: TextStyle(
-                fontSize: 13,
-                color: color.withValues(alpha: 0.86),
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _yijiRow({required String suitable, required String avoid}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _yijiCard(
-            title: '宜',
-            body: suitable,
-            color: const Color(0xFF66BB6A),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _yijiCard(
-            title: '忌',
-            body: avoid,
-            color: const Color(0xFFEF5350),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1022,95 +742,840 @@ class _SummaryYijiLine extends StatelessWidget {
   }
 }
 
-class _AlmanacDetailSheet extends StatelessWidget {
-  final LunarAlmanacDetail detail;
-  final List<(String, Color)> badges;
-  final List<String> weekNames;
-  final Widget Function({required String suitable, required String avoid})
-  yijiRow;
-  final Widget Function(BuildContext context, LunarAlmanacDetail detail)
-  detailRows;
+class _AlmanacDetailPage extends StatelessWidget {
+  final DateTime date;
 
-  const _AlmanacDetailSheet({
-    required this.detail,
-    required this.badges,
-    required this.weekNames,
-    required this.yijiRow,
-    required this.detailRows,
-  });
+  const _AlmanacDetailPage({required this.date});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final displayDate = detail.solarDate;
-    final fullDate =
-        '${displayDate.year}年${displayDate.month}月${displayDate.day}日 星期${weekNames[displayDate.weekday - 1]}';
-    return SafeArea(
-      top: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+    final detail = LunarCalendar.almanacDetail(date);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBackground = isDark
+        ? Color.alphaBlend(
+            const Color(0xFFB58C58).withValues(alpha: 0.05),
+            cs.surface,
+          )
+        : const Color(0xFFFFFEFC);
+    final title = _fullDateTitle(detail.solarDate);
+
+    return Scaffold(
+      backgroundColor: pageBackground,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: _AlmanacDetailNavBar(
+          title: title,
+          backgroundColor: pageBackground,
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fullDate,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${detail.lunarDate.chineseText}  ${_spacedGanzhiLine(detail.ganzhiLine)}',
-                          style: appSecondaryControlTextStyle(context).copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.64),
-                          ),
-                        ),
-                      ],
+      ),
+      body: ColoredBox(
+        color: pageBackground,
+        child: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontal = constraints.maxWidth <= 420 ? 20.0 : 24.0;
+              return Scrollbar(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 28),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 620),
+                      child: _ClassicalAlmanacCard(detail: detail),
                     ),
                   ),
-                  IconButton(
-                    tooltip: '关闭',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              if (badges.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: badges
-                      .map(
-                        (badge) =>
-                            _AlmanacBadge(text: badge.$1, color: badge.$2),
-                      )
-                      .toList(),
                 ),
-              ],
-              const SizedBox(height: 14),
-              yijiRow(suitable: detail.suitable, avoid: detail.avoid),
-              const SizedBox(height: 12),
-              detailRows(context, detail),
-            ],
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+class _AlmanacDetailNavBar extends StatelessWidget {
+  final String title;
+  final Color backgroundColor;
+
+  const _AlmanacDetailNavBar({
+    required this.title,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 64,
+        color: backgroundColor,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned(
+              left: 8,
+              top: 6,
+              bottom: 6,
+              child: IconButton(
+                tooltip: '返回',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_ios_new),
+                iconSize: 20,
+                color: cs.onSurface.withValues(alpha: 0.86),
+                padding: const EdgeInsets.only(left: 12),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 72),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 27,
+                    fontWeight: FontWeight.normal,
+                    letterSpacing: 0,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassicalAlmanacCard extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+
+  const _ClassicalAlmanacCard({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final gold = const Color(0xFFB58C58);
+    final lineColor = gold.withValues(alpha: isDark ? 0.62 : 0.55);
+    final cardColor = isDark
+        ? Color.alphaBlend(
+            gold.withValues(alpha: 0.04),
+            theme.colorScheme.surface,
+          )
+        : Colors.white;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final topHeight = _clampDouble(width * 0.88, 304, 380);
+        final tableHeight = _clampDouble(width * 0.42, 154, 184);
+        final hourHeight = _clampDouble(width * 0.17, 58, 72);
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: lineColor, width: 1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: topHeight,
+                  child: _AlmanacTopVisual(
+                    detail: detail,
+                    lineColor: lineColor,
+                    gold: gold,
+                  ),
+                ),
+                _ClassicalDivider(color: lineColor),
+                SizedBox(
+                  height: tableHeight,
+                  child: _ClassicalInfoTable(
+                    detail: detail,
+                    lineColor: lineColor,
+                  ),
+                ),
+                SizedBox(
+                  height: hourHeight,
+                  child: _ClassicalHourRow(
+                    fortunes: detail.hourFortuneItems,
+                    lineColor: lineColor,
+                    gold: gold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AlmanacTopVisual extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+  final Color lineColor;
+  final Color gold;
+
+  const _AlmanacTopVisual({
+    required this.detail,
+    required this.lineColor,
+    required this.gold,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 32,
+          child: _VerticalYijiPanel(
+            suitable: detail.suitable,
+            avoid: detail.avoid,
+            gold: gold,
+          ),
+        ),
+        _ClassicalVerticalDivider(color: lineColor),
+        Expanded(
+          flex: 68,
+          child: _DateHeroPanel(detail: detail, gold: gold),
+        ),
+      ],
+    );
+  }
+}
+
+class _VerticalYijiPanel extends StatelessWidget {
+  final String suitable;
+  final String avoid;
+  final Color gold;
+
+  const _VerticalYijiPanel({
+    required this.suitable,
+    required this.avoid,
+    required this.gold,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final darkText = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.86);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _VerticalYijiColumn(title: '宜', body: suitable, color: gold),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: _VerticalYijiColumn(
+              title: '忌',
+              body: avoid,
+              color: darkText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerticalYijiColumn extends StatelessWidget {
+  final String title;
+  final String body;
+  final Color color;
+
+  const _VerticalYijiColumn({
+    required this.title,
+    required this.body,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final terms = _splitAlmanacTerms(body);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final termCapacity = ((constraints.maxWidth - 4) / 15)
+            .floor()
+            .clamp(2, 4)
+            .toInt();
+        final visible = terms.take(termCapacity).toList(growable: false);
+        final hasMore = terms.length > visible.length;
+        final textSize = constraints.maxHeight < 330 ? 12.0 : 13.0;
+        return InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _showAlmanacTermDialog(
+            context,
+            title: title,
+            body: body,
+            color: color,
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.72),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: visible
+                        .map(
+                          (term) => Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 1.5,
+                            ),
+                            child: _VerticalTerm(
+                              term: term,
+                              color: color,
+                              fontSize: textSize,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+              if (hasMore)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '更多',
+                    style: TextStyle(
+                      color: color.withValues(alpha: 0.72),
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VerticalTerm extends StatelessWidget {
+  final String term;
+  final Color color;
+  final double fontSize;
+
+  const _VerticalTerm({
+    required this.term,
+    required this.color,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chars = term.runes.map(String.fromCharCode).toList(growable: false);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: chars
+          .map(
+            (char) => Text(
+              char,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.90),
+                fontSize: fontSize,
+                height: 1.12,
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _DateHeroPanel extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+  final Color gold;
+
+  const _DateHeroPanel({required this.detail, required this.gold});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final daySize = _clampDouble(constraints.maxWidth * 0.42, 82, 118);
+        final lunarSize = _clampDouble(constraints.maxWidth * 0.16, 32, 44);
+        final ganzhiSize = _clampDouble(constraints.maxWidth * 0.060, 15, 18);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${detail.solarDate.day}',
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: daySize,
+                  height: 0.92,
+                  color: cs.onSurface,
+                  letterSpacing: 0,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                detail.lunarDate.chineseText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: lunarSize,
+                  height: 1.1,
+                  color: cs.onSurface,
+                  letterSpacing: 0,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                _spacedGanzhiLine(detail.ganzhiLine),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: ganzhiSize,
+                  height: 1.35,
+                  color: cs.onSurface.withValues(alpha: 0.62),
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ClassicalInfoTable extends StatelessWidget {
+  final LunarAlmanacDetail detail;
+  final Color lineColor;
+
+  const _ClassicalInfoTable({required this.detail, required this.lineColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 33,
+          child: Column(
+            children: [
+              Expanded(
+                child: _ClassicalInfoCell(title: '胎神', value: detail.fetalGod),
+              ),
+              _ClassicalDivider(color: lineColor),
+              Expanded(
+                child: _ClassicalInfoCell(title: '星宿', value: detail.mansion),
+              ),
+            ],
+          ),
+        ),
+        _ClassicalVerticalDivider(color: lineColor),
+        Expanded(
+          flex: 34,
+          child: _ClassicalInfoCell(title: '彭祖', value: detail.pengZu),
+        ),
+        _ClassicalVerticalDivider(color: lineColor),
+        Expanded(
+          flex: 33,
+          child: Column(
+            children: [
+              Expanded(
+                child: _ClassicalInfoCell(
+                  title: '五行',
+                  value: detail.fiveElements,
+                ),
+              ),
+              _ClassicalDivider(color: lineColor),
+              Expanded(
+                child: _ClassicalInfoCell(title: '冲煞', value: detail.clash),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClassicalInfoCell extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _ClassicalInfoCell({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              height: 1.1,
+              fontWeight: FontWeight.normal,
+              color: cs.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: title == '彭祖' ? 5 : 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.32,
+                color: cs.onSurface.withValues(alpha: 0.66),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClassicalHourRow extends StatelessWidget {
+  final List<AlmanacHourFortune> fortunes;
+  final Color lineColor;
+  final Color gold;
+
+  const _ClassicalHourRow({
+    required this.fortunes,
+    required this.lineColor,
+    required this.gold,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: fortunes.asMap().entries.map((entry) {
+        final index = entry.key;
+        final fortune = entry.value;
+        return Expanded(
+          child: _ClassicalHourCell(
+            fortune: fortune,
+            lineColor: lineColor,
+            gold: gold,
+            showRightBorder: index != fortunes.length - 1,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _ClassicalHourCell extends StatelessWidget {
+  final AlmanacHourFortune fortune;
+  final Color lineColor;
+  final Color gold;
+  final bool showRightBorder;
+
+  const _ClassicalHourCell({
+    required this.fortune,
+    required this.lineColor,
+    required this.gold,
+    required this.showRightBorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final luckColor = fortune.isAuspicious
+        ? gold
+        : cs.onSurface.withValues(alpha: 0.78);
+    return InkWell(
+      onTap: () => _showHourFortuneDialog(context, fortune),
+      child: Container(
+        height: double.infinity,
+        decoration: BoxDecoration(
+          border: Border(
+            right: showRightBorder
+                ? BorderSide(color: lineColor, width: 0.55)
+                : BorderSide.none,
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final branchSize = constraints.maxWidth < 28 ? 11.0 : 12.5;
+            final luckSize = constraints.maxWidth < 28 ? 10.5 : 12.0;
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  fortune.branch,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.86),
+                    fontSize: branchSize,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  fortune.isAuspicious ? '吉' : '凶',
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: luckColor,
+                    fontSize: luckSize,
+                    height: 1.05,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassicalDivider extends StatelessWidget {
+  final Color color;
+
+  const _ClassicalDivider({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(height: 0.7, color: color);
+  }
+}
+
+class _ClassicalVerticalDivider extends StatelessWidget {
+  final Color color;
+
+  const _ClassicalVerticalDivider({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 0.7, color: color);
+  }
+}
+
+void _showHourFortuneDialog(BuildContext context, AlmanacHourFortune fortune) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final gold = const Color(0xFFB58C58);
+  final lineColor = gold.withValues(
+    alpha: theme.brightness == Brightness.dark ? 0.62 : 0.55,
+  );
+  final cardColor = theme.brightness == Brightness.dark
+      ? Color.alphaBlend(gold.withValues(alpha: 0.04), cs.surface)
+      : Colors.white;
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return Dialog(
+        backgroundColor: cardColor,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 360),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: lineColor, width: 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '${fortune.branch}时 · ${fortune.isAuspicious ? '吉' : '凶'}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _HourDetailLine(label: '时间', value: fortune.range),
+              _HourDetailLine(label: '干支', value: fortune.ganzhi),
+              _HourDetailLine(label: '神煞', value: fortune.deity),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('知道了'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _HourDetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HourDetailLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 44,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: cs.onSurface.withValues(alpha: 0.52),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.35,
+                color: cs.onSurface.withValues(alpha: 0.82),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void _showAlmanacTermDialog(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required Color color,
+}) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final gold = const Color(0xFFB58C58);
+  final lineColor = gold.withValues(
+    alpha: theme.brightness == Brightness.dark ? 0.62 : 0.55,
+  );
+  final cardColor = theme.brightness == Brightness.dark
+      ? Color.alphaBlend(gold.withValues(alpha: 0.04), cs.surface)
+      : Colors.white;
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return Dialog(
+        backgroundColor: cardColor,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: lineColor, width: 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withValues(alpha: 0.72)),
+                  ),
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 16,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.55,
+                  color: cs.onSurface.withValues(alpha: 0.82),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('知道了'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _AlmanacBadge extends StatelessWidget {
@@ -1472,4 +1937,24 @@ String _summaryTerms(String value) {
 
 String _spacedGanzhiLine(String value) {
   return value.replaceFirst('年', '年 ').replaceFirst('月', '月 ').trim();
+}
+
+String _fullDateTitle(DateTime date) {
+  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
+  return '${date.year}年${date.month}月${date.day}日星期${weekNames[date.weekday - 1]}';
+}
+
+List<String> _splitAlmanacTerms(String value) {
+  final terms = value
+      .split(RegExp(r'\s+'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  return terms.isEmpty ? [value] : terms;
+}
+
+double _clampDouble(double value, double min, double max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
 }

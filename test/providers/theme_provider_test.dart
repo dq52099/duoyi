@@ -69,6 +69,8 @@ void main() {
         'unlocked_avatar_frame_ids': ['simple_frame', 'golden_frame'],
         'active_card_skin_id': 'mint_card',
         'unlocked_card_skin_ids': ['plain_card', 'mint_card'],
+        'active_widget_background_id': 'starRail',
+        'active_widget_card_skin_id': 'mint_card',
         'switch_count': 3,
         'updated_at': '2026-06-01T00:00:03Z',
       });
@@ -77,7 +79,33 @@ void main() {
       expect(provider.activeFocusBackdrop.id, 'ocean_focus');
       expect(provider.activeAvatarFrame.id, 'golden_frame');
       expect(provider.activeCardSkin.id, 'mint_card');
+      expect(provider.activeWidgetBackgroundId, 'starRail');
+      expect(provider.activeWidgetCardSkin.id, 'mint_card');
       expect(provider.themeSwitchCount, 3);
+    },
+  );
+
+  test(
+    'widget theme overrides persist and stay limited to unlocked items',
+    () async {
+      final provider = ThemeProvider();
+
+      await provider.unlockBrand('re0');
+      await provider.unlockCardSkin('paper_card');
+      expect(await provider.setWidgetBackgroundBrand('re0'), isTrue);
+      expect(await provider.setWidgetCardSkin('paper_card'), isTrue);
+      expect(await provider.setWidgetBackgroundBrand('genshin'), isFalse);
+      expect(await provider.setWidgetCardSkin('mint_card'), isFalse);
+
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('theme_shop_state')!)
+              as Map<String, dynamic>;
+
+      expect(provider.activeWidgetBackgroundBrand.id, 're0');
+      expect(provider.activeWidgetCardSkin.id, 'paper_card');
+      expect(persisted['activeWidgetBackgroundId'], 're0');
+      expect(persisted['activeWidgetCardSkinId'], 'paper_card');
     },
   );
 

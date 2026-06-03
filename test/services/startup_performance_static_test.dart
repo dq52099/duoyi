@@ -16,8 +16,8 @@ void main() {
       expect(main, contains("'auth profile refresh'"));
       expect(main, contains("'notification quick add'"));
       expect(main, contains("'initial home widget push'"));
-      expect(main, contains('initialDelay: const Duration(seconds: 3)'));
-      expect(main, contains('gap: const Duration(seconds: 2)'));
+      expect(main, contains('initialDelay: const Duration(seconds: 5)'));
+      expect(main, contains('gap: const Duration(seconds: 3)'));
       expect(main, contains('delay: const Duration(seconds: 14)'));
       expect(main, contains('delay: const Duration(seconds: 9)'));
       expect(main, contains('Timer(const Duration(milliseconds: 2200)'));

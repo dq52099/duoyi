@@ -1416,6 +1416,20 @@ class NotificationService extends ChangeNotifier
   }
 
   void notifyAchievementUnlocked(Achievement achievement) {
+    final existingIndex = _history.indexWhere(
+      (item) =>
+          item.relatedId == achievement.id && item.title.startsWith('成就解锁：'),
+    );
+    if (existingIndex >= 0) {
+      if (!_history[existingIndex].isRead) {
+        _history[existingIndex] = _history[existingIndex].copyWith(
+          isRead: true,
+        );
+        unawaited(_saveHistory());
+        notifyListeners();
+      }
+      return;
+    }
     final title = '成就解锁：${achievement.title}';
     final body = achievement.description;
     final notificationId = _ephemeralNotificationId();

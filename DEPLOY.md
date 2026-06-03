@@ -39,6 +39,28 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 首次启动会自动创建 `fingertip_time.db` 与一个 admin 账号。
 
+### 生产后端发布
+
+GitHub Release 只发布 APK / Web 产物，不会自动替换服务器内存里的 FastAPI 进程。生产环境只保留一个多仪后端服务：
+
+```bash
+systemctl status duoyi-backend
+```
+
+该服务固定监听 `127.0.0.1:18015`，OpenResty 将 `6688667.xyz` 的 `/api/` 和 `/ws/` 转发到这个端口。后端代码更新后必须重启该服务，否则进程会继续运行旧代码：
+
+```bash
+./scripts/deploy_backend_prod.sh
+```
+
+脚本会执行并验证：
+
+- 重启 `duoyi-backend`;
+- 本机 `/api/config` 可访问；
+- 公网 `/api/config` 可访问；
+- `/api/theme-shop/apply` 路由已加载，未登录时应返回 401 而不是 404；
+- `/api/focus-rooms/deep_work_room/ranking` 路由已加载，未登录时应返回 401 而不是 404。
+
 ### 管理员登录后可做什么
 
 进入 "我的 → 管理员后台" → 8 个 Tab：

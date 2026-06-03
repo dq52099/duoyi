@@ -117,6 +117,7 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _serverVersionStorageKey = 'sync_server_version';
   static const _collectionHashesStorageKey = 'sync_collection_hashes';
   static const _itemHashesStorageKey = 'sync_item_hashes';
+  static const _pendingLocalChangesStorageKey = 'sync_pending_local_changes';
   static const _preferencesUpdatedAtStorageKey = 'sync_preferences_updated_at';
   static const _preferencesValuesSnapshotStorageKey =
       'sync_preferences_values_snapshot';
@@ -200,6 +201,20 @@ class CloudSyncProvider extends ChangeNotifier {
     );
   }
 
+  Future<void> _persistPendingChanges(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _writePendingChanges(prefs, value);
+  }
+
+  Future<void> _writePendingChanges(SharedPreferences prefs, bool value) async {
+    await prefs.setBool(_pendingLocalChangesStorageKey, value);
+  }
+
+  Future<void> _setPendingChanges(SharedPreferences prefs, bool value) async {
+    _hasPendingChanges = value;
+    await _writePendingChanges(prefs, value);
+  }
+
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
   /// 标记待同步并排队后台自动同步。
   ///
@@ -213,6 +228,7 @@ class CloudSyncProvider extends ChangeNotifier {
       _hasPendingChanges = true;
       _notifySyncStateChanged();
     }
+    unawaited(_persistPendingChanges(true));
     _remotePollTimer?.cancel();
     _scheduleAutoSync();
   }
@@ -779,6 +795,7 @@ class CloudSyncProvider extends ChangeNotifier {
       prefs.getString(_collectionHashesStorageKey),
     );
     _lastItemHashes = _decodeItemHashes(prefs.getString(_itemHashesStorageKey));
+    _hasPendingChanges = prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
     final preferenceChangedKeys = prefs.getStringList(
       _preferencesChangedKeysStorageKey,
     );
@@ -849,8 +866,10 @@ class CloudSyncProvider extends ChangeNotifier {
     _lastError = null;
     _notifySyncStateChanged();
 
+    SharedPreferences? prefs;
+    var shouldRetryLocalChanges = _hasPendingChanges;
     try {
-      final prefs = await SharedPreferences.getInstance();
+      prefs = await SharedPreferences.getInstance();
 
       final syncGeneration = _localChangeGeneration;
       final payload = _buildLocalSyncPayload(prefs);
@@ -858,6 +877,10 @@ class CloudSyncProvider extends ChangeNotifier {
       final localItemHashes = _buildItemHashes(payload);
       final itemDelta = _buildSyncItemDelta(payload, localItemHashes);
       final changedCollections = _changedSyncCollections(payload, localHashes);
+      shouldRetryLocalChanges =
+          shouldRetryLocalChanges ||
+          changedCollections == null ||
+          changedCollections.isNotEmpty;
       Map<String, dynamic> response;
       if (changedCollections == null) {
         response = await client.post('/api/sync', payload);
@@ -873,7 +896,10 @@ class CloudSyncProvider extends ChangeNotifier {
           json.encode(localItemHashes),
         );
         await _persistPreferencesSnapshot(prefs, payload['preferences']);
-        _hasPendingChanges = _localChangeGeneration != syncGeneration;
+        await _setPendingChanges(
+          prefs,
+          _localChangeGeneration != syncGeneration,
+        );
         _lastError = null;
         _isSyncing = false;
         if (_hasPendingChanges) {
@@ -906,15 +932,26 @@ class CloudSyncProvider extends ChangeNotifier {
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
-      _hasPendingChanges =
-          _localChangeGeneration != syncGeneration ||
-          applyResult.hasSkippedLocalChanges;
+      await _setPendingChanges(
+        prefs,
+        _localChangeGeneration != syncGeneration ||
+            applyResult.hasSkippedLocalChanges,
+      );
 
       if (applyResult.changedCollections.isNotEmpty) {
         await onSynced?.call(applyResult.changedCollections);
       }
     } catch (e) {
       _lastError = _userVisibleSyncError(e);
+      if (shouldRetryLocalChanges) {
+        _hasPendingChanges = true;
+        final localPrefs = prefs;
+        if (localPrefs == null) {
+          unawaited(_persistPendingChanges(true));
+        } else {
+          await _writePendingChanges(localPrefs, true);
+        }
+      }
     }
 
     _isSyncing = false;
@@ -969,9 +1006,11 @@ class CloudSyncProvider extends ChangeNotifier {
       final now = DateTime.now();
       _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
       await prefs.setString('sync_last_time', now.toIso8601String());
-      _hasPendingChanges =
-          _localChangeGeneration != syncGeneration ||
-          applyResult.hasSkippedLocalChanges;
+      await _setPendingChanges(
+        prefs,
+        _localChangeGeneration != syncGeneration ||
+            applyResult.hasSkippedLocalChanges,
+      );
       if (applyResult.changedCollections.isNotEmpty) {
         await onSynced?.call(applyResult.changedCollections);
       }

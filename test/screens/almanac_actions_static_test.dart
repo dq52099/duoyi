@@ -15,36 +15,37 @@ void main() {
     expect(source, contains('SingleChildScrollView('));
     expect(source, contains('class _MonthCalendar'));
     expect(source, contains('class _SelectedDateSummaryCard'));
-    expect(source, contains('class _AlmanacDetailSheet'));
-    expect(source, contains('showModalBottomSheet<void>'));
+    expect(source, contains('class _AlmanacDetailPage'));
+    expect(source, contains('class _ClassicalAlmanacCard'));
+    expect(source, contains('Navigator.of(context).push('));
+    expect(source, isNot(contains('showModalBottomSheet<void>')));
     expect(source, isNot(contains('Widget _denseAlmanacCard({')));
     expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
     expect(source, contains('final selectedDate = _date'));
     expect(source, contains('final lunar = almanacDetail.lunarDate'));
-    expect(source, contains('final displayDate = detail.solarDate'));
+    expect(
+      source,
+      contains('final detail = LunarCalendar.almanacDetail(date)'),
+    );
     final calendarIndex = source.indexOf('monthCalendar,');
     final summaryIndex = source.indexOf('summary,');
     final highlightsIndex = source.indexOf('highlights,');
     expect(calendarIndex, greaterThanOrEqualTo(0));
     expect(summaryIndex, greaterThan(calendarIndex));
     expect(highlightsIndex, greaterThan(summaryIndex));
-    expect(
-      source,
-      contains(
-        "'\${displayDate.year}年\${displayDate.month}月\${displayDate.day}日 星期",
-      ),
-    );
-    expect(source, contains("('胎神', detail.fetalGod)"));
-    expect(source, contains("('彭祖', detail.pengZu)"));
-    expect(source, contains("('五行', detail.fiveElements)"));
-    expect(source, contains("('星宿', detail.mansion)"));
-    expect(source, contains("('冲煞', detail.clash)"));
-    expect(
-      source,
-      contains('_hourFortuneRow(context, detail.hourFortuneItems'),
-    );
-    expect(source, contains('Widget _hourFortuneBlock('));
-    expect(source, contains('Wrap('));
+    expect(source, contains("'\${date.year}年\${date.month}月\${date.day}日星期"));
+    expect(source, contains("title: '胎神'"));
+    expect(source, contains('value: detail.fetalGod'));
+    expect(source, contains("title: '彭祖'"));
+    expect(source, contains('value: detail.pengZu'));
+    expect(source, contains("title: '五行'"));
+    expect(source, contains('value: detail.fiveElements'));
+    expect(source, contains("title: '星宿'"));
+    expect(source, contains('value: detail.mansion'));
+    expect(source, contains("title: '冲煞'"));
+    expect(source, contains('value: detail.clash'));
+    expect(source, contains('class _ClassicalHourRow'));
+    expect(source, contains('class _ClassicalHourCell'));
     expect(source, isNot(contains('Widget _aboutCard()')));
     final monthCalendar = source.substring(
       source.indexOf('class _MonthCalendar'),
@@ -54,26 +55,15 @@ void main() {
     expect(monthCalendar, contains('return Column('));
     expect(source, contains('class _MonthNavButton'));
     expect(source, contains('class _SoftAlmanacTag'));
-    expect(source, contains('Widget _detailInfoGrid('));
-    expect(source, contains('Widget _detailInfoTile('));
-    expect(
-      source,
-      contains(
-        'Widget _yijiRow({required String suitable, required String avoid})',
-      ),
-    );
-    expect(
-      source,
-      contains(
-        "Widget _yijiRow({required String suitable, required String avoid}) {\n"
-        "    return Row(",
-      ),
-    );
+    expect(source, contains('class _ClassicalInfoTable'));
+    expect(source, contains('class _ClassicalInfoCell'));
+    expect(source, contains('class _VerticalYijiPanel'));
+    expect(source, contains('class _VerticalYijiColumn'));
     expect(source, contains("title: '宜'"));
     expect(source, contains('body: suitable'));
     expect(source, contains("title: '忌'"));
     expect(source, contains('body: avoid'));
-    expect(source, contains('const SizedBox(width: 10)'));
+    expect(source, contains('const SizedBox(width: 7)'));
     expect(
       source,
       isNot(

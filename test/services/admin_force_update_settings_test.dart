@@ -130,8 +130,8 @@ void main() {
       contains('Future<void> _runStartupIdleQueue('),
       reason: '启动更新策略检查应进入首帧后的 idle 队列，避免冷启动阻塞到无法滑动。',
     );
-    expect(mainApp, contains('initialDelay: const Duration(seconds: 3)'));
-    expect(mainApp, contains('gap: const Duration(seconds: 2)'));
+    expect(mainApp, contains('initialDelay: const Duration(seconds: 5)'));
+    expect(mainApp, contains('gap: const Duration(seconds: 3)'));
     expect(
       mainApp,
       isNot(contains('Future<void>.delayed(const Duration(seconds: 6), ()')),

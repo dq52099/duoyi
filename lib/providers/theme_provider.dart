@@ -67,6 +67,8 @@ class ThemeProvider extends ChangeNotifier {
   static const defaultFocusBackdropId = 'classic_focus';
   static const defaultAvatarFrameId = 'simple_frame';
   static const defaultCardSkinId = 'plain_card';
+  static const widgetFollowThemeId = 'follow_theme';
+  static const widgetFollowCardSkinId = 'follow_card_skin';
   static const focusBackdropRewards = <FocusBackdropReward>[
     FocusBackdropReward(
       id: defaultFocusBackdropId,
@@ -187,6 +189,8 @@ class ThemeProvider extends ChangeNotifier {
   String _activeFocusBackdropId = defaultFocusBackdropId;
   String _activeAvatarFrameId = defaultAvatarFrameId;
   String _activeCardSkinId = defaultCardSkinId;
+  String _activeWidgetBackgroundId = widgetFollowThemeId;
+  String _activeWidgetCardSkinId = widgetFollowCardSkinId;
   String _shopStateUpdatedAt = '';
   bool _serverConfirmedChangePending = false;
 
@@ -204,6 +208,16 @@ class ThemeProvider extends ChangeNotifier {
   AvatarFrameReward get activeAvatarFrame =>
       avatarFrameById(_activeAvatarFrameId);
   CardSkinReward get activeCardSkin => cardSkinById(_activeCardSkinId);
+  String get activeWidgetBackgroundId => _activeWidgetBackgroundId;
+  String get activeWidgetCardSkinId => _activeWidgetCardSkinId;
+  AppBrand get activeWidgetBackgroundBrand =>
+      _activeWidgetBackgroundId == widgetFollowThemeId
+      ? _brand
+      : AppBrands.byId(_activeWidgetBackgroundId);
+  CardSkinReward get activeWidgetCardSkin =>
+      _activeWidgetCardSkinId == widgetFollowCardSkinId
+      ? activeCardSkin
+      : cardSkinById(_activeWidgetCardSkinId);
   String get shopStateUpdatedAt => _shopStateUpdatedAt;
   Map<String, dynamic> get shopStateSnapshot => _shopStateJson();
 
@@ -390,6 +404,32 @@ class ThemeProvider extends ChangeNotifier {
     _activeCardSkinId = isCardSkinUnlocked(activeCardSkinId ?? '')
         ? activeCardSkinId!
         : defaultCardSkinId;
+    final activeWidgetBackgroundId = _stringFromAny(shopState, const [
+      'activeWidgetBackgroundId',
+      'active_widget_background_id',
+      'widgetBackgroundBrandId',
+      'widget_background_brand_id',
+    ]);
+    if (activeWidgetBackgroundId != null) {
+      _activeWidgetBackgroundId = _normalizeWidgetBackgroundId(
+        activeWidgetBackgroundId,
+      );
+    } else if (includeLegacyFallback) {
+      _activeWidgetBackgroundId = widgetFollowThemeId;
+    }
+    final activeWidgetCardSkinId = _stringFromAny(shopState, const [
+      'activeWidgetCardSkinId',
+      'active_widget_card_skin_id',
+      'widgetCardSkinId',
+      'widget_card_skin_id',
+    ]);
+    if (activeWidgetCardSkinId != null) {
+      _activeWidgetCardSkinId = _normalizeWidgetCardSkinId(
+        activeWidgetCardSkinId,
+      );
+    } else if (includeLegacyFallback) {
+      _activeWidgetCardSkinId = widgetFollowCardSkinId;
+    }
     return before != jsonEncode(_shopStateJson());
   }
 
@@ -456,6 +496,32 @@ class ThemeProvider extends ChangeNotifier {
     final nextId = cardSkinById(id).id;
     if (_activeCardSkinId == nextId) return true;
     _activeCardSkinId = nextId;
+    final prefs = await SharedPreferences.getInstance();
+    await _saveShopState(prefs);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setWidgetBackgroundBrand(String id) async {
+    if (id != widgetFollowThemeId && !isBrandUnlocked(id)) {
+      return false;
+    }
+    final nextId = _normalizeWidgetBackgroundId(id);
+    if (_activeWidgetBackgroundId == nextId) return true;
+    _activeWidgetBackgroundId = nextId;
+    final prefs = await SharedPreferences.getInstance();
+    await _saveShopState(prefs);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setWidgetCardSkin(String id) async {
+    if (id != widgetFollowCardSkinId && !isCardSkinUnlocked(id)) {
+      return false;
+    }
+    final nextId = _normalizeWidgetCardSkinId(id);
+    if (_activeWidgetCardSkinId == nextId) return true;
+    _activeWidgetCardSkinId = nextId;
     final prefs = await SharedPreferences.getInstance();
     await _saveShopState(prefs);
     notifyListeners();
@@ -553,6 +619,18 @@ class ThemeProvider extends ChangeNotifier {
     return raw.map((id) => id.toString());
   }
 
+  String _normalizeWidgetBackgroundId(String id) {
+    if (id == widgetFollowThemeId) return widgetFollowThemeId;
+    final brand = AppBrands.byId(id);
+    return isBrandUnlocked(brand.id) ? brand.id : widgetFollowThemeId;
+  }
+
+  String _normalizeWidgetCardSkinId(String id) {
+    if (id == widgetFollowCardSkinId) return widgetFollowCardSkinId;
+    final skin = cardSkinById(id);
+    return isCardSkinUnlocked(skin.id) ? skin.id : widgetFollowCardSkinId;
+  }
+
   Future<void> _saveShopState(
     SharedPreferences prefs, {
     bool touch = true,
@@ -575,6 +653,8 @@ class ThemeProvider extends ChangeNotifier {
     'unlockedAvatarFrameIds': _unlockedAvatarFrameIds.toList(growable: false),
     'activeCardSkinId': _activeCardSkinId,
     'unlockedCardSkinIds': _unlockedCardSkinIds.toList(growable: false),
+    'activeWidgetBackgroundId': _activeWidgetBackgroundId,
+    'activeWidgetCardSkinId': _activeWidgetCardSkinId,
     if (_shopStateUpdatedAt.isNotEmpty) 'updatedAt': _shopStateUpdatedAt,
   };
 }

@@ -29,7 +29,7 @@ void main() {
       expect(find.textContaining('丙午马年 癸巳月 丙午日'), findsOneWidget);
       expect(find.text('宜'), findsOneWidget);
       expect(find.text('忌'), findsOneWidget);
-      expect(find.text('2026年6月1日 星期一'), findsNothing);
+      expect(find.text('2026年6月1日星期一'), findsNothing);
       expect(find.text('胎神'), findsNothing);
       expect(find.text('彭祖'), findsNothing);
       expect(find.text('五行'), findsNothing);
@@ -37,16 +37,16 @@ void main() {
       expect(find.text('冲煞'), findsNothing);
       expect(find.text('时辰吉凶'), findsNothing);
 
-      await tester.tap(find.text('四月十六'));
+      await tester.tap(find.text('1').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('2026年6月1日 星期一'), findsOneWidget);
+      expect(find.text('2026年6月1日星期一'), findsOneWidget);
       expect(find.text('胎神'), findsOneWidget);
       expect(find.text('彭祖'), findsOneWidget);
       expect(find.text('五行'), findsOneWidget);
       expect(find.text('星宿'), findsOneWidget);
       expect(find.text('冲煞'), findsOneWidget);
-      expect(find.text('时辰吉凶'), findsOneWidget);
+      expect(find.text('时辰吉凶'), findsNothing);
       final suitableRect = tester.getRect(find.text('宜').last);
       final avoidRect = tester.getRect(find.text('忌').last);
       expect(
@@ -92,13 +92,13 @@ void main() {
     expect(find.text('本月重点日期'), findsOneWidget);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('四月十六'));
+    await tester.tap(find.text('1').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('2026年6月1日 星期一'), findsOneWidget);
+    expect(find.text('2026年6月1日星期一'), findsOneWidget);
     expect(find.text('胎神'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('关闭'));
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
 
     expect(find.text('四月十六'), findsOneWidget);
@@ -117,13 +117,24 @@ void main() {
     expect(find.textContaining('丙午马年 癸巳月 乙巳日'), findsOneWidget);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('四月十五'));
+    await tester.tap(find.text('31').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('2026年5月31日 星期日'), findsOneWidget);
+    expect(find.text('2026年5月31日星期日'), findsOneWidget);
     expect(find.textContaining('丙午马年 癸巳月 乙巳日'), findsWidgets);
+
+    await tester.tap(find.text('宜').last);
+    await tester.pumpAndSettle();
     expect(find.textContaining('祭祀 解除 断蚁 会亲友 馀事勿取'), findsWidgets);
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('忌').last);
+    await tester.pumpAndSettle();
     expect(find.textContaining('嫁娶 安葬'), findsWidgets);
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('碓磨床房内东'), findsOneWidget);
     expect(find.textContaining('蛇日冲猪（己亥）煞东'), findsOneWidget);
     expect(find.textContaining('实时天气'), findsNothing);
@@ -141,14 +152,25 @@ void main() {
     expect(find.textContaining('丙午马年 癸巳月 戊申日'), findsOneWidget);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('四月十八'));
+    await tester.tap(find.text('3').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('2026年6月3日 星期三'), findsOneWidget);
+    expect(find.text('2026年6月3日星期三'), findsOneWidget);
     expect(find.textContaining('四月十八'), findsWidgets);
     expect(find.textContaining('丙午马年 癸巳月 戊申日'), findsWidgets);
+
+    await tester.tap(find.text('宜').last);
+    await tester.pumpAndSettle();
     expect(find.textContaining('祭祀 沐浴 移徙 破土 安葬 扫舍 平治道涂'), findsOneWidget);
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('忌').last);
+    await tester.pumpAndSettle();
     expect(find.textContaining('祈福 嫁娶 入宅 安床 作灶'), findsWidgets);
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('房床炉房内中'), findsOneWidget);
     expect(find.textContaining('戊不受田，田主不祥；申不安床，鬼祟入房'), findsOneWidget);
     expect(find.textContaining('大驿土平执位'), findsOneWidget);
@@ -172,12 +194,20 @@ void main() {
       '戌',
       '亥',
     ]) {
-      expect(find.text('$branch时'), findsOneWidget);
+      expect(find.text(branch), findsOneWidget);
     }
+    expect(find.text('23:00-00:59'), findsNothing);
+    expect(find.text('21:00-22:59'), findsNothing);
+
+    await tester.ensureVisible(find.text('子'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('子'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('子时 · 吉'), findsOneWidget);
     expect(find.text('23:00-00:59'), findsOneWidget);
-    expect(find.text('21:00-22:59'), findsOneWidget);
-    expect(find.text('壬子 青龙'), findsOneWidget);
-    expect(find.text('癸亥 勾陈'), findsOneWidget);
+    expect(find.text('壬子'), findsOneWidget);
+    expect(find.text('青龙'), findsOneWidget);
   });
 
   testWidgets('almanac shows holiday and user date month highlights', (
@@ -227,22 +257,19 @@ void main() {
     expect(find.text('生日 · 妈妈生日'), findsOneWidget);
   });
 
-  test('almanac suitable and avoid sections stay in one row', () {
+  test('almanac detail uses vertical suitable and avoid columns', () {
     final source = File('lib/screens/almanac_screen.dart').readAsStringSync();
-    final start = source.indexOf('Widget _yijiRow');
-    final end = source.indexOf(
-      'List<_MonthHighlight> _buildMonthHighlights',
-      start,
-    );
+    final start = source.indexOf('class _VerticalYijiPanel');
+    final end = source.indexOf('class _DateHeroPanel', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
-    final method = source.substring(start, end);
+    final section = source.substring(start, end);
 
-    expect(method, contains('return Row('));
-    expect(method, contains("title: '宜'"));
-    expect(method, contains("title: '忌'"));
-    expect(method, contains('const SizedBox(width: 10)'));
-    expect(method, isNot(contains('return Column(')));
+    expect(section, contains('return Padding('));
+    expect(section, contains('Row('));
+    expect(section, contains("title: '宜'"));
+    expect(section, contains("title: '忌'"));
+    expect(section, contains('class _VerticalYijiColumn'));
   });
 
   test(
@@ -258,7 +285,8 @@ void main() {
       expect(source, contains('final lunar = almanacDetail.lunarDate'));
       expect(source, contains('class _MonthCalendar'));
       expect(source, contains('class _SelectedDateSummaryCard'));
-      expect(source, contains('class _AlmanacDetailSheet'));
+      expect(source, contains('class _AlmanacDetailPage'));
+      expect(source, contains('class _ClassicalAlmanacCard'));
       final monthCalendar = source.substring(
         source.indexOf('class _MonthCalendar'),
         source.indexOf('class _MonthNavButton'),
@@ -266,20 +294,21 @@ void main() {
       expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
       expect(source, contains('class _MonthNavButton'));
       expect(source, contains('class _SoftAlmanacTag'));
-      expect(source, contains('Widget _detailInfoGrid('));
-      expect(source, contains('showModalBottomSheet<void>'));
-      expect(source, contains("('胎神', detail.fetalGod)"));
-      expect(source, contains("('彭祖', detail.pengZu)"));
-      expect(source, contains("('五行', detail.fiveElements)"));
-      expect(source, contains("('星宿', detail.mansion)"));
-      expect(source, contains("('冲煞', detail.clash)"));
-      expect(
-        source,
-        contains('_hourFortuneRow(context, detail.hourFortuneItems'),
-      );
-      expect(source, contains('Wrap('));
-      expect(source, contains("'时辰吉凶'"));
-      expect(source, contains('Widget _yijiRow'));
+      expect(source, contains('Navigator.of(context).push('));
+      expect(source, isNot(contains('showModalBottomSheet<void>')));
+      expect(source, contains("title: '胎神'"));
+      expect(source, contains('value: detail.fetalGod'));
+      expect(source, contains("title: '彭祖'"));
+      expect(source, contains('value: detail.pengZu'));
+      expect(source, contains("title: '五行'"));
+      expect(source, contains('value: detail.fiveElements'));
+      expect(source, contains("title: '星宿'"));
+      expect(source, contains('value: detail.mansion'));
+      expect(source, contains("title: '冲煞'"));
+      expect(source, contains('value: detail.clash'));
+      expect(source, contains('class _ClassicalInfoTable'));
+      expect(source, contains('class _ClassicalHourRow'));
+      expect(source, contains('class _VerticalYijiPanel'));
       expect(source, contains('class _MonthHighlightsCard'));
       expect(source, contains("'本月重点日期'"));
       expect(source, contains("'本月暂无重点日期'"));

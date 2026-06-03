@@ -20,4 +20,19 @@ void main() {
     expect(main, contains('ScaffoldMessenger.maybeOf(context)'));
     expect(main, contains('解锁成就：'));
   });
+
+  test('成就通知重启后不会重复进入通知栏和小红点', () {
+    final provider = File(
+      'lib/providers/achievement_provider.dart',
+    ).readAsStringSync();
+    final notifications = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+
+    expect(provider, contains('duoyi_achievements_notified'));
+    expect(provider, contains('await loadFromStorage();'));
+    expect(provider, contains('..addAll(_unlockedAt.keys)'));
+    expect(notifications, contains('relatedId == achievement.id'));
+    expect(notifications, contains("item.title.startsWith('成就解锁：')"));
+  });
 }

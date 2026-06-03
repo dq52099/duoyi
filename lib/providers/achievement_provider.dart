@@ -51,6 +51,7 @@ class RewardLedgerEntry {
 class AchievementProvider extends ChangeNotifier {
   static const _storageKey = 'duoyi_achievements_unlocked';
   static const _rewardStorageKey = 'duoyi_virtual_rewards';
+  static const _notifiedStorageKey = 'duoyi_achievements_notified';
 
   final AchievementEngine _engine;
   final DomainEventBus _bus;
@@ -60,6 +61,7 @@ class AchievementProvider extends ChangeNotifier {
 
   final Map<String, DateTime> _unlockedAt = {};
   final List<Achievement> _pendingUnlockedFeedback = <Achievement>[];
+  final Set<String> _notifiedAchievementIds = <String>{};
   final Set<String> _rewardGrantIds = <String>{};
   final List<RewardLedgerEntry> _rewardLedger = <RewardLedgerEntry>[];
   List<AchievementSnapshot> _snapshots = const <AchievementSnapshot>[];
@@ -69,6 +71,8 @@ class AchievementProvider extends ChangeNotifier {
   int _persistedRevision = 0;
   String _rewardsUpdatedAt = '';
   bool _serverConfirmedRewardsChangePending = false;
+  bool _storageLoaded = false;
+  Future<void>? _storageLoadFuture;
 
   AchievementProvider({AchievementEngine? engine, DomainEventBus? bus})
     : _engine = engine ?? AchievementEngine(),
@@ -158,6 +162,18 @@ class AchievementProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final existing = _storageLoadFuture;
+    if (existing != null) return existing;
+    final future = _loadFromStorageNow();
+    _storageLoadFuture = future;
+    await future.whenComplete(() {
+      if (_storageLoadFuture == future) {
+        _storageLoadFuture = null;
+      }
+    });
+  }
+
+  Future<void> _loadFromStorageNow() async {
     final prefs = await SharedPreferences.getInstance();
     final beforeUnlocked = jsonEncode(
       _unlockedAt.map(
@@ -175,6 +191,10 @@ class AchievementProvider extends ChangeNotifier {
         }
       }
     }
+    _notifiedAchievementIds
+      ..clear()
+      ..addAll(prefs.getStringList(_notifiedStorageKey) ?? const <String>[])
+      ..addAll(_unlockedAt.keys);
     final unlockedChanged =
         beforeUnlocked !=
         jsonEncode(
@@ -183,12 +203,16 @@ class AchievementProvider extends ChangeNotifier {
           ),
         );
     final rewardsChanged = _loadRewardsFromPrefs(prefs);
+    _storageLoaded = true;
     _subscribe();
     _rebuildSnapshots(notify: false);
     if (unlockedChanged || rewardsChanged) notifyListeners();
   }
 
-  void updateContext(AchievementContext context) {
+  Future<void> updateContext(AchievementContext context) async {
+    if (!_storageLoaded) {
+      await loadFromStorage();
+    }
     _context = context;
     _rebuildSnapshots();
   }
@@ -274,13 +298,19 @@ class AchievementProvider extends ChangeNotifier {
       }
     }
 
+    final achievementsToNotify = newlyUnlocked
+        .where(
+          (achievement) => !_notifiedAchievementIds.contains(achievement.id),
+        )
+        .toList(growable: false);
+
     if (newlyUnlocked.isNotEmpty || shouldSaveRewards) {
       unawaited(
         _persistChangesThenNotify(
           saveAchievements: newlyUnlocked.isNotEmpty,
           saveRewards: shouldSaveRewards,
           notify: notify,
-          achievementsToNotify: newlyUnlocked,
+          achievementsToNotify: achievementsToNotify,
         ),
       );
       return;
@@ -305,6 +335,10 @@ class AchievementProvider extends ChangeNotifier {
       _persistedRevision++;
     }
     if (achievementsToNotify.isNotEmpty) {
+      _notifiedAchievementIds.addAll(
+        achievementsToNotify.map((achievement) => achievement.id),
+      );
+      await _saveNotifiedAchievements();
       for (final achievement in achievementsToNotify) {
         _notificationService?.notifyAchievementUnlocked(achievement);
       }
@@ -406,6 +440,14 @@ class AchievementProvider extends ChangeNotifier {
         'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
         'updatedAt': _rewardsUpdatedAt,
       }),
+    );
+  }
+
+  Future<void> _saveNotifiedAchievements() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _notifiedStorageKey,
+      _notifiedAchievementIds.toList(growable: false)..sort(),
     );
   }
 

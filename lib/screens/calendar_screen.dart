@@ -890,31 +890,40 @@ class _CalendarScreenState extends State<CalendarScreen>
                           'calendar_month_global_scroll_view',
                         ),
                         primary: false,
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
                         children: [
-                          SizedBox(
-                            key: const ValueKey('calendar_fixed_month_grid'),
-                            height: monthGridHeight,
-                            child: CalendarMonthGrid(
-                              focusedMonth: _focusedMonth,
-                              selectedDay: _selectedDay,
-                              dateEventTypes: dateTypes,
-                              dateEventCounts: dateCounts,
-                              showLunar: showLunar,
-                              onDaySelected: (d) => setState(() {
-                                _selectedDay = d;
-                                _focusedMonth = DateTime(d.year, d.month);
-                              }),
+                          AppSurfaceCard(
+                            key: const ValueKey(
+                              'calendar_month_grid_skin_card',
+                            ),
+                            padding: EdgeInsets.zero,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              key: const ValueKey('calendar_fixed_month_grid'),
+                              height: monthGridHeight,
+                              child: CalendarMonthGrid(
+                                focusedMonth: _focusedMonth,
+                                selectedDay: _selectedDay,
+                                dateEventTypes: dateTypes,
+                                dateEventCounts: dateCounts,
+                                showLunar: showLunar,
+                                onDaySelected: (d) => setState(() {
+                                  _selectedDay = d;
+                                  _focusedMonth = DateTime(d.year, d.month);
+                                }),
+                              ),
                             ),
                           ),
                           Divider(
-                            height: 1,
+                            height: 8,
                             thickness: 0.5,
                             color: Theme.of(context).colorScheme.outlineVariant
                                 .withValues(alpha: 0.18),
                           ),
-                          ColoredBox(
+                          AppSurfaceCard(
                             key: const ValueKey('calendar_month_detail_agenda'),
-                            color: routeBackground.withValues(alpha: 0.72),
+                            padding: EdgeInsets.zero,
+                            borderRadius: BorderRadius.circular(12),
                             child: CalendarDayAgenda(
                               date: _selectedDay,
                               calendarProvider: calendarProvider,
@@ -944,12 +953,21 @@ class _CalendarScreenState extends State<CalendarScreen>
                   workspaceId: effectiveWorkspaceId,
                 ),
                 // Day
-                CalendarDayAgenda(
-                  date: _selectedDay,
-                  calendarProvider: calendarProvider,
-                  activeTypes: _activeTypes,
-                  projectKey: effectiveProjectKey,
-                  workspaceId: effectiveWorkspaceId,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                  child: AppSurfaceCard(
+                    key: const ValueKey('calendar_day_agenda_skin_card'),
+                    padding: EdgeInsets.zero,
+                    borderRadius: BorderRadius.circular(12),
+                    child: CalendarDayAgenda(
+                      date: _selectedDay,
+                      calendarProvider: calendarProvider,
+                      activeTypes: _activeTypes,
+                      projectKey: effectiveProjectKey,
+                      workspaceId: effectiveWorkspaceId,
+                      horizontalPadding: 8,
+                    ),
+                  ),
                 ),
                 // Three-day
                 _CalendarThreeDayView(
@@ -1878,17 +1896,13 @@ class _ThreeDayLane extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
+        AppSurfaceCard(
+          key: ValueKey(
+            'calendar_three_day_lane_skin_${date.toIso8601String()}',
+          ),
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.10),
-              width: 0.45,
-            ),
-          ),
+          borderRadius: BorderRadius.circular(12),
           child: Row(
             children: [
               Icon(Icons.view_column_outlined, size: 16, color: cs.primary),
@@ -1911,13 +1925,18 @@ class _ThreeDayLane extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: CalendarDayAgenda(
-            date: date,
-            calendarProvider: calendarProvider,
-            activeTypes: activeTypes,
-            projectKey: projectKey,
-            workspaceId: workspaceId,
-            horizontalPadding: 8,
+          child: AppSurfaceCard(
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.circular(12),
+            child: CalendarDayAgenda(
+              date: date,
+              calendarProvider: calendarProvider,
+              activeTypes: activeTypes,
+              projectKey: projectKey,
+              workspaceId: workspaceId,
+              horizontalPadding: 8,
+            ),
           ),
         ),
       ],
@@ -1985,22 +2004,18 @@ class _CalendarYearOverview extends StatelessWidget {
         );
         final selectedText = cs.onSurface;
 
-        return InkWell(
+        return AppSurfaceCard(
+          padding: EdgeInsets.zero,
           borderRadius: BorderRadius.circular(16),
+          color: isSelected ? selectedFill : null,
+          border: Border.all(
+            color: isSelected
+                ? cs.primary.withValues(alpha: 0.34)
+                : cs.outlineVariant.withValues(alpha: 0.10),
+            width: 0.45,
+          ),
           onTap: () => onMonthTap(month),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? selectedFill
-                  : cs.surfaceContainerHighest.withValues(alpha: 0.36),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected
-                    ? cs.primary
-                    : cs.outlineVariant.withValues(alpha: 0.10),
-                width: 0.45,
-              ),
-            ),
+          child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -18,6 +18,7 @@ import '../services/ai_service.dart';
 import '../services/app_update_installer.dart';
 import '../services/app_update_service.dart';
 import '../widgets/brand_background.dart';
+import '../widgets/cached_avatar_image.dart';
 import '../widgets/stats_overview_cards.dart';
 import '../widgets/surface_components.dart';
 import 'theme_picker_screen.dart';
@@ -1242,12 +1243,11 @@ class _ProfileAvatar extends StatelessWidget {
       backgroundColor: cs.primary,
       child: networkUrl != null
           ? ClipOval(
-              child: Image.network(
-                networkUrl,
+              child: CachedAvatarImage(
+                url: networkUrl,
                 width: radius * 2,
                 height: radius * 2,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _ProfileAvatarLetter(
+                fallbackBuilder: (_) => _ProfileAvatarLetter(
                   letter: letter,
                   radius: radius,
                   color: cs.onPrimary,
@@ -1392,10 +1392,12 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final networkUrl = _networkAvatarUrl(value);
     final localPath = _localAvatarPath(value);
     final image = networkUrl != null
-        ? Image.network(
-            networkUrl,
+        ? CachedAvatarImage(
+            url: networkUrl,
+            width: double.infinity,
+            height: double.infinity,
             fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => _fallbackAvatar(context),
+            fallbackBuilder: _fallbackAvatar,
           )
         : localPath != null
         ? Image.file(

@@ -570,6 +570,10 @@ class ReminderRingtoneService : Service() {
                 "bell" -> R.raw.duoyi_bell
                 "morning" -> R.raw.duoyi_morning
                 "pearl" -> R.raw.duoyi_pearl
+                "cedar" -> R.raw.duoyi_cedar
+                "moon" -> R.raw.duoyi_moon
+                "cloud" -> R.raw.duoyi_cloud
+                "sakura" -> R.raw.duoyi_sakura
                 "beep" -> R.raw.duoyi_beep
                 "classic" -> R.raw.duoyi_classic
                 "alarm" -> R.raw.duoyi_alarm
@@ -600,6 +604,10 @@ class ReminderRingtoneService : Service() {
                 "bell",
                 "morning",
                 "pearl",
+                "cedar",
+                "moon",
+                "cloud",
+                "sakura",
                 "beep",
                 "classic",
                 "alarm" -> value

@@ -421,37 +421,47 @@ class HomeWidgetService {
 
 class HomeWidgetThemePayload {
   final String brandId;
+  final String cardSkinId;
   final bool dark;
   final Color primary;
   final Color background;
   final Color surface;
   final Color navBackground;
+  final Color border;
   final Color text;
   final Color mutedText;
   final Color onPrimary;
   final Color accentStart;
   final Color accentEnd;
+  final int cornerRadiusDp;
+  final int controlRadiusDp;
+  final int borderWidthDp;
 
   const HomeWidgetThemePayload({
     required this.brandId,
+    required this.cardSkinId,
     required this.dark,
     required this.primary,
     required this.background,
     required this.surface,
     required this.navBackground,
+    required this.border,
     required this.text,
     required this.mutedText,
     required this.onPrimary,
     required this.accentStart,
     required this.accentEnd,
+    required this.cornerRadiusDp,
+    required this.controlRadiusDp,
+    required this.borderWidthDp,
   });
 
   factory HomeWidgetThemePayload.fromThemeProvider(ThemeProvider provider) {
-    final brand = provider.brand;
+    final brand = provider.activeWidgetBackgroundBrand;
     final theme = brand.theme;
     final cs = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final cardSkin = provider.activeCardSkin;
+    final cardSkin = provider.activeWidgetCardSkin;
     final usesCardSkin = cardSkin.id != ThemeProvider.defaultCardSkinId;
     final accentStart = usesCardSkin ? cardSkin.colors.first : cs.primary;
     final accentEnd = usesCardSkin ? cardSkin.colors.last : cs.secondary;
@@ -471,23 +481,39 @@ class HomeWidgetThemePayload {
       cs.primary.withValues(alpha: dark ? 0.20 : 0.10),
       surface,
     );
+    final border = Color.alphaBlend(
+      accentStart.withValues(alpha: usesCardSkin ? (dark ? 0.50 : 0.34) : 0.18),
+      cs.outlineVariant,
+    );
+    final cornerRadiusDp = switch (cardSkin.id) {
+      'paper_card' => 14,
+      'mint_card' => 15,
+      'starlight_card' => 16,
+      _ => 13,
+    };
     return HomeWidgetThemePayload(
       brandId: brand.id,
+      cardSkinId: cardSkin.id,
       dark: dark,
       primary: cs.primary,
       background: background,
       surface: surface,
       navBackground: navBackground,
+      border: border,
       text: cs.onSurface,
       mutedText: cs.onSurfaceVariant,
       onPrimary: cs.onPrimary,
       accentStart: accentStart,
       accentEnd: accentEnd,
+      cornerRadiusDp: cornerRadiusDp,
+      controlRadiusDp: 8,
+      borderWidthDp: usesCardSkin ? 1 : 0,
     );
   }
 
   List<Future<bool?>> saveOperations() => [
     HomeWidget.saveWidgetData<String>('widget_theme_brand_id', brandId),
+    HomeWidget.saveWidgetData<String>('widget_theme_card_skin_id', cardSkinId),
     HomeWidget.saveWidgetData<bool>('widget_theme_dark', dark),
     HomeWidget.saveWidgetData<String>('widget_theme_primary', _hex(primary)),
     HomeWidget.saveWidgetData<String>(
@@ -499,6 +525,7 @@ class HomeWidgetThemePayload {
       'widget_theme_nav_background',
       _hex(navBackground),
     ),
+    HomeWidget.saveWidgetData<String>('widget_theme_border', _hex(border)),
     HomeWidget.saveWidgetData<String>('widget_theme_text', _hex(text)),
     HomeWidget.saveWidgetData<String>(
       'widget_theme_muted_text',
@@ -516,6 +543,15 @@ class HomeWidgetThemePayload {
       'widget_theme_accent_end',
       _hex(accentEnd),
     ),
+    HomeWidget.saveWidgetData<int>(
+      'widget_theme_corner_radius_dp',
+      cornerRadiusDp,
+    ),
+    HomeWidget.saveWidgetData<int>(
+      'widget_theme_control_radius_dp',
+      controlRadiusDp,
+    ),
+    HomeWidget.saveWidgetData<int>('widget_theme_border_width_dp', borderWidthDp),
   ];
 
   static String _hex(Color color) =>

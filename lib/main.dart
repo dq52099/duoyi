@@ -218,6 +218,23 @@ Future<void> _runStartupIdleQueue(
   }
 }
 
+Future<void> _runStartupStoragePhase(
+  String label,
+  List<Future<void> Function()> tasks, {
+  int batchSize = 1,
+}) {
+  final startedAt = DateTime.now();
+  return _startupGuard(
+    label,
+    () async {
+      await _runSyncReloadTasksInBatches(tasks, batchSize: batchSize);
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      debugPrint('[startup] $label completed in ${elapsedMs}ms');
+    },
+    timeout: const Duration(seconds: 18),
+  );
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -343,46 +360,20 @@ void main() async {
   DeepLinkService.onSharedText = handleSharedText;
   await _startupGuard('deep links', () => DeepLinkService.init());
 
-  await Future.wait([
-    _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
-    _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
-    _startupGuard('pomodoro storage', () => pomodoroProvider.loadFromStorage()),
-    _startupGuard('theme storage', () => themeProvider.loadFromStorage()),
-    _startupGuard(
-      'cloud sync storage',
-      () => cloudSyncProvider.loadFromStorage(),
-    ),
-    _startupGuard('user storage', () => userProvider.loadFromStorage()),
-    _startupGuard(
-      'countdown storage',
-      () => countdownProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'anniversary storage',
-      () => anniversaryProvider.loadFromStorage(),
-    ),
-    _startupGuard('diary storage', () => diaryProvider.loadFromStorage()),
-    _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
-    _startupGuard('course storage', () => courseProvider.loadFromStorage()),
-    _startupGuard('app lock storage', () => appLockProvider.loadFromStorage()),
-    _startupGuard(
-      'preferences storage',
-      () => preferencesProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'quick capture templates storage',
-      () => quickCaptureTemplateProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'time audit storage',
-      () => timeAuditProvider.loadFromStorage(),
-    ),
-    _startupGuard(
-      'auth storage',
+  await cloudSyncProvider.suppressDirtyMarkWhile(
+    () => _runStartupStoragePhase('critical local storage', [
+      () => themeProvider.loadFromStorage(),
       () => authProvider.loadFromStorage(refreshServerConfig: false),
-    ),
-    _startupGuard('locale storage', () => localeProvider.loadFromStorage()),
-  ]);
+      () => preferencesProvider.loadFromStorage(),
+      () => appLockProvider.loadFromStorage(),
+      () => localeProvider.loadFromStorage(),
+      () => userProvider.loadFromStorage(),
+      () => cloudSyncProvider.loadFromStorage(),
+      () => todoProvider.loadFromStorage(),
+      () => habitProvider.loadFromStorage(),
+      () => pomodoroProvider.loadFromStorage(),
+    ]),
+  );
 
   Future<void>? deferredLocalStorageStartup;
   Future<void> ensureDeferredLocalStorageStartup() {
@@ -390,6 +381,27 @@ void main() async {
     if (existing != null) return existing;
     deferredLocalStorageStartup = cloudSyncProvider.suppressDirtyMarkWhile(
       () => _runSyncReloadTasksInBatches([
+        () => _startupGuard(
+          'countdown storage',
+          () => countdownProvider.loadFromStorage(),
+        ),
+        () => _startupGuard(
+          'anniversary storage',
+          () => anniversaryProvider.loadFromStorage(),
+        ),
+        () =>
+            _startupGuard('diary storage', () => diaryProvider.loadFromStorage()),
+        () => _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
+        () =>
+            _startupGuard('course storage', () => courseProvider.loadFromStorage()),
+        () => _startupGuard(
+          'quick capture templates storage',
+          () => quickCaptureTemplateProvider.loadFromStorage(),
+        ),
+        () => _startupGuard(
+          'time audit storage',
+          () => timeAuditProvider.loadFromStorage(),
+        ),
         () =>
             _startupGuard('note storage', () => noteProvider.loadFromStorage()),
         () => _startupGuard(
@@ -695,7 +707,11 @@ void main() async {
   String dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  void refreshAchievements() {
+  Timer? achievementRefreshDebounce;
+  var achievementRefreshInFlight = false;
+  var achievementRefreshQueued = false;
+
+  Future<void> refreshAchievementsNow() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
@@ -757,7 +773,7 @@ void main() async {
       return inWeek;
     }).length;
 
-    achievementProvider.updateContext(
+    await achievementProvider.updateContext(
       AchievementContext(
         totalTodos: todoProvider.todos.length,
         completedTodos: todoProvider.completedTodos.length,
@@ -786,6 +802,35 @@ void main() async {
         weeklyActiveDays: activeDays.length,
       ),
     );
+  }
+
+  Future<void> runQueuedAchievementRefresh() async {
+    if (achievementRefreshInFlight) {
+      achievementRefreshQueued = true;
+      return;
+    }
+    achievementRefreshInFlight = true;
+    try {
+      await refreshAchievementsNow();
+    } catch (e, st) {
+      debugPrint('[achievements] refresh failed: $e\n$st');
+    } finally {
+      achievementRefreshInFlight = false;
+    }
+    if (achievementRefreshQueued) {
+      achievementRefreshQueued = false;
+      achievementRefreshDebounce?.cancel();
+      achievementRefreshDebounce = Timer(const Duration(seconds: 2), () {
+        unawaited(runQueuedAchievementRefresh());
+      });
+    }
+  }
+
+  void refreshAchievements({Duration delay = const Duration(seconds: 2)}) {
+    achievementRefreshDebounce?.cancel();
+    achievementRefreshDebounce = Timer(delay, () {
+      unawaited(runQueuedAchievementRefresh());
+    });
   }
 
   todoProvider.addListener(refreshAchievements);
@@ -1316,11 +1361,11 @@ void main() async {
   Future<void> runPostFrameStartupTasks() async {
     unawaited(
       Future<void>.delayed(
-        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 1800),
         ensureDeferredLocalStorageStartup,
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    await Future<void>.delayed(const Duration(milliseconds: 2400));
     await ensureDeferredPlatformStartup();
     final initialNotificationPayloads = <String>[];
     final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
@@ -1408,8 +1453,8 @@ void main() async {
             timeout: const Duration(seconds: 5),
           ),
         ],
-        initialDelay: const Duration(seconds: 3),
-        gap: const Duration(seconds: 2),
+        initialDelay: const Duration(seconds: 5),
+        gap: const Duration(seconds: 3),
       ),
     );
   }

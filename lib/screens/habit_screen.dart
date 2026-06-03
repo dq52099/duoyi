@@ -714,19 +714,29 @@ class _HabitHeatmapTab extends StatelessWidget {
     final habitGroups = groupHabitsByCategory(provider.habits);
     return ListView(
       children: [
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            heading,
-            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 15),
+        AppSurfaceCard(
+          key: const ValueKey('habit_heatmap_skin_card'),
+          margin: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                heading,
+                style: appSecondaryRouteTitleTextStyle(
+                  context,
+                ).copyWith(fontSize: 13.5),
+              ),
+              const SizedBox(height: 2),
+              HabitHeatmap(heatmapData: heatmapData),
+            ],
           ),
         ),
-        HabitHeatmap(heatmapData: heatmapData),
-        const Divider(),
         if (provider.habits.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(24),
+          AppSurfaceCard(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            padding: const EdgeInsets.all(16),
             child: EmptyState(
               icon: Icons.folder_open,
               message: emptyMessage,
@@ -736,14 +746,12 @@ class _HabitHeatmapTab extends StatelessWidget {
           )
         else ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Text(
               '习惯分组',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.normal,
-                color: cs.onSurface.withValues(alpha: 0.68),
-              ),
+              style: appSecondaryControlTextStyle(
+                context,
+              ).copyWith(color: cs.onSurface.withValues(alpha: 0.68)),
             ),
           ),
           for (final group in habitGroups)
@@ -857,18 +865,35 @@ class _HabitGroupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ExpansionTile(
-      initiallyExpanded: true,
-      leading: Icon(Icons.folder_outlined, color: cs.primary),
-      title: Text(group.category),
-      subtitle: Text(
-        '${group.completedTodayCount}/${group.habits.length} 今日达标',
-        style: const TextStyle(fontSize: 12),
+    return AppSurfaceCard(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(12),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+          childrenPadding: const EdgeInsets.only(bottom: 6),
+          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 20),
+          title: Text(
+            group.category,
+            style: appSecondaryMenuItemTextStyle(
+              context,
+            ).copyWith(fontSize: 13, color: cs.onSurface),
+          ),
+          subtitle: Text(
+            '${group.completedTodayCount}/${group.habits.length} 今日达标',
+            style: appSecondaryControlLabelStyle(
+              context,
+            ).copyWith(color: cs.onSurfaceVariant),
+          ),
+          children: [
+            for (final habit in group.habits)
+              _HabitSummaryTile(habit: habit, streakLabel: streakLabel),
+          ],
+        ),
       ),
-      children: [
-        for (final habit in group.habits)
-          _HabitSummaryTile(habit: habit, streakLabel: streakLabel),
-      ],
     );
   }
 }

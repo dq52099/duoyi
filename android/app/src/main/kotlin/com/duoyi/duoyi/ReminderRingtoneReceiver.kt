@@ -262,6 +262,10 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 "bell",
                 "morning",
                 "pearl",
+                "cedar",
+                "moon",
+                "cloud",
+                "sakura",
                 "beep",
                 "classic",
                 "alarm" -> value

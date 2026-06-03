@@ -44,6 +44,27 @@ void main() {
     );
   });
 
+  test('离线本地改动的待同步状态会持久化并在失败后保留重试', () {
+    final source = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("static const _pendingLocalChangesStorageKey"));
+    expect(source, contains("'sync_pending_local_changes'"));
+    expect(source, contains('prefs.getBool(_pendingLocalChangesStorageKey)'));
+    expect(source, contains('unawaited(_persistPendingChanges(true))'));
+    expect(source, contains('Future<void> _setPendingChanges('));
+    expect(source, contains('await _setPendingChanges('));
+    expect(
+      source,
+      contains('var shouldRetryLocalChanges = _hasPendingChanges'),
+    );
+    expect(source, contains('changedCollections == null'));
+    expect(source, contains('changedCollections.isNotEmpty'));
+    expect(source, contains('await _writePendingChanges(localPrefs, true);'));
+    expect(source, contains('_scheduleAutoSync(_autoRetryDelay);'));
+  });
+
   test('登录后启用远端轮询拉取，登出或关闭自动同步会停止轮询', () {
     final providerSource = File(
       'lib/providers/cloud_sync_provider.dart',

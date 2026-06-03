@@ -110,6 +110,10 @@ void main() {
         'bell',
         'morning',
         'pearl',
+        'cedar',
+        'moon',
+        'cloud',
+        'sakura',
         'beep',
         'classic',
       ]),
@@ -140,6 +144,10 @@ void main() {
       'stream': '溪流短铃',
       'star': '星光提示',
       'marimba': '远山木琴',
+      'cedar': '雪松轻铃',
+      'moon': '月光三音',
+      'cloud': '云端轻响',
+      'sakura': '樱花短铃',
     };
     final labelsById = {
       for (final sound in ReminderRingtoneSettings.sounds)
