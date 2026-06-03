@@ -42,7 +42,8 @@ class TodayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final s = context.watch<ThemeProvider>().brand.strings;
+    final themeProvider = context.watch<ThemeProvider>();
+    final s = themeProvider.brand.strings;
 
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
@@ -123,107 +124,14 @@ class TodayScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
           // 日期卡
-          AppSurfaceCard(
+          _TodayAlmanacCard(
+            now: now,
+            lunarText: lunar.chineseText,
+            suitable: suitable,
+            avoid: avoid,
+            term: term,
+            festival: festival,
             onTap: () => _go(context, AlmanacScreen(initialDate: now)),
-            padding: const EdgeInsets.all(16),
-            borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.primary.withValues(alpha: 0.92),
-                Color.lerp(
-                  cs.primary,
-                  cs.secondary,
-                  0.28,
-                )!.withValues(alpha: 0.78),
-              ],
-            ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${I18n.tr('calendar.chinese_lunar_calendar')} ${lunar.chineseText}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '宜 $suitable',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '忌 $avoid',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          if (term != null)
-                            _chip(term, Colors.lightGreenAccent),
-                          if (festival != null)
-                            _chip(festival, Colors.amberAccent),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(
-                      DesignTokens.radiusControl,
-                    ),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.16),
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${now.day}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.normal,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 12),
 
@@ -559,24 +467,230 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9)),
-      ),
-    );
-  }
-
   void _go(BuildContext context, Widget screen) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => BrandRouteSurface(child: screen)),
+    );
+  }
+}
+
+class _TodayAlmanacCard extends StatelessWidget {
+  final DateTime now;
+  final String lunarText;
+  final String suitable;
+  final String avoid;
+  final String? term;
+  final String? festival;
+  final VoidCallback onTap;
+
+  const _TodayAlmanacCard({
+    required this.now,
+    required this.lunarText,
+    required this.suitable,
+    required this.avoid,
+    required this.term,
+    required this.festival,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final brand = context.watch<ThemeProvider>().brand;
+    final radius = BorderRadius.circular(DesignTokens.radiusCard);
+    final foreground = isDark ? Colors.white : cs.onSurface;
+    final muted = foreground.withValues(alpha: isDark ? 0.74 : 0.68);
+    final accent = cs.primary;
+    final backgroundAsset = brand.backgroundAsset;
+
+    final fallbackGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color.alphaBlend(
+          accent.withValues(alpha: isDark ? 0.26 : 0.16),
+          cs.surface,
+        ),
+        Color.alphaBlend(
+          cs.secondary.withValues(alpha: isDark ? 0.20 : 0.12),
+          cs.surface,
+        ),
+      ],
+    );
+    final imageOverlay = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: isDark
+          ? [
+              Colors.black.withValues(alpha: 0.42),
+              cs.surface.withValues(alpha: 0.72),
+            ]
+          : [
+              brand.backgroundOverlay.withValues(alpha: 0.62),
+              cs.surface.withValues(alpha: 0.76),
+            ],
+    );
+
+    return AppSurfaceCard(
+      onTap: onTap,
+      padding: EdgeInsets.zero,
+      borderRadius: radius,
+      color: Colors.transparent,
+      border: Border.all(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.10)
+            : cs.outlineVariant.withValues(alpha: 0.18),
+        width: 0.55,
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: backgroundAsset == null
+                  ? DecoratedBox(
+                      decoration: BoxDecoration(gradient: fallbackGradient),
+                    )
+                  : Image.asset(
+                      backgroundAsset,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                    ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(gradient: imageOverlay),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                            fontSize: 12.5,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: foreground,
+                            fontSize: 15.5,
+                            height: 1.25,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '宜 $suitable',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: foreground.withValues(alpha: 0.86),
+                            fontSize: 12,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '忌 $avoid',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                            fontSize: 12,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            if (term != null)
+                              _TodayCalendarChip(text: term!, color: accent),
+                            if (festival != null)
+                              _TodayCalendarChip(
+                                text: festival!,
+                                color: cs.tertiary,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: cs.surface.withValues(alpha: isDark ? 0.22 : 0.58),
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.radiusControl,
+                      ),
+                      border: Border.all(
+                        color: foreground.withValues(
+                          alpha: isDark ? 0.12 : 0.10,
+                        ),
+                        width: 0.55,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${now.day}',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: foreground,
+                        fontSize: 27,
+                        height: 1,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayCalendarChip extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _TodayCalendarChip({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.16), width: 0.45),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 11,
+          color: color,
+          height: 1.1,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
     );
   }
 }

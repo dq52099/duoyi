@@ -234,6 +234,33 @@ class NativeReminderRingtone {
     return true;
   }
 
+  static Future<NativeReminderPreviewResult> previewCurrentSound({
+    Duration duration = previewDuration,
+  }) async {
+    if (!_isAndroid) return const NativeReminderPreviewResult.started();
+    try {
+      final raw = await _channel.invokeMethod<Object?>(
+        'previewCurrentSound',
+        <String, Object?>{'durationMillis': duration.inMilliseconds},
+      );
+      if (raw is Map) return NativeReminderPreviewResult.fromMap(raw);
+      return const NativeReminderPreviewResult.started();
+    } catch (e, st) {
+      debugPrint(
+        '[NativeReminderRingtone] previewCurrentSound failed: $e\n$st',
+      );
+      return NativeReminderPreviewResult.failed(
+        reason: 'platform_channel_failed',
+        message: '播放器调用失败：$e',
+      );
+    }
+  }
+
+  static Future<void> stopPreview() async {
+    if (!_isAndroid) return;
+    await _tryInvoke('stopPreview');
+  }
+
   static Future<bool> _waitForPreviewPlaybackStart({
     Duration timeout = const Duration(milliseconds: 1600),
   }) async {
@@ -298,6 +325,38 @@ class NativeReminderRingtoneException implements Exception {
 
   @override
   String toString() => 'NativeReminderRingtoneException: $method failed';
+}
+
+class NativeReminderPreviewResult {
+  final bool started;
+  final String reason;
+  final String message;
+
+  const NativeReminderPreviewResult({
+    required this.started,
+    required this.reason,
+    required this.message,
+  });
+
+  const NativeReminderPreviewResult.started()
+    : started = true,
+      reason = 'started',
+      message = '正在试听当前提醒铃声。';
+
+  const NativeReminderPreviewResult.failed({
+    required this.reason,
+    required this.message,
+  }) : started = false;
+
+  factory NativeReminderPreviewResult.fromMap(Map<dynamic, dynamic> raw) {
+    final started = raw['started'] == true;
+    return NativeReminderPreviewResult(
+      started: started,
+      reason: raw['reason']?.toString() ?? (started ? 'started' : 'unknown'),
+      message:
+          raw['message']?.toString() ?? (started ? '正在试听当前提醒铃声。' : '铃声试听启动失败。'),
+    );
+  }
 }
 
 class NativeReminderDeliveryIssue {

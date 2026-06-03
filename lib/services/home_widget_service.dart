@@ -463,22 +463,39 @@ class HomeWidgetThemePayload {
     final dark = theme.brightness == Brightness.dark;
     final cardSkin = provider.activeWidgetCardSkin;
     final usesCardSkin = cardSkin.id != ThemeProvider.defaultCardSkinId;
+    final imageBacked = brand.backgroundAsset != null;
     final accentStart = usesCardSkin ? cardSkin.colors.first : cs.primary;
     final accentEnd = usesCardSkin ? cardSkin.colors.last : cs.secondary;
     final baseBackground = Color.alphaBlend(
-      brand.backgroundOverlay.withValues(alpha: brand.backgroundOverlayOpacity),
+      brand.backgroundOverlay.withValues(
+        alpha: imageBacked
+            ? brand.backgroundOverlayOpacity.clamp(0.56, 0.82).toDouble()
+            : brand.backgroundOverlayOpacity,
+      ),
       dark ? const Color(0xFF0B0F17) : const Color(0xFFFFFFFF),
     );
     final background = Color.alphaBlend(
-      accentStart.withValues(alpha: dark ? 0.20 : 0.10),
-      baseBackground,
+      accentEnd.withValues(alpha: imageBacked ? (dark ? 0.22 : 0.14) : 0.08),
+      Color.alphaBlend(
+        accentStart.withValues(alpha: dark ? 0.22 : 0.12),
+        baseBackground,
+      ),
     );
     final surface = Color.alphaBlend(
-      accentEnd.withValues(alpha: usesCardSkin ? (dark ? 0.24 : 0.16) : 0.06),
-      cs.surface,
+      accentEnd.withValues(
+        alpha: usesCardSkin
+            ? (dark ? 0.24 : 0.16)
+            : imageBacked
+            ? (dark ? 0.16 : 0.09)
+            : 0.06,
+      ),
+      Color.alphaBlend(
+        brand.backgroundOverlay.withValues(alpha: imageBacked ? 0.18 : 0.0),
+        cs.surface,
+      ),
     );
     final navBackground = Color.alphaBlend(
-      cs.primary.withValues(alpha: dark ? 0.20 : 0.10),
+      cs.primary.withValues(alpha: imageBacked ? (dark ? 0.24 : 0.12) : 0.10),
       surface,
     );
     final border = Color.alphaBlend(
@@ -551,7 +568,10 @@ class HomeWidgetThemePayload {
       'widget_theme_control_radius_dp',
       controlRadiusDp,
     ),
-    HomeWidget.saveWidgetData<int>('widget_theme_border_width_dp', borderWidthDp),
+    HomeWidget.saveWidgetData<int>(
+      'widget_theme_border_width_dp',
+      borderWidthDp,
+    ),
   ];
 
   static String _hex(Color color) =>

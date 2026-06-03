@@ -50,34 +50,99 @@ TextTheme _textTheme({
   required Color mutedColor,
   required Color headingColor,
 }) {
-  TextStyle style(double size, Color color, {double height = 1.3}) {
+  TextStyle style(
+    double size,
+    Color color, {
+    double height = 1.3,
+    FontWeight weight = DesignTokens.fontWeightRegular,
+  }) {
     return TextStyle(
       fontFamily: _cnFontFamily,
       fontFamilyFallback: _cnFontFallback,
       fontSize: size,
       height: height,
-      fontWeight: FontWeight.normal,
+      fontWeight: weight,
       letterSpacing: 0,
       color: color,
     );
   }
 
   return TextTheme(
-    displayLarge: style(40, headingColor, height: 1.12),
-    displayMedium: style(34, headingColor, height: 1.16),
-    displaySmall: style(28, headingColor, height: 1.2),
-    headlineLarge: style(26, headingColor, height: 1.22),
-    headlineMedium: style(22, headingColor, height: 1.24),
-    headlineSmall: style(20, headingColor, height: 1.28),
-    titleLarge: style(18, headingColor, height: 1.24),
-    titleMedium: style(16, headingColor, height: 1.28),
-    titleSmall: style(14, headingColor, height: 1.3),
+    displayLarge: style(
+      38,
+      headingColor,
+      height: 1.12,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    displayMedium: style(
+      32,
+      headingColor,
+      height: 1.16,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    displaySmall: style(
+      27,
+      headingColor,
+      height: 1.2,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    headlineLarge: style(
+      24,
+      headingColor,
+      height: 1.22,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    headlineMedium: style(
+      21,
+      headingColor,
+      height: 1.24,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    headlineSmall: style(
+      19,
+      headingColor,
+      height: 1.28,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    titleLarge: style(
+      18,
+      headingColor,
+      height: 1.24,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    titleMedium: style(
+      15.5,
+      headingColor,
+      height: 1.28,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    titleSmall: style(
+      13.5,
+      headingColor,
+      height: 1.3,
+      weight: DesignTokens.fontWeightRegular,
+    ),
     bodyLarge: style(16, bodyColor, height: 1.56),
     bodyMedium: style(14, bodyColor, height: 1.58),
     bodySmall: style(12, mutedColor, height: 1.5),
-    labelLarge: style(14, bodyColor, height: 1.2),
-    labelMedium: style(12, bodyColor, height: 1.2),
-    labelSmall: style(11, bodyColor, height: 1.2),
+    labelLarge: style(
+      14,
+      bodyColor,
+      height: 1.2,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    labelMedium: style(
+      12,
+      bodyColor,
+      height: 1.2,
+      weight: DesignTokens.fontWeightRegular,
+    ),
+    labelSmall: style(
+      11,
+      bodyColor,
+      height: 1.2,
+      weight: DesignTokens.fontWeightRegular,
+    ),
   );
 }
 
@@ -146,14 +211,14 @@ ThemeData _withSharedControls(ThemeData theme) {
       .copyWith(
         color: appBarForeground,
         fontSize: DesignTokens.fontSizeMd,
-        fontWeight: FontWeight.normal,
+        fontWeight: DesignTokens.fontWeightRegular,
         height: 1.2,
         letterSpacing: 0,
       );
   final appBarToolbarText = (theme.textTheme.bodyMedium ?? const TextStyle())
       .copyWith(
         color: appBarForeground,
-        fontWeight: FontWeight.normal,
+        fontWeight: DesignTokens.fontWeightRegular,
         letterSpacing: 0,
       );
 
@@ -163,18 +228,18 @@ ThemeData _withSharedControls(ThemeData theme) {
   );
   final label = theme.textTheme.labelMedium?.copyWith(
     fontSize: DesignTokens.fontSizeBase,
-    fontWeight: FontWeight.normal,
+    fontWeight: DesignTokens.fontWeightRegular,
   );
   final secondaryControlText = theme.textTheme.bodySmall?.copyWith(
     fontSize: DesignTokens.fontSizeSm,
     height: 1.2,
-    fontWeight: FontWeight.normal,
+    fontWeight: DesignTokens.fontWeightRegular,
     color: cs.onSurface,
   );
   final secondaryLabelText = theme.textTheme.labelSmall?.copyWith(
     fontSize: DesignTokens.fontSizeXs,
     height: 1.16,
-    fontWeight: FontWeight.normal,
+    fontWeight: DesignTokens.fontWeightRegular,
   );
   final selectedControlBackground = Color.alphaBlend(
     cs.primary.withValues(alpha: isDark ? 0.18 : 0.10),
@@ -277,7 +342,7 @@ ThemeData _withSharedControls(ThemeData theme) {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       titleTextStyle: theme.textTheme.titleMedium?.copyWith(
         color: cs.onSurface,
-        fontWeight: FontWeight.normal,
+        fontWeight: DesignTokens.fontWeightRegular,
       ),
       contentTextStyle: body,
       iconColor: cs.primary,
@@ -627,10 +692,10 @@ ThemeData _withSharedControls(ThemeData theme) {
       labelColor: selectedTabForeground,
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.normal,
+        fontWeight: DesignTokens.fontWeightRegular,
       ),
       unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.normal,
+        fontWeight: DesignTokens.fontWeightRegular,
       ),
       overlayColor: WidgetStatePropertyAll(cs.primary.withValues(alpha: 0.08)),
     ),
@@ -644,7 +709,9 @@ ThemeData _withSharedControls(ThemeData theme) {
         final selected = states.contains(WidgetState.selected);
         return theme.textTheme.labelSmall?.copyWith(
           color: selected ? selectedNavigationForeground : cs.onSurfaceVariant,
-          fontWeight: FontWeight.normal,
+          fontWeight: selected
+              ? DesignTokens.fontWeightRegular
+              : DesignTokens.fontWeightRegular,
           letterSpacing: 0,
         );
       }),

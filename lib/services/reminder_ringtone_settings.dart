@@ -202,13 +202,7 @@ class ReminderRingtoneSettings {
       await applyPersistedSettingsToNative();
       return;
     }
-    final previewResult = await _applyAndPreviewWithFallback();
-    if (!previewResult.started) {
-      throw const ReminderRingtonePreviewException();
-    }
-    if (previewResult.usedFallback) {
-      throw const ReminderRingtonePreviewException(fellBackToDefault: true);
-    }
+    await _applyAndPreviewCurrentSound();
   }
 
   static Future<void> setSound(String value, {bool preview = true}) async {
@@ -221,22 +215,12 @@ class ReminderRingtoneSettings {
       await applyPersistedSettingsToNative();
       return;
     }
-    final previewResult = await _applyAndPreviewWithFallback(
-      fallbackOnFailure: next != defaultSound,
-    );
-    if (!previewResult.started) {
-      throw const ReminderRingtonePreviewException();
-    }
-    if (previewResult.usedFallback) {
-      throw const ReminderRingtonePreviewException(fellBackToDefault: true);
-    }
+    await _applyAndPreviewCurrentSound();
   }
 
-  static Future<bool> previewCurrentSound() async {
-    if (!_isAndroid) return true;
-    final applied = await applyPersistedSettingsToNative();
-    if (!applied) return false;
-    return _previewNativeCurrentSound();
+  static Future<void> previewCurrentSound() async {
+    if (!_isAndroid) return;
+    await _applyAndPreviewCurrentSound();
   }
 
   static Future<bool> applyPersistedSettingsToNative() async {
@@ -262,43 +246,29 @@ class ReminderRingtoneSettings {
     }
   }
 
-  static Future<_ReminderRingtonePreviewResult> _applyAndPreviewWithFallback({
-    bool fallbackOnFailure = true,
-  }) async {
+  static Future<void> _applyAndPreviewCurrentSound() async {
     final applied = await applyPersistedSettingsToNative();
-    if (applied && await _previewNativeCurrentSound()) {
-      return const _ReminderRingtonePreviewResult(started: true);
+    if (!applied) {
+      throw const ReminderRingtonePreviewException(
+        reason: 'native_apply_failed',
+        message: '铃声设置写入系统播放器失败，请重试或重启应用后再试。',
+      );
     }
-    if (!fallbackOnFailure) {
-      return const _ReminderRingtonePreviewResult(started: false);
-    }
-    final fallbackApplied = await _fallbackToDefaultSound();
-    if (!fallbackApplied) {
-      return const _ReminderRingtonePreviewResult(started: false);
-    }
-    final fallbackStarted = await _previewNativeCurrentSound();
-    return _ReminderRingtonePreviewResult(
-      started: fallbackStarted,
-      usedFallback: fallbackStarted,
+    final result = await NativeReminderRingtone.previewCurrentSound();
+    if (result.started) return;
+    throw ReminderRingtonePreviewException(
+      reason: result.reason,
+      message: result.message,
     );
   }
 
-  static Future<bool> _previewNativeCurrentSound() async {
-    if (!_isAndroid) return true;
-    await NativeReminderRingtone.clearLastDeliveryIssue();
-    final started = await NativeReminderRingtone.preview();
-    if (!started) return false;
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    final issue = await NativeReminderRingtone.lastDeliveryIssue();
-    return issue?.id != NativeReminderRingtone.previewNotificationId;
-  }
-
-  static Future<bool> _fallbackToDefaultSound() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool(legacyAlarmMigrationPreferenceKey, true);
-    await p.setString(soundPreferenceKey, defaultSound);
-    onChanged?.call(const [soundPreferenceKey]);
-    return applyPersistedSettingsToNative();
+  static Future<void> stopPreview() async {
+    if (!_isAndroid) return;
+    try {
+      await NativeReminderRingtone.stopPreview();
+    } catch (e, st) {
+      debugPrint('[ReminderRingtoneSettings] stop preview failed: $e\n$st');
+    }
   }
 
   static Future<String> _loadAndMigrateSoundPreference(
@@ -340,27 +310,16 @@ class ReminderRingtoneSettings {
 }
 
 class ReminderRingtonePreviewException implements Exception {
-  final bool fellBackToDefault;
+  final String reason;
+  final String message;
 
-  const ReminderRingtonePreviewException({this.fellBackToDefault = false});
+  const ReminderRingtonePreviewException({
+    this.reason = 'unknown',
+    this.message = '铃声试听启动失败，请检查系统音量或音频播放限制。',
+  });
 
   @override
-  String toString() {
-    if (fellBackToDefault) {
-      return '所选提醒铃声试听失败，已切换并播放默认柔和晨铃；请检查该铃声资源或系统通知渠道声音';
-    }
-    return '提醒铃声试听失败，已尝试降级为默认柔和晨铃；请检查通知权限、渠道声音或系统后台限制';
-  }
-}
-
-class _ReminderRingtonePreviewResult {
-  final bool started;
-  final bool usedFallback;
-
-  const _ReminderRingtonePreviewResult({
-    required this.started,
-    this.usedFallback = false,
-  });
+  String toString() => message;
 }
 
 class ReminderRingtoneOption {

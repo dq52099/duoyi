@@ -449,6 +449,9 @@ class ReminderRingtoneService : Service() {
         private const val legacyAlarmMigrationKey = "flutter.pref_reminder_ringtone_alarm_migrated_to_soft"
         private const val minAudibleRawBytes = 4096L
         private val flutterPluginRaceCleanupDelays = longArrayOf(0L, 30L, 80L, 120L, 750L, 2_500L, 5_000L, 10_000L)
+        private val previewHandler = Handler(Looper.getMainLooper())
+        private var previewPlayer: MediaPlayer? = null
+        private var previewStopRunnable: Runnable? = null
         @Volatile
         private var activeReminderId: Int? = null
 
@@ -503,6 +506,7 @@ class ReminderRingtoneService : Service() {
         }
 
         fun stopActive(context: Context) {
+            stopPreview()
             context.stopService(Intent(context, ReminderRingtoneService::class.java))
         }
 
@@ -528,6 +532,100 @@ class ReminderRingtoneService : Service() {
             editor.apply()
         }
 
+        @Synchronized
+        fun previewCurrentSound(context: Context, durationMillis: Long): Map<String, Any> {
+            val appContext = context.applicationContext
+            stopPreview()
+
+            val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val alarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+            if (alarmVolume <= 0) {
+                return previewResult(
+                    started = false,
+                    reason = "alarm_volume_zero",
+                    message = "系统闹钟音量为 0，请调高闹钟/铃声音量后再试听。",
+                )
+            }
+
+            val soundName = selectedSoundName(appContext)
+            val resId = soundResId(appContext)
+            val afd = runCatching { appContext.resources.openRawResourceFd(resId) }.getOrNull()
+                ?: return previewResult(
+                    started = false,
+                    reason = "audio_resource_missing",
+                    message = "内置铃声资源不存在：duoyi_$soundName。",
+                )
+            if (afd.length <= minAudibleRawBytes) {
+                afd.close()
+                return previewResult(
+                    started = false,
+                    reason = "audio_resource_invalid",
+                    message = "内置铃声资源不可播放或文件过小：duoyi_$soundName。",
+                )
+            }
+
+            val volume = volumePercent(appContext) / 100f
+            val player = MediaPlayer()
+            return try {
+                player.setAudioAttributes(previewAudioAttributes())
+                player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                player.isLooping = false
+                player.setVolume(volume, volume)
+                player.setOnCompletionListener { completedPlayer ->
+                    synchronized(ReminderRingtoneService::class.java) {
+                        if (previewPlayer === completedPlayer) {
+                            stopPreview()
+                        }
+                    }
+                }
+                player.setOnErrorListener { errorPlayer, _, _ ->
+                    synchronized(ReminderRingtoneService::class.java) {
+                        if (previewPlayer === errorPlayer) {
+                            stopPreview()
+                        } else {
+                            runCatching { errorPlayer.release() }
+                        }
+                    }
+                    true
+                }
+                player.prepare()
+                previewPlayer = player
+                player.start()
+                val safeDuration = durationMillis.coerceIn(500L, 30_000L)
+                previewStopRunnable = Runnable {
+                    synchronized(ReminderRingtoneService::class.java) {
+                        if (previewPlayer === player) stopPreview()
+                    }
+                }.also { previewHandler.postDelayed(it, safeDuration) }
+                previewResult(
+                    started = true,
+                    reason = "started",
+                    message = "正在试听当前提醒铃声。",
+                )
+            } catch (error: Exception) {
+                runCatching { player.release() }
+                previewPlayer = null
+                previewResult(
+                    started = false,
+                    reason = "player_init_failed",
+                    message = "播放器初始化失败：${error.message ?: "未知错误"}。",
+                )
+            } finally {
+                afd.close()
+            }
+        }
+
+        @Synchronized
+        fun stopPreview() {
+            previewStopRunnable?.let { previewHandler.removeCallbacks(it) }
+            previewStopRunnable = null
+            previewPlayer?.run {
+                runCatching { stop() }
+                runCatching { release() }
+            }
+            previewPlayer = null
+        }
+
         private fun selectedSoundName(context: Context): String {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             val value = prefs.getString(soundKey, "soft") ?: "soft"
@@ -541,11 +639,30 @@ class ReminderRingtoneService : Service() {
             return normalizeSoundName(value)
         }
 
-        private fun volumePercent(context: Context): Int {
-            return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                .getInt(volumeKey, 60)
-                .coerceIn(40, 80)
-        }
+	        private fun volumePercent(context: Context): Int {
+	            return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+	                .getInt(volumeKey, 60)
+	                .coerceIn(40, 80)
+	        }
+
+	        private fun previewAudioAttributes(): AudioAttributes {
+	            return AudioAttributes.Builder()
+	                .setUsage(AudioAttributes.USAGE_ALARM)
+	                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+	                .build()
+	        }
+
+	        private fun previewResult(
+	            started: Boolean,
+	            reason: String,
+	            message: String,
+	        ): Map<String, Any> {
+	            return mapOf(
+	                "started" to started,
+	                "reason" to reason,
+	                "message" to message,
+	            )
+	        }
 
         private fun soundResId(context: Context): Int {
             return when (selectedSoundName(context)) {

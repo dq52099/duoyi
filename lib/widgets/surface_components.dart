@@ -118,7 +118,7 @@ TextStyle appSecondaryControlLabelStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.labelMedium ?? const TextStyle()).copyWith(
     fontSize: 11,
-    fontWeight: FontWeight.normal,
+    fontWeight: DesignTokens.fontWeightRegular,
     height: 1.16,
   );
 }
@@ -959,9 +959,10 @@ class AppSettingsTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: appSecondaryMenuItemTextStyle(
-                        context,
-                      ).copyWith(color: cs.onSurface),
+                      style: appSecondaryMenuItemTextStyle(context).copyWith(
+                        color: cs.onSurface,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                      ),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
                       const SizedBox(height: 2),

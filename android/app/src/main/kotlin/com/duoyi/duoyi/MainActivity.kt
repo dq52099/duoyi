@@ -281,6 +281,17 @@ class MainActivity : FlutterActivity() {
                     }
                     "stopActive" -> {
                         ReminderRingtoneScheduler.stopActiveRingtone(this)
+                        ReminderRingtoneService.stopPreview()
+                        result.success(null)
+                    }
+                    "previewCurrentSound" -> {
+                        val durationMillis = call.argument<Long>("durationMillis")
+                            ?: call.argument<Int>("durationMillis")?.toLong()
+                            ?: 3000L
+                        result.success(ReminderRingtoneService.previewCurrentSound(this, durationMillis))
+                    }
+                    "stopPreview" -> {
+                        ReminderRingtoneService.stopPreview()
                         result.success(null)
                     }
                     "setVolumePercent" -> {
