@@ -20,6 +20,7 @@ data class DuoyiWidgetThemePalette(
     val onPrimary: Int,
     val accentStart: Int,
     val accentEnd: Int,
+    val backgroundAssetKey: String,
     val cornerRadiusDp: Int,
     val controlRadiusDp: Int,
     val borderWidthDp: Int,
@@ -52,6 +53,7 @@ object DuoyiWidgetTheme {
             onPrimary = readColor(prefs, "widget_theme_on_primary", defaultOnPrimary),
             accentStart = readColor(prefs, "widget_theme_accent_start", defaultAccentStart),
             accentEnd = readColor(prefs, "widget_theme_accent_end", defaultAccentEnd),
+            backgroundAssetKey = prefs.getString("widget_theme_background_asset_key", "") ?: "",
             cornerRadiusDp = readInt(prefs, "widget_theme_corner_radius_dp", 13),
             controlRadiusDp = readInt(prefs, "widget_theme_control_radius_dp", 8),
             borderWidthDp = readInt(prefs, "widget_theme_border_width_dp", 0),
@@ -65,14 +67,19 @@ object DuoyiWidgetTheme {
         navId: Int = 0,
     ) {
         val theme = read(prefs)
-        applyRoundedSurface(
-            views,
-            rootId,
-            fill = theme.background,
-            stroke = theme.border,
-            radiusDp = theme.cornerRadiusDp,
-            strokeWidthDp = theme.borderWidthDp,
-        )
+        val imageResource = backgroundImageResource(theme.backgroundAssetKey)
+        if (imageResource != 0) {
+            views.setInt(rootId, "setBackgroundResource", imageResource)
+        } else {
+            applyRoundedSurface(
+                views,
+                rootId,
+                fill = theme.background,
+                stroke = theme.border,
+                radiusDp = theme.cornerRadiusDp,
+                strokeWidthDp = theme.borderWidthDp,
+            )
+        }
         if (navId != 0) {
             applyRoundedSurface(
                 views,
@@ -176,6 +183,19 @@ object DuoyiWidgetTheme {
         if (radiusDp >= 14) return R.drawable.widget_bg_round_14
         if (strokeWidthDp <= 0) return R.drawable.widget_bg_plain
         return R.drawable.widget_bg
+    }
+
+    private fun backgroundImageResource(key: String): Int {
+        return when (key) {
+            "re0" -> R.drawable.widget_theme_re0
+            "genshin" -> R.drawable.widget_theme_genshin
+            "star_rail" -> R.drawable.widget_theme_star_rail
+            "wuthering" -> R.drawable.widget_theme_wuthering
+            "zzz" -> R.drawable.widget_theme_zzz
+            "yanyun" -> R.drawable.widget_theme_yanyun
+            "botw" -> R.drawable.widget_theme_botw
+            else -> 0
+        }
     }
 
     private fun blend(foreground: Int, background: Int, alpha: Float): Int {

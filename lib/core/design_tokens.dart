@@ -73,6 +73,17 @@ class DesignTokens {
   static const double fontSizeXl = 22;
   static const double fontSizeXxl = 28;
 
+  static const double fontSizeCaption = fontSizeXs;
+  static const double fontSizeSecondary = fontSizeSm;
+  static const double fontSizeBody = fontSizeBase;
+  static const double fontSizeListTitle = fontSizeSection;
+  static const double fontSizeCardTitle = fontSizeMd;
+  static const double fontSizeNavigationTitle = fontSizeMd;
+  static const double fontSizePageTitle = fontSizeLg;
+  static const double fontSizeNumericHighlight = 26;
+  static const double fontSizeButton = 13;
+  static const double fontSizeBottomNavLabel = 11;
+
   static const FontWeight fontWeightRegular = FontWeight.normal;
 
   // ----- Elevation / Shadow -----

@@ -251,7 +251,7 @@ class NativeReminderRingtone {
       );
       return NativeReminderPreviewResult.failed(
         reason: 'platform_channel_failed',
-        message: '播放器调用失败：$e',
+        message: '铃声播放器调用失败，请重试。',
       );
     }
   }

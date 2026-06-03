@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/habit_grouping.dart';
 import '../core/habit_icons.dart';
@@ -666,7 +667,11 @@ class _HabitScreenState extends State<HabitScreen>
                       _HabitCheckinCard(habit: activeHabits[index]),
                 ),
               ],
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.paddingOf(context).bottom + 88,
+                ),
+              ),
             ],
           ),
           // Heatmap
@@ -713,6 +718,9 @@ class _HabitHeatmapTab extends StatelessWidget {
     final heatmapData = provider.combinedHeatmap(12);
     final habitGroups = groupHabitsByCategory(provider.habits);
     return ListView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.paddingOf(context).bottom + 88,
+      ),
       children: [
         AppSurfaceCard(
           key: const ValueKey('habit_heatmap_skin_card'),
@@ -726,7 +734,7 @@ class _HabitHeatmapTab extends StatelessWidget {
                 heading,
                 style: appSecondaryRouteTitleTextStyle(
                   context,
-                ).copyWith(fontSize: 13.5),
+                ).copyWith(fontSize: DesignTokens.fontSizeCardTitle),
               ),
               const SizedBox(height: 2),
               HabitHeatmap(heatmapData: heatmapData),
@@ -749,9 +757,10 @@ class _HabitHeatmapTab extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Text(
               '习惯分组',
-              style: appSecondaryControlTextStyle(
-                context,
-              ).copyWith(color: cs.onSurface.withValues(alpha: 0.68)),
+              style: appSecondaryControlTextStyle(context).copyWith(
+                color: cs.onSurface.withValues(alpha: 0.68),
+                fontSize: DesignTokens.fontSizeSecondary,
+              ),
             ),
           ),
           for (final group in habitGroups)
@@ -878,15 +887,18 @@ class _HabitGroupSection extends StatelessWidget {
           leading: Icon(Icons.folder_outlined, color: cs.primary, size: 20),
           title: Text(
             group.category,
-            style: appSecondaryMenuItemTextStyle(
-              context,
-            ).copyWith(fontSize: 13, color: cs.onSurface),
+            style: appSecondaryMenuItemTextStyle(context).copyWith(
+              fontSize: DesignTokens.fontSizeListTitle,
+              fontWeight: DesignTokens.fontWeightRegular,
+              color: cs.onSurface,
+            ),
           ),
           subtitle: Text(
             '${group.completedTodayCount}/${group.habits.length} 今日达标',
-            style: appSecondaryControlLabelStyle(
-              context,
-            ).copyWith(color: cs.onSurfaceVariant),
+            style: appSecondaryControlLabelStyle(context).copyWith(
+              color: cs.onSurfaceVariant,
+              fontSize: DesignTokens.fontSizeSecondary,
+            ),
           ),
           children: [
             for (final habit in group.habits)
@@ -922,7 +934,7 @@ class _HabitInsightCard extends StatelessWidget {
                 '智能习惯洞察',
                 style: appSecondaryRouteTitleTextStyle(
                   context,
-                ).copyWith(fontSize: 12.5),
+                ).copyWith(fontSize: DesignTokens.fontSizeSection),
               ),
             ],
           ),
@@ -945,16 +957,16 @@ class _HabitInsightCard extends StatelessWidget {
                       children: [
                         Text(
                           insight.title,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.normal,
+                          style: TextStyle(
+                            fontSize: DesignTokens.fontSizeSecondary,
+                            fontWeight: DesignTokens.fontWeightRegular,
                           ),
                         ),
                         const SizedBox(height: 1),
                         Text(
                           insight.message,
                           style: TextStyle(
-                            fontSize: 10.5,
+                            fontSize: DesignTokens.fontSizeCaption,
                             color: cs.onSurface.withValues(alpha: 0.62),
                           ),
                         ),
@@ -1014,10 +1026,24 @@ class _HabitSummaryTile extends StatelessWidget {
             size: 18,
           ),
         ),
-        title: Text(habit.name),
+        title: Text(
+          habit.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: DesignTokens.fontSizeListTitle,
+            fontWeight: DesignTokens.fontWeightRegular,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
         subtitle: Text(
           '$streakLabel ${habit.currentStreak} $streakUnit · 最佳 ${habit.bestStreak} $streakUnit',
-          style: const TextStyle(fontSize: 12),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: DesignTokens.fontSizeSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         onTap: () => Navigator.push(
           context,
@@ -1115,8 +1141,7 @@ class _HabitCheckinCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
+              Container(
                 width: 22,
                 height: 22,
                 decoration: BoxDecoration(
@@ -1125,20 +1150,10 @@ class _HabitCheckinCard extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: animation,
-                    child: FadeTransition(opacity: animation, child: child),
-                  ),
-                  child: Icon(
-                    _habitDisplayIcon(habit),
-                    key: ValueKey<String>(
-                      '${habit.id}-${isDone && !hasNegativeOccurrence}-$hasNegativeOccurrence',
-                    ),
-                    color: habitColor,
-                    size: 14,
-                  ),
+                child: Icon(
+                  _habitDisplayIcon(habit),
+                  color: habitColor,
+                  size: 14,
                 ),
               ),
               const SizedBox(width: 7),
@@ -1158,8 +1173,8 @@ class _HabitCheckinCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontWeight: FontWeight.normal,
-                                fontSize: 13,
+                                fontWeight: DesignTokens.fontWeightRegular,
+                                fontSize: DesignTokens.fontSizeListTitle,
                                 height: 1.14,
                                 decoration: isDone && !isNegative
                                     ? TextDecoration.lineThrough
@@ -1222,7 +1237,7 @@ class _HabitCheckinCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.grey.shade500,
-                              fontSize: 11,
+                              fontSize: DesignTokens.fontSizeCaption,
                               height: 1.1,
                             ),
                           ),
@@ -1245,8 +1260,7 @@ class _HabitCheckinCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
+                            Container(
                               height: 2,
                               width: constraints.maxWidth * progress,
                               decoration: BoxDecoration(
@@ -1277,22 +1291,19 @@ class _HabitCheckinCard extends StatelessWidget {
                       maintainSize: true,
                       maintainAnimation: true,
                       maintainState: true,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 160),
-                        child: todayCount > 0
-                            ? _HabitUndoButton(
-                                key: const ValueKey('habit-undo-visible'),
-                                color: hasNegativeOccurrence
-                                    ? cs.error
-                                    : cs.onSurfaceVariant,
-                                onPressed: () => _handleUndo(context),
-                              )
-                            : _HabitUndoButton(
-                                key: const ValueKey('habit-undo-hidden'),
-                                color: cs.onSurfaceVariant,
-                                onPressed: null,
-                              ),
-                      ),
+                      child: todayCount > 0
+                          ? _HabitUndoButton(
+                              key: const ValueKey('habit-undo-visible'),
+                              color: hasNegativeOccurrence
+                                  ? cs.error
+                                  : cs.onSurfaceVariant,
+                              onPressed: () => _handleUndo(context),
+                            )
+                          : _HabitUndoButton(
+                              key: const ValueKey('habit-undo-hidden'),
+                              color: cs.onSurfaceVariant,
+                              onPressed: null,
+                            ),
                     ),
                     const SizedBox(width: _habitActionButtonGap),
                     SizedBox(

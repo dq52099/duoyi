@@ -206,7 +206,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             final summary = _SelectedDateSummaryCard(
               detail: almanacDetail,
               badges: dateBadges,
-              onTap: _showSelectedDateDetail,
+              onOpenAlmanac: _showSelectedDateDetail,
             );
             final highlights = _MonthHighlightsCard(
               selectedDate: selectedDate,
@@ -565,131 +565,113 @@ class _SoftAlmanacTag extends StatelessWidget {
 class _SelectedDateSummaryCard extends StatelessWidget {
   final LunarAlmanacDetail detail;
   final List<(String, Color)> badges;
-  final VoidCallback onTap;
+  final VoidCallback onOpenAlmanac;
 
   const _SelectedDateSummaryCard({
     required this.detail,
     required this.badges,
-    required this.onTap,
+    required this.onOpenAlmanac,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = Color.alphaBlend(
-      cs.primary.withValues(
-        alpha: Theme.of(context).brightness == Brightness.dark ? 0.08 : 0.045,
-      ),
+      cs.primary.withValues(alpha: isDark ? 0.08 : 0.045),
       cs.surface,
     );
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
+      decoration: BoxDecoration(
+        color: bg,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          detail.lunarDate.chineseText,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontSize: 17,
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                              ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          _spacedGanzhiLine(detail.ganzhiLine),
-                          style: appSecondaryControlTextStyle(context).copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.62),
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.76),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Icon(
-                      Icons.chevron_right,
-                      size: 18,
-                      color: cs.onSurface.withValues(alpha: 0.46),
-                    ),
-                  ),
-                ],
-              ),
-              if (badges.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: badges
-                      .map(
-                        (badge) =>
-                            _AlmanacBadge(text: badge.$1, color: badge.$2),
-                      )
-                      .toList(),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: cs.surface.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark
-                        ? 0.32
-                        : 0.62,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SummaryYijiLine(
-                      label: '宜',
-                      text: _summaryTerms(detail.suitable),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      child: Divider(
-                        height: 1,
-                        thickness: 0.45,
-                        color: cs.outlineVariant.withValues(alpha: 0.20),
+                    Text(
+                      detail.lunarDate.chineseText,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.normal,
+                        color: cs.onSurface,
                       ),
                     ),
-                    _SummaryYijiLine(
-                      label: '忌',
-                      text: _summaryTerms(detail.avoid),
+                    const SizedBox(height: 5),
+                    Text(
+                      _spacedGanzhiLine(detail.ganzhiLine),
+                      style: appSecondaryControlTextStyle(context).copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                        height: 1.25,
+                      ),
                     ),
                   ],
                 ),
               ),
+              TextButton.icon(
+                onPressed: onOpenAlmanac,
+                icon: const Icon(Icons.menu_book_outlined, size: 16),
+                label: const Text('查看黄历'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: appSecondaryControlTextStyle(
+                    context,
+                  ).copyWith(fontWeight: FontWeight.normal),
+                ),
+              ),
             ],
           ),
-        ),
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: badges
+                  .map(
+                    (badge) => _AlmanacBadge(text: badge.$1, color: badge.$2),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: cs.surface.withValues(
+                alpha: Theme.of(context).brightness == Brightness.dark
+                    ? 0.32
+                    : 0.62,
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                _SummaryYijiLine(
+                  label: '宜',
+                  text: _summaryTerms(detail.suitable),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Divider(
+                    height: 1,
+                    thickness: 0.45,
+                    color: cs.outlineVariant.withValues(alpha: 0.20),
+                  ),
+                ),
+                _SummaryYijiLine(label: '忌', text: _summaryTerms(detail.avoid)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -833,7 +815,7 @@ class _AlmanacDetailNavBar extends StatelessWidget {
                 maxLines: 1,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontSize: 18,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.normal,
                   letterSpacing: 0,
                   color: cs.onSurface,
                 ),
@@ -868,10 +850,25 @@ class _ClassicalAlmanacCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final cardHeight = _clampDouble(width * 1.58, 560, 640);
-        final hourHeight = _clampDouble(cardHeight * 0.125, 58, 70);
-        final tableHeight = _clampDouble(cardHeight * 0.345, 196, 228);
-        final topHeight = cardHeight - tableHeight - hourHeight - 1.4;
+        final suitableCount = _splitAlmanacTerms(detail.suitable).length;
+        final avoidCount = _splitAlmanacTerms(detail.avoid).length;
+        final yijiCount = suitableCount > avoidCount
+            ? suitableCount
+            : avoidCount;
+        final topMinHeight = _clampDouble(
+          width * 0.72 + (yijiCount > 6 ? (yijiCount - 6) * 8 : 0),
+          246,
+          350,
+        );
+        final tableHeight = _clampDouble(
+          width * 0.64 +
+              (detail.pengZu.length > 24
+                  ? (detail.pengZu.length - 24) * 2.2
+                  : 0),
+          236,
+          326,
+        );
+        final hourHeight = _clampDouble(width * 0.17, 58, 68);
 
         return Container(
           width: double.infinity,
@@ -886,7 +883,7 @@ class _ClassicalAlmanacCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  height: topHeight,
+                  height: topMinHeight,
                   child: _AlmanacTopVisual(
                     detail: detail,
                     lineColor: lineColor,
@@ -933,9 +930,10 @@ class _AlmanacTopVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          flex: 44,
+          flex: 34,
           child: _VerticalYijiPanel(
             suitable: detail.suitable,
             avoid: detail.avoid,
@@ -944,7 +942,7 @@ class _AlmanacTopVisual extends StatelessWidget {
         ),
         _ClassicalVerticalDivider(color: lineColor),
         Expanded(
-          flex: 56,
+          flex: 66,
           child: _DateHeroPanel(detail: detail, gold: gold),
         ),
       ],
@@ -971,80 +969,40 @@ class _VerticalYijiPanel extends StatelessWidget {
     final suitableTerms = _splitAlmanacTerms(suitable);
     final avoidTerms = _splitAlmanacTerms(avoid);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final textSize = constraints.maxWidth < 150 ? 11.0 : 12.0;
-          final availableWidth = constraints.maxWidth - 7;
-          final columnWidth = availableWidth / 2;
-          final termSlotWidth = textSize + 2.4;
-          final densityCapacity = (columnWidth / termSlotWidth)
-              .floor()
-              .clamp(3, 6)
-              .toInt();
-          final suitableCount = suitableTerms.length <= densityCapacity
+          final termCount = suitableTerms.length > avoidTerms.length
               ? suitableTerms.length
-              : densityCapacity;
-          final avoidCount = avoidTerms.length <= densityCapacity
-              ? avoidTerms.length
-              : densityCapacity;
-          final hasMore =
-              suitableTerms.length > suitableCount ||
-              avoidTerms.length > avoidCount;
-          return InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => _showAlmanacYijiDialog(
-              context,
-              suitable: suitable,
-              avoid: avoid,
-              gold: gold,
-              avoidColor: darkText,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _VerticalYijiColumn(
-                          title: '宜',
-                          terms: suitableTerms
-                              .take(suitableCount)
-                              .toList(growable: false),
-                          color: gold,
-                          fontSize: textSize,
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: _VerticalYijiColumn(
-                          title: '忌',
-                          terms: avoidTerms
-                              .take(avoidCount)
-                              .toList(growable: false),
-                          color: darkText,
-                          fontSize: textSize,
-                        ),
-                      ),
-                    ],
-                  ),
+              : avoidTerms.length;
+          final textSize = constraints.maxWidth < 132
+              ? 10.2
+              : termCount >= 8
+              ? 10.4
+              : termCount >= 6
+              ? 10.9
+              : 11.4;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _VerticalYijiColumn(
+                  title: '宜',
+                  terms: suitableTerms,
+                  color: gold,
+                  fontSize: textSize,
                 ),
-                if (hasMore) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '查看全部',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: gold.withValues(alpha: 0.70),
-                      fontSize: 11,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _VerticalYijiColumn(
+                  title: '忌',
+                  terms: avoidTerms,
+                  color: darkText,
+                  fontSize: textSize,
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -1071,47 +1029,43 @@ class _VerticalYijiColumn extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 27,
-          height: 27,
+          width: 24,
+          height: 24,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: color.withValues(alpha: 0.68),
-              width: 0.8,
+              color: color.withValues(alpha: 0.62),
+              width: 0.7,
             ),
           ),
           child: Text(
             title,
             style: TextStyle(
               color: color,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.normal,
               height: 1.0,
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: terms
-                  .map(
-                    (term) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 0.6),
-                      child: _VerticalTerm(
-                        term: term,
-                        color: color,
-                        fontSize: fontSize,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.topCenter,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            runAlignment: WrapAlignment.start,
+            spacing: 1.2,
+            runSpacing: 5,
+            children: terms
+                .map(
+                  (term) => _VerticalTerm(
+                    term: term,
+                    color: color,
+                    fontSize: fontSize,
+                  ),
+                )
+                .toList(),
           ),
         ),
       ],
@@ -1162,11 +1116,11 @@ class _DateHeroPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final daySize = _clampDouble(constraints.maxWidth * 0.42, 82, 118);
-        final lunarSize = _clampDouble(constraints.maxWidth * 0.16, 32, 44);
-        final ganzhiSize = _clampDouble(constraints.maxWidth * 0.060, 15, 18);
+        final daySize = _clampDouble(constraints.maxWidth * 0.36, 76, 106);
+        final lunarSize = _clampDouble(constraints.maxWidth * 0.13, 26, 36);
+        final ganzhiSize = _clampDouble(constraints.maxWidth * 0.052, 13.5, 16);
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1181,27 +1135,27 @@ class _DateHeroPanel extends StatelessWidget {
                   fontWeight: FontWeight.w400,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               Text(
                 detail.lunarDate.chineseText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: lunarSize * 0.88,
+                  fontSize: lunarSize,
                   height: 1.1,
                   color: cs.onSurface,
                   letterSpacing: 0,
                   fontWeight: FontWeight.w400,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 9),
               Text(
                 _spacedGanzhiLine(detail.ganzhiLine),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: ganzhiSize * 0.94,
+                  fontSize: ganzhiSize,
                   height: 1.35,
                   color: cs.onSurface.withValues(alpha: 0.58),
                   letterSpacing: 0,
@@ -1526,135 +1480,6 @@ class _HourDetailLine extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-void _showAlmanacYijiDialog(
-  BuildContext context, {
-  required String suitable,
-  required String avoid,
-  required Color gold,
-  required Color avoidColor,
-}) {
-  final theme = Theme.of(context);
-  final cs = theme.colorScheme;
-  final lineColor = gold.withValues(
-    alpha: theme.brightness == Brightness.dark ? 0.62 : 0.55,
-  );
-  final cardColor = theme.brightness == Brightness.dark
-      ? Color.alphaBlend(gold.withValues(alpha: 0.04), cs.surface)
-      : Colors.white;
-  showDialog<void>(
-    context: context,
-    builder: (dialogContext) {
-      return Dialog(
-        backgroundColor: cardColor,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: lineColor, width: 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _AlmanacYijiDialogColumn(
-                      title: '宜',
-                      body: suitable,
-                      color: gold,
-                    ),
-                  ),
-                  Container(
-                    width: 0.7,
-                    height: 118,
-                    color: lineColor,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                  Expanded(
-                    child: _AlmanacYijiDialogColumn(
-                      title: '忌',
-                      body: avoid,
-                      color: avoidColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.center,
-                child: TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('知道了'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class _AlmanacYijiDialogColumn extends StatelessWidget {
-  final String title;
-  final String body;
-  final Color color;
-
-  const _AlmanacYijiDialogColumn({
-    required this.title,
-    required this.body,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: color.withValues(alpha: 0.72),
-              width: 0.8,
-            ),
-          ),
-          child: Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontSize: 15,
-              fontWeight: FontWeight.normal,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          body,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.55,
-            color: title == '宜'
-                ? color.withValues(alpha: 0.90)
-                : cs.onSurface.withValues(alpha: 0.82),
-          ),
-        ),
-      ],
     );
   }
 }

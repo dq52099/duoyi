@@ -433,6 +433,7 @@ class HomeWidgetThemePayload {
   final Color onPrimary;
   final Color accentStart;
   final Color accentEnd;
+  final String backgroundAssetKey;
   final int cornerRadiusDp;
   final int controlRadiusDp;
   final int borderWidthDp;
@@ -451,6 +452,7 @@ class HomeWidgetThemePayload {
     required this.onPrimary,
     required this.accentStart,
     required this.accentEnd,
+    required this.backgroundAssetKey,
     required this.cornerRadiusDp,
     required this.controlRadiusDp,
     required this.borderWidthDp,
@@ -522,6 +524,7 @@ class HomeWidgetThemePayload {
       onPrimary: cs.onPrimary,
       accentStart: accentStart,
       accentEnd: accentEnd,
+      backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
       cornerRadiusDp: cornerRadiusDp,
       controlRadiusDp: 8,
       borderWidthDp: usesCardSkin ? 1 : 0,
@@ -560,6 +563,10 @@ class HomeWidgetThemePayload {
       'widget_theme_accent_end',
       _hex(accentEnd),
     ),
+    HomeWidget.saveWidgetData<String>(
+      'widget_theme_background_asset_key',
+      backgroundAssetKey,
+    ),
     HomeWidget.saveWidgetData<int>(
       'widget_theme_corner_radius_dp',
       cornerRadiusDp,
@@ -576,6 +583,19 @@ class HomeWidgetThemePayload {
 
   static String _hex(Color color) =>
       '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+
+  static String _backgroundAssetKey(String? asset) {
+    return switch (asset) {
+      'assets/backgrounds/re0.png' => 're0',
+      'assets/backgrounds/genshin.png' => 'genshin',
+      'assets/backgrounds/star_rail.png' => 'star_rail',
+      'assets/backgrounds/wuthering.png' => 'wuthering',
+      'assets/backgrounds/zzz.png' => 'zzz',
+      'assets/backgrounds/yanyun.png' => 'yanyun',
+      'assets/backgrounds/botw.png' => 'botw',
+      _ => '',
+    };
+  }
 }
 
 class _HomeWidgetUpdateTarget {

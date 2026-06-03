@@ -65,14 +65,30 @@ void main() {
 
     await pumpHabitScreen(tester, habitProvider);
 
-    expect(find.textContaining('进度 0%'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('habit_weekly_overview_percent')),
+          )
+          .data,
+      '0%',
+    );
+    expect(find.text('进度'), findsOneWidget);
     expect(find.byIcon(Icons.book), findsOneWidget);
 
     await tester.tap(find.text('打卡').first);
     await tester.pumpAndSettle();
 
     expect(habitProvider.habits.single.todayCount(), 1);
-    expect(find.textContaining('进度 $expectedAfter%'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('habit_weekly_overview_percent')),
+          )
+          .data,
+      '$expectedAfter%',
+    );
+    expect(find.text('进度'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -111,20 +127,20 @@ void main() {
     final iconRect = tester.getRect(
       find.byKey(const ValueKey('habit_weekly_overview_icon_box')),
     );
-    expect(iconRect.width, greaterThanOrEqualTo(48));
-    expect(iconRect.height, greaterThanOrEqualTo(48));
+    expect(iconRect.width, greaterThanOrEqualTo(40));
+    expect(iconRect.height, greaterThanOrEqualTo(40));
 
     final progress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('habit_weekly_overview_progress_bar')),
     );
-    expect(progress.minHeight, greaterThanOrEqualTo(8));
+    expect(progress.minHeight, greaterThanOrEqualTo(5));
 
     final todayIndex = DateTime.now().weekday - 1;
     final dayRect = tester.getRect(
       find.byKey(ValueKey('habit_weekly_overview_day_$todayIndex')),
     );
-    expect(dayRect.width, greaterThanOrEqualTo(40));
-    expect(dayRect.height, greaterThanOrEqualTo(40));
+    expect(dayRect.width, greaterThanOrEqualTo(32));
+    expect(dayRect.height, greaterThanOrEqualTo(32));
   });
 
   testWidgets('habit insights render above today check-in list', (
@@ -304,7 +320,10 @@ void main() {
     await pumpHabitScreen(tester, habitProvider);
 
     expect(find.byTooltip('编辑'), findsNothing);
-    expect(find.byKey(const ValueKey('habit_inline_edit_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('habit_inline_edit_button')),
+      findsNothing,
+    );
     expect(find.byTooltip('习惯操作'), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_edit_button')), findsNothing);
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);

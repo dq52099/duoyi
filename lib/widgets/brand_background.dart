@@ -21,6 +21,8 @@ class BrandBackground extends StatelessWidget {
               ? Image.asset(
                   brand.backgroundAsset!,
                   fit: BoxFit.cover,
+                  filterQuality: FilterQuality.low,
+                  gaplessPlayback: true,
                   errorBuilder: (context, error, stack) =>
                       Container(color: brand.backgroundOverlay),
                 )

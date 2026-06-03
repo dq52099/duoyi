@@ -558,6 +558,8 @@ class _TodayAlmanacCard extends StatelessWidget {
                       backgroundAsset,
                       fit: BoxFit.cover,
                       alignment: Alignment.center,
+                      filterQuality: FilterQuality.low,
+                      gaplessPlayback: true,
                     ),
             ),
             Positioned.fill(

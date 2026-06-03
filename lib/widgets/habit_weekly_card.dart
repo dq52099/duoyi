@@ -28,8 +28,8 @@ class HabitWeeklyCard extends StatelessWidget {
 
     return AppSurfaceCard(
       key: const ValueKey('habit_weekly_overview_card'),
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 9),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      margin: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       border: Border.all(
         color: primaryColor.withValues(alpha: 0.18),
@@ -43,34 +43,35 @@ class HabitWeeklyCard extends StatelessWidget {
             children: [
               Container(
                 key: const ValueKey('habit_weekly_overview_icon_box'),
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_rounded,
-                  size: 24,
+                  size: 21,
                   color: primaryColor,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       '本周概述',
-                      style: appSecondaryRouteTitleTextStyle(
-                        context,
-                      ).copyWith(fontSize: 15, fontWeight: FontWeight.w500),
+                      style: appSecondaryRouteTitleTextStyle(context).copyWith(
+                        fontSize: DesignTokens.fontSizeCardTitle,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '今日 $completedToday/$activeToday 达标',
                       style: appSecondaryControlLabelStyle(context).copyWith(
-                        fontSize: 12,
+                        fontSize: DesignTokens.fontSizeSecondary,
                         color: cs.onSurface.withValues(alpha: 0.62),
                       ),
                     ),
@@ -78,10 +79,7 @@ class HabitWeeklyCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(11),
@@ -96,18 +94,19 @@ class HabitWeeklyCard extends StatelessWidget {
                   children: [
                     Text(
                       '$weekPercent%',
+                      key: const ValueKey('habit_weekly_overview_percent'),
                       style: TextStyle(
                         color: primaryColor,
-                        fontSize: 18,
+                        fontSize: 16,
                         height: 1.0,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: DesignTokens.fontWeightRegular,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '进度',
                       style: appSecondaryControlLabelStyle(context).copyWith(
-                        fontSize: 11,
+                        fontSize: DesignTokens.fontSizeCaption,
                         color: cs.onSurface.withValues(alpha: 0.62),
                       ),
                     ),
@@ -116,18 +115,18 @@ class HabitWeeklyCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
               key: const ValueKey('habit_weekly_overview_progress_bar'),
               value: weekAverage.clamp(0.0, 1.0).toDouble(),
-              minHeight: 8,
+              minHeight: 5,
               backgroundColor: primaryColor.withValues(alpha: 0.10),
               color: primaryColor,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (i) {
@@ -154,16 +153,16 @@ class HabitWeeklyCard extends StatelessWidget {
                   Text(
                     labels[i],
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.normal,
+                      fontSize: DesignTokens.fontSizeCaption,
+                      fontWeight: DesignTokens.fontWeightRegular,
                       color: isToday ? primaryColor : Colors.grey.shade600,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 5),
                   Container(
                     key: ValueKey('habit_weekly_overview_day_$i'),
-                    width: 40,
-                    height: 40,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: bg,
                       shape: BoxShape.circle,
@@ -189,7 +188,7 @@ class HabitWeeklyCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 9,
                           color: textColor,
-                          fontWeight: FontWeight.normal,
+                          fontWeight: DesignTokens.fontWeightRegular,
                         ),
                       ),
                     ),

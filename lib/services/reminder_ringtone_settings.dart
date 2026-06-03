@@ -258,7 +258,7 @@ class ReminderRingtoneSettings {
     if (result.started) return;
     throw ReminderRingtonePreviewException(
       reason: result.reason,
-      message: result.message,
+      message: _friendlyPreviewMessage(result.reason, result.message),
     );
   }
 
@@ -306,6 +306,19 @@ class ReminderRingtoneSettings {
   static bool get _isAndroid {
     if (kIsWeb) return false;
     return PlatformInfo.isAndroid;
+  }
+
+  static String _friendlyPreviewMessage(String reason, String fallback) {
+    return switch (reason) {
+      'media_volume_zero' => '系统媒体音量为 0，请调高媒体音量后再试听。',
+      'alarm_volume_zero' => '系统铃声音量为 0，请调高音量后再试听。',
+      'audio_resource_missing' => '内置铃声资源缺失，请重新安装或更新应用。',
+      'audio_resource_invalid' => '内置铃声文件不可播放，请切换其他铃声。',
+      'player_init_failed' => '铃声播放器初始化失败，请重试。',
+      'platform_channel_failed' => '铃声播放器调用失败，请重试。',
+      'native_apply_failed' => fallback,
+      _ => fallback.isEmpty ? '铃声试听启动失败，请重试。' : fallback,
+    };
   }
 }
 

@@ -138,8 +138,8 @@ class ReminderRingtoneService : Service() {
         val volume = volumePercent(this) / 100f
         val selectedResId = soundResId(this)
         if (playRawRingtone(selectedResId, volume, id, "raw_selected")) return true
-        if (selectedResId != R.raw.duoyi_alarm && playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")) {
-            Log.w("ReminderRingtoneService", "selected ringtone failed, fell back to built-in alarm")
+        if (selectedResId != R.raw.duoyi_soft && playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")) {
+            Log.w("ReminderRingtoneService", "selected ringtone failed, fell back to built-in soft morning chime")
             return true
         }
         return playToneFallback(volume, id)
@@ -173,8 +173,8 @@ class ReminderRingtoneService : Service() {
                         Log.w("ReminderRingtoneService", "raw ringtone start failed, trying fallback", error)
                         if (player === preparedPlayer) player = null
                         runCatching { preparedPlayer.release() }
-                        if (resId != R.raw.duoyi_alarm) {
-                            playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")
+                        if (resId != R.raw.duoyi_soft) {
+                            playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
                         } else {
                             playToneFallback(volume, id)
                         }
@@ -183,8 +183,8 @@ class ReminderRingtoneService : Service() {
                 setOnErrorListener { mp, _, _ ->
                     if (player === mp) player = null
                     runCatching { mp.release() }
-                    if (resId != R.raw.duoyi_alarm) {
-                        playRawRingtone(R.raw.duoyi_alarm, volume, id, "raw_alarm_fallback")
+                    if (resId != R.raw.duoyi_soft) {
+                        playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
                     } else {
                         playToneFallback(volume, id)
                     }
@@ -538,12 +538,12 @@ class ReminderRingtoneService : Service() {
             stopPreview()
 
             val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val alarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
-            if (alarmVolume <= 0) {
+            val mediaVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (mediaVolume <= 0) {
                 return previewResult(
                     started = false,
-                    reason = "alarm_volume_zero",
-                    message = "系统闹钟音量为 0，请调高闹钟/铃声音量后再试听。",
+                    reason = "media_volume_zero",
+                    message = "系统媒体音量为 0，请调高媒体音量后再试听。",
                 )
             }
 
@@ -603,12 +603,17 @@ class ReminderRingtoneService : Service() {
                     message = "正在试听当前提醒铃声。",
                 )
             } catch (error: Exception) {
+                Log.e(
+                    "ReminderRingtoneService",
+                    "previewCurrentSound failed sound=$soundName volume=$volume",
+                    error,
+                )
                 runCatching { player.release() }
                 previewPlayer = null
                 previewResult(
                     started = false,
                     reason = "player_init_failed",
-                    message = "播放器初始化失败：${error.message ?: "未知错误"}。",
+                    message = "铃声播放器初始化失败，请重试。",
                 )
             } finally {
                 afd.close()
@@ -639,30 +644,30 @@ class ReminderRingtoneService : Service() {
             return normalizeSoundName(value)
         }
 
-	        private fun volumePercent(context: Context): Int {
-	            return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-	                .getInt(volumeKey, 60)
-	                .coerceIn(40, 80)
-	        }
+        private fun volumePercent(context: Context): Int {
+            return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                .getInt(volumeKey, 60)
+                .coerceIn(40, 80)
+        }
 
-	        private fun previewAudioAttributes(): AudioAttributes {
-	            return AudioAttributes.Builder()
-	                .setUsage(AudioAttributes.USAGE_ALARM)
-	                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-	                .build()
-	        }
+        private fun previewAudioAttributes(): AudioAttributes {
+            return AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        }
 
-	        private fun previewResult(
-	            started: Boolean,
-	            reason: String,
-	            message: String,
-	        ): Map<String, Any> {
-	            return mapOf(
-	                "started" to started,
-	                "reason" to reason,
-	                "message" to message,
-	            )
-	        }
+        private fun previewResult(
+            started: Boolean,
+            reason: String,
+            message: String,
+        ): Map<String, Any> {
+            return mapOf(
+                "started" to started,
+                "reason" to reason,
+                "message" to message,
+            )
+        }
 
         private fun soundResId(context: Context): Int {
             return when (selectedSoundName(context)) {
@@ -683,7 +688,18 @@ class ReminderRingtoneService : Service() {
                 "mist" -> R.raw.duoyi_mist
                 "moon" -> R.raw.duoyi_moon
                 "morning" -> R.raw.duoyi_morning
-                else -> R.raw.duoyi_alarm  // 默认使用alarm作为兜底
+                "paper" -> R.raw.duoyi_paper
+                "pearl" -> R.raw.duoyi_pearl
+                "pebble" -> R.raw.duoyi_pebble
+                "sakura" -> R.raw.duoyi_sakura
+                "silver" -> R.raw.duoyi_silver
+                "soft" -> R.raw.duoyi_soft
+                "star" -> R.raw.duoyi_star
+                "stream" -> R.raw.duoyi_stream
+                "tide" -> R.raw.duoyi_tide
+                "water" -> R.raw.duoyi_water
+                "wood" -> R.raw.duoyi_wood
+                else -> R.raw.duoyi_soft
             }
         }
 
@@ -705,12 +721,19 @@ class ReminderRingtoneService : Service() {
                 "marimba",
                 "mist",
                 "moon",
-                "morning" -> value
-                // 旧的铃声名称映射到实际存在的文件
-                "soft" -> "alarm"
-                "silver", "paper", "stream", "star", "wood", "water",
-                "pebble", "tide", "pearl", "sakura" -> "alarm"  // 这些文件不存在，用alarm代替
-                else -> "alarm"
+                "morning",
+                "paper",
+                "pearl",
+                "pebble",
+                "sakura",
+                "silver",
+                "soft",
+                "star",
+                "stream",
+                "tide",
+                "water",
+                "wood" -> value
+                else -> "soft"
             }
         }
 

@@ -169,8 +169,14 @@ void main() {
     expect(cardSource, isNot(contains('Icons.warning_amber_rounded')));
     expect(cardSource, isNot(contains('Icons.verified_rounded')));
     expect(cardSource, isNot(contains('_HabitEditButton(habit: habit)')));
-    expect(source, isNot(contains('class _HabitEditButton extends StatelessWidget')));
-    expect(source, isNot(contains("key: const ValueKey('habit_inline_edit_button')")));
+    expect(
+      source,
+      isNot(contains('class _HabitEditButton extends StatelessWidget')),
+    );
+    expect(
+      source,
+      isNot(contains("key: const ValueKey('habit_inline_edit_button')")),
+    );
     expect(source, contains('message: label'));
     expect(source, isNot(contains("tooltip: '习惯操作'")));
     expect(source, isNot(contains('PopupMenuButton<String>')));
@@ -241,22 +247,22 @@ void main() {
     );
     expect(weekly, contains('context.watch<HabitProvider>()'));
     expect(weekly, contains('final data = provider.currentWeekProgress();'));
-    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(12, 8, 12, 9)'));
+    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(12, 7, 12, 8)'));
     expect(
       weekly,
-      contains('padding: const EdgeInsets.fromLTRB(16, 18, 16, 18)'),
+      contains('padding: const EdgeInsets.fromLTRB(12, 12, 12, 12)'),
     );
     expect(weekly, contains('currentWeekProgress()'));
     expect(
       weekly,
       contains('borderRadius: BorderRadius.circular(DesignTokens.radiusCard)'),
     );
-    expect(weekly, contains('fontSize: 19'));
-    expect(weekly, contains('fontSize: 22'));
-    expect(weekly, contains('minHeight: 10'));
-    expect(weekly, contains('width: 44'));
-    expect(weekly, contains('height: 44'));
-    expect(weekly, contains('fontWeight: FontWeight.normal'));
+    expect(weekly, contains('fontSize: DesignTokens.fontSizeCardTitle'));
+    expect(weekly, contains('fontSize: 16'));
+    expect(weekly, contains('minHeight: 5'));
+    expect(weekly, contains('width: 40'));
+    expect(weekly, contains('height: 40'));
+    expect(weekly, contains('fontWeight: DesignTokens.fontWeightRegular'));
   });
 
   test('习惯达标状态与任务名同一行靠右展示', () {

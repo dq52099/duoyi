@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/design_tokens.dart';
 import '../core/notification_history_policy.dart';
 import '../core/platform_info.dart';
 import '../core/report_reminder_config.dart';
@@ -667,11 +668,12 @@ class _NotificationSettingsScreenState
         ),
       );
       return;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] send test failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('测试通知发送失败：$e'),
+        const SnackBar(
+          content: Text('测试通知发送失败，请检查通知权限和渠道设置。'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -703,11 +705,12 @@ class _NotificationSettingsScreenState
         ),
       );
       return;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] scheduled test failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('定时测试注册失败：$e'),
+        const SnackBar(
+          content: Text('定时测试注册失败，请检查通知和精确闹钟权限。'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -739,11 +742,12 @@ class _NotificationSettingsScreenState
         ),
       );
       return;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] strong test failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('强提醒测试启动失败：$e'),
+        const SnackBar(
+          content: Text('强提醒测试启动失败，请检查通知、闹钟和后台运行权限。'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -849,18 +853,21 @@ class _NotificationSettingsScreenState
           child: RefreshIndicator(
             onRefresh: _refreshStatus,
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics(),
+              ),
               padding: EdgeInsets.fromLTRB(
                 12,
-                10,
+                16,
                 12,
-                24 + MediaQuery.paddingOf(context).bottom,
+                40 + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
                 AppSurfaceCard(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
                   border: Border.all(
-                    color: cs.outlineVariant.withValues(alpha: 0.18),
-                    width: 0.45,
+                    color: cs.outlineVariant.withValues(alpha: 0.12),
+                    width: 0.35,
                   ),
                   child: Row(
                     children: [
@@ -883,7 +890,11 @@ class _NotificationSettingsScreenState
                           children: [
                             Text(
                               '通知设置',
-                              style: Theme.of(context).textTheme.titleMedium,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontSize: DesignTokens.fontSizeCardTitle,
+                                    fontWeight: DesignTokens.fontWeightRegular,
+                                  ),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -1615,7 +1626,7 @@ class _NotificationRingtoneSectionState
     } on ReminderRingtonePreviewException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
       );
     } finally {
       if (mounted) setState(() => _previewing = false);
@@ -1638,7 +1649,7 @@ class _NotificationRingtoneSectionState
     } on ReminderRingtonePreviewException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
       );
     }
   }

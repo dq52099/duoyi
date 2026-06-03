@@ -199,7 +199,7 @@ void main() {
       expect(source, contains('await _applyAndPreviewCurrentSound();'));
       expect(source, contains('ReminderRingtonePreviewException'));
       expect(source, contains('reason: result.reason'));
-      expect(source, contains('message: result.message'));
+      expect(source, contains('_friendlyPreviewMessage'));
       expect(source, isNot(contains('fellBackToDefault')));
       expect(source, isNot(contains('已尝试降级')));
       expect(source, isNot(contains('默认轻铃')));
@@ -217,7 +217,9 @@ void main() {
       expect(mainActivity, contains('result.success(null)'));
       expect(service, contains('fun previewCurrentSound'));
       expect(service, contains('MediaPlayer()'));
-      expect(service, contains('alarm_volume_zero'));
+      expect(service, contains('media_volume_zero'));
+      expect(service, contains('AudioManager.STREAM_MUSIC'));
+      expect(service, contains('AudioAttributes.USAGE_MEDIA'));
       expect(service, contains('audio_resource_missing'));
       expect(service, contains('val normalized = value.coerceIn(40, 80)'));
       expect(service, contains('.getInt(volumeKey, 60)'));

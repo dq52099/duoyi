@@ -350,6 +350,9 @@ void main() {
       final focusProvider = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFocusHabitWidgetProvider.kt',
       ).readAsStringSync();
+      final service = File(
+        'lib/services/home_widget_service.dart',
+      ).readAsStringSync();
 
       expect(theme, contains('setBackgroundTintList'));
       expect(theme, contains('fun applyButtonSurfaces('));
@@ -357,6 +360,37 @@ void main() {
         theme,
         isNot(contains('views.setInt(rootId, "setBackgroundColor"')),
       );
+      expect(theme, contains('backgroundAssetKey'));
+      expect(
+        theme,
+        contains('backgroundImageResource(theme.backgroundAssetKey)'),
+      );
+      expect(
+        theme,
+        contains(
+          'views.setInt(rootId, "setBackgroundResource", imageResource)',
+        ),
+      );
+      for (final key in [
+        're0',
+        'genshin',
+        'star_rail',
+        'wuthering',
+        'zzz',
+        'yanyun',
+        'botw',
+      ]) {
+        expect(theme, contains('R.drawable.widget_theme_$key'));
+        expect(
+          File(
+            'android/app/src/main/res/drawable-nodpi/widget_theme_$key.png',
+          ).existsSync(),
+          isTrue,
+        );
+      }
+      expect(service, contains('backgroundAssetKey: _backgroundAssetKey'));
+      expect(service, contains("'widget_theme_background_asset_key'"));
+      expect(service, contains("'assets/backgrounds/re0.png' => 're0'"));
       expect(rootBg, contains('<corners android:radius="16dp" />'));
       expect(navBg, contains('<corners android:radius="9dp" />'));
       expect(primaryButton, contains('<corners android:radius="8dp" />'));

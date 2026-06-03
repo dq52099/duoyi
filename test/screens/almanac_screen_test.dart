@@ -40,6 +40,13 @@ void main() {
       await tester.tap(find.text('1').first);
       await tester.pumpAndSettle();
 
+      expect(find.text('2026年6月1日星期一'), findsNothing);
+      expect(find.text('胎神'), findsNothing);
+      expect(find.text('查看黄历'), findsOneWidget);
+
+      await tester.tap(find.text('查看黄历'));
+      await tester.pumpAndSettle();
+
       expect(find.text('2026年6月1日星期一'), findsOneWidget);
       expect(find.text('胎神'), findsOneWidget);
       expect(find.text('彭祖'), findsOneWidget);
@@ -95,6 +102,12 @@ void main() {
     await tester.tap(find.text('1').first);
     await tester.pumpAndSettle();
 
+    expect(find.text('2026年6月1日星期一'), findsNothing);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('查看黄历'));
+    await tester.pumpAndSettle();
+
     expect(find.text('2026年6月1日星期一'), findsOneWidget);
     expect(find.text('胎神'), findsOneWidget);
 
@@ -120,20 +133,17 @@ void main() {
     await tester.tap(find.text('31').first);
     await tester.pumpAndSettle();
 
+    expect(find.text('2026年5月31日星期日'), findsNothing);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('查看黄历'));
+    await tester.pumpAndSettle();
+
     expect(find.text('2026年5月31日星期日'), findsOneWidget);
     expect(find.textContaining('丙午马年 癸巳月 乙巳日'), findsWidgets);
-
-    await tester.tap(find.text('宜').last);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('祭祀 解除 断蚁 会亲友 馀事勿取'), findsWidgets);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('忌').last);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('嫁娶 安葬'), findsWidgets);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
+    expect(find.text('宜'), findsWidgets);
+    expect(find.text('忌'), findsWidgets);
+    expect(find.text('知道了'), findsNothing);
 
     expect(find.textContaining('碓磨床房内东'), findsOneWidget);
     expect(find.textContaining('蛇日冲猪（己亥）煞东'), findsOneWidget);
@@ -155,21 +165,18 @@ void main() {
     await tester.tap(find.text('3').first);
     await tester.pumpAndSettle();
 
+    expect(find.text('2026年6月3日星期三'), findsNothing);
+    expect(find.text('胎神'), findsNothing);
+
+    await tester.tap(find.text('查看黄历'));
+    await tester.pumpAndSettle();
+
     expect(find.text('2026年6月3日星期三'), findsOneWidget);
     expect(find.textContaining('四月十八'), findsWidgets);
     expect(find.textContaining('丙午马年 癸巳月 戊申日'), findsWidgets);
-
-    await tester.tap(find.text('宜').last);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('祭祀 沐浴 移徙 破土 安葬 扫舍 平治道涂'), findsOneWidget);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('忌').last);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('祈福 嫁娶 入宅 安床 作灶'), findsWidgets);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
+    expect(find.text('宜'), findsWidgets);
+    expect(find.text('忌'), findsWidgets);
+    expect(find.text('知道了'), findsNothing);
 
     expect(find.textContaining('房床炉房内中'), findsOneWidget);
     expect(find.textContaining('戊不受田，田主不祥；申不安床，鬼祟入房'), findsOneWidget);
