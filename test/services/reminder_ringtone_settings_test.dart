@@ -176,88 +176,99 @@ void main() {
     }
   });
 
-  test(
-    'ringtone changes trigger direct native foreground preview by default',
-    () {
-      final source = File(
-        'lib/services/reminder_ringtone_settings.dart',
-      ).readAsStringSync();
-      final mainActivity = File(
-        'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
-      ).readAsStringSync();
-      final service = File(
-        'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
-      ).readAsStringSync();
-      final screen = File(
-        'lib/screens/notification_history_screen.dart',
-      ).readAsStringSync();
-      final native = File(
-        'lib/services/native_reminder_ringtone.dart',
-      ).readAsStringSync();
+  test('ringtone changes trigger direct native foreground preview by default', () {
+    final source = File(
+      'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
+    final mainActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+    ).readAsStringSync();
+    final service = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+    ).readAsStringSync();
+    final screen = File(
+      'lib/screens/notification_history_screen.dart',
+    ).readAsStringSync();
+    final native = File(
+      'lib/services/native_reminder_ringtone.dart',
+    ).readAsStringSync();
 
-      expect(source, contains('setSound(String value, {bool preview = true})'));
-      expect(source, contains('await _applyAndPreviewCurrentSound();'));
-      expect(source, contains('ReminderRingtonePreviewException'));
-      expect(source, contains('reason: result.reason'));
-      expect(source, contains('_friendlyPreviewMessage'));
-      expect(source, contains('铃声试听启动失败，请重试。'));
-      expect(source, isNot(contains('播放器调用失败')));
-      expect(source, isNot(contains('fellBackToDefault')));
-      expect(source, isNot(contains('已尝试降级')));
-      expect(source, isNot(contains('默认轻铃')));
-      expect(source, contains('await applyPersistedSettingsToNative();'));
-      expect(source, contains('NativeReminderRingtone.previewCurrentSound()'));
-      expect(mainActivity, contains('"setSoundName"'));
-      expect(mainActivity, contains('ReminderRingtoneService.setSoundName'));
-      expect(mainActivity, contains('"setVolumePercent"'));
-      expect(
-        mainActivity,
-        contains('ReminderRingtoneService.setVolumePercent'),
-      );
-      expect(mainActivity, contains('"previewCurrentSound"'));
-      expect(mainActivity, contains('"stopPreview"'));
-      expect(mainActivity, contains('result.success(null)'));
-      expect(service, contains('fun previewCurrentSound'));
-      expect(service, contains('MediaPlayer()'));
-      expect(service, contains('media_volume_zero'));
-      expect(service, contains('AudioManager.STREAM_MUSIC'));
-      expect(service, contains('AudioAttributes.USAGE_MEDIA'));
-      expect(service, contains('audio_resource_missing'));
-      expect(service, contains('val normalized = value.coerceIn(40, 80)'));
-      expect(service, contains('.getInt(volumeKey, 60)'));
-      expect(service, contains('.coerceIn(40, 80)'));
-      expect(native, contains('static const int previewNotificationId'));
-      expect(native, contains('static const Duration previewDuration'));
-      expect(native, contains('Future<bool> preview({'));
-      expect(native, contains("_tryInvoke('showNow'"));
-      expect(native, contains("'vibrate': false"));
-      expect(native, contains('unawaited('));
-      expect(native, contains("_tryInvoke('cancel'"));
-      expect(
-        native,
-        contains('Future<NativeReminderPreviewResult> previewCurrentSound'),
-      );
-      expect(native, contains("'previewCurrentSound'"));
-      expect(native, contains('铃声试听启动失败，请重试。'));
-      expect(native, isNot(contains('播放器调用失败')));
-      expect(native, contains("static Future<void> stopPreview()"));
-      expect(native, isNot(contains('await cancel(previewNotificationId)')));
-      expect(screen, contains('Future<void> _reloadRingtoneSettings() async'));
-      expect(screen, contains('await _reloadRingtoneSettings();'));
-      expect(screen, contains('Future<void> _previewCurrentSound() async'));
-      expect(screen, contains("tooltip: '试听当前铃声'"));
-      expect(
-        screen,
-        contains('ReminderRingtoneSettings.previewCurrentSound()'),
-      );
-      expect(screen, contains('ReminderRingtoneSettings.stopPreview()'));
-      expect(screen, contains('正在试听当前提醒铃声'));
-      expect(screen, contains('if (_previewing) return;'));
-      expect(screen, contains('_previewing = true;'));
-      expect(screen, contains(r"successMessage: '已切换为 $label，并开始试听'"));
-      expect(screen, contains("successMessage: '已切换音量并开始试听'"));
-    },
-  );
+    expect(source, contains('setSound(String value, {bool preview = true})'));
+    expect(source, contains('await _applyAndPreviewCurrentSound();'));
+    expect(source, contains('ReminderRingtonePreviewException'));
+    expect(source, contains('reason: result.reason'));
+    expect(source, contains('_friendlyPreviewMessage'));
+    expect(source, contains('铃声试听启动失败，请重试。'));
+    expect(source, isNot(contains('播放器调用失败')));
+    expect(source, isNot(contains('fellBackToDefault')));
+    expect(source, isNot(contains('已尝试降级')));
+    expect(source, isNot(contains('默认轻铃')));
+    expect(source, contains('await applyPersistedSettingsToNative();'));
+    expect(source, contains('NativeReminderRingtone.previewCurrentSound()'));
+    expect(mainActivity, contains('"setSoundName"'));
+    expect(mainActivity, contains('ReminderRingtoneService.setSoundName'));
+    expect(mainActivity, contains('"setVolumePercent"'));
+    expect(mainActivity, contains('ReminderRingtoneService.setVolumePercent'));
+    expect(mainActivity, contains('"previewCurrentSound"'));
+    expect(mainActivity, contains('"stopPreview"'));
+    expect(mainActivity, contains('result.success(null)'));
+    expect(service, contains('fun previewCurrentSound'));
+    expect(service, contains('MediaPlayer()'));
+    expect(service, contains('media_volume_zero'));
+    expect(service, contains('AudioManager.STREAM_MUSIC'));
+    expect(service, contains('AudioAttributes.USAGE_MEDIA'));
+    expect(service, contains('stopPreview()'));
+    expect(service, contains('activeReminderId != null'));
+    expect(service, contains('active_reminder_ringing'));
+    expect(
+      source,
+      contains("'active_reminder_ringing' => '当前有提醒正在响铃，请先处理后再试听。'"),
+    );
+    expect(
+      service,
+      isNot(
+        contains(
+          'appContext.stopService(Intent(appContext, ReminderRingtoneService::class.java))',
+        ),
+      ),
+    );
+    expect(service, contains('audio_resource_missing'));
+    expect(service, contains('tone_fallback_started'));
+    expect(service, isNot(contains('当前铃声暂不可播放')));
+    expect(service, isNot(contains('铃声播放器初始化失败')));
+    expect(service, contains('val normalized = value.coerceIn(40, 80)'));
+    expect(service, contains('.getInt(volumeKey, 60)'));
+    expect(service, contains('.coerceIn(40, 80)'));
+    expect(native, contains('static const int previewNotificationId'));
+    expect(native, contains('static const Duration previewDuration'));
+    expect(native, contains('Future<bool> preview({'));
+    expect(native, contains("_tryInvoke('showNow'"));
+    expect(native, contains("'vibrate': false"));
+    expect(native, contains('unawaited('));
+    expect(native, contains("_tryInvoke('cancel'"));
+    expect(
+      native,
+      contains('Future<NativeReminderPreviewResult> previewCurrentSound'),
+    );
+    expect(native, contains("'previewCurrentSound'"));
+    expect(native, contains('铃声试听启动失败，请重试。'));
+    expect(native, isNot(contains('播放器调用失败')));
+    expect(source, contains("'player_init_failed' => '铃声试听启动失败，请重试。'"));
+    expect(source, isNot(contains('铃声播放器初始化失败')));
+    expect(native, contains("static Future<void> stopPreview()"));
+    expect(native, isNot(contains('await cancel(previewNotificationId)')));
+    expect(screen, contains('Future<void> _reloadRingtoneSettings() async'));
+    expect(screen, contains('await _reloadRingtoneSettings();'));
+    expect(screen, contains('Future<void> _previewCurrentSound() async'));
+    expect(screen, contains("tooltip: '试听当前铃声'"));
+    expect(screen, contains('ReminderRingtoneSettings.previewCurrentSound()'));
+    expect(screen, contains('ReminderRingtoneSettings.stopPreview()'));
+    expect(screen, contains('正在试听当前提醒铃声'));
+    expect(screen, contains('if (_previewing) return;'));
+    expect(screen, contains('_previewing = true;'));
+    expect(screen, contains(r"successMessage: '已切换为 $label，并开始试听'"));
+    expect(screen, contains("successMessage: '已切换音量并开始试听'"));
+  });
 
   test(
     'ringtone volume changes also trigger direct native preview by default',

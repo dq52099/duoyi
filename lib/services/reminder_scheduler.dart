@@ -761,7 +761,7 @@ class ReminderScheduler {
     final weekdays = _habitWeekdays(habit, rule);
     final id = _idFor('habit_${habit.id}');
     final payload = 'duoyi://habit/${habit.id}?confirm=1';
-    final title = _habitTitle(rule.kind);
+    final title = _habitTitle();
     final body = '${habit.name} 到时间了，点开确认打卡';
 
     switch (rule.kind) {
@@ -2468,7 +2468,7 @@ class ReminderScheduler {
           objectType: 'todo',
           objectId: t.id,
           rule: rule,
-          title: _titleFor('todo', rule.type, rule.kind),
+          title: _todoTitle(t, rule.type),
           body: t.title,
           payload: payload,
           when: scheduledWhen,
@@ -2492,7 +2492,7 @@ class ReminderScheduler {
           objectType: 'todo',
           objectId: t.id,
           rule: rule,
-          title: _titleFor('todo', rule.type, rule.kind),
+          title: _todoTitle(t, rule.type),
           body: t.title,
           payload: payload,
           when: scheduledWhen,
@@ -2504,7 +2504,7 @@ class ReminderScheduler {
           objectType: 'todo',
           objectId: t.id,
           rule: rule,
-          title: _titleFor('todo', rule.type, rule.kind),
+          title: _todoTitle(t, rule.type),
           body: t.title,
           payload: payload,
           hour: rule.hour!,
@@ -2520,7 +2520,7 @@ class ReminderScheduler {
           objectType: 'todo',
           objectId: t.id,
           rule: rule,
-          title: _titleFor('todo', rule.type, rule.kind),
+          title: _todoTitle(t, rule.type),
           body: t.title,
           payload: payload,
           hour: rule.hour!,
@@ -2931,12 +2931,15 @@ class ReminderScheduler {
     return weekdays.length == 7 ? const <int>[] : weekdays;
   }
 
-  String _habitTitle(ReminderKind kind) {
-    return switch (kind) {
-      ReminderKind.alarm => '⏰ 习惯打卡',
-      ReminderKind.popup || ReminderKind.push => '🔔 习惯打卡',
-      ReminderKind.email => '✉️ 习惯打卡',
-      ReminderKind.off => '🔕 习惯打卡',
+  String _habitTitle() {
+    return '习惯打卡提醒';
+  }
+
+  String _todoTitle(TodoItem item, ReminderRuleType type) {
+    return switch (type) {
+      ReminderRuleType.dailyTime || ReminderRuleType.weeklyTime => '今日提醒',
+      ReminderRuleType.absolute ||
+      ReminderRuleType.relativeToDue => '提醒：${item.title}',
     };
   }
 

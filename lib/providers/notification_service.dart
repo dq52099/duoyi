@@ -1141,9 +1141,10 @@ class NotificationService extends ChangeNotifier
     required DateTime when,
   }) async {
     final body = _notificationBodyForPayload(title, 'duoyi://todo/$todoId');
+    final displayTitle = '提醒：$title';
     final scheduled = await _scheduleOnceOrRecord(
       id: _idFor('todo_$todoId'),
-      title: _strings.notifTodoDueTitle,
+      title: displayTitle,
       body: body,
       when: when,
       payload: 'duoyi://todo/$todoId',
@@ -1155,7 +1156,7 @@ class NotificationService extends ChangeNotifier
     _addScheduledToHistory(
       NotificationItem(
         id: _idFor('todo_$todoId').toString(),
-        title: _strings.notifTodoDueTitle,
+        title: displayTitle,
         body: body,
         scheduledTime: when,
         type: NotificationType.todo,
@@ -1182,9 +1183,10 @@ class NotificationService extends ChangeNotifier
     required int minute,
     List<int>? weekdays,
   }) async {
+    const title = '习惯打卡提醒';
     final scheduled = await _scheduleDailyOrRecord(
       id: _idFor('habit_$habitId'),
-      title: _strings.notifHabitRemindTitle,
+      title: title,
       body: '别忘了: $habitName',
       hour: hour,
       minute: minute,
@@ -1198,7 +1200,7 @@ class NotificationService extends ChangeNotifier
     _addScheduledToHistory(
       NotificationItem(
         id: _idFor('habit_$habitId').toString(),
-        title: _strings.notifHabitRemindTitle,
+        title: title,
         body: '别忘了: $habitName',
         scheduledTime: DateTime.now(),
         type: NotificationType.habit,

@@ -91,10 +91,7 @@ void main() {
     expect(find.text('背单词'), findsOneWidget);
 
     await tester.tap(
-      find.ancestor(
-        of: find.text('工作 1'),
-        matching: find.byType(FilterChip),
-      ),
+      find.ancestor(of: find.text('工作 1'), matching: find.byType(FilterChip)),
     );
     await tester.pumpAndSettle();
 
@@ -102,10 +99,7 @@ void main() {
     expect(find.text('背单词'), findsNothing);
 
     await tester.tap(
-      find.ancestor(
-        of: find.text('全部项目'),
-        matching: find.byType(FilterChip),
-      ),
+      find.ancestor(of: find.text('全部项目'), matching: find.byType(FilterChip)),
     );
     await tester.pumpAndSettle();
 
@@ -115,10 +109,7 @@ void main() {
     expect(find.text('背单词'), findsOneWidget);
 
     await tester.tap(
-      find.ancestor(
-        of: find.text('工作 1'),
-        matching: find.byType(FilterChip),
-      ),
+      find.ancestor(of: find.text('工作 1'), matching: find.byType(FilterChip)),
     );
     await tester.pumpAndSettle();
 
@@ -126,10 +117,7 @@ void main() {
     expect(find.text('背单词'), findsNothing);
 
     await tester.tap(
-      find.ancestor(
-        of: find.text('全部项目'),
-        matching: find.byType(FilterChip),
-      ),
+      find.ancestor(of: find.text('全部项目'), matching: find.byType(FilterChip)),
     );
     await tester.pumpAndSettle();
 

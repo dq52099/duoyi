@@ -36,8 +36,11 @@ void main() {
           interval: interval,
         );
         final scheduling = const GoalScheduling.fixed();
-        final anchor =
-            DateTime(2025, 1, 1).add(Duration(days: rng.nextInt(300)));
+        final anchor = DateTime(
+          2025,
+          1,
+          1,
+        ).add(Duration(days: rng.nextInt(300)));
 
         final nxt = RecurrenceEngine.nextOccurrence(
           rule: rule,
@@ -46,13 +49,18 @@ void main() {
           anchor: anchor,
         );
 
-        expect(nxt, isNotNull,
-            reason: 'iter=$iter weekly-fixed 应该永远有下一次');
+        expect(nxt, isNotNull, reason: 'iter=$iter weekly-fixed 应该永远有下一次');
         final delta = nxt!.difference(dateOnly(anchor)).inDays;
-        expect(delta >= 1, isTrue,
-            reason: 'iter=$iter anchor=$anchor next=$nxt delta=$delta');
-        expect(delta <= 7 * interval, isTrue,
-            reason: 'iter=$iter anchor=$anchor next=$nxt delta=$delta');
+        expect(
+          delta >= 1,
+          isTrue,
+          reason: 'iter=$iter anchor=$anchor next=$nxt delta=$delta',
+        );
+        expect(
+          delta <= 7 * interval,
+          isTrue,
+          reason: 'iter=$iter anchor=$anchor next=$nxt delta=$delta',
+        );
       }
     });
   });
@@ -90,8 +98,11 @@ void main() {
     test('同 goalId 同 yearWeek 两次调用返回相同日期', () {
       final rng = Random(kSeed);
       for (int iter = 0; iter < kIterations; iter++) {
-        final anchor =
-            DateTime(2025, 3, 3).add(Duration(days: rng.nextInt(180)));
+        final anchor = DateTime(
+          2025,
+          3,
+          3,
+        ).add(Duration(days: rng.nextInt(180)));
         final rule = const RecurrenceRule(
           frequency: RecurrenceFrequency.weekly,
           interval: 1,
@@ -113,8 +124,11 @@ void main() {
           anchor: anchor,
           goalId: goalId,
         );
-        expect(first, second,
-            reason: 'iter=$iter goalId=$goalId first=$first second=$second');
+        expect(
+          first,
+          second,
+          reason: 'iter=$iter goalId=$goalId first=$first second=$second',
+        );
       }
     });
   });
@@ -126,7 +140,12 @@ void main() {
         2025,
         const HolidayYear(
           holidays: <String>{
-            '03-05', '03-06', '03-07', '03-08', '03-09', '03-10'
+            '03-05',
+            '03-06',
+            '03-07',
+            '03-08',
+            '03-09',
+            '03-10',
           },
           workMakeupDays: <String>{},
         ),

@@ -91,7 +91,11 @@ void main() {
       );
       expect(
         File('lib/screens/notification_history_screen.dart').readAsStringSync(),
-        contains('_openSystemSettings(NotificationService.channelId)'),
+        matches(
+          RegExp(
+            r'_openSystemSettings\(\s*NotificationService\.channelId\s*,?\s*\)',
+          ),
+        ),
       );
       expect(
         File('lib/screens/notification_history_screen.dart').readAsStringSync(),

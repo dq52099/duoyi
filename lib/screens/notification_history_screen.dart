@@ -144,6 +144,8 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final hasPager = filteredHistory.length > _pageSize;
 
     return Scaffold(
       backgroundColor: routeBackground,
@@ -206,7 +208,12 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                             message: '没有匹配的通知记录',
                           )
                         : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
+                            padding: EdgeInsets.fromLTRB(
+                              12,
+                              6,
+                              12,
+                              hasPager ? 12 : 24 + bottomInset,
+                            ),
                             itemCount: visibleHistory.length,
                             separatorBuilder: (context, index) =>
                                 const SizedBox(height: 8),
@@ -223,9 +230,9 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                             },
                           ),
                   ),
-                  if (filteredHistory.length > _pageSize)
+                  if (hasPager)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
                       child: Row(
                         children: [
                           Text(
@@ -551,6 +558,15 @@ class _NotificationSettingsScreenState
         _exactAlarmGranted = exactAlarmGranted;
         _channelStatuses = channelStatuses;
       });
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] refresh status failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('通知状态读取失败，请稍后重试或打开系统通知设置检查。'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -566,29 +582,51 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _requestPermission() async {
-    final granted = await context
-        .read<NotificationService>()
-        .requestPermission();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(granted ? '通知权限已开启' : '通知权限未开启'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    await _refreshStatus();
+    try {
+      final granted = await context
+          .read<NotificationService>()
+          .requestPermission();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(granted ? '通知权限已开启' : '通知权限未开启'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refreshStatus();
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] request permission failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('通知权限请求失败，请前往系统设置手动开启。'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _requestExactAlarmPermission() async {
-    final granted = await AlarmService.instance.requestExactAlarmPermission();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(granted ? '精准闹钟权限已开启' : '精准闹钟权限未开启，闹钟可能延后或降级'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    await _refreshStatus();
+    try {
+      final granted = await AlarmService.instance.requestExactAlarmPermission();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(granted ? '精准闹钟权限已开启' : '精准闹钟权限未开启，闹钟可能延后或降级'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refreshStatus();
+    } catch (e, st) {
+      debugPrint('[NotificationSettings] exact alarm request failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('精准闹钟权限请求失败，请前往系统设置手动开启。'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _setNotificationStatusBarPreference({
@@ -847,336 +885,365 @@ class _NotificationSettingsScreenState
         toolbarHeight: 52,
       ),
       body: AppSecondaryControlTheme(
-        child: SafeArea(
-          top: false,
-          bottom: false,
-          child: RefreshIndicator(
-            onRefresh: _refreshStatus,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: ClampingScrollPhysics(),
-              ),
-              padding: EdgeInsets.fromLTRB(
-                12,
-                16,
-                12,
-                40 + MediaQuery.paddingOf(context).bottom,
-              ),
-              children: [
-                AppSurfaceCard(
-                  padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
-                  border: Border.all(
-                    color: cs.outlineVariant.withValues(alpha: 0.12),
-                    width: 0.35,
-                  ),
-                  child: Row(
+        child: RefreshIndicator(
+          onRefresh: _refreshStatus,
+          child: CustomScrollView(
+            key: const ValueKey('notification_settings_scroll_view'),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics(),
+            ),
+            slivers: [
+              SliverSafeArea(
+                top: false,
+                bottom: true,
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 40),
+                  sliver: SliverList.list(
                     children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(10),
+                      AppSurfaceCard(
+                        padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.12),
+                          width: 0.35,
                         ),
-                        child: Icon(
-                          Icons.notifications_active_outlined,
-                          color: cs.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              '通知设置',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    fontSize: DesignTokens.fontSizeCardTitle,
-                                    fontWeight: DesignTokens.fontWeightRegular,
-                                  ),
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: cs.primary.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.notifications_active_outlined,
+                                color: cs.primary,
+                              ),
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '系统权限、提醒时间、铃声和通知记录保留',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: cs.onSurface.withValues(alpha: 0.64),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '通知设置',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontSize:
+                                              DesignTokens.fontSizeCardTitle,
+                                          fontWeight:
+                                              DesignTokens.fontWeightRegular,
+                                        ),
                                   ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '系统权限、提醒时间、铃声和通知记录保留',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.64,
+                                          ),
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      AppSettingsSection(
+                        title: '系统通知',
+                        subtitle: service.permissionGranted
+                            ? '通知权限已开启'
+                            : '通知权限未开启',
+                        children: [
+                          AppSettingsTile(
+                            icon: service.permissionGranted
+                                ? Icons.check_circle_outline
+                                : Icons.notifications_off_outlined,
+                            color: service.permissionGranted
+                                ? Colors.green
+                                : Colors.red,
+                            title: '通知权限',
+                            subtitle: service.permissionGranted
+                                ? '系统允许多仪发送提醒'
+                                : '开启后才能收到普通通知和提醒',
+                            trailing: TextButton(
+                              onPressed: _busy ? null : _requestPermission,
+                              child: Text(
+                                service.permissionGranted ? '重新检查' : '开启',
+                              ),
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.settings_outlined,
+                            color: Colors.deepOrange,
+                            title: '普通提醒渠道',
+                            subtitle: _channelSubtitle(
+                              '检查普通通知的声音、横幅和锁屏权限',
+                              NotificationService.channelId,
+                            ),
+                            trailing: _channelStatusTrailing(
+                              NotificationService.channelId,
+                              cs,
+                            ),
+                            onTap: () => _openSystemSettings(
+                              NotificationService.channelId,
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.alarm_on_outlined,
+                            color: Colors.deepPurple,
+                            title: '强提醒渠道',
+                            subtitle: _channelSubtitle(
+                              '检查闹钟提醒的声音、横幅和全屏展示权限',
+                              AlarmService.channelId,
+                            ),
+                            trailing: _channelStatusTrailing(
+                              AlarmService.channelId,
+                              cs,
+                            ),
+                            onTap: () =>
+                                _openSystemSettings(AlarmService.channelId),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.alt_route_outlined,
+                            color: Colors.indigo,
+                            title: '闹钟降级兜底',
+                            subtitle: _channelSubtitle(
+                              '强提醒或内置铃声注册失败时会改用普通提醒；普通提醒渠道静音，兜底也可能无声',
+                              NativeReminderRingtone.fallbackChannelId,
+                            ),
+                            trailing: _channelStatusTrailing(
+                              NativeReminderRingtone.fallbackChannelId,
+                              cs,
+                            ),
+                            onTap: () => _openSystemSettings(
+                              NativeReminderRingtone.fallbackChannelId,
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.music_note_outlined,
+                            color: Colors.pink,
+                            title: '内置铃声状态渠道',
+                            subtitle: _channelSubtitle(
+                              '检查内置铃声前台状态通知是否被静音或屏蔽',
+                              NativeReminderRingtone.statusChannelId,
+                            ),
+                            trailing: _channelStatusTrailing(
+                              NativeReminderRingtone.statusChannelId,
+                              cs,
+                            ),
+                            onTap: () => _openSystemSettings(
+                              NativeReminderRingtone.statusChannelId,
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.notifications_active_outlined,
+                            color: cs.primary,
+                            title: '立即发送测试通知',
+                            subtitle: '验证普通通知渠道是否可见、可响铃',
+                            onTap: _busy ? null : _sendTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.schedule_send_outlined,
+                            color: Colors.cyan,
+                            title: '1 分钟后定时测试',
+                            subtitle: '验证系统定时调度链路，到点应收到普通提醒',
+                            onTap: _busy ? null : _sendScheduledTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.alarm_on_outlined,
+                            color: Colors.deepOrange,
+                            title: '测试强提醒铃声',
+                            subtitle: '验证闹钟提醒、内置铃声和通知停止按钮',
+                            onTap: _busy ? null : _sendStrongTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.schedule,
+                            color: Colors.teal,
+                            title: '已调度普通提醒',
+                            subtitle: _pendingPushCount == null
+                                ? '正在读取待触发队列'
+                                : '$_pendingPushCount 条待触发',
+                            trailing: IconButton(
+                              tooltip: '刷新',
+                              onPressed: _busy ? null : _refreshStatus,
+                              icon: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh),
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.alarm_on_outlined,
+                            color: Colors.deepPurple,
+                            title: '已调度闹钟提醒',
+                            subtitle: _pendingAlarmCount == null
+                                ? '正在读取强提醒队列'
+                                : '$_pendingAlarmCount 条待触发 · ${_exactAlarmGranted == true ? '精准闹钟已开启' : '精准闹钟未开启'}',
+                            trailing: TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : _requestExactAlarmPermission,
+                              child: const Text('精准闹钟'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      AppSettingsSection(
+                        title: '提醒入口',
+                        subtitle: '控制由通知触发的快捷记录和历史保留',
+                        children: [
+                          if (PlatformInfo.isAndroid) ...[
+                            SwitchListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              secondary: const Icon(Icons.add_alert_outlined),
+                              title: Text(
+                                I18n.tr(
+                                  'preferences.notification_quick_add.title',
+                                ),
+                              ),
+                              subtitle: Text(
+                                I18n.tr(
+                                  'preferences.notification_quick_add.subtitle',
+                                ),
+                              ),
+                              value: prefs.notificationQuickAdd,
+                              onChanged: _busy
+                                  ? null
+                                  : (value) =>
+                                        _setNotificationStatusBarPreference(
+                                          quickAdd: true,
+                                          value: value,
+                                        ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              secondary: const Icon(Icons.today_outlined),
+                              title: Text(
+                                I18n.tr(
+                                  'preferences.notification_today_progress.title',
+                                ),
+                              ),
+                              subtitle: Text(
+                                I18n.tr(
+                                  'preferences.notification_today_progress.subtitle',
+                                ),
+                              ),
+                              value: prefs.notificationTodayProgress,
+                              onChanged: _busy
+                                  ? null
+                                  : (value) =>
+                                        _setNotificationStatusBarPreference(
+                                          quickAdd: false,
+                                          value: value,
+                                        ),
+                            ),
+                          ] else
+                            AppSettingsTile(
+                              icon: Icons.notifications_none_outlined,
+                              color: Colors.blueGrey,
+                              title: I18n.tr(
+                                'preferences.notification_status_bar.title',
+                              ),
+                              subtitle: I18n.tr(
+                                'preferences.notification_status_bar.unsupported',
+                              ),
+                            ),
+                          AppSettingsTile(
+                            icon: Icons.history_outlined,
+                            color: Colors.blueGrey,
+                            title: '通知记录',
+                            subtitle:
+                                '共 ${service.historyCount} 条，未读 ${service.unreadCount} 条',
+                            trailing: TextButton(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const NotificationHistoryScreen(
+                                        markReadOnOpen: true,
+                                      ),
+                                ),
+                              ),
+                              child: const Text('查看'),
+                            ),
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.inventory_2_outlined,
+                            color: Colors.indigo,
+                            title: '通知记录保留',
+                            subtitle:
+                                '最多保留 ${prefs.notificationHistoryLimit} 条历史，调低后会裁剪旧记录',
+                            trailing: AppCompactDropdown<int>(
+                              value: prefs.notificationHistoryLimit,
+                              width: 116,
+                              items: [
+                                for (final value
+                                    in NotificationHistoryPolicy.options)
+                                  DropdownMenuItem(
+                                    value: value,
+                                    child: Text('$value 条'),
+                                  ),
+                              ],
+                              onChanged: (value) async {
+                                if (value == null) return;
+                                final prefProvider = context
+                                    .read<PreferencesProvider>();
+                                final notif = context
+                                    .read<NotificationService>();
+                                await prefProvider.setNotificationHistoryLimit(
+                                  value,
+                                );
+                                await notif.setHistoryLimit(
+                                  prefProvider.notificationHistoryLimit,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      AppSettingsSection(
+                        title: I18n.tr('preferences.section.daily_reminder'),
+                        subtitle: I18n.tr(
+                          'preferences.section.daily_reminder.subtitle',
+                        ),
+                        children: [
+                          for (
+                            var i = 0;
+                            i < prefs.dailyReminderSlots.length;
+                            i++
+                          )
+                            _NotificationReminderSlotTile(
+                              index: i,
+                              slot: prefs.dailyReminderSlots[i],
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const _NotificationRingtoneSection(),
+                      const SizedBox(height: 12),
+                      const _ReportReminderSection(),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                AppSettingsSection(
-                  title: '系统通知',
-                  subtitle: service.permissionGranted ? '通知权限已开启' : '通知权限未开启',
-                  children: [
-                    AppSettingsTile(
-                      icon: service.permissionGranted
-                          ? Icons.check_circle_outline
-                          : Icons.notifications_off_outlined,
-                      color: service.permissionGranted
-                          ? Colors.green
-                          : Colors.red,
-                      title: '通知权限',
-                      subtitle: service.permissionGranted
-                          ? '系统允许多仪发送提醒'
-                          : '开启后才能收到普通通知和提醒',
-                      trailing: TextButton(
-                        onPressed: _busy ? null : _requestPermission,
-                        child: Text(service.permissionGranted ? '重新检查' : '开启'),
-                      ),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.settings_outlined,
-                      color: Colors.deepOrange,
-                      title: '普通提醒渠道',
-                      subtitle: _channelSubtitle(
-                        '检查普通通知的声音、横幅和锁屏权限',
-                        NotificationService.channelId,
-                      ),
-                      trailing: _channelStatusTrailing(
-                        NotificationService.channelId,
-                        cs,
-                      ),
-                      onTap: () =>
-                          _openSystemSettings(NotificationService.channelId),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.alarm_on_outlined,
-                      color: Colors.deepPurple,
-                      title: '强提醒渠道',
-                      subtitle: _channelSubtitle(
-                        '检查闹钟提醒的声音、横幅和全屏展示权限',
-                        AlarmService.channelId,
-                      ),
-                      trailing: _channelStatusTrailing(
-                        AlarmService.channelId,
-                        cs,
-                      ),
-                      onTap: () => _openSystemSettings(AlarmService.channelId),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.alt_route_outlined,
-                      color: Colors.indigo,
-                      title: '闹钟降级兜底',
-                      subtitle: _channelSubtitle(
-                        '强提醒或内置铃声注册失败时会改用普通提醒；普通提醒渠道静音，兜底也可能无声',
-                        NativeReminderRingtone.fallbackChannelId,
-                      ),
-                      trailing: _channelStatusTrailing(
-                        NativeReminderRingtone.fallbackChannelId,
-                        cs,
-                      ),
-                      onTap: () => _openSystemSettings(
-                        NativeReminderRingtone.fallbackChannelId,
-                      ),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.music_note_outlined,
-                      color: Colors.pink,
-                      title: '内置铃声状态渠道',
-                      subtitle: _channelSubtitle(
-                        '检查内置铃声前台状态通知是否被静音或屏蔽',
-                        NativeReminderRingtone.statusChannelId,
-                      ),
-                      trailing: _channelStatusTrailing(
-                        NativeReminderRingtone.statusChannelId,
-                        cs,
-                      ),
-                      onTap: () => _openSystemSettings(
-                        NativeReminderRingtone.statusChannelId,
-                      ),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.notifications_active_outlined,
-                      color: cs.primary,
-                      title: '立即发送测试通知',
-                      subtitle: '验证普通通知渠道是否可见、可响铃',
-                      onTap: _busy ? null : _sendTest,
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.schedule_send_outlined,
-                      color: Colors.cyan,
-                      title: '1 分钟后定时测试',
-                      subtitle: '验证系统定时调度链路，到点应收到普通提醒',
-                      onTap: _busy ? null : _sendScheduledTest,
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.alarm_on_outlined,
-                      color: Colors.deepOrange,
-                      title: '测试强提醒铃声',
-                      subtitle: '验证闹钟提醒、内置铃声和通知停止按钮',
-                      onTap: _busy ? null : _sendStrongTest,
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.schedule,
-                      color: Colors.teal,
-                      title: '已调度普通提醒',
-                      subtitle: _pendingPushCount == null
-                          ? '正在读取待触发队列'
-                          : '$_pendingPushCount 条待触发',
-                      trailing: IconButton(
-                        tooltip: '刷新',
-                        onPressed: _busy ? null : _refreshStatus,
-                        icon: _busy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.refresh),
-                      ),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.alarm_on_outlined,
-                      color: Colors.deepPurple,
-                      title: '已调度闹钟提醒',
-                      subtitle: _pendingAlarmCount == null
-                          ? '正在读取强提醒队列'
-                          : '$_pendingAlarmCount 条待触发 · ${_exactAlarmGranted == true ? '精准闹钟已开启' : '精准闹钟未开启'}',
-                      trailing: TextButton(
-                        onPressed: _busy ? null : _requestExactAlarmPermission,
-                        child: const Text('精准闹钟'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                AppSettingsSection(
-                  title: '提醒入口',
-                  subtitle: '控制由通知触发的快捷记录和历史保留',
-                  children: [
-                    if (PlatformInfo.isAndroid) ...[
-                      SwitchListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                        ),
-                        secondary: const Icon(Icons.add_alert_outlined),
-                        title: Text(
-                          I18n.tr('preferences.notification_quick_add.title'),
-                        ),
-                        subtitle: Text(
-                          I18n.tr(
-                            'preferences.notification_quick_add.subtitle',
-                          ),
-                        ),
-                        value: prefs.notificationQuickAdd,
-                        onChanged: _busy
-                            ? null
-                            : (value) => _setNotificationStatusBarPreference(
-                                quickAdd: true,
-                                value: value,
-                              ),
-                      ),
-                      SwitchListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                        ),
-                        secondary: const Icon(Icons.today_outlined),
-                        title: Text(
-                          I18n.tr(
-                            'preferences.notification_today_progress.title',
-                          ),
-                        ),
-                        subtitle: Text(
-                          I18n.tr(
-                            'preferences.notification_today_progress.subtitle',
-                          ),
-                        ),
-                        value: prefs.notificationTodayProgress,
-                        onChanged: _busy
-                            ? null
-                            : (value) => _setNotificationStatusBarPreference(
-                                quickAdd: false,
-                                value: value,
-                              ),
-                      ),
-                    ] else
-                      AppSettingsTile(
-                        icon: Icons.notifications_none_outlined,
-                        color: Colors.blueGrey,
-                        title: I18n.tr(
-                          'preferences.notification_status_bar.title',
-                        ),
-                        subtitle: I18n.tr(
-                          'preferences.notification_status_bar.unsupported',
-                        ),
-                      ),
-                    AppSettingsTile(
-                      icon: Icons.history_outlined,
-                      color: Colors.blueGrey,
-                      title: '通知记录',
-                      subtitle:
-                          '共 ${service.historyCount} 条，未读 ${service.unreadCount} 条',
-                      trailing: TextButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const NotificationHistoryScreen(
-                              markReadOnOpen: true,
-                            ),
-                          ),
-                        ),
-                        child: const Text('查看'),
-                      ),
-                    ),
-                    AppSettingsTile(
-                      icon: Icons.inventory_2_outlined,
-                      color: Colors.indigo,
-                      title: '通知记录保留',
-                      subtitle:
-                          '最多保留 ${prefs.notificationHistoryLimit} 条历史，调低后会裁剪旧记录',
-                      trailing: AppCompactDropdown<int>(
-                        value: prefs.notificationHistoryLimit,
-                        width: 116,
-                        items: [
-                          for (final value in NotificationHistoryPolicy.options)
-                            DropdownMenuItem(
-                              value: value,
-                              child: Text('$value 条'),
-                            ),
-                        ],
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          final prefProvider = context
-                              .read<PreferencesProvider>();
-                          final notif = context.read<NotificationService>();
-                          await prefProvider.setNotificationHistoryLimit(value);
-                          await notif.setHistoryLimit(
-                            prefProvider.notificationHistoryLimit,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                AppSettingsSection(
-                  title: I18n.tr('preferences.section.daily_reminder'),
-                  subtitle: I18n.tr(
-                    'preferences.section.daily_reminder.subtitle',
-                  ),
-                  children: [
-                    for (var i = 0; i < prefs.dailyReminderSlots.length; i++)
-                      _NotificationReminderSlotTile(
-                        index: i,
-                        slot: prefs.dailyReminderSlots[i],
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const _NotificationRingtoneSection(),
-                const SizedBox(height: 12),
-                const _ReportReminderSection(),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

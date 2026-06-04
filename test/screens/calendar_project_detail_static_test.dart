@@ -89,6 +89,7 @@ void main() {
     expect(monthDetail, contains('horizontalPadding:'));
     expect(monthDetail, contains('8,'));
     expect(monthDetail, contains('scrollable: false'));
+    expect(monthDetail, contains('previewLimit: 8'));
     expect(source, isNot(contains('desiredDetailHeight')));
     expect(source, isNot(contains('maxGridForReadableDetail')));
     expect(source, contains('bool _monthGridShowsLunar('));
@@ -99,6 +100,10 @@ void main() {
       'lib/widgets/calendar_day_agenda.dart',
     ).readAsStringSync();
     expect(agenda, contains('return Scrollbar('));
+    expect(agenda, contains('final int? previewLimit'));
+    expect(agenda, contains('final todoById = {'));
+    expect(agenda, contains('events.take(previewLimit!'));
+    expect(agenda, contains('class _AgendaOverflowNotice'));
     expect(
       agenda,
       contains("key: const ValueKey('calendar_day_agenda_inline_content')"),

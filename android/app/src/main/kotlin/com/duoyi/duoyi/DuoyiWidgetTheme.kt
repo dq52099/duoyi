@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Build
+import android.view.View
 import android.widget.RemoteViews
 
 data class DuoyiWidgetThemePalette(
@@ -69,8 +70,16 @@ object DuoyiWidgetTheme {
         val theme = read(prefs)
         val imageResource = backgroundImageResource(theme.backgroundAssetKey)
         if (imageResource != 0) {
-            views.setInt(rootId, "setBackgroundResource", imageResource)
+            applyImageBackedSurface(
+                views,
+                rootId = rootId,
+                imageResource = imageResource,
+                overlayColor = imageOverlayColor(theme),
+                radiusDp = theme.cornerRadiusDp,
+            )
         } else {
+            views.setViewVisibility(R.id.widget_theme_background, View.GONE)
+            views.setViewVisibility(R.id.widget_theme_overlay, View.GONE)
             applyRoundedSurface(
                 views,
                 rootId,
@@ -90,6 +99,24 @@ object DuoyiWidgetTheme {
                 strokeWidthDp = if (theme.borderWidthDp > 0) 1 else 0,
             )
         }
+    }
+
+    private fun applyImageBackedSurface(
+        views: RemoteViews,
+        rootId: Int,
+        imageResource: Int,
+        overlayColor: Int,
+        radiusDp: Int,
+    ) {
+        views.setInt(
+            rootId,
+            "setBackgroundResource",
+            widgetBackgroundResource(radiusDp, 0),
+        )
+        views.setImageViewResource(R.id.widget_theme_background, imageResource)
+        views.setViewVisibility(R.id.widget_theme_background, View.VISIBLE)
+        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", overlayColor)
+        views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)
     }
 
     fun applyButtonSurfaces(
@@ -186,7 +213,7 @@ object DuoyiWidgetTheme {
     }
 
     private fun backgroundImageResource(key: String): Int {
-        return when (key) {
+        return when (key.trim().lowercase()) {
             "re0" -> R.drawable.widget_theme_re0
             "genshin" -> R.drawable.widget_theme_genshin
             "star_rail" -> R.drawable.widget_theme_star_rail
@@ -195,6 +222,14 @@ object DuoyiWidgetTheme {
             "yanyun" -> R.drawable.widget_theme_yanyun
             "botw" -> R.drawable.widget_theme_botw
             else -> 0
+        }
+    }
+
+    private fun imageOverlayColor(theme: DuoyiWidgetThemePalette): Int {
+        return if (theme.dark) {
+            Color.argb(92, 0, 0, 0)
+        } else {
+            Color.argb(78, 255, 255, 255)
         }
     }
 

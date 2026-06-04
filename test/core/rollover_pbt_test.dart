@@ -86,8 +86,7 @@ void main() {
       case 'completedToday':
         final h = rng.nextInt(24);
         final m = rng.nextInt(60);
-        final completed =
-            DateTime(today.year, today.month, today.day, h, m);
+        final completed = DateTime(today.year, today.month, today.day, h, m);
         return TodoItem(
           title: 'today-$index',
           date: completed,
@@ -141,10 +140,12 @@ void main() {
   /// 过滤出预期被归档的 id 集合（P5 的 RHS）。
   Set<String> expectedArchivedIds(List<TodoItem> todos, DateTime today) {
     return todos
-        .where((t) =>
-            t.isCompleted &&
-            t.completedAt != null &&
-            dateOnly(t.completedAt!).isBefore(today))
+        .where(
+          (t) =>
+              t.isCompleted &&
+              t.completedAt != null &&
+              dateOnly(t.completedAt!).isBefore(today),
+        )
         .map((t) => t.id)
         .toSet();
   }
@@ -184,7 +185,8 @@ void main() {
           expect(
             actual,
             equals(expected),
-            reason: 'iter=$iter n=$n — 归档集合不等于规约集合\n'
+            reason:
+                'iter=$iter n=$n — 归档集合不等于规约集合\n'
                 'expected=$expected\nactual=$actual',
           );
         }
@@ -221,7 +223,8 @@ void main() {
               expect(
                 t.completedAt,
                 isNotNull,
-                reason: 'iter=$iter id=${t.id} — isCompleted=true 必须有 completedAt',
+                reason:
+                    'iter=$iter id=${t.id} — isCompleted=true 必须有 completedAt',
               );
             }
           }
@@ -271,76 +274,69 @@ void main() {
   });
 
   group('幂等性：二次 runDailyRollover 保持 P5 / P19 / P20', () {
-    test(
-      '二次调用不改变归档集合；三条不变式在两次之后仍然成立',
-      () async {
-        final rng = Random(kSeed);
+    test('二次调用不改变归档集合；三条不变式在两次之后仍然成立', () async {
+      final rng = Random(kSeed);
 
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
+      for (int iter = 0; iter < kIterations; iter++) {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final provider = TodoProvider();
 
-          final now = DateTime.now();
-          final today = dateOnly(now);
-          final n = 1 + rng.nextInt(10);
+        final now = DateTime.now();
+        final today = dateOnly(now);
+        final n = 1 + rng.nextInt(10);
 
-          // 有效生成器：保证 P19 在播种阶段已成立，便于观察"二次调用"对
-          // 已稳定集合的影响。
-          await seedTodos(
-            provider,
-            now: now,
-            n: n,
-            rng: rng,
-            allowNullCompletedAt: false,
-          );
+        // 有效生成器：保证 P19 在播种阶段已成立，便于观察"二次调用"对
+        // 已稳定集合的影响。
+        await seedTodos(
+          provider,
+          now: now,
+          n: n,
+          rng: rng,
+          allowNullCompletedAt: false,
+        );
 
-          // 第一次 rollover。
-          await CompletionVisibilityPolicy.runDailyRollover(provider, now);
-          final firstArchived = provider.todos
-              .where((t) => t.isArchivedAfterRollover)
-              .map((t) => t.id)
-              .toSet();
+        // 第一次 rollover。
+        await CompletionVisibilityPolicy.runDailyRollover(provider, now);
+        final firstArchived = provider.todos
+            .where((t) => t.isArchivedAfterRollover)
+            .map((t) => t.id)
+            .toSet();
 
-          // 第二次 rollover：期望完全幂等（就归档集合而言）。
-          await CompletionVisibilityPolicy.runDailyRollover(provider, now);
-          final secondArchived = provider.todos
-              .where((t) => t.isArchivedAfterRollover)
-              .map((t) => t.id)
-              .toSet();
+        // 第二次 rollover：期望完全幂等（就归档集合而言）。
+        await CompletionVisibilityPolicy.runDailyRollover(provider, now);
+        final secondArchived = provider.todos
+            .where((t) => t.isArchivedAfterRollover)
+            .map((t) => t.id)
+            .toSet();
 
-          expect(
-            secondArchived,
-            equals(firstArchived),
-            reason: 'iter=$iter — 二次 rollover 改变了归档集合',
-          );
+        expect(
+          secondArchived,
+          equals(firstArchived),
+          reason: 'iter=$iter — 二次 rollover 改变了归档集合',
+        );
 
-          // P5：归档集合仍等于规约集合。
-          final expected = expectedArchivedIds(provider.todos, today);
-          expect(
-            secondArchived,
-            equals(expected),
-            reason: 'iter=$iter — 二次 rollover 后归档集合偏离规约',
-          );
+        // P5：归档集合仍等于规约集合。
+        final expected = expectedArchivedIds(provider.todos, today);
+        expect(
+          secondArchived,
+          equals(expected),
+          reason: 'iter=$iter — 二次 rollover 后归档集合偏离规约',
+        );
 
-          // P19 / P20 在二次 rollover 后仍成立。
-          for (final t in provider.todos) {
-            if (t.isCompleted) {
-              expect(
-                t.completedAt,
-                isNotNull,
-                reason: 'P19 iter=$iter id=${t.id}',
-              );
-            }
-            if (t.isArchivedAfterRollover) {
-              expect(
-                t.isCompleted,
-                isTrue,
-                reason: 'P20 iter=$iter id=${t.id}',
-              );
-            }
+        // P19 / P20 在二次 rollover 后仍成立。
+        for (final t in provider.todos) {
+          if (t.isCompleted) {
+            expect(
+              t.completedAt,
+              isNotNull,
+              reason: 'P19 iter=$iter id=${t.id}',
+            );
+          }
+          if (t.isArchivedAfterRollover) {
+            expect(t.isCompleted, isTrue, reason: 'P20 iter=$iter id=${t.id}');
           }
         }
-      },
-    );
+      }
+    });
   });
 }

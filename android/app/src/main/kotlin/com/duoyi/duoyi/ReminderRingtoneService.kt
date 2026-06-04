@@ -451,6 +451,8 @@ class ReminderRingtoneService : Service() {
         private val flutterPluginRaceCleanupDelays = longArrayOf(0L, 30L, 80L, 120L, 750L, 2_500L, 5_000L, 10_000L)
         private val previewHandler = Handler(Looper.getMainLooper())
         private var previewPlayer: MediaPlayer? = null
+        private var previewToneGenerator: ToneGenerator? = null
+        private var previewToneRunnable: Runnable? = null
         private var previewStopRunnable: Runnable? = null
         @Volatile
         private var activeReminderId: Int? = null
@@ -536,6 +538,13 @@ class ReminderRingtoneService : Service() {
         fun previewCurrentSound(context: Context, durationMillis: Long): Map<String, Any> {
             val appContext = context.applicationContext
             stopPreview()
+            if (activeReminderId != null) {
+                return previewResult(
+                    started = false,
+                    reason = "active_reminder_ringing",
+                    message = "当前有提醒正在响铃，请先处理后再试听。",
+                )
+            }
 
             val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val mediaVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -567,6 +576,10 @@ class ReminderRingtoneService : Service() {
             val volume = volumePercent(appContext) / 100f
             val player = MediaPlayer()
             return try {
+                Log.d(
+                    "ReminderRingtoneService",
+                    "previewCurrentSound start sound=$soundName resId=$resId bytes=${afd.length} volumePercent=${volumePercent(appContext)}",
+                )
                 player.setAudioAttributes(previewAudioAttributes())
                 player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 player.isLooping = false
@@ -605,16 +618,24 @@ class ReminderRingtoneService : Service() {
             } catch (error: Exception) {
                 Log.e(
                     "ReminderRingtoneService",
-                    "previewCurrentSound failed sound=$soundName volume=$volume",
+                    "previewCurrentSound failed sound=$soundName resId=$resId bytes=${afd.length} volume=$volume",
                     error,
                 )
                 runCatching { player.release() }
                 previewPlayer = null
-                previewResult(
-                    started = false,
-                    reason = "player_init_failed",
-                    message = "铃声播放器初始化失败，请重试。",
-                )
+                if (startPreviewToneFallback(volume, durationMillis, soundName)) {
+                    previewResult(
+                        started = true,
+                        reason = "tone_fallback_started",
+                        message = "正在试听当前提醒铃声。",
+                    )
+                } else {
+                    previewResult(
+                        started = false,
+                        reason = "player_init_failed",
+                        message = "铃声试听启动失败，请重试。",
+                    )
+                }
             } finally {
                 afd.close()
             }
@@ -624,11 +645,61 @@ class ReminderRingtoneService : Service() {
         fun stopPreview() {
             previewStopRunnable?.let { previewHandler.removeCallbacks(it) }
             previewStopRunnable = null
+            previewToneRunnable?.let { previewHandler.removeCallbacks(it) }
+            previewToneRunnable = null
+            previewToneGenerator?.release()
+            previewToneGenerator = null
             previewPlayer?.run {
                 runCatching { stop() }
                 runCatching { release() }
             }
             previewPlayer = null
+        }
+
+        private fun startPreviewToneFallback(
+            volume: Float,
+            durationMillis: Long,
+            soundName: String,
+        ): Boolean {
+            return runCatching {
+                val toneVolume = (volume * 100).toInt().coerceIn(40, 100)
+                previewToneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, toneVolume)
+                val started = previewToneGenerator?.startTone(
+                    ToneGenerator.TONE_PROP_BEEP,
+                    260,
+                ) == true
+                if (!started) {
+                    previewToneGenerator?.release()
+                    previewToneGenerator = null
+                    return@runCatching false
+                }
+                val safeDuration = durationMillis.coerceIn(500L, 30_000L)
+                previewToneRunnable = object : Runnable {
+                    override fun run() {
+                        val generator = previewToneGenerator ?: return
+                        generator.startTone(ToneGenerator.TONE_PROP_BEEP, 260)
+                        previewHandler.postDelayed(this, 1800L)
+                    }
+                }.also { previewHandler.postDelayed(it, 1800L) }
+                previewStopRunnable = Runnable {
+                    synchronized(ReminderRingtoneService::class.java) {
+                        stopPreview()
+                    }
+                }.also { previewHandler.postDelayed(it, safeDuration) }
+                Log.w(
+                    "ReminderRingtoneService",
+                    "preview tone fallback started after raw playback failed sound=$soundName",
+                )
+                true
+            }.onFailure { error ->
+                Log.e(
+                    "ReminderRingtoneService",
+                    "preview tone fallback failed sound=$soundName",
+                    error,
+                )
+                previewToneGenerator?.release()
+                previewToneGenerator = null
+            }.getOrDefault(false)
         }
 
         private fun selectedSoundName(context: Context): String {

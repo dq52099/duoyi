@@ -53,6 +53,7 @@ class _FakeNotifSink
       'kind': 'once',
       'id': id,
       'title': title,
+      'body': body,
       'when': when,
       'payload': payload,
     });
@@ -78,6 +79,8 @@ class _FakeNotifSink
     scheduled.add({
       'kind': 'daily',
       'id': id,
+      'title': title,
+      'body': body,
       'hour': hour,
       'minute': minute,
       'payload': payload,
@@ -150,6 +153,8 @@ class _FakeNotifSink
     scheduled.add({
       'kind': 'habit',
       'habitId': habitId,
+      'title': '习惯打卡提醒',
+      'body': '别忘了: $habitName',
       'hour': hour,
       'minute': minute,
     });
@@ -274,6 +279,8 @@ class _FakeAlarmSink implements ReminderAlarmSink, ReminderPendingSink {
     scheduled.add({
       'kind': 'fullscreen',
       'id': id,
+      'title': title,
+      'body': body,
       'when': when,
       'payload': payload,
       'vibrate': vibrate,
@@ -322,6 +329,8 @@ class _FakeAlarmSink implements ReminderAlarmSink, ReminderPendingSink {
     scheduled.add({
       'kind': 'daily_fullscreen',
       'id': id,
+      'title': title,
+      'body': body,
       'payload': payload,
       'hour': hour,
       'minute': minute,
@@ -401,6 +410,8 @@ class _FakePopupSink implements ReminderPopupSink {
     scheduled.add({
       'kind': 'popup_repeating',
       'id': id,
+      'title': title,
+      'body': body,
       'hour': hour,
       'minute': minute,
       'payload': payload,
@@ -459,6 +470,8 @@ class _FakeEmailSink implements ReminderEmailSink {
     scheduled.add({
       'kind': 'email_repeating',
       'id': id,
+      'title': title,
+      'body': body,
       'hour': hour,
       'minute': minute,
       'payload': payload,
@@ -789,6 +802,7 @@ void main() {
       expect(notif.scheduled.map((entry) => entry['id']), [
         _idFor('todo:${todo.id}:absolute'),
       ]);
+      expect(notif.scheduled.single['title'], '提醒：${todo.title}');
     });
 
     test('syncTodos 对重复的每日通知只注册第一条规则', () async {
@@ -821,6 +835,8 @@ void main() {
       await scheduler.syncTodos([todo]);
 
       expect(notif.scheduled.map((entry) => entry['id']), [firstId]);
+      expect(notif.scheduled.single['title'], '今日提醒');
+      expect(notif.scheduled.single['body'], todo.title);
       expect(notif.pending, contains(firstId));
       expect(notif.pending, isNot(contains(secondId)));
       expect(alarm.scheduled, isEmpty);
@@ -1196,6 +1212,8 @@ void main() {
       expect(alarm.scheduled.first['minute'], 30);
       expect(alarm.scheduled.first['fullScreen'], isTrue);
       expect(alarm.scheduled.first['snoozeMinutes'], 5);
+      expect(alarm.scheduled.first['title'], '习惯打卡提醒');
+      expect(alarm.scheduled.first['body'], '阅读 到时间了，点开确认打卡');
       expect(alarm.scheduled.first['payload'], 'duoyi://habit/h1?confirm=1');
     });
 
@@ -1215,6 +1233,8 @@ void main() {
       expect(notif.scheduled.length, 1);
       expect(notif.scheduled.first['kind'], 'habit');
       expect(notif.scheduled.first['habitId'], 'h1');
+      expect(notif.scheduled.first['title'], '习惯打卡提醒');
+      expect(notif.scheduled.first['body'], '别忘了: 阅读');
     });
 
     test('syncHabits 闹钟插件异常时也降级普通通知', () async {

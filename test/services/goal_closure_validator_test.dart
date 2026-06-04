@@ -281,8 +281,7 @@ void _writeAndroidEvidence(Directory dir) {
         'evidence/manual/android_widget_style_matrix.mp4',
     'widget_refresh_before_after':
         'evidence/manual/android_widget_refresh_before_after.mp4',
-    'widget_todo_complete':
-        'evidence/manual/android_widget_todo_complete.mp4',
+    'widget_todo_complete': 'evidence/manual/android_widget_todo_complete.mp4',
     'widget_quick_add': 'evidence/manual/android_widget_quick_add.mp4',
     'widget_habit_checkin': 'evidence/manual/android_widget_habit_checkin.mp4',
     'calendar_countdown_deeplink':

@@ -129,7 +129,7 @@ void main() {
         ),
       );
       expect(main, contains('Future<void> _runStartupIdleQueue('));
-      expect(main, contains('initialDelay: const Duration(seconds: 5)'));
+      expect(main, contains('initialDelay: const Duration(seconds: 8)'));
       expect(main, contains('gap: const Duration(seconds: 3)'));
       expect(
         main,

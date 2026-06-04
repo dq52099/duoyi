@@ -40,10 +40,7 @@ void main() {
       HolidayCalendar.resetOverrides();
       HolidayCalendar.updateFrom(
         2027,
-        const HolidayYear(
-          holidays: {'01-01'},
-          workMakeupDays: {'01-04'},
-        ),
+        const HolidayYear(holidays: {'01-01'}, workMakeupDays: {'01-04'}),
       );
       expect(HolidayCalendar.isHoliday(DateTime(2027, 1, 1)), isTrue);
       expect(HolidayCalendar.isWorkMakeupDay(DateTime(2027, 1, 4)), isTrue);

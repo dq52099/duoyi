@@ -71,15 +71,19 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
     final days = scheduling.fixedWeekdays;
     if (days != null && days.isNotEmpty) {
       if (days.any((d) => d < 0 || d > 6)) {
-        issues.add(const GoalValidationIssue(
-          GoalValidationField.fixedWeekdays,
-          '固定星期只能在 0(周一)~6(周日) 范围内',
-        ));
+        issues.add(
+          const GoalValidationIssue(
+            GoalValidationField.fixedWeekdays,
+            '固定星期只能在 0(周一)~6(周日) 范围内',
+          ),
+        );
       } else if (days.toSet().length != days.length) {
-        issues.add(const GoalValidationIssue(
-          GoalValidationField.fixedWeekdays,
-          '固定星期不能重复选择',
-        ));
+        issues.add(
+          const GoalValidationIssue(
+            GoalValidationField.fixedWeekdays,
+            '固定星期不能重复选择',
+          ),
+        );
       }
     }
   }
@@ -90,15 +94,19 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
     final days = scheduling.fixedMonthDays;
     if (days != null && days.isNotEmpty) {
       if (days.any((d) => d < 1 || d > 31)) {
-        issues.add(const GoalValidationIssue(
-          GoalValidationField.fixedMonthDays,
-          '固定日期只能在每月 1~31 号之间',
-        ));
+        issues.add(
+          const GoalValidationIssue(
+            GoalValidationField.fixedMonthDays,
+            '固定日期只能在每月 1~31 号之间',
+          ),
+        );
       } else if (days.toSet().length != days.length) {
-        issues.add(const GoalValidationIssue(
-          GoalValidationField.fixedMonthDays,
-          '固定日期不能重复选择',
-        ));
+        issues.add(
+          const GoalValidationIssue(
+            GoalValidationField.fixedMonthDays,
+            '固定日期不能重复选择',
+          ),
+        );
       }
     }
   }
@@ -107,43 +115,53 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
   if (scheduling.mode == SchedulingMode.random) {
     final gap = scheduling.randomMinGapDays;
     if (gap != null && gap < 1) {
-      issues.add(const GoalValidationIssue(
-        GoalValidationField.randomMinGapDays,
-        '随机模式下最小间隔天数需 ≥ 1',
-      ));
+      issues.add(
+        const GoalValidationIssue(
+          GoalValidationField.randomMinGapDays,
+          '随机模式下最小间隔天数需 ≥ 1',
+        ),
+      );
     }
     final perWeek = scheduling.randomMaxPerWeek;
     if (perWeek != null && perWeek < 1) {
-      issues.add(const GoalValidationIssue(
-        GoalValidationField.randomMaxPerWeek,
-        '每周最多派发次数需 ≥ 1',
-      ));
+      issues.add(
+        const GoalValidationIssue(
+          GoalValidationField.randomMaxPerWeek,
+          '每周最多派发次数需 ≥ 1',
+        ),
+      );
     }
     final perMonth = scheduling.randomMaxPerMonth;
     if (perMonth != null && perMonth < 1) {
-      issues.add(const GoalValidationIssue(
-        GoalValidationField.randomMaxPerMonth,
-        '每月最多派发次数需 ≥ 1',
-      ));
+      issues.add(
+        const GoalValidationIssue(
+          GoalValidationField.randomMaxPerMonth,
+          '每月最多派发次数需 ≥ 1',
+        ),
+      );
     }
   }
 
   // --- 每日目标次数 ≥ 0（允许清零）---
   final dailyCount = g.dailyTargetCount;
   if (dailyCount != null && dailyCount < 0) {
-    issues.add(const GoalValidationIssue(
-      GoalValidationField.dailyTargetCount,
-      '每日目标次数不能为负数',
-    ));
+    issues.add(
+      const GoalValidationIssue(
+        GoalValidationField.dailyTargetCount,
+        '每日目标次数不能为负数',
+      ),
+    );
   }
 
   // --- 目标时长（秒） ≥ 0 ---
   final timeTarget = g.timeTargetSeconds;
   if (timeTarget != null && timeTarget < 0) {
-    issues.add(const GoalValidationIssue(
-      GoalValidationField.timeTargetSeconds,
-      '目标时长不能为负数',
-    ));
+    issues.add(
+      const GoalValidationIssue(
+        GoalValidationField.timeTargetSeconds,
+        '目标时长不能为负数',
+      ),
+    );
   }
 
   // --- 已启用提醒时，hour/minute 必须合法 ---
@@ -151,17 +169,15 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
   if (reminder.enabled) {
     final hour = reminder.hour;
     if (hour == null || hour < 0 || hour > 23) {
-      issues.add(const GoalValidationIssue(
-        GoalValidationField.hour,
-        '提醒小时需在 0~23 之间',
-      ));
+      issues.add(
+        const GoalValidationIssue(GoalValidationField.hour, '提醒小时需在 0~23 之间'),
+      );
     }
     final minute = reminder.minute;
     if (minute == null || minute < 0 || minute > 59) {
-      issues.add(const GoalValidationIssue(
-        GoalValidationField.minute,
-        '提醒分钟需在 0~59 之间',
-      ));
+      issues.add(
+        const GoalValidationIssue(GoalValidationField.minute, '提醒分钟需在 0~59 之间'),
+      );
     }
   }
 

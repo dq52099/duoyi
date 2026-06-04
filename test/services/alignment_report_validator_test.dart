@@ -15,14 +15,17 @@ void main() {
     }
   });
 
-  test('alignment report validator passes complete eight-group report', () async {
-    _writeReport(tempDir);
+  test(
+    'alignment report validator passes complete eight-group report',
+    () async {
+      _writeReport(tempDir);
 
-    final result = await _runValidator(tempDir);
+      final result = await _runValidator(tempDir);
 
-    expect(result.exitCode, 0, reason: _combinedOutput(result));
-    expect(result.stdout, contains('Alignment report validation passed.'));
-  });
+      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      expect(result.stdout, contains('Alignment report validation passed.'));
+    },
+  );
 
   test('alignment report validator fails when a group is missing', () async {
     _writeReport(tempDir, omitGroup: '7/8 debug APK build');
@@ -63,11 +66,7 @@ Future<ProcessResult> _runValidator(Directory reportDir) {
   );
 }
 
-void _writeReport(
-  Directory dir, {
-  String? omitGroup,
-  String? emptyLogFor,
-}) {
+void _writeReport(Directory dir, {String? omitGroup, String? emptyLogFor}) {
   final groups = <String>[
     '1/8 404 and route contracts',
     '2/8 style layout and readable selection',

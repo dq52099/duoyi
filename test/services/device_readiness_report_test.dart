@@ -67,42 +67,45 @@ printf 'List of devices attached\n\n'
     },
   );
 
-  test('device readiness treats an empty system-images directory as missing', () async {
-    final flutter = _writeExecutable(
-      '${binDir.path}/flutter',
-      '''#!/usr/bin/env bash
+  test(
+    'device readiness treats an empty system-images directory as missing',
+    () async {
+      final flutter = _writeExecutable(
+        '${binDir.path}/flutter',
+        '''#!/usr/bin/env bash
 if [[ "\$1" == "devices" && "\${2:-}" == "--machine" ]]; then
   printf '[]\n'
 else
   printf 'No devices\n'
 fi
 ''',
-    );
-    final adb = _writeExecutable('${binDir.path}/adb', '''#!/usr/bin/env bash
+      );
+      final adb = _writeExecutable('${binDir.path}/adb', '''#!/usr/bin/env bash
 printf 'List of devices attached\n\n'
 ''');
-    Directory('${sdkDir.path}/system-images').createSync(recursive: true);
+      Directory('${sdkDir.path}/system-images').createSync(recursive: true);
 
-    final result = await Process.run(
-      'bash',
-      ['scripts/generate_device_readiness_report.sh'],
-      workingDirectory: Directory.current.path,
-      environment: {
-        'FLUTTER_BIN': flutter.path,
-        'ADB_BIN': adb.path,
-        'ANDROID_SDK_ROOT': sdkDir.path,
-        'OUTPUT_DIR': outputDir.path,
-        'KVM_DEVICE': '${tempDir.path}/missing-kvm',
-      },
-      includeParentEnvironment: true,
-    );
+      final result = await Process.run(
+        'bash',
+        ['scripts/generate_device_readiness_report.sh'],
+        workingDirectory: Directory.current.path,
+        environment: {
+          'FLUTTER_BIN': flutter.path,
+          'ADB_BIN': adb.path,
+          'ANDROID_SDK_ROOT': sdkDir.path,
+          'OUTPUT_DIR': outputDir.path,
+          'KVM_DEVICE': '${tempDir.path}/missing-kvm',
+        },
+        includeParentEnvironment: true,
+      );
 
-    expect(result.exitCode, 0, reason: _combinedOutput(result));
-    final status = _readStatus(outputDir);
-    expect(status['android_system_images'], 'missing');
-    expect(status['kvm'], 'missing');
-    expect(status['android_emulator_launchability'], 'missing');
-  });
+      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      final status = _readStatus(outputDir);
+      expect(status['android_system_images'], 'missing');
+      expect(status['kvm'], 'missing');
+      expect(status['android_emulator_launchability'], 'missing');
+    },
+  );
 
   test('device readiness validator rejects duplicate rows', () async {
     outputDir.createSync(recursive: true);

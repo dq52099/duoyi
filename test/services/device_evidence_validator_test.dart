@@ -214,8 +214,9 @@ void main() {
     () async {
       final androidDir = Directory('${tempDir.path}/android')..createSync();
       _writeAndroidEvidence(androidDir);
-      File('${androidDir.path}/single_delivery_no_duplicate.txt')
-          .writeAsStringSync('''
+      File(
+        '${androidDir.path}/single_delivery_no_duplicate.txt',
+      ).writeAsStringSync('''
 reminder_id=device-regression-single-delivery
 flutter_pending_count=1
 native_pending_count=1
@@ -245,8 +246,9 @@ duplicate_delivery_count=1
     () async {
       final androidDir = Directory('${tempDir.path}/android')..createSync();
       _writeAndroidEvidence(androidDir);
-      File('${androidDir.path}/single_delivery_no_duplicate.txt')
-          .writeAsStringSync('''
+      File(
+        '${androidDir.path}/single_delivery_no_duplicate.txt',
+      ).writeAsStringSync('''
 reminder_id=device-regression-single-delivery
 flutter_pending_count=0
 native_pending_count=1
@@ -273,8 +275,9 @@ duplicate_delivery_count=0
     () async {
       final androidDir = Directory('${tempDir.path}/android')..createSync();
       _writeAndroidEvidence(androidDir);
-      File('${androidDir.path}/notification_today_progress.txt')
-          .writeAsStringSync('');
+      File(
+        '${androidDir.path}/notification_today_progress.txt',
+      ).writeAsStringSync('');
 
       final result = await _runValidator(
         'android',
@@ -296,8 +299,9 @@ duplicate_delivery_count=0
     () async {
       final androidDir = Directory('${tempDir.path}/android')..createSync();
       _writeAndroidEvidence(androidDir);
-      File('${androidDir.path}/single_delivery_no_duplicate.txt')
-          .writeAsStringSync('''
+      File(
+        '${androidDir.path}/single_delivery_no_duplicate.txt',
+      ).writeAsStringSync('''
 reminder_id=device-regression-single-delivery
 flutter_pending_count=manual
 native_pending_count=manual
@@ -589,7 +593,9 @@ duplicate_delivery_count=pending
     expect(result.exitCode, isNot(0));
     expect(
       _combinedOutput(result),
-      contains('iOS WidgetKit gallery manual proof has invalid media signature'),
+      contains(
+        'iOS WidgetKit gallery manual proof has invalid media signature',
+      ),
     );
   });
 }
@@ -630,8 +636,7 @@ void _writeAndroidEvidence(
         'evidence/manual/android_widget_style_matrix.mp4',
     'widget_refresh_before_after':
         'evidence/manual/android_widget_refresh_before_after.mp4',
-    'widget_todo_complete':
-        'evidence/manual/android_widget_todo_complete.mp4',
+    'widget_todo_complete': 'evidence/manual/android_widget_todo_complete.mp4',
     'widget_quick_add': 'evidence/manual/android_widget_quick_add.mp4',
     'widget_habit_checkin': 'evidence/manual/android_widget_habit_checkin.mp4',
     'calendar_countdown_deeplink':

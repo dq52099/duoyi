@@ -123,15 +123,9 @@ void main() {
     final yesterday = today.subtract(const Duration(days: 1));
     final tomorrow = today.add(const Duration(days: 1));
 
+    await todoProvider.addTodo(TodoItem(title: '无截止任务', date: tomorrow));
     await todoProvider.addTodo(
-      TodoItem(title: '无截止任务', date: tomorrow),
-    );
-    await todoProvider.addTodo(
-      TodoItem(
-        title: '今天截止任务',
-        date: yesterday,
-        dueDate: today,
-      ),
+      TodoItem(title: '今天截止任务', date: yesterday, dueDate: today),
     );
     await todoProvider.addTodo(
       TodoItem(

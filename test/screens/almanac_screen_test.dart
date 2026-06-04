@@ -42,9 +42,15 @@ void main() {
 
       expect(find.text('2026年6月1日星期一'), findsNothing);
       expect(find.text('胎神'), findsNothing);
-      expect(find.text('查看黄历'), findsOneWidget);
+      expect(find.text('查看黄历'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+        findsOneWidget,
+      );
 
-      await tester.tap(find.text('查看黄历'));
+      await tester.tap(
+        find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('2026年6月1日星期一'), findsOneWidget);
@@ -105,7 +111,9 @@ void main() {
     expect(find.text('2026年6月1日星期一'), findsNothing);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('查看黄历'));
+    await tester.tap(
+      find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('2026年6月1日星期一'), findsOneWidget);
@@ -136,7 +144,9 @@ void main() {
     expect(find.text('2026年5月31日星期日'), findsNothing);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('查看黄历'));
+    await tester.tap(
+      find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('2026年5月31日星期日'), findsOneWidget);
@@ -168,7 +178,9 @@ void main() {
     expect(find.text('2026年6月3日星期三'), findsNothing);
     expect(find.text('胎神'), findsNothing);
 
-    await tester.tap(find.text('查看黄历'));
+    await tester.tap(
+      find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('2026年6月3日星期三'), findsOneWidget);

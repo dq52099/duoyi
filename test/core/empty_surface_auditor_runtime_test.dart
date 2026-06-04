@@ -7,12 +7,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: Column(
-            children: [
-              Text('正常内容'),
-              Text('TODO: 这里还是占位功能'),
-            ],
-          ),
+          body: Column(children: [Text('正常内容'), Text('TODO: 这里还是占位功能')]),
         ),
       ),
     );

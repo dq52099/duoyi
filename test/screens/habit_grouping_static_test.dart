@@ -10,6 +10,16 @@ void main() {
     expect(source, contains('groupHabitsByCategory(provider.habits)'));
     expect(source, contains('_HabitGroupSection'));
     expect(source, contains('ExpansionTile('));
+    expect(source, contains('const int _habitHeatmapGroupPreviewLimit = 8'));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'initiallyExpanded:\s*group\.habits\.length\s*<=\s*_habitHeatmapGroupPreviewLimit',
+        ),
+      ),
+    );
+    expect(source, contains('for (final habit in previewHabits)'));
     expect(source, contains('习惯分组'));
     expect(source, contains('Icons.folder_outlined'));
     expect(
@@ -142,20 +152,20 @@ void main() {
     );
     expect(
       cardSource,
-      contains('padding: const EdgeInsets.fromLTRB(8, 4, 6, 4)'),
+      contains('padding: const EdgeInsets.fromLTRB(7, 3, 6, 3)'),
     );
-    expect(source, contains('const double _habitCheckinCardBodyHeight = 44'));
-    expect(source, contains('const double _habitTitleStatusHeight = 17'));
-    expect(source, contains('const double _habitUndoButtonWidth = 30'));
+    expect(source, contains('const double _habitCheckinCardBodyHeight = 40'));
+    expect(source, contains('const double _habitTitleStatusHeight = 16'));
+    expect(source, contains('const double _habitUndoButtonWidth = 28'));
     expect(source, isNot(contains('const double _habitMenuButtonWidth')));
     expect(source, contains('const double _habitActionButtonGap = 3'));
     expect(source, contains('const double _habitActionRailWidth'));
     expect(cardSource, contains('height: _habitCheckinCardBodyHeight'));
-    expect(cardSource, contains('width: 22'));
-    expect(cardSource, contains('height: 22'));
+    expect(cardSource, contains('width: 21'));
+    expect(cardSource, contains('height: 21'));
     expect(cardSource, contains('height: 2'));
     expect(cardSource, contains('width: _habitCheckinButtonWidth'));
-    expect(cardSource, contains('height: 28'));
+    expect(cardSource, contains('height: 26'));
     expect(cardSource, contains('minimumSize: const Size('));
     expect(cardSource, contains('_habitCheckinButtonWidth'));
     expect(cardSource, contains('_habitDisplayIcon(habit)'));
@@ -247,10 +257,10 @@ void main() {
     );
     expect(weekly, contains('context.watch<HabitProvider>()'));
     expect(weekly, contains('final data = provider.currentWeekProgress();'));
-    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(12, 7, 12, 8)'));
+    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(10, 6, 10, 6)'));
     expect(
       weekly,
-      contains('padding: const EdgeInsets.fromLTRB(12, 12, 12, 12)'),
+      contains('padding: const EdgeInsets.fromLTRB(10, 9, 10, 10)'),
     );
     expect(weekly, contains('currentWeekProgress()'));
     expect(
@@ -258,10 +268,12 @@ void main() {
       contains('borderRadius: BorderRadius.circular(DesignTokens.radiusCard)'),
     );
     expect(weekly, contains('fontSize: DesignTokens.fontSizeCardTitle'));
-    expect(weekly, contains('fontSize: 16'));
+    expect(weekly, contains('fontSize: 15'));
     expect(weekly, contains('minHeight: 5'));
     expect(weekly, contains('width: 40'));
     expect(weekly, contains('height: 40'));
+    expect(weekly, contains('width: 32'));
+    expect(weekly, contains('height: 32'));
     expect(weekly, contains('fontWeight: DesignTokens.fontWeightRegular'));
   });
 

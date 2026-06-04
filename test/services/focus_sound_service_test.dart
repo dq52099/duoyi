@@ -103,7 +103,10 @@ void main() {
       screen,
       contains('final previewStarted = await provider.setWhiteNoiseSound('),
     );
-    expect(goalEditScreen, contains('await FocusSoundService.instance.stop();'));
+    expect(
+      goalEditScreen,
+      contains('await FocusSoundService.instance.stop();'),
+    );
     expect(
       goalEditScreen,
       contains('final started = await FocusSoundService.instance.preview(id);'),
@@ -157,11 +160,21 @@ void main() {
     expect(provider, contains('handleFocusForegroundStopRequested'));
     expect(
       provider,
-      contains('await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);'),
+      contains(
+        'await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);',
+      ),
     );
-    expect(mainActivity, contains('FocusSoundForegroundService.stopRequestCallback'));
+    expect(
+      mainActivity,
+      contains('FocusSoundForegroundService.stopRequestCallback'),
+    );
     expect(mainActivity, contains('invokeMethod("stopRequested", null)'));
     expect(foregroundService, contains('stopRequestCallback?.invoke()'));
-    expect(foregroundService, isNot(contains('if (intent?.action == actionStop) {\n            stopSelf()')));
+    expect(
+      foregroundService,
+      isNot(
+        contains('if (intent?.action == actionStop) {\n            stopSelf()'),
+      ),
+    );
   });
 }

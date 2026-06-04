@@ -37,8 +37,7 @@ void main() {
 
   /// "今天 00:00"基准。所有测试都用同一个 today，避免跨越午夜带来抖动。
   final DateTime today = DateTime(2025, 6, 15);
-  final DateTime todayMidnight =
-      DateTime(today.year, today.month, today.day);
+  final DateTime todayMidnight = DateTime(today.year, today.month, today.day);
 
   /// 构造一个过期 TodoItem：dueDate 在 today 之前的 [1, 5] 天，
   /// hour ∈ [0, 23]，minute ∈ [0, 59]。
@@ -50,8 +49,11 @@ void main() {
     final daysBefore = rng.nextInt(5) + 1; // 1..5
     final hour = rng.nextInt(24); // 0..23
     final minute = rng.nextInt(60); // 0..59
-    final base = DateTime(today.year, today.month, today.day)
-        .subtract(Duration(days: daysBefore));
+    final base = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).subtract(Duration(days: daysBefore));
     final due = DateTime(base.year, base.month, base.day, hour, minute);
     return TodoItem(title: 'overdue-$title', dueDate: due);
   }
@@ -64,10 +66,14 @@ void main() {
     required int title,
   }) {
     final daysAfter = rng.nextInt(6); // 0..5
-    final base = DateTime(today.year, today.month, today.day)
-        .add(Duration(days: daysAfter));
+    final base = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).add(Duration(days: daysAfter));
     final hour = daysAfter == 0
-        ? 1 + rng.nextInt(23) // today：至少 01:00，确保 >= 00:00
+        ? 1 +
+              rng.nextInt(23) // today：至少 01:00，确保 >= 00:00
         : rng.nextInt(24);
     final minute = rng.nextInt(60);
     final due = DateTime(base.year, base.month, base.day, hour, minute);
@@ -81,8 +87,11 @@ void main() {
     required int title,
   }) {
     final daysBefore = rng.nextInt(5) + 1;
-    final base = DateTime(today.year, today.month, today.day)
-        .subtract(Duration(days: daysBefore));
+    final base = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).subtract(Duration(days: daysBefore));
     final due = DateTime(
       base.year,
       base.month,
@@ -99,8 +108,7 @@ void main() {
   }
 
   /// 构造一个没有 dueDate 的 TodoItem。
-  TodoItem buildNoDue({required int title}) =>
-      TodoItem(title: 'no-due-$title');
+  TodoItem buildNoDue({required int title}) => TodoItem(title: 'no-due-$title');
 
   group('P12 - postponeOverdue monotonicity', () {
     test(
@@ -168,224 +176,210 @@ void main() {
   });
 
   group('P12 - non-overdue / completed / null dueDate 不受影响', () {
-    test(
-      'future dueDate：dueDate 原样不变，postponeHistory 保持为空',
-      () async {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
-
-          final n = 1 + rng.nextInt(8);
-          final originals = <String, DateTime>{};
-          for (int i = 0; i < n; i++) {
-            final t = buildFuture(today: today, rng: rng, title: i);
-            originals[t.id] = t.dueDate!;
-            await provider.addTodo(t);
-          }
-
-          await provider.postponeOverdue(today);
-
-          for (final entry in originals.entries) {
-            final t = provider.todos.firstWhere((x) => x.id == entry.key);
-            expect(
-              t.dueDate,
-              entry.value,
-              reason: 'iter=$iter id=${t.id} — future todo dueDate 不应改变',
-            );
-            expect(
-              t.postponeHistory,
-              isEmpty,
-              reason: 'iter=$iter — 未过期 todo 不应追加 PostponeRecord',
-            );
-          }
-        }
-      },
-    );
-
-    test(
-      'isCompleted=true 即使 dueDate < today：dueDate 原样不变',
-      () async {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
-
-          final n = 1 + rng.nextInt(8);
-          final originals = <String, DateTime>{};
-          for (int i = 0; i < n; i++) {
-            final t = buildCompletedPast(today: today, rng: rng, title: i);
-            originals[t.id] = t.dueDate!;
-            await provider.addTodo(t);
-          }
-
-          await provider.postponeOverdue(today);
-
-          for (final entry in originals.entries) {
-            final t = provider.todos.firstWhere((x) => x.id == entry.key);
-            expect(
-              t.dueDate,
-              entry.value,
-              reason: 'iter=$iter id=${t.id} — '
-                  '已完成 todo 的 dueDate 不应被顺延',
-            );
-            expect(
-              t.postponeHistory,
-              isEmpty,
-              reason: 'iter=$iter — 已完成 todo 不应追加 PostponeRecord',
-            );
-          }
-        }
-      },
-    );
-
-    test(
-      'dueDate 为 null：不改动任何字段',
-      () async {
+    test('future dueDate：dueDate 原样不变，postponeHistory 保持为空', () async {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kIterations; iter++) {
         SharedPreferences.setMockInitialValues(<String, Object>{});
         final provider = TodoProvider();
 
-        for (int i = 0; i < 10; i++) {
+        final n = 1 + rng.nextInt(8);
+        final originals = <String, DateTime>{};
+        for (int i = 0; i < n; i++) {
+          final t = buildFuture(today: today, rng: rng, title: i);
+          originals[t.id] = t.dueDate!;
+          await provider.addTodo(t);
+        }
+
+        await provider.postponeOverdue(today);
+
+        for (final entry in originals.entries) {
+          final t = provider.todos.firstWhere((x) => x.id == entry.key);
+          expect(
+            t.dueDate,
+            entry.value,
+            reason: 'iter=$iter id=${t.id} — future todo dueDate 不应改变',
+          );
+          expect(
+            t.postponeHistory,
+            isEmpty,
+            reason: 'iter=$iter — 未过期 todo 不应追加 PostponeRecord',
+          );
+        }
+      }
+    });
+
+    test('isCompleted=true 即使 dueDate < today：dueDate 原样不变', () async {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kIterations; iter++) {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final provider = TodoProvider();
+
+        final n = 1 + rng.nextInt(8);
+        final originals = <String, DateTime>{};
+        for (int i = 0; i < n; i++) {
+          final t = buildCompletedPast(today: today, rng: rng, title: i);
+          originals[t.id] = t.dueDate!;
+          await provider.addTodo(t);
+        }
+
+        await provider.postponeOverdue(today);
+
+        for (final entry in originals.entries) {
+          final t = provider.todos.firstWhere((x) => x.id == entry.key);
+          expect(
+            t.dueDate,
+            entry.value,
+            reason:
+                'iter=$iter id=${t.id} — '
+                '已完成 todo 的 dueDate 不应被顺延',
+          );
+          expect(
+            t.postponeHistory,
+            isEmpty,
+            reason: 'iter=$iter — 已完成 todo 不应追加 PostponeRecord',
+          );
+        }
+      }
+    });
+
+    test('dueDate 为 null：不改动任何字段', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final provider = TodoProvider();
+
+      for (int i = 0; i < 10; i++) {
+        await provider.addTodo(buildNoDue(title: i));
+      }
+
+      await provider.postponeOverdue(today);
+
+      for (final t in provider.todos) {
+        expect(t.dueDate, isNull);
+        expect(t.postponeHistory, isEmpty);
+      }
+    });
+  });
+
+  group('P13 - postponeOverdue idempotency', () {
+    test('连续两次 postponeOverdue：dueDate 不变，postponeHistory 不再增长', () async {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kIterations; iter++) {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final provider = TodoProvider();
+
+        final n = 1 + rng.nextInt(8);
+        for (int i = 0; i < n; i++) {
+          await provider.addTodo(
+            buildOverdue(today: today, rng: rng, title: i),
+          );
+        }
+
+        await provider.postponeOverdue(today);
+
+        // 快照第一次调用之后的结果
+        final firstRunDue = <String, DateTime>{
+          for (final t in provider.todos) t.id: t.dueDate!,
+        };
+        final firstRunHistLen = <String, int>{
+          for (final t in provider.todos) t.id: t.postponeHistory.length,
+        };
+
+        await provider.postponeOverdue(today);
+
+        for (final t in provider.todos) {
+          expect(
+            t.dueDate,
+            firstRunDue[t.id],
+            reason:
+                'iter=$iter id=${t.id} — '
+                '第二次调用 dueDate 必须与第一次调用后相同',
+          );
+          expect(
+            t.postponeHistory.length,
+            firstRunHistLen[t.id],
+            reason:
+                'iter=$iter id=${t.id} — '
+                '第二次调用不应追加新的 PostponeRecord',
+          );
+        }
+      }
+    });
+
+    test('mixed todos（overdue + future + completed + null）：二次调用结果一致', () async {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kIterations; iter++) {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final provider = TodoProvider();
+
+        // 每种至少 1 个
+        final overdueCount = 1 + rng.nextInt(4);
+        final futureCount = 1 + rng.nextInt(4);
+        final completedCount = 1 + rng.nextInt(4);
+        final nullCount = 1 + rng.nextInt(4);
+
+        for (int i = 0; i < overdueCount; i++) {
+          await provider.addTodo(
+            buildOverdue(today: today, rng: rng, title: i),
+          );
+        }
+        for (int i = 0; i < futureCount; i++) {
+          await provider.addTodo(buildFuture(today: today, rng: rng, title: i));
+        }
+        for (int i = 0; i < completedCount; i++) {
+          await provider.addTodo(
+            buildCompletedPast(today: today, rng: rng, title: i),
+          );
+        }
+        for (int i = 0; i < nullCount; i++) {
           await provider.addTodo(buildNoDue(title: i));
         }
 
         await provider.postponeOverdue(today);
 
+        // 快照：记录每个 todo 的 dueDate 与 postponeHistory 长度
+        final firstRunDue = <String, DateTime?>{
+          for (final t in provider.todos) t.id: t.dueDate,
+        };
+        final firstRunHistLen = <String, int>{
+          for (final t in provider.todos) t.id: t.postponeHistory.length,
+        };
+
+        await provider.postponeOverdue(today);
+
+        // 第二次调用必须是 no-op：所有 todos 的 dueDate 与历史长度都保持不变。
+        expect(
+          provider.todos.length,
+          firstRunDue.length,
+          reason: 'iter=$iter — todos 数量不应改变',
+        );
         for (final t in provider.todos) {
-          expect(t.dueDate, isNull);
-          expect(t.postponeHistory, isEmpty);
-        }
-      },
-    );
-  });
-
-  group('P13 - postponeOverdue idempotency', () {
-    test(
-      '连续两次 postponeOverdue：dueDate 不变，postponeHistory 不再增长',
-      () async {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
-
-          final n = 1 + rng.nextInt(8);
-          for (int i = 0; i < n; i++) {
-            await provider.addTodo(
-              buildOverdue(today: today, rng: rng, title: i),
-            );
-          }
-
-          await provider.postponeOverdue(today);
-
-          // 快照第一次调用之后的结果
-          final firstRunDue = <String, DateTime>{
-            for (final t in provider.todos) t.id: t.dueDate!,
-          };
-          final firstRunHistLen = <String, int>{
-            for (final t in provider.todos) t.id: t.postponeHistory.length,
-          };
-
-          await provider.postponeOverdue(today);
-
-          for (final t in provider.todos) {
-            expect(
-              t.dueDate,
-              firstRunDue[t.id],
-              reason: 'iter=$iter id=${t.id} — '
-                  '第二次调用 dueDate 必须与第一次调用后相同',
-            );
-            expect(
-              t.postponeHistory.length,
-              firstRunHistLen[t.id],
-              reason: 'iter=$iter id=${t.id} — '
-                  '第二次调用不应追加新的 PostponeRecord',
-            );
-          }
-        }
-      },
-    );
-
-    test(
-      'mixed todos（overdue + future + completed + null）：二次调用结果一致',
-      () async {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kIterations; iter++) {
-          SharedPreferences.setMockInitialValues(<String, Object>{});
-          final provider = TodoProvider();
-
-          // 每种至少 1 个
-          final overdueCount = 1 + rng.nextInt(4);
-          final futureCount = 1 + rng.nextInt(4);
-          final completedCount = 1 + rng.nextInt(4);
-          final nullCount = 1 + rng.nextInt(4);
-
-          for (int i = 0; i < overdueCount; i++) {
-            await provider.addTodo(
-              buildOverdue(today: today, rng: rng, title: i),
-            );
-          }
-          for (int i = 0; i < futureCount; i++) {
-            await provider.addTodo(
-              buildFuture(today: today, rng: rng, title: i),
-            );
-          }
-          for (int i = 0; i < completedCount; i++) {
-            await provider.addTodo(
-              buildCompletedPast(today: today, rng: rng, title: i),
-            );
-          }
-          for (int i = 0; i < nullCount; i++) {
-            await provider.addTodo(buildNoDue(title: i));
-          }
-
-          await provider.postponeOverdue(today);
-
-          // 快照：记录每个 todo 的 dueDate 与 postponeHistory 长度
-          final firstRunDue = <String, DateTime?>{
-            for (final t in provider.todos) t.id: t.dueDate,
-          };
-          final firstRunHistLen = <String, int>{
-            for (final t in provider.todos) t.id: t.postponeHistory.length,
-          };
-
-          await provider.postponeOverdue(today);
-
-          // 第二次调用必须是 no-op：所有 todos 的 dueDate 与历史长度都保持不变。
           expect(
-            provider.todos.length,
-            firstRunDue.length,
-            reason: 'iter=$iter — todos 数量不应改变',
+            t.dueDate,
+            firstRunDue[t.id],
+            reason: 'iter=$iter id=${t.id} — dueDate 应保持不变',
           );
-          for (final t in provider.todos) {
-            expect(
-              t.dueDate,
-              firstRunDue[t.id],
-              reason: 'iter=$iter id=${t.id} — dueDate 应保持不变',
-            );
-            expect(
-              t.postponeHistory.length,
-              firstRunHistLen[t.id],
-              reason: 'iter=$iter id=${t.id} — '
-                  'postponeHistory 长度应保持不变',
-            );
-          }
-
-          // 额外：之前本来就过期的 todos 历史长度必须恰好为 1。
-          final overdueWithHistory = provider.todos
-              .where((t) => t.postponeHistory.isNotEmpty)
-              .toList();
           expect(
-            overdueWithHistory.length,
-            overdueCount,
+            t.postponeHistory.length,
+            firstRunHistLen[t.id],
             reason:
-                'iter=$iter — 只有 overdue 那部分应产生 postponeHistory 记录',
+                'iter=$iter id=${t.id} — '
+                'postponeHistory 长度应保持不变',
           );
-          for (final t in overdueWithHistory) {
-            expect(t.postponeHistory.length, 1);
-            expect(t.postponeHistory.first.reason, 'auto_daily_rollover');
-          }
         }
-      },
-    );
+
+        // 额外：之前本来就过期的 todos 历史长度必须恰好为 1。
+        final overdueWithHistory = provider.todos
+            .where((t) => t.postponeHistory.isNotEmpty)
+            .toList();
+        expect(
+          overdueWithHistory.length,
+          overdueCount,
+          reason: 'iter=$iter — 只有 overdue 那部分应产生 postponeHistory 记录',
+        );
+        for (final t in overdueWithHistory) {
+          expect(t.postponeHistory.length, 1);
+          expect(t.postponeHistory.first.reason, 'auto_daily_rollover');
+        }
+      }
+    });
   });
 }

@@ -218,21 +218,27 @@ Future<void> _runStartupIdleQueue(
   }
 }
 
+Future<void> _runStartupStaggeredTask(
+  String label,
+  Future<void> Function() task, {
+  required Duration delay,
+  Duration timeout = const Duration(seconds: 12),
+}) async {
+  await Future<void>.delayed(delay);
+  await _startupGuard(label, task, timeout: timeout);
+}
+
 Future<void> _runStartupStoragePhase(
   String label,
   List<Future<void> Function()> tasks, {
   int batchSize = 1,
 }) {
   final startedAt = DateTime.now();
-  return _startupGuard(
-    label,
-    () async {
-      await _runSyncReloadTasksInBatches(tasks, batchSize: batchSize);
-      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
-      debugPrint('[startup] $label completed in ${elapsedMs}ms');
-    },
-    timeout: const Duration(seconds: 18),
-  );
+  return _startupGuard(label, () async {
+    await _runSyncReloadTasksInBatches(tasks, batchSize: batchSize);
+    final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+    debugPrint('[startup] $label completed in ${elapsedMs}ms');
+  }, timeout: const Duration(seconds: 18));
 }
 
 void main() async {
@@ -374,11 +380,16 @@ void main() async {
   );
 
   // 数据Provider可以并行加载，提升启动速度
-  await cloudSyncProvider.suppressDirtyMarkWhile(() => Future.wait([
-    _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
-    _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
-    _startupGuard('pomodoro storage', () => pomodoroProvider.loadFromStorage()),
-  ]));
+  await cloudSyncProvider.suppressDirtyMarkWhile(
+    () => Future.wait([
+      _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
+      _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
+      _startupGuard(
+        'pomodoro storage',
+        () => pomodoroProvider.loadFromStorage(),
+      ),
+    ]),
+  );
 
   Future<void>? deferredLocalStorageStartup;
   Future<void> ensureDeferredLocalStorageStartup() {
@@ -394,11 +405,16 @@ void main() async {
           'anniversary storage',
           () => anniversaryProvider.loadFromStorage(),
         ),
+        () => _startupGuard(
+          'diary storage',
+          () => diaryProvider.loadFromStorage(),
+        ),
         () =>
-            _startupGuard('diary storage', () => diaryProvider.loadFromStorage()),
-        () => _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
-        () =>
-            _startupGuard('course storage', () => courseProvider.loadFromStorage()),
+            _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
+        () => _startupGuard(
+          'course storage',
+          () => courseProvider.loadFromStorage(),
+        ),
         () => _startupGuard(
           'quick capture templates storage',
           () => quickCaptureTemplateProvider.loadFromStorage(),
@@ -440,6 +456,40 @@ void main() async {
   }
 
   Future<void>? deferredPlatformStartup;
+  Future<void>? notificationLaunchStartup;
+  Future<void> ensureNotificationLaunchStartup() {
+    final existing = notificationLaunchStartup;
+    if (existing != null) return existing;
+    notificationLaunchStartup = () async {
+      await _runSyncReloadTasksInBatches([
+        () => _startupGuard(
+          'notification launch service',
+          () => LocalNotifications.instance.init(),
+          timeout: const Duration(seconds: 8),
+        ),
+        () => _startupGuard(
+          'alarm launch service',
+          () => AlarmService.instance.init(),
+          timeout: const Duration(seconds: 8),
+        ),
+      ]);
+    }();
+    return notificationLaunchStartup!;
+  }
+
+  Future<void>? homeWidgetLaunchStartup;
+  Future<void> ensureHomeWidgetLaunchStartup() {
+    final existing = homeWidgetLaunchStartup;
+    if (existing != null) return existing;
+    homeWidgetLaunchStartup = () async {
+      final initialized = await HomeWidgetService.init();
+      if (!initialized) {
+        debugPrint('[HomeWidget] startup init completed with failures');
+      }
+    }();
+    return homeWidgetLaunchStartup!;
+  }
+
   Future<void> ensureDeferredPlatformStartup() {
     final existing = deferredPlatformStartup;
     if (existing != null) return existing;
@@ -447,12 +497,7 @@ void main() async {
       await _runSyncReloadTasksInBatches([
         () => _startupGuard('notifications', () => notificationService.init()),
         () => _startupGuard('system tray', () => systemTray.init()),
-        () => _startupGuard('home widget', () async {
-          final initialized = await HomeWidgetService.init();
-          if (!initialized) {
-            debugPrint('[HomeWidget] startup init completed with failures');
-          }
-        }),
+        () => _startupGuard('home widget', ensureHomeWidgetLaunchStartup),
       ]);
       try {
         _initialExactAlarmGranted = await AlarmService.instance
@@ -1061,7 +1106,9 @@ void main() async {
 
   // 通知点击后的深链接(打开对应 Tab)
   void handleNotificationPayload(String payload) {
-    unawaited(NativeReminderRingtone.stopActive());
+    if (_shouldStopActiveRingtoneForPayload(payload)) {
+      unawaited(NativeReminderRingtone.stopActive());
+    }
     final uri = Uri.tryParse(payload);
     if (uri == null) return;
     _handleWidgetUri(uri, pomodoroProvider);
@@ -1366,53 +1413,77 @@ void main() async {
   Future<void> runPostFrameStartupTasks() async {
     unawaited(
       Future<void>.delayed(
-        const Duration(milliseconds: 1800),
+        const Duration(milliseconds: 3200),
         ensureDeferredLocalStorageStartup,
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 2400));
-    await ensureDeferredPlatformStartup();
-    final initialNotificationPayloads = <String>[];
-    final localLaunchPayload = LocalNotifications.instance.takeLaunchPayload();
-    if (localLaunchPayload != null && localLaunchPayload.isNotEmpty) {
-      initialNotificationPayloads.add(localLaunchPayload);
-    }
-    final alarmLaunchPayload = AlarmService.instance.takeLaunchPayload();
-    if (alarmLaunchPayload != null && alarmLaunchPayload.isNotEmpty) {
-      initialNotificationPayloads.add(alarmLaunchPayload);
-    }
-    for (final payload in initialNotificationPayloads.toSet()) {
-      handleNotificationPayload(payload);
-    }
-    final initial = await _startupValue<Uri>(
-      'home widget initial launch',
-      () => HomeWidgetService.initialLaunchUri(),
+    unawaited(
+      _runStartupStaggeredTask(
+        'startup notification launch payloads',
+        () async {
+          await ensureNotificationLaunchStartup();
+          final initialNotificationPayloads = <String>[];
+          final localLaunchPayload = LocalNotifications.instance
+              .takeLaunchPayload();
+          if (localLaunchPayload != null && localLaunchPayload.isNotEmpty) {
+            initialNotificationPayloads.add(localLaunchPayload);
+          }
+          final alarmLaunchPayload = AlarmService.instance.takeLaunchPayload();
+          if (alarmLaunchPayload != null && alarmLaunchPayload.isNotEmpty) {
+            initialNotificationPayloads.add(alarmLaunchPayload);
+          }
+          for (final payload in initialNotificationPayloads.toSet()) {
+            handleNotificationPayload(payload);
+          }
+        },
+        delay: const Duration(milliseconds: 900),
+      ),
     );
-    final initialDeepLink = await _startupValue<Uri>(
-      'deep link initial launch',
-      () => DeepLinkService.takeInitialLink(),
+    unawaited(
+      _runStartupStaggeredTask('startup deep links', () async {
+        final initialDeepLink = await _startupValue<Uri>(
+          'deep link initial launch',
+          () => DeepLinkService.takeInitialLink(),
+        );
+        final initialOAuthLink = await _startupValue<Uri>(
+          'deep link initial oauth',
+          () => DeepLinkService.takeInitialOAuthLink(),
+        );
+        final initialSharedText = await _startupValue<String>(
+          'deep link initial shared text',
+          () => DeepLinkService.takeInitialSharedText(),
+        );
+        if (initialDeepLink != null && initialDeepLink.toString().isNotEmpty) {
+          _handleWidgetUri(initialDeepLink, pomodoroProvider);
+        }
+        if (initialOAuthLink != null) {
+          _handleWidgetUri(initialOAuthLink, pomodoroProvider);
+        }
+        if (initialSharedText != null) {
+          _showSharedTextImportSheet(initialSharedText);
+        }
+      }, delay: const Duration(milliseconds: 1100)),
     );
-    final initialOAuthLink = await _startupValue<Uri>(
-      'deep link initial oauth',
-      () => DeepLinkService.takeInitialOAuthLink(),
+    unawaited(
+      _runStartupStaggeredTask('home widget initial launch', () async {
+        await ensureHomeWidgetLaunchStartup();
+        final initial = await _startupValue<Uri>(
+          'home widget initial launch',
+          () => HomeWidgetService.initialLaunchUri(),
+        );
+        if (initial != null) {
+          _handleWidgetUri(initial, pomodoroProvider);
+        }
+      }, delay: const Duration(milliseconds: 1400)),
     );
-    final initialSharedText = await _startupValue<String>(
-      'deep link initial shared text',
-      () => DeepLinkService.takeInitialSharedText(),
+    unawaited(
+      _runStartupStaggeredTask(
+        'deferred platform services',
+        ensureDeferredPlatformStartup,
+        delay: const Duration(seconds: 6),
+        timeout: const Duration(seconds: 18),
+      ),
     );
-    if (initial != null) {
-      _handleWidgetUri(initial, pomodoroProvider);
-    }
-    if (initialDeepLink != null &&
-        initialDeepLink.toString() != initial?.toString()) {
-      _handleWidgetUri(initialDeepLink, pomodoroProvider);
-    }
-    if (initialOAuthLink != null) {
-      _handleWidgetUri(initialOAuthLink, pomodoroProvider);
-    }
-    if (initialSharedText != null) {
-      _showSharedTextImportSheet(initialSharedText);
-    }
     unawaited(
       _runStartupIdleQueue(
         [
@@ -1458,7 +1529,7 @@ void main() async {
             timeout: const Duration(seconds: 5),
           ),
         ],
-        initialDelay: const Duration(seconds: 5),
+        initialDelay: const Duration(seconds: 8),
         gap: const Duration(seconds: 3),
       ),
     );
@@ -1507,6 +1578,13 @@ void main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(runPostFrameStartupTasks());
   });
+}
+
+bool _shouldStopActiveRingtoneForPayload(String payload) {
+  final uri = Uri.tryParse(payload);
+  if (uri == null || uri.scheme != 'duoyi') return false;
+  if (uri.queryParameters['confirm'] == '1') return true;
+  return uri.host == 'snooze' || uri.host == 'alarm-test';
 }
 
 Future<bool> _pushHomeWidget(

@@ -28,9 +28,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('AI schedule shortcut opens dedicated route', (
-    tester,
-  ) async {
+  testWidgets('AI schedule shortcut opens dedicated route', (tester) async {
     tester.view.physicalSize = const Size(390, 560);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -93,6 +91,9 @@ void main() {
     final method = source.substring(start, end);
 
     expect(method, contains('AiScheduleScreen'));
-    expect(method, contains('MaterialPageRoute(builder: (_) => const AiScheduleScreen())'));
+    expect(
+      method,
+      contains('MaterialPageRoute(builder: (_) => const AiScheduleScreen())'),
+    );
   });
 }

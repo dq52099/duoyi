@@ -22,6 +22,8 @@ import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 import 'habit_detail_screen.dart';
 
+const int _habitHeatmapGroupPreviewLimit = 8;
+
 class HabitScreen extends StatefulWidget {
   const HabitScreen({super.key});
 
@@ -605,6 +607,7 @@ class _HabitScreenState extends State<HabitScreen>
         : cs.surfaceContainerLowest;
 
     return BrandScaffold(
+      paintBackground: false,
       appBar: AppBar(
         title: Text(s.habitTitle),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
@@ -717,55 +720,69 @@ class _HabitHeatmapTab extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final heatmapData = provider.combinedHeatmap(12);
     final habitGroups = groupHabitsByCategory(provider.habits);
-    return ListView(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.paddingOf(context).bottom + 88,
-      ),
-      children: [
-        AppSurfaceCard(
-          key: const ValueKey('habit_heatmap_skin_card'),
-          margin: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-          borderRadius: BorderRadius.circular(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                heading,
-                style: appSecondaryRouteTitleTextStyle(
-                  context,
-                ).copyWith(fontSize: DesignTokens.fontSizeCardTitle),
-              ),
-              const SizedBox(height: 2),
-              HabitHeatmap(heatmapData: heatmapData),
-            ],
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: AppSurfaceCard(
+            key: const ValueKey('habit_heatmap_skin_card'),
+            margin: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+            borderRadius: BorderRadius.circular(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  heading,
+                  style: appSecondaryRouteTitleTextStyle(
+                    context,
+                  ).copyWith(fontSize: DesignTokens.fontSizeCardTitle),
+                ),
+                const SizedBox(height: 2),
+                HabitHeatmap(heatmapData: heatmapData),
+              ],
+            ),
           ),
         ),
         if (provider.habits.isEmpty)
-          AppSurfaceCard(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            padding: const EdgeInsets.all(16),
-            child: EmptyState(
-              icon: Icons.folder_open,
-              message: emptyMessage,
-              actionLabel: actionLabel,
-              onAction: onAdd,
+          SliverToBoxAdapter(
+            child: AppSurfaceCard(
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              padding: const EdgeInsets.all(16),
+              child: EmptyState(
+                icon: Icons.folder_open,
+                message: emptyMessage,
+                actionLabel: actionLabel,
+                onAction: onAdd,
+              ),
             ),
           )
         else ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-            child: Text(
-              '习惯分组',
-              style: appSecondaryControlTextStyle(context).copyWith(
-                color: cs.onSurface.withValues(alpha: 0.68),
-                fontSize: DesignTokens.fontSizeSecondary,
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+              child: Text(
+                '习惯分组',
+                style: appSecondaryControlTextStyle(context).copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.68),
+                  fontSize: DesignTokens.fontSizeCaption,
+                ),
               ),
             ),
           ),
-          for (final group in habitGroups)
-            _HabitGroupSection(group: group, streakLabel: streakLabel),
+          SliverList.builder(
+            itemCount: habitGroups.length,
+            itemBuilder: (context, index) => _HabitGroupSection(
+              key: ValueKey(
+                'habit_heatmap_group_${habitGroups[index].category}',
+              ),
+              group: habitGroups[index],
+              streakLabel: streakLabel,
+            ),
+          ),
         ],
+        SliverToBoxAdapter(
+          child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 88),
+        ),
       ],
     );
   }
@@ -812,8 +829,8 @@ class _HabitTodaySummaryCard extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
-              width: 28,
-              height: 28,
+              width: 26,
+              height: 26,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -851,7 +868,7 @@ class _HabitTodaySummaryCard extends StatelessWidget {
                     '$streakLabel $longestStreak 天',
                     style: TextStyle(
                       color: Colors.grey.shade600,
-                      fontSize: 10.5,
+                      fontSize: 10,
                       height: 1.1,
                     ),
                   ),
@@ -869,11 +886,19 @@ class _HabitGroupSection extends StatelessWidget {
   final HabitGroup group;
   final String streakLabel;
 
-  const _HabitGroupSection({required this.group, required this.streakLabel});
+  const _HabitGroupSection({
+    super.key,
+    required this.group,
+    required this.streakLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final previewHabits = group.habits.length > _habitHeatmapGroupPreviewLimit
+        ? group.habits.take(_habitHeatmapGroupPreviewLimit).toList()
+        : group.habits;
+    final hiddenCount = group.habits.length - previewHabits.length;
     return AppSurfaceCard(
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
       padding: EdgeInsets.zero,
@@ -881,14 +906,17 @@ class _HabitGroupSection extends StatelessWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          initiallyExpanded: true,
-          tilePadding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
-          childrenPadding: const EdgeInsets.only(bottom: 6),
-          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 20),
+          initiallyExpanded:
+              group.habits.length <= _habitHeatmapGroupPreviewLimit,
+          tilePadding: const EdgeInsets.fromLTRB(10, 0, 8, 0),
+          childrenPadding: const EdgeInsets.only(bottom: 4),
+          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 18),
+          minTileHeight: 44,
+          dense: true,
           title: Text(
             group.category,
             style: appSecondaryMenuItemTextStyle(context).copyWith(
-              fontSize: DesignTokens.fontSizeListTitle,
+              fontSize: DesignTokens.fontSizeSecondary,
               fontWeight: DesignTokens.fontWeightRegular,
               color: cs.onSurface,
             ),
@@ -897,12 +925,23 @@ class _HabitGroupSection extends StatelessWidget {
             '${group.completedTodayCount}/${group.habits.length} 今日达标',
             style: appSecondaryControlLabelStyle(context).copyWith(
               color: cs.onSurfaceVariant,
-              fontSize: DesignTokens.fontSizeSecondary,
+              fontSize: DesignTokens.fontSizeCaption,
             ),
           ),
           children: [
-            for (final habit in group.habits)
+            for (final habit in previewHabits)
               _HabitSummaryTile(habit: habit, streakLabel: streakLabel),
+            if (hiddenCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+                child: Text(
+                  '还有 $hiddenCount 个习惯，请进入今日打卡或习惯详情查看',
+                  style: appSecondaryControlLabelStyle(context).copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontSize: DesignTokens.fontSizeCaption,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -920,8 +959,8 @@ class _HabitInsightCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       key: const ValueKey('habit_insight_card'),
-      margin: const EdgeInsets.fromLTRB(10, 1, 10, 4),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 3),
+      padding: const EdgeInsets.fromLTRB(9, 7, 9, 5),
       borderRadius: BorderRadius.circular(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,10 +1095,10 @@ class _HabitSummaryTile extends StatelessWidget {
   }
 }
 
-const double _habitCheckinCardBodyHeight = 44;
-const double _habitTitleStatusHeight = 17;
-const double _habitCheckinButtonWidth = 58;
-const double _habitUndoButtonWidth = 30;
+const double _habitCheckinCardBodyHeight = 40;
+const double _habitTitleStatusHeight = 16;
+const double _habitCheckinButtonWidth = 54;
+const double _habitUndoButtonWidth = 28;
 const double _habitActionButtonGap = 3;
 const double _habitActionRailWidth =
     _habitUndoButtonWidth + _habitActionButtonGap + _habitCheckinButtonWidth;
@@ -1122,7 +1161,7 @@ class _HabitCheckinCard extends StatelessWidget {
       child: AppSurfaceCard(
         key: ValueKey('habit_checkin_card_${habit.id}'),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
-        padding: const EdgeInsets.fromLTRB(8, 4, 6, 4),
+        padding: const EdgeInsets.fromLTRB(7, 3, 6, 3),
         borderRadius: BorderRadius.circular(10),
         onTap: () => Navigator.push(
           context,
@@ -1142,8 +1181,8 @@ class _HabitCheckinCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 21,
+                height: 21,
                 decoration: BoxDecoration(
                   color: habitColor.withValues(
                     alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.15,
@@ -1153,10 +1192,10 @@ class _HabitCheckinCard extends StatelessWidget {
                 child: Icon(
                   _habitDisplayIcon(habit),
                   color: habitColor,
-                  size: 14,
+                  size: 13,
                 ),
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 6),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1174,7 +1213,7 @@ class _HabitCheckinCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: DesignTokens.fontWeightRegular,
-                                fontSize: DesignTokens.fontSizeListTitle,
+                                fontSize: DesignTokens.fontSizeSecondary,
                                 height: 1.14,
                                 decoration: isDone && !isNegative
                                     ? TextDecoration.lineThrough
@@ -1187,7 +1226,7 @@ class _HabitCheckinCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 5),
+                          const SizedBox(width: 4),
                           SizedBox(
                             height: _habitTitleStatusHeight,
                             child: ConstrainedBox(
@@ -1248,7 +1287,7 @@ class _HabitCheckinCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    const SizedBox(height: 1),
+                    const SizedBox(height: 0),
                     LayoutBuilder(
                       builder: (context, constraints) {
                         return Stack(
@@ -1308,7 +1347,7 @@ class _HabitCheckinCard extends StatelessWidget {
                     const SizedBox(width: _habitActionButtonGap),
                     SizedBox(
                       width: _habitCheckinButtonWidth,
-                      height: 28,
+                      height: 26,
                       child: FilledButton(
                         onPressed: canCheckIn
                             ? () => _handleCheckIn(context)
@@ -1319,10 +1358,10 @@ class _HabitCheckinCard extends StatelessWidget {
                           disabledBackgroundColor: Colors.grey.shade200,
                           disabledForegroundColor: Colors.grey.shade600,
                           padding: const EdgeInsets.symmetric(horizontal: 3),
-                          minimumSize: const Size(_habitCheckinButtonWidth, 28),
+                          minimumSize: const Size(_habitCheckinButtonWidth, 26),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           textStyle: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.normal,
                           ),
                         ),

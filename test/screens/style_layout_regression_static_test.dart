@@ -421,8 +421,17 @@ void main() {
     );
     expect(brandScaffold, contains('final routeBackground'));
     expect(brandScaffold, contains('ColoredBox('));
-    expect(brandScaffold, contains('color: routeBackground'));
-    expect(brandScaffold, contains('BrandBackground('));
+    expect(
+      brandScaffold,
+      contains('color: paintBackground ? routeBackground : Colors.transparent'),
+    );
+    expect(brandScaffold, contains('final bool paintBackground'));
+    expect(brandScaffold, contains('this.paintBackground = true'));
+    expect(
+      brandScaffold,
+      contains('paintBackground ? BrandBackground(child: scaffold) : scaffold'),
+      reason: '主导航 shell 已经绘制品牌背景，tab 内 BrandScaffold 需要可关闭内层背景以避免重复解码和重绘。',
+    );
 
     final surfaceComponents = File(
       'lib/widgets/surface_components.dart',
@@ -654,6 +663,11 @@ void main() {
     expect(almanac, contains('surfaceTintColor: Colors.transparent'));
     expect(almanac, contains('body: ColoredBox('));
     expect(almanac, contains('color: routeBackground.withValues(alpha: 0.92)'));
+    expect(
+      almanac,
+      contains('22 + MediaQuery.paddingOf(context).bottom'),
+      reason: '万年历主页面底部滚动 padding 需要避开 Android 手势区。',
+    );
     expect(almanac, isNot(contains('backgroundColor: Colors.transparent')));
     expect(almanac, isNot(contains('return BrandScaffold(')));
 
@@ -1046,7 +1060,7 @@ void main() {
     expect(moreApps, contains('Expanded('));
 
     final habit = File('lib/screens/habit_screen.dart').readAsStringSync();
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 44'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 40'));
     expect(habit, isNot(contains("label: const Text('还原')")));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
   });
@@ -1086,10 +1100,10 @@ void main() {
     expect(habit, contains('SliverList.builder('));
     expect(habit, contains('itemCount: activeHabits.length'));
     expect(habit, contains('_HabitTodaySummaryCard('));
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 44'));
-    expect(habit, contains('const double _habitTitleStatusHeight = 17'));
-    expect(habit, contains('const double _habitUndoButtonWidth = 30'));
-    expect(habit, contains('const double _habitCheckinButtonWidth = 58'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 40'));
+    expect(habit, contains('const double _habitTitleStatusHeight = 16'));
+    expect(habit, contains('const double _habitUndoButtonWidth = 28'));
+    expect(habit, contains('const double _habitCheckinButtonWidth = 54'));
     expect(habit, contains('minimumSize: const Size('));
     expect(habit, contains('_habitCheckinButtonWidth'));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
@@ -1115,6 +1129,22 @@ void main() {
     expect(habit, contains('builder: (ctx) => AppDialog('));
     expect(habit, isNot(contains('builder: (ctx) => AlertDialog(')));
     expect(habit, isNot(contains('...activeHabits.map')));
+    final heatmapStart = habit.indexOf('class _HabitHeatmapTab');
+    final heatmapEnd = habit.indexOf(
+      'class _HabitInsightSection',
+      heatmapStart,
+    );
+    expect(heatmapStart, greaterThanOrEqualTo(0));
+    expect(heatmapEnd, greaterThan(heatmapStart));
+    final heatmapTab = habit.substring(heatmapStart, heatmapEnd);
+    expect(heatmapTab, contains('return CustomScrollView('));
+    expect(heatmapTab, contains('SliverList.builder('));
+    expect(heatmapTab, contains('itemCount: habitGroups.length'));
+    expect(
+      heatmapTab,
+      isNot(contains('return ListView(')),
+      reason: '热力图分组不能一次性 eager 构建所有分组和任务。',
+    );
     expect(
       habit.indexOf('const SliverToBoxAdapter(child: HabitWeeklyCard())'),
       lessThan(

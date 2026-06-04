@@ -97,41 +97,46 @@ void main() {
     }
   });
 
-  test('matrix validator rejects the old nonexistent habit card path', () async {
-    final tempDir = await Directory.systemTemp.createTemp('duoyi-goal-matrix-');
-    try {
-      final matrixFile = File('${tempDir.path}/goal-requirement-matrix.md')
-        ..writeAsStringSync(
-          File(
-            'docs/goal-requirement-matrix.md',
-          ).readAsStringSync().replaceFirst(
-            'lib/widgets/habit_weekly_card.dart',
+  test(
+    'matrix validator rejects the old nonexistent habit card path',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'duoyi-goal-matrix-',
+      );
+      try {
+        final matrixFile = File('${tempDir.path}/goal-requirement-matrix.md')
+          ..writeAsStringSync(
+            File(
+              'docs/goal-requirement-matrix.md',
+            ).readAsStringSync().replaceFirst(
+              'lib/widgets/habit_weekly_card.dart',
+              'test/widgets/habit_weekly_card.dart',
+            ),
+          );
+
+        final result = await Process.run(
+          'bash',
+          ['scripts/validate_goal_requirement_matrix.sh'],
+          workingDirectory: Directory.current.path,
+          environment: {'MATRIX_FILE': matrixFile.path},
+          includeParentEnvironment: true,
+        );
+
+        expect(result.exitCode, isNot(0));
+        expect(
+          _combinedOutput(result),
+          contains(
+            'REQ-HABIT evidence path is missing: '
             'test/widgets/habit_weekly_card.dart',
           ),
         );
-
-      final result = await Process.run(
-        'bash',
-        ['scripts/validate_goal_requirement_matrix.sh'],
-        workingDirectory: Directory.current.path,
-        environment: {'MATRIX_FILE': matrixFile.path},
-        includeParentEnvironment: true,
-      );
-
-      expect(result.exitCode, isNot(0));
-      expect(
-        _combinedOutput(result),
-        contains(
-          'REQ-HABIT evidence path is missing: '
-          'test/widgets/habit_weekly_card.dart',
-        ),
-      );
-    } finally {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
+      } finally {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
       }
-    }
-  });
+    },
+  );
 }
 
 String _combinedOutput(ProcessResult result) {

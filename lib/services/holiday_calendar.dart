@@ -22,10 +22,7 @@ class HolidayYear {
   /// `MM-DD` 字符串集合（周末调休上班）。
   final Set<String> workMakeupDays;
 
-  const HolidayYear({
-    required this.holidays,
-    required this.workMakeupDays,
-  });
+  const HolidayYear({required this.holidays, required this.workMakeupDays});
 }
 
 /// 2024 / 2025 法定节假日（来源：国务院办公厅公告）。
@@ -50,10 +47,13 @@ const Map<int, HolidayYear> _kBuiltinHolidays = <int, HolidayYear>{
       '10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07',
     },
     workMakeupDays: <String>{
-      '02-04', '02-18',
-      '04-07', '04-28',
+      '02-04',
+      '02-18',
+      '04-07',
+      '04-28',
       '05-11',
-      '09-14', '09-29',
+      '09-14',
+      '09-29',
       '10-12',
     },
   ),
@@ -71,12 +71,7 @@ const Map<int, HolidayYear> _kBuiltinHolidays = <int, HolidayYear>{
       // 中秋 + 国庆（连休）
       '10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07', '10-08',
     },
-    workMakeupDays: <String>{
-      '01-26', '02-08',
-      '04-27',
-      '09-28',
-      '10-11',
-    },
+    workMakeupDays: <String>{'01-26', '02-08', '04-27', '09-28', '10-11'},
   ),
   2026: HolidayYear(
     holidays: <String>{
@@ -96,7 +91,8 @@ const Map<int, HolidayYear> _kBuiltinHolidays = <int, HolidayYear>{
       '10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07',
     },
     workMakeupDays: <String>{
-      '02-15', '02-28',
+      '02-15',
+      '02-28',
       '04-26',
       '06-28',
       '09-27',

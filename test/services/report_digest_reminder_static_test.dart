@@ -123,6 +123,21 @@ void main() {
       expect(main, contains("payload: 'duoyi://report/weekly'"));
       expect(main, contains("payload: 'duoyi://report/monthly'"));
       expect(main, contains("payload: 'duoyi://report/yearly'"));
+      final reportSyncStart = main.indexOf(
+        'Future<void> _syncReportDigestReminders',
+      );
+      final reportBodyStart = main.indexOf(
+        'String _reportDigestNotificationBody',
+        reportSyncStart,
+      );
+      expect(reportSyncStart, greaterThanOrEqualTo(0));
+      expect(reportBodyStart, greaterThan(reportSyncStart));
+      final reportSync = main.substring(reportSyncStart, reportBodyStart);
+      expect(reportSync, contains('await notification.scheduleOnce('));
+      expect(reportSync, isNot(contains('AlarmService')));
+      expect(reportSync, isNot(contains('scheduleFullScreen')));
+      expect(reportSync, isNot(contains('scheduleDailyFullScreen')));
+      expect(reportSync, isNot(contains('NativeReminderRingtone')));
       expect(main, isNot(contains('查看上一周的效率分、待办、习惯、专注和时间投入趋势')));
       expect(main, isNot(contains('查看上月成长轨迹、效率对比、专注投入和活跃热力图')));
       expect(main, contains("uri.host == 'report'"));

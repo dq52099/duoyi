@@ -10,8 +10,11 @@ class HabitHeatmap extends StatelessWidget {
 
   Color _cellColor(int intensity, Color primary) {
     if (intensity == 0) return primary.withValues(alpha: 0.06);
-    final opacities = [0.0, 0.20, 0.34, 0.50, 0.68, 0.88];
-    return primary.withValues(alpha: opacities[intensity.clamp(0, 5)]);
+    if (intensity >= 5) return const Color(0xFF4CAF50);
+    final opacities = [0.0, 0.20, 0.34, 0.50, 0.68];
+    return const Color(
+      0xFFFFB74D,
+    ).withValues(alpha: opacities[intensity.clamp(0, 4)]);
   }
 
   @override
@@ -28,9 +31,9 @@ class HabitHeatmap extends StatelessWidget {
         final available = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : 360.0;
-        final cell = ((available - 40 - columns * 3) / columns).clamp(
-          12.0,
-          20.0,
+        final cell = ((available - 36 - columns * 2.5) / columns).clamp(
+          10.0,
+          17.0,
         );
         final grid = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +66,7 @@ class HabitHeatmap extends StatelessWidget {
                       .map(
                         (s) => SizedBox(
                           height: cell + 2,
-                          width: 24,
+                          width: 22,
                           child: s.isEmpty
                               ? null
                               : Center(
@@ -91,7 +94,7 @@ class HabitHeatmap extends StatelessWidget {
                         child: Container(
                           width: cell,
                           height: cell,
-                          margin: const EdgeInsets.all(1.5),
+                          margin: const EdgeInsets.all(1.25),
                           decoration: BoxDecoration(
                             color: _cellColor(intensity, primary),
                             borderRadius: BorderRadius.circular(4),
@@ -113,7 +116,7 @@ class HabitHeatmap extends StatelessWidget {
         );
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
           child: grid,
         );
       },

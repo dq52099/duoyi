@@ -74,86 +74,75 @@ void main() {
   }
 
   group('P6 (模型层) - subtaskProgress ↔ all subtasks completed', () {
-    test(
-      'forward: 全部子任务 isCompleted=true ⟹ subtaskProgress = 1.0',
-      () {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kModelIterations; iter++) {
-          final n = 1 + rng.nextInt(10); // subtasks count ∈ [1, 10]
-          final todo = buildTodoWithSubtasks(subtaskCount: n);
+    test('forward: 全部子任务 isCompleted=true ⟹ subtaskProgress = 1.0', () {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kModelIterations; iter++) {
+        final n = 1 + rng.nextInt(10); // subtasks count ∈ [1, 10]
+        final todo = buildTodoWithSubtasks(subtaskCount: n);
 
-          // 以随机顺序勾选全部子任务，避免只覆盖"顺序勾选"。
-          for (final i in shuffledIndices(n, rng)) {
-            todo.subtasks[i].isCompleted = true;
-          }
-
-          expect(
-            todo.subtaskProgress,
-            1.0,
-            reason:
-                'iter=$iter n=$n — 全部子任务勾选后 subtaskProgress 应为 1.0',
-          );
+        // 以随机顺序勾选全部子任务，避免只覆盖"顺序勾选"。
+        for (final i in shuffledIndices(n, rng)) {
+          todo.subtasks[i].isCompleted = true;
         }
-      },
-    );
 
-    test(
-      'backward: 任一子任务被撤回 ⟹ subtaskProgress < 1.0',
-      () {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kModelIterations; iter++) {
-          final n = 1 + rng.nextInt(10);
-          final todo = buildTodoWithSubtasks(subtaskCount: n);
-          for (final s in todo.subtasks) {
-            s.isCompleted = true;
-          }
-          assert(todo.subtaskProgress == 1.0);
+        expect(
+          todo.subtaskProgress,
+          1.0,
+          reason: 'iter=$iter n=$n — 全部子任务勾选后 subtaskProgress 应为 1.0',
+        );
+      }
+    });
 
-          final undoIdx = rng.nextInt(n);
-          todo.subtasks[undoIdx].isCompleted = false;
-
-          expect(
-            todo.subtaskProgress < 1.0,
-            isTrue,
-            reason: 'iter=$iter n=$n 撤回 idx=$undoIdx — '
-                'subtaskProgress=${todo.subtaskProgress} 应 <1.0',
-          );
-          // 同时再补充一个精确等式断言：done = n - 1。
-          expect(
-            todo.subtaskProgress,
-            closeTo((n - 1) / n, 1e-12),
-          );
+    test('backward: 任一子任务被撤回 ⟹ subtaskProgress < 1.0', () {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kModelIterations; iter++) {
+        final n = 1 + rng.nextInt(10);
+        final todo = buildTodoWithSubtasks(subtaskCount: n);
+        for (final s in todo.subtasks) {
+          s.isCompleted = true;
         }
-      },
-    );
+        assert(todo.subtaskProgress == 1.0);
+
+        final undoIdx = rng.nextInt(n);
+        todo.subtasks[undoIdx].isCompleted = false;
+
+        expect(
+          todo.subtaskProgress < 1.0,
+          isTrue,
+          reason:
+              'iter=$iter n=$n 撤回 idx=$undoIdx — '
+              'subtaskProgress=${todo.subtaskProgress} 应 <1.0',
+        );
+        // 同时再补充一个精确等式断言：done = n - 1。
+        expect(todo.subtaskProgress, closeTo((n - 1) / n, 1e-12));
+      }
+    });
   });
 
   group('P6 formula - subtaskProgress == done / total', () {
-    test(
-      'K/N 随机配置下 subtaskProgress = K/N',
-      () {
-        final rng = Random(kSeed);
-        for (int iter = 0; iter < kModelIterations; iter++) {
-          final n = 1 + rng.nextInt(10);
-          final todo = buildTodoWithSubtasks(subtaskCount: n);
+    test('K/N 随机配置下 subtaskProgress = K/N', () {
+      final rng = Random(kSeed);
+      for (int iter = 0; iter < kModelIterations; iter++) {
+        final n = 1 + rng.nextInt(10);
+        final todo = buildTodoWithSubtasks(subtaskCount: n);
 
-          // 随机挑选 K ∈ [0, n] 个子任务标记完成。
-          final k = rng.nextInt(n + 1);
-          final picks = shuffledIndices(n, rng).take(k);
-          for (final idx in picks) {
-            todo.subtasks[idx].isCompleted = true;
-          }
-
-          final expected = k / n;
-          expect(
-            todo.subtaskProgress,
-            closeTo(expected, 1e-12),
-            reason: 'iter=$iter n=$n k=$k — '
-                'progress=${todo.subtaskProgress}, 期望=$expected',
-          );
+        // 随机挑选 K ∈ [0, n] 个子任务标记完成。
+        final k = rng.nextInt(n + 1);
+        final picks = shuffledIndices(n, rng).take(k);
+        for (final idx in picks) {
+          todo.subtasks[idx].isCompleted = true;
         }
-      },
-    );
+
+        final expected = k / n;
+        expect(
+          todo.subtaskProgress,
+          closeTo(expected, 1e-12),
+          reason:
+              'iter=$iter n=$n k=$k — '
+              'progress=${todo.subtaskProgress}, 期望=$expected',
+        );
+      }
+    });
   });
 
   group('P7 (Provider 层) - autoToggleByChildren=true 双向联动', () {
@@ -179,23 +168,22 @@ void main() {
           for (int step = 0; step < order.length; step++) {
             // 注意：每轮都要重新拿 parent 的快照，因为 toggleSubtask 会触发
             // recomputeParent，可能改变 isCompleted。
-            final parentBefore =
-                provider.todos.firstWhere((t) => t.id == todoId);
+            final parentBefore = provider.todos.firstWhere(
+              (t) => t.id == todoId,
+            );
             final subId = parentBefore.subtasks[order[step]].id;
 
             final before = DateTime.now();
             await provider.toggleSubtask(todoId, subId);
             final after = DateTime.now();
 
-            final parentNow =
-                provider.todos.firstWhere((t) => t.id == todoId);
+            final parentNow = provider.todos.firstWhere((t) => t.id == todoId);
             final isLast = step == order.length - 1;
             if (isLast) {
               expect(
                 parentNow.isCompleted,
                 isTrue,
-                reason:
-                    'iter=$iter n=$n 最后一次勾选后父任务应 isCompleted=true',
+                reason: 'iter=$iter n=$n 最后一次勾选后父任务应 isCompleted=true',
               );
               expect(
                 parentNow.completedAt,
@@ -220,14 +208,12 @@ void main() {
               expect(
                 parentNow.isCompleted,
                 isFalse,
-                reason:
-                    'iter=$iter n=$n step=$step 中间步父任务不应过早完成',
+                reason: 'iter=$iter n=$n step=$step 中间步父任务不应过早完成',
               );
               expect(
                 parentNow.completedAt,
                 isNull,
-                reason:
-                    'iter=$iter step=$step 中间步父任务 completedAt 应为 null',
+                reason: 'iter=$iter step=$step 中间步父任务 completedAt 应为 null',
               );
             }
           }
@@ -235,96 +221,90 @@ void main() {
       },
     );
 
-    test(
-      'reverse: 全部完成后撤回任一子任务 ⟹ 父任务回落 isCompleted=false & '
-      'completedAt=null',
-      () async {
-        final rng = Random(kSeed);
-        final provider = TodoProvider();
+    test('reverse: 全部完成后撤回任一子任务 ⟹ 父任务回落 isCompleted=false & '
+        'completedAt=null', () async {
+      final rng = Random(kSeed);
+      final provider = TodoProvider();
 
-        for (int iter = 0; iter < kProviderIterations; iter++) {
-          final n = 1 + rng.nextInt(8);
-          final todo = buildTodoWithSubtasks(
-            subtaskCount: n,
-            title: 'reverse-$iter',
-          );
-          await provider.addTodo(todo);
-          final todoId = todo.id;
+      for (int iter = 0; iter < kProviderIterations; iter++) {
+        final n = 1 + rng.nextInt(8);
+        final todo = buildTodoWithSubtasks(
+          subtaskCount: n,
+          title: 'reverse-$iter',
+        );
+        await provider.addTodo(todo);
+        final todoId = todo.id;
 
-          // 先把父任务推到 isCompleted=true 状态。
-          final order = shuffledIndices(n, rng);
-          for (final idx in order) {
-            final parent = provider.todos.firstWhere((t) => t.id == todoId);
-            await provider.toggleSubtask(todoId, parent.subtasks[idx].id);
-          }
-
-          final completed = provider.todos.firstWhere((t) => t.id == todoId);
-          assert(completed.isCompleted, 'precondition: parent should be done');
-          assert(completed.completedAt != null);
-
-          // 反向：撤回随机一个子任务。
-          final undoIdx = rng.nextInt(n);
-          final undoSubId = completed.subtasks[undoIdx].id;
-          await provider.toggleSubtask(todoId, undoSubId);
-
-          final after = provider.todos.firstWhere((t) => t.id == todoId);
-          expect(
-            after.isCompleted,
-            isFalse,
-            reason: 'iter=$iter n=$n 撤回 idx=$undoIdx — '
-                'autoToggle=true 下父任务应回到未完成',
-          );
-          expect(
-            after.completedAt,
-            isNull,
-            reason: 'iter=$iter — completedAt 应被清空',
-          );
-          // 不变式 P6：progress 也应严格 <1.0。
-          expect(after.subtaskProgress < 1.0, isTrue);
+        // 先把父任务推到 isCompleted=true 状态。
+        final order = shuffledIndices(n, rng);
+        for (final idx in order) {
+          final parent = provider.todos.firstWhere((t) => t.id == todoId);
+          await provider.toggleSubtask(todoId, parent.subtasks[idx].id);
         }
-      },
-    );
+
+        final completed = provider.todos.firstWhere((t) => t.id == todoId);
+        assert(completed.isCompleted, 'precondition: parent should be done');
+        assert(completed.completedAt != null);
+
+        // 反向：撤回随机一个子任务。
+        final undoIdx = rng.nextInt(n);
+        final undoSubId = completed.subtasks[undoIdx].id;
+        await provider.toggleSubtask(todoId, undoSubId);
+
+        final after = provider.todos.firstWhere((t) => t.id == todoId);
+        expect(
+          after.isCompleted,
+          isFalse,
+          reason:
+              'iter=$iter n=$n 撤回 idx=$undoIdx — '
+              'autoToggle=true 下父任务应回到未完成',
+        );
+        expect(
+          after.completedAt,
+          isNull,
+          reason: 'iter=$iter — completedAt 应被清空',
+        );
+        // 不变式 P6：progress 也应严格 <1.0。
+        expect(after.subtaskProgress < 1.0, isTrue);
+      }
+    });
   });
 
   group('autoToggleByChildren=false — 父任务与子任务解耦', () {
-    test(
-      'autoToggle=false 下勾选全部子任务，父任务仍保持 isCompleted=false',
-      () async {
-        final rng = Random(kSeed);
-        final provider = TodoProvider();
+    test('autoToggle=false 下勾选全部子任务，父任务仍保持 isCompleted=false', () async {
+      final rng = Random(kSeed);
+      final provider = TodoProvider();
 
-        for (int iter = 0; iter < kProviderIterations; iter++) {
-          final n = 1 + rng.nextInt(8);
-          final todo = buildTodoWithSubtasks(
-            subtaskCount: n,
-            autoToggleByChildren: false,
-            title: 'manual-$iter',
-          );
-          await provider.addTodo(todo);
-          final todoId = todo.id;
+      for (int iter = 0; iter < kProviderIterations; iter++) {
+        final n = 1 + rng.nextInt(8);
+        final todo = buildTodoWithSubtasks(
+          subtaskCount: n,
+          autoToggleByChildren: false,
+          title: 'manual-$iter',
+        );
+        await provider.addTodo(todo);
+        final todoId = todo.id;
 
-          for (final idx in shuffledIndices(n, rng)) {
-            final parent = provider.todos.firstWhere((t) => t.id == todoId);
-            await provider.toggleSubtask(todoId, parent.subtasks[idx].id);
-          }
-
+        for (final idx in shuffledIndices(n, rng)) {
           final parent = provider.todos.firstWhere((t) => t.id == todoId);
-          // 全部子任务确实勾选了。
-          expect(parent.subtaskProgress, 1.0);
-          // 但父任务完成态不受驱动。
-          expect(
-            parent.isCompleted,
-            isFalse,
-            reason:
-                'iter=$iter n=$n — autoToggle=false 下父任务不应被子任务自动置完成',
-          );
-          expect(
-            parent.completedAt,
-            isNull,
-            reason: 'iter=$iter — 未完成时 completedAt 必须为 null',
-          );
+          await provider.toggleSubtask(todoId, parent.subtasks[idx].id);
         }
-      },
-    );
+
+        final parent = provider.todos.firstWhere((t) => t.id == todoId);
+        // 全部子任务确实勾选了。
+        expect(parent.subtaskProgress, 1.0);
+        // 但父任务完成态不受驱动。
+        expect(
+          parent.isCompleted,
+          isFalse,
+          reason: 'iter=$iter n=$n — autoToggle=false 下父任务不应被子任务自动置完成',
+        );
+        expect(
+          parent.completedAt,
+          isNull,
+          reason: 'iter=$iter — 未完成时 completedAt 必须为 null',
+        );
+      }
+    });
   });
 }

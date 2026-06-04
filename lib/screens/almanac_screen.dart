@@ -218,7 +218,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
                   wide ? 24 : 14,
                   6,
                   wide ? 24 : 14,
-                  22,
+                  22 + MediaQuery.paddingOf(context).bottom,
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -581,97 +581,98 @@ class _SelectedDateSummaryCard extends StatelessWidget {
       cs.primary.withValues(alpha: isDark ? 0.08 : 0.045),
       cs.surface,
     );
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Material(
+      key: const ValueKey('selected_date_almanac_summary_card'),
+      color: bg,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpenAlmanac,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          detail.lunarDate.chineseText,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.normal,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          _spacedGanzhiLine(detail.ganzhiLine),
+                          style: appSecondaryControlTextStyle(context).copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.62),
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (badges.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: badges
+                      .map(
+                        (badge) =>
+                            _AlmanacBadge(text: badge.$1, color: badge.$2),
+                      )
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surface.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.32
+                        : 0.62,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      detail.lunarDate.chineseText,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.normal,
-                        color: cs.onSurface,
+                    _SummaryYijiLine(
+                      label: '宜',
+                      text: _summaryTerms(detail.suitable),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      child: Divider(
+                        height: 1,
+                        thickness: 0.45,
+                        color: cs.outlineVariant.withValues(alpha: 0.20),
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      _spacedGanzhiLine(detail.ganzhiLine),
-                      style: appSecondaryControlTextStyle(context).copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                        height: 1.25,
-                      ),
+                    _SummaryYijiLine(
+                      label: '忌',
+                      text: _summaryTerms(detail.avoid),
                     ),
                   ],
                 ),
               ),
-              TextButton.icon(
-                onPressed: onOpenAlmanac,
-                icon: const Icon(Icons.menu_book_outlined, size: 16),
-                label: const Text('查看黄历'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  textStyle: appSecondaryControlTextStyle(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.normal),
-                ),
-              ),
             ],
           ),
-          if (badges.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: badges
-                  .map(
-                    (badge) => _AlmanacBadge(text: badge.$1, color: badge.$2),
-                  )
-                  .toList(),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            decoration: BoxDecoration(
-              color: cs.surface.withValues(
-                alpha: Theme.of(context).brightness == Brightness.dark
-                    ? 0.32
-                    : 0.62,
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                _SummaryYijiLine(
-                  label: '宜',
-                  text: _summaryTerms(detail.suitable),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  child: Divider(
-                    height: 1,
-                    thickness: 0.45,
-                    color: cs.outlineVariant.withValues(alpha: 0.20),
-                  ),
-                ),
-                _SummaryYijiLine(label: '忌', text: _summaryTerms(detail.avoid)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

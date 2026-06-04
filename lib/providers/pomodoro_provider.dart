@@ -807,7 +807,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _persistedRevision++;
     notifyListeners();
     final playbackOk = await _syncSoundToState();
-    if (!playbackOk && _state.isRunning && normalized != FocusSoundCatalog.none) {
+    if (!playbackOk &&
+        _state.isRunning &&
+        normalized != FocusSoundCatalog.none) {
       _state = _state.copyWith(whiteNoiseSound: FocusSoundCatalog.none);
       _config.whiteNoiseSound = FocusSoundCatalog.none;
       await _touchAndSaveConfig();

@@ -365,12 +365,11 @@ void main() {
         theme,
         contains('backgroundImageResource(theme.backgroundAssetKey)'),
       );
-      expect(
-        theme,
-        contains(
-          'views.setInt(rootId, "setBackgroundResource", imageResource)',
-        ),
-      );
+      expect(theme, contains('applyImageBackedSurface('));
+      expect(theme, contains('views.setImageViewResource('));
+      expect(theme, contains('R.id.widget_theme_background'));
+      expect(theme, contains('R.id.widget_theme_overlay'));
+      expect(theme, contains('imageOverlayColor(theme)'));
       for (final key in [
         're0',
         'genshin',
@@ -395,6 +394,30 @@ void main() {
       expect(navBg, contains('<corners android:radius="9dp" />'));
       expect(primaryButton, contains('<corners android:radius="8dp" />'));
       expect(secondaryButton, contains('<corners android:radius="8dp" />'));
+      final layoutFiles =
+          Directory('android/app/src/main/res/layout')
+              .listSync()
+              .whereType<File>()
+              .where(
+                (file) =>
+                    file.uri.pathSegments.last.startsWith('duoyi') &&
+                    file.uri.pathSegments.last.endsWith('_widget.xml') &&
+                    !file.uri.pathSegments.last.contains('preview'),
+              )
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
+      expect(
+        layoutFiles.map((file) => file.path).toSet(),
+        hasLength(layoutFiles.length),
+      );
+      for (final file in layoutFiles) {
+        final xml = file.readAsStringSync();
+        expect(xml, contains('<FrameLayout'));
+        expect(xml, contains('android:clipToOutline="true"'));
+        expect(xml, contains('@+id/widget_theme_background'));
+        expect(xml, contains('android:scaleType="centerCrop"'));
+        expect(xml, contains('@+id/widget_theme_overlay'));
+      }
       expect(legacyProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
       expect(legacyProvider, contains('R.id.widget_quick_pomodoro'));
       expect(legacyProvider, contains('R.id.widget_quick_open'));

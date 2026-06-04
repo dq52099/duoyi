@@ -641,11 +641,7 @@ void main() {
         path: '/api/me/email',
         location: '',
       ),
-      const _RouteContract(
-        method: 'POST',
-        path: '/api/me/email',
-        location: '',
-      ),
+      const _RouteContract(method: 'POST', path: '/api/me/email', location: ''),
       const _RouteContract(
         method: 'POST',
         path: '/api/me/avatar',
@@ -671,11 +667,7 @@ void main() {
         path: '/api/auth/login',
         location: '',
       ),
-      const _RouteContract(
-        method: 'GET',
-        path: '/api/auth/me',
-        location: '',
-      ),
+      const _RouteContract(method: 'GET', path: '/api/auth/me', location: ''),
       const _RouteContract(method: 'GET', path: '/api/me', location: ''),
       const _RouteContract(
         method: 'POST',
@@ -1124,11 +1116,7 @@ void main() {
         location: '',
       ),
       const _RouteContract(method: 'GET', path: '/api/config', location: ''),
-      const _RouteContract(
-        method: 'GET',
-        path: '/api/auth/me',
-        location: '',
-      ),
+      const _RouteContract(method: 'GET', path: '/api/auth/me', location: ''),
       const _RouteContract(
         method: 'GET',
         path: '/api/announcements',
@@ -1220,11 +1208,7 @@ void main() {
         path: '/api/me/profile',
         location: '',
       ),
-      const _RouteContract(
-        method: 'POST',
-        path: '/api/me/email',
-        location: '',
-      ),
+      const _RouteContract(method: 'POST', path: '/api/me/email', location: ''),
       const _RouteContract(
         method: 'POST',
         path: '/api/me/password',

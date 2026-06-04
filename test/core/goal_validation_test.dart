@@ -26,12 +26,8 @@ void main() {
     test('合法的 fixed/weekly 配置应通过', () {
       final goal = GoalItem(
         title: '周一三五练腹',
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.weekly,
-        ),
-        scheduling: const GoalScheduling.fixed(
-          fixedWeekdays: [0, 2, 4],
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.weekly),
+        scheduling: const GoalScheduling.fixed(fixedWeekdays: [0, 2, 4]),
       );
 
       expect(isGoalValid(goal), isTrue);
@@ -60,19 +56,15 @@ void main() {
     test('fixedWeekdays = [0, 2, 9] 应报错（超出 0..6）', () {
       final goal = GoalItem(
         title: 't',
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.weekly,
-        ),
-        scheduling: const GoalScheduling.fixed(
-          fixedWeekdays: [0, 2, 9],
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.weekly),
+        scheduling: const GoalScheduling.fixed(fixedWeekdays: [0, 2, 9]),
       );
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.fixedWeekdays,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.fixedWeekdays),
         isNotEmpty,
       );
     });
@@ -80,19 +72,15 @@ void main() {
     test('fixedWeekdays = [1, 1, 2] 应报错（重复）', () {
       final goal = GoalItem(
         title: 't',
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.weekly,
-        ),
-        scheduling: const GoalScheduling.fixed(
-          fixedWeekdays: [1, 1, 2],
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.weekly),
+        scheduling: const GoalScheduling.fixed(fixedWeekdays: [1, 1, 2]),
       );
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.fixedWeekdays,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.fixedWeekdays),
         isNotEmpty,
       );
     });
@@ -103,16 +91,14 @@ void main() {
         recurrence: const RecurrenceRule(
           frequency: RecurrenceFrequency.monthly,
         ),
-        scheduling: const GoalScheduling.fixed(
-          fixedMonthDays: [1, 32],
-        ),
+        scheduling: const GoalScheduling.fixed(fixedMonthDays: [1, 32]),
       );
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.fixedMonthDays,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.fixedMonthDays),
         isNotEmpty,
       );
     });
@@ -125,9 +111,9 @@ void main() {
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.randomMinGapDays,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.randomMinGapDays),
         isNotEmpty,
       );
     });
@@ -137,9 +123,9 @@ void main() {
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.dailyTargetCount,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.dailyTargetCount),
         isNotEmpty,
       );
     });
@@ -147,18 +133,12 @@ void main() {
     test('reminder.enabled = true 且 hour = 25 应报错', () {
       final goal = GoalItem(
         title: 't',
-        reminder: const ReminderConfig(
-          enabled: true,
-          hour: 25,
-          minute: 0,
-        ),
+        reminder: const ReminderConfig(enabled: true, hour: 25, minute: 0),
       );
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.hour,
-        ),
+        validateGoal(goal).where((i) => i.field == GoalValidationField.hour),
         isNotEmpty,
       );
     });
@@ -168,9 +148,9 @@ void main() {
 
       expect(isGoalValid(goal), isFalse);
       expect(
-        validateGoal(goal).where(
-          (i) => i.field == GoalValidationField.timeTargetSeconds,
-        ),
+        validateGoal(
+          goal,
+        ).where((i) => i.field == GoalValidationField.timeTargetSeconds),
         isNotEmpty,
       );
     });

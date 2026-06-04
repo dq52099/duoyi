@@ -288,7 +288,18 @@ class MainActivity : FlutterActivity() {
                         val durationMillis = call.argument<Long>("durationMillis")
                             ?: call.argument<Int>("durationMillis")?.toLong()
                             ?: 3000L
-                        result.success(ReminderRingtoneService.previewCurrentSound(this, durationMillis))
+                        try {
+                            result.success(ReminderRingtoneService.previewCurrentSound(this, durationMillis))
+                        } catch (error: Exception) {
+                            Log.e("MainActivity", "previewCurrentSound channel failed", error)
+                            result.success(
+                                mapOf(
+                                    "started" to false,
+                                    "reason" to "platform_channel_failed",
+                                    "message" to "铃声试听启动失败，请重试。",
+                                )
+                            )
+                        }
                     }
                     "stopPreview" -> {
                         ReminderRingtoneService.stopPreview()
@@ -510,8 +521,7 @@ class MainActivity : FlutterActivity() {
 
     private fun stopReminderRingtoneIfRequested(intent: Intent?) {
         val explicitStop = intent?.getBooleanExtra(ReminderRingtoneService.extraStopRingtone, false) == true
-        val opensDuoyiReminderTarget = duoyiDeepLinkFrom(intent) != null
-        if (explicitStop || opensDuoyiReminderTarget) {
+        if (explicitStop) {
             stopReminderRingtone()
         }
     }

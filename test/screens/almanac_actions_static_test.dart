@@ -64,13 +64,14 @@ void main() {
     expect(source, contains("title: '忌'"));
     expect(source, contains('terms: avoidTerms'));
     expect(source, contains('onOpenAlmanac: _showSelectedDateDetail'));
-    expect(source, contains('onPressed: onOpenAlmanac'));
-    expect(source, contains("label: const Text('查看黄历')"));
+    expect(source, contains("ValueKey('selected_date_almanac_summary_card')"));
+    expect(source, contains('onTap: onOpenAlmanac'));
+    expect(source, isNot(contains("label: const Text('查看黄历')")));
+    expect(source, isNot(contains('onPressed: onOpenAlmanac')));
     expect(source, isNot(contains('查看全部')));
     expect(source, isNot(contains('更多')));
     expect(source, isNot(contains('_showAlmanacYijiDialog')));
     expect(source, isNot(contains('onTap: _showSelectedDateDetail')));
-    expect(source, isNot(contains('onTap: onOpenAlmanac')));
     expect(source, contains('const SizedBox(width: 6)'));
     expect(
       source,

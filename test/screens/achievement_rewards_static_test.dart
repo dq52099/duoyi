@@ -53,7 +53,9 @@ void main() {
     expect(main, contains('void markAchievementDirtyOnPersistedChange()'));
     expect(
       main,
-      contains('achievementProvider.addListener(markAchievementDirtyOnPersistedChange)'),
+      contains(
+        'achievementProvider.addListener(markAchievementDirtyOnPersistedChange)',
+      ),
     );
   });
 }

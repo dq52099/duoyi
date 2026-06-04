@@ -291,10 +291,7 @@ void main() {
       final yesterday = today.subtract(const Duration(days: 1));
       final tomorrow = today.add(const Duration(days: 1));
 
-      final noDue = TodoItem(
-        title: '无截止日期',
-        date: tomorrow,
-      );
+      final noDue = TodoItem(title: '无截止日期', date: tomorrow);
       final dueToday = TodoItem(
         title: '今天截止',
         date: yesterday,
@@ -341,8 +338,14 @@ void main() {
         CompletionVisibilityPolicy.shouldShowInToday(dueEarlierToday, now),
         isFalse,
       );
-      expect(CompletionVisibilityPolicy.shouldShowInToday(overdue, now), isFalse);
-      expect(CompletionVisibilityPolicy.shouldShowInToday(future, now), isFalse);
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(overdue, now),
+        isFalse,
+      );
+      expect(
+        CompletionVisibilityPolicy.shouldShowInToday(future, now),
+        isFalse,
+      );
       expect(
         CompletionVisibilityPolicy.shouldShowInToday(completed, now),
         isFalse,

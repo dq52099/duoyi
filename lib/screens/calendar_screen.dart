@@ -733,6 +733,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         : Theme.of(context).colorScheme.surfaceContainerLowest;
 
     return BrandScaffold(
+      paintBackground: false,
       appBar: AppBar(
         title: const Text('日历'),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -932,6 +933,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                               workspaceId: effectiveWorkspaceId,
                               horizontalPadding: 8,
                               scrollable: false,
+                              previewLimit: 8,
                             ),
                           ),
                         ],

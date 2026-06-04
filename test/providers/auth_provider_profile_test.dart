@@ -737,10 +737,7 @@ void main() {
                   'unlockedBrandIds': ['defaultBrand', 're0'],
                   'updatedAt': '2026-06-01T00:00:00Z',
                 },
-                'user': {
-                  'user_id': 'u-1',
-                  'username': 'stable-user',
-                },
+                'user': {'user_id': 'u-1', 'username': 'stable-user'},
               }),
               200,
               headers: {'content-type': 'application/json'},

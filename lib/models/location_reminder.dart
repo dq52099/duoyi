@@ -63,9 +63,9 @@ class LocationReminder {
     DateTime? createdAt,
     DateTime? updatedAt,
     this.lastFiredAt,
-  })  : id = id ?? _locationUuid.v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+  }) : id = id ?? _locationUuid.v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   LocationReminder copyWith({
     String? title,
@@ -80,39 +80,37 @@ class LocationReminder {
     DateTime? updatedAt,
     DateTime? lastFiredAt,
     bool clearLastFiredAt = false,
-  }) =>
-      LocationReminder(
-        id: id,
-        title: title ?? this.title,
-        note: note ?? this.note,
-        latitude: latitude ?? this.latitude,
-        longitude: longitude ?? this.longitude,
-        radiusMeters: radiusMeters ?? this.radiusMeters,
-        trigger: trigger ?? this.trigger,
-        oneShot: oneShot ?? this.oneShot,
-        linkedType: linkedType ?? this.linkedType,
-        linkedId: linkedId ?? this.linkedId,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? DateTime.now(),
-        lastFiredAt:
-            clearLastFiredAt ? null : (lastFiredAt ?? this.lastFiredAt),
-      );
+  }) => LocationReminder(
+    id: id,
+    title: title ?? this.title,
+    note: note ?? this.note,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    radiusMeters: radiusMeters ?? this.radiusMeters,
+    trigger: trigger ?? this.trigger,
+    oneShot: oneShot ?? this.oneShot,
+    linkedType: linkedType ?? this.linkedType,
+    linkedId: linkedId ?? this.linkedId,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? DateTime.now(),
+    lastFiredAt: clearLastFiredAt ? null : (lastFiredAt ?? this.lastFiredAt),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'note': note,
-        'latitude': latitude,
-        'longitude': longitude,
-        'radiusMeters': radiusMeters,
-        'trigger': trigger.name,
-        'oneShot': oneShot,
-        'linkedType': linkedType,
-        'linkedId': linkedId,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'lastFiredAt': lastFiredAt?.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'note': note,
+    'latitude': latitude,
+    'longitude': longitude,
+    'radiusMeters': radiusMeters,
+    'trigger': trigger.name,
+    'oneShot': oneShot,
+    'linkedType': linkedType,
+    'linkedId': linkedId,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'lastFiredAt': lastFiredAt?.toIso8601String(),
+  };
 
   factory LocationReminder.fromJson(Map<String, dynamic> json) {
     return LocationReminder(
@@ -129,7 +127,8 @@ class LocationReminder {
       oneShot: json['oneShot'] == true,
       linkedType: json['linkedType']?.toString(),
       linkedId: json['linkedId']?.toString(),
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??

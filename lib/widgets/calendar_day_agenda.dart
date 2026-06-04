@@ -28,6 +28,7 @@ class CalendarDayAgenda extends StatelessWidget {
   final String? workspaceId;
   final double horizontalPadding;
   final bool scrollable;
+  final int? previewLimit;
 
   const CalendarDayAgenda({
     super.key,
@@ -38,46 +39,8 @@ class CalendarDayAgenda extends StatelessWidget {
     this.workspaceId,
     this.horizontalPadding = 16,
     this.scrollable = true,
+    this.previewLimit,
   });
-
-  IconData _icon(CalendarEventType t) {
-    switch (t) {
-      case CalendarEventType.event:
-        return Icons.event_note_outlined;
-      case CalendarEventType.todo:
-        return Icons.check_circle_outline;
-      case CalendarEventType.habit:
-        return Icons.repeat;
-      case CalendarEventType.pomodoro:
-        return Icons.timer;
-      case CalendarEventType.anniversary:
-        return Icons.celebration_outlined;
-      case CalendarEventType.course:
-        return Icons.class_outlined;
-      case CalendarEventType.diary:
-        return Icons.book_outlined;
-      case CalendarEventType.countdown:
-        return Icons.hourglass_bottom;
-      case CalendarEventType.goal:
-        return Icons.flag_circle_outlined;
-      case CalendarEventType.timeEntry:
-        return Icons.timelapse_outlined;
-    }
-  }
-
-  _CalendarTodoVisual _todoVisualForEvent(
-    BuildContext context,
-    CalendarEvent event,
-  ) {
-    if (event.type != CalendarEventType.todo || event.sourceId == null) {
-      return _CalendarTodoVisual(icon: _icon(event.type), color: event.color);
-    }
-    final todos = context.read<TodoProvider>().todos;
-    for (final todo in todos) {
-      if (todo.id == event.sourceId) return _calendarTodoVisual(todo);
-    }
-    return _CalendarTodoVisual(icon: _icon(event.type), color: event.color);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,12 +54,19 @@ class CalendarDayAgenda extends StatelessWidget {
       projectKey: projectKey,
       workspaceId: workspaceId,
     );
-    final timedEvents = events.where((e) => e.time != null).toList()
+    final todoById = {
+      for (final todo in context.read<TodoProvider>().todos) todo.id: todo,
+    };
+    final visibleEvents = previewLimit == null
+        ? events
+        : events.take(previewLimit!.clamp(0, events.length)).toList();
+    final hiddenEventCount = events.length - visibleEvents.length;
+    final timedEvents = visibleEvents.where((e) => e.time != null).toList()
       ..sort(
         (a, b) =>
             _eventStartOnDay(a, date).compareTo(_eventStartOnDay(b, date)),
       );
-    final untimedEvents = events.where((e) => e.time == null).toList();
+    final untimedEvents = visibleEvents.where((e) => e.time == null).toList();
 
     final lunar = LunarCalendar.fromSolar(date);
     final term = LunarCalendar.solarTerm(date);
@@ -188,14 +158,21 @@ class CalendarDayAgenda extends StatelessWidget {
       if (timedEvents.isNotEmpty) ...[
         const SizedBox(height: 12),
         _sectionTitle('🕘 时间线'),
-        _CalendarDayTimeGrid(date: date, events: timedEvents),
+        _CalendarDayTimeGrid(
+          date: date,
+          events: timedEvents,
+          todoById: todoById,
+        ),
       ],
 
       if (untimedEvents.isNotEmpty) ...[
         const SizedBox(height: 12),
         _sectionTitle('📝 全天/无时间'),
-        ..._buildTimeline(context, untimedEvents),
+        ..._buildTimeline(context, untimedEvents, todoById),
       ],
+
+      if (hiddenEventCount > 0)
+        _AgendaOverflowNotice(hiddenCount: hiddenEventCount),
 
       if (events.isEmpty && hitAnniversaries.isEmpty && todayCourses.isEmpty)
         Padding(
@@ -327,6 +304,7 @@ class CalendarDayAgenda extends StatelessWidget {
   List<Widget> _buildTimeline(
     BuildContext context,
     List<CalendarEvent> events,
+    Map<String, TodoItem> todoById,
   ) {
     return List.generate(events.length, (index) {
       final e = events[index];
@@ -348,7 +326,7 @@ class CalendarDayAgenda extends StatelessWidget {
                     ),
                     child: Builder(
                       builder: (context) {
-                        final visual = _todoVisualForEvent(context, e);
+                        final visual = _calendarEventVisual(e, todoById);
                         return Icon(visual.icon, color: visual.color, size: 14);
                       },
                     ),
@@ -364,7 +342,7 @@ class CalendarDayAgenda extends StatelessWidget {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _DraggableEventCard(event: e),
+                child: _DraggableEventCard(event: e, todoById: todoById),
               ),
             ),
           ],
@@ -380,8 +358,13 @@ class _CalendarDayTimeGrid extends StatelessWidget {
 
   final DateTime date;
   final List<CalendarEvent> events;
+  final Map<String, TodoItem> todoById;
 
-  const _CalendarDayTimeGrid({required this.date, required this.events});
+  const _CalendarDayTimeGrid({
+    required this.date,
+    required this.events,
+    required this.todoById,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +428,11 @@ class _CalendarDayTimeGrid extends StatelessWidget {
             ),
           ],
         ),
-        child: _DraggableEventCard(event: event, compact: clampedHeight < 88),
+        child: _DraggableEventCard(
+          event: event,
+          compact: clampedHeight < 88,
+          todoById: todoById,
+        ),
       ),
     );
   }
@@ -461,6 +448,28 @@ class _CalendarDayTimeGrid extends StatelessWidget {
       if (start.isBefore(otherEnd) && end.isAfter(otherStart)) overlaps++;
     }
     return overlaps.clamp(0, 2);
+  }
+}
+
+class _AgendaOverflowNotice extends StatelessWidget {
+  final int hiddenCount;
+
+  const _AgendaOverflowNotice({required this.hiddenCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Text(
+        '还有 $hiddenCount 项，请切换到日视图查看完整日程',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 11,
+          color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+        ),
+      ),
+    );
   }
 }
 
@@ -505,8 +514,13 @@ class _TimelineHourRow extends StatelessWidget {
 class _DraggableEventCard extends StatefulWidget {
   final CalendarEvent event;
   final bool compact;
+  final Map<String, TodoItem> todoById;
 
-  const _DraggableEventCard({required this.event, this.compact = false});
+  const _DraggableEventCard({
+    required this.event,
+    required this.todoById,
+    this.compact = false,
+  });
 
   @override
   State<_DraggableEventCard> createState() => _DraggableEventCardState();
@@ -575,7 +589,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
 
   Widget _buildCompactContent(BuildContext context, CalendarEvent e) {
     final visual = _eventVisualState(e);
-    final eventVisual = _calendarEventVisual(context, e);
+    final eventVisual = _calendarEventVisual(e, widget.todoById);
     final cs = Theme.of(context).colorScheme;
     final isCompleted = visual == TodoVisualState.completed;
     final isOverdue = visual == TodoVisualState.overdue;
@@ -643,7 +657,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
 
   Widget _buildRegularContent(BuildContext context, CalendarEvent e) {
     final visual = _eventVisualState(e);
-    final eventVisual = _calendarEventVisual(context, e);
+    final eventVisual = _calendarEventVisual(e, widget.todoById);
     final cs = Theme.of(context).colorScheme;
     final isCompleted = visual == TodoVisualState.completed;
     final isOverdue = visual == TodoVisualState.overdue;
@@ -820,8 +834,8 @@ class _CalendarTodoVisual {
 }
 
 _CalendarTodoVisual _calendarEventVisual(
-  BuildContext context,
   CalendarEvent event,
+  Map<String, TodoItem> todoById,
 ) {
   if (event.type != CalendarEventType.todo || event.sourceId == null) {
     return _CalendarTodoVisual(
@@ -829,10 +843,8 @@ _CalendarTodoVisual _calendarEventVisual(
       color: event.color,
     );
   }
-  final todos = context.read<TodoProvider>().todos;
-  for (final todo in todos) {
-    if (todo.id == event.sourceId) return _calendarTodoVisual(todo);
-  }
+  final todo = todoById[event.sourceId];
+  if (todo != null) return _calendarTodoVisual(todo);
   return _CalendarTodoVisual(
     icon: _fallbackEventIcon(event.type),
     color: event.color,

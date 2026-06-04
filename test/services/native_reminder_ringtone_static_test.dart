@@ -540,7 +540,8 @@ void main() {
     expect(service, contains('extraStopRingtone'));
     expect(mainActivity, contains('stopReminderRingtoneIfRequested(intent)'));
     expect(mainActivity, contains('ReminderRingtoneService.extraStopRingtone'));
-    expect(mainActivity, contains('opensDuoyiReminderTarget'));
+    expect(mainActivity, isNot(contains('opensDuoyiReminderTarget')));
+    expect(mainActivity, isNot(contains('duoyiDeepLinkFrom(intent) != null')));
     final onCreateStart = mainActivity.indexOf('override fun onCreate');
     final onNewIntentStart = mainActivity.indexOf('override fun onNewIntent');
     expect(onCreateStart, greaterThanOrEqualTo(0));
@@ -557,6 +558,30 @@ void main() {
       mainActivity,
       contains(
         'stopService(Intent(this, ReminderRingtoneService::class.java))',
+      ),
+    );
+
+    final main = File('lib/main.dart').readAsStringSync();
+    expect(main, contains('bool _shouldStopActiveRingtoneForPayload('));
+    expect(main, contains("uri.queryParameters['confirm'] == '1'"));
+    expect(main, contains("uri.host == 'snooze'"));
+    expect(main, contains("uri.host == 'alarm-test'"));
+    final handlerStart = main.indexOf('void handleNotificationPayload');
+    final handlerEnd = main.indexOf(
+      'LocalNotifications.instance.onTap',
+      handlerStart,
+    );
+    expect(handlerStart, greaterThanOrEqualTo(0));
+    expect(handlerEnd, greaterThan(handlerStart));
+    final handler = main.substring(handlerStart, handlerEnd);
+    expect(handler, contains('_shouldStopActiveRingtoneForPayload(payload)'));
+    expect(handler, contains('NativeReminderRingtone.stopActive()'));
+    expect(
+      handler.trimLeft(),
+      isNot(
+        startsWith(
+          'void handleNotificationPayload(String payload) {\n    unawaited(NativeReminderRingtone.stopActive());',
+        ),
       ),
     );
   });

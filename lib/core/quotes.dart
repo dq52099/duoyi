@@ -37,9 +37,11 @@ class DailyQuotes {
   /// 基于日期稳定选择同一条。
   static String today() {
     final now = DateTime.now();
-    final days = DateTime(now.year, now.month, now.day)
-        .difference(DateTime(2000, 1, 1))
-        .inDays;
+    final days = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime(2000, 1, 1)).inDays;
     return quotes[days.abs() % quotes.length];
   }
 

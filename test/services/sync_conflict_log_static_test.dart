@@ -18,7 +18,10 @@ void main() {
     expect(provider, contains("'id', 'workspaceId', 'createdAt', 'updatedAt'"));
     expect(screen, contains('sync_merge_decisions'));
     expect(screen, contains('SyncMergeDecision.fromJson'));
-    expect(screen, contains('items.sort((a, b) => b.decidedAt.compareTo(a.decidedAt));'));
+    expect(
+      screen,
+      contains('items.sort((a, b) => b.decidedAt.compareTo(a.decidedAt));'),
+    );
     expect(screen, contains("I18n.tr('sync_conflict.keep_remote')"));
     expect(screen, contains("I18n.tr('sync_conflict.keep_local')"));
     expect(screen, contains('item.changedFields.isNotEmpty'));

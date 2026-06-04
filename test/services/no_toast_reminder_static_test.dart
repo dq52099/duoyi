@@ -31,135 +31,125 @@ import 'package:flutter_test/flutter_test.dart';
 ///     的级联调用），避免文档或变量名里的"snackBar"字样误报；
 ///   - 字符串字面量中的出现也视作违规（不太可能，但额外严格）。
 void main() {
-  test(
-    'P15 - 提醒派发层（lib/services/** + lib/providers/**）'
-    '不得调用 ScaffoldMessenger.showSnackBar',
-    () {
-      final violations = <_Violation>[];
-      for (final dirName in const ['lib/services', 'lib/providers']) {
-        final dir = Directory(dirName);
-        if (!dir.existsSync()) {
-          fail('测试前置条件不满足：目录 $dirName 不存在。请从仓库根目录运行 flutter test。');
-        }
-        for (final entity in dir.listSync(recursive: true)) {
-          if (entity is! File) continue;
-          if (!entity.path.toLowerCase().endsWith('.dart')) continue;
-          final relPath = _relativePosixPath(entity);
-          final source = entity.readAsStringSync();
-          final stripped = _stripDartComments(source);
-          final lines = stripped.split('\n');
-          for (var i = 0; i < lines.length; i++) {
-            final line = lines[i];
-            if (line.contains('.showSnackBar(')) {
-              violations.add(_Violation(
-                path: relPath,
-                lineNumber: i + 1,
-                snippet: line.trim(),
-              ));
-            }
-          }
-        }
+  test('P15 - 提醒派发层（lib/services/** + lib/providers/**）'
+      '不得调用 ScaffoldMessenger.showSnackBar', () {
+    final violations = <_Violation>[];
+    for (final dirName in const ['lib/services', 'lib/providers']) {
+      final dir = Directory(dirName);
+      if (!dir.existsSync()) {
+        fail('测试前置条件不满足：目录 $dirName 不存在。请从仓库根目录运行 flutter test。');
       }
-      expect(
-        violations,
-        isEmpty,
-        reason: _formatViolations(violations),
-      );
-    },
-  );
-
-  test(
-    'P15 - 提醒派发层不得通过第三方 Toast 库（Fluttertoast / BotToast）绕过',
-    () {
-      // 防御性：除 SnackBar 外，也有人会用 fluttertoast / bot_toast。
-      // 虽然当前 pubspec 未引入这些依赖，此处仍做一轮静态护栏，避免
-      // 后续有人在 services/providers 层偷偷引入"toast 当提醒"。
-      final forbiddenPatterns = <RegExp>[
-        RegExp(r'\bFluttertoast\b'),
-        RegExp(r'\bBotToast\b'),
-        RegExp(r'''['"]package:fluttertoast\/'''),
-        RegExp(r'''['"]package:bot_toast\/'''),
-      ];
-      final violations = <_Violation>[];
-      for (final dirName in const ['lib/services', 'lib/providers']) {
-        final dir = Directory(dirName);
-        if (!dir.existsSync()) continue;
-        for (final entity in dir.listSync(recursive: true)) {
-          if (entity is! File) continue;
-          if (!entity.path.toLowerCase().endsWith('.dart')) continue;
-          final relPath = _relativePosixPath(entity);
-          final source = entity.readAsStringSync();
-          final stripped = _stripDartComments(source);
-          final lines = stripped.split('\n');
-          for (var i = 0; i < lines.length; i++) {
-            final line = lines[i];
-            for (final re in forbiddenPatterns) {
-              if (re.hasMatch(line)) {
-                violations.add(_Violation(
-                  path: relPath,
-                  lineNumber: i + 1,
-                  snippet: line.trim(),
-                ));
-                break;
-              }
-            }
-          }
-        }
-      }
-      expect(
-        violations,
-        isEmpty,
-        reason: _formatViolations(violations, kind: 'Toast 库调用'),
-      );
-    },
-  );
-
-  test(
-    'P15 - 三个关键提醒派发类所在文件必须存在且零 SnackBar',
-    () {
-      // 这是 P15 的"最小闭包"断言：R4.1 明确 ReminderScheduler /
-      // NotificationService / AlarmService 是提醒派发的全部承载点；
-      // 只要这三处各自的源文件里不出现 `.showSnackBar(`，就等价于
-      // "ReminderConfig.enabled=true 的触发路径与 SnackBar 互不交叉"。
-      const dispatchFiles = <String>[
-        'lib/services/reminder_scheduler.dart',
-        'lib/services/alarm_service.dart',
-        'lib/providers/notification_service.dart',
-      ];
-      final missing = <String>[];
-      final violations = <_Violation>[];
-      for (final rel in dispatchFiles) {
-        final file = File(rel);
-        if (!file.existsSync()) {
-          missing.add(rel);
-          continue;
-        }
-        final source = file.readAsStringSync();
+      for (final entity in dir.listSync(recursive: true)) {
+        if (entity is! File) continue;
+        if (!entity.path.toLowerCase().endsWith('.dart')) continue;
+        final relPath = _relativePosixPath(entity);
+        final source = entity.readAsStringSync();
         final stripped = _stripDartComments(source);
         final lines = stripped.split('\n');
         for (var i = 0; i < lines.length; i++) {
-          if (lines[i].contains('.showSnackBar(')) {
-            violations.add(_Violation(
-              path: rel,
-              lineNumber: i + 1,
-              snippet: lines[i].trim(),
-            ));
+          final line = lines[i];
+          if (line.contains('.showSnackBar(')) {
+            violations.add(
+              _Violation(
+                path: relPath,
+                lineNumber: i + 1,
+                snippet: line.trim(),
+              ),
+            );
           }
         }
       }
-      expect(
-        missing,
-        isEmpty,
-        reason: '关键提醒派发文件缺失：$missing —— 已被重命名/删除？请同步修正本测试的'
-            'dispatchFiles 白名单，否则 P15 的结构证明不成立。',
-      );
-      expect(
-        violations,
-        isEmpty,
-        reason: _formatViolations(violations, kind: 'SnackBar 直接调用'),
-      );
-    },
-  );
+    }
+    expect(violations, isEmpty, reason: _formatViolations(violations));
+  });
+
+  test('P15 - 提醒派发层不得通过第三方 Toast 库（Fluttertoast / BotToast）绕过', () {
+    // 防御性：除 SnackBar 外，也有人会用 fluttertoast / bot_toast。
+    // 虽然当前 pubspec 未引入这些依赖，此处仍做一轮静态护栏，避免
+    // 后续有人在 services/providers 层偷偷引入"toast 当提醒"。
+    final forbiddenPatterns = <RegExp>[
+      RegExp(r'\bFluttertoast\b'),
+      RegExp(r'\bBotToast\b'),
+      RegExp(r'''['"]package:fluttertoast\/'''),
+      RegExp(r'''['"]package:bot_toast\/'''),
+    ];
+    final violations = <_Violation>[];
+    for (final dirName in const ['lib/services', 'lib/providers']) {
+      final dir = Directory(dirName);
+      if (!dir.existsSync()) continue;
+      for (final entity in dir.listSync(recursive: true)) {
+        if (entity is! File) continue;
+        if (!entity.path.toLowerCase().endsWith('.dart')) continue;
+        final relPath = _relativePosixPath(entity);
+        final source = entity.readAsStringSync();
+        final stripped = _stripDartComments(source);
+        final lines = stripped.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          for (final re in forbiddenPatterns) {
+            if (re.hasMatch(line)) {
+              violations.add(
+                _Violation(
+                  path: relPath,
+                  lineNumber: i + 1,
+                  snippet: line.trim(),
+                ),
+              );
+              break;
+            }
+          }
+        }
+      }
+    }
+    expect(
+      violations,
+      isEmpty,
+      reason: _formatViolations(violations, kind: 'Toast 库调用'),
+    );
+  });
+
+  test('P15 - 三个关键提醒派发类所在文件必须存在且零 SnackBar', () {
+    // 这是 P15 的"最小闭包"断言：R4.1 明确 ReminderScheduler /
+    // NotificationService / AlarmService 是提醒派发的全部承载点；
+    // 只要这三处各自的源文件里不出现 `.showSnackBar(`，就等价于
+    // "ReminderConfig.enabled=true 的触发路径与 SnackBar 互不交叉"。
+    const dispatchFiles = <String>[
+      'lib/services/reminder_scheduler.dart',
+      'lib/services/alarm_service.dart',
+      'lib/providers/notification_service.dart',
+    ];
+    final missing = <String>[];
+    final violations = <_Violation>[];
+    for (final rel in dispatchFiles) {
+      final file = File(rel);
+      if (!file.existsSync()) {
+        missing.add(rel);
+        continue;
+      }
+      final source = file.readAsStringSync();
+      final stripped = _stripDartComments(source);
+      final lines = stripped.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].contains('.showSnackBar(')) {
+          violations.add(
+            _Violation(path: rel, lineNumber: i + 1, snippet: lines[i].trim()),
+          );
+        }
+      }
+    }
+    expect(
+      missing,
+      isEmpty,
+      reason:
+          '关键提醒派发文件缺失：$missing —— 已被重命名/删除？请同步修正本测试的'
+          'dispatchFiles 白名单，否则 P15 的结构证明不成立。',
+    );
+    expect(
+      violations,
+      isEmpty,
+      reason: _formatViolations(violations, kind: 'SnackBar 直接调用'),
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------

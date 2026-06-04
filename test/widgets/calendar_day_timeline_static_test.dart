@@ -9,16 +9,20 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains("import 'dart:math' as math;"));
-    expect(source, contains('final timedEvents = events.where'));
-    expect(source, contains('final untimedEvents = events.where'));
+    expect(source, contains('final timedEvents = visibleEvents.where'));
+    expect(source, contains('final untimedEvents = visibleEvents.where'));
     expect(source, contains('Expanded('));
     expect(source, contains('Wrap('));
     expect(source, contains('runSpacing: 5'));
     expect(source, contains('Widget _dayBadge('));
     expect(source, contains('_sectionTitle(\'🕘 时间线\')'));
     expect(source, contains('_sectionTitle(\'📝 全天/无时间\')'));
-    expect(source, contains('_CalendarDayTimeGrid(date: date'));
-    expect(source, contains('..._buildTimeline(context, untimedEvents)'));
+    expect(source, contains('_CalendarDayTimeGrid('));
+    expect(source, contains('todoById: todoById'));
+    expect(
+      source,
+      contains('..._buildTimeline(context, untimedEvents, todoById)'),
+    );
   });
 
   test('日视图时间线提供 24 小时刻度和按分钟定位的事件块', () {
@@ -55,7 +59,7 @@ void main() {
     expect(source, contains('final bool compact'));
     expect(source, contains('_buildCompactContent(context, e)'));
     expect(source, contains('_buildRegularContent(context, e)'));
-    expect(source, contains('_DraggableEventCard(event: event'));
+    expect(source, contains('_DraggableEventCard('));
   });
 
   test('日历日程中的待办按完成和逾期状态区分显示', () {
@@ -82,6 +86,9 @@ void main() {
     );
     expect(agenda, contains("import '../core/todo_templates.dart';"));
     expect(agenda, contains('_CalendarTodoVisual _calendarEventVisual('));
+    expect(agenda, contains('Map<String, TodoItem> todoById'));
+    expect(agenda, contains('final todo = todoById[event.sourceId]'));
+    expect(agenda, isNot(contains('for (final todo in todos)')));
     expect(agenda, contains('TodoListTemplates.all'));
     expect(agenda, contains('EisenhowerQuadrant.urgentImportant'));
     expect(agenda, contains('class _CalendarAgendaStatusBadge'));

@@ -129,8 +129,14 @@ void main() {
       provider.indexOf('Future<bool> setFocusSoundVolume('),
     );
     expect(setter, contains('final playbackOk = await _syncSoundToState();'));
-    expect(setter, contains('if (!playbackOk && _state.isRunning'));
-    expect(setter, contains('_config.whiteNoiseSound = FocusSoundCatalog.none;'));
+    expect(
+      setter,
+      matches(RegExp(r'if\s*\(\s*!playbackOk\s*&&\s*_state\.isRunning')),
+    );
+    expect(
+      setter,
+      contains('_config.whiteNoiseSound = FocusSoundCatalog.none;'),
+    );
     expect(setter, isNot(contains('return _playFocusSound(normalized);')));
     expect(
       provider,
@@ -188,9 +194,7 @@ void main() {
     expect(goalEdit, contains('Future<void> _pickFocusNoise(String id)'));
     expect(
       goalEdit,
-      contains(
-        'context.read<PomodoroProvider?>()?.config.focusSoundVolume',
-      ),
+      contains('context.read<PomodoroProvider?>()?.config.focusSoundVolume'),
     );
     expect(goalEdit, contains('FocusSoundService.defaultVolume'));
     expect(goalEdit, contains('FocusSoundService.instance.preview(id)'));

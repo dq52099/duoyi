@@ -13,20 +13,20 @@ enum Mood {
 
 extension MoodX on Mood {
   String get label => switch (this) {
-        Mood.awesome => '超棒',
-        Mood.good => '开心',
-        Mood.okay => '平静',
-        Mood.bad => '郁闷',
-        Mood.terrible => '糟糕',
-      };
+    Mood.awesome => '超棒',
+    Mood.good => '开心',
+    Mood.okay => '平静',
+    Mood.bad => '郁闷',
+    Mood.terrible => '糟糕',
+  };
 
   String get emoji => switch (this) {
-        Mood.awesome => '😄',
-        Mood.good => '🙂',
-        Mood.okay => '😐',
-        Mood.bad => '😔',
-        Mood.terrible => '😢',
-      };
+    Mood.awesome => '😄',
+    Mood.good => '🙂',
+    Mood.okay => '😐',
+    Mood.bad => '😔',
+    Mood.terrible => '😢',
+  };
 }
 
 /// 天气
@@ -34,26 +34,26 @@ enum Weather { sunny, cloudy, overcast, rain, snow, wind, fog, thunder }
 
 extension WeatherX on Weather {
   String get label => switch (this) {
-        Weather.sunny => '晴',
-        Weather.cloudy => '多云',
-        Weather.overcast => '阴',
-        Weather.rain => '雨',
-        Weather.snow => '雪',
-        Weather.wind => '风',
-        Weather.fog => '雾',
-        Weather.thunder => '雷',
-      };
+    Weather.sunny => '晴',
+    Weather.cloudy => '多云',
+    Weather.overcast => '阴',
+    Weather.rain => '雨',
+    Weather.snow => '雪',
+    Weather.wind => '风',
+    Weather.fog => '雾',
+    Weather.thunder => '雷',
+  };
 
   String get emoji => switch (this) {
-        Weather.sunny => '☀️',
-        Weather.cloudy => '⛅',
-        Weather.overcast => '☁️',
-        Weather.rain => '🌧️',
-        Weather.snow => '❄️',
-        Weather.wind => '💨',
-        Weather.fog => '🌫️',
-        Weather.thunder => '⚡',
-      };
+    Weather.sunny => '☀️',
+    Weather.cloudy => '⛅',
+    Weather.overcast => '☁️',
+    Weather.rain => '🌧️',
+    Weather.snow => '❄️',
+    Weather.wind => '💨',
+    Weather.fog => '🌫️',
+    Weather.thunder => '⚡',
+  };
 }
 
 /// 日记条目：按天记录，支持心情/天气/图片路径/标签
@@ -80,11 +80,11 @@ class DiaryEntry {
     this.location,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? _uuid.v4(),
-        tags = tags ?? [],
-        imagePaths = imagePaths ?? [],
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? _uuid.v4(),
+       tags = tags ?? [],
+       imagePaths = imagePaths ?? [],
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   String get dateKey =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -103,30 +103,28 @@ class DiaryEntry {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'content': content,
-        'mood': mood?.index,
-        'weather': weather?.index,
-        'tags': tags,
-        'imagePaths': imagePaths,
-        'location': location,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'date': date.toIso8601String(),
+    'content': content,
+    'mood': mood?.index,
+    'weather': weather?.index,
+    'tags': tags,
+    'imagePaths': imagePaths,
+    'location': location,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) => DiaryEntry(
-        id: json['id'],
-        date: DateTime.parse(json['date']),
-        content: json['content'] ?? '',
-        mood: json['mood'] != null ? Mood.values[json['mood']] : null,
-        weather:
-            json['weather'] != null ? Weather.values[json['weather']] : null,
-        tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
-        imagePaths:
-            (json['imagePaths'] as List<dynamic>?)?.cast<String>() ?? [],
-        location: json['location'],
-        createdAt: DateTime.parse(json['createdAt']),
-        updatedAt: DateTime.parse(json['updatedAt']),
-      );
+    id: json['id'],
+    date: DateTime.parse(json['date']),
+    content: json['content'] ?? '',
+    mood: json['mood'] != null ? Mood.values[json['mood']] : null,
+    weather: json['weather'] != null ? Weather.values[json['weather']] : null,
+    tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+    imagePaths: (json['imagePaths'] as List<dynamic>?)?.cast<String>() ?? [],
+    location: json['location'],
+    createdAt: DateTime.parse(json['createdAt']),
+    updatedAt: DateTime.parse(json['updatedAt']),
+  );
 }

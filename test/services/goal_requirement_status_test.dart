@@ -58,9 +58,7 @@ void main() {
       expect(
         _readReasons(outputDir)['REQ-DEVICE'],
         allOf(
-          contains(
-            'device gate=failed(2)',
-          ),
+          contains('device gate=failed(2)'),
           contains('android_device_evidence=failed(1)'),
           contains('ios_device_evidence=failed(1)'),
         ),

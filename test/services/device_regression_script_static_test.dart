@@ -282,10 +282,7 @@ void main() {
       source,
       contains('evidence/manual/android_launcher_widgets_10_added.mp4'),
     );
-    expect(
-      source,
-      contains('evidence/manual/android_widget_style_matrix.mp4'),
-    );
+    expect(source, contains('evidence/manual/android_widget_style_matrix.mp4'));
     expect(
       source,
       contains('evidence/manual/android_calendar_countdown_deeplink.mp4'),
@@ -580,10 +577,7 @@ void main() {
       );
       expect(source, contains('notification_assistant.txt'));
       expect(source, contains('notification_today_progress.txt'));
-      expect(
-        source,
-        contains('notification shade today progress evidence'),
-      );
+      expect(source, contains('notification shade today progress evidence'));
       expect(source, contains('reminder_alarm_queue.txt'));
       expect(source, contains('default_soft_ringtone.txt'));
       expect(source, contains('widget_providers.txt'));

@@ -164,9 +164,22 @@ void main() {
 
       expect(
         screen,
-        contains('_openSystemSettings(NotificationService.channelId)'),
+        matches(
+          RegExp(
+            r'_openSystemSettings\(\s*NotificationService\.channelId,?\s*\)',
+            multiLine: true,
+          ),
+        ),
       );
-      expect(screen, contains('_openSystemSettings(AlarmService.channelId)'));
+      expect(
+        screen,
+        matches(
+          RegExp(
+            r'_openSystemSettings\(\s*AlarmService\.channelId,?\s*\)',
+            multiLine: true,
+          ),
+        ),
+      );
       expect(screen, contains('NativeReminderRingtone.statusChannelId'));
       expect(screen, contains('NativeReminderRingtone.fallbackChannelId'));
       expect(

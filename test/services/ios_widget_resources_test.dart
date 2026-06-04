@@ -323,49 +323,46 @@ void main() {
       expect(swift, contains('formatMinutes'));
     });
 
-    test(
-      'keeps WidgetKit text compatible with iOS 14 and clipped in bounds',
-      () {
-        final widgetTargetBlocks = RegExp(
-          r'IPHONEOS_DEPLOYMENT_TARGET = 14\.0;',
-        ).allMatches(project).length;
-        expect(widgetTargetBlocks, greaterThanOrEqualTo(3));
-        expect(swift, isNot(contains('.foregroundStyle(')));
-        expect(swift, contains('.foregroundColor(entry.theme.mutedText)'));
-        expect(swift, contains('.foregroundColor(entry.theme.primary)'));
-        expect(
-          swift,
-          contains(
-            '.foregroundColor(primary ? entry.theme.text : entry.theme.mutedText)',
-          ),
-        );
-        expect(
-          swift,
-          contains(
-            'private func todoText(_ title: String, primary: Bool) -> some View',
-          ),
-        );
-        final rowText = _swiftFunctionBlock(swift, 'rowText');
-        final todoText = _swiftFunctionBlock(swift, 'todoText');
-        final navText = _swiftFunctionBlock(swift, 'navText');
-        for (final block in [rowText, todoText, navText]) {
-          expect(block, contains('.lineLimit('));
-          expect(block, contains('.truncationMode(.tail)'));
-        }
-        final header = _swiftPropertyBlock(swift, 'header');
-        final focusContent = _swiftPropertyBlock(swift, 'focusContent');
-        final todoRow = _swiftFunctionBlock(swift, 'todoRow');
-        final accessoryContent = _swiftPropertyBlock(swift, 'accessoryContent');
-        for (final block in [header, focusContent, todoRow, accessoryContent]) {
-          expect(block, contains('.lineLimit(1)'));
-          expect(block, contains('.truncationMode(.tail)'));
-        }
-        expect(header, contains('.layoutPriority(1)'));
-        expect(focusContent, contains('.minimumScaleFactor(0.78)'));
-        expect(todoText, contains('.lineLimit(primary ? primaryLines : 1)'));
-        expect(navText, contains('.lineLimit(1)'));
-      },
-    );
+    test('keeps WidgetKit text compatible with iOS 14 and clipped in bounds', () {
+      final widgetTargetBlocks = RegExp(
+        r'IPHONEOS_DEPLOYMENT_TARGET = 14\.0;',
+      ).allMatches(project).length;
+      expect(widgetTargetBlocks, greaterThanOrEqualTo(3));
+      expect(swift, isNot(contains('.foregroundStyle(')));
+      expect(swift, contains('.foregroundColor(entry.theme.mutedText)'));
+      expect(swift, contains('.foregroundColor(entry.theme.primary)'));
+      expect(
+        swift,
+        contains(
+          '.foregroundColor(primary ? entry.theme.text : entry.theme.mutedText)',
+        ),
+      );
+      expect(
+        swift,
+        contains(
+          'private func todoText(_ title: String, primary: Bool) -> some View',
+        ),
+      );
+      final rowText = _swiftFunctionBlock(swift, 'rowText');
+      final todoText = _swiftFunctionBlock(swift, 'todoText');
+      final navText = _swiftFunctionBlock(swift, 'navText');
+      for (final block in [rowText, todoText, navText]) {
+        expect(block, contains('.lineLimit('));
+        expect(block, contains('.truncationMode(.tail)'));
+      }
+      final header = _swiftPropertyBlock(swift, 'header');
+      final focusContent = _swiftPropertyBlock(swift, 'focusContent');
+      final todoRow = _swiftFunctionBlock(swift, 'todoRow');
+      final accessoryContent = _swiftPropertyBlock(swift, 'accessoryContent');
+      for (final block in [header, focusContent, todoRow, accessoryContent]) {
+        expect(block, contains('.lineLimit(1)'));
+        expect(block, contains('.truncationMode(.tail)'));
+      }
+      expect(header, contains('.layoutPriority(1)'));
+      expect(focusContent, contains('.minimumScaleFactor(0.78)'));
+      expect(todoText, contains('.lineLimit(primary ? primaryLines : 1)'));
+      expect(navText, contains('.lineLimit(1)'));
+    });
 
     test('Flutter side enables iOS home_widget updates', () {
       expect(service, contains('PlatformInfo.isAndroid || PlatformInfo.isIOS'));

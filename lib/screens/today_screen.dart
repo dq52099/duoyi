@@ -554,12 +554,33 @@ class _TodayAlmanacCard extends StatelessWidget {
                   ? DecoratedBox(
                       decoration: BoxDecoration(gradient: fallbackGradient),
                     )
-                  : Image.asset(
-                      backgroundAsset,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      filterQuality: FilterQuality.low,
-                      gaplessPlayback: true,
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final dpr = MediaQuery.devicePixelRatioOf(
+                          context,
+                        ).clamp(1.0, 3.0);
+                        final fallbackSize = MediaQuery.sizeOf(context);
+                        final width = constraints.hasBoundedWidth
+                            ? constraints.maxWidth
+                            : fallbackSize.width;
+                        final height = constraints.hasBoundedHeight
+                            ? constraints.maxHeight
+                            : 180.0;
+                        final cacheWidth = (width * dpr).ceil().clamp(1, 2048);
+                        final cacheHeight = (height * dpr).ceil().clamp(
+                          1,
+                          2048,
+                        );
+                        return Image.asset(
+                          backgroundAsset,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          cacheWidth: cacheWidth,
+                          cacheHeight: cacheHeight,
+                          filterQuality: FilterQuality.low,
+                          gaplessPlayback: true,
+                        );
+                      },
                     ),
             ),
             Positioned.fill(

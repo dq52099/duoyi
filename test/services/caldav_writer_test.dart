@@ -127,10 +127,7 @@ void main() {
         collectionUrl: 'https://example.com/cal/',
         client: client,
       );
-      expect(
-        () => writer.deleteEvent('x'),
-        throwsA(isA<Exception>()),
-      );
+      expect(() => writer.deleteEvent('x'), throwsA(isA<Exception>()));
     });
 
     test('特殊字符在 SUMMARY 中转义', () async {
