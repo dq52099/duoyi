@@ -282,9 +282,19 @@ class AndroidWidgetManager {
     }
   }
 
+  static Future<int?> refreshAllWidgets() async {
+    if (!_isAndroid) return 0;
+    try {
+      return await _channel.invokeMethod<int>('refreshAllWidgets') ?? 0;
+    } catch (e, st) {
+      debugPrint('[AndroidWidgetManager] refreshAllWidgets failed: $e\n$st');
+      return null;
+    }
+  }
+
   static Future<AndroidWidgetPinConfirmation> waitForPinResult(
     String requestId, {
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(minutes: 2),
     Duration pollInterval = const Duration(milliseconds: 700),
   }) async {
     final deadline = DateTime.now().add(timeout);
@@ -294,6 +304,8 @@ class AndroidWidgetManager {
       await Future<void>.delayed(pollInterval);
     }
     await cancelPinRequest(requestId);
+    await clearPinResult(requestId);
+    await refreshAllWidgets();
     return AndroidWidgetPinConfirmation(
       status: AndroidWidgetPinFinalStatus.timeout,
       requestId: requestId,

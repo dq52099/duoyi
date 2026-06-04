@@ -11,7 +11,20 @@ void main() {
       expect(main, contains('Future<void> _runStartupIdleQueue('));
       expect(main, contains('Future<void> _runStartupStaggeredTask('));
       expect(main, contains('Future<void> _runSyncReloadTasksInBatches('));
-      expect(main, contains('Future<void> ensureNotificationLaunchStartup()'));
+      expect(
+        main,
+        isNot(contains('Future<void> ensureNotificationLaunchStartup()')),
+        reason: '启动阶段不能再完整初始化通知和闹钟渠道，避免冷启动抢首屏。',
+      );
+      expect(
+        main,
+        isNot(contains('unawaited(ensureNotificationLaunchStartup())')),
+      );
+      expect(
+        main,
+        contains('LocalNotifications.instance.initForLaunchPayload()'),
+      );
+      expect(main, contains('AlarmService.instance.initForLaunchPayload()'));
       expect(main, contains('Future<void> ensureHomeWidgetLaunchStartup()'));
       expect(main, contains('await _yieldForNextFrame();'));
       expect(main, contains("'deferred local storage'"));
@@ -23,22 +36,46 @@ void main() {
       expect(main, contains("'auth profile refresh'"));
       expect(main, contains("'notification quick add'"));
       expect(main, contains("'initial home widget push'"));
-      expect(main, contains('initialDelay: const Duration(seconds: 8)'));
-      expect(main, contains('gap: const Duration(seconds: 3)'));
+      expect(main, contains('initialDelay: const Duration(seconds: 30)'));
+      expect(main, contains('gap: const Duration(seconds: 8)'));
       expect(
         main,
-        contains('const Duration(milliseconds: 3200)'),
+        contains('const Duration(seconds: 14)'),
         reason: '首帧后的延迟本地加载不能和首屏渲染立即抢资源。',
       );
-      expect(main, contains('delay: const Duration(milliseconds: 900)'));
+      expect(main, contains('delay: const Duration(milliseconds: 2400)'));
       expect(main, contains('delay: const Duration(milliseconds: 1100)'));
-      expect(main, contains('delay: const Duration(milliseconds: 1400)'));
-      expect(main, contains('delay: const Duration(seconds: 6)'));
-      expect(main, contains('delay: const Duration(seconds: 14)'));
-      expect(main, contains('delay: const Duration(seconds: 9)'));
+      expect(main, contains('delay: const Duration(seconds: 8)'));
+      expect(main, contains('delay: const Duration(seconds: 28)'));
+      expect(main, contains('delay: const Duration(seconds: 45)'));
+      expect(main, contains('delay: const Duration(seconds: 40)'));
+      expect(
+        main,
+        contains('Future<void>.delayed(const Duration(seconds: 30)'),
+      );
       expect(main, contains('Timer(const Duration(milliseconds: 2200)'));
       expect(main, contains('var homeWidgetPushInFlight = false'));
       expect(main, contains('homeWidgetPushQueued = true'));
+
+      final localNotifications = File(
+        'lib/services/local_notifications_io.dart',
+      ).readAsStringSync();
+      expect(
+        localNotifications,
+        contains('Future<void> initForLaunchPayload() async'),
+      );
+      expect(localNotifications, contains('await _ensurePluginInitialized();'));
+      expect(localNotifications, contains('await _probeLaunchPayload();'));
+
+      final alarmService = File(
+        'lib/services/alarm_service.dart',
+      ).readAsStringSync();
+      expect(
+        alarmService,
+        contains('Future<void> initForLaunchPayload() async'),
+      );
+      expect(alarmService, contains('await _ensurePluginInitialized();'));
+      expect(alarmService, contains('await _probeLaunchPayload();'));
 
       final background = File(
         'lib/widgets/brand_background.dart',

@@ -45,9 +45,10 @@ object DuoyiWidgetProviderRegistry {
     private const val tag = "DuoyiWidgetPin"
     private const val pendingPrefsName = "duoyi_widget_pin_state"
     private const val pendingVariantProvidersKey = "pending_variant_providers"
+    private const val activeVariantProvidersKey = "active_variant_providers"
     private const val pendingEntrySeparator = "|"
     private const val pendingFieldSeparator = "||"
-    private const val pendingVariantProviderTtlMillis = 60 * 1000L
+    private const val pendingVariantProviderTtlMillis = 4 * 60 * 1000L
 
     fun componentFor(context: Context, kind: String, style: String): ComponentName? {
         val family = widgetFamilies.firstOrNull { it.kind == kind } ?: return null
@@ -77,6 +78,7 @@ object DuoyiWidgetProviderRegistry {
         prefs.edit()
             .putStringSet(pendingVariantProvidersKey, pending)
             .apply()
+        scheduleExpiredPendingVariantProviderCleanup(context)
     }
 
     fun clearPendingVariantProvider(context: Context, requestId: String, component: ComponentName) {
@@ -145,12 +147,77 @@ object DuoyiWidgetProviderRegistry {
                 tag,
                 "cleanup_expired_pending requestId=${pendingRequestId(flattened)} provider=${component.className} ageMs=${createdAt?.let { now - it } ?: -1}",
             )
-            disableVariantProviderIfUnused(context, component)
+            disableVariantProviderIfUnused(context, component, respectPending = false)
             pending.remove(flattened)
         }
         prefs.edit()
             .putStringSet(pendingVariantProvidersKey, pending)
             .apply()
+    }
+
+    fun markVariantProviderActive(context: Context, component: ComponentName): Boolean {
+        if (!isVariantProvider(component.className)) return false
+        val prefs = context.getSharedPreferences(pendingPrefsName, Context.MODE_PRIVATE)
+        val active = prefs.getStringSet(activeVariantProvidersKey, emptySet())
+            ?.toMutableSet()
+            ?: mutableSetOf()
+        val flattened = component.flattenToString()
+        if (!active.add(flattened)) return false
+        prefs.edit()
+            .putStringSet(activeVariantProvidersKey, active)
+            .apply()
+        Log.i(tag, "mark_active_variant_provider provider=${component.className} activeCount=${active.size}")
+        return true
+    }
+
+    private fun clearActiveVariantProvider(context: Context, component: ComponentName): Boolean {
+        if (!isVariantProvider(component.className)) return false
+        val prefs = context.getSharedPreferences(pendingPrefsName, Context.MODE_PRIVATE)
+        val active = prefs.getStringSet(activeVariantProvidersKey, emptySet())
+            ?.toMutableSet()
+            ?: mutableSetOf()
+        if (!active.remove(component.flattenToString())) return false
+        prefs.edit()
+            .putStringSet(activeVariantProvidersKey, active)
+            .apply()
+        Log.i(tag, "clear_active_variant_provider provider=${component.className} activeCount=${active.size}")
+        return true
+    }
+
+    private fun activeVariantProviderComponents(context: Context): List<ComponentName> {
+        val prefs = context.getSharedPreferences(pendingPrefsName, Context.MODE_PRIVATE)
+        val active = prefs.getStringSet(activeVariantProvidersKey, emptySet()) ?: return emptyList()
+        return active.mapNotNull { ComponentName.unflattenFromString(it) }
+            .filter { isVariantProvider(it.className) }
+    }
+
+    fun restoreEnabledProvidersForExistingWidgets(context: Context): Int {
+        val manager = AppWidgetManager.getInstance(context)
+        var restoredCount = 0
+        for (component in activeVariantProviderComponents(context)) {
+            val enabled = ensureProviderEnabled(context, component)
+            val ids = manager.getAppWidgetIds(component)
+            if (ids.isEmpty()) {
+                disableVariantProviderIfUnused(context, component)
+                continue
+            }
+            if (enabled) {
+                restoredCount += 1
+            }
+        }
+        for (providerClass in allWidgetProviderClasses()) {
+            val component = ComponentName(context, providerClass)
+            val ids = manager.getAppWidgetIds(component)
+            if (ids.isEmpty()) continue
+            markVariantProviderActive(context, component)
+            if (ensureProviderEnabled(context, component)) {
+                restoredCount += 1
+            }
+        }
+        if (restoredCount > 0) {
+            Log.i(tag, "restore_enabled_providers count=$restoredCount")
+        }
+        return restoredCount
     }
 
     private fun pendingEntry(requestId: String, component: ComponentName): String {
@@ -207,10 +274,23 @@ object DuoyiWidgetProviderRegistry {
     }
 
     fun disableVariantProviderIfUnused(context: Context, component: ComponentName): Boolean {
+        return disableVariantProviderIfUnused(context, component, respectPending = true)
+    }
+
+    private fun disableVariantProviderIfUnused(
+        context: Context,
+        component: ComponentName,
+        respectPending: Boolean,
+    ): Boolean {
         if (!isVariantProvider(component.className)) return false
+        if (respectPending && hasPendingVariantProvider(context, component)) {
+            Log.i(tag, "keep_variant_provider_pending provider=${component.className}")
+            return false
+        }
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(component)
         if (ids.isNotEmpty()) {
+            markVariantProviderActive(context, component)
             Log.i(
                 tag,
                 "keep_variant_provider provider=${component.className} widgetCount=${ids.size}",
@@ -222,6 +302,7 @@ object DuoyiWidgetProviderRegistry {
             PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
             PackageManager.DONT_KILL_APP,
         )
+        clearActiveVariantProvider(context, component)
         Log.i(tag, "disable_variant_provider provider=${component.className} widgetCount=0")
         return true
     }
@@ -229,7 +310,7 @@ object DuoyiWidgetProviderRegistry {
     fun scheduleDisableVariantProviderIfUnused(
         context: Context,
         component: ComponentName,
-        delayMillis: Long = 15_000L,
+        delayMillis: Long = 5 * 60_000L,
     ) {
         if (!isVariantProvider(component.className)) return
         val appContext = context.applicationContext
@@ -243,6 +324,10 @@ object DuoyiWidgetProviderRegistry {
     }
 
     fun requestUpdateForProvider(context: Context, providerClassName: String?) {
+        if (providerClassName == DuoyiWidgetProvider::class.java.name) {
+            requestUpdate(context, legacyProviderClasses)
+            return
+        }
         val kind = kindForProvider(providerClassName) ?: return
         requestUpdateForKind(context, kind)
     }
@@ -252,18 +337,60 @@ object DuoyiWidgetProviderRegistry {
         requestUpdate(context, family.providerClasses)
     }
 
-    fun requestUpdate(context: Context, providerClasses: List<Class<out AppWidgetProvider>>) {
+    fun requestUpdateForAllWidgets(context: Context): Int {
+        return requestUpdate(context, allWidgetProviderClasses())
+    }
+
+    fun requestUpdate(context: Context, providerClasses: List<Class<out AppWidgetProvider>>): Int {
+        val components = providerClasses.map { ComponentName(context, it) }
+        return requestUpdateComponents(context, components)
+    }
+
+    fun requestUpdateForComponent(context: Context, component: ComponentName): Int {
+        return requestUpdateComponents(context, listOf(component))
+    }
+
+    private fun requestUpdateComponents(context: Context, components: List<ComponentName>): Int {
         val manager = AppWidgetManager.getInstance(context)
-        for (providerClass in providerClasses) {
-            val component = ComponentName(context, providerClass)
+        var updatedCount = 0
+        for (component in components) {
             val ids = manager.getAppWidgetIds(component)
             if (ids.isEmpty()) continue
-            val intent = Intent(context, providerClass).apply {
-                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            ensureProviderEnabled(context, component)
+            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                setComponent(component)
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
             }
             context.sendBroadcast(intent)
+            updatedCount += ids.size
         }
+        return updatedCount
+    }
+
+    private fun hasPendingVariantProvider(context: Context, component: ComponentName): Boolean {
+        val prefs = context.getSharedPreferences(pendingPrefsName, Context.MODE_PRIVATE)
+        return prefs.getStringSet(pendingVariantProvidersKey, emptySet())
+            ?.any { pendingComponent(it) == component }
+            ?: false
+    }
+
+    private fun scheduleExpiredPendingVariantProviderCleanup(context: Context) {
+        val appContext = context.applicationContext
+        Handler(Looper.getMainLooper()).postDelayed({
+            cleanupExpiredPendingVariantProviders(appContext)
+        }, pendingVariantProviderTtlMillis + 5_000L)
+    }
+
+    private fun ensureProviderEnabled(context: Context, component: ComponentName): Boolean {
+        val current = context.packageManager.getComponentEnabledSetting(component)
+        if (current == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return false
+        context.packageManager.setComponentEnabledSetting(
+            component,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP,
+        )
+        Log.i(tag, "enable_widget_provider provider=${component.className} previousState=$current")
+        return true
     }
 
     fun applyDisplayModeToExistingWidgets(context: Context, styleId: String?): Int {
@@ -271,6 +398,21 @@ object DuoyiWidgetProviderRegistry {
         val manager = AppWidgetManager.getInstance(context)
         val prefs = HomeWidgetPlugin.getData(context)
         var appliedCount = 0
+        for (providerClass in legacyProviderClasses) {
+            val component = ComponentName(context, providerClass)
+            val ids = manager.getAppWidgetIds(component)
+            if (ids.isEmpty()) continue
+            for (id in ids) {
+                if (id == AppWidgetManager.INVALID_APPWIDGET_ID) continue
+                DuoyiWidgetDisplayMode.saveForWidget(prefs, id, style.id)
+                manager.updateAppWidgetOptions(id, style.toOptions())
+                appliedCount += 1
+                Log.i(
+                    tag,
+                    "apply_display_mode widgetId=$id provider=${component.className} normalizedStyle=${style.id}",
+                )
+            }
+        }
         for (family in widgetFamilies) {
             for (providerClass in family.providerClasses) {
                 val component = ComponentName(context, providerClass)
@@ -289,6 +431,7 @@ object DuoyiWidgetProviderRegistry {
             }
             requestUpdate(context, family.providerClasses)
         }
+        requestUpdate(context, legacyProviderClasses)
         return appliedCount
     }
 
@@ -364,4 +507,12 @@ object DuoyiWidgetProviderRegistry {
             DuoyiDiaryDetailedWidgetProvider::class.java,
         ),
     )
+
+    private val legacyProviderClasses = listOf<Class<out AppWidgetProvider>>(
+        DuoyiWidgetProvider::class.java,
+    )
+
+    private fun allWidgetProviderClasses(): List<Class<out AppWidgetProvider>> {
+        return legacyProviderClasses + widgetFamilies.flatMap { it.providerClasses }
+    }
 }

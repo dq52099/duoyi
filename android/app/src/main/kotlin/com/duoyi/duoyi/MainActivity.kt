@@ -14,6 +14,8 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.provider.Settings
 import android.provider.OpenableColumns
@@ -24,6 +26,7 @@ import java.io.File
 import java.io.IOException
 import java.util.TimeZone
 import java.util.UUID
+import java.util.concurrent.Executors
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -47,6 +50,10 @@ class MainActivity : FlutterActivity() {
     private var pendingInitialOAuthLink: String? = null
     private var pendingInitialSharedText: String? = null
     private var focusSoundForegroundMethodChannel: MethodChannel? = null
+    private val widgetRestoreHandler = Handler(Looper.getMainLooper())
+    private val widgetRestoreExecutor = Executors.newSingleThreadExecutor()
+    private var widgetRestoreScheduled = false
+    private var lastWidgetRestoreAtMillis = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +65,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(this)
+        scheduleWidgetRestoreAfterResume()
+    }
+
+    override fun onDestroy() {
+        widgetRestoreHandler.removeCallbacksAndMessages(null)
+        widgetRestoreExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -77,6 +90,25 @@ class MainActivity : FlutterActivity() {
             if (deepLink != null) channel.invokeMethod("onLink", deepLink)
             if (sharedText != null) channel.invokeMethod("onSharedText", sharedText)
         }
+    }
+
+    private fun scheduleWidgetRestoreAfterResume() {
+        val now = System.currentTimeMillis()
+        if (widgetRestoreScheduled || now - lastWidgetRestoreAtMillis < 60_000L) return
+        widgetRestoreScheduled = true
+        val appContext = applicationContext
+        widgetRestoreHandler.postDelayed({
+            widgetRestoreScheduled = false
+            lastWidgetRestoreAtMillis = System.currentTimeMillis()
+            widgetRestoreExecutor.execute {
+                runCatching {
+                    DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
+                    DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(appContext)
+                }.onFailure { error ->
+                    Log.w("DuoyiWidgetPin", "resume widget provider restore failed", error)
+                }
+            }
+        }, 4_500L)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -411,11 +443,15 @@ class MainActivity : FlutterActivity() {
                     "cancelPinRequest" -> {
                         val requestId = call.argument<String>("requestId") ?: ""
                         DuoyiWidgetProviderRegistry.cleanupPendingVariantProvider(this, requestId)
+                        DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(this)
                         result.success(null)
                     }
                     "applyWidgetDisplayMode" -> {
                         val style = call.argument<String>("style") ?: "standard"
                         result.success(DuoyiWidgetProviderRegistry.applyDisplayModeToExistingWidgets(this, style))
+                    }
+                    "refreshAllWidgets" -> {
+                        result.success(DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(this))
                     }
                     else -> result.notImplemented()
                 }
@@ -588,11 +624,21 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestPinWidget(kind: String, styleId: String): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unsupported_platform"
-        val manager = getSystemService(AppWidgetManager::class.java) ?: return "unavailable"
-        if (!manager.isRequestPinAppWidgetSupported) return "unsupported_launcher"
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return "unsupported_platform"
+        }
+        val manager = getSystemService(AppWidgetManager::class.java)
+            ?: run {
+                return "unavailable"
+            }
+        if (!manager.isRequestPinAppWidgetSupported) {
+            return "unsupported_launcher"
+        }
         val pinStyle = DuoyiWidgetPinStyle.fromId(styleId)
-        val provider = widgetProviderFor(kind, pinStyle.id) ?: return "invalid_kind"
+        val provider = widgetProviderFor(kind, pinStyle.id)
+            ?: run {
+                return "invalid_kind"
+            }
         val requestId = UUID.randomUUID().toString()
         return try {
             enableWidgetProvider(provider)
@@ -622,15 +668,18 @@ class MainActivity : FlutterActivity() {
             } else {
                 Log.w("DuoyiWidgetPin", "request_blocked requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}")
                 DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
+                DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
                 "confirmation_blocked"
             }
         } catch (e: SecurityException) {
             Log.w("DuoyiWidgetPin", "permission_denied requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
             DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
+            DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
             "permission_denied"
         } catch (e: Exception) {
             Log.w("DuoyiWidgetPin", "unavailable requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
             DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
+            DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
             "unavailable"
         }
     }

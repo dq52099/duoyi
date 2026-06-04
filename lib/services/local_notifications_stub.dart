@@ -26,6 +26,7 @@ class LocalNotifications {
   bool get permissionGranted => _granted;
 
   Future<void> init() async {}
+  Future<void> initForLaunchPayload() async {}
 
   Future<bool> requestPermission() async => false;
   Future<bool> refreshPermission() async => _granted;

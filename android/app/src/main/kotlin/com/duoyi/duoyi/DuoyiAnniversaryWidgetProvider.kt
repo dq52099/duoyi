@@ -38,10 +38,12 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_anniversary_widget)
             DuoyiWidgetTheme.applyContainer(
-                views,
-                prefs,
-                R.id.widget_anniversary_root,
-                R.id.widget_anniversary_bottom_nav
+                context = context,
+                views = views,
+                prefs = prefs,
+                rootId = R.id.widget_anniversary_root,
+                navId = R.id.widget_anniversary_bottom_nav,
+                appWidgetId = id,
             )
             DuoyiWidgetTheme.applyTextColors(
                 views,

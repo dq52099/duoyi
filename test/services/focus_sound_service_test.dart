@@ -60,6 +60,24 @@ void main() {
     expect(source, contains('return false;'));
   });
 
+  test('reminder previews use the same media asset playback primitives', () {
+    final source = File(
+      'lib/services/focus_sound_service.dart',
+    ).readAsStringSync();
+    final reminderPreview = File(
+      'lib/services/reminder_ringtone_preview_service.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('Future<bool> previewFile('));
+    expect(source, contains('Future<bool> previewAsset('));
+    expect(source, contains('startForegroundService: false'));
+    expect(source, contains('DeviceFileSource(filePath)'));
+    expect(source, contains('AssetSource(assetPath)'));
+    expect(reminderPreview, contains('AudioPlayer? _player'));
+    expect(reminderPreview, contains('AssetSource(assetPath)'));
+    expect(reminderPreview, contains('FocusSoundService.mediaAudioContext'));
+  });
+
   test(
     'missing custom focus sounds report preview failure instead of silence',
     () async {

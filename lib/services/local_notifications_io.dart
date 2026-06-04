@@ -20,7 +20,10 @@ class LocalNotifications {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  bool _pluginInitialized = false;
+  bool _launchPayloadProbed = false;
   bool _initialized = false;
+  Future<void>? _pluginInitFuture;
   Future<void>? _initFuture;
   bool _granted = false;
   String? _launchPayload;
@@ -156,39 +159,8 @@ class LocalNotifications {
     if (!LocalTimezoneResolver.isInitialized) {
       await LocalTimezoneResolver.init();
     }
-
-    const androidInit = AndroidInitializationSettings(
-      '@drawable/ic_stat_duoyi',
-    );
-    const iosInit = DarwinInitializationSettings();
-    const linuxInit = LinuxInitializationSettings(defaultActionName: 'Open');
-    await _plugin.initialize(
-      const InitializationSettings(
-        android: androidInit,
-        iOS: iosInit,
-        macOS: iosInit,
-        linux: linuxInit,
-      ),
-      onDidReceiveNotificationResponse: (resp) {
-        final payload = _payloadForResponse(resp);
-        if (payload != null && onTap != null) onTap!(payload);
-      },
-    );
-
-    try {
-      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-      final response = launchDetails?.notificationResponse;
-      final launchPayload = response == null
-          ? null
-          : _payloadForResponse(response);
-      if (launchDetails?.didNotificationLaunchApp == true &&
-          launchPayload != null &&
-          launchPayload.isNotEmpty) {
-        _launchPayload = launchPayload;
-      }
-    } catch (e, st) {
-      debugPrint('[LocalNotifications] launch payload probe failed: $e\n$st');
-    }
+    await _ensurePluginInitialized();
+    await _probeLaunchPayload();
 
     // 建立默认渠道
     if (_isAndroid) {
@@ -242,6 +214,71 @@ class LocalNotifications {
     _initialized = true;
     // 默认先探测权限状态
     await _probePermission();
+  }
+
+  Future<void> initForLaunchPayload() async {
+    if (_initialized || (_pluginInitialized && _launchPayloadProbed)) return;
+    await _ensurePluginInitialized();
+    await _probeLaunchPayload();
+  }
+
+  Future<void> _ensurePluginInitialized() async {
+    if (_pluginInitialized) return;
+    final inFlight = _pluginInitFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _initializePlugin();
+    _pluginInitFuture = future;
+    try {
+      await future;
+    } finally {
+      _pluginInitFuture = null;
+    }
+  }
+
+  Future<void> _initializePlugin() async {
+    if (_pluginInitialized) return;
+
+    const androidInit = AndroidInitializationSettings(
+      '@drawable/ic_stat_duoyi',
+    );
+    const iosInit = DarwinInitializationSettings();
+    const linuxInit = LinuxInitializationSettings(defaultActionName: 'Open');
+    await _plugin.initialize(
+      const InitializationSettings(
+        android: androidInit,
+        iOS: iosInit,
+        macOS: iosInit,
+        linux: linuxInit,
+      ),
+      onDidReceiveNotificationResponse: (resp) {
+        final payload = _payloadForResponse(resp);
+        if (payload != null && onTap != null) onTap!(payload);
+      },
+    );
+    _pluginInitialized = true;
+  }
+
+  Future<void> _probeLaunchPayload() async {
+    if (_launchPayloadProbed) return;
+    _launchPayloadProbed = true;
+
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      final response = launchDetails?.notificationResponse;
+      final launchPayload = response == null
+          ? null
+          : _payloadForResponse(response);
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchPayload != null &&
+          launchPayload.isNotEmpty) {
+        _launchPayload = launchPayload;
+      }
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] launch payload probe failed: $e\n$st');
+    }
   }
 
   String? _payloadForResponse(NotificationResponse resp) {

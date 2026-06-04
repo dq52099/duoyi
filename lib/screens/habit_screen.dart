@@ -733,9 +733,11 @@ class _HabitHeatmapTab extends StatelessWidget {
               children: [
                 Text(
                   heading,
-                  style: appSecondaryRouteTitleTextStyle(
-                    context,
-                  ).copyWith(fontSize: DesignTokens.fontSizeCardTitle),
+                  style: appSecondaryRouteTitleTextStyle(context).copyWith(
+                    fontSize: DesignTokens.fontSizeSection,
+                    fontWeight: DesignTokens.fontWeightRegular,
+                    height: 1.12,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 HabitHeatmap(heatmapData: heatmapData),
@@ -909,9 +911,9 @@ class _HabitGroupSection extends StatelessWidget {
           initiallyExpanded:
               group.habits.length <= _habitHeatmapGroupPreviewLimit,
           tilePadding: const EdgeInsets.fromLTRB(10, 0, 8, 0),
-          childrenPadding: const EdgeInsets.only(bottom: 4),
-          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 18),
-          minTileHeight: 44,
+          childrenPadding: const EdgeInsets.only(bottom: 3),
+          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 16),
+          minTileHeight: 38,
           dense: true,
           title: Text(
             group.category,
@@ -919,13 +921,15 @@ class _HabitGroupSection extends StatelessWidget {
               fontSize: DesignTokens.fontSizeSecondary,
               fontWeight: DesignTokens.fontWeightRegular,
               color: cs.onSurface,
+              height: 1.12,
             ),
           ),
           subtitle: Text(
             '${group.completedTodayCount}/${group.habits.length} 今日达标',
             style: appSecondaryControlLabelStyle(context).copyWith(
               color: cs.onSurfaceVariant,
-              fontSize: DesignTokens.fontSizeCaption,
+              fontSize: 10.5,
+              height: 1.08,
             ),
           ),
           children: [
@@ -1045,49 +1049,77 @@ class _HabitSummaryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final habitColor = Color(habit.colorValue);
     final streakUnit = habit.streakUnitLabel;
     return _HabitSwipeActionWrapper(
       habit: habit,
       showEndAction: _habitCanEnd(habit),
-      actionMargin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      actionMargin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       borderRadius: BorderRadius.circular(10),
-      child: ListTile(
-        leading: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Color(habit.colorValue).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HabitDetailScreen(habitId: habit.id),
+            ),
           ),
-          child: Icon(
-            _habitDisplayIcon(habit),
-            color: Color(habit.colorValue),
-            size: 18,
-          ),
-        ),
-        title: Text(
-          habit.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: DesignTokens.fontSizeListTitle,
-            fontWeight: DesignTokens.fontWeightRegular,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        subtitle: Text(
-          '$streakLabel ${habit.currentStreak} $streakUnit · 最佳 ${habit.bestStreak} $streakUnit',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: DesignTokens.fontSizeSecondary,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => HabitDetailScreen(habitId: habit.id),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 3, 10, 4),
+            child: SizedBox(
+              height: 38,
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: habitColor.withValues(alpha: 0.13),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _habitDisplayIcon(habit),
+                      color: habitColor,
+                      size: 15,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          habit.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.08,
+                            fontWeight: DesignTokens.fontWeightRegular,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$streakLabel ${habit.currentStreak} $streakUnit · 最佳 ${habit.bestStreak} $streakUnit',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: DesignTokens.fontSizeCaption,
+                            height: 1.05,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

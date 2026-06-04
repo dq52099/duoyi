@@ -367,9 +367,35 @@ void main() {
       );
       expect(theme, contains('applyImageBackedSurface('));
       expect(theme, contains('views.setImageViewResource('));
+      expect(theme, contains('views.setImageViewBitmap('));
+      expect(theme, contains('roundedBackgroundBitmap('));
+      expect(theme, contains('backgroundBitmapCache'));
+      expect(theme, contains('maxBackgroundBitmapCacheEntries'));
+      expect(theme, contains('renderRoundedBackgroundBitmap('));
+      expect(theme, contains('source.recycle()'));
+      expect(theme, contains('centerCropRect('));
       expect(theme, contains('R.id.widget_theme_background'));
       expect(theme, contains('R.id.widget_theme_overlay'));
       expect(theme, contains('imageOverlayColor(theme)'));
+      expect(
+        theme,
+        contains(
+          'views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)',
+        ),
+      );
+      expect(theme, contains('"starrail",'));
+      expect(
+        theme,
+        contains(
+          '"assets/backgrounds/star_rail.png" -> R.drawable.widget_theme_star_rail',
+        ),
+      );
+      expect(
+        theme,
+        contains('"assets/backgrounds/re0.png" -> R.drawable.widget_theme_re0'),
+      );
+      expect(theme, contains('"starrail",'));
+      expect(theme, contains('"wutheringwaves",'));
       for (final key in [
         're0',
         'genshin',
@@ -390,6 +416,11 @@ void main() {
       expect(service, contains('backgroundAssetKey: _backgroundAssetKey'));
       expect(service, contains("'widget_theme_background_asset_key'"));
       expect(service, contains("'assets/backgrounds/re0.png' => 're0'"));
+      expect(
+        service,
+        contains('Future<bool> updateTheme(HomeWidgetThemePayload theme)'),
+      );
+      expect(service, contains('[HomeWidget] updateTheme failed:'));
       expect(rootBg, contains('<corners android:radius="16dp" />'));
       expect(navBg, contains('<corners android:radius="9dp" />'));
       expect(primaryButton, contains('<corners android:radius="8dp" />'));
@@ -427,8 +458,8 @@ void main() {
       expect(focusProvider, contains('R.id.widget_focus_quick_start'));
     });
 
-    test('历史兼容主小组件不再注册为可见组合入口', () {
-      _assertWidgetResource(legacyWidget, registered: false);
+    test('历史兼容主小组件保留注册用于升级前旧实例刷新', () {
+      _assertWidgetResource(legacyWidget);
       final manifest = File(
         'android/app/src/main/AndroidManifest.xml',
       ).readAsStringSync();
@@ -441,8 +472,20 @@ void main() {
       final configActivity = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
       ).readAsStringSync();
+      final legacyProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt',
+      ).readAsStringSync();
 
-      expect(manifest, isNot(contains('android:name=".DuoyiWidgetProvider"')));
+      final legacyReceiver = _receiverBlock(manifest, 'DuoyiWidgetProvider');
+      expect(legacyReceiver, contains('android:name=".DuoyiWidgetProvider"'));
+      expect(
+        legacyReceiver,
+        contains('android.intent.action.MY_PACKAGE_REPLACED'),
+      );
+      expect(
+        legacyReceiver,
+        contains('android:resource="@xml/duoyi_widget_info"'),
+      );
       expect(strings, isNot(contains('今日待办 / 习惯')));
       expect(strings, contains('历史兼容小组件'));
       final legacyInfo = File(
@@ -453,8 +496,83 @@ void main() {
       expect(legacyInfo, isNot(contains('android:targetCellHeight="3"')));
       expect(service, isNot(contains('_androidProviderName')));
       expect(
+        service,
+        isNot(contains("_androidLegacyProviderName = 'DuoyiWidgetProvider'")),
+        reason:
+            'Android legacy provider refresh should be covered by one native all-provider refresh.',
+      );
+      expect(
         configActivity,
         isNot(contains('DuoyiWidgetProvider.requestUpdate')),
+      );
+      expect(
+        legacyProvider,
+        contains(
+          'DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)',
+        ),
+      );
+    });
+
+    test('升级或重启后恢复旧桌面小组件并延后启动期恢复任务', () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final restoreReceiver = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt',
+      ).readAsStringSync();
+      final mainActivity = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+      ).readAsStringSync();
+      final variants = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt',
+      ).readAsStringSync();
+
+      final receiverBlock = _receiverBlock(
+        manifest,
+        'DuoyiWidgetRestoreReceiver',
+      );
+      expect(
+        receiverBlock,
+        contains('android:name=".DuoyiWidgetRestoreReceiver"'),
+      );
+      expect(receiverBlock, contains('android:exported="true"'));
+      expect(receiverBlock, contains('android.intent.action.BOOT_COMPLETED'));
+      expect(
+        receiverBlock,
+        contains('android.intent.action.MY_PACKAGE_REPLACED'),
+      );
+      expect(
+        receiverBlock,
+        contains('android.intent.action.QUICKBOOT_POWERON'),
+      );
+      expect(restoreReceiver, contains('class DuoyiWidgetRestoreReceiver'));
+      expect(
+        restoreReceiver,
+        contains('restoreEnabledProvidersForExistingWidgets(appContext)'),
+      );
+      expect(
+        restoreReceiver,
+        contains('requestUpdateForAllWidgets(appContext)'),
+      );
+      expect(variants, contains('active_variant_providers'));
+      expect(variants, contains('markVariantProviderActive'));
+      expect(variants, contains('restoreEnabledProvidersForExistingWidgets'));
+      expect(variants, contains('ensureProviderEnabled(context, component)'));
+      expect(mainActivity, contains('scheduleWidgetRestoreAfterResume()'));
+      expect(mainActivity, contains('widgetRestoreHandler.postDelayed'));
+      expect(
+        mainActivity,
+        contains('}, 4_500L)'),
+        reason: '启动和杀后台重进时小组件 provider 扫描应延后，不能压住首屏。',
+      );
+      expect(mainActivity, contains('lastWidgetRestoreAtMillis < 60_000L'));
+      expect(
+        mainActivity,
+        isNot(
+          contains(
+            'override fun onResume() {\n        super.onResume()\n        DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(this)',
+          ),
+        ),
       );
     });
 
@@ -920,13 +1038,28 @@ void main() {
       expect(mainActivity, contains('pinStyle.toOptions()'));
       expect(pinStyle, contains('fun toDisplayModeOptions(): Bundle'));
       expect(resultReceiver, contains('DuoyiWidgetDisplayMode.saveForWidget'));
+      expect(resultReceiver, contains('manager.updateAppWidgetOptions('));
       expect(
         resultReceiver,
-        contains(
-          'updateAppWidgetOptions(\n                widgetId,\n                pinStyle.toOptions(),',
-        ),
+        contains('widgetId,\n            pinStyle.toOptions(),'),
       );
       expect(resultReceiver, contains('pinStyle.toOptions()'));
+      expect(resultReceiver, contains('getAppWidgetInfo(widgetId)?.provider'));
+      expect(
+        resultReceiver,
+        contains('kindForProvider(actualProvider?.className)'),
+      );
+      expect(
+        resultReceiver,
+        contains('markVariantProviderActive(context, provider)'),
+      );
+      expect(
+        resultReceiver,
+        contains('requestUpdateForComponent(context, provider)'),
+        reason:
+            'Pin confirmation should refresh the actual provider only, not the whole kind family.',
+      );
+      expect(manager, contains('await refreshAllWidgets();'));
       final todoLayout = File(
         'android/app/src/main/res/layout/duoyi_todo_widget.xml',
       ).readAsStringSync();
@@ -966,18 +1099,24 @@ void main() {
 
       expect(service, contains('Future<bool> init()'));
       expect(service, contains('Future<bool> setDisplayMode(String mode)'));
+      expect(
+        service,
+        contains('Future<bool> updateTheme(HomeWidgetThemePayload theme)'),
+      );
       expect(service, contains('Future<bool> push({'));
       expect(service, contains('Future<bool> _updateAllWidgets()'));
       expect(service, contains("debugPrint('[HomeWidget]"));
       expect(service, isNot(contains('catch (_) {}')));
-      expect(service, contains('_androidVariantProviderNames(androidName)'));
+      expect(service, contains('AndroidWidgetManager.refreshAllWidgets()'));
+      expect(service, contains('await Future.wait(theme.saveOperations())'));
       expect(
         service,
-        contains(
-          "return <String>['\${prefix}Compact\$suffix', '\${prefix}Detailed\$suffix'];",
-        ),
+        isNot(contains('_androidVariantProviderNames(androidName)')),
+        reason:
+            'Android updates should not fan out through repeated Dart updateWidget calls.',
       );
-      expect(service, contains('await updateOne(variantName)'));
+      expect(service, isNot(contains('await updateOne(variantName)')));
+      expect(service, isNot(contains('_androidLegacyProviderName')));
       final main = File('lib/main.dart').readAsStringSync();
       expect(main, contains('Future<bool> pushHomeWidgetNow()'));
       expect(main, contains('runQueuedHomeWidgetPush'));
@@ -1040,6 +1179,15 @@ void main() {
       expect(manager, contains("'invalid_widget_id'"));
       expect(manager, contains('requestPinWidgetDetailed'));
       expect(manager, contains('waitForPinResult'));
+      expect(
+        manager,
+        contains('Duration timeout = const Duration(minutes: 2)'),
+      );
+      expect(
+        manager,
+        contains('cancelPinRequest(requestId)'),
+        reason: '桌面确认超时后必须主动清理 pending 变体 provider，避免快捷添加失败后小组件列表或旧实例状态残留。',
+      );
       expect(manager, contains("'lastPinResult'"));
       expect(manager, contains("'clearPinResult'"));
       expect(manager, contains("'cancelPinRequest'"));
@@ -1212,7 +1360,15 @@ void main() {
         callbackReceiver,
         contains('DuoyiWidgetDisplayMode.saveForWidget'),
       );
-      expect(callbackReceiver, contains('DuoyiWidgetPinStyle.fromId(style)'));
+      expect(callbackReceiver, contains('val providerStyle ='));
+      expect(
+        callbackReceiver,
+        contains('intent.getStringExtra(extraStyle) ?: providerStyle'),
+      );
+      expect(
+        callbackReceiver,
+        contains('kindForProvider(actualProvider?.className)'),
+      );
       expect(callbackReceiver, contains('updateAppWidgetOptions('));
       expect(styledProvider, contains('onAppWidgetOptionsChanged'));
       expect(
@@ -1552,7 +1708,7 @@ void main() {
       expect(
         mainActivity,
         contains(
-          'DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(this)',
+          'DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(appContext)',
         ),
         reason:
             'Returning from launcher must only clean expired temporary variant providers, not the in-flight launcher confirmation request.',
@@ -1577,6 +1733,11 @@ void main() {
         reason:
             'A normal onResume during launcher confirmation should not disable the just-enabled compact/detailed provider.',
       );
+      expect(
+        variants,
+        contains('scheduleExpiredPendingVariantProviderCleanup(context)'),
+      );
+      expect(variants, contains('pendingVariantProviderTtlMillis + 5_000L'));
       expect(variants, contains('fun disableVariantProviderIfUnused'));
       expect(variants, contains('fun scheduleDisableVariantProviderIfUnused'));
       expect(variants, contains('Handler(Looper.getMainLooper()).postDelayed'));
@@ -1885,9 +2046,13 @@ void main() {
 
       expect(
         service,
-        contains(
-          "return <String>['\${prefix}Compact\$suffix', '\${prefix}Detailed\$suffix'];",
+        isNot(
+          contains(
+            "return <String>['\${prefix}Compact\$suffix', '\${prefix}Detailed\$suffix'];",
+          ),
         ),
+        reason:
+            'Android style variants are refreshed by native provider registry, not Dart fan-out.',
       );
       expect(variants, contains('fun componentFor('));
       expect(variants, contains('fun styleForProvider('));
@@ -2078,6 +2243,10 @@ void main() {
           ],
         ),
       );
+      final expectedManifestProviders = _sorted([
+        legacyWidget.receiver,
+        ...expectedAllProviders,
+      ]);
       final expectedKindIds = _sorted(widgets.map((widget) => widget.kindId));
       final expectedIosKinds = _sorted(widgets.map((widget) => widget.iosKind));
 
@@ -2086,8 +2255,8 @@ void main() {
           r'<receiver\b[\s\S]*?android:name="\.([^"]*WidgetProvider)"',
         ).allMatches(manifest).map((match) => match.group(1)!),
       );
-      expect(manifestProviders, expectedAllProviders);
-      expect(manifestProviders, hasLength(30));
+      expect(manifestProviders, expectedManifestProviders);
+      expect(manifestProviders, hasLength(31));
 
       final variantProviders = _sorted(
         RegExp(
@@ -2117,6 +2286,10 @@ void main() {
         RegExp(
           r"_android\w+ProviderName\s*=\s*'([^']+)'",
         ).allMatches(service).map((match) => match.group(1)!),
+      );
+      expect(
+        service,
+        isNot(contains("_androidLegacyProviderName = 'DuoyiWidgetProvider'")),
       );
       final iosServiceKinds = _sorted(
         RegExp(
@@ -2251,6 +2424,10 @@ void main() {
       );
       expect(
         styledProvider,
+        contains('DuoyiWidgetProviderRegistry.markVariantProviderActive'),
+      );
+      expect(
+        styledProvider,
         contains('DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused'),
       );
       expect(
@@ -2267,8 +2444,9 @@ void main() {
       );
       expect(
         variants,
-        contains('action = AppWidgetManager.ACTION_APPWIDGET_UPDATE'),
+        contains('Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)'),
       );
+      expect(variants, contains('setComponent(component)'));
       expect(variants, contains('context.sendBroadcast(intent)'));
       final requestUpdateBody = variants.substring(
         variants.indexOf(
@@ -2280,6 +2458,14 @@ void main() {
       expect(variants, contains('fun applyDisplayModeToExistingWidgets'));
       expect(variants, contains('apply_display_mode widgetId='));
       expect(variants, contains(r'normalizedStyle=${style.id}'));
+      expect(variants, contains('activeVariantProvidersKey'));
+      expect(variants, contains('"active_variant_providers"'));
+      expect(variants, contains('fun markVariantProviderActive'));
+      expect(variants, contains('activeVariantProviderComponents(context)'));
+      expect(
+        variants,
+        contains('clearActiveVariantProvider(context, component)'),
+      );
       expect(
         variants,
         contains('manager.updateAppWidgetOptions(id, style.toOptions())'),
@@ -2380,7 +2566,7 @@ void main() {
       expect(service, contains('habit_quick_check_id'));
       expect(service, contains('habit_quick_check_label'));
       expect(service, contains('_updateWidgetFamily'));
-      expect(service, contains('_androidVariantProviderNames'));
+      expect(service, isNot(contains('_androidVariantProviderNames')));
       expect(widgetScreen, contains('WidgetPreviewCard'));
       expect(widgetScreen, contains('_WidgetPreviewNav'));
       for (final title in [

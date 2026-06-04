@@ -2,6 +2,7 @@ package com.duoyi.duoyi
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
@@ -12,7 +13,7 @@ open class DuoyiStyledWidgetProvider : AppWidgetProvider() {
         super.onDeleted(context, appWidgetIds)
         DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(
             context,
-            android.content.ComponentName(context, this::class.java),
+            ComponentName(context, this::class.java),
         )
     }
 
@@ -49,6 +50,10 @@ open class DuoyiStyledWidgetProvider : AppWidgetProvider() {
             HomeWidgetPlugin.getData(context),
             appWidgetId,
             normalizedStyle,
+        )
+        DuoyiWidgetProviderRegistry.markVariantProviderActive(
+            context,
+            ComponentName(context, this::class.java),
         )
         DuoyiWidgetProviderRegistry.requestUpdateForProvider(context, this::class.java.name)
     }

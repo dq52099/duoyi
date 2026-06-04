@@ -201,15 +201,15 @@ Future<void> _runSyncReloadTasksInBatches(
 }
 
 Future<void> _yieldForNextFrame([
-  Duration delay = const Duration(milliseconds: 16),
+  Duration delay = const Duration(milliseconds: 32),
 ]) {
   return Future<void>.delayed(delay);
 }
 
 Future<void> _runStartupIdleQueue(
   List<Future<void> Function()> tasks, {
-  Duration initialDelay = const Duration(milliseconds: 1400),
-  Duration gap = const Duration(milliseconds: 900),
+  Duration initialDelay = const Duration(seconds: 12),
+  Duration gap = const Duration(seconds: 4),
 }) async {
   await Future<void>.delayed(initialDelay);
   for (final task in tasks) {
@@ -379,24 +379,22 @@ void main() async {
     ]),
   );
 
-  // 数据Provider可以并行加载，提升启动速度
-  await cloudSyncProvider.suppressDirtyMarkWhile(
-    () => Future.wait([
-      _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
-      _startupGuard('habit storage', () => habitProvider.loadFromStorage()),
-      _startupGuard(
-        'pomodoro storage',
-        () => pomodoroProvider.loadFromStorage(),
-      ),
-    ]),
-  );
-
   Future<void>? deferredLocalStorageStartup;
   Future<void> ensureDeferredLocalStorageStartup() {
     final existing = deferredLocalStorageStartup;
     if (existing != null) return existing;
     deferredLocalStorageStartup = cloudSyncProvider.suppressDirtyMarkWhile(
       () => _runSyncReloadTasksInBatches([
+        () =>
+            _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
+        () => _startupGuard(
+          'habit storage',
+          () => habitProvider.loadFromStorage(),
+        ),
+        () => _startupGuard(
+          'pomodoro storage',
+          () => pomodoroProvider.loadFromStorage(),
+        ),
         () => _startupGuard(
           'countdown storage',
           () => countdownProvider.loadFromStorage(),
@@ -456,26 +454,6 @@ void main() async {
   }
 
   Future<void>? deferredPlatformStartup;
-  Future<void>? notificationLaunchStartup;
-  Future<void> ensureNotificationLaunchStartup() {
-    final existing = notificationLaunchStartup;
-    if (existing != null) return existing;
-    notificationLaunchStartup = () async {
-      await _runSyncReloadTasksInBatches([
-        () => _startupGuard(
-          'notification launch service',
-          () => LocalNotifications.instance.init(),
-          timeout: const Duration(seconds: 8),
-        ),
-        () => _startupGuard(
-          'alarm launch service',
-          () => AlarmService.instance.init(),
-          timeout: const Duration(seconds: 8),
-        ),
-      ]);
-    }();
-    return notificationLaunchStartup!;
-  }
 
   Future<void>? homeWidgetLaunchStartup;
   Future<void> ensureHomeWidgetLaunchStartup() {
@@ -496,6 +474,8 @@ void main() async {
     deferredPlatformStartup = () async {
       await _runSyncReloadTasksInBatches([
         () => _startupGuard('notifications', () => notificationService.init()),
+        () =>
+            _startupGuard('alarm service', () => AlarmService.instance.init()),
         () => _startupGuard('system tray', () => systemTray.init()),
         () => _startupGuard('home widget', ensureHomeWidgetLaunchStartup),
       ]);
@@ -918,7 +898,7 @@ void main() async {
 
   // 启动后延迟刷新订阅日历，且 30 分钟内已同步过的不再抢首屏资源。
   // ignore: discarded_futures
-  Future<void>.delayed(const Duration(seconds: 5), () {
+  Future<void>.delayed(const Duration(seconds: 30), () {
     if (calendarSyncDue()) return calendarSyncProvider.syncAll();
   });
 
@@ -1309,12 +1289,12 @@ void main() async {
     unawaited(
       startCloudSyncAfterAuth(
         reason: 'initial logged-in startup',
-        delay: const Duration(seconds: 14),
+        delay: const Duration(seconds: 45),
       ),
     );
     unawaited(
       queueStartupReminderResync(
-        delay: const Duration(seconds: 9),
+        delay: const Duration(seconds: 40),
         reason: 'initial logged-in startup',
       ),
     );
@@ -1413,7 +1393,7 @@ void main() async {
   Future<void> runPostFrameStartupTasks() async {
     unawaited(
       Future<void>.delayed(
-        const Duration(milliseconds: 3200),
+        const Duration(seconds: 14),
         ensureDeferredLocalStorageStartup,
       ),
     );
@@ -1421,7 +1401,8 @@ void main() async {
       _runStartupStaggeredTask(
         'startup notification launch payloads',
         () async {
-          await ensureNotificationLaunchStartup();
+          await LocalNotifications.instance.initForLaunchPayload();
+          await AlarmService.instance.initForLaunchPayload();
           final initialNotificationPayloads = <String>[];
           final localLaunchPayload = LocalNotifications.instance
               .takeLaunchPayload();
@@ -1436,7 +1417,7 @@ void main() async {
             handleNotificationPayload(payload);
           }
         },
-        delay: const Duration(milliseconds: 900),
+        delay: const Duration(milliseconds: 2400),
       ),
     );
     unawaited(
@@ -1474,13 +1455,13 @@ void main() async {
         if (initial != null) {
           _handleWidgetUri(initial, pomodoroProvider);
         }
-      }, delay: const Duration(milliseconds: 1400)),
+      }, delay: const Duration(seconds: 8)),
     );
     unawaited(
       _runStartupStaggeredTask(
         'deferred platform services',
         ensureDeferredPlatformStartup,
-        delay: const Duration(seconds: 6),
+        delay: const Duration(seconds: 28),
         timeout: const Duration(seconds: 18),
       ),
     );
@@ -1529,13 +1510,13 @@ void main() async {
             timeout: const Duration(seconds: 5),
           ),
         ],
-        initialDelay: const Duration(seconds: 8),
-        gap: const Duration(seconds: 3),
+        initialDelay: const Duration(seconds: 30),
+        gap: const Duration(seconds: 8),
       ),
     );
   }
 
-  // 冷启动本地 loadFromStorage 已完成；首帧后的远端刷新和通知重放不再阻塞页面。
+  // 首屏关键配置已完成；大数据 Provider、远端刷新和通知重放在首帧后分批执行。
   cloudSyncProvider.dirtyMarkEnabled = true;
 
   runApp(

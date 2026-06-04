@@ -49,6 +49,11 @@ class FocusSoundService with WidgetsBindingObserver {
     stayAwake: true,
   ).build();
 
+  static AudioContext get mediaAudioContext => _focusAudioContext;
+
+  @visibleForTesting
+  static AudioContext get focusAudioContext => _focusAudioContext;
+
   /// 当前正在播放的音轨 id（`'none'` 表示未播）。
   String get currentSound => _currentSound;
 
@@ -72,6 +77,33 @@ class FocusSoundService with WidgetsBindingObserver {
   /// 未知 id 不抛异常，但会返回 false，供 UI 提示用户当前选择没有发声。
   Future<bool> play(String sound) async {
     return _play(sound, ++_playbackGeneration);
+  }
+
+  Future<bool> playFile(String soundId, String filePath) async {
+    if (filePath.isEmpty) return false;
+    return _playSources(soundId, <Source>[
+      DeviceFileSource(filePath),
+    ], ++_playbackGeneration);
+  }
+
+  Future<bool> previewFile(String soundId, String filePath) async {
+    if (filePath.isEmpty) return false;
+    return _playSources(
+      soundId,
+      <Source>[DeviceFileSource(filePath)],
+      ++_playbackGeneration,
+      startForegroundService: false,
+    );
+  }
+
+  Future<bool> previewAsset(String soundId, String assetPath) async {
+    if (assetPath.isEmpty) return false;
+    return _playSources(
+      soundId,
+      <Source>[AssetSource(assetPath)],
+      ++_playbackGeneration,
+      startForegroundService: false,
+    );
   }
 
   Future<bool> preview(
@@ -126,8 +158,9 @@ class FocusSoundService with WidgetsBindingObserver {
   Future<bool> _playSources(
     String normalizedSound,
     List<Source> sources,
-    int generation,
-  ) async {
+    int generation, {
+    bool startForegroundService = true,
+  }) async {
     if (_isPlaying && _currentSound == normalizedSound) {
       await _applyVolumeToPlayers(_volume);
       return true;
@@ -156,7 +189,9 @@ class FocusSoundService with WidgetsBindingObserver {
       _currentSound = normalizedSound;
       _isPlaying = true;
       await _applyVolumeToPlayers(_volume);
-      await _startForegroundService();
+      if (startForegroundService) {
+        await _startForegroundService();
+      }
       return true;
     } catch (e, st) {
       debugPrint(

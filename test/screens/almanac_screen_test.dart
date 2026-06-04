@@ -156,7 +156,9 @@ void main() {
     expect(find.text('知道了'), findsNothing);
 
     expect(find.textContaining('碓磨床房内东'), findsOneWidget);
-    expect(find.textContaining('蛇日冲猪（己亥）煞东'), findsOneWidget);
+    expect(find.text('覆灯火  建执位'), findsOneWidget);
+    expect(find.text('蛇日冲猪（己亥）'), findsOneWidget);
+    expect(find.text('煞东'), findsOneWidget);
     expect(find.textContaining('实时天气'), findsNothing);
   });
 
@@ -189,15 +191,44 @@ void main() {
     expect(find.text('宜'), findsWidgets);
     expect(find.text('忌'), findsWidgets);
     expect(find.text('知道了'), findsNothing);
+    expect(find.text('祭\n祀'), findsOneWidget);
+    expect(find.text('祈\n福'), findsOneWidget);
+    expect(find.text('平\n治\n道\n涂'), findsOneWidget);
 
-    expect(find.textContaining('房床炉房内中'), findsOneWidget);
-    expect(find.textContaining('戊不受田，田主不祥；申不安床，鬼祟入房'), findsOneWidget);
-    expect(find.textContaining('大驿土平执位'), findsOneWidget);
+    final sacrificeText = tester.widget<Text>(find.text('祭\n祀'));
+    final longSuitableText = tester.widget<Text>(find.text('平\n治\n道\n涂'));
+    expect(longSuitableText.style?.fontSize, sacrificeText.style?.fontSize);
+
+    expect(find.text('房床炉房内中'), findsOneWidget);
+    expect(find.text('戊不受田'), findsOneWidget);
+    expect(find.text('田主不祥'), findsOneWidget);
+    expect(find.text('申不安床'), findsOneWidget);
+    expect(find.text('鬼祟入房'), findsOneWidget);
+    expect(find.text('戊不受田田主不祥'), findsNothing);
+    expect(find.text('申不安床鬼祟入房'), findsNothing);
+    expect(find.text('大驿土  平执位'), findsOneWidget);
     expect(find.textContaining('东方箕水豹-吉'), findsOneWidget);
-    expect(find.textContaining('猴日冲虎（壬寅）煞南'), findsOneWidget);
+    expect(find.text('猴日冲虎（壬寅）'), findsOneWidget);
+    expect(find.text('煞南'), findsOneWidget);
     expect(find.textContaining('2026年6月2日'), findsNothing);
     expect(find.textContaining('2026年6月4日'), findsNothing);
     expect(find.textContaining('子吉 丑吉 寅凶'), findsNothing);
+
+    final fetalGodText = tester.widget<Text>(find.text('房床炉房内中'));
+    final pengZuText = tester.widget<Text>(find.text('戊不受田'));
+    final fiveElementText = tester.widget<Text>(find.text('大驿土  平执位'));
+    final clashText = tester.widget<Text>(find.text('猴日冲虎（壬寅）'));
+    final clashDirectionText = tester.widget<Text>(find.text('煞南'));
+    expect(pengZuText.style?.fontSize, lessThanOrEqualTo(12));
+    expect(fiveElementText.style?.fontSize, lessThanOrEqualTo(11.2));
+    expect(clashText.style?.fontSize, lessThanOrEqualTo(11.2));
+    expect(clashDirectionText.style?.fontSize, clashText.style?.fontSize);
+    expect(pengZuText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
+    expect(
+      fiveElementText.style?.fontSize,
+      lessThan(fetalGodText.style!.fontSize!),
+    );
+    expect(clashText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
 
     for (final branch in [
       '子',

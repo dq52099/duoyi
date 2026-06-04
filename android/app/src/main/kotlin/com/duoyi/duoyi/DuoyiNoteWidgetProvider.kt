@@ -38,10 +38,12 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_note_widget)
             DuoyiWidgetTheme.applyContainer(
-                views,
-                prefs,
-                R.id.widget_note_root,
-                R.id.widget_note_bottom_nav
+                context = context,
+                views = views,
+                prefs = prefs,
+                rootId = R.id.widget_note_root,
+                navId = R.id.widget_note_bottom_nav,
+                appWidgetId = id,
             )
             DuoyiWidgetTheme.applyTextColors(
                 views,

@@ -4,6 +4,7 @@ import 'package:home_widget/home_widget.dart';
 import '../core/brand_strings.dart';
 import '../core/platform_info.dart';
 import '../providers/theme_provider.dart';
+import 'android_widget_manager.dart';
 
 /// Pushes today's stats and brand strings out to Android/iOS home widgets.
 /// 在 web / 其他平台下为空实现。
@@ -57,6 +58,17 @@ class HomeWidgetService {
       return _updateAllWidgets();
     } catch (e, st) {
       debugPrint('[HomeWidget] setDisplayMode($mode) failed: $e\n$st');
+      return false;
+    }
+  }
+
+  static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
+    if (!_supported) return true;
+    try {
+      await Future.wait(theme.saveOperations());
+      return _updateAllWidgets();
+    } catch (e, st) {
+      debugPrint('[HomeWidget] updateTheme failed: $e\n$st');
       return false;
     }
   }
@@ -357,6 +369,14 @@ class HomeWidgetService {
   }
 
   static Future<bool> _updateAllWidgets() async {
+    if (PlatformInfo.isAndroid) {
+      final updated = await AndroidWidgetManager.refreshAllWidgets();
+      if (updated == null) {
+        debugPrint('[HomeWidget] Android refreshAllWidgets failed');
+        return false;
+      }
+      return true;
+    }
     var ok = true;
     for (final target in _widgetUpdateTargets) {
       ok =
@@ -391,21 +411,7 @@ class HomeWidgetService {
     }
 
     await updateOne(androidName, ios: iOSName);
-    if (!PlatformInfo.isAndroid) return ok;
-    for (final variantName in _androidVariantProviderNames(androidName)) {
-      await updateOne(variantName);
-    }
     return ok;
-  }
-
-  static Iterable<String> _androidVariantProviderNames(String standardName) {
-    const suffix = 'WidgetProvider';
-    if (!standardName.endsWith(suffix)) return const [];
-    final prefix = standardName.substring(
-      0,
-      standardName.length - suffix.length,
-    );
-    return <String>['${prefix}Compact$suffix', '${prefix}Detailed$suffix'];
   }
 
   static Stream<Uri?> get widgetClickedStream {

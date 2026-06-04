@@ -249,7 +249,7 @@ void main() {
       main,
       contains('const minStartupSyncInterval = Duration(minutes: 30)'),
     );
-    expect(main, contains('Future<void>.delayed(const Duration(seconds: 5)'));
+    expect(main, contains('Future<void>.delayed(const Duration(seconds: 30)'));
     expect(deepLinkService, contains('takeInitialLink'));
     expect(deepLinkService, contains('_isDuoyiDeepLink(uri)'));
     expect(mainActivity, contains('pendingInitialDeepLink'));
@@ -437,6 +437,26 @@ void main() {
     expect(screen, contains('value: ReminderKind.off'));
     expect(screen, contains('enabled: kind != ReminderKind.off'));
     expect(screen, contains('preferences.daily_reminder.kind.off.description'));
+    final kindTile = screen.substring(
+      screen.indexOf('class _ReminderKindSettingsTile'),
+      screen.indexOf('class _ReminderKindOptionButton'),
+    );
+    expect(kindTile, contains('const SizedBox(height: 12)'));
+    expect(
+      kindTile.indexOf('preferences.daily_reminder.kind.title'),
+      lessThan(kindTile.indexOf('_ReminderKindSelector(')),
+    );
+    final kindSelector = screen.substring(
+      screen.indexOf('class _ReminderKindSelector'),
+      screen.indexOf('class _ReminderKindOptionSpec'),
+    );
+    expect(kindSelector, contains('clamp(88.0, maxWidth)'));
+    expect(kindSelector, contains('height: 38'));
+    final kindButton = screen.substring(
+      screen.indexOf('class _ReminderKindOptionButton'),
+      screen.indexOf('Color _reminderKindForeground'),
+    );
+    expect(kindButton, contains('FittedBox('));
 
     expect(main, contains('Future<void> _scheduleDailyDigestRepeating({'));
     expect(main, contains('Future<void> _scheduleDailyDigestOnce({'));

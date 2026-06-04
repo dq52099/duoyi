@@ -851,23 +851,38 @@ class _ClassicalAlmanacCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final suitableCount = _splitAlmanacTerms(detail.suitable).length;
-        final avoidCount = _splitAlmanacTerms(detail.avoid).length;
+        final suitableTerms = _splitAlmanacTerms(detail.suitable);
+        final avoidTerms = _splitAlmanacTerms(detail.avoid);
+        final suitableCount = suitableTerms.length;
+        final avoidCount = avoidTerms.length;
         final yijiCount = suitableCount > avoidCount
             ? suitableCount
             : avoidCount;
+        final longestYijiTerm = _longestRuneLength([
+          ...suitableTerms,
+          ...avoidTerms,
+        ]);
+        final pengZuLineCount = _splitPengZuLines(detail.pengZu).length;
+        final fiveElementLineCount = _splitFiveElementLines(
+          detail.fiveElements,
+        ).length;
+        final clashLineCount = _splitClashLines(detail.clash).length;
+        final sideLineCount = fiveElementLineCount > clashLineCount
+            ? fiveElementLineCount
+            : clashLineCount;
         final topMinHeight = _clampDouble(
-          width * 0.72 + (yijiCount > 6 ? (yijiCount - 6) * 8 : 0),
-          246,
-          350,
+          width * 0.72 +
+              (yijiCount > 6 ? (yijiCount - 6) * 8 : 0) +
+              (longestYijiTerm > 2 ? (longestYijiTerm - 2) * 5 : 0),
+          252,
+          382,
         );
         final tableHeight = _clampDouble(
-          width * 0.64 +
-              (detail.pengZu.length > 24
-                  ? (detail.pengZu.length - 24) * 2.2
-                  : 0),
+          width * 0.62 +
+              (pengZuLineCount > 4 ? (pengZuLineCount - 4) * 15 : 0) +
+              (sideLineCount > 2 ? (sideLineCount - 2) * 9 : 0),
           236,
-          326,
+          348,
         );
         final hourHeight = _clampDouble(width * 0.17, 58, 68);
 
@@ -976,13 +991,14 @@ class _VerticalYijiPanel extends StatelessWidget {
           final termCount = suitableTerms.length > avoidTerms.length
               ? suitableTerms.length
               : avoidTerms.length;
-          final textSize = constraints.maxWidth < 132
-              ? 10.2
+          final baseTextSize = constraints.maxWidth < 132
+              ? 10.0
               : termCount >= 8
-              ? 10.4
+              ? 10.2
               : termCount >= 6
-              ? 10.9
-              : 11.4;
+              ? 10.6
+              : 11.0;
+          final textSize = _clampDouble(baseTextSize, 9.8, 11.0);
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1087,21 +1103,22 @@ class _VerticalTerm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chars = term.runes.map(String.fromCharCode).toList(growable: false);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: chars
-          .map(
-            (char) => Text(
-              char,
-              style: TextStyle(
-                color: color.withValues(alpha: 0.90),
-                fontSize: fontSize,
-                height: 1.12,
-              ),
-            ),
-          )
-          .toList(),
+    return SizedBox(
+      width: fontSize + 5,
+      child: Text(
+        _verticalAlmanacTerm(term),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: color.withValues(alpha: 0.90),
+          fontSize: fontSize,
+          height: 1.12,
+        ),
+        strutStyle: StrutStyle(
+          fontSize: fontSize,
+          height: 1.12,
+          forceStrutHeight: true,
+        ),
+      ),
     );
   }
 }
@@ -1231,6 +1248,31 @@ class _ClassicalInfoCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isPengZu = title == '彭祖';
+    final isFiveElement = title == '五行';
+    final isClash = title == '冲煞';
+    final isCompactBody = isFiveElement || isClash;
+    final valueLines = isPengZu
+        ? _splitPengZuLines(value)
+        : isFiveElement
+        ? _splitFiveElementLines(value)
+        : isClash
+        ? _splitClashLines(value)
+        : [value.trim()];
+    final titleSize = isPengZu
+        ? 18.0
+        : isCompactBody
+        ? 16.0
+        : 17.0;
+    final valueSize = isPengZu
+        ? 12.0
+        : isCompactBody
+        ? 11.2
+        : 13.8;
+    final valueHeight = isPengZu
+        ? 1.34
+        : isCompactBody
+        ? 1.30
+        : 1.34;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: isPengZu ? 10 : 8,
@@ -1245,22 +1287,28 @@ class _ClassicalInfoCell extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: isPengZu ? 18 : 17,
+              fontSize: titleSize,
               height: 1.1,
               fontWeight: FontWeight.normal,
               color: cs.onSurface,
             ),
           ),
-          SizedBox(height: isPengZu ? 10 : 7),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            softWrap: true,
-            style: TextStyle(
-              fontSize: isPengZu ? 13.8 : 14.4,
-              height: isPengZu ? 1.42 : 1.36,
-              color: cs.onSurface.withValues(alpha: 0.68),
-            ),
+          SizedBox(height: isPengZu ? 9 : 6),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final line in valueLines)
+                Text(
+                  line,
+                  textAlign: TextAlign.center,
+                  softWrap: true,
+                  style: TextStyle(
+                    fontSize: valueSize,
+                    height: valueHeight,
+                    color: cs.onSurface.withValues(alpha: 0.66),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -1852,11 +1900,97 @@ String _fullDateTitle(DateTime date) {
 
 List<String> _splitAlmanacTerms(String value) {
   final terms = value
-      .split(RegExp(r'\s+'))
+      .split(RegExp(r'[\s、，,；;。]+'))
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
   return terms.isEmpty ? [value] : terms;
+}
+
+String _verticalAlmanacTerm(String value) {
+  return value.runes.map((rune) => String.fromCharCodes([rune])).join('\n');
+}
+
+List<String> _splitPengZuLines(String value) {
+  final seed = value
+      .trim()
+      .split(RegExp(r'[；;，,。]+'))
+      .map((item) => item.replaceAll(RegExp(r'\s+'), '').trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  final lines = <String>[];
+  for (final item in seed) {
+    if (item.runes.length <= 4) {
+      lines.add(item);
+      continue;
+    }
+    final parts = RegExp(r'.{1,4}', unicode: true)
+        .allMatches(item)
+        .map((match) => match.group(0) ?? '')
+        .where((part) => part.isNotEmpty);
+    lines.addAll(parts);
+  }
+  return lines.isEmpty ? [value.trim()] : lines;
+}
+
+List<String> _splitFiveElementLines(String value) {
+  final normalized = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.isEmpty) return const <String>[];
+  final tokens = normalized
+      .split(' ')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  final lines = <String>[];
+  if (tokens.length >= 2) {
+    _addFiveElementPart(lines, tokens.join(''));
+    return lines.isEmpty ? [tokens.join('  ')] : lines;
+  }
+
+  for (final token in tokens.isEmpty ? [normalized] : tokens) {
+    _addFiveElementPart(lines, token);
+  }
+  return lines.isEmpty ? [normalized] : lines;
+}
+
+List<String> _splitClashLines(String value) {
+  final normalized = value.trim().replaceAll(RegExp(r'\s+'), '');
+  if (normalized.isEmpty) return const <String>[];
+  final lines = <String>[];
+  final directionMatch = RegExp(r'^(.*?)(煞[东南西北中]+方?)$').firstMatch(normalized);
+  if (directionMatch != null) {
+    final prefix = directionMatch.group(1) ?? '';
+    final direction = directionMatch.group(2) ?? '';
+    if (prefix.isNotEmpty) lines.add(prefix);
+    if (direction.isNotEmpty) lines.add(direction);
+    return lines;
+  }
+  return [normalized];
+}
+
+void _addFiveElementPart(List<String> lines, String value) {
+  final text = value.trim();
+  if (text.isEmpty) return;
+
+  final zhiXingMatch = RegExp(r'^(.+?)([建除满平定执破危成收开闭]执位)$').firstMatch(text);
+  if (zhiXingMatch != null) {
+    final prefix = zhiXingMatch.group(1) ?? '';
+    final zhiXing = zhiXingMatch.group(2) ?? '';
+    final parts = [prefix, zhiXing].where((part) => part.isNotEmpty);
+    if (parts.isNotEmpty) lines.add(parts.join('  '));
+    return;
+  }
+
+  lines.add(text);
+}
+
+int _longestRuneLength(Iterable<String> values) {
+  var longest = 0;
+  for (final value in values) {
+    final length = value.runes.length;
+    if (length > longest) longest = length;
+  }
+  return longest;
 }
 
 double _clampDouble(double value, double min, double max) {

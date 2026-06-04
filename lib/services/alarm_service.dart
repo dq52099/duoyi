@@ -78,7 +78,10 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
+  bool _pluginInitialized = false;
+  bool _launchPayloadProbed = false;
   bool _initialized = false;
+  Future<void>? _pluginInitFuture;
   Future<void>? _initFuture;
   String? _launchPayload;
   AlarmScheduleIssue? _lastScheduleIssue;
@@ -426,7 +429,54 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     if (!LocalTimezoneResolver.isInitialized) {
       await LocalTimezoneResolver.init();
     }
+    await _ensurePluginInitialized();
+    await _probeLaunchPayload();
 
+    if (_isAndroid) {
+      try {
+        await _ensureAndroidFallbackChannelSound();
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        for (final legacyId in legacyChannelIds) {
+          await android?.deleteNotificationChannel(legacyId);
+        }
+        for (final legacyId in NativeReminderRingtone.legacyChannelIds) {
+          await android?.deleteNotificationChannel(legacyId);
+        }
+      } catch (e, st) {
+        debugPrint('[AlarmService] channel setup failed: $e\n$st');
+      }
+    }
+
+    _initialized = true;
+  }
+
+  Future<void> initForLaunchPayload() async {
+    if (_initialized || (_pluginInitialized && _launchPayloadProbed)) return;
+    await _ensurePluginInitialized();
+    await _probeLaunchPayload();
+  }
+
+  Future<void> _ensurePluginInitialized() async {
+    if (_pluginInitialized) return;
+    final inFlight = _pluginInitFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _initializePlugin();
+    _pluginInitFuture = future;
+    try {
+      await future;
+    } finally {
+      _pluginInitFuture = null;
+    }
+  }
+
+  Future<void> _initializePlugin() async {
+    if (_pluginInitialized) return;
     const androidInit = AndroidInitializationSettings(
       '@drawable/ic_stat_duoyi',
     );
@@ -472,6 +522,12 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         if (payload != null) onTap!(payload);
       },
     );
+    _pluginInitialized = true;
+  }
+
+  Future<void> _probeLaunchPayload() async {
+    if (_launchPayloadProbed) return;
+    _launchPayloadProbed = true;
 
     try {
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
@@ -484,26 +540,6 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     } catch (e, st) {
       debugPrint('[AlarmService] launch payload probe failed: $e\n$st');
     }
-
-    if (_isAndroid) {
-      try {
-        await _ensureAndroidFallbackChannelSound();
-        final android = _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-        for (final legacyId in legacyChannelIds) {
-          await android?.deleteNotificationChannel(legacyId);
-        }
-        for (final legacyId in NativeReminderRingtone.legacyChannelIds) {
-          await android?.deleteNotificationChannel(legacyId);
-        }
-      } catch (e, st) {
-        debugPrint('[AlarmService] channel setup failed: $e\n$st');
-      }
-    }
-
-    _initialized = true;
   }
 
   bool get _isAndroid {

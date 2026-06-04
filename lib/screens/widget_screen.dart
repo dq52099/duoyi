@@ -650,6 +650,8 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
       if (!context.mounted) return;
       widget.onPinSupportChanged(support);
       if (support != AndroidWidgetPinResult.requested) {
+        await AndroidWidgetManager.refreshAllWidgets();
+        if (!context.mounted) return;
         await _showPinWidgetHelp(context, support);
         return;
       }
@@ -673,6 +675,8 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
         );
         if (!context.mounted) return;
         if (confirmation.isSuccess) {
+          await AndroidWidgetManager.refreshAllWidgets();
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -683,9 +687,13 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
           await AndroidWidgetManager.clearPinResult(requestId);
           return;
         }
+        await AndroidWidgetManager.refreshAllWidgets();
+        if (!context.mounted) return;
         await _showPinWidgetConfirmationFailureHelp(context, confirmation);
         return;
       }
+      await AndroidWidgetManager.refreshAllWidgets();
+      if (!context.mounted) return;
       await _showPinWidgetHelp(context, request.result);
     } finally {
       if (mounted) {
@@ -876,6 +884,10 @@ class WidgetPreviewCard extends StatelessWidget {
       WidgetPreviewKind.diary => '日记预览',
     };
     final skin = cardSkin;
+    final widgetBrand = themeProvider?.activeWidgetBackgroundBrand;
+    final previewBackgroundAsset = widgetBrand?.backgroundAsset;
+    final imageBacked = previewBackgroundAsset != null;
+    final brightness = Theme.of(context).brightness;
     final backgroundStart = usesCardSkin && skin != null
         ? skin.colors.first
         : cs.primary;
@@ -905,6 +917,21 @@ class WidgetPreviewCard extends StatelessWidget {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
+    final imageOverlay = LinearGradient(
+      colors: brightness == Brightness.dark
+          ? [
+              Colors.black.withValues(alpha: 0.34),
+              cs.surface.withValues(alpha: 0.46),
+            ]
+          : [
+              (widgetBrand?.backgroundOverlay ?? cs.surface).withValues(
+                alpha: 0.42,
+              ),
+              cs.surface.withValues(alpha: 0.58),
+            ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
     return Semantics(
       label: '$title ${displayMode.previewCellLabel}',
       child: LayoutBuilder(
@@ -923,113 +950,160 @@ class WidgetPreviewCard extends StatelessWidget {
                 aspectRatio: displayMode.previewAspectRatio,
                 child: Container(
                   clipBehavior: Clip.hardEdge,
-                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: previewBackground,
-                    gradient: previewGradient,
-                    borderRadius: BorderRadius.circular(8),
+                    color: imageBacked ? cs.surface : previewBackground,
+                    gradient: imageBacked ? null : previewGradient,
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: cs.primary.withValues(alpha: 0.16),
                       width: 0.45,
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Stack(
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            switch (kind) {
-                              WidgetPreviewKind.todo =>
-                                Icons.checklist_rtl_outlined,
-                              WidgetPreviewKind.focus => Icons.timer_outlined,
-                              WidgetPreviewKind.habit =>
-                                Icons.self_improvement_outlined,
-                              WidgetPreviewKind.calendar =>
-                                Icons.calendar_month_outlined,
-                              WidgetPreviewKind.schedule =>
-                                Icons.event_note_outlined,
-                              WidgetPreviewKind.goal => Icons.flag_outlined,
-                              WidgetPreviewKind.course => Icons.school_outlined,
-                              WidgetPreviewKind.note =>
-                                Icons.edit_note_outlined,
-                              WidgetPreviewKind.anniversary =>
-                                Icons.event_available_outlined,
-                              WidgetPreviewKind.diary => Icons.book_outlined,
+                      if (imageBacked)
+                        Positioned.fill(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final dpr = MediaQuery.devicePixelRatioOf(
+                                context,
+                              ).clamp(1.0, 3.0);
+                              final cacheWidth = (constraints.maxWidth * dpr)
+                                  .ceil()
+                                  .clamp(1, 1600);
+                              final cacheHeight = (constraints.maxHeight * dpr)
+                                  .ceil()
+                                  .clamp(1, 1600);
+                              return Image.asset(
+                                previewBackgroundAsset,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.center,
+                                cacheWidth: cacheWidth,
+                                cacheHeight: cacheHeight,
+                                filterQuality: FilterQuality.low,
+                                gaplessPlayback: true,
+                                errorBuilder: (context, error, stack) =>
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: previewGradient,
+                                      ),
+                                    ),
+                              );
                             },
-                            size: 18,
-                            color: accent,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.normal,
+                        ),
+                      if (imageBacked)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(gradient: imageOverlay),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  switch (kind) {
+                                    WidgetPreviewKind.todo =>
+                                      Icons.checklist_rtl_outlined,
+                                    WidgetPreviewKind.focus =>
+                                      Icons.timer_outlined,
+                                    WidgetPreviewKind.habit =>
+                                      Icons.self_improvement_outlined,
+                                    WidgetPreviewKind.calendar =>
+                                      Icons.calendar_month_outlined,
+                                    WidgetPreviewKind.schedule =>
+                                      Icons.event_note_outlined,
+                                    WidgetPreviewKind.goal =>
+                                      Icons.flag_outlined,
+                                    WidgetPreviewKind.course =>
+                                      Icons.school_outlined,
+                                    WidgetPreviewKind.note =>
+                                      Icons.edit_note_outlined,
+                                    WidgetPreviewKind.anniversary =>
+                                      Icons.event_available_outlined,
+                                    WidgetPreviewKind.diary =>
+                                      Icons.book_outlined,
+                                  },
+                                  size: 18,
+                                  color: accent,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${displayMode.previewCellLabel} · 05/17',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: _WidgetPreviewDensity(
+                                  mode: displayMode,
+                                  child: switch (kind) {
+                                    WidgetPreviewKind.todo =>
+                                      const _WidgetPreviewTodoBody(),
+                                    WidgetPreviewKind.focus =>
+                                      const _WidgetPreviewFocusBody(),
+                                    WidgetPreviewKind.habit =>
+                                      const _WidgetPreviewHabitBody(),
+                                    WidgetPreviewKind.calendar =>
+                                      const _WidgetPreviewCalendarBody(),
+                                    WidgetPreviewKind.schedule =>
+                                      const _WidgetPreviewScheduleBody(),
+                                    WidgetPreviewKind.goal =>
+                                      const _WidgetPreviewGoalBody(),
+                                    WidgetPreviewKind.course =>
+                                      const _WidgetPreviewCourseBody(),
+                                    WidgetPreviewKind.note =>
+                                      const _WidgetPreviewNoteBody(),
+                                    WidgetPreviewKind.anniversary =>
+                                      const _WidgetPreviewAnniversaryBody(),
+                                    WidgetPreviewKind.diary =>
+                                      const _WidgetPreviewDiaryBody(),
+                                  },
+                                ),
                               ),
                             ),
-                          ),
-                          Text(
-                            '${displayMode.previewCellLabel} · 05/17',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          child: _WidgetPreviewDensity(
-                            mode: displayMode,
-                            child: switch (kind) {
-                              WidgetPreviewKind.todo =>
-                                const _WidgetPreviewTodoBody(),
-                              WidgetPreviewKind.focus =>
-                                const _WidgetPreviewFocusBody(),
-                              WidgetPreviewKind.habit =>
-                                const _WidgetPreviewHabitBody(),
-                              WidgetPreviewKind.calendar =>
-                                const _WidgetPreviewCalendarBody(),
-                              WidgetPreviewKind.schedule =>
-                                const _WidgetPreviewScheduleBody(),
-                              WidgetPreviewKind.goal =>
-                                const _WidgetPreviewGoalBody(),
-                              WidgetPreviewKind.course =>
-                                const _WidgetPreviewCourseBody(),
-                              WidgetPreviewKind.note =>
-                                const _WidgetPreviewNoteBody(),
-                              WidgetPreviewKind.anniversary =>
-                                const _WidgetPreviewAnniversaryBody(),
-                              WidgetPreviewKind.diary =>
-                                const _WidgetPreviewDiaryBody(),
-                            },
-                          ),
+                            if (displayMode != WidgetDisplayMode.compact) ...[
+                              const SizedBox(height: 10),
+                              _WidgetPreviewNav(
+                                selectedIndex: switch (kind) {
+                                  WidgetPreviewKind.todo => 0,
+                                  WidgetPreviewKind.focus => 3,
+                                  WidgetPreviewKind.habit => 1,
+                                  WidgetPreviewKind.calendar => 2,
+                                  WidgetPreviewKind.schedule => 2,
+                                  WidgetPreviewKind.goal => 2,
+                                  WidgetPreviewKind.course => 2,
+                                  WidgetPreviewKind.note => 2,
+                                  WidgetPreviewKind.anniversary => 2,
+                                  WidgetPreviewKind.diary => 2,
+                                },
+                                accent: accent,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      if (displayMode != WidgetDisplayMode.compact) ...[
-                        const SizedBox(height: 10),
-                        _WidgetPreviewNav(
-                          selectedIndex: switch (kind) {
-                            WidgetPreviewKind.todo => 0,
-                            WidgetPreviewKind.focus => 3,
-                            WidgetPreviewKind.habit => 1,
-                            WidgetPreviewKind.calendar => 2,
-                            WidgetPreviewKind.schedule => 2,
-                            WidgetPreviewKind.goal => 2,
-                            WidgetPreviewKind.course => 2,
-                            WidgetPreviewKind.note => 2,
-                            WidgetPreviewKind.anniversary => 2,
-                            WidgetPreviewKind.diary => 2,
-                          },
-                          accent: accent,
-                        ),
-                      ],
                     ],
                   ),
                 ),

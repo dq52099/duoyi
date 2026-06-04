@@ -38,10 +38,12 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
             }
             val views = RemoteViews(context.packageName, R.layout.duoyi_course_widget)
             DuoyiWidgetTheme.applyContainer(
-                views,
-                prefs,
-                R.id.widget_course_root,
-                R.id.widget_course_bottom_nav
+                context = context,
+                views = views,
+                prefs = prefs,
+                rootId = R.id.widget_course_root,
+                navId = R.id.widget_course_bottom_nav,
+                appWidgetId = id,
             )
             DuoyiWidgetTheme.applyTextColors(
                 views,

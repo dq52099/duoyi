@@ -257,23 +257,20 @@ void main() {
     );
     expect(weekly, contains('context.watch<HabitProvider>()'));
     expect(weekly, contains('final data = provider.currentWeekProgress();'));
-    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(10, 6, 10, 6)'));
-    expect(
-      weekly,
-      contains('padding: const EdgeInsets.fromLTRB(10, 9, 10, 10)'),
-    );
+    expect(weekly, contains('margin: const EdgeInsets.fromLTRB(10, 5, 10, 5)'));
+    expect(weekly, contains('padding: const EdgeInsets.fromLTRB(9, 7, 9, 8)'));
     expect(weekly, contains('currentWeekProgress()'));
     expect(
       weekly,
       contains('borderRadius: BorderRadius.circular(DesignTokens.radiusCard)'),
     );
-    expect(weekly, contains('fontSize: DesignTokens.fontSizeCardTitle'));
-    expect(weekly, contains('fontSize: 15'));
-    expect(weekly, contains('minHeight: 5'));
-    expect(weekly, contains('width: 40'));
-    expect(weekly, contains('height: 40'));
-    expect(weekly, contains('width: 32'));
-    expect(weekly, contains('height: 32'));
+    expect(weekly, contains('fontSize: DesignTokens.fontSizeSection'));
+    expect(weekly, contains('fontSize: 14'));
+    expect(weekly, contains('minHeight: 4'));
+    expect(weekly, contains('width: 34'));
+    expect(weekly, contains('height: 34'));
+    expect(weekly, contains('width: 28'));
+    expect(weekly, contains('height: 28'));
     expect(weekly, contains('fontWeight: DesignTokens.fontWeightRegular'));
   });
 

@@ -23,7 +23,7 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            requestUpdate(context)
+            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
         }
     }
 
@@ -39,10 +39,12 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
         appWidgetIds.forEach { id ->
             val views = RemoteViews(context.packageName, R.layout.duoyi_widget)
             DuoyiWidgetTheme.applyContainer(
-                views,
-                prefs,
-                R.id.widget_root,
-                R.id.widget_bottom_nav
+                context = context,
+                views = views,
+                prefs = prefs,
+                rootId = R.id.widget_root,
+                navId = R.id.widget_bottom_nav,
+                appWidgetId = id,
             )
             DuoyiWidgetTheme.applyTextColors(
                 views,

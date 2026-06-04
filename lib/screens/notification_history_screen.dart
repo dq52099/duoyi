@@ -1364,18 +1364,13 @@ class _NotificationReminderSlotTileState
         ),
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
         children: [
-          AppSettingsTile(
-            icon: Icons.notifications_none_rounded,
-            color: Colors.teal,
-            title: I18n.tr('preferences.daily_reminder.kind.title'),
+          _ReminderKindSettingsTile(
+            value: slot.kind,
             subtitle: _kindDescription(slot.kind),
-            trailing: _ReminderKindSelector(
-              value: slot.kind,
-              enabled: !_saving,
-              onChanged: (kind) => _save(
-                context,
-                slot.copyWith(enabled: kind != ReminderKind.off, kind: kind),
-              ),
+            enabled: !_saving,
+            onChanged: (kind) => _save(
+              context,
+              slot.copyWith(enabled: kind != ReminderKind.off, kind: kind),
             ),
           ),
           const SizedBox(height: 6),
@@ -1487,6 +1482,12 @@ class _ReminderKindSelector extends StatelessWidget {
   final ReminderKind value;
   final bool enabled;
   final ValueChanged<ReminderKind> onChanged;
+  static const _options = [
+    _ReminderKindOptionSpec(value: ReminderKind.push),
+    _ReminderKindOptionSpec(value: ReminderKind.popup),
+    _ReminderKindOptionSpec(value: ReminderKind.alarm),
+    _ReminderKindOptionSpec(value: ReminderKind.off),
+  ];
 
   const _ReminderKindSelector({
     required this.value,
@@ -1496,53 +1497,180 @@ class _ReminderKindSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selected = DailyReminderSlot.normalizeKind(value);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width - 64;
+        final gap = maxWidth < 340 ? 6.0 : 8.0;
+        final itemWidth = ((maxWidth - gap) / 2)
+            .clamp(88.0, maxWidth)
+            .toDouble();
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final option in _options)
+              SizedBox(
+                width: itemWidth,
+                height: 38,
+                child: _ReminderKindOptionButton(
+                  label: _kindLabel(option.value),
+                  selected: selected == option.value,
+                  enabled: enabled,
+                  onTap: () => onChanged(option.value),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReminderKindOptionSpec {
+  final ReminderKind value;
+
+  const _ReminderKindOptionSpec({required this.value});
+}
+
+class _ReminderKindSettingsTile extends StatelessWidget {
+  final ReminderKind value;
+  final String subtitle;
+  final bool enabled;
+  final ValueChanged<ReminderKind> onChanged;
+
+  const _ReminderKindSettingsTile({
+    required this.value,
+    required this.subtitle,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SegmentedButton<ReminderKind>(
-      showSelectedIcon: false,
-      segments: [
-        ButtonSegment(
-          value: ReminderKind.push,
-          label: Text(I18n.tr('reminder.kind.push')),
-        ),
-        ButtonSegment(
-          value: ReminderKind.popup,
-          label: Text(I18n.tr('reminder.kind.popup')),
-        ),
-        ButtonSegment(
-          value: ReminderKind.alarm,
-          label: Text(I18n.tr('reminder.kind.alarm')),
-        ),
-        ButtonSegment(
-          value: ReminderKind.off,
-          label: Text(I18n.tr('reminder.kind.off')),
-        ),
-      ],
-      selected: {DailyReminderSlot.normalizeKind(value)},
-      onSelectionChanged: enabled ? (values) => onChanged(values.single) : null,
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        textStyle: WidgetStateProperty.all(
-          Theme.of(context).textTheme.labelMedium,
-        ),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return cs.onSurface;
-          return cs.onSurface;
-        }),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return cs.primary.withValues(alpha: 0.12);
-          }
-          return cs.surface;
-        }),
-        side: WidgetStateProperty.resolveWith((states) {
-          final color = states.contains(WidgetState.selected)
-              ? cs.primary.withValues(alpha: 0.38)
-              : cs.outlineVariant.withValues(alpha: 0.45);
-          return BorderSide(color: color, width: 0.45);
-        }),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.teal,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      I18n.tr('preferences.daily_reminder.kind.title'),
+                      style: appSecondaryMenuItemTextStyle(context).copyWith(
+                        color: cs.onSurface,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: appSecondaryControlLabelStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ReminderKindSelector(
+            value: value,
+            enabled: enabled,
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }
+}
+
+class _ReminderKindOptionButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _ReminderKindOptionButton({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final borderColor = selected
+        ? cs.primary.withValues(alpha: 0.42)
+        : cs.outlineVariant.withValues(alpha: 0.45);
+    final foreground = _reminderKindForeground(cs, selected, enabled);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? cs.primary.withValues(alpha: 0.12) : cs.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: BorderSide(color: borderColor, width: 0.45),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.normal,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Color _reminderKindForeground(ColorScheme cs, bool selected, bool enabled) {
+  if (!enabled) return cs.onSurface.withValues(alpha: 0.38);
+  if (selected) return cs.onSurface;
+  return cs.onSurface.withValues(alpha: 0.76);
 }
 
 String _kindLabel(ReminderKind kind) {

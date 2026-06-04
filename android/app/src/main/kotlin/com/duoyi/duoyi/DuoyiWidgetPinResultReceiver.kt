@@ -9,17 +9,26 @@ import es.antonborri.home_widget.HomeWidgetPlugin
 
 class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val kind = intent.getStringExtra(extraKind)
         val requestId = intent.getStringExtra(extraRequestId)
-        val style = intent.getStringExtra(extraStyle)
-        val pinStyle = DuoyiWidgetPinStyle.fromId(style)
-        val provider = kind?.let {
-            DuoyiWidgetProviderRegistry.componentFor(context, it, pinStyle.id)
-        }
         val widgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID,
         )
+        val manager = AppWidgetManager.getInstance(context)
+        val actualProvider = if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            null
+        } else {
+            manager.getAppWidgetInfo(widgetId)?.provider
+        }
+        val providerStyle = DuoyiWidgetProviderRegistry.styleForProvider(actualProvider?.className)
+        val pinStyle = DuoyiWidgetPinStyle.fromId(
+            intent.getStringExtra(extraStyle) ?: providerStyle,
+        )
+        val kind = intent.getStringExtra(extraKind)
+            ?: DuoyiWidgetProviderRegistry.kindForProvider(actualProvider?.className)
+        val provider = actualProvider ?: kind?.let {
+            DuoyiWidgetProviderRegistry.componentFor(context, it, pinStyle.id)
+        }
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             Log.w(
                 tag,
@@ -33,6 +42,11 @@ class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
                 )
                 DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(context, provider)
             }
+            if (provider != null) {
+                DuoyiWidgetProviderRegistry.requestUpdateForComponent(context, provider)
+            } else if (!kind.isNullOrBlank()) {
+                DuoyiWidgetProviderRegistry.requestUpdateForKind(context, kind)
+            }
             recordResult(context, requestId, kind, pinStyle.id, widgetId, "invalid_widget_id")
             return
         }
@@ -40,29 +54,30 @@ class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
             tag,
             "confirmed requestId=${requestId.orEmpty()} kind=${kind.orEmpty()} style=${pinStyle.id} widgetId=$widgetId provider=${provider?.className.orEmpty()}",
         )
-        if (!style.isNullOrBlank()) {
-            DuoyiWidgetDisplayMode.saveForWidget(
-                HomeWidgetPlugin.getData(context),
-                widgetId,
-                pinStyle.id,
+        DuoyiWidgetDisplayMode.saveForWidget(
+            HomeWidgetPlugin.getData(context),
+            widgetId,
+            pinStyle.id,
+        )
+        manager.updateAppWidgetOptions(
+            widgetId,
+            pinStyle.toOptions(),
+        )
+        if (provider != null) {
+            DuoyiWidgetProviderRegistry.markVariantProviderActive(context, provider)
+            DuoyiWidgetProviderRegistry.clearPendingVariantProvider(
+                context,
+                requestId.orEmpty(),
+                provider,
             )
-            AppWidgetManager.getInstance(context).updateAppWidgetOptions(
-                widgetId,
-                pinStyle.toOptions(),
+            DuoyiWidgetProviderRegistry.scheduleDisableVariantProviderIfUnused(
+                context,
+                provider,
             )
-            if (provider != null) {
-                DuoyiWidgetProviderRegistry.clearPendingVariantProvider(
-                    context,
-                    requestId.orEmpty(),
-                    provider,
-                )
-                DuoyiWidgetProviderRegistry.scheduleDisableVariantProviderIfUnused(
-                    context,
-                    provider,
-                )
-            }
         }
-        if (!kind.isNullOrBlank()) {
+        if (provider != null) {
+            DuoyiWidgetProviderRegistry.requestUpdateForComponent(context, provider)
+        } else if (!kind.isNullOrBlank()) {
             DuoyiWidgetProviderRegistry.requestUpdateForKind(context, kind)
         }
         recordResult(context, requestId, kind, pinStyle.id, widgetId, "confirmed")

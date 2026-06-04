@@ -1,11 +1,20 @@
 package com.duoyi.duoyi
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
+import kotlin.math.roundToInt
 
 data class DuoyiWidgetThemePalette(
     val brandId: String,
@@ -38,6 +47,17 @@ object DuoyiWidgetTheme {
     private const val defaultOnPrimary = "#FFFFFFFF"
     private const val defaultAccentStart = "#FFFF6B6B"
     private const val defaultAccentEnd = "#FFFFB088"
+    private const val maxBackgroundBitmapCacheEntries = 8
+    private val backgroundBitmapCache =
+        object : LinkedHashMap<BackgroundBitmapCacheKey, Bitmap>(
+            maxBackgroundBitmapCacheEntries,
+            0.75f,
+            true,
+        ) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<BackgroundBitmapCacheKey, Bitmap>?,
+            ): Boolean = size > maxBackgroundBitmapCacheEntries
+        }
 
     fun read(prefs: SharedPreferences): DuoyiWidgetThemePalette {
         return DuoyiWidgetThemePalette(
@@ -62,20 +82,25 @@ object DuoyiWidgetTheme {
     }
 
     fun applyContainer(
+        context: Context,
         views: RemoteViews,
         prefs: SharedPreferences,
         rootId: Int,
         navId: Int = 0,
+        appWidgetId: Int? = null,
     ) {
         val theme = read(prefs)
         val imageResource = backgroundImageResource(theme.backgroundAssetKey)
         if (imageResource != 0) {
             applyImageBackedSurface(
+                context = context,
                 views,
+                prefs = prefs,
                 rootId = rootId,
                 imageResource = imageResource,
                 overlayColor = imageOverlayColor(theme),
                 radiusDp = theme.cornerRadiusDp,
+                appWidgetId = appWidgetId,
             )
         } else {
             views.setViewVisibility(R.id.widget_theme_background, View.GONE)
@@ -102,21 +127,36 @@ object DuoyiWidgetTheme {
     }
 
     private fun applyImageBackedSurface(
+        context: Context,
         views: RemoteViews,
+        prefs: SharedPreferences,
         rootId: Int,
         imageResource: Int,
         overlayColor: Int,
         radiusDp: Int,
+        appWidgetId: Int?,
     ) {
         views.setInt(
             rootId,
             "setBackgroundResource",
             widgetBackgroundResource(radiusDp, 0),
         )
-        views.setImageViewResource(R.id.widget_theme_background, imageResource)
+        val bitmap = roundedBackgroundBitmap(
+            context = context,
+            imageResource = imageResource,
+            radiusDp = radiusDp,
+            overlayColor = overlayColor,
+            renderSpec = backgroundRenderSpec(prefs, appWidgetId),
+        )
+        if (bitmap == null) {
+            views.setImageViewResource(R.id.widget_theme_background, imageResource)
+            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", overlayColor)
+            views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)
+        } else {
+            views.setImageViewBitmap(R.id.widget_theme_background, bitmap)
+            views.setViewVisibility(R.id.widget_theme_overlay, View.GONE)
+        }
         views.setViewVisibility(R.id.widget_theme_background, View.VISIBLE)
-        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", overlayColor)
-        views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)
     }
 
     fun applyButtonSurfaces(
@@ -197,7 +237,7 @@ object DuoyiWidgetTheme {
             "setBackgroundResource",
             widgetBackgroundResource(radiusDp, strokeWidthDp),
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setColorStateList(viewId, "setBackgroundTintList", ColorStateList.valueOf(fill))
         } else {
             views.setInt(viewId, "setBackgroundColor", fill)
@@ -212,15 +252,144 @@ object DuoyiWidgetTheme {
         return R.drawable.widget_bg
     }
 
+    private fun roundedBackgroundBitmap(
+        context: Context,
+        imageResource: Int,
+        radiusDp: Int,
+        overlayColor: Int,
+        renderSpec: BackgroundRenderSpec,
+    ): Bitmap? {
+        val key = BackgroundBitmapCacheKey(
+            imageResource = imageResource,
+            radiusDp = radiusDp,
+            overlayColor = overlayColor,
+            renderSpec = renderSpec,
+        )
+        synchronized(backgroundBitmapCache) {
+            val cached = backgroundBitmapCache[key]
+            if (cached != null && !cached.isRecycled) return cached
+        }
+        val output = renderRoundedBackgroundBitmap(
+            context = context,
+            imageResource = imageResource,
+            radiusDp = radiusDp,
+            overlayColor = overlayColor,
+            renderSpec = renderSpec,
+        ) ?: return null
+        synchronized(backgroundBitmapCache) {
+            backgroundBitmapCache[key] = output
+        }
+        return output
+    }
+
+    private fun renderRoundedBackgroundBitmap(
+        context: Context,
+        imageResource: Int,
+        radiusDp: Int,
+        overlayColor: Int,
+        renderSpec: BackgroundRenderSpec,
+    ): Bitmap? {
+        val source = BitmapFactory.decodeResource(context.resources, imageResource) ?: return null
+        return try {
+            val width = renderSpec.bitmapWidth
+            val height = renderSpec.bitmapHeight
+            val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
+            val radius = (radiusDp * renderSpec.radiusScale).toFloat()
+            val path = Path().apply {
+                addRoundRect(bounds, radius, radius, Path.Direction.CW)
+            }
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.clipPath(path)
+            canvas.drawBitmap(source, centerCropRect(source, width, height), bounds, paint)
+            paint.color = overlayColor
+            paint.style = Paint.Style.FILL
+            canvas.drawRect(bounds, paint)
+            output
+        } finally {
+            source.recycle()
+        }
+    }
+
+    private fun centerCropRect(source: Bitmap, targetWidth: Int, targetHeight: Int): Rect {
+        val sourceAspect = source.width.toFloat() / source.height.toFloat()
+        val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
+        return if (sourceAspect > targetAspect) {
+            val cropWidth = (source.height * targetAspect).roundToInt().coerceAtMost(source.width)
+            val left = ((source.width - cropWidth) / 2).coerceAtLeast(0)
+            Rect(left, 0, left + cropWidth, source.height)
+        } else {
+            val cropHeight = (source.width / targetAspect).roundToInt().coerceAtMost(source.height)
+            val top = ((source.height - cropHeight) / 2).coerceAtLeast(0)
+            Rect(0, top, source.width, top + cropHeight)
+        }
+    }
+
+    private fun backgroundRenderSpec(
+        prefs: SharedPreferences,
+        appWidgetId: Int?,
+    ): BackgroundRenderSpec {
+        return when {
+            DuoyiWidgetDisplayMode.isCompact(prefs, appWidgetId) -> BackgroundRenderSpec(
+                bitmapWidth = 240,
+                bitmapHeight = 240,
+                logicalWidthDp = 110,
+                logicalHeightDp = 110,
+            )
+            DuoyiWidgetDisplayMode.isDetailed(prefs, appWidgetId) -> BackgroundRenderSpec(
+                bitmapWidth = 400,
+                bitmapHeight = 288,
+                logicalWidthDp = 250,
+                logicalHeightDp = 180,
+            )
+            else -> BackgroundRenderSpec(
+                bitmapWidth = 360,
+                bitmapHeight = 220,
+                logicalWidthDp = 180,
+                logicalHeightDp = 110,
+            )
+        }
+    }
+
+    private data class BackgroundRenderSpec(
+        val bitmapWidth: Int,
+        val bitmapHeight: Int,
+        val logicalWidthDp: Int,
+        val logicalHeightDp: Int,
+    ) {
+        val radiusScale: Float
+            get() = minOf(
+                bitmapWidth.toFloat() / logicalWidthDp.toFloat(),
+                bitmapHeight.toFloat() / logicalHeightDp.toFloat(),
+            )
+    }
+
+    private data class BackgroundBitmapCacheKey(
+        val imageResource: Int,
+        val radiusDp: Int,
+        val overlayColor: Int,
+        val renderSpec: BackgroundRenderSpec,
+    )
+
     private fun backgroundImageResource(key: String): Int {
         return when (key.trim().lowercase()) {
-            "re0" -> R.drawable.widget_theme_re0
-            "genshin" -> R.drawable.widget_theme_genshin
-            "star_rail" -> R.drawable.widget_theme_star_rail
-            "wuthering" -> R.drawable.widget_theme_wuthering
-            "zzz" -> R.drawable.widget_theme_zzz
-            "yanyun" -> R.drawable.widget_theme_yanyun
-            "botw" -> R.drawable.widget_theme_botw
+            "re0",
+            "assets/backgrounds/re0.png" -> R.drawable.widget_theme_re0
+            "genshin",
+            "assets/backgrounds/genshin.png" -> R.drawable.widget_theme_genshin
+            "starrail",
+            "star_rail",
+            "assets/backgrounds/star_rail.png" -> R.drawable.widget_theme_star_rail
+            "wuthering",
+            "wutheringwaves",
+            "assets/backgrounds/wuthering.png" -> R.drawable.widget_theme_wuthering
+            "zzz",
+            "assets/backgrounds/zzz.png" -> R.drawable.widget_theme_zzz
+            "yanyun",
+            "assets/backgrounds/yanyun.png" -> R.drawable.widget_theme_yanyun
+            "botw",
+            "assets/backgrounds/botw.png" -> R.drawable.widget_theme_botw
             else -> 0
         }
     }

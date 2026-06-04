@@ -2,7 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:duoyi/services/reminder_ringtone_settings.dart';
+import 'package:duoyi/services/reminder_ringtone_preview_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -176,9 +178,12 @@ void main() {
     }
   });
 
-  test('ringtone changes trigger direct native foreground preview by default', () {
+  test('ringtone changes use Flutter asset preview for settings page', () {
     final source = File(
       'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
+    final previewService = File(
+      'lib/services/reminder_ringtone_preview_service.dart',
     ).readAsStringSync();
     final mainActivity = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
@@ -196,15 +201,41 @@ void main() {
     expect(source, contains('setSound(String value, {bool preview = true})'));
     expect(source, contains('await _applyAndPreviewCurrentSound();'));
     expect(source, contains('ReminderRingtonePreviewException'));
-    expect(source, contains('reason: result.reason'));
-    expect(source, contains('_friendlyPreviewMessage'));
+    expect(source, contains('flutter_asset_preview_failed:'));
     expect(source, contains('铃声试听启动失败，请重试。'));
     expect(source, isNot(contains('播放器调用失败')));
     expect(source, isNot(contains('fellBackToDefault')));
     expect(source, isNot(contains('已尝试降级')));
     expect(source, isNot(contains('默认轻铃')));
-    expect(source, contains('await applyPersistedSettingsToNative();'));
-    expect(source, contains('NativeReminderRingtone.previewCurrentSound()'));
+    expect(source, contains('applyPersistedSettingsToNative().then'));
+    expect(source, contains('ReminderRingtonePreviewService.instance'));
+    expect(source, contains('flutterPreviewStarted'));
+    expect(
+      source,
+      contains('NativeReminderRingtone.previewCurrentSound('),
+      reason: 'Flutter asset 试听失败后必须用直连 MediaPlayer 原生兜底。',
+    );
+    expect(
+      ReminderRingtonePreviewService.assetPathFor('soft'),
+      'sounds/reminders/duoyi_soft.wav',
+    );
+    expect(previewService, contains("import 'focus_sound_service.dart';"));
+    expect(previewService, contains('FocusSoundService.mediaAudioContext'));
+    expect(previewService, contains('AudioPlayer? _player'));
+    expect(previewService, contains('AssetSource(assetPath)'));
+    expect(
+      previewService,
+      isNot(contains('FocusSoundService.instance.stop()')),
+      reason: '提醒试听不能停止正在播放的番茄/白噪音。',
+    );
+    expect(
+      ReminderRingtonePreviewService.previewAudioContext.android.usageType,
+      AndroidUsageType.media,
+      reason: '设置页试听必须走 Flutter media audio path，不能占用闹钟音量。',
+    );
+    expect(previewService, isNot(contains('AndroidUsageType.alarm')));
+    expect(previewService, isNot(contains('AudioCache(prefix: \'\')')));
+    expect(previewService, contains(r'sounds/reminders/duoyi_$soundName.wav'));
     expect(mainActivity, contains('"setSoundName"'));
     expect(mainActivity, contains('ReminderRingtoneService.setSoundName'));
     expect(mainActivity, contains('"setVolumePercent"'));
@@ -216,14 +247,29 @@ void main() {
     expect(service, contains('MediaPlayer()'));
     expect(service, contains('media_volume_zero'));
     expect(service, contains('AudioManager.STREAM_MUSIC'));
+    expect(
+      service.indexOf('AudioManager.STREAM_MUSIC'),
+      lessThan(service.indexOf('fun stopPreview()')),
+      reason: 'native 兜底试听只检查媒体音量。',
+    );
+    expect(service, isNot(contains('AudioManager.STREAM_ALARM')));
+    expect(service, contains('AudioManager.STREAM_NOTIFICATION'));
+    expect(service, contains('AudioAttributes.USAGE_ALARM'));
     expect(service, contains('AudioAttributes.USAGE_MEDIA'));
+    expect(
+      service.indexOf('AudioAttributes.USAGE_ALARM'),
+      lessThan(service.indexOf('fun previewCurrentSound')),
+      reason: '正式提醒仍走 native alarm audio path。',
+    );
+    expect(
+      service.indexOf('AudioAttributes.USAGE_MEDIA'),
+      greaterThan(service.indexOf('fun previewCurrentSound')),
+      reason:
+          'native preview is only a direct MediaPlayer fallback; the first path remains Flutter asset media playback.',
+    );
     expect(service, contains('stopPreview()'));
     expect(service, contains('activeReminderId != null'));
     expect(service, contains('active_reminder_ringing'));
-    expect(
-      source,
-      contains("'active_reminder_ringing' => '当前有提醒正在响铃，请先处理后再试听。'"),
-    );
     expect(
       service,
       isNot(
@@ -253,7 +299,7 @@ void main() {
     expect(native, contains("'previewCurrentSound'"));
     expect(native, contains('铃声试听启动失败，请重试。'));
     expect(native, isNot(contains('播放器调用失败')));
-    expect(source, contains("'player_init_failed' => '铃声试听启动失败，请重试。'"));
+    expect(source, contains('flutter_asset_preview_failed:'));
     expect(source, isNot(contains('铃声播放器初始化失败')));
     expect(native, contains("static Future<void> stopPreview()"));
     expect(native, isNot(contains('await cancel(previewNotificationId)')));
@@ -270,53 +316,42 @@ void main() {
     expect(screen, contains("successMessage: '已切换音量并开始试听'"));
   });
 
-  test(
-    'ringtone volume changes also trigger direct native preview by default',
-    () {
-      final source = File(
-        'lib/services/reminder_ringtone_settings.dart',
-      ).readAsStringSync();
+  test('ringtone volume changes also trigger Flutter preview by default', () {
+    final source = File(
+      'lib/services/reminder_ringtone_settings.dart',
+    ).readAsStringSync();
 
-      final volumeStart = source.indexOf(
-        'static Future<void> setVolumePercent(int value, {bool preview = true})',
-      );
-      final volumeEnd = source.indexOf(
-        'static Future<void> setSound',
-        volumeStart,
-      );
-      expect(volumeStart, greaterThanOrEqualTo(0));
-      expect(volumeEnd, greaterThan(volumeStart));
-      final method = source.substring(volumeStart, volumeEnd);
+    final volumeStart = source.indexOf(
+      'static Future<void> setVolumePercent(int value, {bool preview = true})',
+    );
+    final volumeEnd = source.indexOf(
+      'static Future<void> setSound',
+      volumeStart,
+    );
+    expect(volumeStart, greaterThanOrEqualTo(0));
+    expect(volumeEnd, greaterThan(volumeStart));
+    final method = source.substring(volumeStart, volumeEnd);
 
-      expect(method, contains('await _applyAndPreviewCurrentSound();'));
-      expect(
-        source,
-        contains('final applied = await applyPersistedSettingsToNative();'),
-      );
-      expect(
-        source,
-        contains(
-          'final result = await NativeReminderRingtone.previewCurrentSound();',
-        ),
-      );
-      expect(source, contains('if (result.started) return;'));
-      expect(source, contains("reason: 'native_apply_failed'"));
-      expect(source, contains('static Future<void> previewCurrentSound()'));
-      expect(source, contains('static Future<void> stopPreview()'));
-      expect(
-        source,
-        isNot(contains('NativeReminderRingtone.clearLastDeliveryIssue()')),
-      );
-      expect(
-        source,
-        isNot(contains('NativeReminderRingtone.lastDeliveryIssue()')),
-      );
-      expect(
-        source,
-        contains('static Future<bool> applyPersistedSettingsToNative()'),
-      );
-    },
-  );
+    expect(method, contains('await _applyAndPreviewCurrentSound();'));
+    expect(source, contains('applyPersistedSettingsToNative().then'));
+    expect(source, contains('ReminderRingtonePreviewService.instance'));
+    expect(source, contains('flutterPreviewStarted'));
+    expect(source, contains('flutter_asset_preview_failed:'));
+    expect(source, contains('static Future<void> previewCurrentSound()'));
+    expect(source, contains('static Future<void> stopPreview()'));
+    expect(
+      source,
+      isNot(contains('NativeReminderRingtone.clearLastDeliveryIssue()')),
+    );
+    expect(
+      source,
+      isNot(contains('NativeReminderRingtone.lastDeliveryIssue()')),
+    );
+    expect(
+      source,
+      contains('static Future<bool> applyPersistedSettingsToNative()'),
+    );
+  });
 
   test('built-in ringtone options map to non-empty Android raw resources', () {
     final service = File(

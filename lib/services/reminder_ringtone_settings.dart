@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/platform_info.dart';
 import 'native_reminder_ringtone.dart';
+import 'reminder_ringtone_preview_service.dart';
 
 enum ReminderRingtonePlatformMode {
   androidNative,
@@ -247,22 +250,68 @@ class ReminderRingtoneSettings {
   }
 
   static Future<void> _applyAndPreviewCurrentSound() async {
-    final applied = await applyPersistedSettingsToNative();
-    if (!applied) {
-      throw const ReminderRingtonePreviewException(
-        reason: 'native_apply_failed',
-        message: '铃声设置写入系统播放器失败，请重试或重启应用后再试。',
+    if (!_isAndroid) return;
+    final p = await SharedPreferences.getInstance();
+    final volumePercent = _normalizeVolume(
+      p.getInt(volumePreferenceKey) ?? defaultVolumePercent,
+    );
+    final soundName = _normalizeSound(await _loadAndMigrateSoundPreference(p));
+    final flutterPreviewStarted = await ReminderRingtonePreviewService.instance
+        .preview(
+          soundName: soundName,
+          volumePercent: volumePercent,
+          duration: NativeReminderRingtone.previewDuration,
+        );
+    if (flutterPreviewStarted) {
+      unawaited(
+        applyPersistedSettingsToNative().then((applied) {
+          if (applied) return;
+          debugPrint(
+            '[ReminderRingtoneSettings] native apply failed after persisted '
+            'ringtone change; actual reminder channel refresh will retry.',
+          );
+        }),
+      );
+      return;
+    }
+    debugPrint(
+      '[ReminderRingtoneSettings] Flutter ringtone preview failed '
+      'sound=$soundName volume=$volumePercent',
+    );
+
+    final nativeSettingsApplied = await applyPersistedSettingsToNative();
+    if (!nativeSettingsApplied) {
+      debugPrint(
+        '[ReminderRingtoneSettings] native apply failed before fallback '
+        'preview sound=$soundName volume=$volumePercent',
       );
     }
-    final result = await NativeReminderRingtone.previewCurrentSound();
-    if (result.started) return;
+    final nativePreview = await NativeReminderRingtone.previewCurrentSound(
+      duration: NativeReminderRingtone.previewDuration,
+    );
+    if (nativePreview.started) {
+      debugPrint(
+        '[ReminderRingtoneSettings] native MediaPlayer fallback preview '
+        'started sound=$soundName volume=$volumePercent '
+        'reason=${nativePreview.reason}',
+      );
+      return;
+    }
+    debugPrint(
+      '[ReminderRingtoneSettings] native MediaPlayer fallback preview failed '
+      'sound=$soundName volume=$volumePercent reason=${nativePreview.reason} '
+      'message=${nativePreview.message}',
+    );
     throw ReminderRingtonePreviewException(
-      reason: result.reason,
-      message: _friendlyPreviewMessage(result.reason, result.message),
+      reason: 'flutter_asset_preview_failed:${nativePreview.reason}',
+      message: nativePreview.message.isEmpty
+          ? '铃声试听启动失败，请重试。'
+          : nativePreview.message,
     );
   }
 
   static Future<void> stopPreview() async {
+    await ReminderRingtonePreviewService.instance.stop();
     if (!_isAndroid) return;
     try {
       await NativeReminderRingtone.stopPreview();
@@ -306,20 +355,6 @@ class ReminderRingtoneSettings {
   static bool get _isAndroid {
     if (kIsWeb) return false;
     return PlatformInfo.isAndroid;
-  }
-
-  static String _friendlyPreviewMessage(String reason, String fallback) {
-    return switch (reason) {
-      'media_volume_zero' => '系统媒体音量为 0，请调高媒体音量后再试听。',
-      'alarm_volume_zero' => '系统铃声音量为 0，请调高音量后再试听。',
-      'audio_resource_missing' => '内置铃声资源缺失，请重新安装或更新应用。',
-      'audio_resource_invalid' => '内置铃声文件不可播放，请切换其他铃声。',
-      'active_reminder_ringing' => '当前有提醒正在响铃，请先处理后再试听。',
-      'player_init_failed' => '铃声试听启动失败，请重试。',
-      'platform_channel_failed' => '铃声试听启动失败，请重试。',
-      'native_apply_failed' => fallback,
-      _ => fallback.isEmpty ? '铃声试听启动失败，请重试。' : fallback,
-    };
   }
 }
 
