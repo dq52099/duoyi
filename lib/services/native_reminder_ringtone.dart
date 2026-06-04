@@ -251,7 +251,7 @@ class NativeReminderRingtone {
       );
       return NativeReminderPreviewResult.failed(
         reason: 'platform_channel_failed',
-        message: '铃声播放器调用失败，请重试。',
+        message: '铃声试听启动失败，请重试。',
       );
     }
   }

@@ -200,6 +200,8 @@ void main() {
       expect(source, contains('ReminderRingtonePreviewException'));
       expect(source, contains('reason: result.reason'));
       expect(source, contains('_friendlyPreviewMessage'));
+      expect(source, contains('铃声试听启动失败，请重试。'));
+      expect(source, isNot(contains('播放器调用失败')));
       expect(source, isNot(contains('fellBackToDefault')));
       expect(source, isNot(contains('已尝试降级')));
       expect(source, isNot(contains('默认轻铃')));
@@ -236,6 +238,8 @@ void main() {
         contains('Future<NativeReminderPreviewResult> previewCurrentSound'),
       );
       expect(native, contains("'previewCurrentSound'"));
+      expect(native, contains('铃声试听启动失败，请重试。'));
+      expect(native, isNot(contains('播放器调用失败')));
       expect(native, contains("static Future<void> stopPreview()"));
       expect(native, isNot(contains('await cancel(previewNotificationId)')));
       expect(screen, contains('Future<void> _reloadRingtoneSettings() async'));

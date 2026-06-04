@@ -427,7 +427,9 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       await LocalTimezoneResolver.init();
     }
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(
+      '@drawable/ic_stat_duoyi',
+    );
     // 不在 AlarmService 初始化时弹权限，权限由 LocalNotifications 或显式调用
     // [requestExactAlarmPermission] / 系统设置流程负责，避免重复弹窗。
     const iosInit = DarwinInitializationSettings(
@@ -630,7 +632,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
       actions: _actionsForPayload(payload),
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_stat_duoyi',
       ongoing: false,
       autoCancel: true,
     );
@@ -1287,7 +1289,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
       actions: _actionsForPayload(payload),
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_stat_duoyi',
       ongoing: false,
       autoCancel: true,
     );

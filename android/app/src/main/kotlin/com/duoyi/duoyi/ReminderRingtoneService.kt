@@ -349,7 +349,7 @@ class ReminderRingtoneService : Service() {
         }
 
         val builder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_duoyi)
             .setContentTitle(title)
             .setContentText(body)
             .setOngoing(false)

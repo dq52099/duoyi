@@ -158,7 +158,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
             val fullScreenIntent = PendingIntent.getActivity(context, id + 4_000_000, openIntent, flags)
             val notification = NotificationCompat.Builder(context, fallbackChannelId)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_duoyi)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)

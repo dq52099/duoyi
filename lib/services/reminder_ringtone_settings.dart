@@ -315,7 +315,7 @@ class ReminderRingtoneSettings {
       'audio_resource_missing' => '内置铃声资源缺失，请重新安装或更新应用。',
       'audio_resource_invalid' => '内置铃声文件不可播放，请切换其他铃声。',
       'player_init_failed' => '铃声播放器初始化失败，请重试。',
-      'platform_channel_failed' => '铃声播放器调用失败，请重试。',
+      'platform_channel_failed' => '铃声试听启动失败，请重试。',
       'native_apply_failed' => fallback,
       _ => fallback.isEmpty ? '铃声试听启动失败，请重试。' : fallback,
     };

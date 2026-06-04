@@ -1139,7 +1139,7 @@ class _DateHeroPanel extends StatelessWidget {
               Text(
                 detail.lunarDate.chineseText,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                softWrap: false,
                 style: TextStyle(
                   fontSize: lunarSize,
                   height: 1.1,
@@ -1151,8 +1151,7 @@ class _DateHeroPanel extends StatelessWidget {
               const SizedBox(height: 9),
               Text(
                 _spacedGanzhiLine(detail.ganzhiLine),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 3,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: ganzhiSize,

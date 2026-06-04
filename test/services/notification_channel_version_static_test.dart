@@ -179,6 +179,45 @@ void main() {
       expect(screen, isNot(contains('duoyi_alarm_fallback_v4')));
     });
 
+    test('Android 系统通知使用单色 small icon，不使用 launcher 彩色图标', () {
+      final icon = File(
+        'android/app/src/main/res/drawable/ic_stat_duoyi.xml',
+      ).readAsStringSync();
+      final local = File(
+        'lib/services/local_notifications_io.dart',
+      ).readAsStringSync();
+      final alarm = File('lib/services/alarm_service.dart').readAsStringSync();
+      final nativeService = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+      ).readAsStringSync();
+      final receiver = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt',
+      ).readAsStringSync();
+      final geofenceReceiver = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceReceiver.kt',
+      ).readAsStringSync();
+      final focusService = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/services/FocusSoundForegroundService.kt',
+      ).readAsStringSync();
+
+      expect(icon, contains('android:fillColor="#FFFFFFFF"'));
+      expect(local, contains('AndroidInitializationSettings('));
+      expect(alarm, contains('AndroidInitializationSettings('));
+      expect(local, contains("'@drawable/ic_stat_duoyi'"));
+      expect(alarm, contains("'@drawable/ic_stat_duoyi'"));
+      expect(local, isNot(contains('@mipmap/ic_launcher')));
+      expect(alarm, isNot(contains('@mipmap/ic_launcher')));
+      for (final source in [
+        nativeService,
+        receiver,
+        geofenceReceiver,
+        focusService,
+      ]) {
+        expect(source, contains('R.drawable.ic_stat_duoyi'));
+        expect(source, isNot(contains('R.mipmap.ic_launcher')));
+      }
+    });
+
     test('铃声设置变化会立即刷新普通提醒和强提醒渠道', () {
       final main = File('lib/main.dart').readAsStringSync();
       final local = File(

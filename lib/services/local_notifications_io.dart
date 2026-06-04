@@ -157,7 +157,9 @@ class LocalNotifications {
       await LocalTimezoneResolver.init();
     }
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(
+      '@drawable/ic_stat_duoyi',
+    );
     const iosInit = DarwinInitializationSettings();
     const linuxInit = LinuxInitializationSettings(defaultActionName: 'Open');
     await _plugin.initialize(
@@ -398,7 +400,7 @@ class LocalNotifications {
             ? AudioAttributesUsage.alarm
             : AudioAttributesUsage.notificationRingtone,
         visibility: NotificationVisibility.public,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_stat_duoyi',
         ticker: I18n.tr('notification.ticker.reminder'),
         autoCancel: true,
         ongoing: false,
@@ -437,7 +439,7 @@ class LocalNotifications {
         enableVibration: false,
         silent: true,
         visibility: NotificationVisibility.public,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_stat_duoyi',
         ticker: I18n.tr('notification.ticker.quick_add'),
         ongoing: true,
         autoCancel: false,

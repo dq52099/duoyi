@@ -42,7 +42,7 @@ class FocusSoundForegroundService : Service() {
             flags,
         )
         return NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_duoyi)
             .setContentTitle("多仪白噪音")
             .setContentText("专注背景音正在播放")
             .setOngoing(true)
