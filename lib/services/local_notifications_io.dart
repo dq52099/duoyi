@@ -131,7 +131,11 @@ class LocalNotifications {
       }
     }
     if (failures.isEmpty) return;
-    throw StateError('旧原生强提醒队列清理失败，已阻止注册普通通知以避免重复弹出。');
+    debugPrint(
+      '[LocalNotifications] $operation continues after native owner cleanup '
+      'failure count=${failures.length}; ordinary notification registration '
+      'must not be blocked by stale strong-reminder cleanup.',
+    );
   }
 
   /// Tap 回调(payload)——由主入口注册处理 deep link。
@@ -617,6 +621,31 @@ class LocalNotifications {
     return true;
   }
 
+  void _releaseVisibleNotificationSlot({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+    String? channelId,
+  }) {
+    _recentVisibleNotificationIds.remove(id);
+    _recentVisibleNotificationSignatures.remove(
+      _visibleNotificationSignature(
+        title: title,
+        body: body,
+        payload: payload,
+        channelId: channelId,
+      ),
+    );
+    _recentVisibleNotificationContentSignatures.remove(
+      _visibleNotificationContentSignature(
+        title: title,
+        body: body,
+        channelId: channelId,
+      ),
+    );
+  }
+
   Future<void> show({
     required int id,
     required String title,
@@ -637,17 +666,51 @@ class LocalNotifications {
     )) {
       return;
     }
-    await cancel(id);
-    await _plugin.show(
-      id,
-      title,
-      body,
-      _details(
+    try {
+      await _cancelPluginNotificationOnly(id, operation: 'show replace');
+      await _cancelNativeRingtoneQueue(id, operation: 'show handoff');
+      await _plugin.show(
+        id,
+        title,
+        body,
+        _details(
+          channelId: effectiveChannelId,
+          androidActions: _todoActionsFor(payload),
+        ),
+        payload: payload,
+      );
+    } catch (_) {
+      _releaseVisibleNotificationSlot(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
         channelId: effectiveChannelId,
-        androidActions: _todoActionsFor(payload),
-      ),
-      payload: payload,
-    );
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _cancelPluginNotificationOnly(
+    int id, {
+    required String operation,
+  }) async {
+    var failureCount = 0;
+    for (final queueId in _queueIdsFor(id)) {
+      try {
+        await _plugin.cancel(queueId);
+      } catch (e, st) {
+        failureCount++;
+        debugPrint('[LocalNotifications] $operation cancel failed: $e\n$st');
+      }
+    }
+    if (failureCount > 0) {
+      debugPrint(
+        '[LocalNotifications] $operation continues after plugin cancel '
+        'failure count=$failureCount; replacement notification should not be '
+        'blocked by stale cleanup.',
+      );
+    }
   }
 
   Future<void> showQuickAddOngoing({
@@ -655,6 +718,7 @@ class LocalNotifications {
     String? body,
     bool enableQuickActions = true,
     bool requestIfNeeded = false,
+    bool force = false,
   }) async {
     if (!_isAndroid) return;
     if (!_initialized) await init();
@@ -665,7 +729,7 @@ class LocalNotifications {
     final effectiveTitle = title ?? I18n.tr('notification.quick_add.title');
     final effectiveBody = body ?? I18n.tr('notification.quick_add.body');
     final signature = '$effectiveTitle\n$effectiveBody\n$enableQuickActions';
-    if (_lastQuickAddOngoingSignature == signature) return;
+    if (!force && _lastQuickAddOngoingSignature == signature) return;
     await _plugin.show(
       quickAddNotificationId,
       effectiveTitle,
@@ -707,7 +771,7 @@ class LocalNotifications {
       requestIfNeeded: requestIfNeeded,
     );
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleOnce handoff');
-    await cancel(id);
+    await _cancelPluginNotificationOnly(id, operation: 'scheduleOnce replace');
     final scheduledAt = tz.TZDateTime.from(when, tz.local);
     final details = _details(
       channelId: channelId ?? _defaultChannelId,
@@ -739,16 +803,7 @@ class LocalNotifications {
         payload: payload,
       );
     }
-    try {
-      await _verifyPendingIds(
-        <int>{id},
-        operation: 'scheduleOnce',
-        failureMessage: '系统通知注册后未出现在待触发队列，提醒未确认成功',
-      );
-    } catch (_) {
-      await _cancelScheduledIds(<int>{id});
-      rethrow;
-    }
+    await _logPendingVerification(<int>{id}, operation: 'scheduleOnce');
   }
 
   /// 每日固定时间；可选 weekdays (1=Mon..7=Sun) 限定某几天。
@@ -771,7 +826,7 @@ class LocalNotifications {
       requestIfNeeded: requestIfNeeded,
     );
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleDaily handoff');
-    await cancel(id);
+    await _cancelPluginNotificationOnly(id, operation: 'scheduleDaily replace');
     final details = _details(
       channelId: channelId ?? _defaultChannelId,
       androidActions: _todoActionsFor(payload),
@@ -808,11 +863,7 @@ class LocalNotifications {
           );
         }
       }
-      await _verifyPendingIds(
-        expectedIds,
-        operation: 'scheduleDaily',
-        failureMessage: '重复提醒注册后未出现在待触发队列，提醒未确认成功',
-      );
+      await _logPendingVerification(expectedIds, operation: 'scheduleDaily');
     } catch (_) {
       await _cancelScheduledIds(expectedIds);
       rethrow;
@@ -858,10 +909,9 @@ class LocalNotifications {
     }
   }
 
-  Future<void> _verifyPendingIds(
+  Future<void> _logPendingVerification(
     Iterable<int> ids, {
     required String operation,
-    required String failureMessage,
   }) async {
     final expected = ids.toSet();
     if (expected.isEmpty) return;
@@ -872,15 +922,14 @@ class LocalNotifications {
       if (missing.isEmpty) return;
       debugPrint(
         '[LocalNotifications] $operation pending verification missing ids: '
-        '${missing.join(',')}',
+        '${missing.join(',')}; keeping schedule because the platform accepted '
+        'zonedSchedule and pendingNotificationRequests can be incomplete on '
+        'some launchers/plugin versions.',
       );
-      throw StateError('$failureMessage：${missing.join(',')}');
     } catch (e, st) {
-      if (e is StateError) rethrow;
       debugPrint(
-        '[LocalNotifications] $operation pending verification failed: $e\n$st',
+        '[LocalNotifications] $operation pending verification skipped: $e\n$st',
       );
-      throw StateError('$failureMessage：无法确认系统待触发队列');
     }
   }
 

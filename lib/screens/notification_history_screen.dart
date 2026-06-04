@@ -643,7 +643,9 @@ class _NotificationSettingsScreenState
       } else {
         await prefs.setNotificationTodayProgress(value);
       }
-      final synced = await _syncNotificationStatusBarNow();
+      final synced = await _syncNotificationStatusBarNow(
+        requestIfNeeded: value,
+      );
       if (!mounted) return;
       if (synced) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -672,9 +674,14 @@ class _NotificationSettingsScreenState
     }
   }
 
-  Future<bool> _syncNotificationStatusBarNow() async {
+  Future<bool> _syncNotificationStatusBarNow({
+    bool requestIfNeeded = false,
+  }) async {
     try {
-      return await NotificationStatusBarSyncBridge.sync(force: true);
+      return await NotificationStatusBarSyncBridge.sync(
+        force: true,
+        requestIfNeeded: requestIfNeeded,
+      );
     } on NotificationPermissionDeniedException catch (e) {
       debugPrint('[NotificationSettings] status bar permission denied: $e');
       return false;
@@ -1504,9 +1511,7 @@ class _ReminderKindSelector extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width - 64;
         final gap = maxWidth < 340 ? 6.0 : 8.0;
-        final itemWidth = ((maxWidth - gap) / 2)
-            .clamp(88.0, maxWidth)
-            .toDouble();
+        final itemWidth = ((maxWidth - gap) / 2).toDouble();
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -1514,12 +1519,14 @@ class _ReminderKindSelector extends StatelessWidget {
             for (final option in _options)
               SizedBox(
                 width: itemWidth,
-                height: 38,
-                child: _ReminderKindOptionButton(
-                  label: _kindLabel(option.value),
-                  selected: selected == option.value,
-                  enabled: enabled,
-                  onTap: () => onChanged(option.value),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 42),
+                  child: _ReminderKindOptionButton(
+                    label: _kindLabel(option.value),
+                    selected: selected == option.value,
+                    enabled: enabled,
+                    onTap: () => onChanged(option.value),
+                  ),
                 ),
               ),
           ],
@@ -1598,7 +1605,7 @@ class _ReminderKindSettingsTile extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _ReminderKindSelector(
             value: value,
             enabled: enabled,
@@ -1643,20 +1650,18 @@ class _ReminderKindOptionButton extends StatelessWidget {
         child: InkWell(
           onTap: enabled ? onTap : null,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.normal,
-                    height: 1.0,
-                  ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.normal,
+                  height: 1.0,
                 ),
               ),
             ),

@@ -77,8 +77,10 @@ void main() {
     );
     expect(
       localNotifications,
-      contains("if (_lastQuickAddOngoingSignature == signature) return;"),
-      reason: '设置页立即同步和 main 延迟同步内容相同时不能重复刷新常驻通知。',
+      contains(
+        "if (!force && _lastQuickAddOngoingSignature == signature) return;",
+      ),
+      reason: '设置页立即同步和 main 延迟同步内容相同时不能重复刷新常驻通知，但手动同步需要可强制刷新以修复状态不一致。',
     );
     expect(
       localNotifications,
@@ -151,11 +153,13 @@ void main() {
       main,
       contains("import 'services/notification_status_bar_service.dart';"),
     );
-    expect(main, contains("Future<bool> syncNotificationQuickAdd()"));
+    expect(main, contains("Future<bool> syncNotificationQuickAdd({"));
+    expect(main, contains("bool requestIfNeeded = false"));
     expect(main, contains("Future<bool> syncNotificationQuickAddDeduped({"));
     expect(main, contains("bool force = false"));
     expect(main, contains("_syncNotificationQuickAddDedupedCallback"));
-    expect(main, contains("void queueNotificationQuickAddSync()"));
+    expect(main, contains("void queueNotificationQuickAddSync({"));
+    expect(main, contains("bool allowBeforeDeferredHydration = false"));
     expect(main, contains("var notificationQuickAddSyncInFlight = false"));
     expect(main, contains("var notificationQuickAddSyncQueued = false"));
     expect(
@@ -190,10 +194,18 @@ void main() {
     expect(main, contains('String notificationQuickAddSignature()'));
     expect(
       main,
-      contains(
-        'lastNotificationQuickAddSignature = notificationQuickAddSignature();',
-      ),
-      reason: '更新后跳过启动同步时，也要抑制随后 resume/data-change 触发的同内容常驻通知。',
+      contains('lastNotificationQuickAddSignature = signature;'),
+      reason: '常驻通知同步成功后记录签名，避免随后 resume/data-change 重复刷新同内容通知。',
+    );
+    expect(
+      main,
+      contains('lastNotificationQuickAddFailureSignature = signature;'),
+      reason: '同步失败时记录失败签名，配合退避避免 30 秒后进入高频重试卡顿。',
+    );
+    expect(
+      main,
+      contains('const Duration(seconds: 45)'),
+      reason: '通知栏同步失败后必须退避，不能持续重试拖慢页面。',
     );
     expect(main, contains("LocalNotifications.instance.showQuickAddOngoing"));
     expect(main, contains("buildNotificationStatusBarPlan("));
@@ -207,8 +219,8 @@ void main() {
     expect(main, contains("_refreshNotificationProgressOnResume"));
     expect(
       main,
-      contains("_syncNotificationQuickAddDedupedCallback?.call()"),
-      reason: 'App 回到前台刷新今日进展时也必须复用同一套去重同步入口。',
+      contains("_syncNotificationQuickAddDedupedCallback?.call(force: true)"),
+      reason: 'App 回到前台刷新今日进展时复用同一入口，并强制修正可能不一致的常驻通知状态。',
     );
     expect(main, contains("_durationUntilNextLocalDay"));
     expect(main, contains('final isTodayTodo = day == today;'));
@@ -249,7 +261,18 @@ void main() {
       main,
       contains('const minStartupSyncInterval = Duration(minutes: 30)'),
     );
-    expect(main, contains('Future<void>.delayed(const Duration(seconds: 30)'));
+    expect(
+      main,
+      isNot(contains('Future<void>.delayed(const Duration(seconds: 30)')),
+      reason: '用户反馈进入 App 约 30 秒后持续卡顿，启动期重任务不能集中在 30 秒附近触发。',
+    );
+    for (final delayed in const [65, 75, 90, 110, 120]) {
+      expect(
+        main,
+        contains('Duration(seconds: $delayed)'),
+        reason: '启动后平台服务、通知恢复、日历/云同步需要错峰，避免 30 秒附近形成持续卡顿。',
+      );
+    }
     expect(deepLinkService, contains('takeInitialLink'));
     expect(deepLinkService, contains('_isDuoyiDeepLink(uri)'));
     expect(mainActivity, contains('pendingInitialDeepLink'));
@@ -335,7 +358,12 @@ void main() {
     expect(screen, contains("setNotificationTodayProgress(value)"));
     expect(
       screen,
-      contains('NotificationStatusBarSyncBridge.sync(force: true)'),
+      contains('NotificationStatusBarSyncBridge.sync(\n        force: true,'),
+    );
+    expect(
+      screen,
+      contains('requestIfNeeded: requestIfNeeded'),
+      reason: '开启今日进展时必须允许同步层请求通知权限，避免 UI 假成功但通知未出现。',
     );
     expect(
       screen,
@@ -367,8 +395,11 @@ void main() {
     expect(dedupeMethod, contains('var synced = false;'));
     expect(
       dedupeMethod,
-      contains('synced = await syncNotificationQuickAdd();'),
+      contains(
+        'synced = await syncNotificationQuickAdd(\n        requestIfNeeded: requestIfNeeded,',
+      ),
     );
+    expect(dedupeMethod, contains('force: force,'));
     expect(dedupeMethod, contains('if (synced) {'));
     expect(
       dedupeMethod,
@@ -441,7 +472,7 @@ void main() {
       screen.indexOf('class _ReminderKindSettingsTile'),
       screen.indexOf('class _ReminderKindOptionButton'),
     );
-    expect(kindTile, contains('const SizedBox(height: 12)'));
+    expect(kindTile, contains('const SizedBox(height: 10)'));
     expect(
       kindTile.indexOf('preferences.daily_reminder.kind.title'),
       lessThan(kindTile.indexOf('_ReminderKindSelector(')),
@@ -450,13 +481,14 @@ void main() {
       screen.indexOf('class _ReminderKindSelector'),
       screen.indexOf('class _ReminderKindOptionSpec'),
     );
-    expect(kindSelector, contains('clamp(88.0, maxWidth)'));
-    expect(kindSelector, contains('height: 38'));
+    expect(kindSelector, contains('ConstrainedBox('));
+    expect(kindSelector, contains('minHeight: 42'));
     final kindButton = screen.substring(
       screen.indexOf('class _ReminderKindOptionButton'),
       screen.indexOf('Color _reminderKindForeground'),
     );
-    expect(kindButton, contains('FittedBox('));
+    expect(kindButton, isNot(contains('FittedBox(')));
+    expect(kindButton, contains('labelMedium'));
 
     expect(main, contains('Future<void> _scheduleDailyDigestRepeating({'));
     expect(main, contains('Future<void> _scheduleDailyDigestOnce({'));

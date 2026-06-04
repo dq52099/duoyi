@@ -17,16 +17,16 @@ void main() {
     expect(source, contains('class _SelectedDateSummaryCard'));
     expect(source, contains('class _AlmanacDetailPage'));
     expect(source, contains('class _ClassicalAlmanacCard'));
-    expect(source, contains('Navigator.of(context).push('));
+    expect(source, contains('Navigator.of(context).push<DateTime>('));
     expect(source, isNot(contains('showModalBottomSheet<void>')));
     expect(source, isNot(contains('Widget _denseAlmanacCard({')));
     expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
     expect(source, contains('final selectedDate = _date'));
     expect(source, contains('final lunar = almanacDetail.lunarDate'));
-    expect(
-      source,
-      contains('final detail = LunarCalendar.almanacDetail(date)'),
-    );
+    expect(source, contains('final Map<int, LunarAlmanacDetail> _detailCache'));
+    expect(source, contains('LunarAlmanacDetail _detailFor(DateTime date)'));
+    expect(source, contains('() => LunarCalendar.almanacDetail(day)'));
+    expect(source, contains('final detail = _detailFor(_date)'));
     final calendarIndex = source.indexOf('monthCalendar,');
     final summaryIndex = source.indexOf('summary,');
     final highlightsIndex = source.indexOf('highlights,');
@@ -72,7 +72,10 @@ void main() {
     expect(source, isNot(contains('更多')));
     expect(source, isNot(contains('_showAlmanacYijiDialog')));
     expect(source, isNot(contains('onTap: _showSelectedDateDetail')));
-    expect(source, contains('const SizedBox(width: 6)'));
+    expect(source, contains('_splitAlmanacTerms(suitable).take(5).toList()'));
+    expect(source, contains('_splitAlmanacTerms(avoid).take(5).toList()'));
+    expect(source, contains('const SizedBox(width: 10)'));
+    expect(source, contains('class _VerticalTerm'));
     expect(
       source,
       isNot(

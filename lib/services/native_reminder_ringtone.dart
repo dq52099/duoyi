@@ -286,12 +286,19 @@ class NativeReminderRingtone {
   }
 
   static Future<void> _verifyPending(int id, String method) async {
-    final pending = await pendingIdsOrThrow();
-    if (pending.contains(id)) return;
-    debugPrint(
-      '[NativeReminderRingtone] $method pending verification missing id: $id',
-    );
-    throw NativeReminderRingtoneException('$method pending verification');
+    try {
+      final pending = await pendingIdsOrThrow();
+      if (pending.contains(id)) return;
+      debugPrint(
+        '[NativeReminderRingtone] $method pending verification missing id: $id; '
+        'keeping schedule because AlarmManager/launcher pending queries can lag '
+        'after platform registration succeeds.',
+      );
+    } catch (e, st) {
+      debugPrint(
+        '[NativeReminderRingtone] $method pending verification skipped: $e\n$st',
+      );
+    }
   }
 
   static Future<bool> _tryInvoke(

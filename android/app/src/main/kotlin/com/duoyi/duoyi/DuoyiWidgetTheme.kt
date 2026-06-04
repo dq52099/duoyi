@@ -12,6 +12,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import kotlin.math.roundToInt
@@ -240,7 +241,12 @@ object DuoyiWidgetTheme {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setColorStateList(viewId, "setBackgroundTintList", ColorStateList.valueOf(fill))
         } else {
-            views.setInt(viewId, "setBackgroundColor", fill)
+            // RemoteViews on pre-S cannot tint a drawable reliably. Keeping the rounded
+            // drawable is preferable to replacing it with a square setBackgroundColor.
+            Log.d(
+                "DuoyiWidgetTheme",
+                "pre-S rounded widget surface uses bundled rounded drawable without runtime tint",
+            )
         }
     }
 

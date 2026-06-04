@@ -269,7 +269,7 @@ void main() {
       ),
     );
     expect(service, contains('ToneGenerator'));
-    expect(service, contains('AudioManager.STREAM_NOTIFICATION'));
+    expect(service, contains('AudioManager.STREAM_ALARM'));
     expect(service, contains('ToneGenerator.TONE_PROP_BEEP'));
     expect(service, isNot(contains('TONE_CDMA_ALERT_CALL_GUARD')));
     expect(service, contains('playToneFallback(volume, id)'));

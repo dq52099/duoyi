@@ -191,6 +191,13 @@ object DuoyiWidgetProviderRegistry {
             .filter { isVariantProvider(it.className) }
     }
 
+    private fun isActiveVariantProvider(context: Context, component: ComponentName): Boolean {
+        if (!isVariantProvider(component.className)) return false
+        val prefs = context.getSharedPreferences(pendingPrefsName, Context.MODE_PRIVATE)
+        val active = prefs.getStringSet(activeVariantProvidersKey, emptySet()) ?: return false
+        return active.contains(component.flattenToString())
+    }
+
     fun restoreEnabledProvidersForExistingWidgets(context: Context): Int {
         val manager = AppWidgetManager.getInstance(context)
         var restoredCount = 0
@@ -198,7 +205,10 @@ object DuoyiWidgetProviderRegistry {
             val enabled = ensureProviderEnabled(context, component)
             val ids = manager.getAppWidgetIds(component)
             if (ids.isEmpty()) {
-                disableVariantProviderIfUnused(context, component)
+                Log.i(
+                    tag,
+                    "restore_keep_active_variant_without_visible_ids provider=${component.className}",
+                )
                 continue
             }
             if (enabled) {
@@ -283,8 +293,13 @@ object DuoyiWidgetProviderRegistry {
         respectPending: Boolean,
     ): Boolean {
         if (!isVariantProvider(component.className)) return false
+        ensureProviderEnabled(context, component)
         if (respectPending && hasPendingVariantProvider(context, component)) {
             Log.i(tag, "keep_variant_provider_pending provider=${component.className}")
+            return false
+        }
+        if (isActiveVariantProvider(context, component)) {
+            Log.i(tag, "keep_active_variant_provider provider=${component.className}")
             return false
         }
         val manager = AppWidgetManager.getInstance(context)
@@ -302,8 +317,7 @@ object DuoyiWidgetProviderRegistry {
             PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
             PackageManager.DONT_KILL_APP,
         )
-        clearActiveVariantProvider(context, component)
-        Log.i(tag, "disable_variant_provider provider=${component.className} widgetCount=0")
+        Log.i(tag, "disable_unused_variant_provider provider=${component.className}")
         return true
     }
 
@@ -443,6 +457,8 @@ object DuoyiWidgetProviderRegistry {
     ) {
         val providerClasses: List<Class<out AppWidgetProvider>>
             get() = listOf(standard, compact, detailed)
+        val variantProviderClasses: List<Class<out AppWidgetProvider>>
+            get() = listOf(compact, detailed)
     }
 
     private val widgetFamilies = listOf(

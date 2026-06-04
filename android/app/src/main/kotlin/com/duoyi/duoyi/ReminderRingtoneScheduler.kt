@@ -68,7 +68,15 @@ object ReminderRingtoneScheduler {
             id,
         )
         if (!reserveDelivery(context, id)) return true
-        return startRingtoneService(context, intent)
+        if (startRingtoneService(context, intent)) return true
+        return ReminderRingtoneReceiver.showFallbackNotification(
+            context,
+            id,
+            title,
+            body,
+            payload,
+            fullScreen,
+        )
     }
 
     fun scheduleOnce(

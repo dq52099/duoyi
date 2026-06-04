@@ -205,7 +205,7 @@ class ReminderRingtoneService : Service() {
         releaseToneFallback()
         val toneVolume = (volume * 100).toInt().coerceIn(40, 100)
         return runCatching {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, toneVolume)
+            toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, toneVolume)
             val initialStarted = toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 260) == true
             if (!initialStarted) {
                 ReminderRingtoneScheduler.recordDeliveryIssue(
@@ -548,11 +548,16 @@ class ReminderRingtoneService : Service() {
 
             val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val mediaVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val alarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
             if (mediaVolume <= 0) {
+                Log.w(
+                    "ReminderRingtoneService",
+                    "previewCurrentSound media stream volume is zero; alarmVolume=$alarmVolume",
+                )
                 return previewResult(
                     started = false,
                     reason = "media_volume_zero",
-                    message = "系统媒体音量为 0，请调高媒体音量后再试听。",
+                    message = "系统媒体音量为 0，请调高媒体音量后重试。",
                 )
             }
 
@@ -578,7 +583,7 @@ class ReminderRingtoneService : Service() {
             return try {
                 Log.d(
                     "ReminderRingtoneService",
-                    "previewCurrentSound start sound=$soundName resId=$resId bytes=${afd.length} volumePercent=${volumePercent(appContext)}",
+                    "previewCurrentSound start sound=$soundName resId=$resId bytes=${afd.length} volumePercent=${volumePercent(appContext)} mediaVolume=$mediaVolume alarmVolume=$alarmVolume",
                 )
                 player.setAudioAttributes(previewAudioAttributes())
                 player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
@@ -688,7 +693,7 @@ class ReminderRingtoneService : Service() {
                 }.also { previewHandler.postDelayed(it, safeDuration) }
                 Log.w(
                     "ReminderRingtoneService",
-                    "preview tone fallback started after raw playback failed sound=$soundName",
+                    "preview media tone fallback started after raw playback failed sound=$soundName",
                 )
                 true
             }.onFailure { error ->

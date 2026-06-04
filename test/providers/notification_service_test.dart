@@ -817,7 +817,7 @@ void main() {
   });
 
   test(
-    'local notification schedules verify pending queue before reporting success',
+    'local notification schedules log pending queue verification after enqueue',
     () {
       final local = File(
         'lib/services/local_notifications_io.dart',
@@ -828,19 +828,32 @@ void main() {
       expect(onceStart, greaterThanOrEqualTo(0));
       expect(onceEnd, greaterThan(onceStart));
       final once = local.substring(onceStart, onceEnd);
-      expect(once, contains('await cancel(id);'));
       expect(
-        once.indexOf('await cancel(id);'),
-        lessThan(once.indexOf('_plugin.zonedSchedule(')),
-        reason: '同一 id 重复注册前必须先清理旧队列，避免保存一次弹两条。',
+        once,
+        contains(
+          "_cancelPluginNotificationOnly(id, operation: 'scheduleOnce replace')",
+        ),
       );
-      expect(once, contains('_verifyPendingIds('));
+      expect(
+        once.indexOf('_cancelPluginNotificationOnly'),
+        lessThan(once.indexOf('_plugin.zonedSchedule(')),
+        reason: '同一 id 重复注册前必须先清理旧队列，但清理失败不能阻断新注册。',
+      );
+      expect(once, contains('_logPendingVerification('));
       expect(
         once.indexOf('_plugin.zonedSchedule('),
-        lessThan(once.indexOf('_verifyPendingIds(')),
+        lessThan(once.indexOf('_logPendingVerification(')),
       );
-      expect(once, contains('系统通知注册后未出现在待触发队列，提醒未确认成功'));
-      expect(once, contains('await _cancelScheduledIds(<int>{id});'));
+      expect(
+        once,
+        isNot(contains('系统通知注册后未出现在待触发队列，提醒未确认成功')),
+        reason: '平台已接受调度时不再因为 pending 查询缺失而回滚成功状态。',
+      );
+      expect(
+        once,
+        isNot(contains('await _cancelScheduledIds(<int>{id});')),
+        reason: 'pending 查询现在只记录诊断，不取消已经交给系统的队列。',
+      );
 
       final dailyStart = local.indexOf('Future<void> scheduleDaily({');
       final dailyEnd = local.indexOf(
@@ -850,20 +863,31 @@ void main() {
       expect(dailyStart, greaterThanOrEqualTo(0));
       expect(dailyEnd, greaterThan(dailyStart));
       final daily = local.substring(dailyStart, dailyEnd);
-      expect(daily, contains('await cancel(id);'));
       expect(
-        daily.indexOf('await cancel(id);'),
+        daily,
+        contains(
+          "_cancelPluginNotificationOnly(id, operation: 'scheduleDaily replace')",
+        ),
+      );
+      expect(
+        daily.indexOf('_cancelPluginNotificationOnly'),
         lessThan(daily.indexOf('_scheduleRepeating(')),
-        reason: '重复提醒重入注册前必须清理 base id 和 weekday 子 id。',
+        reason: '重复提醒重入注册前必须清理 base id 和 weekday 子 id，但清理失败不能阻断新注册。',
       );
       expect(daily, contains('final expectedIds = <int>{};'));
       expect(daily, contains('expectedIds.add(id);'));
       expect(daily, contains('expectedIds.add(subId);'));
-      expect(daily, contains('_verifyPendingIds('));
-      expect(daily, contains('重复提醒注册后未出现在待触发队列，提醒未确认成功'));
-      expect(daily, contains('await _cancelScheduledIds(expectedIds);'));
+      expect(daily, contains('_logPendingVerification('));
+      expect(daily, isNot(contains('重复提醒注册后未出现在待触发队列，提醒未确认成功')));
+      expect(
+        daily,
+        contains('await _cancelScheduledIds(expectedIds);'),
+        reason: '真正的调度异常仍要清理本轮已注册的子任务，避免半成功队列残留。',
+      );
 
-      final helperStart = local.indexOf('Future<void> _verifyPendingIds(');
+      final helperStart = local.indexOf(
+        'Future<void> _logPendingVerification(',
+      );
       final helperEnd = local.indexOf(
         'static bool _isExactAlarmDenied',
         helperStart,
@@ -873,8 +897,8 @@ void main() {
       final helper = local.substring(helperStart, helperEnd);
       expect(helper, contains('_plugin.pendingNotificationRequests()'));
       expect(helper, contains('expected.difference(actual)'));
-      expect(helper, contains('throw StateError'));
-      expect(local, contains('Future<void> _cancelScheduledIds('));
+      expect(helper, isNot(contains('throw StateError')));
+      expect(helper, contains('debugPrint'));
     },
   );
 
@@ -1199,27 +1223,6 @@ void main() {
     expect(source, isNot(contains('DesktopNotification')));
     expect(source, isNot(contains('_desktopShow')));
     expect(source, isNot(contains('desktopReady')));
-    expect(
-      source,
-      contains('static const Duration _visibleNotificationDuplicateWindow'),
-    );
-    expect(
-      source,
-      contains('static final Map<int, DateTime> _recentVisibleNotificationIds'),
-    );
-    expect(
-      source,
-      contains(
-        'static final Map<String, DateTime> _recentVisibleNotificationSignatures',
-      ),
-    );
-    expect(
-      source,
-      contains(
-        'static final Map<String, DateTime>\n  _recentVisibleNotificationContentSignatures',
-      ),
-    );
-    expect(source, contains('_reserveVisibleNotificationSlot('));
     expect(source, contains('int _ephemeralNotificationId()'));
     expect(
       source,
@@ -1227,23 +1230,6 @@ void main() {
       reason: '时间戳生成的测试/番茄钟通知也必须避开固定通知 ID。',
     );
     expect(source, contains('required int id'));
-    expect(source, contains('_visibleNotificationSignature('));
-    expect(source, contains('_visibleNotificationContentSignature('));
-    expect(
-      source,
-      contains('final lastShownById = _recentVisibleNotificationIds[id]'),
-    );
-    expect(
-      source,
-      contains('final lastShownWithSameContent ='),
-      reason: '同标题正文但不同 id/payload 的重复即时通知也只能显示一条。',
-    );
-    expect(source, contains('_recentVisibleNotificationIds[id] = now'));
-    expect(
-      source,
-      contains('duplicate visible notification skipped'),
-      reason: '同一事件短时间重复触发时，底层只允许发一条可见通知。',
-    );
     final localNotifications = File(
       'lib/services/local_notifications_io.dart',
     ).readAsStringSync();
@@ -1297,15 +1283,18 @@ void main() {
     final showMethod = localNotifications.substring(showStart, quickAddStart);
     expect(showMethod, contains('_reserveVisibleNotificationSlot('));
     expect(showMethod, contains('return;'));
-    expect(showMethod, contains('await cancel(id);'));
     expect(
-      showMethod.indexOf('_reserveVisibleNotificationSlot('),
-      lessThan(showMethod.indexOf('await cancel(id);')),
+      showMethod,
+      contains("_cancelPluginNotificationOnly(id, operation: 'show replace')"),
     );
     expect(
-      showMethod.indexOf('await cancel(id);'),
+      showMethod.indexOf('_reserveVisibleNotificationSlot('),
+      lessThan(showMethod.indexOf('_cancelPluginNotificationOnly')),
+    );
+    expect(
+      showMethod.indexOf('_cancelPluginNotificationOnly'),
       lessThan(showMethod.indexOf('await _plugin.show(')),
-      reason: '同 ID 即时通知展示前先清旧 row 和原生强提醒残留，避免系统上残留两条。',
+      reason: '同 ID 即时通知展示前先清旧 row，但清理失败不能阻断本次展示。',
     );
 
     for (final range in <({String start, String end})>[
@@ -1339,8 +1328,11 @@ void main() {
 
       expect(local, contains('Future<void> _cancelNativeRingtoneQueue'));
       expect(local, contains('NativeReminderRingtone.cancelOrThrow(nativeId)'));
-      expect(local, contains('旧原生强提醒队列清理失败'));
-      expect(local, contains('已阻止注册普通通知以避免重复弹出'));
+      expect(local, contains('continues after native owner cleanup'));
+      expect(
+        local,
+        contains('must not be blocked by stale strong-reminder cleanup'),
+      );
 
       final onceStart = local.indexOf('Future<void> scheduleOnce({');
       final dailyStart = local.indexOf(
@@ -1359,12 +1351,46 @@ void main() {
       );
       expect(
         once.indexOf('_cancelNativeRingtoneQueue'),
-        lessThan(once.indexOf('await cancel(id);')),
-        reason: '普通通知注册前必须先确认旧原生强提醒队列已清干净。',
+        lessThan(once.indexOf('_cancelPluginNotificationOnly')),
+        reason: '普通通知注册前先尝试清旧强提醒队列，但失败不能阻断新通知注册。',
       );
       expect(
-        once.indexOf('await cancel(id);'),
+        once.indexOf('_cancelPluginNotificationOnly'),
         lessThan(once.indexOf('_plugin.zonedSchedule')),
+      );
+      expect(
+        once,
+        contains(
+          "_cancelPluginNotificationOnly(id, operation: 'scheduleOnce replace')",
+        ),
+      );
+
+      final showStart = local.indexOf('Future<void> show({');
+      final quickAddStart = local.indexOf(
+        'Future<void> showQuickAddOngoing({',
+        showStart,
+      );
+      expect(showStart, greaterThanOrEqualTo(0));
+      expect(quickAddStart, greaterThan(showStart));
+      final show = local.substring(showStart, quickAddStart);
+      expect(show, contains('Future<void> _cancelPluginNotificationOnly'));
+      expect(
+        show,
+        contains(
+          "_cancelPluginNotificationOnly(id, operation: 'show replace')",
+        ),
+      );
+      expect(
+        show,
+        contains("_cancelNativeRingtoneQueue(id, operation: 'show handoff')"),
+      );
+      expect(
+        show.indexOf('_cancelPluginNotificationOnly'),
+        lessThan(show.indexOf('_plugin.show')),
+      );
+      expect(
+        show.indexOf('_cancelNativeRingtoneQueue'),
+        lessThan(show.indexOf('_plugin.show')),
       );
 
       final quickAddCancelStart = local.indexOf(

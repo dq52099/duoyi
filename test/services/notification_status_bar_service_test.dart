@@ -119,15 +119,25 @@ void main() {
       expect(screen, contains('setNotificationTodayProgress(value)'));
       expect(
         screen,
-        contains('NotificationStatusBarSyncBridge.sync(force: true)'),
+        contains('NotificationStatusBarSyncBridge.sync('),
         reason: '设置页保存后必须复用 main 层签名去重入口，避免自己 show 一次、监听器再 show 一次。',
       );
+      expect(screen, contains('force: true'));
+      expect(screen, contains('requestIfNeeded: requestIfNeeded'));
+      expect(screen, contains('requestIfNeeded: value'));
       expect(
         bridge,
-        contains('typedef NotificationStatusBarSync = Future<bool> Function'),
+        contains('typedef NotificationStatusBarSync ='),
         reason: '桥接层必须传回底层同步结果，失败时设置页才能恢复旧开关。',
       );
-      expect(bridge, contains('return current(force: force);'));
+      expect(bridge, contains('Future<bool> Function'));
+      expect(bridge, contains('bool requestIfNeeded'));
+      expect(
+        bridge,
+        contains(
+          'return current(force: force, requestIfNeeded: requestIfNeeded);',
+        ),
+      );
       expect(
         bridge,
         isNot(contains('await current(force: force);\n    return true;')),
@@ -135,16 +145,30 @@ void main() {
     });
 
     test('状态栏同步桥透传 force 和底层成功状态', () async {
-      final calls = <bool>[];
+      final calls = <({bool force, bool requestIfNeeded})>[];
       addTearDown(() => NotificationStatusBarSyncBridge.attach(null));
-      NotificationStatusBarSyncBridge.attach(({bool force = false}) async {
-        calls.add(force);
-        return force;
+      NotificationStatusBarSyncBridge.attach(({
+        bool force = false,
+        bool requestIfNeeded = false,
+      }) async {
+        calls.add((force: force, requestIfNeeded: requestIfNeeded));
+        return force && requestIfNeeded;
       });
 
       expect(await NotificationStatusBarSyncBridge.sync(), isFalse);
-      expect(await NotificationStatusBarSyncBridge.sync(force: true), isTrue);
-      expect(calls, <bool>[false, true]);
+      expect(await NotificationStatusBarSyncBridge.sync(force: true), isFalse);
+      expect(
+        await NotificationStatusBarSyncBridge.sync(
+          force: true,
+          requestIfNeeded: true,
+        ),
+        isTrue,
+      );
+      expect(calls, <({bool force, bool requestIfNeeded})>[
+        (force: false, requestIfNeeded: false),
+        (force: true, requestIfNeeded: false),
+        (force: true, requestIfNeeded: true),
+      ]);
 
       NotificationStatusBarSyncBridge.attach(null);
       expect(await NotificationStatusBarSyncBridge.sync(force: true), isFalse);

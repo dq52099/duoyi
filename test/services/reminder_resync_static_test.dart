@@ -108,7 +108,7 @@ void main() {
         matches(
           RegExp(
             r"queueStartupReminderResync\(\s*"
-            r"delay: const Duration\(seconds: 40\),\s*"
+            r"delay: const Duration\(seconds: 110\),\s*"
             r"reason: 'initial logged-in startup',",
             multiLine: true,
           ),
@@ -129,8 +129,8 @@ void main() {
         ),
       );
       expect(main, contains('Future<void> _runStartupIdleQueue('));
-      expect(main, contains('initialDelay: const Duration(seconds: 30)'));
-      expect(main, contains('gap: const Duration(seconds: 8)'));
+      expect(main, contains('initialDelay: const Duration(seconds: 75)'));
+      expect(main, contains('gap: const Duration(seconds: 12)'));
       expect(
         main,
         contains("'deferred local storage'"),

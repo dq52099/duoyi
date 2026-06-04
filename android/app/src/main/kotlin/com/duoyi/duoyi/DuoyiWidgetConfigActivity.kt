@@ -1,7 +1,6 @@
 package com.duoyi.duoyi
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
@@ -38,23 +37,12 @@ class DuoyiWidgetConfigActivity : Activity() {
 
         val providerClassName = manager.getAppWidgetInfo(widgetId)?.provider?.className
         val providerStyle = DuoyiWidgetProviderRegistry.styleForProvider(providerClassName)
-        if (providerStyle == "compact" || providerStyle == "detailed") {
+        if (!providerStyle.isNullOrBlank()) {
             finishWithStyle(widgetId, providerStyle)
             return
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("选择小组件样式")
-            .setItems(arrayOf("紧凑", "标准", "详细")) { _, which ->
-                val style = when (which) {
-                    0 -> "compact"
-                    2 -> "detailed"
-                    else -> "standard"
-                }
-                finishWithStyle(widgetId, style)
-            }
-            .setOnCancelListener { finish() }
-            .show()
+        finishWithStyle(widgetId, "standard")
     }
 
     private fun requestedStyleFromIntent(): String? {
@@ -75,7 +63,12 @@ class DuoyiWidgetConfigActivity : Activity() {
         manager.updateAppWidgetOptions(widgetId, normalizedStyle.toDisplayModeOptions())
         // Ask the actual provider to render the initial state immediately.
         val providerClassName = manager.getAppWidgetInfo(widgetId)?.provider?.className
+        val provider = manager.getAppWidgetInfo(widgetId)?.provider
+        if (provider != null) {
+            DuoyiWidgetProviderRegistry.markVariantProviderActive(applicationContext, provider)
+        }
         DuoyiWidgetProviderRegistry.requestUpdateForProvider(applicationContext, providerClassName)
+        DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(applicationContext)
 
         val resultValue = Intent().apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)

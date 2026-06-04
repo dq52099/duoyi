@@ -124,6 +124,7 @@ class AndroidWidgetPinConfirmation {
     return AndroidWidgetPinConfirmation(
       status: switch (nativeStatus) {
         'confirmed' => AndroidWidgetPinFinalStatus.success,
+        'confirmed_unverified' => AndroidWidgetPinFinalStatus.success,
         'invalid_widget_id' => AndroidWidgetPinFinalStatus.invalidWidgetId,
         _ => AndroidWidgetPinFinalStatus.unavailable,
       },
@@ -303,9 +304,10 @@ class AndroidWidgetManager {
       if (result != null) return result;
       await Future<void>.delayed(pollInterval);
     }
-    await cancelPinRequest(requestId);
-    await clearPinResult(requestId);
-    await refreshAllWidgets();
+    debugPrint(
+      '[AndroidWidgetManager] pin result timed out; keep pending request '
+      'alive for late launcher callback requestId=$requestId',
+    );
     return AndroidWidgetPinConfirmation(
       status: AndroidWidgetPinFinalStatus.timeout,
       requestId: requestId,

@@ -734,7 +734,7 @@ class _HabitHeatmapTab extends StatelessWidget {
                 Text(
                   heading,
                   style: appSecondaryRouteTitleTextStyle(context).copyWith(
-                    fontSize: DesignTokens.fontSizeSection,
+                    fontSize: 13,
                     fontWeight: DesignTokens.fontWeightRegular,
                     height: 1.12,
                   ),
@@ -902,7 +902,7 @@ class _HabitGroupSection extends StatelessWidget {
         : group.habits;
     final hiddenCount = group.habits.length - previewHabits.length;
     return AppSurfaceCard(
-      margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
       padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(12),
       child: Theme(
@@ -910,15 +910,15 @@ class _HabitGroupSection extends StatelessWidget {
         child: ExpansionTile(
           initiallyExpanded:
               group.habits.length <= _habitHeatmapGroupPreviewLimit,
-          tilePadding: const EdgeInsets.fromLTRB(10, 0, 8, 0),
-          childrenPadding: const EdgeInsets.only(bottom: 3),
-          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 16),
-          minTileHeight: 38,
+          tilePadding: const EdgeInsets.fromLTRB(9, 0, 8, 0),
+          childrenPadding: const EdgeInsets.only(bottom: 2),
+          leading: Icon(Icons.folder_outlined, color: cs.primary, size: 15),
+          minTileHeight: 34,
           dense: true,
           title: Text(
             group.category,
             style: appSecondaryMenuItemTextStyle(context).copyWith(
-              fontSize: DesignTokens.fontSizeSecondary,
+              fontSize: 12,
               fontWeight: DesignTokens.fontWeightRegular,
               color: cs.onSurface,
               height: 1.12,
@@ -926,11 +926,9 @@ class _HabitGroupSection extends StatelessWidget {
           ),
           subtitle: Text(
             '${group.completedTodayCount}/${group.habits.length} 今日达标',
-            style: appSecondaryControlLabelStyle(context).copyWith(
-              color: cs.onSurfaceVariant,
-              fontSize: 10.5,
-              height: 1.08,
-            ),
+            style: appSecondaryControlLabelStyle(
+              context,
+            ).copyWith(color: cs.onSurfaceVariant, fontSize: 10, height: 1.08),
           ),
           children: [
             for (final habit in previewHabits)
@@ -975,9 +973,10 @@ class _HabitInsightCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 '智能习惯洞察',
-                style: appSecondaryRouteTitleTextStyle(
-                  context,
-                ).copyWith(fontSize: DesignTokens.fontSizeSection),
+                style: appSecondaryRouteTitleTextStyle(context).copyWith(
+                  fontSize: 13,
+                  fontWeight: DesignTokens.fontWeightRegular,
+                ),
               ),
             ],
           ),
@@ -1001,7 +1000,7 @@ class _HabitInsightCard extends StatelessWidget {
                         Text(
                           insight.title,
                           style: TextStyle(
-                            fontSize: DesignTokens.fontSizeSecondary,
+                            fontSize: 12,
                             fontWeight: DesignTokens.fontWeightRegular,
                           ),
                         ),
@@ -1009,7 +1008,7 @@ class _HabitInsightCard extends StatelessWidget {
                         Text(
                           insight.message,
                           style: TextStyle(
-                            fontSize: DesignTokens.fontSizeCaption,
+                            fontSize: 10.5,
                             color: cs.onSurface.withValues(alpha: 0.62),
                           ),
                         ),
@@ -1055,7 +1054,7 @@ class _HabitSummaryTile extends StatelessWidget {
     return _HabitSwipeActionWrapper(
       habit: habit,
       showEndAction: _habitCanEnd(habit),
-      actionMargin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      actionMargin: const EdgeInsets.symmetric(horizontal: 8),
       borderRadius: BorderRadius.circular(10),
       child: Material(
         color: Colors.transparent,
@@ -1068,14 +1067,14 @@ class _HabitSummaryTile extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 3, 10, 4),
+            padding: const EdgeInsets.fromLTRB(9, 2, 9, 3),
             child: SizedBox(
-              height: 38,
+              height: 34,
               child: Row(
                 children: [
                   Container(
-                    width: 28,
-                    height: 28,
+                    width: 25,
+                    height: 25,
                     decoration: BoxDecoration(
                       color: habitColor.withValues(alpha: 0.13),
                       borderRadius: BorderRadius.circular(8),
@@ -1083,10 +1082,10 @@ class _HabitSummaryTile extends StatelessWidget {
                     child: Icon(
                       _habitDisplayIcon(habit),
                       color: habitColor,
-                      size: 15,
+                      size: 14,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 7),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1097,7 +1096,7 @@ class _HabitSummaryTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             height: 1.08,
                             fontWeight: DesignTokens.fontWeightRegular,
                             color: cs.onSurface,
@@ -1109,7 +1108,7 @@ class _HabitSummaryTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: DesignTokens.fontSizeCaption,
+                            fontSize: 10,
                             height: 1.05,
                             color: cs.onSurfaceVariant,
                           ),
@@ -1127,9 +1126,9 @@ class _HabitSummaryTile extends StatelessWidget {
   }
 }
 
-const double _habitCheckinCardBodyHeight = 40;
-const double _habitTitleStatusHeight = 16;
-const double _habitCheckinButtonWidth = 54;
+const double _habitCheckinCardBodyHeight = 38;
+const double _habitTitleStatusHeight = 15;
+const double _habitCheckinButtonWidth = 52;
 const double _habitUndoButtonWidth = 28;
 const double _habitActionButtonGap = 3;
 const double _habitActionRailWidth =
@@ -1193,7 +1192,7 @@ class _HabitCheckinCard extends StatelessWidget {
       child: AppSurfaceCard(
         key: ValueKey('habit_checkin_card_${habit.id}'),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
-        padding: const EdgeInsets.fromLTRB(7, 3, 6, 3),
+        padding: const EdgeInsets.fromLTRB(7, 2, 6, 2),
         borderRadius: BorderRadius.circular(10),
         onTap: () => Navigator.push(
           context,
@@ -1213,8 +1212,8 @@ class _HabitCheckinCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 21,
-                height: 21,
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
                   color: habitColor.withValues(
                     alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.15,
@@ -1224,7 +1223,7 @@ class _HabitCheckinCard extends StatelessWidget {
                 child: Icon(
                   _habitDisplayIcon(habit),
                   color: habitColor,
-                  size: 13,
+                  size: 12,
                 ),
               ),
               const SizedBox(width: 6),
@@ -1245,7 +1244,7 @@ class _HabitCheckinCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: DesignTokens.fontWeightRegular,
-                                fontSize: DesignTokens.fontSizeSecondary,
+                                fontSize: 12,
                                 height: 1.14,
                                 decoration: isDone && !isNegative
                                     ? TextDecoration.lineThrough
@@ -1308,7 +1307,7 @@ class _HabitCheckinCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.grey.shade500,
-                              fontSize: DesignTokens.fontSizeCaption,
+                              fontSize: 10,
                               height: 1.1,
                             ),
                           ),
@@ -1379,7 +1378,7 @@ class _HabitCheckinCard extends StatelessWidget {
                     const SizedBox(width: _habitActionButtonGap),
                     SizedBox(
                       width: _habitCheckinButtonWidth,
-                      height: 26,
+                      height: 25,
                       child: FilledButton(
                         onPressed: canCheckIn
                             ? () => _handleCheckIn(context)
@@ -1390,10 +1389,10 @@ class _HabitCheckinCard extends StatelessWidget {
                           disabledBackgroundColor: Colors.grey.shade200,
                           disabledForegroundColor: Colors.grey.shade600,
                           padding: const EdgeInsets.symmetric(horizontal: 3),
-                          minimumSize: const Size(_habitCheckinButtonWidth, 26),
+                          minimumSize: const Size(_habitCheckinButtonWidth, 25),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           textStyle: const TextStyle(
-                            fontSize: 10.5,
+                            fontSize: 10,
                             fontWeight: FontWeight.normal,
                           ),
                         ),

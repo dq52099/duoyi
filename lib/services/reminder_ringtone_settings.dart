@@ -256,6 +256,39 @@ class ReminderRingtoneSettings {
       p.getInt(volumePreferenceKey) ?? defaultVolumePercent,
     );
     final soundName = _normalizeSound(await _loadAndMigrateSoundPreference(p));
+    final nativeSettingsApplied = await applyPersistedSettingsToNative();
+    String? nativeFailureMessage;
+    String? nativeFailureReason;
+    if (nativeSettingsApplied) {
+      final nativePreview = await NativeReminderRingtone.previewCurrentSound(
+        duration: NativeReminderRingtone.previewDuration,
+      );
+      if (nativePreview.started) {
+        debugPrint(
+          '[ReminderRingtoneSettings] native MediaPlayer preview started '
+          'sound=$soundName volume=$volumePercent reason=${nativePreview.reason}',
+        );
+        return;
+      }
+      nativeFailureReason = nativePreview.reason;
+      nativeFailureMessage = nativePreview.message;
+      if (nativePreview.reason == 'active_reminder_ringing') {
+        throw ReminderRingtonePreviewException(
+          reason: nativePreview.reason,
+          message: nativePreview.message,
+        );
+      }
+      debugPrint(
+        '[ReminderRingtoneSettings] native MediaPlayer preview failed '
+        'sound=$soundName volume=$volumePercent reason=${nativePreview.reason} '
+        'message=${nativePreview.message}; trying Flutter media fallback.',
+      );
+    } else {
+      debugPrint(
+        '[ReminderRingtoneSettings] native apply failed before preview '
+        'sound=$soundName volume=$volumePercent; trying Flutter media fallback.',
+      );
+    }
     final flutterPreviewStarted = await ReminderRingtonePreviewService.instance
         .preview(
           soundName: soundName,
@@ -263,50 +296,19 @@ class ReminderRingtoneSettings {
           duration: NativeReminderRingtone.previewDuration,
         );
     if (flutterPreviewStarted) {
-      unawaited(
-        applyPersistedSettingsToNative().then((applied) {
-          if (applied) return;
-          debugPrint(
-            '[ReminderRingtoneSettings] native apply failed after persisted '
-            'ringtone change; actual reminder channel refresh will retry.',
-          );
-        }),
+      debugPrint(
+        '[ReminderRingtoneSettings] Flutter media preview started '
+        'sound=$soundName volume=$volumePercent',
       );
       return;
     }
     debugPrint(
-      '[ReminderRingtoneSettings] Flutter ringtone preview failed '
-      'sound=$soundName volume=$volumePercent',
-    );
-
-    final nativeSettingsApplied = await applyPersistedSettingsToNative();
-    if (!nativeSettingsApplied) {
-      debugPrint(
-        '[ReminderRingtoneSettings] native apply failed before fallback '
-        'preview sound=$soundName volume=$volumePercent',
-      );
-    }
-    final nativePreview = await NativeReminderRingtone.previewCurrentSound(
-      duration: NativeReminderRingtone.previewDuration,
-    );
-    if (nativePreview.started) {
-      debugPrint(
-        '[ReminderRingtoneSettings] native MediaPlayer fallback preview '
-        'started sound=$soundName volume=$volumePercent '
-        'reason=${nativePreview.reason}',
-      );
-      return;
-    }
-    debugPrint(
-      '[ReminderRingtoneSettings] native MediaPlayer fallback preview failed '
-      'sound=$soundName volume=$volumePercent reason=${nativePreview.reason} '
-      'message=${nativePreview.message}',
+      '[ReminderRingtoneSettings] Flutter media preview failed '
+      'sound=$soundName volume=$volumePercent.',
     );
     throw ReminderRingtonePreviewException(
-      reason: 'flutter_asset_preview_failed:${nativePreview.reason}',
-      message: nativePreview.message.isEmpty
-          ? '铃声试听启动失败，请重试。'
-          : nativePreview.message,
+      reason: nativeFailureReason ?? 'native_and_flutter_preview_failed',
+      message: nativeFailureMessage ?? '铃声试听启动失败，请重试。',
     );
   }
 

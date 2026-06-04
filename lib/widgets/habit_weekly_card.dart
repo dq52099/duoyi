@@ -28,8 +28,8 @@ class HabitWeeklyCard extends StatelessWidget {
 
     return AppSurfaceCard(
       key: const ValueKey('habit_weekly_overview_card'),
-      margin: const EdgeInsets.fromLTRB(10, 5, 10, 5),
-      padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
+      margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       border: Border.all(
         color: primaryColor.withValues(alpha: 0.18),
@@ -43,15 +43,15 @@ class HabitWeeklyCard extends StatelessWidget {
             children: [
               Container(
                 key: const ValueKey('habit_weekly_overview_icon_box'),
-                width: 34,
-                height: 34,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.13),
                   borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_rounded,
-                  size: 18,
+                  size: 16,
                   color: primaryColor,
                 ),
               ),
@@ -63,7 +63,7 @@ class HabitWeeklyCard extends StatelessWidget {
                     Text(
                       '本周概述',
                       style: appSecondaryRouteTitleTextStyle(context).copyWith(
-                        fontSize: DesignTokens.fontSizeSection,
+                        fontSize: 13,
                         fontWeight: DesignTokens.fontWeightRegular,
                         height: 1.12,
                       ),
@@ -81,7 +81,7 @@ class HabitWeeklyCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(11),
@@ -99,7 +99,7 @@ class HabitWeeklyCard extends StatelessWidget {
                       key: const ValueKey('habit_weekly_overview_percent'),
                       style: TextStyle(
                         color: primaryColor,
-                        fontSize: 14,
+                        fontSize: 13,
                         height: 1.0,
                         fontWeight: DesignTokens.fontWeightRegular,
                       ),
@@ -118,18 +118,18 @@ class HabitWeeklyCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
               key: const ValueKey('habit_weekly_overview_progress_bar'),
               value: weekAverage.clamp(0.0, 1.0).toDouble(),
-              minHeight: 4,
+              minHeight: 3,
               backgroundColor: primaryColor.withValues(alpha: 0.10),
               color: primaryColor,
             ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (i) {
@@ -161,11 +161,11 @@ class HabitWeeklyCard extends StatelessWidget {
                       color: isToday ? primaryColor : Colors.grey.shade600,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Container(
                     key: ValueKey('habit_weekly_overview_day_$i'),
-                    width: 28,
-                    height: 28,
+                    width: 25,
+                    height: 25,
                     decoration: BoxDecoration(
                       color: bg,
                       shape: BoxShape.circle,
@@ -189,7 +189,7 @@ class HabitWeeklyCard extends StatelessWidget {
                       child: Text(
                         i > todayDOW ? '-' : '${(val * 100).round()}%',
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 8.5,
                           color: textColor,
                           fontWeight: DesignTokens.fontWeightRegular,
                         ),

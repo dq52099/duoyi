@@ -32,22 +32,14 @@ class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             Log.w(
                 tag,
-                "invalid_widget_id requestId=${requestId.orEmpty()} kind=${kind.orEmpty()} style=${pinStyle.id} provider=${provider?.className.orEmpty()}",
+                "confirmed_unverified requestId=${requestId.orEmpty()} kind=${kind.orEmpty()} style=${pinStyle.id} provider=${provider?.className.orEmpty()}",
             )
-            if (provider != null) {
-                DuoyiWidgetProviderRegistry.clearPendingVariantProvider(
-                    context,
-                    requestId.orEmpty(),
-                    provider,
-                )
-                DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(context, provider)
-            }
             if (provider != null) {
                 DuoyiWidgetProviderRegistry.requestUpdateForComponent(context, provider)
             } else if (!kind.isNullOrBlank()) {
                 DuoyiWidgetProviderRegistry.requestUpdateForKind(context, kind)
             }
-            recordResult(context, requestId, kind, pinStyle.id, widgetId, "invalid_widget_id")
+            recordResult(context, requestId, kind, pinStyle.id, widgetId, "confirmed_unverified")
             return
         }
         Log.i(

@@ -448,6 +448,12 @@ void main() {
         expect(xml, contains('@+id/widget_theme_background'));
         expect(xml, contains('android:scaleType="centerCrop"'));
         expect(xml, contains('@+id/widget_theme_overlay'));
+        expect(
+          xml,
+          isNot(contains('<View')),
+          reason:
+              'Launcher RemoteViews hosts do not reliably support plain android.view.View; overlay must use a supported widget class.',
+        );
       }
       expect(legacyProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
       expect(legacyProvider, contains('R.id.widget_quick_pomodoro'));
@@ -557,6 +563,12 @@ void main() {
       expect(variants, contains('active_variant_providers'));
       expect(variants, contains('markVariantProviderActive'));
       expect(variants, contains('restoreEnabledProvidersForExistingWidgets'));
+      expect(
+        variants,
+        isNot(contains('widgetFamilies.flatMap { it.variantProviderClasses }')),
+        reason:
+            'Restore must not enable every compact/detailed provider on each app resume; only existing or active instances should be restored.',
+      );
       expect(variants, contains('ensureProviderEnabled(context, component)'));
       expect(mainActivity, contains('scheduleWidgetRestoreAfterResume()'));
       expect(mainActivity, contains('widgetRestoreHandler.postDelayed'));
@@ -566,6 +578,22 @@ void main() {
         reason: '启动和杀后台重进时小组件 provider 扫描应延后，不能压住首屏。',
       );
       expect(mainActivity, contains('lastWidgetRestoreAtMillis < 60_000L'));
+      expect(
+        mainActivity,
+        contains(
+          'DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)',
+        ),
+        reason:
+            'The delayed resume restore should repaint all registered widget providers after enabling variants.',
+      );
+      expect(
+        mainActivity,
+        contains(
+          '"refreshAllWidgets" -> {\n                        DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(this)',
+        ),
+        reason:
+            'Flutter-triggered widget refresh must restore disabled providers before repainting existing widgets.',
+      );
       expect(
         mainActivity,
         isNot(
@@ -619,7 +647,7 @@ void main() {
       expect(mainActivity, isNot(contains('"focus_habit"')));
     });
 
-    test('应用内添加失败提示区分 launcher、权限、弹窗拦截和超时取消', () {
+    test('应用内添加失败提示区分 launcher、权限、弹窗拦截和迟到回执', () {
       final manager = File(
         'lib/services/android_widget_manager.dart',
       ).readAsStringSync();
@@ -646,7 +674,7 @@ void main() {
       expect(widgetScreen, contains('当前桌面启动器不支持应用内直接添加小组件'));
       expect(widgetScreen, contains('系统拒绝了本次添加请求'));
       expect(widgetScreen, contains('桌面没有展示或接受系统确认弹窗'));
-      expect(widgetScreen, contains('本次添加已超时并取消'));
+      expect(widgetScreen, contains('已发起添加请求，但桌面暂未返回确认结果'));
       expect(widgetScreen, contains('if (widget.canOpenWidgetSettings)'));
       expect(widgetScreen, contains('if (canOpenSettings)'));
       expect(widgetScreen, contains('打开权限设置'));
@@ -1059,7 +1087,15 @@ void main() {
         reason:
             'Pin confirmation should refresh the actual provider only, not the whole kind family.',
       );
-      expect(manager, contains('await refreshAllWidgets();'));
+      expect(manager, contains("'applyWidgetDisplayMode'"));
+      expect(
+        mainActivity,
+        contains(
+          'DuoyiWidgetProviderRegistry.applyDisplayModeToExistingWidgets(this, style)',
+        ),
+        reason:
+            'Display mode changes are applied and refreshed natively so Dart does not issue a second broad widget refresh.',
+      );
       final todoLayout = File(
         'android/app/src/main/res/layout/duoyi_todo_widget.xml',
       ).readAsStringSync();
@@ -1176,6 +1212,7 @@ void main() {
       expect(manager, contains('class AndroidWidgetPinRequest'));
       expect(manager, contains('class AndroidWidgetPinConfirmation'));
       expect(manager, contains("raw['status']?.toString()"));
+      expect(manager, contains("'confirmed_unverified'"));
       expect(manager, contains("'invalid_widget_id'"));
       expect(manager, contains('requestPinWidgetDetailed'));
       expect(manager, contains('waitForPinResult'));
@@ -1185,9 +1222,11 @@ void main() {
       );
       expect(
         manager,
-        contains('cancelPinRequest(requestId)'),
-        reason: '桌面确认超时后必须主动清理 pending 变体 provider，避免快捷添加失败后小组件列表或旧实例状态残留。',
+        isNot(contains('cancelPinRequest(requestId)')),
+        reason:
+            'A launcher may deliver the pin callback after the in-app wait timeout; keep the pending provider alive for that late callback.',
       );
+      expect(manager, contains('keep pending request'));
       expect(manager, contains("'lastPinResult'"));
       expect(manager, contains("'clearPinResult'"));
       expect(manager, contains("'cancelPinRequest'"));
@@ -1218,7 +1257,7 @@ void main() {
       expect(widgetScreen, contains('正在检查桌面小组件支持'));
       expect(widgetScreen, contains('当前桌面支持应用内添加'));
       expect(widgetScreen, contains('等待桌面确认'));
-      expect(widgetScreen, contains('添加未确认'));
+      expect(widgetScreen, isNot(contains('添加未确认')));
       expect(widgetScreen, contains('添加未完成'));
       expect(widgetScreen, contains('桌面返回了无效的小组件实例'));
       expect(
@@ -1439,7 +1478,7 @@ void main() {
         styledProvider,
         contains('override fun onDeleted'),
         reason:
-            'Deleting the last compact/detailed launcher instance should allow the hidden provider to be disabled again.',
+            'Deleting a launcher instance still clears per-widget density and lets the registry reclaim unused variant providers.',
       );
       expect(
         styledProvider,
@@ -1474,19 +1513,27 @@ void main() {
         File(
           'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
         ).readAsStringSync(),
-        contains('setTitle("选择小组件样式")'),
+        isNot(contains('setTitle("选择小组件样式")')),
       );
       expect(
         File(
           'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
         ).readAsStringSync(),
-        contains('.setOnCancelListener { finish() }'),
+        isNot(contains('.setOnCancelListener { finish() }')),
       );
       expect(
         File(
           'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
         ).readAsStringSync(),
-        isNot(contains('finishWithStyle(widgetId, "standard")')),
+        contains('finishWithStyle(widgetId, "standard")'),
+      );
+      expect(
+        File(
+          'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
+        ).readAsStringSync(),
+        contains(
+          'DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(applicationContext)',
+        ),
       );
       expect(
         File(
@@ -1503,9 +1550,9 @@ void main() {
           ),
         ),
         reason:
-            'Invalid pin callbacks must still clean temporary variant providers and record a diagnosable status.',
+            'Invalid pin callbacks must still be handled and recorded instead of disappearing silently.',
       );
-      expect(callbackReceiver, contains('invalid_widget_id'));
+      expect(callbackReceiver, contains('confirmed_unverified'));
       expect(callbackReceiver, contains('Log.w('));
       expect(callbackReceiver, contains('requestId='));
       expect(callbackReceiver, contains('kind='));
@@ -1513,21 +1560,11 @@ void main() {
       expect(callbackReceiver, contains('provider='));
       expect(
         callbackReceiver,
-        contains('DuoyiWidgetProviderRegistry.clearPendingVariantProvider'),
-        reason:
-            'Invalid widget ids must clear the exact pending temporary provider.',
-      );
-      expect(
-        callbackReceiver,
-        contains('DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused'),
-        reason:
-            'Invalid widget ids must not leave compact/detailed providers visible in the launcher picker.',
-      );
-      expect(
-        callbackReceiver,
         contains(
-          'recordResult(context, requestId, kind, pinStyle.id, widgetId, "invalid_widget_id")',
+          'recordResult(context, requestId, kind, pinStyle.id, widgetId, "confirmed_unverified")',
         ),
+        reason:
+            'Some launchers confirm pinning without returning EXTRA_APPWIDGET_ID; keep that path successful and let pending-provider TTL reconcile later.',
       );
       expect(callbackReceiver, contains('const val keyStatus = "status"'));
       expect(callbackReceiver, contains('putString(keyStatus, status)'));
@@ -1624,7 +1661,7 @@ void main() {
       );
     });
 
-    test('应用内固定小组件按样式请求尺寸但只使用标准可见 provider', () {
+    test('应用内固定小组件按样式请求尺寸并按需保持 variant provider 可用', () {
       final manifest = File(
         'android/app/src/main/AndroidManifest.xml',
       ).readAsStringSync();
@@ -1703,7 +1740,7 @@ void main() {
         mainActivity,
         contains('DuoyiWidgetProviderRegistry.rememberPendingVariantProvider'),
         reason:
-            'Temporarily enabled compact/detailed providers must be tracked for cancel cleanup.',
+            'Pending compact/detailed providers must be tracked so launcher late callbacks can still be reconciled.',
       );
       expect(
         mainActivity,
@@ -1719,7 +1756,7 @@ void main() {
           'DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)',
         ),
         reason:
-            'Failed pin requests should not leave hidden variant providers visible in the launcher picker.',
+            'Failed pin requests still reconcile provider state so temporary variant providers are not left exposed.',
       );
       expect(variants, contains('fun rememberPendingVariantProvider'));
       expect(variants, contains('fun clearPendingVariantProvider'));
@@ -1744,7 +1781,10 @@ void main() {
       expect(
         variants,
         contains('PackageManager.COMPONENT_ENABLED_STATE_DISABLED'),
+        reason:
+            'Unused variant providers must be disabled again so launcher add targets do not become stale or duplicated.',
       );
+      expect(variants, contains('disable_unused_variant_provider'));
       expect(variants, contains('"compact" -> family.compact'));
       expect(
         variants,
@@ -2464,8 +2504,11 @@ void main() {
       expect(variants, contains('activeVariantProviderComponents(context)'));
       expect(
         variants,
-        contains('clearActiveVariantProvider(context, component)'),
+        isNot(contains('clearActiveVariantProvider(context, component)')),
+        reason:
+            'Active variant providers are retained across upgrades and launcher refreshes.',
       );
+      expect(variants, contains('keep_active_variant_provider'));
       expect(
         variants,
         contains('manager.updateAppWidgetOptions(id, style.toOptions())'),

@@ -1060,7 +1060,7 @@ void main() {
     expect(moreApps, contains('Expanded('));
 
     final habit = File('lib/screens/habit_screen.dart').readAsStringSync();
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 40'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 38'));
     expect(habit, isNot(contains("label: const Text('还原')")));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
   });
@@ -1100,10 +1100,10 @@ void main() {
     expect(habit, contains('SliverList.builder('));
     expect(habit, contains('itemCount: activeHabits.length'));
     expect(habit, contains('_HabitTodaySummaryCard('));
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 40'));
-    expect(habit, contains('const double _habitTitleStatusHeight = 16'));
+    expect(habit, contains('const double _habitCheckinCardBodyHeight = 38'));
+    expect(habit, contains('const double _habitTitleStatusHeight = 15'));
     expect(habit, contains('const double _habitUndoButtonWidth = 28'));
-    expect(habit, contains('const double _habitCheckinButtonWidth = 54'));
+    expect(habit, contains('const double _habitCheckinButtonWidth = 52'));
     expect(habit, contains('minimumSize: const Size('));
     expect(habit, contains('_habitCheckinButtonWidth'));
     expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));

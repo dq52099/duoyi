@@ -34,6 +34,8 @@ class HomeWidgetService {
   static const String _iosAnniversaryWidgetName = 'DuoyiAnniversaryWidget';
   static const String _iosDiaryWidgetName = 'DuoyiDiaryWidget';
   static const String _appGroupId = 'group.com.duoyi.duoyi';
+  static String _lastThemeSignature = '';
+  static String _lastPushSignature = '';
 
   static bool get _supported {
     if (kIsWeb) return false;
@@ -64,9 +66,13 @@ class HomeWidgetService {
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
     if (!_supported) return true;
+    final signature = theme.signature;
+    if (signature == _lastThemeSignature) return true;
     try {
       await Future.wait(theme.saveOperations());
-      return _updateAllWidgets();
+      final ok = await _updateAllWidgets();
+      if (ok) _lastThemeSignature = signature;
+      return ok;
     } catch (e, st) {
       debugPrint('[HomeWidget] updateTheme failed: $e\n$st');
       return false;
@@ -110,6 +116,43 @@ class HomeWidgetService {
     required HomeWidgetThemePayload theme,
   }) async {
     if (!_supported) return true;
+    final signature = _pushSignature(
+      todoCount: todoCount,
+      habitPercent: habitPercent,
+      pomodoroToday: pomodoroToday,
+      focusMinutesToday: focusMinutesToday,
+      strings: strings,
+      todoTop3: todoTop3,
+      todoTop3Ids: todoTop3Ids,
+      goalHighlights: goalHighlights,
+      goalHighlightIds: goalHighlightIds,
+      anniversaryHighlights: anniversaryHighlights,
+      anniversaryHighlightIds: anniversaryHighlightIds,
+      courseHighlights: courseHighlights,
+      courseHighlightIds: courseHighlightIds,
+      noteHighlights: noteHighlights,
+      noteHighlightIds: noteHighlightIds,
+      memorialHighlights: memorialHighlights,
+      memorialHighlightIds: memorialHighlightIds,
+      diaryHighlights: diaryHighlights,
+      diaryHighlightIds: diaryHighlightIds,
+      scheduleHighlights: scheduleHighlights,
+      scheduleHighlightIds: scheduleHighlightIds,
+      todayEventSummary: todayEventSummary,
+      focusSummary: focusSummary,
+      habitSummary: habitSummary,
+      streakSummary: streakSummary,
+      nextFocusLabel: nextFocusLabel,
+      focusTimerRunning: focusTimerRunning,
+      focusTimerRemainingSeconds: focusTimerRemainingSeconds,
+      focusTimerTotalSeconds: focusTimerTotalSeconds,
+      focusTimerEndsAtMillis: focusTimerEndsAtMillis,
+      focusTimerLabel: focusTimerLabel,
+      habitQuickCheckId: habitQuickCheckId,
+      habitQuickCheckLabel: habitQuickCheckLabel,
+      theme: theme,
+    );
+    if (signature == _lastPushSignature) return true;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<int>('todo_count', todoCount),
@@ -361,7 +404,12 @@ class HomeWidgetService {
         ),
         ...theme.saveOperations(),
       ]);
-      return _updateAllWidgets();
+      final ok = await _updateAllWidgets();
+      if (ok) {
+        _lastPushSignature = signature;
+        _lastThemeSignature = theme.signature;
+      }
+      return ok;
     } catch (e, st) {
       debugPrint('[HomeWidget] push failed: $e\n$st');
       return false;
@@ -374,6 +422,9 @@ class HomeWidgetService {
       if (updated == null) {
         debugPrint('[HomeWidget] Android refreshAllWidgets failed');
         return false;
+      }
+      if (updated == 0) {
+        debugPrint('[HomeWidget] Android refreshAllWidgets updated 0 widgets');
       }
       return true;
     }
@@ -422,6 +473,93 @@ class HomeWidgetService {
   static Future<Uri?> initialLaunchUri() async {
     if (!_supported) return null;
     return HomeWidget.initiallyLaunchedFromHomeWidget();
+  }
+
+  static String _pushSignature({
+    required int todoCount,
+    required int habitPercent,
+    required int pomodoroToday,
+    required int focusMinutesToday,
+    required BrandStrings strings,
+    required List<String> todoTop3,
+    required List<String> todoTop3Ids,
+    required List<String> goalHighlights,
+    required List<String> goalHighlightIds,
+    required List<String> anniversaryHighlights,
+    required List<String> anniversaryHighlightIds,
+    required List<String> courseHighlights,
+    required List<String> courseHighlightIds,
+    required List<String> noteHighlights,
+    required List<String> noteHighlightIds,
+    required List<String> memorialHighlights,
+    required List<String> memorialHighlightIds,
+    required List<String> diaryHighlights,
+    required List<String> diaryHighlightIds,
+    required List<String> scheduleHighlights,
+    required List<String> scheduleHighlightIds,
+    required String todayEventSummary,
+    required String focusSummary,
+    required String habitSummary,
+    required String streakSummary,
+    required String nextFocusLabel,
+    required bool focusTimerRunning,
+    required int focusTimerRemainingSeconds,
+    required int focusTimerTotalSeconds,
+    required int focusTimerEndsAtMillis,
+    required String focusTimerLabel,
+    required String habitQuickCheckId,
+    required String habitQuickCheckLabel,
+    required HomeWidgetThemePayload theme,
+  }) {
+    return [
+      todoCount,
+      habitPercent,
+      pomodoroToday,
+      focusMinutesToday,
+      strings.appTitle,
+      strings.navTodo,
+      strings.navHabit,
+      strings.navCalendar,
+      strings.navFocus,
+      _listSignature(todoTop3),
+      _listSignature(todoTop3Ids),
+      _listSignature(goalHighlights),
+      _listSignature(goalHighlightIds),
+      _listSignature(anniversaryHighlights),
+      _listSignature(anniversaryHighlightIds),
+      _listSignature(courseHighlights),
+      _listSignature(courseHighlightIds),
+      _listSignature(noteHighlights),
+      _listSignature(noteHighlightIds),
+      _listSignature(memorialHighlights),
+      _listSignature(memorialHighlightIds),
+      _listSignature(diaryHighlights),
+      _listSignature(diaryHighlightIds),
+      _listSignature(scheduleHighlights),
+      _listSignature(scheduleHighlightIds),
+      todayEventSummary,
+      focusSummary,
+      habitSummary,
+      streakSummary,
+      nextFocusLabel,
+      focusTimerRunning,
+      focusTimerRemainingSeconds,
+      focusTimerTotalSeconds,
+      focusTimerEndsAtMillis,
+      focusTimerLabel,
+      habitQuickCheckId,
+      habitQuickCheckLabel,
+      theme.signature,
+    ].map(_signaturePart).join('|');
+  }
+
+  static String _listSignature(List<String> values) {
+    return values.map(_signaturePart).join(',');
+  }
+
+  static String _signaturePart(Object? value) {
+    final text = value?.toString() ?? '';
+    return '${text.length}:$text';
   }
 }
 
@@ -586,6 +724,28 @@ class HomeWidgetThemePayload {
       borderWidthDp,
     ),
   ];
+
+  String get signature {
+    return [
+      brandId,
+      cardSkinId,
+      dark,
+      _hex(primary),
+      _hex(background),
+      _hex(surface),
+      _hex(navBackground),
+      _hex(border),
+      _hex(text),
+      _hex(mutedText),
+      _hex(onPrimary),
+      _hex(accentStart),
+      _hex(accentEnd),
+      backgroundAssetKey,
+      cornerRadiusDp,
+      controlRadiusDp,
+      borderWidthDp,
+    ].map(HomeWidgetService._signaturePart).join('|');
+  }
 
   static String _hex(Color color) =>
       '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';

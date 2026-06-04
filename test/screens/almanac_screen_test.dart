@@ -193,11 +193,11 @@ void main() {
     expect(find.text('知道了'), findsNothing);
     expect(find.text('祭\n祀'), findsOneWidget);
     expect(find.text('祈\n福'), findsOneWidget);
-    expect(find.text('平\n治\n道\n涂'), findsOneWidget);
+    expect(find.text('平\n治\n道\n涂'), findsNothing);
 
     final sacrificeText = tester.widget<Text>(find.text('祭\n祀'));
-    final longSuitableText = tester.widget<Text>(find.text('平\n治\n道\n涂'));
-    expect(longSuitableText.style?.fontSize, sacrificeText.style?.fontSize);
+    final prayText = tester.widget<Text>(find.text('祈\n福'));
+    expect(prayText.style?.fontSize, sacrificeText.style?.fontSize);
 
     expect(find.text('房床炉房内中'), findsOneWidget);
     expect(find.text('戊不受田'), findsOneWidget);
@@ -344,7 +344,10 @@ void main() {
       expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
       expect(source, contains('class _MonthNavButton'));
       expect(source, contains('class _SoftAlmanacTag'));
-      expect(source, contains('Navigator.of(context).push('));
+      expect(source, contains('Navigator.of(context).push<DateTime>('));
+      expect(source, contains('PageView.builder'));
+      expect(source, contains('_detailCache.putIfAbsent'));
+      expect(source, contains('onPageChanged: (page)'));
       expect(source, isNot(contains('showModalBottomSheet<void>')));
       expect(source, contains("title: '胎神'"));
       expect(source, contains('value: detail.fetalGod'));

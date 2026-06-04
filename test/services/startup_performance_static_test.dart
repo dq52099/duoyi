@@ -36,8 +36,8 @@ void main() {
       expect(main, contains("'auth profile refresh'"));
       expect(main, contains("'notification quick add'"));
       expect(main, contains("'initial home widget push'"));
-      expect(main, contains('initialDelay: const Duration(seconds: 30)'));
-      expect(main, contains('gap: const Duration(seconds: 8)'));
+      expect(main, contains('initialDelay: const Duration(seconds: 75)'));
+      expect(main, contains('gap: const Duration(seconds: 12)'));
       expect(
         main,
         contains('const Duration(seconds: 14)'),
@@ -46,16 +46,26 @@ void main() {
       expect(main, contains('delay: const Duration(milliseconds: 2400)'));
       expect(main, contains('delay: const Duration(milliseconds: 1100)'));
       expect(main, contains('delay: const Duration(seconds: 8)'));
-      expect(main, contains('delay: const Duration(seconds: 28)'));
-      expect(main, contains('delay: const Duration(seconds: 45)'));
-      expect(main, contains('delay: const Duration(seconds: 40)'));
+      expect(main, contains('delay: const Duration(seconds: 65)'));
       expect(
         main,
-        contains('Future<void>.delayed(const Duration(seconds: 30)'),
+        contains('Future<void>.delayed(const Duration(seconds: 90)'),
+      );
+      expect(main, contains('delay: const Duration(seconds: 110)'));
+      expect(main, contains('delay: const Duration(seconds: 120)'));
+      expect(
+        main,
+        isNot(contains('Future<void>.delayed(const Duration(seconds: 30)')),
+        reason: '30 秒附近不能再启动重型同步、通知或小组件任务。',
       );
       expect(main, contains('Timer(const Duration(milliseconds: 2200)'));
       expect(main, contains('var homeWidgetPushInFlight = false'));
       expect(main, contains('homeWidgetPushQueued = true'));
+      expect(main, contains('var deferredLocalStorageHydrated = false'));
+      expect(main, contains('deferredLocalStorageHydrated = true'));
+      expect(main, contains('if (!deferredLocalStorageHydrated) return;'));
+      expect(main, contains('bool allowBeforeDeferredHydration = false'));
+      expect(main, contains('queueNotificationQuickAddSync();'));
 
       final localNotifications = File(
         'lib/services/local_notifications_io.dart',

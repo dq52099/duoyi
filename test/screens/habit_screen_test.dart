@@ -127,20 +127,20 @@ void main() {
     final iconRect = tester.getRect(
       find.byKey(const ValueKey('habit_weekly_overview_icon_box')),
     );
-    expect(iconRect.width, 34);
-    expect(iconRect.height, 34);
+    expect(iconRect.width, closeTo(30, 0.001));
+    expect(iconRect.height, closeTo(30, 0.001));
 
     final progress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('habit_weekly_overview_progress_bar')),
     );
-    expect(progress.minHeight, 4);
+    expect(progress.minHeight, 3);
 
     final todayIndex = DateTime.now().weekday - 1;
     final dayRect = tester.getRect(
       find.byKey(ValueKey('habit_weekly_overview_day_$todayIndex')),
     );
-    expect(dayRect.width, 28);
-    expect(dayRect.height, 28);
+    expect(dayRect.width, closeTo(25, 0.001));
+    expect(dayRect.height, closeTo(25, 0.001));
   });
 
   testWidgets('habit insights render above today check-in list', (

@@ -103,12 +103,14 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     // 仅更新选中日期，不自动打开黄历详情
   }
 
-  void _openAlmanacDetail(DateTime selectedDate) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
+  Future<void> _openAlmanacDetail(DateTime selectedDate) async {
+    final returnedDate = await Navigator.of(context).push<DateTime>(
+      MaterialPageRoute<DateTime>(
         builder: (_) => _AlmanacDetailPage(date: selectedDate),
       ),
     );
+    if (!mounted || returnedDate == null) return;
+    setState(() => _date = _clampDate(returnedDate));
   }
 
   List<(String, Color)> _dateBadges({
@@ -725,14 +727,60 @@ class _SummaryYijiLine extends StatelessWidget {
   }
 }
 
-class _AlmanacDetailPage extends StatelessWidget {
+class _AlmanacDetailPage extends StatefulWidget {
   final DateTime date;
 
   const _AlmanacDetailPage({required this.date});
 
   @override
+  State<_AlmanacDetailPage> createState() => _AlmanacDetailPageState();
+}
+
+class _AlmanacDetailPageState extends State<_AlmanacDetailPage> {
+  static const int _initialPage = 10000;
+  late final PageController _pageController;
+  late DateTime _date;
+  final Map<int, LunarAlmanacDetail> _detailCache = <int, LunarAlmanacDetail>{};
+  bool _allowPopWithResult = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = _dateOnly(widget.date);
+    _pageController = PageController(initialPage: _initialPage);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  DateTime _dateForPage(int page) {
+    return _dateOnly(widget.date).add(Duration(days: page - _initialPage));
+  }
+
+  LunarAlmanacDetail _detailFor(DateTime date) {
+    final day = _dateOnly(date);
+    final key = day.year * 10000 + day.month * 100 + day.day;
+    return _detailCache.putIfAbsent(
+      key,
+      () => LunarCalendar.almanacDetail(day),
+    );
+  }
+
+  void _popWithCurrentDate() {
+    if (_allowPopWithResult) return;
+    setState(() => _allowPopWithResult = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop(_date);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final detail = LunarCalendar.almanacDetail(date);
+    final detail = _detailFor(_date);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -744,34 +792,56 @@ class _AlmanacDetailPage extends StatelessWidget {
         : const Color(0xFFFFFEFC);
     final title = _fullDateTitle(detail.solarDate);
 
-    return Scaffold(
-      backgroundColor: pageBackground,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: _AlmanacDetailNavBar(
-          title: title,
-          backgroundColor: pageBackground,
+    return PopScope<DateTime>(
+      canPop: _allowPopWithResult,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _popWithCurrentDate();
+      },
+      child: Scaffold(
+        backgroundColor: pageBackground,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: _AlmanacDetailNavBar(
+            title: title,
+            backgroundColor: pageBackground,
+            onBack: _popWithCurrentDate,
+          ),
         ),
-      ),
-      body: ColoredBox(
-        color: pageBackground,
-        child: SafeArea(
-          top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final horizontal = constraints.maxWidth <= 420 ? 20.0 : 24.0;
-              return Scrollbar(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 28),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 620),
-                      child: _ClassicalAlmanacCard(detail: detail),
-                    ),
-                  ),
-                ),
-              );
-            },
+        body: ColoredBox(
+          color: pageBackground,
+          child: SafeArea(
+            top: false,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final horizontal = constraints.maxWidth <= 420 ? 20.0 : 24.0;
+                return PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: (page) {
+                    setState(() => _date = _dateForPage(page));
+                  },
+                  itemBuilder: (context, page) {
+                    final pageDate = _dateForPage(page);
+                    final pageDetail = _detailFor(pageDate);
+                    return Scrollbar(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          12,
+                          horizontal,
+                          28,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 620),
+                            child: _ClassicalAlmanacCard(detail: pageDetail),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -782,10 +852,12 @@ class _AlmanacDetailPage extends StatelessWidget {
 class _AlmanacDetailNavBar extends StatelessWidget {
   final String title;
   final Color backgroundColor;
+  final VoidCallback onBack;
 
   const _AlmanacDetailNavBar({
     required this.title,
     required this.backgroundColor,
+    required this.onBack,
   });
 
   @override
@@ -801,7 +873,7 @@ class _AlmanacDetailNavBar extends StatelessWidget {
             padding: const EdgeInsets.only(left: 8),
             child: IconButton(
               tooltip: '返回',
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: onBack,
               icon: const Icon(Icons.arrow_back_ios_new),
               iconSize: 20,
               color: cs.onSurface.withValues(alpha: 0.86),
@@ -851,17 +923,6 @@ class _ClassicalAlmanacCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final suitableTerms = _splitAlmanacTerms(detail.suitable);
-        final avoidTerms = _splitAlmanacTerms(detail.avoid);
-        final suitableCount = suitableTerms.length;
-        final avoidCount = avoidTerms.length;
-        final yijiCount = suitableCount > avoidCount
-            ? suitableCount
-            : avoidCount;
-        final longestYijiTerm = _longestRuneLength([
-          ...suitableTerms,
-          ...avoidTerms,
-        ]);
         final pengZuLineCount = _splitPengZuLines(detail.pengZu).length;
         final fiveElementLineCount = _splitFiveElementLines(
           detail.fiveElements,
@@ -870,13 +931,7 @@ class _ClassicalAlmanacCard extends StatelessWidget {
         final sideLineCount = fiveElementLineCount > clashLineCount
             ? fiveElementLineCount
             : clashLineCount;
-        final topMinHeight = _clampDouble(
-          width * 0.72 +
-              (yijiCount > 6 ? (yijiCount - 6) * 8 : 0) +
-              (longestYijiTerm > 2 ? (longestYijiTerm - 2) * 5 : 0),
-          252,
-          382,
-        );
+        final topMinHeight = _clampDouble(width * 0.66, 246, 330);
         final tableHeight = _clampDouble(
           width * 0.62 +
               (pengZuLineCount > 4 ? (pengZuLineCount - 4) * 15 : 0) +
@@ -982,23 +1037,13 @@ class _VerticalYijiPanel extends StatelessWidget {
     final darkText = Theme.of(
       context,
     ).colorScheme.onSurface.withValues(alpha: 0.86);
-    final suitableTerms = _splitAlmanacTerms(suitable);
-    final avoidTerms = _splitAlmanacTerms(avoid);
+    final suitableTerms = _splitAlmanacTerms(suitable).take(5).toList();
+    final avoidTerms = _splitAlmanacTerms(avoid).take(5).toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+      padding: const EdgeInsets.fromLTRB(10, 13, 10, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final termCount = suitableTerms.length > avoidTerms.length
-              ? suitableTerms.length
-              : avoidTerms.length;
-          final baseTextSize = constraints.maxWidth < 132
-              ? 10.0
-              : termCount >= 8
-              ? 10.2
-              : termCount >= 6
-              ? 10.6
-              : 11.0;
-          final textSize = _clampDouble(baseTextSize, 9.8, 11.0);
+          final textSize = constraints.maxWidth < 132 ? 13.0 : 14.0;
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1010,7 +1055,7 @@ class _VerticalYijiPanel extends StatelessWidget {
                   fontSize: textSize,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 10),
               Expanded(
                 child: _VerticalYijiColumn(
                   title: '忌',
@@ -1067,23 +1112,19 @@ class _VerticalYijiColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.topCenter,
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            runAlignment: WrapAlignment.start,
-            spacing: 1.2,
-            runSpacing: 5,
-            children: terms
-                .map(
-                  (term) => _VerticalTerm(
-                    term: term,
-                    color: color,
-                    fontSize: fontSize,
-                  ),
-                )
-                .toList(),
-          ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final term in terms)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: _VerticalTerm(
+                  term: term,
+                  color: color,
+                  fontSize: fontSize,
+                ),
+              ),
+          ],
         ),
       ],
     );
@@ -1104,18 +1145,18 @@ class _VerticalTerm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: fontSize + 5,
+      width: fontSize + 6,
       child: Text(
         _verticalAlmanacTerm(term),
         textAlign: TextAlign.center,
         style: TextStyle(
           color: color.withValues(alpha: 0.90),
           fontSize: fontSize,
-          height: 1.12,
+          height: 1.18,
         ),
         strutStyle: StrutStyle(
           fontSize: fontSize,
-          height: 1.12,
+          height: 1.18,
           forceStrutHeight: true,
         ),
       ),
@@ -1264,9 +1305,9 @@ class _ClassicalInfoCell extends StatelessWidget {
         ? 16.0
         : 17.0;
     final valueSize = isPengZu
-        ? 12.0
+        ? 11.4
         : isCompactBody
-        ? 11.2
+        ? 10.8
         : 13.8;
     final valueHeight = isPengZu
         ? 1.34
@@ -1898,6 +1939,9 @@ String _fullDateTitle(DateTime date) {
   return '${date.year}年${date.month}月${date.day}日星期${weekNames[date.weekday - 1]}';
 }
 
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
 List<String> _splitAlmanacTerms(String value) {
   final terms = value
       .split(RegExp(r'[\s、，,；;。]+'))
@@ -1982,15 +2026,6 @@ void _addFiveElementPart(List<String> lines, String value) {
   }
 
   lines.add(text);
-}
-
-int _longestRuneLength(Iterable<String> values) {
-  var longest = 0;
-  for (final value in values) {
-    final length = value.runes.length;
-    if (length > longest) longest = length;
-  }
-  return longest;
 }
 
 double _clampDouble(double value, double min, double max) {

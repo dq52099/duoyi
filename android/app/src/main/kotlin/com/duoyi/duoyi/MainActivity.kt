@@ -102,8 +102,12 @@ class MainActivity : FlutterActivity() {
             lastWidgetRestoreAtMillis = System.currentTimeMillis()
             widgetRestoreExecutor.execute {
                 runCatching {
-                    DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
+                    val restored =
+                        DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
                     DuoyiWidgetProviderRegistry.cleanupPendingVariantProviders(appContext)
+                    if (restored > 0) {
+                        DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
+                    }
                 }.onFailure { error ->
                     Log.w("DuoyiWidgetPin", "resume widget provider restore failed", error)
                 }
@@ -451,6 +455,7 @@ class MainActivity : FlutterActivity() {
                         result.success(DuoyiWidgetProviderRegistry.applyDisplayModeToExistingWidgets(this, style))
                     }
                     "refreshAllWidgets" -> {
+                        DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(this)
                         result.success(DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(this))
                     }
                     else -> result.notImplemented()
@@ -642,6 +647,8 @@ class MainActivity : FlutterActivity() {
         val requestId = UUID.randomUUID().toString()
         return try {
             enableWidgetProvider(provider)
+            DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(this)
+            DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
             val options = pinStyle.toOptions()
             Log.i(
                 "DuoyiWidgetPin",

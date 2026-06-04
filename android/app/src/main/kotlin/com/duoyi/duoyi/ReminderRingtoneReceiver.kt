@@ -110,7 +110,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             body: String,
             payload: String?,
             fullScreen: Boolean,
-        ) {
+        ): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
             ) {
@@ -121,7 +121,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                     "fallback_notification_permission_denied",
                     "系统通知权限关闭，前台铃声服务失败后无法展示兜底通知。",
                 )
-                return
+                return false
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val fallbackSoundName = selectedFallbackSoundName(context)
@@ -170,8 +170,9 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 .setVibrate(longArrayOf(0, 220, 420, 220))
                 .setAutoCancel(true)
                 .build()
-            runCatching {
+            return runCatching {
                 manager.notify(fallbackNotificationId(id), notification)
+                true
             }.onFailure {
                 Log.e("ReminderRingtoneReceiver", "fallback notification failed", it)
                 ReminderRingtoneScheduler.recordDeliveryIssue(
@@ -180,7 +181,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                     "fallback_notification_failed",
                     "系统未接受闹钟兜底通知，请检查通知权限、后台限制和渠道声音。",
                 )
-            }
+            }.getOrDefault(false)
         }
 
         private fun fallbackNotificationId(id: Int): Int {

@@ -98,7 +98,8 @@ typedef _ReminderResyncQueue =
 /// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发提醒重放。
 /// 放在顶层是因为 `_DuoyiAppState` 并不持有构造时的闭包引用。
 late ReminderScheduler _reminderScheduler;
-Future<bool> Function({bool force})? _syncNotificationQuickAddDedupedCallback;
+Future<bool> Function({bool force, bool requestIfNeeded})?
+_syncNotificationQuickAddDedupedCallback;
 _ReminderResyncQueue? _queueFullReminderResyncCallback;
 bool _initialExactAlarmGranted = false;
 const int _dailyDigestHolidayWindowDays = 45;
@@ -379,77 +380,89 @@ void main() async {
     ]),
   );
 
+  var deferredLocalStorageHydrated = false;
   Future<void>? deferredLocalStorageStartup;
   Future<void> ensureDeferredLocalStorageStartup() {
     final existing = deferredLocalStorageStartup;
     if (existing != null) return existing;
-    deferredLocalStorageStartup = cloudSyncProvider.suppressDirtyMarkWhile(
-      () => _runSyncReloadTasksInBatches([
-        () =>
-            _startupGuard('todo storage', () => todoProvider.loadFromStorage()),
-        () => _startupGuard(
-          'habit storage',
-          () => habitProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'pomodoro storage',
-          () => pomodoroProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'countdown storage',
-          () => countdownProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'anniversary storage',
-          () => anniversaryProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'diary storage',
-          () => diaryProvider.loadFromStorage(),
-        ),
-        () =>
-            _startupGuard('goal storage', () => goalProvider.loadFromStorage()),
-        () => _startupGuard(
-          'course storage',
-          () => courseProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'quick capture templates storage',
-          () => quickCaptureTemplateProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'time audit storage',
-          () => timeAuditProvider.loadFromStorage(),
-        ),
-        () =>
-            _startupGuard('note storage', () => noteProvider.loadFromStorage()),
-        () => _startupGuard(
-          'achievement storage',
-          () => achievementProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'custom focus sounds storage',
-          () => customFocusSoundProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'focus room storage',
-          () => focusRoomProvider.loadFromStorage(),
-        ),
-        () => _startupGuard('ai storage', () => aiService.loadFromStorage()),
-        () => _startupGuard(
-          'location reminders storage',
-          () => locationReminderProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'calendar subscriptions storage',
-          () => calendarSyncProvider.loadFromStorage(),
-        ),
-        () => _startupGuard(
-          'calendar local events',
-          () => calendarProvider.loadFromStorage(),
-        ),
-      ]),
-    );
+    deferredLocalStorageStartup = cloudSyncProvider
+        .suppressDirtyMarkWhile(
+          () => _runSyncReloadTasksInBatches([
+            () => _startupGuard(
+              'todo storage',
+              () => todoProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'habit storage',
+              () => habitProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'pomodoro storage',
+              () => pomodoroProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'countdown storage',
+              () => countdownProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'anniversary storage',
+              () => anniversaryProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'diary storage',
+              () => diaryProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'goal storage',
+              () => goalProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'course storage',
+              () => courseProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'quick capture templates storage',
+              () => quickCaptureTemplateProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'time audit storage',
+              () => timeAuditProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'note storage',
+              () => noteProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'achievement storage',
+              () => achievementProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'custom focus sounds storage',
+              () => customFocusSoundProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'focus room storage',
+              () => focusRoomProvider.loadFromStorage(),
+            ),
+            () =>
+                _startupGuard('ai storage', () => aiService.loadFromStorage()),
+            () => _startupGuard(
+              'location reminders storage',
+              () => locationReminderProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'calendar subscriptions storage',
+              () => calendarSyncProvider.loadFromStorage(),
+            ),
+            () => _startupGuard(
+              'calendar local events',
+              () => calendarProvider.loadFromStorage(),
+            ),
+          ]),
+        )
+        .whenComplete(() {
+          deferredLocalStorageHydrated = true;
+        });
     return deferredLocalStorageStartup!;
   }
 
@@ -898,7 +911,7 @@ void main() async {
 
   // 启动后延迟刷新订阅日历，且 30 分钟内已同步过的不再抢首屏资源。
   // ignore: discarded_futures
-  Future<void>.delayed(const Duration(seconds: 30), () {
+  Future<void>.delayed(const Duration(seconds: 90), () {
     if (calendarSyncDue()) return calendarSyncProvider.syncAll();
   });
 
@@ -930,11 +943,16 @@ void main() async {
     });
   }
 
-  Future<bool> syncNotificationQuickAdd() => _syncNotificationQuickAdd(
+  Future<bool> syncNotificationQuickAdd({
+    bool requestIfNeeded = false,
+    bool force = false,
+  }) => _syncNotificationQuickAdd(
     preferencesProvider,
     todos: todoProvider,
     habits: habitProvider,
     goals: goalProvider,
+    requestIfNeeded: requestIfNeeded,
+    force: force,
   );
 
   Timer? dailyDigestSyncDebounce;
@@ -950,6 +968,8 @@ void main() async {
   var notificationQuickAddSyncQueued = false;
   Completer<bool>? notificationQuickAddSyncQueuedCompleter;
   var lastNotificationQuickAddSignature = '';
+  var lastNotificationQuickAddFailureSignature = '';
+  DateTime? lastNotificationQuickAddFailureAt;
   String notificationQuickAddSignature() {
     final todayProgress = preferencesProvider.notificationTodayProgress;
     final progressBody = todayProgress
@@ -963,9 +983,21 @@ void main() async {
         '$todayProgress:$progressBody';
   }
 
-  Future<bool> syncNotificationQuickAddDeduped({bool force = false}) async {
+  Future<bool> syncNotificationQuickAddDeduped({
+    bool force = false,
+    bool requestIfNeeded = false,
+  }) async {
     final signature = notificationQuickAddSignature();
     if (!force && signature == lastNotificationQuickAddSignature) return true;
+    final lastFailureAt = lastNotificationQuickAddFailureAt;
+    if (!force &&
+        signature == lastNotificationQuickAddFailureSignature &&
+        lastFailureAt != null &&
+        DateTime.now().difference(lastFailureAt) <
+            const Duration(seconds: 45)) {
+      debugPrint('[NotificationStatusBar] sync skipped during failure backoff');
+      return false;
+    }
     if (notificationQuickAddSyncInFlight) {
       notificationQuickAddSyncQueued = true;
       final completer = notificationQuickAddSyncQueuedCompleter ??=
@@ -975,9 +1007,17 @@ void main() async {
     notificationQuickAddSyncInFlight = true;
     var synced = false;
     try {
-      synced = await syncNotificationQuickAdd();
+      synced = await syncNotificationQuickAdd(
+        requestIfNeeded: requestIfNeeded,
+        force: force,
+      );
       if (synced) {
         lastNotificationQuickAddSignature = signature;
+        lastNotificationQuickAddFailureSignature = '';
+        lastNotificationQuickAddFailureAt = null;
+      } else {
+        lastNotificationQuickAddFailureSignature = signature;
+        lastNotificationQuickAddFailureAt = DateTime.now();
       }
     } finally {
       notificationQuickAddSyncInFlight = false;
@@ -1009,14 +1049,16 @@ void main() async {
         _notificationStatusBarStartupBuildKey,
         AppVersion.build,
       );
-      lastNotificationQuickAddSignature = notificationQuickAddSignature();
-      debugPrint('[NotificationStatusBar] startup show skipped after update');
-      return true;
+      debugPrint('[NotificationStatusBar] startup force sync after update');
+      return syncNotificationQuickAddDeduped(force: true);
     }
     return syncNotificationQuickAddDeduped();
   }
 
-  void queueNotificationQuickAddSync() {
+  void queueNotificationQuickAddSync({
+    bool allowBeforeDeferredHydration = false,
+  }) {
+    if (!deferredLocalStorageHydrated && !allowBeforeDeferredHydration) return;
     notificationQuickAddSyncDebounce?.cancel();
     notificationQuickAddSyncDebounce = Timer(const Duration(seconds: 2), () {
       unawaited(syncNotificationQuickAddDeduped());
@@ -1024,6 +1066,7 @@ void main() async {
   }
 
   void queueNotificationProgressSync() {
+    if (!deferredLocalStorageHydrated) return;
     if (!preferencesProvider.notificationTodayProgress) return;
     queueNotificationQuickAddSync();
   }
@@ -1289,12 +1332,12 @@ void main() async {
     unawaited(
       startCloudSyncAfterAuth(
         reason: 'initial logged-in startup',
-        delay: const Duration(seconds: 45),
+        delay: const Duration(seconds: 120),
       ),
     );
     unawaited(
       queueStartupReminderResync(
-        delay: const Duration(seconds: 40),
+        delay: const Duration(seconds: 110),
         reason: 'initial logged-in startup',
       ),
     );
@@ -1316,6 +1359,8 @@ void main() async {
   );
 
   Timer? homeWidgetPushDebounce;
+  Timer? homeWidgetThemeDebounce;
+  String lastHomeWidgetThemeSignature = '';
   var homeWidgetPushInFlight = false;
   var homeWidgetPushQueued = false;
   Future<void> runQueuedHomeWidgetPush() async {
@@ -1344,17 +1389,48 @@ void main() async {
   }
 
   void queueHomeWidgetPush() {
+    if (!deferredLocalStorageHydrated) return;
     homeWidgetPushDebounce?.cancel();
     homeWidgetPushDebounce = Timer(const Duration(milliseconds: 2200), () {
       unawaited(runQueuedHomeWidgetPush());
     });
   }
 
+  String homeWidgetThemeSignature() {
+    final payload = HomeWidgetThemePayload.fromThemeProvider(themeProvider);
+    return '${payload.brandId}:${payload.cardSkinId}:'
+        '${payload.backgroundAssetKey}:${payload.dark}:'
+        '${payload.background.toARGB32()}:${payload.surface.toARGB32()}:'
+        '${payload.cornerRadiusDp}:${payload.borderWidthDp}';
+  }
+
+  Future<void> updateHomeWidgetThemeNow({required String reason}) async {
+    final signature = homeWidgetThemeSignature();
+    if (signature == lastHomeWidgetThemeSignature) return;
+    lastHomeWidgetThemeSignature = signature;
+    final ok = await HomeWidgetService.updateTheme(
+      HomeWidgetThemePayload.fromThemeProvider(themeProvider),
+    );
+    if (!ok) {
+      lastHomeWidgetThemeSignature = '';
+      debugPrint('[HomeWidget] theme update failed reason=$reason');
+    }
+  }
+
+  void queueHomeWidgetThemeUpdate({required String reason}) {
+    homeWidgetThemeDebounce?.cancel();
+    homeWidgetThemeDebounce = Timer(const Duration(milliseconds: 160), () {
+      unawaited(updateHomeWidgetThemeNow(reason: reason));
+    });
+  }
+
   notificationService.setStrings(themeProvider.brand.strings);
   themeProvider.addListener(() {
     notificationService.setStrings(themeProvider.brand.strings);
+    queueHomeWidgetThemeUpdate(reason: 'theme provider changed');
     queueHomeWidgetPush();
   });
+  unawaited(updateHomeWidgetThemeNow(reason: 'startup theme loaded'));
 
   systemTray.onActivate.listen((action) {
     if (action == 'pomodoro_quick_start') pomodoroProvider.startIfIdle();
@@ -1392,10 +1468,11 @@ void main() async {
 
   Future<void> runPostFrameStartupTasks() async {
     unawaited(
-      Future<void>.delayed(
-        const Duration(seconds: 14),
-        ensureDeferredLocalStorageStartup,
-      ),
+      Future<void>.delayed(const Duration(seconds: 14), () async {
+        await ensureDeferredLocalStorageStartup();
+        queueHomeWidgetPush();
+        queueNotificationQuickAddSync();
+      }),
     );
     unawaited(
       _runStartupStaggeredTask(
@@ -1461,7 +1538,7 @@ void main() async {
       _runStartupStaggeredTask(
         'deferred platform services',
         ensureDeferredPlatformStartup,
-        delay: const Duration(seconds: 28),
+        delay: const Duration(seconds: 65),
         timeout: const Duration(seconds: 18),
       ),
     );
@@ -1510,8 +1587,8 @@ void main() async {
             timeout: const Duration(seconds: 5),
           ),
         ],
-        initialDelay: const Duration(seconds: 30),
-        gap: const Duration(seconds: 8),
+        initialDelay: const Duration(seconds: 75),
+        gap: const Duration(seconds: 12),
       ),
     );
   }
@@ -2816,6 +2893,8 @@ Future<bool> _syncNotificationQuickAdd(
   required TodoProvider todos,
   required HabitProvider habits,
   required GoalProvider goals,
+  bool requestIfNeeded = false,
+  bool force = false,
 }) async {
   final todayProgress = prefs.notificationTodayProgress;
   final progress = todayProgress
@@ -2836,6 +2915,8 @@ Future<bool> _syncNotificationQuickAdd(
         title: plan.title,
         body: plan.body,
         enableQuickActions: plan.enableQuickActions,
+        requestIfNeeded: requestIfNeeded,
+        force: force,
       );
       return true;
     } on NotificationPermissionDeniedException catch (e) {
@@ -3245,6 +3326,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   AppUpdateService? _appUpdateService;
   DateTime? _lastUpdatePolicyCheckAt;
   DateTime? _lastAccountProfileRefreshAt;
+  Timer? _updatePolicyCheckTimer;
 
   @override
   void initState() {
@@ -3262,6 +3344,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   void dispose() {
     _achievementProvider?.removeListener(_showAchievementFeedback);
     _focusRoomProvider?.stopRealtimeRankings();
+    _updatePolicyCheckTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -3351,8 +3434,10 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   }
 
   void _checkUpdatePolicy({bool force = false}) {
-    // 延迟30秒检查更新，避免阻塞UI和首屏渲染
-    Future.delayed(const Duration(seconds: 30), () {
+    if (!force && _updatePolicyCheckTimer?.isActive == true) return;
+    // 延迟检查更新，避免阻塞UI；同一轮生命周期只保留一个待执行任务。
+    _updatePolicyCheckTimer?.cancel();
+    _updatePolicyCheckTimer = Timer(const Duration(seconds: 45), () {
       final now = DateTime.now();
       final previous = _lastUpdatePolicyCheckAt;
       if (!force &&
@@ -3485,7 +3570,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
   void _refreshNotificationProgressOnResume() {
     // ignore: discarded_futures
     Future.microtask(() async {
-      await _syncNotificationQuickAddDedupedCallback?.call();
+      await _syncNotificationQuickAddDedupedCallback?.call(force: true);
     });
   }
 

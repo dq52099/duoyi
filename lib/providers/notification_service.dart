@@ -130,18 +130,7 @@ class NotificationService extends ChangeNotifier
     'duoyi_general_alerts_v16',
     'duoyi_general_alerts_v17',
   };
-  static const Duration _visibleNotificationDuplicateWindow = Duration(
-    seconds: 3,
-  );
   static const Duration _scheduleIssueDuplicateWindow = Duration(seconds: 30);
-  static final Map<String, DateTime> _recentVisibleNotificationSignatures =
-      <String, DateTime>{};
-  static final Map<String, DateTime>
-  _recentVisibleNotificationContentSignatures = <String, DateTime>{};
-  static final Map<String, String> _visibleContentSignatureByFullSignature =
-      <String, String>{};
-  static final Map<int, DateTime> _recentVisibleNotificationIds =
-      <int, DateTime>{};
 
   Timer? _pomodoroNotificationTimer;
   int _pendingNotifications = 0;
@@ -494,6 +483,7 @@ class NotificationService extends ChangeNotifier
     required String issueTitle,
     String? payload,
     String? relatedId,
+    bool requestIfNeeded = false,
   }) async {
     final now = DateTime.now();
     if (!when.isAfter(now)) {
@@ -528,6 +518,7 @@ class NotificationService extends ChangeNotifier
         when: when,
         channelId: channelId,
         payload: payload,
+        requestIfNeeded: requestIfNeeded,
       );
       final granted = await LocalNotifications.instance.refreshPermission();
       if (!granted) {
@@ -553,13 +544,13 @@ class NotificationService extends ChangeNotifier
       );
       rethrow;
     } catch (e, st) {
+      debugPrint('[NotificationService] scheduleOnce failed: $e\n$st');
       _recordScheduleIssue(
         title: issueTitle,
-        message: '系统通知注册失败：$e',
+        message: '系统通知注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置。',
         scheduledTime: when,
         relatedId: relatedId,
       );
-      debugPrint('[NotificationService] scheduleOnce failed: $e\n$st');
       rethrow;
     }
   }
@@ -620,12 +611,12 @@ class NotificationService extends ChangeNotifier
       );
       rethrow;
     } catch (e, st) {
+      debugPrint('[NotificationService] scheduleDaily failed: $e\n$st');
       _recordScheduleIssue(
         title: issueTitle,
-        message: '重复提醒注册失败：$e',
+        message: '重复提醒注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置。',
         relatedId: relatedId,
       );
-      debugPrint('[NotificationService] scheduleDaily failed: $e\n$st');
       rethrow;
     }
   }
@@ -664,103 +655,12 @@ class NotificationService extends ChangeNotifier
     );
   }
 
-  String _visibleNotificationSignature({
-    required String title,
-    required String body,
-    String? payload,
-  }) {
-    return '$title\n$body\n${payload ?? ''}';
-  }
-
-  String _visibleNotificationContentSignature({
-    required String title,
-    required String body,
-  }) {
-    return '$title\n$body';
-  }
-
-  String? _reserveVisibleNotificationSlot({
-    required int id,
-    required String title,
-    required String body,
-    String? payload,
-  }) {
-    final now = DateTime.now();
-    _recentVisibleNotificationSignatures.removeWhere(
-      (_, at) => now.difference(at) > _visibleNotificationDuplicateWindow,
-    );
-    _recentVisibleNotificationContentSignatures.removeWhere(
-      (_, at) => now.difference(at) > _visibleNotificationDuplicateWindow,
-    );
-    _recentVisibleNotificationIds.removeWhere(
-      (_, at) => now.difference(at) > _visibleNotificationDuplicateWindow,
-    );
-    final signature = _visibleNotificationSignature(
-      title: title,
-      body: body,
-      payload: payload,
-    );
-    final contentSignature = _visibleNotificationContentSignature(
-      title: title,
-      body: body,
-    );
-    final lastShownById = _recentVisibleNotificationIds[id];
-    if (lastShownById != null &&
-        now.difference(lastShownById) <= _visibleNotificationDuplicateWindow) {
-      debugPrint(
-        '[NotificationService] duplicate visible notification skipped',
-      );
-      return null;
-    }
-    final lastShownAt = _recentVisibleNotificationSignatures[signature];
-    if (lastShownAt != null &&
-        now.difference(lastShownAt) <= _visibleNotificationDuplicateWindow) {
-      debugPrint(
-        '[NotificationService] duplicate visible notification skipped',
-      );
-      return null;
-    }
-    final lastShownWithSameContent =
-        _recentVisibleNotificationContentSignatures[contentSignature];
-    if (lastShownWithSameContent != null &&
-        now.difference(lastShownWithSameContent) <=
-            _visibleNotificationDuplicateWindow) {
-      debugPrint(
-        '[NotificationService] duplicate visible notification skipped',
-      );
-      return null;
-    }
-    _recentVisibleNotificationSignatures[signature] = now;
-    _recentVisibleNotificationContentSignatures[contentSignature] = now;
-    _visibleContentSignatureByFullSignature[signature] = contentSignature;
-    _recentVisibleNotificationIds[id] = now;
-    return signature;
-  }
-
-  void _releaseVisibleNotificationSlot(int id, String signature) {
-    _recentVisibleNotificationSignatures.remove(signature);
-    final contentSignature = _visibleContentSignatureByFullSignature.remove(
-      signature,
-    );
-    if (contentSignature != null) {
-      _recentVisibleNotificationContentSignatures.remove(contentSignature);
-    }
-    _recentVisibleNotificationIds.remove(id);
-  }
-
   bool _showImmediate({
     required int id,
     required String title,
     required String body,
     String? payload,
   }) {
-    final signature = _reserveVisibleNotificationSlot(
-      id: id,
-      title: title,
-      body: body,
-      payload: payload,
-    );
-    if (signature == null) return false;
     // ignore: discarded_futures
     LocalNotifications.instance
         .show(
@@ -771,7 +671,6 @@ class NotificationService extends ChangeNotifier
           payload: payload,
         )
         .catchError((Object e, StackTrace st) {
-          _releaseVisibleNotificationSlot(id, signature);
           debugPrint(
             '[NotificationService] immediate notification failed: $e\n$st',
           );
@@ -844,25 +743,13 @@ class NotificationService extends ChangeNotifier
     required String body,
     String? payload,
   }) async {
-    final signature = _reserveVisibleNotificationSlot(
+    await LocalNotifications.instance.show(
       id: id,
       title: title,
       body: body,
+      channelId: channelId,
       payload: payload,
     );
-    if (signature == null) return;
-    try {
-      await LocalNotifications.instance.show(
-        id: id,
-        title: title,
-        body: body,
-        channelId: channelId,
-        payload: payload,
-      );
-    } catch (_) {
-      _releaseVisibleNotificationSlot(id, signature);
-      rethrow;
-    }
     _addToHistory(
       NotificationItem(
         id: id.toString(),
@@ -1323,13 +1210,6 @@ class NotificationService extends ChangeNotifier
         _lastScheduleIssue?.blocking == false;
     const notificationId = LocalNotifications.diagnosticNotificationId;
     try {
-      final signature = _reserveVisibleNotificationSlot(
-        id: notificationId,
-        title: '多仪 · 通知测试',
-        body: '这是一条普通提醒测试。如果没有声音，请检查“通知提醒”渠道声音设置。',
-        payload: 'duoyi://tab/mine',
-      );
-      if (signature == null) return;
       await LocalNotifications.instance.show(
         id: notificationId,
         title: '多仪 · 通知测试',
@@ -1348,30 +1228,17 @@ class NotificationService extends ChangeNotifier
         _clearScheduleIssueState();
       }
     } on NotificationPermissionDeniedException {
-      _releaseVisibleNotificationSlot(
-        notificationId,
-        _visibleNotificationSignature(
-          title: '多仪 · 通知测试',
-          body: '这是一条普通提醒测试。如果没有声音，请检查“通知提醒”渠道声音设置。',
-          payload: 'duoyi://tab/mine',
-        ),
-      );
       _recordScheduleIssue(
         title: '普通通知测试异常',
         message: '系统通知权限未开启，测试通知未发送。请开启系统通知权限后再测试。',
       );
       rethrow;
     } catch (e, st) {
-      _releaseVisibleNotificationSlot(
-        notificationId,
-        _visibleNotificationSignature(
-          title: '多仪 · 通知测试',
-          body: '这是一条普通提醒测试。如果没有声音，请检查“通知提醒”渠道声音设置。',
-          payload: 'duoyi://tab/mine',
-        ),
-      );
-      _recordScheduleIssue(title: '普通通知测试异常', message: '测试通知发送失败：$e');
       debugPrint('[NotificationService] test notification failed: $e\n$st');
+      _recordScheduleIssue(
+        title: '普通通知测试异常',
+        message: '测试通知发送失败，请检查系统通知权限和通知渠道设置。',
+      );
       rethrow;
     }
     _addToHistory(
@@ -1400,6 +1267,7 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: 'duoyi://tab/mine',
       issueTitle: '定时通知测试注册失败',
+      requestIfNeeded: true,
     );
     if (!scheduled) return;
     _pendingNotifications++;

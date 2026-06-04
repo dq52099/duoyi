@@ -45,6 +45,7 @@ class LocalNotifications {
     String? body,
     bool enableQuickActions = true,
     bool requestIfNeeded = false,
+    bool force = false,
   }) async {}
   Future<void> cancelQuickAddOngoing() async {}
 
