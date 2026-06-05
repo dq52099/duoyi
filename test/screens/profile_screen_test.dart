@@ -7,6 +7,7 @@ import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/screens/profile_screen.dart';
 import 'package:duoyi/services/api_client.dart';
+import 'package:duoyi/widgets/cached_avatar_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -277,10 +278,8 @@ void main() {
       );
 
       Finder serverAvatarImage() => find.byWidgetPredicate((widget) {
-        if (widget is! Image || widget.image is! NetworkImage) return false;
-        return (widget.image as NetworkImage).url.contains(
-          '/api/uploads/avatars/u-1.png',
-        );
+        if (widget is! CachedAvatarImage) return false;
+        return widget.url.contains('/api/uploads/avatars/u-1.png');
       });
 
       expect(serverAvatarImage(), findsOneWidget);

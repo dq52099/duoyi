@@ -79,8 +79,7 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
     kinds.add(rule.kind);
     switch (rule.type) {
       case ReminderRuleType.absolute:
-      case ReminderRuleType.relativeToDue:
-        final anchor = todo.dueDate ?? todo.reminderAt;
+        final anchor = _absoluteTodoReminderAnchor(todo);
         if (anchor == null) {
           issues.add(
             const TodoReminderPreflightIssue(
@@ -95,9 +94,43 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
           rule.hour ?? anchor.hour,
           rule.minute ?? anchor.minute,
         );
-        final when = rule.type == ReminderRuleType.relativeToDue
-            ? base.add(Duration(minutes: rule.offsetMinutes ?? 0))
-            : base;
+        final scheduledWhen = _coerceJustMissedOneShotReminder(
+          base,
+          effectiveNow,
+        );
+        if (scheduledWhen == null) {
+          issues.add(
+            TodoReminderPreflightIssue(
+              title: '待办提醒注册失败',
+              message: '提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。',
+              scheduledTime: base,
+            ),
+          );
+          continue;
+        }
+        deliverableRules++;
+        if (firstScheduledTime == null ||
+            scheduledWhen.isBefore(firstScheduledTime)) {
+          firstScheduledTime = scheduledWhen;
+        }
+        break;
+      case ReminderRuleType.relativeToDue:
+        final anchor = _relativeTodoReminderAnchor(todo);
+        if (anchor == null) {
+          issues.add(
+            const TodoReminderPreflightIssue(
+              title: '待办提醒注册失败',
+              message: '一次性提醒需要截止日期或提醒日期。请先设置未来的日期。',
+            ),
+          );
+          continue;
+        }
+        final base = _dateAtTimeForPreflight(
+          anchor,
+          rule.hour ?? anchor.hour,
+          rule.minute ?? anchor.minute,
+        );
+        final when = base.add(Duration(minutes: rule.offsetMinutes ?? 0));
         final scheduledWhen = _coerceJustMissedOneShotReminder(
           when,
           effectiveNow,
@@ -190,6 +223,12 @@ ReminderPlan _effectiveTodoPlanForPreflight(TodoItem t) {
   }
   return const ReminderPlan.disabled();
 }
+
+DateTime? _absoluteTodoReminderAnchor(TodoItem todo) =>
+    todo.reminderAt ?? todo.dueDate;
+
+DateTime? _relativeTodoReminderAnchor(TodoItem todo) =>
+    todo.dueDate ?? todo.reminderAt;
 
 DateTime _dateAtTimeForPreflight(DateTime date, int hour, int minute) {
   return DateTime(date.year, date.month, date.day, hour, minute);
@@ -2452,7 +2491,7 @@ class ReminderScheduler {
     switch (rule.type) {
       case ReminderRuleType.absolute:
         final payload = _todoPayload(t.id, rule.kind);
-        final anchor = t.dueDate ?? t.reminderAt;
+        final anchor = _absoluteTodoReminderAnchor(t);
         if (anchor == null) return null;
         final hour = rule.hour ?? anchor.hour;
         final minute = rule.minute ?? anchor.minute;
@@ -2475,7 +2514,7 @@ class ReminderScheduler {
         );
       case ReminderRuleType.relativeToDue:
         final payload = _todoPayload(t.id, rule.kind);
-        final anchor = t.dueDate ?? t.reminderAt;
+        final anchor = _relativeTodoReminderAnchor(t);
         if (anchor == null) return null;
         final hour = rule.hour ?? anchor.hour;
         final minute = rule.minute ?? anchor.minute;

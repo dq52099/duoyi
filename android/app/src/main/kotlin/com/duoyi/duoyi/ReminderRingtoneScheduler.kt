@@ -67,7 +67,10 @@ object ReminderRingtoneScheduler {
             repeatCount,
             id,
         )
-        if (!reserveDelivery(context, id)) return true
+        // `showNow` is user/test initiated. The scheduled receiver keeps its
+        // own duplicate-delivery guard, but applying the same 45s guard here
+        // makes rapid strong-reminder retries report success without actually
+        // starting playback.
         if (startRingtoneService(context, intent)) return true
         return ReminderRingtoneReceiver.showFallbackNotification(
             context,
@@ -810,7 +813,16 @@ object ReminderRingtoneScheduler {
                 return
             }
             if (reserveDelivery(context, id, rootId, storedDeliveryToken)) {
-                startRingtoneService(context, intent)
+                if (!startRingtoneService(context, intent)) {
+                    ReminderRingtoneReceiver.showFallbackNotification(
+                        context,
+                        id,
+                        title,
+                        body,
+                        payload,
+                        fullScreen,
+                    )
+                }
             }
         }
     }

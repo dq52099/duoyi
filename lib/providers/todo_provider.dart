@@ -25,6 +25,8 @@ class TodoProvider extends ChangeNotifier {
   static const Duration _reminderSyncTimeout = Duration(seconds: 5);
 
   List<TodoItem> _todos = [];
+  bool _storageLoaded = false;
+  Future<void>? _storageLoadFuture;
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
   ///
@@ -78,11 +80,11 @@ class TodoProvider extends ChangeNotifier {
     return _todos.where((t) => _dateKey(t.date) == key).toList();
   }
 
-  /// "今日"视图可见的 todos（不包含已完成、归档、逾期与未来项）。
+  /// "今日"视图可见的 todos（不包含已完成、归档、逾期项）。
   ///
   /// 与 [activeTodos] 不同：后者是"未完成"过滤，跨日通用；这里严格对齐
   /// `CompletionVisibilityPolicy.shouldShowInToday`，只返回
-  /// 无截止日期未完成任务，或截止日期为今天且未逾期的条目。
+  /// 无截止日期未完成任务，或截止时间仍未到的条目。
   /// 供 Today 列表 / Today Widget 复用，避免各处重复判断。
   List<TodoItem> visibleTodayTodos(DateTime now) => _todos
       .where((t) => CompletionVisibilityPolicy.shouldShowInToday(t, now))
@@ -158,16 +160,78 @@ class TodoProvider extends ChangeNotifier {
   // --- Persistence ---
 
   Future<void> loadFromStorage() async {
+    if (_storageLoaded) return;
+    final running = _storageLoadFuture;
+    if (running != null) return running;
+    final future = _loadFromStorage();
+    _storageLoadFuture = future;
+    try {
+      await future;
+    } finally {
+      _storageLoadFuture = null;
+    }
+  }
+
+  Future<void> _loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString('todos');
-    if (data != null) {
-      final list = json.decode(data) as List;
-      _todos = list.map((e) => TodoItem.fromJson(e)).toList();
+    if (data != null && data.isNotEmpty) {
+      final parsed = <TodoItem>[];
+      var shouldRewrite = false;
+      try {
+        final decoded = json.decode(data);
+        if (decoded is List) {
+          for (var i = 0; i < decoded.length; i++) {
+            final raw = decoded[i];
+            try {
+              if (raw is! Map) {
+                shouldRewrite = true;
+                debugPrint(
+                  '[TodoProvider] skipped invalid todo[$i]: not a map',
+                );
+                continue;
+              }
+              parsed.add(TodoItem.fromJson(Map<String, dynamic>.from(raw)));
+            } catch (e, st) {
+              shouldRewrite = true;
+              debugPrint('[TodoProvider] skipped invalid todo[$i]: $e\n$st');
+            }
+          }
+          _todos = parsed;
+        } else {
+          shouldRewrite = true;
+          debugPrint(
+            '[TodoProvider] ignored invalid todos storage: not a list',
+          );
+        }
+      } catch (e, st) {
+        shouldRewrite = true;
+        debugPrint('[TodoProvider] todos storage decode failed: $e\n$st');
+      }
+      if (shouldRewrite) {
+        await prefs.setString(
+          'todos_corrupt_backup_${DateTime.now().millisecondsSinceEpoch}',
+          data,
+        );
+        await _writeToStorage();
+      }
     }
+    _storageLoaded = true;
     _notify();
   }
 
+  Future<void> _ensureStorageLoaded() async {
+    if (_storageLoaded) return;
+    debugPrint('[TodoProvider] waiting for local todo hydration before write');
+    await loadFromStorage();
+  }
+
   Future<void> _saveToStorage() async {
+    await _ensureStorageLoaded();
+    await _writeToStorage();
+  }
+
+  Future<void> _writeToStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final data = json.encode(_todos.map((e) => e.toJson()).toList());
     await prefs.setString('todos', data);
@@ -194,6 +258,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> addTodo(TodoItem todo) async {
+    await _ensureStorageLoaded();
     _todos.add(todo);
     DomainEventBus.instance.publish(
       DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
@@ -204,6 +269,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
+    await _ensureStorageLoaded();
     final incoming = imported.toList();
     if (incoming.isEmpty) {
       return const TodoImportSummary(inserted: 0, skippedDuplicates: 0);
@@ -252,6 +318,7 @@ class TodoProvider extends ChangeNotifier {
     TodoItem updated, {
     bool waitForReminderSync = true,
   }) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
       final prev = _todos[idx];
@@ -296,6 +363,7 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids, {
     bool recordCompletionTime = true,
   }) async {
+    await _ensureStorageLoaded();
     final selected = ids.toSet();
     if (selected.isEmpty) return 0;
 
@@ -340,6 +408,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> reopenTodos(Iterable<String> ids) async {
+    await _ensureStorageLoaded();
     final selected = ids.toSet();
     if (selected.isEmpty) return 0;
 
@@ -378,6 +447,7 @@ class TodoProvider extends ChangeNotifier {
   /// [recordCompletionTime] 为 `true` 时，在完成状态变更后会自动写入时间足迹；
   /// 由 UI 层统一决定是否要先弹出"顺手记耗时"对话框，或改用自定义时长。
   Future<void> toggleTodo(String id, {bool recordCompletionTime = true}) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return;
     final prev = _todos[idx];
@@ -419,6 +489,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTodo(String id) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return;
 
@@ -432,6 +503,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> deleteTodos(Iterable<String> ids) async {
+    await _ensureStorageLoaded();
     final selected = ids.toSet();
     if (selected.isEmpty) return 0;
     final existing = _todos.where((t) => selected.contains(t.id)).toList();
@@ -455,6 +527,7 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     EisenhowerQuadrant quadrant,
   ) async {
+    await _ensureStorageLoaded();
     final selected = ids.toSet();
     if (selected.isEmpty) return 0;
     var changed = 0;
@@ -474,6 +547,7 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     TodoPriority priority,
   ) async {
+    await _ensureStorageLoaded();
     final selected = ids.toSet();
     if (selected.isEmpty) return 0;
     var changed = 0;
@@ -493,6 +567,7 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     String columnId,
   ) async {
+    await _ensureStorageLoaded();
     final target = columnId.trim().isEmpty
         ? defaultKanbanPendingColumnId
         : columnId.trim();
@@ -560,6 +635,7 @@ class TodoProvider extends ChangeNotifier {
     DateTime? now,
     bool waitForReminderSync = true,
   }) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return false;
     final todo = _todos[idx];
@@ -627,6 +703,7 @@ class TodoProvider extends ChangeNotifier {
       value.day == day.day;
 
   Future<void> reorder(List<String> orderedIds) async {
+    await _ensureStorageLoaded();
     final map = {for (final t in _todos) t.id: t};
     final newList = <TodoItem>[];
     for (int i = 0; i < orderedIds.length; i++) {
@@ -643,6 +720,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> reorderVisibleTodos(List<String> orderedIds) async {
+    await _ensureStorageLoaded();
     final ordered = orderedIds.toList(growable: false);
     if (ordered.length < 2) return 0;
     final orderedSet = ordered.toSet();
@@ -761,6 +839,7 @@ class TodoProvider extends ChangeNotifier {
     String workspaceId, {
     String? userId,
   }) async {
+    await _ensureStorageLoaded();
     var mutated = false;
     for (var i = 0; i < _todos.length; i++) {
       final todo = _todos[i];
@@ -781,6 +860,7 @@ class TodoProvider extends ChangeNotifier {
   // --- Subtask operations ---
 
   Future<void> addSubtask(String todoId, String title) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       final newSubtasks = List<Subtask>.from(_todos[idx].subtasks)
@@ -792,6 +872,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> toggleSubtask(String todoId, String subtaskId) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final sIdx = _todos[idx].subtasks.indexWhere((s) => s.id == subtaskId);
@@ -809,6 +890,7 @@ class TodoProvider extends ChangeNotifier {
   ///   - 存在未完成子任务且父任务已完成 → `isCompleted = false` 且 `completedAt = null`
   /// - 若 `autoToggleByChildren = false`：不触碰父任务完成态，仅持久化当前子任务变动。
   Future<void> recomputeParent(String todoId) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final t = _todos[idx];
@@ -846,6 +928,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       _todos[idx].subtasks.removeWhere((s) => s.id == subtaskId);
@@ -855,6 +938,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> reorderSubtasks(String todoId, List<String> orderedIds) async {
+    await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final map = {for (final s in _todos[idx].subtasks) s.id: s};
@@ -888,6 +972,7 @@ class TodoProvider extends ChangeNotifier {
   /// 由 [postponeOverdue] 负责顺延。两者在 `CompletionVisibilityPolicy
   /// .runDailyRollover` 中组合使用。
   Future<void> archivePastCompletions(DateTime todayDay) async {
+    await _ensureStorageLoaded();
     final todayStart = DateTime(todayDay.year, todayDay.month, todayDay.day);
     var mutated = false;
 
@@ -930,6 +1015,7 @@ class TodoProvider extends ChangeNotifier {
   ///
   /// [today] 作为参数注入，便于测试；内部会先取其日部分做"本地 00:00"对齐。
   Future<void> postponeOverdue(DateTime today) async {
+    await _ensureStorageLoaded();
     final todayDay = DateTime(today.year, today.month, today.day);
     var mutated = false;
 

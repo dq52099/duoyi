@@ -31,10 +31,6 @@ class HabitWeeklyCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-      border: Border.all(
-        color: primaryColor.withValues(alpha: 0.18),
-        width: 0.7,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

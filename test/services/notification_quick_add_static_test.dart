@@ -168,6 +168,14 @@ void main() {
     );
     expect(main, contains("var lastNotificationQuickAddSignature = ''"));
     expect(main, contains("return completer.future"));
+    expect(
+      main,
+      contains("final completedSignature = notificationQuickAddSignature()"),
+    );
+    expect(
+      main,
+      contains("lastNotificationQuickAddSignature = completedSignature"),
+    );
     expect(main, contains("queuedCompleter.complete(queuedSynced)"));
     expect(
       main,
@@ -194,12 +202,14 @@ void main() {
     expect(main, contains('String notificationQuickAddSignature()'));
     expect(
       main,
-      contains('lastNotificationQuickAddSignature = signature;'),
+      contains('lastNotificationQuickAddSignature = completedSignature;'),
       reason: '常驻通知同步成功后记录签名，避免随后 resume/data-change 重复刷新同内容通知。',
     );
     expect(
       main,
-      contains('lastNotificationQuickAddFailureSignature = signature;'),
+      contains(
+        'lastNotificationQuickAddFailureSignature = completedSignature;',
+      ),
       reason: '同步失败时记录失败签名，配合退避避免 30 秒后进入高频重试卡顿。',
     );
     expect(
@@ -403,7 +413,7 @@ void main() {
     expect(dedupeMethod, contains('if (synced) {'));
     expect(
       dedupeMethod,
-      contains('lastNotificationQuickAddSignature = signature;'),
+      contains('lastNotificationQuickAddSignature = completedSignature;'),
     );
     expect(
       syncMethod,

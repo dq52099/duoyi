@@ -219,16 +219,11 @@ void main() {
     final fiveElementText = tester.widget<Text>(find.text('大驿土  平执位'));
     final clashText = tester.widget<Text>(find.text('猴日冲虎（壬寅）'));
     final clashDirectionText = tester.widget<Text>(find.text('煞南'));
-    expect(pengZuText.style?.fontSize, lessThanOrEqualTo(12));
-    expect(fiveElementText.style?.fontSize, lessThanOrEqualTo(11.2));
-    expect(clashText.style?.fontSize, lessThanOrEqualTo(11.2));
+    expect(pengZuText.style?.fontSize, fetalGodText.style?.fontSize);
+    expect(fiveElementText.style?.fontSize, fetalGodText.style?.fontSize);
+    expect(clashText.style?.fontSize, fetalGodText.style?.fontSize);
     expect(clashDirectionText.style?.fontSize, clashText.style?.fontSize);
-    expect(pengZuText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
-    expect(
-      fiveElementText.style?.fontSize,
-      lessThan(fetalGodText.style!.fontSize!),
-    );
-    expect(clashText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
+    expect(pengZuText.style?.height, greaterThan(fetalGodText.style!.height!));
 
     for (final branch in [
       '子',

@@ -110,9 +110,7 @@ void main() {
     expect(find.text('今天暂无待办，点击查看或添加任务'), findsOneWidget);
   });
 
-  testWidgets('Today todo shows no-due and due-today tasks only', (
-    tester,
-  ) async {
+  testWidgets('Today todo shows no-due and not-overdue tasks', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -161,7 +159,7 @@ void main() {
     expect(find.text('无截止日期'), findsOneWidget);
     expect(find.text('今天截止任务'), findsOneWidget);
     expect(find.text('昨天截止任务'), findsNothing);
-    expect(find.text('明天截止任务'), findsNothing);
+    expect(find.text('明天截止任务'), findsOneWidget);
     expect(find.text('已完成任务'), findsNothing);
   });
 
@@ -569,7 +567,7 @@ void main() {
     expect(normalDecoratedTile, findsWidgets);
   });
 
-  testWidgets('Today suggestion add immediately moves task into today', (
+  testWidgets('Future not-overdue todo appears directly in today', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 1000);
@@ -581,7 +579,7 @@ void main() {
     final today = DateTime(now.year, now.month, now.day);
     await todoProvider.addTodo(
       TodoItem(
-        title: '建议加入今日',
+        title: '明天未逾期待办',
         date: today.add(const Duration(days: 1)),
         dueDate: today.add(const Duration(days: 1, hours: 18)),
         priority: TodoPriority.high,
@@ -596,25 +594,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('今日待办'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('today_reminder_header_toggle')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(I18n.tr('today.suggestions')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('today_suggestion_template_icon_工作')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text(I18n.tr('today.add_to_today')));
-    await tester.pumpAndSettle();
+    expect(find.text('明天未逾期待办'), findsOneWidget);
 
     final stored = todoProvider.todos.single;
     expect(
       DateTime(stored.date.year, stored.date.month, stored.date.day),
-      today,
+      today.add(const Duration(days: 1)),
     );
     expect(stored.dueDate, isNotNull);
     expect(
@@ -623,9 +608,8 @@ void main() {
         stored.dueDate!.month,
         stored.dueDate!.day,
       ),
-      today,
+      today.add(const Duration(days: 1)),
     );
-    expect(find.text('今日待提醒事项'), findsOneWidget);
     expect(find.text('今日待办'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('today_todo_template_icon_工作')),

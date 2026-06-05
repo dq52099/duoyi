@@ -231,18 +231,35 @@ class CalendarProvider extends ChangeNotifier {
 
   int _hashTodos(List<TodoItem> todos) {
     return Object.hashAll(
-      todos.map(
-        (t) => Object.hash(
+      todos.map((t) {
+        final rule = t.reminderPlan.primaryRule;
+        return Object.hashAll([
           t.id,
           t.title,
           t.date.millisecondsSinceEpoch,
           t.dueDate?.millisecondsSinceEpoch,
+          t.reminderAt?.millisecondsSinceEpoch,
+          // ignore: deprecated_member_use_from_same_package
+          t.hasReminder,
+          t.reminder.enabled,
+          t.reminder.kind.index,
+          t.reminder.hour,
+          t.reminder.minute,
+          t.reminder.daysBefore,
+          t.reminderPlan.enabled,
+          rule?.enabled,
+          rule?.type.index,
+          rule?.kind.index,
+          rule?.hour,
+          rule?.minute,
+          rule?.offsetMinutes,
+          Object.hashAll(rule?.weekdays ?? const <int>[]),
           t.isCompleted,
           t.listGroupId,
           t.listGroupName,
           t.workspaceId,
-        ),
-      ),
+        ]);
+      }),
     );
   }
 

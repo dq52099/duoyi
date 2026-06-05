@@ -5,6 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/core/calendar_aggregator.dart';
 import 'package:duoyi/models/calendar_event.dart';
+import 'package:duoyi/models/goal.dart'
+    show
+        ReminderConfig,
+        ReminderKind,
+        ReminderPlan,
+        ReminderRule,
+        ReminderRuleType;
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/pomodoro.dart';
 import 'package:duoyi/models/todo.dart';
@@ -136,6 +143,69 @@ void main() {
         CalendarEventType.habit,
         CalendarEventType.pomodoro,
       });
+    });
+
+    test('待办日历时间线优先使用提醒时间，不把日期型截止显示为 0 点', () {
+      final day = DateTime(2026, 6, 5);
+      final events = CalendarAggregator.buildEvents(
+        todos: [
+          TodoItem(
+            id: 'daily-reminder',
+            title: '每日 19 点提醒',
+            date: day,
+            dueDate: DateTime(2026, 6, 8),
+            reminder: const ReminderConfig(
+              enabled: true,
+              kind: ReminderKind.push,
+              hour: 19,
+              minute: 0,
+            ),
+            reminderPlan: ReminderPlan(
+              enabled: true,
+              rules: [
+                ReminderRule(
+                  id: 'daily-19',
+                  type: ReminderRuleType.dailyTime,
+                  kind: ReminderKind.push,
+                  hour: 19,
+                  minute: 0,
+                ),
+              ],
+            ),
+          ),
+        ],
+        habits: const [],
+        pomodoroSessions: const [],
+        colorScheme: cs,
+      );
+
+      final event = events.single;
+      expect(event.date, DateTime(2026, 6, 5, 19));
+      expect(event.time, const TimeOfDay(hour: 19, minute: 0));
+      expect(event.endDate, DateTime(2026, 6, 8));
+    });
+
+    test('没有提醒时间时用创建时间放入小时网格，不落到 0 点', () {
+      final day = DateTime(2026, 6, 5);
+      final events = CalendarAggregator.buildEvents(
+        todos: [
+          TodoItem(
+            id: 'date-only-due',
+            title: '只有日期截止',
+            date: day,
+            dueDate: DateTime(2026, 6, 8),
+            createdAt: DateTime(2026, 6, 1, 14, 35),
+          ),
+        ],
+        habits: const [],
+        pomodoroSessions: const [],
+        colorScheme: cs,
+      );
+
+      final event = events.single;
+      expect(event.date, DateTime(2026, 6, 5, 14, 35));
+      expect(event.time, const TimeOfDay(hour: 14, minute: 35));
+      expect(event.endDate, DateTime(2026, 6, 8));
     });
 
     test('习惯起止周期外的补卡记录不生成日历事件', () {

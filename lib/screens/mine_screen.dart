@@ -196,6 +196,11 @@ class MineScreen extends StatelessWidget {
                                     avatar: avatarValue,
                                     displayName: displayName,
                                     radius: compact ? 26 : 30,
+                                    cacheKey: _avatarCacheKey(
+                                      avatarValue,
+                                      p.updatedAt,
+                                      auth.state.userId,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -994,6 +999,11 @@ class MineScreen extends StatelessWidget {
         builder: (_) => _AvatarPreviewScreen(
           avatar: avatar,
           displayName: displayName,
+          cacheKey: _avatarCacheKey(
+            avatar,
+            profile.updatedAt,
+            auth.state.userId,
+          ),
           onEdit: () => _pickAndSaveAvatar(context),
         ),
       ),
@@ -1220,11 +1230,13 @@ class _ProfileAvatar extends StatelessWidget {
   final String? avatar;
   final String displayName;
   final double radius;
+  final Object? cacheKey;
 
   const _ProfileAvatar({
     required this.avatar,
     required this.displayName,
     required this.radius,
+    this.cacheKey,
   });
 
   @override
@@ -1245,6 +1257,7 @@ class _ProfileAvatar extends StatelessWidget {
           ? ClipOval(
               child: CachedAvatarImage(
                 url: networkUrl,
+                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
                 width: radius * 2,
                 height: radius * 2,
                 fallbackBuilder: (_) => _ProfileAvatarLetter(
@@ -1332,11 +1345,13 @@ class _MineUserLineChip extends StatelessWidget {
 class _AvatarPreviewScreen extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
   final VoidCallback? onEdit;
 
   const _AvatarPreviewScreen({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
     this.onEdit,
   });
 
@@ -1370,6 +1385,7 @@ class _AvatarPreviewScreen extends StatelessWidget {
           child: _ProfileAvatarFullImage(
             avatar: avatar,
             displayName: displayName,
+            cacheKey: cacheKey,
           ),
         ),
       ),
@@ -1380,10 +1396,12 @@ class _AvatarPreviewScreen extends StatelessWidget {
 class _ProfileAvatarFullImage extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
 
   const _ProfileAvatarFullImage({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
   });
 
   @override
@@ -1394,6 +1412,7 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final image = networkUrl != null
         ? CachedAvatarImage(
             url: networkUrl,
+            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1493,6 +1512,11 @@ String? _networkAvatarUrl(String value) {
     return trimmed;
   }
   return null;
+}
+
+String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
+  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}|'
+      '${updatedAt?.millisecondsSinceEpoch ?? 0}';
 }
 
 Future<String> _copyLocalAvatarFile(XFile file) async {

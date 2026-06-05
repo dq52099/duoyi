@@ -207,9 +207,11 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       }
     }
     if (failures.isNotEmpty) {
-      final message = '旧 Flutter 闹钟队列清理失败，已阻止注册另一条提醒以避免重复弹出。';
-      _recordScheduleIssue(title: '闹钟提醒交接失败', message: message, id: id);
-      throw AlarmQueueHandoffException(message);
+      debugPrint(
+        '[AlarmService] $operation continues after plugin owner cleanup '
+        'failure count=${failures.length}; replacing the alarm should not be '
+        'blocked by stale Flutter notification cleanup.',
+      );
     }
   }
 
@@ -230,9 +232,11 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       }
     }
     if (failures.isNotEmpty) {
-      final message = '旧原生闹钟队列清理失败，已阻止注册另一条提醒以避免重复弹出。';
-      _recordScheduleIssue(title: '闹钟提醒交接失败', message: message, id: id);
-      throw AlarmQueueHandoffException(message);
+      debugPrint(
+        '[AlarmService] $operation continues after native owner cleanup '
+        'failure count=${failures.length}; replacing the alarm should not be '
+        'blocked by stale native cleanup.',
+      );
     }
   }
 
@@ -823,6 +827,8 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         id,
         operation: 'scheduleDailyFullScreen native owner handoff',
       );
+      await NativeReminderRingtone.stopPreview();
+      await ReminderRingtoneSettings.applyPersistedSettingsToNative();
       await _ensureAndroidFallbackChannelSound();
       channelIssueMessage = await _androidChannelIssueMessage();
       nativeRingtoneOk = await _tryNativeRingtone(

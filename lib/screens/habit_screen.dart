@@ -614,11 +614,29 @@ class _HabitScreenState extends State<HabitScreen>
         surfaceTintColor: Colors.transparent,
         bottom: TabBar(
           controller: _tabCtrl,
-          labelStyle: appSecondaryMenuItemTextStyle(context),
-          unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+          labelStyle: appSecondaryControlLabelStyle(context).copyWith(
+            fontSize: 12,
+            height: 1.1,
+            fontWeight: DesignTokens.fontWeightRegular,
+          ),
+          unselectedLabelStyle: appSecondaryControlLabelStyle(context).copyWith(
+            fontSize: 12,
+            height: 1.1,
+            fontWeight: DesignTokens.fontWeightRegular,
+          ),
           labelColor: cs.onSurface,
           unselectedLabelColor: cs.onSurfaceVariant,
-          indicatorColor: cs.primary.withValues(alpha: 0.72),
+          indicator: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: 0.16),
+              width: 0.55,
+            ),
+          ),
           tabs: [
             Tab(text: s.habitTabToday),
             Tab(text: s.habitTabHeatmap),
@@ -1200,12 +1218,9 @@ class _HabitCheckinCard extends StatelessWidget {
             builder: (_) => HabitDetailScreen(habitId: habit.id),
           ),
         ),
-        border: Border.all(
-          color: isDone || hasNegativeOccurrence
-              ? habitColor.withValues(alpha: 0.12)
-              : Colors.transparent,
-          width: 0.45,
-        ),
+        border: isDone || hasNegativeOccurrence
+            ? Border.all(color: habitColor.withValues(alpha: 0.12), width: 0.45)
+            : null,
         child: SizedBox(
           height: _habitCheckinCardBodyHeight,
           child: Row(

@@ -1004,7 +1004,7 @@ class _AlmanacTopVisual extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          flex: 34,
+          flex: 32,
           child: _VerticalYijiPanel(
             suitable: detail.suitable,
             avoid: detail.avoid,
@@ -1013,7 +1013,7 @@ class _AlmanacTopVisual extends StatelessWidget {
         ),
         _ClassicalVerticalDivider(color: lineColor),
         Expanded(
-          flex: 66,
+          flex: 68,
           child: _DateHeroPanel(detail: detail, gold: gold),
         ),
       ],
@@ -1291,7 +1291,6 @@ class _ClassicalInfoCell extends StatelessWidget {
     final isPengZu = title == '彭祖';
     final isFiveElement = title == '五行';
     final isClash = title == '冲煞';
-    final isCompactBody = isFiveElement || isClash;
     final valueLines = isPengZu
         ? _splitPengZuLines(value)
         : isFiveElement
@@ -1299,21 +1298,9 @@ class _ClassicalInfoCell extends StatelessWidget {
         : isClash
         ? _splitClashLines(value)
         : [value.trim()];
-    final titleSize = isPengZu
-        ? 18.0
-        : isCompactBody
-        ? 16.0
-        : 17.0;
-    final valueSize = isPengZu
-        ? 11.4
-        : isCompactBody
-        ? 10.8
-        : 13.8;
-    final valueHeight = isPengZu
-        ? 1.34
-        : isCompactBody
-        ? 1.30
-        : 1.34;
+    final titleSize = 16.0;
+    final valueSize = 12.4;
+    final valueHeight = isPengZu ? 1.48 : 1.36;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: isPengZu ? 10 : 8,
@@ -1334,7 +1321,7 @@ class _ClassicalInfoCell extends StatelessWidget {
               color: cs.onSurface,
             ),
           ),
-          SizedBox(height: isPengZu ? 9 : 6),
+          SizedBox(height: isPengZu ? 8 : 6),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [

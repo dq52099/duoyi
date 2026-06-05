@@ -524,6 +524,7 @@ class _NotificationSettingsScreenState
   bool? _exactAlarmGranted;
   Map<String, NotificationChannelStatus>? _channelStatuses;
   bool _busy = false;
+  int _statusBarPreferenceGeneration = 0;
 
   @override
   void initState() {
@@ -634,8 +635,10 @@ class _NotificationSettingsScreenState
     required bool value,
   }) async {
     final prefs = context.read<PreferencesProvider>();
-    final previousQuickAdd = prefs.notificationQuickAdd;
-    final previousTodayProgress = prefs.notificationTodayProgress;
+    final generation = ++_statusBarPreferenceGeneration;
+    final previousValue = quickAdd
+        ? prefs.notificationQuickAdd
+        : prefs.notificationTodayProgress;
     setState(() => _busy = true);
     try {
       if (quickAdd) {
@@ -647,6 +650,7 @@ class _NotificationSettingsScreenState
         requestIfNeeded: value,
       );
       if (!mounted) return;
+      if (generation != _statusBarPreferenceGeneration) return;
       if (synced) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -659,8 +663,22 @@ class _NotificationSettingsScreenState
         );
         return;
       }
-      await prefs.setNotificationQuickAdd(previousQuickAdd);
-      await prefs.setNotificationTodayProgress(previousTodayProgress);
+      final stillMatchesThisRequest = quickAdd
+          ? prefs.notificationQuickAdd == value
+          : prefs.notificationTodayProgress == value;
+      if (stillMatchesThisRequest) {
+        if (quickAdd) {
+          await prefs.setNotificationQuickAdd(previousValue);
+        } else {
+          await prefs.setNotificationTodayProgress(previousValue);
+        }
+      } else {
+        debugPrint(
+          '[NotificationSettings] stale status bar sync failure ignored; '
+          'latest local preference already changed.',
+        );
+        return;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -670,7 +688,9 @@ class _NotificationSettingsScreenState
         ),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && generation == _statusBarPreferenceGeneration) {
+        setState(() => _busy = false);
+      }
     }
   }
 

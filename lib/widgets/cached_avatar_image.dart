@@ -11,6 +11,7 @@ class CachedAvatarImage extends StatefulWidget {
   final double width;
   final double height;
   final BoxFit fit;
+  final Object? cacheKey;
   final Widget Function(BuildContext context) fallbackBuilder;
 
   const CachedAvatarImage({
@@ -20,6 +21,7 @@ class CachedAvatarImage extends StatefulWidget {
     required this.height,
     required this.fallbackBuilder,
     this.fit = BoxFit.cover,
+    this.cacheKey,
   });
 
   @override
@@ -28,8 +30,10 @@ class CachedAvatarImage extends StatefulWidget {
 
 class _CachedAvatarImageState extends State<CachedAvatarImage> {
   File? _cachedFile;
+  bool _cacheLookupComplete = false;
   bool _networkFailed = false;
   Object? _lastCachedUrl;
+  int _cacheLookupGeneration = 0;
 
   @override
   void initState() {
@@ -40,18 +44,27 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   @override
   void didUpdateWidget(CachedAvatarImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url == widget.url) return;
+    if (oldWidget.url == widget.url && oldWidget.cacheKey == widget.cacheKey) {
+      return;
+    }
     _networkFailed = false;
     _cachedFile = null;
+    _cacheLookupComplete = false;
     _lastCachedUrl = null;
     unawaited(_loadCachedFile());
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.url.trim().isEmpty) {
+      return widget.fallbackBuilder(context);
+    }
     final cached = _cachedFile;
-    if (_networkFailed && cached != null) {
+    if (cached != null) {
       return _fileImage(cached);
+    }
+    if (!_cacheLookupComplete || _networkFailed) {
+      return widget.fallbackBuilder(context);
     }
     return Image.network(
       widget.url,
@@ -88,10 +101,23 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   }
 
   Future<void> _loadCachedFile() async {
-    final file = await _avatarCacheFile(widget.url);
+    final url = widget.url;
+    final cacheKey = _effectiveCacheKey;
+    final generation = ++_cacheLookupGeneration;
+    final file = await _avatarCacheFile(cacheKey);
     if (!mounted) return;
+    if (generation != _cacheLookupGeneration ||
+        url != widget.url ||
+        cacheKey != _effectiveCacheKey) {
+      return;
+    }
     if (await file.exists()) {
-      setState(() => _cachedFile = file);
+      setState(() {
+        _cachedFile = file;
+        _cacheLookupComplete = true;
+      });
+    } else {
+      setState(() => _cacheLookupComplete = true);
     }
   }
 
@@ -103,26 +129,37 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
 
   Future<void> _cacheNetworkAvatar() async {
     try {
-      final uri = Uri.tryParse(widget.url);
+      final url = widget.url;
+      final cacheKey = _effectiveCacheKey;
+      final uri = Uri.tryParse(url);
       if (uri == null || !uri.hasScheme) return;
       final response = await http.get(uri).timeout(const Duration(seconds: 6));
+      if (!mounted || url != widget.url || cacheKey != _effectiveCacheKey) {
+        return;
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) return;
       if (response.bodyBytes.isEmpty ||
           response.bodyBytes.length > 4 * 1024 * 1024) {
         return;
       }
-      final file = await _avatarCacheFile(widget.url);
+      final file = await _avatarCacheFile(cacheKey);
       await file.parent.create(recursive: true);
       await file.writeAsBytes(response.bodyBytes, flush: false);
-      if (mounted) setState(() => _cachedFile = file);
+      if (mounted && url == widget.url) setState(() => _cachedFile = file);
     } catch (e, st) {
       debugPrint('[avatar-cache] cache failed: $e\n$st');
     }
   }
 
-  Future<File> _avatarCacheFile(String url) async {
+  String get _effectiveCacheKey {
+    final explicit = widget.cacheKey?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    return widget.url;
+  }
+
+  Future<File> _avatarCacheFile(String cacheKey) async {
     final dir = await getApplicationDocumentsDirectory();
-    final digest = sha1.convert(url.codeUnits).toString();
+    final digest = sha1.convert(cacheKey.codeUnits).toString();
     return File('${dir.path}/avatar_cache/$digest.img');
   }
 }

@@ -591,6 +591,79 @@ void main() {
     });
 
     test(
+      'preflight prefers reminderAt over date-only dueDate for absolute todo reminders',
+      () {
+        final now = DateTime(2026, 6, 5, 12);
+        final reminderAt = DateTime(2026, 6, 5, 19);
+        final todo = TodoItem(
+          id: 'absolute-reminder-with-date-only-due',
+          title: '晚上提醒',
+          dueDate: DateTime(2026, 6, 5),
+          reminderAt: reminderAt,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: 19,
+                minute: 0,
+              ),
+            ],
+          ),
+        );
+
+        final result = preflightTodoReminderPlan(todo, now: now);
+
+        expect(result.ok, isTrue);
+        expect(result.blockingIssue, isNull);
+        expect(result.firstScheduledTime, reminderAt);
+      },
+    );
+
+    test(
+      'syncTodos registers absolute todo reminderAt when dueDate is date-only midnight',
+      () async {
+        final now = DateTime.now();
+        final reminderAt = now.add(const Duration(hours: 2));
+        final todo = TodoItem(
+          id: 'sync-absolute-reminder-with-date-only-due',
+          title: '晚上提醒',
+          dueDate: DateTime(reminderAt.year, reminderAt.month, reminderAt.day),
+          reminderAt: reminderAt,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: reminderAt.hour,
+                minute: reminderAt.minute,
+              ),
+            ],
+          ),
+        );
+
+        await scheduler.syncTodos([todo]);
+
+        expect(notif.issues, isEmpty);
+        expect(notif.scheduled, hasLength(1));
+        expect(
+          notif.scheduled.single['when'],
+          DateTime(
+            reminderAt.year,
+            reminderAt.month,
+            reminderAt.day,
+            reminderAt.hour,
+            reminderAt.minute,
+          ),
+        );
+      },
+    );
+
+    test(
       'startup resync does not re-arm just-missed same-minute one-shot reminders',
       () async {
         final now = DateTime.now();

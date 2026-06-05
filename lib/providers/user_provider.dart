@@ -71,6 +71,49 @@ class UserProvider extends ChangeNotifier {
     String? avatarUrl,
     String? bio,
   }) async {
+    await _writeProfile(
+      username: username,
+      avatarInitials: avatarInitials,
+      displayName: displayName,
+      email: email,
+      emailVerified: emailVerified,
+      avatarUrl: avatarUrl,
+      bio: bio,
+      touchUpdatedAt: true,
+    );
+  }
+
+  Future<void> applyAccountSnapshot({
+    required String username,
+    String? avatarInitials,
+    String? displayName,
+    String? email,
+    bool? emailVerified,
+    String? avatarUrl,
+    String? bio,
+  }) async {
+    await _writeProfile(
+      username: username,
+      avatarInitials: avatarInitials,
+      displayName: displayName,
+      email: email,
+      emailVerified: emailVerified,
+      avatarUrl: avatarUrl,
+      bio: bio,
+      touchUpdatedAt: false,
+    );
+  }
+
+  Future<void> _writeProfile({
+    required String username,
+    String? avatarInitials,
+    String? displayName,
+    String? email,
+    bool? emailVerified,
+    String? avatarUrl,
+    String? bio,
+    required bool touchUpdatedAt,
+  }) async {
     final cleanName = username.trim().isEmpty ? '用户' : username.trim();
     final cleanInitials = (avatarInitials ?? '').trim();
     _profile.username = cleanName;
@@ -92,7 +135,9 @@ class UserProvider extends ChangeNotifier {
     if (bio != null) {
       _profile.bio = bio.trim();
     }
-    _profile.updatedAt = DateTime.now();
+    if (touchUpdatedAt || _profile.updatedAt == null) {
+      _profile.updatedAt = DateTime.now();
+    }
     await _save();
     notifyListeners();
   }

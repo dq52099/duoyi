@@ -216,7 +216,9 @@ void main() {
     expect(service, contains('AudioAttributes.USAGE_ALARM'));
     expect(service, contains('playRawRingtone(selectedResId, volume, id'));
     expect(service, contains('recordPlaybackStarted'));
-    expect(service, contains('preparedPlayer.start()'));
+    expect(service, contains('prepare()'));
+    expect(service, contains('start()'));
+    expect(service, isNot(contains('prepareAsync()')));
     expect(service, contains('raw_selected'));
     expect(service, contains('raw_soft_fallback'));
     expect(service, contains('tone_fallback'));
@@ -272,7 +274,7 @@ void main() {
     expect(service, contains('AudioManager.STREAM_ALARM'));
     expect(service, contains('ToneGenerator.TONE_PROP_BEEP'));
     expect(service, isNot(contains('TONE_CDMA_ALERT_CALL_GUARD')));
-    expect(service, contains('playToneFallback(volume, id)'));
+    expect(service, contains('playToneFallback(volume, id, audioRoute)'));
     expect(service, contains('tone fallback playback failed'));
     expect(service, contains('ringtone playback failed'));
     expect(service, contains('ringtone_playback_failed'));
@@ -1119,7 +1121,7 @@ void main() {
     expect(helper, contains('已阻止注册系统通知兜底以避免重复弹出'));
   });
 
-  test('闹钟通道交接清理失败会阻断另一通道注册，避免重复弹出', () {
+  test('闹钟通道旧队列清理失败不阻断新提醒注册', () {
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync();
@@ -1132,9 +1134,14 @@ void main() {
       alarmService,
       contains('throw AlarmQueueHandoffException(message);'),
     );
-    expect(alarmService, contains('旧 Flutter 闹钟队列清理失败'));
-    expect(alarmService, contains('旧原生闹钟队列清理失败'));
-    expect(alarmService, contains('已阻止注册另一条提醒以避免重复弹出'));
+    expect(alarmService, contains('continues after plugin owner cleanup'));
+    expect(alarmService, contains('continues after native owner cleanup'));
+    expect(alarmService, contains('replacing the alarm should not be '));
+    expect(
+      alarmService,
+      contains('blocked by stale Flutter notification cleanup'),
+    );
+    expect(alarmService, contains('blocked by stale native cleanup'));
 
     final flutterCleanupStart = alarmService.indexOf(
       'Future<void> _cancelFlutterAlarmQueue',
@@ -1160,9 +1167,17 @@ void main() {
     expect(flutterCleanup, contains('final failures = <Object>[];'));
     expect(flutterCleanup, contains('failures.add(e);'));
     expect(flutterCleanup, contains('if (failures.isNotEmpty)'));
+    expect(
+      flutterCleanup,
+      isNot(contains('throw AlarmQueueHandoffException(message);')),
+    );
     expect(nativeCleanup, contains('final failures = <Object>[];'));
     expect(nativeCleanup, contains('failures.add(e);'));
     expect(nativeCleanup, contains('if (failures.isNotEmpty)'));
+    expect(
+      nativeCleanup,
+      isNot(contains('throw AlarmQueueHandoffException(message);')),
+    );
     expect(nativeCleanup, contains('NativeReminderRingtone.cancelOrThrow'));
     expect(
       nativeCleanup,
@@ -1224,7 +1239,11 @@ void main() {
       lessThan(showNow.indexOf('val intent = ReminderRingtoneService.intent')),
       reason: '立即响铃前也必须清理同 id 旧队列，否则旧 alarm 后续还会再响。',
     );
-    expect(showNow, contains('if (!reserveDelivery(context, id)) return true'));
+    expect(showNow, isNot(contains('reserveDelivery(')));
+    expect(
+      showNow,
+      contains('rapid strong-reminder retries report success without actually'),
+    );
     expect(once, contains('cancelScheduledOnly(context, id)'));
     expect(
       once.indexOf('cancelScheduledOnly(context, id)'),

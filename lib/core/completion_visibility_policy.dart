@@ -31,7 +31,7 @@ class CompletionVisibilityPolicy {
   /// 规则：
   /// 1. 已归档、已完成任务不展示。
   /// 2. 无截止日期的未完成任务展示，避免遗漏。
-  /// 3. 有截止日期时，只展示本地日期等于今天且未逾期的任务；逾期与未来任务不展示。
+  /// 3. 有截止日期时，截止时间未到就展示；逾期后不展示。
   ///    兼容只保存日期、不保存具体时刻的旧数据：当天 00:00 视为全天截止。
   static bool shouldShowInToday(TodoItem t, DateTime now) {
     if (t.isArchivedAfterRollover) return false;
@@ -39,8 +39,9 @@ class CompletionVisibilityPolicy {
     final today = dateOnly(now);
     final due = t.dueDate;
     if (due == null) return true;
-    if (dateOnly(due) != today) return false;
-    return due == today || !due.isBefore(now);
+    final dueDay = dateOnly(due);
+    if (due == dueDay && dueDay == today) return true;
+    return !due.isBefore(now);
   }
 
   /// 把一条 Todo 映射到它当前的可视语义状态。

@@ -45,27 +45,108 @@ class CalendarAggregator {
   static List<CalendarEvent> _todoEvents(
     List<TodoItem> todos,
     ColorScheme colorScheme,
-  ) {
-    return [
-      for (final t in todos)
-        CalendarEvent(
-          id: 'todo_${t.id}',
-          title: t.title,
-          subtitle: t.dueDate == null
-              ? null
-              : '截止 ${_formatDateTime(t.dueDate!)}',
-          date: t.date,
-          endDate: t.dueDate,
-          type: CalendarEventType.todo,
-          color: colorScheme.primary,
-          isCompleted: t.isCompleted,
-          sourceId: t.id,
-          projectId: t.listGroupId,
-          projectName: t.listGroupName,
-          workspaceId: t.workspaceId,
-          time: t.dueDate == null ? null : TimeOfDay.fromDateTime(t.dueDate!),
-        ),
-    ];
+  ) => [for (final t in todos) _todoEvent(t, colorScheme)];
+
+  static CalendarEvent _todoEvent(TodoItem t, ColorScheme colorScheme) {
+    final anchor = _todoCalendarAnchor(t);
+    return CalendarEvent(
+      id: 'todo_${t.id}',
+      title: t.title,
+      subtitle: t.dueDate == null ? null : '截止 ${_formatDateTime(t.dueDate!)}',
+      date: anchor.date,
+      endDate: t.dueDate,
+      type: CalendarEventType.todo,
+      color: colorScheme.primary,
+      isCompleted: t.isCompleted,
+      sourceId: t.id,
+      projectId: t.listGroupId,
+      projectName: t.listGroupName,
+      workspaceId: t.workspaceId,
+      time: anchor.time,
+    );
+  }
+
+  static _TodoCalendarAnchor _todoCalendarAnchor(TodoItem t) {
+    final plan = t.reminderPlan;
+    final rule = plan.enabled ? plan.primaryRule : null;
+    if (rule != null &&
+        rule.enabled &&
+        rule.kind != ReminderKind.off &&
+        _validClock(rule.hour, rule.minute)) {
+      final hour = rule.hour!;
+      final minute = rule.minute!;
+      switch (rule.type) {
+        case ReminderRuleType.dailyTime:
+        case ReminderRuleType.weeklyTime:
+          return _timedAnchor(t.date, hour, minute);
+        case ReminderRuleType.relativeToDue:
+          final due = t.dueDate;
+          if (due != null) {
+            return _timedAnchor(
+              due,
+              hour,
+              minute,
+              offsetMinutes: rule.offsetMinutes,
+            );
+          }
+          break;
+        case ReminderRuleType.absolute:
+          final reminderAt = t.reminderAt;
+          if (reminderAt != null) return _timedAnchorFromDateTime(reminderAt);
+          return _timedAnchor(t.dueDate ?? t.date, hour, minute);
+      }
+    }
+
+    final legacyReminderAt = t.reminderAt;
+    if (legacyReminderAt != null) {
+      return _timedAnchorFromDateTime(legacyReminderAt);
+    }
+
+    final legacy = t.reminder;
+    if (legacy.enabled && _validClock(legacy.hour, legacy.minute)) {
+      return _timedAnchor(t.dueDate ?? t.date, legacy.hour!, legacy.minute!);
+    }
+
+    final due = t.dueDate;
+    if (due != null && _hasClockTime(due)) {
+      return _timedAnchorFromDateTime(due);
+    }
+
+    return _timedAnchor(t.date, t.createdAt.hour, t.createdAt.minute);
+  }
+
+  static _TodoCalendarAnchor _timedAnchor(
+    DateTime date,
+    int hour,
+    int minute, {
+    int? offsetMinutes,
+  }) {
+    final base = DateTime(date.year, date.month, date.day, hour, minute);
+    final shifted = offsetMinutes == null
+        ? base
+        : base.add(Duration(minutes: offsetMinutes));
+    return _timedAnchorFromDateTime(shifted);
+  }
+
+  static _TodoCalendarAnchor _timedAnchorFromDateTime(DateTime date) {
+    return _TodoCalendarAnchor(date, TimeOfDay.fromDateTime(date));
+  }
+
+  static bool _validClock(int? hour, int? minute) {
+    return hour != null &&
+        minute != null &&
+        hour >= 0 &&
+        hour <= 23 &&
+        minute >= 0 &&
+        minute <= 59;
+  }
+
+  static bool _hasClockTime(DateTime date) {
+    return date.hour != 0 ||
+        date.minute != 0 ||
+        date.second != 0 ||
+        date.millisecond != 0 ||
+        date.microsecond != 0;
   }
 
   static List<CalendarEvent> _habitEvents(List<Habit> habits) {
@@ -358,4 +439,11 @@ class CalendarAggregator {
     final minutes = seconds / 60;
     return '${minutes.toStringAsFixed(seconds % 60 == 0 ? 0 : 1)}分钟';
   }
+}
+
+class _TodoCalendarAnchor {
+  final DateTime date;
+  final TimeOfDay? time;
+
+  const _TodoCalendarAnchor(this.date, this.time);
 }

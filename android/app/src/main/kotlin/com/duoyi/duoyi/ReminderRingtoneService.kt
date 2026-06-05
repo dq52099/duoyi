@@ -27,6 +27,11 @@ class ReminderRingtoneService : Service() {
     private var toneRunnable: Runnable? = null
     private val handler = Handler(Looper.getMainLooper())
     private var stopRunnable: Runnable? = null
+    private data class ReminderAudioRoute(
+        val attributes: AudioAttributes,
+        val toneStream: Int,
+        val sourceSuffix: String,
+    )
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == actionStop) {
@@ -69,6 +74,7 @@ class ReminderRingtoneService : Service() {
 
         try {
             activeReminderId = id
+            stopPreview()
             cancelFlutterPluginNotification(this, id)
             cancelStatusNotification(id)
             if (rootId != id) cancelStatusNotification(rootId)
@@ -137,15 +143,16 @@ class ReminderRingtoneService : Service() {
         releasePlayer()
         val volume = volumePercent(this) / 100f
         val selectedResId = soundResId(this)
-        if (playRawRingtone(selectedResId, volume, id, "raw_selected")) return true
-        if (selectedResId != R.raw.duoyi_soft && playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")) {
+        val audioRoute = reminderAudioRoute(id)
+        if (playRawRingtone(selectedResId, volume, id, "raw_selected${audioRoute.sourceSuffix}", audioRoute)) return true
+        if (selectedResId != R.raw.duoyi_soft && playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback${audioRoute.sourceSuffix}", audioRoute)) {
             Log.w("ReminderRingtoneService", "selected ringtone failed, fell back to built-in soft morning chime")
             return true
         }
-        return playToneFallback(volume, id)
+        return playToneFallback(volume, id, audioRoute)
     }
 
-    private fun playRawRingtone(resId: Int, volume: Float, id: Int, source: String): Boolean {
+    private fun playRawRingtone(resId: Int, volume: Float, id: Int, source: String, audioRoute: ReminderAudioRoute): Boolean {
         val afd = runCatching { resources.openRawResourceFd(resId) }.getOrNull()
         if (afd == null) {
             return false
@@ -155,57 +162,47 @@ class ReminderRingtoneService : Service() {
             afd.close()
             return false
         }
+        val mediaPlayer = MediaPlayer()
         try {
-            player = MediaPlayer().apply {
-                setAudioAttributes(alarmAudioAttributes())
+            player = mediaPlayer.apply {
+                setAudioAttributes(audioRoute.attributes)
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 isLooping = true
                 setVolume(volume, volume)
-                setOnPreparedListener { preparedPlayer ->
-                    runCatching {
-                        preparedPlayer.start()
-                        ReminderRingtoneScheduler.recordPlaybackStarted(
-                            this@ReminderRingtoneService,
-                            id,
-                            source,
-                        )
-                    }.onFailure { error ->
-                        Log.w("ReminderRingtoneService", "raw ringtone start failed, trying fallback", error)
-                        if (player === preparedPlayer) player = null
-                        runCatching { preparedPlayer.release() }
-                        if (resId != R.raw.duoyi_soft) {
-                            playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
-                        } else {
-                            playToneFallback(volume, id)
-                        }
-                    }
-                }
                 setOnErrorListener { mp, _, _ ->
                     if (player === mp) player = null
                     runCatching { mp.release() }
                     if (resId != R.raw.duoyi_soft) {
-                        playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback")
+                        playRawRingtone(R.raw.duoyi_soft, volume, id, "raw_soft_fallback${audioRoute.sourceSuffix}", audioRoute)
                     } else {
-                        playToneFallback(volume, id)
+                        playToneFallback(volume, id, audioRoute)
                     }
                     true
                 }
-                prepareAsync()
+                prepare()
+                start()
+                ReminderRingtoneScheduler.recordPlaybackStarted(
+                    this@ReminderRingtoneService,
+                    id,
+                    source,
+                )
             }
             return true
         } catch (error: Exception) {
             Log.w("ReminderRingtoneService", "raw ringtone playback failed, trying soft fallback", error)
+            if (player === mediaPlayer) player = null
+            runCatching { mediaPlayer.release() }
             return false
         } finally {
             afd.close()
         }
     }
 
-    private fun playToneFallback(volume: Float, id: Int): Boolean {
+    private fun playToneFallback(volume: Float, id: Int, audioRoute: ReminderAudioRoute): Boolean {
         releaseToneFallback()
         val toneVolume = (volume * 100).toInt().coerceIn(40, 100)
         return runCatching {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, toneVolume)
+            toneGenerator = ToneGenerator(audioRoute.toneStream, toneVolume)
             val initialStarted = toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 260) == true
             if (!initialStarted) {
                 ReminderRingtoneScheduler.recordDeliveryIssue(
@@ -236,7 +233,7 @@ class ReminderRingtoneService : Service() {
             ReminderRingtoneScheduler.recordPlaybackStarted(
                 this,
                 id,
-                "tone_fallback",
+                "tone_fallback${audioRoute.sourceSuffix}",
             )
             true
         }.onFailure {
@@ -251,9 +248,44 @@ class ReminderRingtoneService : Service() {
         }.getOrDefault(false)
     }
 
+    private fun reminderAudioRoute(id: Int): ReminderAudioRoute {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val alarmVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM)
+        val musicVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (alarmVolume <= 0 && musicVolume > 0) {
+            Log.w(
+                "ReminderRingtoneService",
+                "alarm stream volume is zero; using media stream fallback for strong reminder id=$id musicVolume=$musicVolume",
+            )
+            ReminderRingtoneScheduler.recordDeliveryIssue(
+                this,
+                id = id,
+                reason = "alarm_volume_zero_media_fallback",
+                message = "系统闹钟音量为 0，已临时使用媒体音量播放强提醒。建议调高系统闹钟音量。",
+            )
+            return ReminderAudioRoute(
+                attributes = mediaAudioAttributes(),
+                toneStream = AudioManager.STREAM_MUSIC,
+                sourceSuffix = "_media_volume_fallback",
+            )
+        }
+        return ReminderAudioRoute(
+            attributes = alarmAudioAttributes(),
+            toneStream = AudioManager.STREAM_ALARM,
+            sourceSuffix = "",
+        )
+    }
+
     private fun alarmAudioAttributes(): AudioAttributes {
         return AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+    }
+
+    private fun mediaAudioAttributes(): AudioAttributes {
+        return AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
     }

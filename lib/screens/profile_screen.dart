@@ -44,11 +44,13 @@ class _ProfileAvatarPreview extends StatelessWidget {
   final String? avatar;
   final String displayName;
   final double radius;
+  final Object? cacheKey;
 
   const _ProfileAvatarPreview({
     required this.avatar,
     required this.displayName,
     required this.radius,
+    this.cacheKey,
   });
 
   @override
@@ -69,6 +71,7 @@ class _ProfileAvatarPreview extends StatelessWidget {
           ? ClipOval(
               child: CachedAvatarImage(
                 url: networkUrl,
+                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
                 width: radius * 2,
                 height: radius * 2,
                 fallbackBuilder: (_) => _ProfileAvatarLetter(
@@ -275,11 +278,13 @@ class _ProfileAvatarWithEdit extends StatelessWidget {
 class _ProfileAvatarFullScreen extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
   final VoidCallback? onEdit;
 
   const _ProfileAvatarFullScreen({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
     this.onEdit,
   });
 
@@ -313,6 +318,7 @@ class _ProfileAvatarFullScreen extends StatelessWidget {
           child: _ProfileAvatarFullImage(
             avatar: avatar,
             displayName: displayName,
+            cacheKey: cacheKey,
           ),
         ),
       ),
@@ -323,10 +329,12 @@ class _ProfileAvatarFullScreen extends StatelessWidget {
 class _ProfileAvatarFullImage extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
 
   const _ProfileAvatarFullImage({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
   });
 
   @override
@@ -337,6 +345,7 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final image = networkUrl != null
         ? CachedAvatarImage(
             url: networkUrl,
+            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1037,11 +1046,14 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     final avatar = _avatarCtrl.text.trim().isEmpty
         ? context.read<AuthProvider>().state.avatar
         : _avatarCtrl.text.trim();
+    final auth = context.read<AuthProvider>().state;
+    final profile = context.read<UserProvider>().profile;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: avatar,
           displayName: displayName,
+          cacheKey: _avatarCacheKey(avatar, profile.updatedAt, auth.userId),
           onEdit: _uploadAvatar,
         ),
       ),
@@ -1165,6 +1177,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AuthProvider>().state;
+    final profile = context.watch<UserProvider>().profile;
     final themeProvider = context.watch<ThemeProvider>();
     final achievements = context.watch<AchievementProvider?>();
     final avatarFrame = themeProvider.activeAvatarFrame;
@@ -1174,6 +1187,14 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       state.displayName,
       state.username,
     ]);
+    final previewAvatar = _avatarCtrl.text.trim().isEmpty
+        ? state.avatar
+        : _avatarCtrl.text.trim();
+    final avatarCacheKey = _avatarCacheKey(
+      previewAvatar,
+      profile.updatedAt,
+      state.userId,
+    );
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Colors.transparent;
 
@@ -1218,11 +1239,10 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                     child: Hero(
                       tag: 'profile-avatar-preview',
                       child: _ProfileAvatarPreview(
-                        avatar: _avatarCtrl.text.trim().isEmpty
-                            ? state.avatar
-                            : _avatarCtrl.text.trim(),
+                        avatar: previewAvatar,
                         displayName: displayName.isEmpty ? '我' : displayName,
                         radius: 36,
+                        cacheKey: avatarCacheKey,
                       ),
                     ),
                   ),
@@ -1531,6 +1551,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: _avatarCtrl.text.trim(),
           displayName: displayName,
+          cacheKey: _avatarCacheKey(
+            _avatarCtrl.text.trim(),
+            context.read<UserProvider>().profile.updatedAt,
+            null,
+          ),
           onEdit: _pickLocalAvatar,
         ),
       ),
@@ -1609,11 +1634,18 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<UserProvider>().profile;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
       I18n.tr('profile.default_user'),
     ]);
+    final previewAvatar = _avatarCtrl.text.trim();
+    final avatarCacheKey = _avatarCacheKey(
+      previewAvatar,
+      profile.updatedAt,
+      null,
+    );
     final subtitle = _firstNonEmptyProfileText([
       _bioCtrl.text,
       _emailCtrl.text,
@@ -1647,9 +1679,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                   child: Hero(
                     tag: 'profile-avatar-preview',
                     child: _ProfileAvatarPreview(
-                      avatar: _avatarCtrl.text.trim(),
+                      avatar: previewAvatar,
                       displayName: displayName,
                       radius: 36,
+                      cacheKey: avatarCacheKey,
                     ),
                   ),
                 ),
@@ -1840,6 +1873,11 @@ String? _networkAvatarUrl(String value) {
     return trimmed;
   }
   return null;
+}
+
+String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
+  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}|'
+      '${updatedAt?.millisecondsSinceEpoch ?? 0}';
 }
 
 Future<String> _copyLocalAvatarFile(XFile file) async {

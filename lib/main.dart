@@ -89,6 +89,7 @@ import 'widgets/surface_components.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 final List<Uri> _pendingWidgetUris = <Uri>[];
+final Map<String, DateTime> _recentWidgetActionUris = <String, DateTime>{};
 typedef _ReminderResyncQueue =
     Future<void> Function({Duration delay, String reason});
 
@@ -305,13 +306,15 @@ void main() async {
         profile.bio == (state.bio ?? '')) {
       return;
     }
-    await userProvider.updateProfile(
-      username: name,
-      displayName: state.displayName ?? '',
-      email: state.email ?? '',
-      emailVerified: state.emailVerified,
-      avatarUrl: state.avatar ?? '',
-      bio: state.bio ?? '',
+    await cloudSyncProvider.suppressDirtyMarkWhile(
+      () => userProvider.applyAccountSnapshot(
+        username: name,
+        displayName: state.displayName ?? '',
+        email: state.email ?? '',
+        emailVerified: state.emailVerified,
+        avatarUrl: state.avatar ?? '',
+        bio: state.bio ?? '',
+      ),
     );
   };
   Object? accountPayloadValue(Map<dynamic, dynamic> data, List<String> keys) {
@@ -966,6 +969,8 @@ void main() async {
   Timer? notificationQuickAddSyncDebounce;
   var notificationQuickAddSyncInFlight = false;
   var notificationQuickAddSyncQueued = false;
+  var notificationQuickAddSyncQueuedForce = false;
+  var notificationQuickAddSyncQueuedRequestIfNeeded = false;
   Completer<bool>? notificationQuickAddSyncQueuedCompleter;
   var lastNotificationQuickAddSignature = '';
   var lastNotificationQuickAddFailureSignature = '';
@@ -1000,6 +1005,10 @@ void main() async {
     }
     if (notificationQuickAddSyncInFlight) {
       notificationQuickAddSyncQueued = true;
+      notificationQuickAddSyncQueuedForce =
+          notificationQuickAddSyncQueuedForce || force;
+      notificationQuickAddSyncQueuedRequestIfNeeded =
+          notificationQuickAddSyncQueuedRequestIfNeeded || requestIfNeeded;
       final completer = notificationQuickAddSyncQueuedCompleter ??=
           Completer<bool>();
       return completer.future;
@@ -1011,12 +1020,13 @@ void main() async {
         requestIfNeeded: requestIfNeeded,
         force: force,
       );
+      final completedSignature = notificationQuickAddSignature();
       if (synced) {
-        lastNotificationQuickAddSignature = signature;
+        lastNotificationQuickAddSignature = completedSignature;
         lastNotificationQuickAddFailureSignature = '';
         lastNotificationQuickAddFailureAt = null;
       } else {
-        lastNotificationQuickAddFailureSignature = signature;
+        lastNotificationQuickAddFailureSignature = completedSignature;
         lastNotificationQuickAddFailureAt = DateTime.now();
       }
     } finally {
@@ -1024,13 +1034,22 @@ void main() async {
     }
     if (notificationQuickAddSyncQueued) {
       notificationQuickAddSyncQueued = false;
+      final queuedForce = notificationQuickAddSyncQueuedForce;
+      final queuedRequestIfNeeded =
+          notificationQuickAddSyncQueuedRequestIfNeeded;
+      notificationQuickAddSyncQueuedForce = false;
+      notificationQuickAddSyncQueuedRequestIfNeeded = false;
       final queuedCompleter = notificationQuickAddSyncQueuedCompleter;
       notificationQuickAddSyncQueuedCompleter = null;
       lastNotificationQuickAddSignature = '';
-      final queuedSynced = await syncNotificationQuickAddDeduped();
+      final queuedSynced = await syncNotificationQuickAddDeduped(
+        force: queuedForce,
+        requestIfNeeded: queuedRequestIfNeeded,
+      );
       if (queuedCompleter != null && !queuedCompleter.isCompleted) {
         queuedCompleter.complete(queuedSynced);
       }
+      synced = queuedSynced;
     }
     return synced;
   }
@@ -2517,6 +2536,21 @@ void _drainPendingWidgetUris(PomodoroProvider pomodoro) {
   }
 }
 
+bool _reserveWidgetActionUri(Uri uri) {
+  final now = DateTime.now();
+  _recentWidgetActionUris.removeWhere(
+    (_, at) => now.difference(at) > const Duration(seconds: 5),
+  );
+  final key = uri.toString();
+  final last = _recentWidgetActionUris[key];
+  if (last != null && now.difference(last) <= const Duration(seconds: 5)) {
+    debugPrint('[DeepLink] duplicate widget action skipped: $uri');
+    return false;
+  }
+  _recentWidgetActionUris[key] = now;
+  return true;
+}
+
 void _handleWidgetUri(
   Uri? uri,
   PomodoroProvider pomodoro, {
@@ -2690,6 +2724,7 @@ void _handleWidgetUri(
     ns.handleSnoozeDeepLink(uri);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+    if (!_reserveWidgetActionUri(uri)) return;
     if (action == 'start_pomodoro') {
       state.navigateTo(4, allowHidden: true);
       if (pomodoro.state.isRunning) {
@@ -2707,7 +2742,7 @@ void _handleWidgetUri(
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showQuickTodoDialog(ctx);
+        unawaited(_showQuickTodoDialog(ctx));
       });
     } else if (action == 'complete_todo' && ctx != null) {
       final id = uri.queryParameters['id'];
@@ -2808,17 +2843,30 @@ Future<void> _createQuickTodoFromAction(
   BuildContext context,
   TodoItem todo,
 ) async {
-  if (!await _preflightQuickTodoReminder(
-    context,
-    todo,
-    feedback: _showWidgetActionFeedbackFromShell,
-  )) {
-    return;
+  try {
+    if (!await _preflightQuickTodoReminder(
+      context,
+      todo,
+      feedback: _showWidgetActionFeedbackFromShell,
+    )) {
+      return;
+    }
+    final latestContext = mainShellKey.currentContext ?? context;
+    if (!latestContext.mounted) return;
+    final todos = Provider.of<TodoProvider?>(latestContext, listen: false);
+    if (todos == null) {
+      debugPrint(
+        '[QuickTodoAction] TodoProvider unavailable for action create',
+      );
+      _showWidgetActionFeedbackFromShell('快捷待办暂不可用，请打开待办页后重试');
+      return;
+    }
+    await todos.addTodo(todo);
+    _showWidgetActionFeedbackFromShell(_quickTodoCreatedMessage(todo));
+  } catch (e, st) {
+    debugPrint('[QuickTodoAction] create failed: $e\n$st');
+    _showWidgetActionFeedbackFromShell('快捷待办创建失败，请稍后重试');
   }
-  final latestContext = mainShellKey.currentContext ?? context;
-  if (!latestContext.mounted) return;
-  await Provider.of<TodoProvider>(latestContext, listen: false).addTodo(todo);
-  _showWidgetActionFeedbackFromShell(_quickTodoCreatedMessage(todo));
 }
 
 Future<void> _completeTodoFromWidgetAction(
@@ -2840,7 +2888,14 @@ Future<bool> _preflightQuickTodoReminder(
   required void Function(String message) feedback,
   String issueTitle = '待办提醒注册失败',
 }) async {
-  final preflight = preflightTodoReminderPlan(todo);
+  late final TodoReminderPreflightResult preflight;
+  try {
+    preflight = preflightTodoReminderPlan(todo);
+  } catch (e, st) {
+    debugPrint('[QuickTodoAction] reminder preflight failed: $e\n$st');
+    feedback('$issueTitle：提醒配置异常，请在待办详情中重新设置提醒。');
+    return false;
+  }
   if (!preflight.hasEnabledPlan) return true;
 
   final blocking = preflight.blockingIssue;
@@ -2855,16 +2910,28 @@ Future<bool> _preflightQuickTodoReminder(
   if (!usesPush && !usesPopup && !usesAlarm) return true;
   final latestContext = mainShellKey.currentContext ?? context;
   if (!latestContext.mounted) return false;
-  final notification = Provider.of<NotificationService?>(
-    latestContext,
-    listen: false,
-  );
-  if (notification != null && (usesPush || usesPopup)) {
-    final ready = await notification.ensureReadyForReminder(
-      scheduledTime: preflight.firstScheduledTime,
-      issueTitle: issueTitle,
-      relatedId: todo.id,
+  NotificationService? notification;
+  try {
+    notification = Provider.of<NotificationService?>(
+      latestContext,
+      listen: false,
     );
+  } catch (e, st) {
+    debugPrint('[QuickTodoAction] notification provider unavailable: $e\n$st');
+  }
+  if (notification != null && (usesPush || usesPopup)) {
+    final ready = await notification
+        .ensureReadyForReminder(
+          scheduledTime: preflight.firstScheduledTime,
+          issueTitle: issueTitle,
+          relatedId: todo.id,
+        )
+        .catchError((Object e, StackTrace st) {
+          debugPrint(
+            '[QuickTodoAction] notification preflight failed: $e\n$st',
+          );
+          return false;
+        });
     if (ready) return true;
     final issue = notification.lastScheduleIssue;
     feedback(
@@ -2875,7 +2942,14 @@ Future<bool> _preflightQuickTodoReminder(
     return false;
   }
   if (usesAlarm) {
-    final granted = await LocalNotifications.instance.ensurePermission();
+    final granted = await LocalNotifications.instance
+        .ensurePermission()
+        .catchError((Object e, StackTrace st) {
+          debugPrint(
+            '[QuickTodoAction] alarm permission preflight failed: $e\n$st',
+          );
+          return false;
+        });
     if (granted) return true;
     feedback('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
     return false;
@@ -2884,8 +2958,13 @@ Future<bool> _preflightQuickTodoReminder(
 }
 
 String _quickTodoCreatedMessage(TodoItem todo) {
-  final preflight = preflightTodoReminderPlan(todo);
-  return preflight.hasEnabledPlan ? '已创建待办，提醒状态可在通知设置/待办详情检查' : '已创建待办';
+  try {
+    final preflight = preflightTodoReminderPlan(todo);
+    return preflight.hasEnabledPlan ? '已创建待办，提醒状态可在通知设置/待办详情检查' : '已创建待办';
+  } catch (e, st) {
+    debugPrint('[QuickTodoAction] created message preflight failed: $e\n$st');
+    return '已创建待办，提醒状态可在待办详情中检查';
+  }
 }
 
 Future<bool> _syncNotificationQuickAdd(
@@ -2987,86 +3066,107 @@ String _todayTaskProgressNotificationBody(
 Future<void> _showQuickTodoDialog(BuildContext context) async {
   if (!context.mounted) return;
   final ctrl = TextEditingController();
-  SmartDateParseResult parsed = SmartDateParseResult.empty;
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AppDialog(
-        title: const Text('快速待办'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '一句话描述（如：明天下午3点开会）'),
-              onChanged: (value) {
-                setState(() => parsed = SmartDateParser.parse(value));
-              },
-            ),
-            if (parsed.isSuccess) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    ctx,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
+  try {
+    SmartDateParseResult parsed = SmartDateParseResult.empty;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AppDialog(
+          title: const Text('快速待办'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '一句话描述（如：明天下午3点开会）',
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 14,
-                      color: Theme.of(ctx).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '识别到：${_formatParsedSmartDate(parsed)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(ctx).colorScheme.primary,
+                onChanged: (value) {
+                  setState(() => parsed = SmartDateParser.parse(value));
+                },
+              ),
+              if (parsed.isSuccess) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      ctx,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome,
+                        size: 14,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '识别到：${_formatParsedSmartDate(parsed)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(I18n.tr('action.add')),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(I18n.tr('action.add')),
-          ),
-        ],
       ),
-    ),
-  );
-  if (ok != true || !context.mounted) return;
-  final text = ctrl.text.trim();
-  if (text.isEmpty) return;
-  final draft = SmartTodoDraftBuilder.fromText(text);
-  final todo = draft.toTodo();
-  if (!await _preflightQuickTodoReminder(
-    context,
-    todo,
-    feedback: (message) => _showContextSnackBar(context, message),
-  )) {
-    return;
+    );
+    if (ok != true || !context.mounted) return;
+    final text = ctrl.text.trim();
+    if (text.isEmpty) return;
+    final draft = SmartTodoDraftBuilder.fromText(text);
+    final todo = draft.toTodo();
+    if (!await _preflightQuickTodoReminder(
+      context,
+      todo,
+      feedback: (message) => _showContextSnackBar(context, message),
+    )) {
+      return;
+    }
+    if (!context.mounted) return;
+    final todos = Provider.of<TodoProvider?>(context, listen: false);
+    if (todos == null) {
+      _showContextSnackBar(context, '快捷待办暂不可用，请打开待办页后重试');
+      return;
+    }
+    await todos.addTodo(todo);
+    if (!context.mounted) return;
+    _showContextSnackBar(context, _quickTodoCreatedMessage(todo));
+  } catch (e, st) {
+    debugPrint('[QuickTodoDialog] create failed: $e\n$st');
+    if (context.mounted) {
+      _showContextSnackBar(context, '快捷待办创建失败，请稍后重试');
+    } else {
+      _showWidgetActionFeedbackFromShell('快捷待办创建失败，请稍后重试');
+    }
+  } finally {
+    ctrl.dispose();
   }
-  if (!context.mounted) return;
-  await context.read<TodoProvider>().addTodo(todo);
-  if (!context.mounted) return;
-  _showContextSnackBar(context, _quickTodoCreatedMessage(todo));
 }
 
 Future<void> _showSharedTextImportSheet(String rawText) async {

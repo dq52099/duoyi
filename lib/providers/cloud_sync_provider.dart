@@ -534,6 +534,7 @@ class CloudSyncProvider extends ChangeNotifier {
     'pref_show_completed_todos',
     'pref_quick_capture_fab',
     'pref_notification_quick_add',
+    'pref_notification_today_progress',
     'pref_daily_reminder_enabled',
     'pref_daily_reminder_today_tasks',
     'pref_daily_reminder_tomorrow_plan',
@@ -1384,6 +1385,12 @@ class CloudSyncProvider extends ChangeNotifier {
         requestCollectionHashes,
       )) {
         skippedCollections.add('preferences');
+      } else if (_remotePreferencesAreOlderThanLocal(
+        prefs,
+        Map<String, dynamic>.from(preferences),
+      )) {
+        skippedCollections.add('preferences');
+        debugPrint('[CloudSync] skipped stale preferences payload');
       } else {
         await _writePreferencesPayload(prefs, preferences);
       }
@@ -1397,6 +1404,12 @@ class CloudSyncProvider extends ChangeNotifier {
         requestCollectionHashes,
       )) {
         skippedCollections.add('quick_capture_templates');
+      } else if (_remoteQuickCaptureTemplatesAreOlderThanLocal(
+        prefs,
+        Map<String, dynamic>.from(quickCaptureTemplates),
+      )) {
+        skippedCollections.add('quick_capture_templates');
+        debugPrint('[CloudSync] skipped stale quick capture templates payload');
       } else {
         await _writeQuickCaptureTemplatesPayload(prefs, quickCaptureTemplates);
       }
@@ -1706,7 +1719,9 @@ class CloudSyncProvider extends ChangeNotifier {
     String localKey,
     Map<dynamic, dynamic> remoteValue,
   ) {
-    if (localKey != 'theme_shop_state' && localKey != 'duoyi_virtual_rewards') {
+    if (localKey != 'theme_shop_state' &&
+        localKey != 'duoyi_virtual_rewards' &&
+        localKey != 'user_profile') {
       return false;
     }
     final local = _readLocalObject(prefs, localKey);
@@ -1731,12 +1746,6 @@ class CloudSyncProvider extends ChangeNotifier {
       if (_syncPayloadHash(_readPreferenceValues(prefs)) ==
           _syncPayloadHash({for (final key in remoteKeys) key: values[key]})) {
         // Values already match. Still fall through to update the sync stamp.
-      } else {
-        for (final key in _preferenceKeys) {
-          if (!remoteKeys.contains(key) && prefs.containsKey(key)) {
-            await prefs.remove(key);
-          }
-        }
       }
       for (final entry in values.entries) {
         final key = entry.key.toString();
@@ -1760,6 +1769,43 @@ class CloudSyncProvider extends ChangeNotifier {
       _pendingPreferencesUpdatedAt = null;
       await prefs.setString(_preferencesUpdatedAtStorageKey, updatedAt);
     }
+  }
+
+  bool _remotePreferencesAreOlderThanLocal(
+    SharedPreferences prefs,
+    Map<String, dynamic> remotePayload,
+  ) {
+    final localUpdatedAt =
+        _pendingPreferencesUpdatedAt ??
+        prefs.getString(_preferencesUpdatedAtStorageKey) ??
+        '';
+    final remoteUpdatedAt = remotePayload['updatedAt']?.toString() ?? '';
+    final hasPendingKeys =
+        _pendingPreferencesFullSync ||
+        _pendingPreferenceKeys.isNotEmpty ||
+        _readPendingPreferenceChangedKeys(prefs).isNotEmpty;
+    if (!hasPendingKeys) return false;
+    if (localUpdatedAt.isNotEmpty && remoteUpdatedAt.isEmpty) return true;
+    if (localUpdatedAt.isEmpty || remoteUpdatedAt.isEmpty) return false;
+    return _timestampGt(localUpdatedAt, remoteUpdatedAt);
+  }
+
+  bool _remoteQuickCaptureTemplatesAreOlderThanLocal(
+    SharedPreferences prefs,
+    Map<String, dynamic> remotePayload,
+  ) {
+    final localUpdatedAt =
+        _pendingQuickCaptureTemplatesUpdatedAt ??
+        prefs.getString(_quickCaptureTemplatesUpdatedAtStorageKey) ??
+        '';
+    final remoteUpdatedAt = remotePayload['updatedAt']?.toString() ?? '';
+    if (_pendingQuickCaptureTemplatesUpdatedAt == null &&
+        localUpdatedAt.isEmpty) {
+      return false;
+    }
+    if (localUpdatedAt.isNotEmpty && remoteUpdatedAt.isEmpty) return true;
+    if (localUpdatedAt.isEmpty || remoteUpdatedAt.isEmpty) return false;
+    return _timestampGt(localUpdatedAt, remoteUpdatedAt);
   }
 
   Future<void> _persistPreferencesSnapshot(
