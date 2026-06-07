@@ -950,6 +950,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             ReorderableListView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              // ignore: deprecated_member_use
               onReorder: (oldI, newI) {
                 if (!canEdit) return;
                 final ids = _todo.subtasks.map((e) => e.id).toList();

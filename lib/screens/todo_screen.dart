@@ -1644,6 +1644,7 @@ class _TodoKanbanView extends StatelessWidget {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            // ignore: deprecated_member_use
             cacheExtent: 560,
             itemCount: columns.length,
             itemBuilder: (context, index) {
@@ -1909,6 +1910,7 @@ class _KanbanColumn extends StatelessWidget {
                           ),
                         )
                       : ListView.builder(
+                          // ignore: deprecated_member_use
                           cacheExtent: 560,
                           itemCount: listEntries.length,
                           itemBuilder: (context, index) {
@@ -2673,6 +2675,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: widget.todos.length,
+      // ignore: deprecated_member_use
       onReorder: _reorderTodos,
       proxyDecorator: (child, index, animation) => Material(
         type: MaterialType.transparency,
@@ -3678,6 +3681,7 @@ class QuadrantListScreen extends StatelessWidget {
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
           : ListView.builder(
+              // ignore: deprecated_member_use
               cacheExtent: 640,
               itemCount: todos.length,
               itemBuilder: (context, index) {
