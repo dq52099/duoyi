@@ -45,7 +45,7 @@ List<TodoItem> _visibleTodayOverviewTodos(
     final due = todo.dueDate;
     if (due == null) return true;
     final dueDay = CompletionVisibilityPolicy.dateOnly(due);
-    if (dueDay.isBefore(today) || dueDay.isAfter(today)) return false;
+    if (dueDay.isBefore(today)) return false;
     if (CompletionVisibilityPolicy.isDateOnly(due)) return true;
     return !due.isBefore(now);
   }).toList();
@@ -618,137 +618,140 @@ class _TodayAlmanacCard extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
                   child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _TodayDateBadge(
-                        date: now,
-                        accent: accent,
-                        foreground: foreground,
-                        muted: muted,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _TodayDateBadge(
+                            date: now,
+                            accent: accent,
+                            foreground: foreground,
+                            muted: muted,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: accent.withValues(
-                                      alpha: isDark ? 0.20 : 0.13,
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 24,
+                                      height: 24,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: accent.withValues(
+                                          alpha: isDark ? 0.20 : 0.13,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          DesignTokens.radiusSm,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.calendar_month_rounded,
+                                        size: 14,
+                                        color: accent,
+                                      ),
                                     ),
-                                    borderRadius: BorderRadius.circular(
-                                      DesignTokens.radiusSm,
+                                    const SizedBox(width: 7),
+                                    Expanded(
+                                      child: Text(
+                                        '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: muted,
+                                              fontSize: 12.5,
+                                              height: 1.2,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                  child: Icon(
-                                    Icons.calendar_month_rounded,
-                                    size: 14,
-                                    color: accent,
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      width: 26,
+                                      height: 26,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: foreground.withValues(
+                                          alpha: isDark ? 0.12 : 0.08,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 17,
+                                        color: foreground.withValues(
+                                          alpha: 0.62,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: foreground,
+                                    fontSize: 16,
+                                    height: 1.25,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
-                                const SizedBox(width: 7),
-                                Expanded(
-                                  child: Text(
-                                    '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: muted,
-                                      fontSize: 12.5,
-                                      height: 1.2,
-                                    ),
+                                if (term != null || festival != null) ...[
+                                  const SizedBox(height: 9),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      if (term != null)
+                                        _TodayCalendarChip(
+                                          text: term!,
+                                          color: accent,
+                                        ),
+                                      if (festival != null)
+                                        _TodayCalendarChip(
+                                          text: festival!,
+                                          color: cs.tertiary,
+                                        ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  width: 26,
-                                  height: 26,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: foreground.withValues(
-                                      alpha: isDark ? 0.12 : 0.08,
-                                    ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.chevron_right_rounded,
-                                    size: 17,
-                                    color: foreground.withValues(alpha: 0.62),
-                                  ),
-                                ),
+                                ],
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: foreground,
-                                fontSize: 16,
-                                height: 1.25,
-                                fontWeight: FontWeight.normal,
-                              ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _TodayYijiPreview(
+                              label: '宜',
+                              text: suitable,
+                              color: const Color(0xFF2E7D32),
+                              foreground: foreground,
+                              isDark: isDark,
                             ),
-                            if (term != null || festival != null) ...[
-                              const SizedBox(height: 9),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  if (term != null)
-                                    _TodayCalendarChip(
-                                      text: term!,
-                                      color: accent,
-                                    ),
-                                  if (festival != null)
-                                    _TodayCalendarChip(
-                                      text: festival!,
-                                      color: cs.tertiary,
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _TodayYijiPreview(
+                              label: '忌',
+                              text: avoid,
+                              color: const Color(0xFFC62828),
+                              foreground: foreground,
+                              isDark: isDark,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _TodayYijiPreview(
-                          label: '宜',
-                          text: suitable,
-                          color: const Color(0xFF2E7D32),
-                          foreground: foreground,
-                          isDark: isDark,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _TodayYijiPreview(
-                          label: '忌',
-                          text: avoid,
-                          color: const Color(0xFFC62828),
-                          foreground: foreground,
-                          isDark: isDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
                 ),
               ),
             ),

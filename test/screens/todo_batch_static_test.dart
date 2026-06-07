@@ -120,7 +120,11 @@ void main() {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
     expect(source, contains('_TodoViewMode.list => ListView.builder'));
-    expect(source, contains('cacheExtent: 640'));
+    expect(
+      source,
+      contains('scrollCacheExtent: const ScrollCacheExtent.pixels'),
+    );
+    expect(source, contains('640'));
     expect(source, contains('RepaintBoundary(child: content)'));
     expect(source, contains('RepaintBoundary(child: card)'));
     expect(source, contains('clipBehavior: Clip.hardEdge'));

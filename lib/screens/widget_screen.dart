@@ -1468,7 +1468,7 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
           style: TextStyle(
             fontSize: 10,
             color: isToday ? Colors.white : cs.onSurface,
-            fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ),
@@ -1705,7 +1705,7 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
             style: TextStyle(
               color: Colors.blue,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ),
