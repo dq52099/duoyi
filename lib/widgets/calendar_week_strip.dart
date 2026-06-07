@@ -88,8 +88,13 @@ class CalendarWeekStrip extends StatelessWidget {
                     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
                 final types = dateEventTypes[key] ?? [];
                 final isSelected =
-                    d.day == selectedDay.day && d.month == selectedDay.month;
-                final isToday = d.day == today.day && d.month == today.month;
+                    d.year == selectedDay.year &&
+                    d.month == selectedDay.month &&
+                    d.day == selectedDay.day;
+                final isToday =
+                    d.year == today.year &&
+                    d.month == today.month &&
+                    d.day == today.day;
                 final labels = ['一', '二', '三', '四', '五', '六', '日'];
                 final selectedBackground = Color.alphaBlend(
                   cs.primary.withValues(
@@ -101,65 +106,93 @@ class CalendarWeekStrip extends StatelessWidget {
                 );
                 final selectedForeground = cs.onSurface;
 
-                return GestureDetector(
-                  onTap: () => onDaySelected(d),
-                  child: Container(
-                    width: 48,
-                    height: 64,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? selectedBackground
-                          : (isToday
-                                ? cs.primary.withValues(alpha: 0.12)
-                                : null),
-                      borderRadius: BorderRadius.circular(10),
-                      border: isSelected
-                          ? Border.all(
-                              color: cs.primary.withValues(alpha: 0.26),
-                              width: 0.45,
-                            )
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          labels[d.weekday - 1],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isSelected
-                                ? selectedForeground.withValues(alpha: 0.70)
-                                : cs.onSurfaceVariant,
-                          ),
-                        ),
-                        Text(
-                          '${d.day}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.normal,
-                            color: isSelected ? selectedForeground : null,
-                          ),
-                        ),
-                        if (types.isNotEmpty)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: types
-                                .take(3)
-                                .map(
-                                  (t) => Container(
-                                    width: 5,
-                                    height: 5,
-                                    margin: const EdgeInsets.only(right: 1),
-                                    decoration: BoxDecoration(
-                                      color: _colorFor(t, cs),
-                                      shape: BoxShape.circle,
-                                    ),
+                final semanticLabel = _weekDaySemanticLabel(
+                  d,
+                  weekdayLabel: labels[d.weekday - 1],
+                  isToday: isToday,
+                  isSelected: isSelected,
+                  eventTypeCount: types.length,
+                );
+
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: semanticLabel,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: SizedBox(
+                      width: 48,
+                      height: 64,
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => onDaySelected(d),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? selectedBackground
+                                  : (isToday
+                                        ? cs.primary.withValues(alpha: 0.12)
+                                        : null),
+                              borderRadius: BorderRadius.circular(10),
+                              border: isSelected
+                                  ? Border.all(
+                                      color: cs.primary.withValues(alpha: 0.26),
+                                      width: 0.45,
+                                    )
+                                  : null,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  labels[d.weekday - 1],
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isSelected
+                                        ? selectedForeground.withValues(
+                                            alpha: 0.70,
+                                          )
+                                        : cs.onSurfaceVariant,
                                   ),
-                                )
-                                .toList(),
+                                ),
+                                Text(
+                                  '${d.day}',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.normal,
+                                    color: isSelected
+                                        ? selectedForeground
+                                        : null,
+                                  ),
+                                ),
+                                if (types.isNotEmpty)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: types
+                                        .take(3)
+                                        .map(
+                                          (t) => Container(
+                                            width: 5,
+                                            height: 5,
+                                            margin: const EdgeInsets.only(
+                                              right: 1,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _colorFor(t, cs),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                              ],
+                            ),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -183,6 +216,23 @@ class CalendarWeekStrip extends StatelessWidget {
     final time = aMinutes.compareTo(bMinutes);
     if (time != 0) return time;
     return a.title.compareTo(b.title);
+  }
+
+  String _weekDaySemanticLabel(
+    DateTime date, {
+    required String weekdayLabel,
+    required bool isToday,
+    required bool isSelected,
+    required int eventTypeCount,
+  }) {
+    final parts = <String>[
+      '${date.year}年${date.month}月${date.day}日',
+      weekdayLabel,
+      if (isToday) '今天',
+      if (isSelected) '已选中',
+      eventTypeCount > 0 ? '$eventTypeCount 类事项' : '无事项',
+    ];
+    return parts.join('，');
   }
 }
 

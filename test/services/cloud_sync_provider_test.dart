@@ -927,8 +927,12 @@ void main() {
       locationReminders,
       'Future<void> _saveTriggeredHits(',
     );
+    final normalizedSaveTriggeredHitsBody = saveTriggeredHitsBody.replaceAll(
+      '\r\n',
+      '\n',
+    );
     expect(
-      saveTriggeredHitsBody,
+      normalizedSaveTriggeredHitsBody,
       contains(
         "CloudSyncProvider.recordDeletedItems(\n        'location_reminders',",
       ),

@@ -57,8 +57,14 @@ class CalendarMonthGrid extends StatelessWidget {
         final showDots = cellHeight >= 36;
         final canShowEventCount = cellHeight >= 40;
 
+        final horizontalPadding = constraints.maxWidth < 360 ? 6.0 : 12.0;
+        final showEventCount = canShowEventCount && cellHeight >= 56;
+
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: 6.0,
+          ),
           child: Column(
             children: [
               SizedBox(
@@ -102,8 +108,10 @@ class CalendarMonthGrid extends StatelessWidget {
                           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                       final types = dateEventTypes[key] ?? [];
                       final eventCount = dateEventCounts[key] ?? types.length;
-                      final showEventCount =
+                      final countIsVisible =
                           canShowEventCount && eventCount > 0;
+                      final showEventCountBadge =
+                          countIsVisible && showEventCount && eventCount > 1;
                       final hasTodo = types.contains(CalendarEventType.todo);
                       final isSelected =
                           date.year == selectedDay.year &&
@@ -153,93 +161,129 @@ class CalendarMonthGrid extends StatelessWidget {
                         }
                       }
 
+                      final semanticLabel = _daySemanticLabel(
+                        date,
+                        isToday: isToday,
+                        isSelected: isSelected,
+                        eventCount: eventCount,
+                        subText: subText,
+                      );
+
                       return Expanded(
-                        child: GestureDetector(
-                          onTap: () => onDaySelected(date),
-                          child: Container(
-                            height: cellHeight,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? selectedBackground
-                                  : (isToday
-                                        ? cs.primary.withValues(alpha: 0.1)
-                                        : Colors.transparent),
+                        child: Semantics(
+                          button: true,
+                          selected: isSelected,
+                          label: semanticLabel,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(
                                 DesignTokens.radiusControl,
                               ),
-                              border: isSelected
-                                  ? Border.all(
-                                      color: cs.primary.withValues(alpha: 0.26),
-                                      width: 0.45,
-                                    )
-                                  : null,
-                            ),
-                            child: ClipRect(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '$dayNum',
-                                    style: TextStyle(
-                                      fontSize: dayFontSize,
-                                      height: cellHeight < 14 ? 0.95 : 1.05,
-                                      fontWeight: FontWeight.normal,
-                                      color: isSelected
-                                          ? selectedForeground
-                                          : (isToday
-                                                ? cs.primary
-                                                : cs.onSurface),
+                              onTap: () => onDaySelected(date),
+                              child: Center(
+                                child: Container(
+                                  width: double.infinity,
+                                  height: cellHeight,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? selectedBackground
+                                        : (isToday
+                                              ? cs.primary.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Colors.transparent),
+                                    borderRadius: BorderRadius.circular(
+                                      DesignTokens.radiusControl,
+                                    ),
+                                    border: isSelected
+                                        ? Border.all(
+                                            color: cs.primary.withValues(
+                                              alpha: 0.26,
+                                            ),
+                                            width: 0.45,
+                                          )
+                                        : null,
+                                  ),
+                                  child: ClipRect(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '$dayNum',
+                                          style: TextStyle(
+                                            fontSize: dayFontSize,
+                                            height: cellHeight < 14
+                                                ? 0.95
+                                                : 1.05,
+                                            fontWeight: FontWeight.normal,
+                                            color: isSelected
+                                                ? selectedForeground
+                                                : (isToday
+                                                      ? cs.primary
+                                                      : cs.onSurface),
+                                          ),
+                                        ),
+                                        if (subText != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 1,
+                                            ),
+                                            child: Text(
+                                              subText,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                height: 1,
+                                                color: isSelected
+                                                    ? selectedForeground
+                                                          .withValues(
+                                                            alpha: 0.64,
+                                                          )
+                                                    : subColor,
+                                              ),
+                                            ),
+                                          ),
+                                        if (showDots &&
+                                            types.isNotEmpty &&
+                                            !showEventCountBadge)
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                              top: subText == null ? 3 : 2,
+                                            ),
+                                            child: _eventDots(
+                                              context,
+                                              types: types,
+                                              isSelected: isSelected,
+                                              selectedColor: selectedDotColor,
+                                            ),
+                                          ),
+                                        if (showEventCountBadge)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 1,
+                                            ),
+                                            child: _eventCountBadge(
+                                              context,
+                                              count: eventCount,
+                                              color: hasTodo
+                                                  ? cs.primary
+                                                  : cs.tertiary,
+                                              foreground: isSelected
+                                                  ? selectedForeground
+                                                  : null,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  if (subText != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 1),
-                                      child: Text(
-                                        subText,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          height: 1,
-                                          color: isSelected
-                                              ? selectedForeground.withValues(
-                                                  alpha: 0.64,
-                                                )
-                                              : subColor,
-                                        ),
-                                      ),
-                                    ),
-                                  if (showDots && types.isNotEmpty)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        top: subText == null ? 3 : 2,
-                                      ),
-                                      child: _eventDots(
-                                        context,
-                                        types: types,
-                                        isSelected: isSelected,
-                                        selectedColor: selectedDotColor,
-                                      ),
-                                    ),
-                                  if (showEventCount)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 1),
-                                      child: _eventCountBadge(
-                                        context,
-                                        count: eventCount,
-                                        color: hasTodo
-                                            ? cs.primary
-                                            : cs.tertiary,
-                                        foreground: isSelected
-                                            ? selectedForeground
-                                            : null,
-                                      ),
-                                    ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -319,4 +363,21 @@ class CalendarMonthGrid extends StatelessWidget {
     margin: const EdgeInsets.only(left: 1),
     decoration: BoxDecoration(color: color, shape: BoxShape.circle),
   );
+
+  String _daySemanticLabel(
+    DateTime date, {
+    required bool isToday,
+    required bool isSelected,
+    required int eventCount,
+    required String? subText,
+  }) {
+    final parts = <String>[
+      '${date.year}年${date.month}月${date.day}日',
+      if (isToday) '今天',
+      if (isSelected) '已选中',
+      if (subText != null && subText.isNotEmpty) subText,
+      eventCount > 0 ? '$eventCount 个事项' : '无事项',
+    ];
+    return parts.join('，');
+  }
 }

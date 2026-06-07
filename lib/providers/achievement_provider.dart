@@ -209,12 +209,15 @@ class AchievementProvider extends ChangeNotifier {
     if (unlockedChanged || rewardsChanged) notifyListeners();
   }
 
-  Future<void> updateContext(AchievementContext context) async {
+  Future<void> updateContext(
+    AchievementContext context, {
+    bool silentUnlockFeedback = false,
+  }) async {
     if (!_storageLoaded) {
       await loadFromStorage();
     }
     _context = context;
-    _rebuildSnapshots();
+    _rebuildSnapshots(silentUnlockFeedback: silentUnlockFeedback);
   }
 
   AchievementSnapshot snapshotFor(String achievementId) {
@@ -237,7 +240,11 @@ class AchievementProvider extends ChangeNotifier {
     });
   }
 
-  void _rebuildSnapshots({bool notify = true, bool rewardsChanged = false}) {
+  void _rebuildSnapshots({
+    bool notify = true,
+    bool rewardsChanged = false,
+    bool silentUnlockFeedback = false,
+  }) {
     final context = _context;
     if (context == null) {
       _snapshots = [
@@ -285,7 +292,9 @@ class AchievementProvider extends ChangeNotifier {
     shouldSaveRewards |= _awardCompletedChallenges(context);
 
     if (newlyUnlocked.isNotEmpty) {
-      _pendingUnlockedFeedback.addAll(newlyUnlocked);
+      if (!silentUnlockFeedback) {
+        _pendingUnlockedFeedback.addAll(newlyUnlocked);
+      }
       for (final achievement in newlyUnlocked) {
         shouldSaveRewards |= _award(
           VirtualRewardRules.forAchievement(
@@ -298,11 +307,20 @@ class AchievementProvider extends ChangeNotifier {
       }
     }
 
-    final achievementsToNotify = newlyUnlocked
-        .where(
-          (achievement) => !_notifiedAchievementIds.contains(achievement.id),
-        )
-        .toList(growable: false);
+    final achievementIdsToMarkNotified = silentUnlockFeedback
+        ? newlyUnlocked.map((achievement) => achievement.id).toList()
+        : newlyUnlocked
+              .map((achievement) => achievement.id)
+              .where((id) => !_notifiedAchievementIds.contains(id))
+              .toList(growable: false);
+    final achievementsToNotify = silentUnlockFeedback
+        ? const <Achievement>[]
+        : newlyUnlocked
+              .where(
+                (achievement) =>
+                    !_notifiedAchievementIds.contains(achievement.id),
+              )
+              .toList(growable: false);
 
     if (newlyUnlocked.isNotEmpty || shouldSaveRewards) {
       unawaited(
@@ -310,6 +328,7 @@ class AchievementProvider extends ChangeNotifier {
           saveAchievements: newlyUnlocked.isNotEmpty,
           saveRewards: shouldSaveRewards,
           notify: notify,
+          achievementIdsToMarkNotified: achievementIdsToMarkNotified,
           achievementsToNotify: achievementsToNotify,
         ),
       );
@@ -323,6 +342,7 @@ class AchievementProvider extends ChangeNotifier {
     required bool saveAchievements,
     required bool saveRewards,
     required bool notify,
+    required List<String> achievementIdsToMarkNotified,
     required List<Achievement> achievementsToNotify,
   }) async {
     if (saveAchievements) {
@@ -334,11 +354,11 @@ class AchievementProvider extends ChangeNotifier {
     if (saveAchievements || saveRewards) {
       _persistedRevision++;
     }
-    if (achievementsToNotify.isNotEmpty) {
-      _notifiedAchievementIds.addAll(
-        achievementsToNotify.map((achievement) => achievement.id),
-      );
+    if (achievementIdsToMarkNotified.isNotEmpty) {
+      _notifiedAchievementIds.addAll(achievementIdsToMarkNotified);
       await _saveNotifiedAchievements();
+    }
+    if (achievementsToNotify.isNotEmpty) {
       for (final achievement in achievementsToNotify) {
         _notificationService?.notifyAchievementUnlocked(achievement);
       }

@@ -111,14 +111,19 @@ class LocationReminderProvider extends ChangeNotifier {
 
   final List<LocationReminder> _reminders = [];
   final Map<String, bool> _inRange = {};
+  bool _loaded = false;
 
   List<LocationReminder> get reminders =>
       List<LocationReminder>.unmodifiable(_reminders);
+  bool get isLoaded => _loaded;
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      _loaded = true;
+      return;
+    }
     try {
       final list = jsonDecode(raw) as List;
       _reminders
@@ -131,6 +136,7 @@ class LocationReminderProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[LocationReminder] load failed: $e');
     }
+    _loaded = true;
     notifyListeners();
   }
 

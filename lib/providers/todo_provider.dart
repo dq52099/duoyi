@@ -78,11 +78,11 @@ class TodoProvider extends ChangeNotifier {
     return _todos.where((t) => _dateKey(t.date) == key).toList();
   }
 
-  /// "今日"视图可见的 todos（不包含已完成、归档、逾期与未来项）。
+  /// "今日"视图可见的 todos（不包含已完成、归档、未到进入日期与已逾期项）。
   ///
   /// 与 [activeTodos] 不同：后者是"未完成"过滤，跨日通用；这里严格对齐
   /// `CompletionVisibilityPolicy.shouldShowInToday`，只返回
-  /// 无截止日期未完成任务，或截止日期为今天且未逾期的条目。
+  /// 从进入日期起、到截止日期当天的未完成条目；无截止日期则从进入日期起持续展示。
   /// 供 Today 列表 / Today Widget 复用，避免各处重复判断。
   List<TodoItem> visibleTodayTodos(DateTime now) => _todos
       .where((t) => CompletionVisibilityPolicy.shouldShowInToday(t, now))

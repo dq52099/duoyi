@@ -138,6 +138,42 @@ void main() {
       });
     });
 
+    test('待办日历事件从进入日期延伸到截止日期或今天', () {
+      final events = CalendarAggregator.buildEvents(
+        todos: [
+          TodoItem(
+            id: 'range',
+            title: '跨日待办',
+            date: DateTime(2026, 5, 20),
+            dueDate: DateTime(2026, 5, 22, 18),
+          ),
+          TodoItem(
+            id: 'date-only',
+            title: '日期截止待办',
+            date: DateTime(2026, 5, 20),
+            dueDate: DateTime(2026, 5, 22),
+          ),
+          TodoItem(id: 'open', title: '无截止待办', date: DateTime(2026, 5, 20)),
+        ],
+        habits: const [],
+        pomodoroSessions: const [],
+        colorScheme: cs,
+        now: DateTime(2026, 5, 21, 12),
+      );
+
+      final byId = {for (final event in events) event.sourceId: event};
+      expect(byId['range']!.date, DateTime(2026, 5, 20));
+      expect(byId['range']!.endDate, DateTime(2026, 5, 22, 18));
+      expect(
+        byId['date-only']!.endDate,
+        DateTime(2026, 5, 22, 23, 59, 59, 999, 999),
+      );
+      expect(
+        byId['open']!.endDate,
+        DateTime(2026, 5, 21, 23, 59, 59, 999, 999),
+      );
+    });
+
     test('习惯起止周期外的补卡记录不生成日历事件', () {
       final events = CalendarAggregator.buildEvents(
         todos: const [],

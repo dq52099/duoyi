@@ -642,6 +642,7 @@ void main() async {
   );
 
   Future<void> syncLocationGeofences() async {
+    if (!locationReminderProvider.isLoaded) return;
     try {
       await LocationGeofenceService.syncReminders(
         locationReminderProvider.reminders,
@@ -652,8 +653,6 @@ void main() async {
   }
 
   locationReminderProvider.addListener(syncLocationGeofences);
-  // ignore: discarded_futures
-  syncLocationGeofences();
 
   // 本地有改动 → 交给云同步侧排队自动同步。
   void markDirty() {
@@ -753,8 +752,11 @@ void main() async {
   Timer? achievementRefreshDebounce;
   var achievementRefreshInFlight = false;
   var achievementRefreshQueued = false;
+  var achievementRefreshQueuedSilent = false;
 
-  Future<void> refreshAchievementsNow() async {
+  Future<void> refreshAchievementsNow({
+    bool silentUnlockFeedback = false,
+  }) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
@@ -844,17 +846,21 @@ void main() async {
         weeklyDiaryEntries: weeklyDiaryEntries,
         weeklyActiveDays: activeDays.length,
       ),
+      silentUnlockFeedback: silentUnlockFeedback,
     );
   }
 
-  Future<void> runQueuedAchievementRefresh() async {
+  Future<void> runQueuedAchievementRefresh({
+    bool silentUnlockFeedback = false,
+  }) async {
     if (achievementRefreshInFlight) {
       achievementRefreshQueued = true;
+      achievementRefreshQueuedSilent |= silentUnlockFeedback;
       return;
     }
     achievementRefreshInFlight = true;
     try {
-      await refreshAchievementsNow();
+      await refreshAchievementsNow(silentUnlockFeedback: silentUnlockFeedback);
     } catch (e, st) {
       debugPrint('[achievements] refresh failed: $e\n$st');
     } finally {
@@ -862,17 +868,26 @@ void main() async {
     }
     if (achievementRefreshQueued) {
       achievementRefreshQueued = false;
+      final queuedSilent = achievementRefreshQueuedSilent;
+      achievementRefreshQueuedSilent = false;
       achievementRefreshDebounce?.cancel();
       achievementRefreshDebounce = Timer(const Duration(seconds: 2), () {
-        unawaited(runQueuedAchievementRefresh());
+        unawaited(
+          runQueuedAchievementRefresh(silentUnlockFeedback: queuedSilent),
+        );
       });
     }
   }
 
-  void refreshAchievements({Duration delay = const Duration(seconds: 2)}) {
+  void refreshAchievements({
+    Duration delay = const Duration(seconds: 2),
+    bool silentUnlockFeedback = false,
+  }) {
     achievementRefreshDebounce?.cancel();
     achievementRefreshDebounce = Timer(delay, () {
-      unawaited(runQueuedAchievementRefresh());
+      unawaited(
+        runQueuedAchievementRefresh(silentUnlockFeedback: silentUnlockFeedback),
+      );
     });
   }
 
@@ -1155,10 +1170,26 @@ void main() async {
     aiService.updateFromServerConfig(authProvider.serverConfig);
   }
   cloudSyncProvider.onSynced = (changedCollections) async {
-    // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作"脏改动"。
+    // 同步完成后服务端回写可能覆盖本地数据；这段 reload 不应被当作“脏改动”。
     await cloudSyncProvider.suppressDirtyMarkWhile(() async {
+      const achievementSyncCollections = <String>{
+        'todos',
+        'habits',
+        'pomodoro_sessions',
+        'diaries',
+        'goals',
+        'anniversaries',
+        'courses',
+        'notes',
+        'theme_shop_state',
+        'achievement_states',
+        'virtual_rewards',
+      };
       final reloadTasks = <Future<void> Function()>[];
       var shouldResyncReminders = false;
+      final shouldRefreshAchievementsSilently = changedCollections.any(
+        achievementSyncCollections.contains,
+      );
 
       if (changedCollections.contains('todos')) {
         reloadTasks.add(todoProvider.loadFromStorage);
@@ -1227,6 +1258,12 @@ void main() async {
       }
 
       await _runSyncReloadTasksInBatches(reloadTasks);
+      if (shouldRefreshAchievementsSilently) {
+        achievementRefreshDebounce?.cancel();
+        achievementRefreshQueued = false;
+        achievementRefreshQueuedSilent = false;
+        await refreshAchievementsNow(silentUnlockFeedback: true);
+      }
 
       final accountCollectionsChanged =
           changedCollections.contains('user_profile') ||
@@ -1659,19 +1696,15 @@ Future<bool> _pushHomeWidget(
   DiaryProvider d,
   ThemeProvider tp,
 ) async {
-  final today = DateTime.now();
-  final activeToday =
-      t.todos.where((todo) {
-        return !todo.isCompleted &&
-            todo.date.year == today.year &&
-            todo.date.month == today.month &&
-            todo.date.day == today.day;
-      }).toList()..sort((a, b) {
-        // 按优先级倒序
-        final r = b.priority.rank.compareTo(a.priority.rank);
-        if (r != 0) return r;
-        return a.sortOrder.compareTo(b.sortOrder);
-      });
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final activeToday = t.visibleTodayTodos(now)
+    ..sort((a, b) {
+      // 按优先级倒序
+      final r = b.priority.rank.compareTo(a.priority.rank);
+      if (r != 0) return r;
+      return a.sortOrder.compareTo(b.sortOrder);
+    });
   final activeTodayTodos = activeToday.length;
   final top3 = activeToday.take(3).map((e) => e.title).toList();
   final top3Ids = activeToday.take(3).map((e) => e.id).toList();
@@ -2276,10 +2309,7 @@ String _dailyDigestBody(
 ) {
   final today = DateTime(now.year, now.month, now.day);
   final tomorrow = today.add(const Duration(days: 1));
-  final todayCount = todos.todos.where((t) {
-    final d = DateTime(t.date.year, t.date.month, t.date.day);
-    return d.isAtSameMomentAs(today) && !t.isCompleted;
-  }).length;
+  final todayCount = todos.visibleTodayTodos(now).length;
   final tomorrowCount = todos.todos.where((t) {
     final d = DateTime(t.date.year, t.date.month, t.date.day);
     return d.isAtSameMomentAs(tomorrow) && !t.isCompleted;
@@ -2950,28 +2980,25 @@ String _todayTaskProgressNotificationBody(
   required GoalProvider goals,
 }) {
   final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  var todayTotal = 0;
-  var todayDone = 0;
-  var representativeCount = 0;
-  for (final todo in todos) {
-    final due = todo.dueDate;
-    final date = due ?? todo.date;
-    final day = DateTime(date.year, date.month, date.day);
-    final isTodayTodo = day == today;
-    if (isTodayTodo) {
-      todayTotal++;
-      if (todo.isCompleted) todayDone++;
-    }
-    if (isTodayTodo &&
+  final today = CompletionVisibilityPolicy.dateOnly(now);
+  final visibleTodos = todos
+      .where((todo) {
+        final day = CompletionVisibilityPolicy.dateOnly(todo.date);
+        final isTodayTodo = day == today;
+        return isTodayTodo &&
         !todo.isCompleted &&
-        (todo.priority == TodoPriority.urgent ||
+            !todo.isArchivedAfterRollover;
+      })
+      .toList(growable: false);
+  final remaining = visibleTodos.length;
+  final representativeCount = visibleTodos
+      .where(
+        (todo) =>
+            todo.priority == TodoPriority.urgent ||
             todo.priority == TodoPriority.high ||
-            todo.quadrant == EisenhowerQuadrant.urgentImportant)) {
-      representativeCount++;
-    }
-  }
-  final remaining = (todayTotal - todayDone).clamp(0, todayTotal);
+            todo.quadrant == EisenhowerQuadrant.urgentImportant,
+      )
+      .length;
   final dailyCount = habits.habits
       .where((habit) => habit.isActiveToday() && !habit.isCompletedToday())
       .length;

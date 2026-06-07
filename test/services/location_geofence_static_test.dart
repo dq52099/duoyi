@@ -21,6 +21,9 @@ void main() {
     final receiver = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceReceiver.kt',
     ).readAsStringSync();
+    final restoreReceiver = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceRestoreReceiver.kt',
+    ).readAsStringSync();
     final integrations = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
@@ -48,6 +51,32 @@ void main() {
     expect(manifest, contains('android.permission.ACCESS_COARSE_LOCATION'));
     expect(manifest, contains('android.permission.ACCESS_BACKGROUND_LOCATION'));
     expect(manifest, contains('android:name=".LocationGeofenceReceiver"'));
+    expect(
+      manifest,
+      contains('android:name=".LocationGeofenceRestoreReceiver"'),
+    );
+    final restoreReceiverStart = manifest.indexOf(
+      'android:name=".LocationGeofenceRestoreReceiver"',
+    );
+    final restoreReceiverEnd = manifest.indexOf(
+      '</receiver>',
+      restoreReceiverStart,
+    );
+    expect(restoreReceiverStart, greaterThanOrEqualTo(0));
+    expect(restoreReceiverEnd, greaterThan(restoreReceiverStart));
+    final restoreReceiverManifest = manifest.substring(
+      restoreReceiverStart,
+      restoreReceiverEnd,
+    );
+    expect(restoreReceiverManifest, contains('android:exported="true"'));
+    expect(
+      restoreReceiverManifest,
+      contains('android.intent.action.BOOT_COMPLETED'),
+    );
+    expect(
+      restoreReceiverManifest,
+      contains('android.intent.action.MY_PACKAGE_REPLACED'),
+    );
     expect(gradle, contains('com.google.android.gms:play-services-location'));
 
     expect(mainActivity, contains('duoyi/location_geofence'));
@@ -72,6 +101,12 @@ void main() {
     expect(receiver, contains('位置提醒：'));
     expect(receiver, contains('removeOneShot'));
     expect(receiver, contains('POST_NOTIFICATIONS'));
+    expect(
+      restoreReceiver,
+      contains('LocationGeofenceScheduler.restoreRemembered'),
+    );
+    expect(restoreReceiver, contains('Intent.ACTION_BOOT_COMPLETED'));
+    expect(restoreReceiver, contains('Intent.ACTION_MY_PACKAGE_REPLACED'));
 
     expect(integrations, contains('Android 已接入系统 geofence 调度'));
     expect(model, contains('Android 通过原生 geofence 调度接入系统后台触发'));

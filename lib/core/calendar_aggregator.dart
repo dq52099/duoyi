@@ -10,6 +10,7 @@ import '../models/habit.dart';
 import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import 'completion_visibility_policy.dart';
 
 class CalendarAggregator {
   CalendarAggregator._();
@@ -26,9 +27,11 @@ class CalendarAggregator {
     List<CountdownItem>? countdowns,
     List<GoalItem>? goals,
     List<TimeEntry>? timeEntries,
+    DateTime? now,
   }) {
+    final reference = now ?? DateTime.now();
     final events = <CalendarEvent>[
-      ..._todoEvents(todos, colorScheme),
+      ..._todoEvents(todos, colorScheme, reference),
       ..._habitEvents(habits),
       ..._pomodoroEvents(pomodoroSessions),
       ..._timeEntryEvents(timeEntries ?? const <TimeEntry>[]),
@@ -45,6 +48,7 @@ class CalendarAggregator {
   static List<CalendarEvent> _todoEvents(
     List<TodoItem> todos,
     ColorScheme colorScheme,
+    DateTime now,
   ) {
     return [
       for (final t in todos)
@@ -55,7 +59,7 @@ class CalendarAggregator {
               ? null
               : '截止 ${_formatDateTime(t.dueDate!)}',
           date: t.date,
-          endDate: t.dueDate,
+          endDate: _todoVisibleEndDate(t, now),
           type: CalendarEventType.todo,
           color: colorScheme.primary,
           isCompleted: t.isCompleted,
@@ -66,6 +70,30 @@ class CalendarAggregator {
           time: t.dueDate == null ? null : TimeOfDay.fromDateTime(t.dueDate!),
         ),
     ];
+  }
+
+  static DateTime? _todoVisibleEndDate(TodoItem todo, DateTime now) {
+    final start = CompletionVisibilityPolicy.dateOnly(todo.date);
+    final today = CompletionVisibilityPolicy.dateOnly(now);
+    final due = todo.dueDate;
+    if (due == null) {
+      if (!todo.isCompleted) {
+        if (today.isBefore(start)) return null;
+        return _endOfLocalDay(today);
+      }
+      final completed = todo.completedAt == null
+          ? start
+          : CompletionVisibilityPolicy.dateOnly(todo.completedAt!);
+      final visibleEnd = completed.isBefore(start) ? start : completed;
+      return _endOfLocalDay(visibleEnd);
+    }
+
+    final dueDay = CompletionVisibilityPolicy.dateOnly(due);
+    if (dueDay.isBefore(start)) return null;
+    if (CompletionVisibilityPolicy.isDateOnly(due)) {
+      return _endOfLocalDay(dueDay);
+    }
+    return due;
   }
 
   static List<CalendarEvent> _habitEvents(List<Habit> habits) {
@@ -316,6 +344,9 @@ class CalendarAggregator {
     if (y == null || m == null || d == null) return null;
     return DateTime(y, m, d);
   }
+
+  static DateTime _endOfLocalDay(DateTime day) =>
+      DateTime(day.year, day.month, day.day, 23, 59, 59, 999, 999);
 
   static Color _timeEntryColor(TimeEntryCategory category) =>
       switch (category) {

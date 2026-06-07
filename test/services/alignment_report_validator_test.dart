@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
 void main() {
   late Directory tempDir;
 
@@ -61,7 +63,10 @@ Future<ProcessResult> _runValidator(Directory reportDir) {
     'bash',
     ['scripts/validate_alignment_report.sh'],
     workingDirectory: Directory.current.path,
-    environment: {'REPORT_DIR': reportDir.path},
+    environment: bashEnvironment(
+      {'REPORT_DIR': reportDir.path},
+      pathVariables: {'REPORT_DIR'},
+    ),
     includeParentEnvironment: true,
   );
 }
@@ -90,9 +95,10 @@ void _writeReport(Directory dir, {String? omitGroup, String? emptyLogFor}) {
     }
     final log = File('${dir.path}/${_slug(group)}.log');
     log.writeAsStringSync(group == emptyLogFor ? '' : 'log for $group');
+    final logPath = bashPath(log.path);
     final status = group.startsWith('8/8') ? 'failed(2)' : 'passed';
-    summary.writeln('$group\t$status\t1\t${log.path}');
-    markdown.writeln('| $group | $status | 1s | `${log.path}` |');
+    summary.writeln('$group\t$status\t1\t$logPath');
+    markdown.writeln('| $group | $status | 1s | `$logPath` |');
   }
   File('${dir.path}/summary.tsv').writeAsStringSync(summary.toString());
   File('${dir.path}/summary.md').writeAsStringSync(markdown.toString());

@@ -156,21 +156,28 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     Iterable<int> pluginIds = const <int>[],
   }) async {
     if (!_initialized) return;
+    var skipPluginCleanup = false;
     for (final pluginId in pluginIds) {
+      if (skipPluginCleanup) break;
       try {
         await _plugin.cancel(pluginId);
       } catch (e, st) {
         debugPrint(
           '[AlarmService] plugin partial schedule cleanup failed: $e\n$st',
         );
+        if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+          skipPluginCleanup = true;
+        }
       }
     }
-    try {
-      await _plugin.cancel(id);
-    } catch (e, st) {
-      debugPrint(
-        '[AlarmService] plugin partial schedule cleanup failed: $e\n$st',
-      );
+    if (!skipPluginCleanup) {
+      try {
+        await _plugin.cancel(id);
+      } catch (e, st) {
+        debugPrint(
+          '[AlarmService] plugin partial schedule cleanup failed: $e\n$st',
+        );
+      }
     }
     if (!_isAndroid) return;
     try {
@@ -196,14 +203,33 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     required String operation,
   }) async {
     final failures = <Object>[];
+    var skipPluginCleanup = false;
     for (final pluginId in _pluginAlarmQueueIds(id)) {
-      try {
-        await _plugin.cancel(pluginId);
-      } catch (e, st) {
-        failures.add(e);
-        debugPrint(
-          '[AlarmService] $operation plugin owner cleanup failed: $e\n$st',
-        );
+      if (!skipPluginCleanup) {
+        try {
+          await _plugin.cancel(pluginId);
+          continue;
+        } catch (e, st) {
+          debugPrint(
+            '[AlarmService] $operation plugin owner cleanup failed: $e\n$st',
+          );
+          if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+            skipPluginCleanup = true;
+          } else {
+            failures.add(e);
+            continue;
+          }
+        }
+      }
+      if (_isAndroid) {
+        try {
+          await NativeReminderRingtone.cancelOrThrow(pluginId);
+        } catch (e, st) {
+          failures.add(e);
+          debugPrint(
+            '[AlarmService] $operation native plugin cleanup failed: $e\n$st',
+          );
+        }
       }
     }
     if (failures.isNotEmpty) {
@@ -279,6 +305,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       }
     } catch (e, st) {
       debugPrint('[AlarmService] channel readiness probe failed: $e\n$st');
+      return '强提醒渠道状态无法确认，闹钟会继续注册，但到点弹出、停止按钮或兜底声音可能受系统设置影响。请检查系统通知设置后重新保存提醒。($e)';
     }
     return null;
   }
@@ -736,6 +763,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       }
       // 降级重试：精准闹钟权限缺失时，退化为非精准模式，让提醒至少还能响，
       // 只是可能偏移几分钟。降级成功时视为已调度，避免上层误以为队列为空。
+      Object? inexactFallbackError;
       if (requireExactAlarm) {
         try {
           await _plugin.zonedSchedule(
@@ -777,17 +805,21 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             id: id,
           );
           return;
-        } on StateError {
-          await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
-          rethrow;
-        } catch (_) {
+        } catch (e, st) {
+          inexactFallbackError = e;
+          debugPrint(
+            '[AlarmService] scheduleFullScreen inexact fallback failed: $e\n$st',
+          );
           // 回退也失败时下方一并抛出业务异常让调用方处理。
         }
       }
       await _cancelPartialScheduleAfterFailure(id);
+      final inexactFallbackDetail = inexactFallbackError == null
+          ? ''
+          : ' 非精准回退错误：$inexactFallbackError';
       _recordScheduleIssue(
         title: '闹钟提醒注册失败',
-        message: '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。',
+        message: '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。$inexactFallbackDetail',
         scheduledTime: when,
         id: id,
       );
@@ -1023,6 +1055,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
           rethrow;
         }
+        Object? inexactFallbackError;
         if (requireExactAlarm) {
           try {
             await _plugin.zonedSchedule(
@@ -1057,14 +1090,22 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             }
             exactFallbackUsed = true;
             continue;
-          } catch (_) {
+          } catch (fallbackError, fallbackStack) {
+            inexactFallbackError = fallbackError;
+            debugPrint(
+              '[AlarmService] scheduleDailyFullScreen inexact fallback failed: $fallbackError\n$fallbackStack',
+            );
             // 回退也失败时下方一并抛出业务异常让调用方处理。
           }
         }
         await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+        final inexactFallbackDetail = inexactFallbackError == null
+            ? ''
+            : ' 非精准回退错误：$inexactFallbackError';
         _recordScheduleIssue(
           title: '重复闹钟注册失败',
-          message: '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。',
+          message:
+              '系统精准闹钟权限未开启，非精准回退也失败。请开启精准闹钟权限后重新保存提醒。$inexactFallbackDetail',
           id: scheduleId,
         );
         throw const AlarmPermissionDeniedException();
@@ -1107,16 +1148,29 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         msg.contains('exact_alarms_not_permitted');
   }
 
+  static bool _isPendingIntentLimitExceeded(Object e) {
+    final msg = e.toString();
+    return msg.contains('Too many PendingIntent created') ||
+        msg.contains('10000 PendingIntents');
+  }
+
   @override
   Future<void> cancel(int id) async {
     if (!_initialized) await init();
     final failures = <Object>[];
+    var skipPluginCancel = false;
     for (final queueId in _pluginAlarmQueueIds(id)) {
-      try {
-        await _plugin.cancel(queueId);
-      } catch (e, st) {
-        failures.add(e);
-        debugPrint('[AlarmService] cancel plugin queue failed: $e\n$st');
+      if (!skipPluginCancel) {
+        try {
+          await _plugin.cancel(queueId);
+        } catch (e, st) {
+          debugPrint('[AlarmService] cancel plugin queue failed: $e\n$st');
+          if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+            skipPluginCancel = true;
+          } else {
+            failures.add(e);
+          }
+        }
       }
       try {
         await NativeReminderRingtone.cancelOrThrow(queueId);
@@ -1155,7 +1209,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   /// 查询当前 AlarmService 下发的 pending id 列表（便于测试与诊断）。
   @override
   Future<List<int>> pendingIds() async {
-    if (!_initialized) return const [];
+    if (!_initialized) await init();
     final pending = await _plugin.pendingNotificationRequests();
     final ids = pending.map((e) => e.id).toSet();
     final nativeIds = await NativeReminderRingtone.pendingIdsOrThrow();
@@ -1171,32 +1225,38 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   }) async {
     final expected = ids.toSet();
     if (expected.isEmpty) return;
+    Set<int> actual;
     try {
       final pending = await _plugin.pendingNotificationRequests();
-      final actual = pending.map((request) => request.id).toSet();
-      final missing = expected.difference(actual);
-      if (missing.isEmpty) return;
-      final missingText = missing.join(',');
-      _recordScheduleIssue(
-        title: '闹钟提醒注册失败',
-        message: '系统闹钟注册后未出现在待触发队列，提醒未确认成功：$missingText',
-        scheduledTime: scheduledTime,
-        id: id ?? missing.first,
-      );
-      throw StateError('闹钟提醒未进入系统待触发队列：$missingText');
+      actual = pending.map((request) => request.id).toSet();
     } catch (e, st) {
-      if (e is StateError) rethrow;
+      const message = '系统闹钟已提交注册，但待触发队列状态无法确认';
       _recordScheduleIssue(
-        title: '闹钟提醒注册失败',
-        message: '系统闹钟注册后无法确认待触发队列：$e',
+        title: '闹钟提醒待触发队列需确认',
+        message: '$message。已保留系统接受的提醒调度，若到点未弹出请重新保存提醒。($e)',
         scheduledTime: scheduledTime,
         id: id,
       );
       debugPrint(
-        '[AlarmService] $operation pending verification failed: $e\n$st',
+        '[AlarmService] $operation pending verification skipped: $e\n$st',
       );
-      throw StateError('闹钟提醒无法确认系统待触发队列：$e');
+      return;
     }
+    final missing = expected.difference(actual);
+    if (missing.isEmpty) return;
+    const message = '系统闹钟已提交注册，但待触发队列未返回完整记录';
+    _recordScheduleIssue(
+      title: '闹钟提醒待触发队列需确认',
+      message: '$message。缺失队列 id：${missing.join(',')}，已保留系统接受的提醒调度。',
+      scheduledTime: scheduledTime,
+      id: id,
+    );
+    debugPrint(
+      '[AlarmService] $operation pending verification missing ids: '
+      '${missing.join(',')}; actual=${actual.join(',')}; keeping schedule '
+      'because pendingNotificationRequests can be incomplete after '
+      'zonedSchedule succeeds.',
+    );
   }
 
   Future<Set<String>?> notificationChannelIds() async {

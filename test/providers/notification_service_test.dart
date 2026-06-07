@@ -61,15 +61,22 @@ void main() {
         'Future<List<int>> pendingIds()',
         cancelAllStart,
       );
+      final scheduleOnceStart = source.indexOf(
+        'Future<void> scheduleOnce({',
+        quickAddCancelStart,
+      );
       expect(quickAddCancelStart, greaterThanOrEqualTo(0));
       expect(cancelStart, greaterThanOrEqualTo(0));
-      expect(cancelStart, greaterThan(quickAddCancelStart));
       expect(cancelAllStart, greaterThan(cancelStart));
       expect(pendingStart, greaterThan(cancelAllStart));
+      expect(scheduleOnceStart, greaterThan(quickAddCancelStart));
 
       final cancel = source.substring(cancelStart, cancelAllStart);
       final cancelAll = source.substring(cancelAllStart, pendingStart);
-      final quickAddCancel = source.substring(quickAddCancelStart, cancelStart);
+      final quickAddCancel = source.substring(
+        quickAddCancelStart,
+        scheduleOnceStart,
+      );
 
       expect(cancel, isNot(contains('if (!_initialized) return;')));
       expect(cancel, contains('if (!_initialized) await init();'));
@@ -623,17 +630,17 @@ void main() {
     );
     expectMethodRecordsHistory(
       'Future<void> scheduleTodoReminder({',
-      '@override\n  Future<void> cancelTodoReminder',
+      'Future<void> cancelTodoReminder',
       recordNeedle: '_addScheduledToHistory(',
     );
     expectMethodRecordsHistory(
       'Future<void> scheduleHabitReminder({',
-      '@override\n  Future<void> cancelHabitReminder',
+      'Future<void> cancelHabitReminder',
       recordNeedle: '_addScheduledToHistory(',
     );
     expectMethodRecordsHistory(
       'Future<void> scheduleAnniversary({',
-      '@override\n  Future<void> cancelAnniversary',
+      'Future<void> cancelAnniversary',
       recordNeedle: '_addScheduledToHistory(',
     );
 
@@ -830,6 +837,10 @@ void main() {
       final once = local.substring(onceStart, onceEnd);
       expect(
         once,
+        contains("_ensureAndroidFallbackChannelsForOperation('scheduleOnce')"),
+      );
+      expect(
+        once,
         contains(
           "_cancelPluginNotificationOnly(id, operation: 'scheduleOnce replace')",
         ),
@@ -844,16 +855,8 @@ void main() {
         once.indexOf('_plugin.zonedSchedule('),
         lessThan(once.indexOf('_logPendingVerification(')),
       );
-      expect(
-        once,
-        isNot(contains('系统通知注册后未出现在待触发队列，提醒未确认成功')),
-        reason: '平台已接受调度时不再因为 pending 查询缺失而回滚成功状态。',
-      );
-      expect(
-        once,
-        isNot(contains('await _cancelScheduledIds(<int>{id});')),
-        reason: 'pending 查询现在只记录诊断，不取消已经交给系统的队列。',
-      );
+      expect(once, isNot(contains('strict: true')));
+      expect(once, isNot(contains('await _cancelScheduledIds(<int>{id});')));
 
       final dailyStart = local.indexOf('Future<void> scheduleDaily({');
       final dailyEnd = local.indexOf(
@@ -863,6 +866,10 @@ void main() {
       expect(dailyStart, greaterThanOrEqualTo(0));
       expect(dailyEnd, greaterThan(dailyStart));
       final daily = local.substring(dailyStart, dailyEnd);
+      expect(
+        daily,
+        contains("_ensureAndroidFallbackChannelsForOperation('scheduleDaily')"),
+      );
       expect(
         daily,
         contains(
@@ -878,11 +885,35 @@ void main() {
       expect(daily, contains('expectedIds.add(id);'));
       expect(daily, contains('expectedIds.add(subId);'));
       expect(daily, contains('_logPendingVerification('));
+      expect(daily, isNot(contains('strict: true')));
       expect(daily, isNot(contains('重复提醒注册后未出现在待触发队列，提醒未确认成功')));
       expect(
         daily,
         contains('await _cancelScheduledIds(expectedIds);'),
         reason: '真正的调度异常仍要清理本轮已注册的子任务，避免半成功队列残留。',
+      );
+
+      final replaceCleanupStart = local.indexOf(
+        'Future<void> _cancelPluginNotificationOnly(',
+      );
+      final onceStartAfterCleanup = local.indexOf(
+        'Future<void> scheduleOnce({',
+        replaceCleanupStart,
+      );
+      expect(replaceCleanupStart, greaterThanOrEqualTo(0));
+      expect(onceStartAfterCleanup, greaterThan(replaceCleanupStart));
+      final replaceCleanup = local.substring(
+        replaceCleanupStart,
+        onceStartAfterCleanup,
+      );
+      expect(replaceCleanup, contains('var skipPluginCleanup = false'));
+      expect(replaceCleanup, contains('_isPendingIntentLimitExceeded(e)'));
+      expect(replaceCleanup, contains('skipPluginCleanup = true'));
+      expect(
+        replaceCleanup,
+        contains('await NativeReminderRingtone.cancel(queueId);'),
+        reason:
+            '插件 cancel 触发 Android PendingIntent 上限后，要停止继续插件取消并走 no-create 原生清理。',
       );
 
       final helperStart = local.indexOf(
@@ -897,8 +928,110 @@ void main() {
       final helper = local.substring(helperStart, helperEnd);
       expect(helper, contains('_plugin.pendingNotificationRequests()'));
       expect(helper, contains('expected.difference(actual)'));
+      expect(helper, isNot(contains('bool strict = false')));
+      expect(helper, isNot(contains('await _cancelScheduledIds(expected);')));
       expect(helper, isNot(contains('throw StateError')));
       expect(helper, contains('debugPrint'));
+
+      final channelGuardStart = local.indexOf(
+        'Future<void> _ensureAndroidFallbackChannelsForOperation',
+      );
+      final channelGuardEnd = local.indexOf(
+        'Future<void> _ensureAndroidFallbackChannelSound',
+        channelGuardStart,
+      );
+      expect(channelGuardStart, greaterThanOrEqualTo(0));
+      expect(channelGuardEnd, greaterThan(channelGuardStart));
+      final channelGuard = local.substring(channelGuardStart, channelGuardEnd);
+      expect(channelGuard, contains('try {'));
+      expect(channelGuard, contains('await _ensureAndroidFallbackChannels();'));
+      expect(
+        channelGuard,
+        contains('channel setup failed; continuing'),
+        reason: 'Channel recreation failures should be diagnostic-only; the '
+            'registration attempt still gets a chance to run.',
+      );
+      expect(channelGuard, isNot(contains('rethrow')));
+    },
+  );
+
+  test(
+    'local notification permission probes Android app switch and pending IDs initialize plugin',
+    () {
+      final local = File(
+        'lib/services/local_notifications_io.dart',
+      ).readAsStringSync();
+      final service = File(
+        'lib/providers/notification_service.dart',
+      ).readAsStringSync();
+
+      final requestStart = local.indexOf('Future<bool> requestPermission()');
+      final probeStart = local.indexOf('Future<void> _probePermission()');
+      final ensureStart = local.indexOf(
+        'Future<void> _ensureDeliveryPermission',
+      );
+      expect(requestStart, greaterThanOrEqualTo(0));
+      expect(probeStart, greaterThan(requestStart));
+      expect(ensureStart, greaterThan(probeStart));
+      final permissionBlock = local.substring(requestStart, ensureStart);
+      expect(
+        permissionBlock,
+        contains('_requestAndroidNotificationPermission()'),
+      );
+      expect(permissionBlock, contains('_androidNotificationsEnabled()'));
+      expect(permissionBlock, contains('areNotificationsEnabled()'));
+      expect(
+        permissionBlock,
+        contains('_permissionHandlerNotificationGranted('),
+      );
+      expect(permissionBlock, contains('_combineKnownPermissionSignals('));
+      expect(
+        permissionBlock,
+        contains('if (signals.isEmpty) return false;'),
+        reason:
+            'Android 13+ permission probes that all fail must not be treated as granted.',
+      );
+
+      final pendingStart = local.indexOf('Future<List<int>> pendingIds()');
+      final launchPayloadStart = local.indexOf(
+        'String? takeLaunchPayload()',
+        pendingStart,
+      );
+      expect(pendingStart, greaterThanOrEqualTo(0));
+      expect(launchPayloadStart, greaterThan(pendingStart));
+      final pendingIds = local.substring(pendingStart, launchPayloadStart);
+      expect(pendingIds, contains('if (!_initialized) await init();'));
+      expect(pendingIds, contains('pendingIds failed'));
+      expect(pendingIds, contains('return <int>[];'));
+      expect(pendingIds, isNot(contains('return const [];')));
+
+      final initStart = service.indexOf('Future<void> init() async');
+      final requestPermissionStart = service.indexOf(
+        'Future<bool> requestPermission()',
+        initStart,
+      );
+      expect(initStart, greaterThanOrEqualTo(0));
+      expect(requestPermissionStart, greaterThan(initStart));
+      final initBlock = service.substring(initStart, requestPermissionStart);
+      expect(initBlock, contains('try {'));
+      expect(initBlock, contains('LocalNotifications.instance.init()'));
+      expect(initBlock, contains('local notification init failed'));
+      expect(initBlock, contains('_recordScheduleIssue('));
+      expect(initBlock, contains('await _loadHistory();'));
+
+      final refreshStart = service.indexOf('Future<bool> refreshPermission()');
+      final saveHistoryStart = service.indexOf(
+        'Future<void> _saveHistory()',
+        refreshStart,
+      );
+      expect(refreshStart, greaterThanOrEqualTo(0));
+      expect(saveHistoryStart, greaterThan(refreshStart));
+      final refresh = service.substring(refreshStart, saveHistoryStart);
+      expect(
+        refresh,
+        contains('granted && _lastScheduleIssueIsPermissionOnly'),
+      );
+      expect(refresh, contains('_clearScheduleIssueState();'));
     },
   );
 
@@ -950,23 +1083,23 @@ void main() {
     );
     expectPublicScheduleGuardsSuccess(
       'Future<void> scheduleTodoReminder({',
-      '@override\n  Future<void> cancelTodoReminder',
+      'Future<void> cancelTodoReminder',
       scheduleCall: '_scheduleOnceOrRecord(',
     );
     expectPublicScheduleGuardsSuccess(
       'Future<void> scheduleHabitReminder({',
-      '@override\n  Future<void> cancelHabitReminder',
+      'Future<void> cancelHabitReminder',
       scheduleCall: '_scheduleDailyOrRecord(',
     );
     expectPublicScheduleGuardsSuccess(
       'Future<void> scheduleAnniversary({',
-      '@override\n  Future<void> cancelAnniversary',
+      'Future<void> cancelAnniversary',
       scheduleCall: '_scheduleOnceOrRecord(',
     );
   });
 
   test(
-    'schedule helper surfaces permission and plugin failures instead of fake success',
+    'schedule helper records permission and plugin failures without crashing callers',
     () {
       final source = File(
         'lib/providers/notification_service.dart',
@@ -992,11 +1125,11 @@ void main() {
         source.substring(dailyStart, dailyEnd),
       ]) {
         expect(helper, contains('on NotificationPermissionDeniedException'));
-        expect(helper, contains('rethrow;'));
         expect(helper, contains('catch (e, st)'));
         expect(helper, contains('debugPrint('));
-        expect(helper, contains('rethrow;'));
         expect(helper, contains('_recordScheduleIssue('));
+        expect(helper, contains('return false;'));
+        expect(helper, isNot(contains('rethrow;')));
       }
       expect(
         source.substring(onceStart, onceEnd),
@@ -1004,7 +1137,7 @@ void main() {
       );
       expect(
         source.substring(onceStart, onceEnd),
-        contains('throw NotificationPermissionDeniedException'),
+        isNot(contains('throw NotificationPermissionDeniedException')),
       );
     },
   );
@@ -1121,6 +1254,8 @@ void main() {
     expect(method, contains('LocalNotifications.instance.refreshPermission()'));
     expect(method, contains('系统通知权限未开启，测试通知未发送'));
     expect(method, contains('测试通知发送失败'));
+    expect(method, contains('return;'));
+    expect(method, isNot(contains('rethrow;')));
     expect(method, contains('多仪 · 通知测试'));
     expect(method, isNot(contains('AlarmService.instance.showFullScreenTest')));
     expect(method, isNot(contains('HapticFeedback.vibrate')));
@@ -1132,7 +1267,7 @@ void main() {
     () {
       final prefs = File(
         'lib/screens/notification_history_screen.dart',
-      ).readAsStringSync();
+      ).readAsStringSync().replaceAll('\r\n', '\n');
       final preferences = File(
         'lib/screens/preferences_screen.dart',
       ).readAsStringSync();
@@ -1405,13 +1540,21 @@ void main() {
         'Future<List<int>> pendingIds()',
         cancelAllStart,
       );
+      final scheduleOnceStart = local.indexOf(
+        'Future<void> scheduleOnce({',
+        quickAddCancelStart,
+      );
       expect(quickAddCancelStart, greaterThanOrEqualTo(0));
       expect(cancelStart, greaterThan(quickAddCancelStart));
       expect(cancelAllStart, greaterThan(cancelStart));
       expect(pendingStart, greaterThan(cancelAllStart));
+      expect(scheduleOnceStart, greaterThan(quickAddCancelStart));
       final cancel = local.substring(cancelStart, cancelAllStart);
       final cancelAll = local.substring(cancelAllStart, pendingStart);
-      final quickAddCancel = local.substring(quickAddCancelStart, cancelStart);
+      final quickAddCancel = local.substring(
+        quickAddCancelStart,
+        scheduleOnceStart,
+      );
 
       expect(cancel, contains('for (final queueId in _queueIdsFor(id))'));
       expect(cancel, contains('await _plugin.cancel(queueId);'));
@@ -1588,6 +1731,7 @@ void main() {
       expect(helper, contains('status.isSilent'));
       expect(helper, contains('普通提醒渠道已关闭，提醒已注册但到点可能不会显示'));
       expect(helper, contains('普通提醒渠道声音已关闭，提醒已注册但到点可能无声'));
+      expect(helper, contains('普通提醒渠道状态无法确认，提醒会继续注册'));
       expect(helper, contains('blocking: false'));
       expect(helper, contains('return true;'));
 
@@ -1601,7 +1745,11 @@ void main() {
         once.indexOf('_ensureChannelReadyOrRecord('),
         lessThan(once.indexOf('LocalNotifications.instance.scheduleOnce')),
       );
-      expect(once, contains('throw NotificationPermissionDeniedException'));
+      expect(once, contains('return false;'));
+      expect(
+        once,
+        isNot(contains('throw NotificationPermissionDeniedException')),
+      );
       expect(once, contains('channelWarningRecorded'));
       expect(once, contains('!channelWarningRecorded'));
 
@@ -1704,6 +1852,35 @@ void main() {
       expect(daily, contains('if (_isAndroid && nativeRingtoneOk) return;'));
       expect(daily, contains('rethrow;'));
       expect(daily, contains('已保留内置重复闹钟铃声，提醒仍会响铃'));
+    },
+  );
+
+  test(
+    'ReminderScheduler bridges AlarmService diagnostics into notification issue sink',
+    () {
+      final scheduler = File(
+        'lib/services/reminder_scheduler.dart',
+      ).readAsStringSync();
+
+      expect(scheduler, contains('void _recordAlarmScheduleIssue({'));
+      expect(scheduler, contains('alarm is! AlarmService'));
+      expect(scheduler, contains('(alarm as AlarmService).lastScheduleIssue'));
+      expect(scheduler, contains('clearReminderScheduleIssue()'));
+      expect(scheduler, contains('issueSink.recordReminderScheduleIssue('));
+      expect(
+        scheduler,
+        contains('scheduledTime: issue.scheduledTime ?? scheduledTime'),
+      );
+      expect(
+        scheduler,
+        contains('_recordAlarmScheduleIssue(relatedId: habit.id'),
+      );
+      expect(
+        scheduler,
+        contains('_recordAlarmScheduleIssue(relatedId: rule.key'),
+      );
+      expect(scheduler, contains('scheduledTime: payload.when'));
+      expect(scheduler, contains('scheduledTime: remindAt'));
     },
   );
 }

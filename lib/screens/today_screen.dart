@@ -35,6 +35,22 @@ import 'statistics_screen.dart';
 import 'today_detail_router.dart';
 import 'todo_screen.dart';
 
+List<TodoItem> _visibleTodayOverviewTodos(
+  Iterable<TodoItem> todos,
+  DateTime now,
+) {
+  final today = CompletionVisibilityPolicy.dateOnly(now);
+  return todos.where((todo) {
+    if (todo.isArchivedAfterRollover || todo.isCompleted) return false;
+    final due = todo.dueDate;
+    if (due == null) return true;
+    final dueDay = CompletionVisibilityPolicy.dateOnly(due);
+    if (dueDay.isBefore(today) || dueDay.isAfter(today)) return false;
+    if (CompletionVisibilityPolicy.isDateOnly(due)) return true;
+    return !due.isBefore(now);
+  }).toList();
+}
+
 /// 今日概览：登录后展示的聚合首屏。
 class TodayScreen extends StatelessWidget {
   const TodayScreen({super.key});
@@ -65,7 +81,7 @@ class TodayScreen extends StatelessWidget {
     final suitable = LunarCalendar.suitable(now);
     final avoid = LunarCalendar.avoid(now);
 
-    final todayTodos = todoP.visibleTodayTodos(now);
+    final todayTodos = _visibleTodayOverviewTodos(todoP.todos, now);
     final todayTodosCount = todayTodos.length;
     final completedTodayCount = todoP.todos.where((todo) {
       final completedAt = todo.completedAt;
@@ -505,6 +521,8 @@ class _TodayAlmanacCard extends StatelessWidget {
     final muted = foreground.withValues(alpha: isDark ? 0.74 : 0.68);
     final accent = cs.primary;
     final backgroundAsset = brand.backgroundAsset;
+    final panelFill = foreground.withValues(alpha: isDark ? 0.09 : 0.055);
+    final panelBorder = foreground.withValues(alpha: isDark ? 0.13 : 0.09);
 
     final fallbackGradient = LinearGradient(
       begin: Alignment.topLeft,
@@ -545,6 +563,7 @@ class _TodayAlmanacCard extends StatelessWidget {
             : cs.outlineVariant.withValues(alpha: 0.18),
         width: 0.55,
       ),
+      elevation: 2,
       child: ClipRRect(
         borderRadius: radius,
         child: Stack(
@@ -589,102 +608,249 @@ class _TodayAlmanacCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+              padding: const EdgeInsets.all(15),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: panelFill,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+                  border: Border.all(color: panelBorder, width: 0.45),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
+                  child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: muted,
-                            fontSize: 12.5,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: foreground,
-                            fontSize: 15.5,
-                            height: 1.25,
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '宜 $suitable',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: foreground.withValues(alpha: 0.86),
-                            fontSize: 12,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '忌 $avoid',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: muted,
-                            fontSize: 12,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _TodayDateBadge(
+                        date: now,
+                        accent: accent,
+                        foreground: foreground,
+                        muted: muted,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (term != null)
-                              _TodayCalendarChip(text: term!, color: accent),
-                            if (festival != null)
-                              _TodayCalendarChip(
-                                text: festival!,
-                                color: cs.tertiary,
+                            Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(
+                                      alpha: isDark ? 0.20 : 0.13,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      DesignTokens.radiusSm,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.calendar_month_rounded,
+                                    size: 14,
+                                    color: accent,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Expanded(
+                                  child: Text(
+                                    '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: muted,
+                                      fontSize: 12.5,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: foreground.withValues(
+                                      alpha: isDark ? 0.12 : 0.08,
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 17,
+                                    color: foreground.withValues(alpha: 0.62),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: foreground,
+                                fontSize: 16,
+                                height: 1.25,
+                                fontWeight: FontWeight.normal,
                               ),
+                            ),
+                            if (term != null || festival != null) ...[
+                              const SizedBox(height: 9),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  if (term != null)
+                                    _TodayCalendarChip(
+                                      text: term!,
+                                      color: accent,
+                                    ),
+                                  if (festival != null)
+                                    _TodayCalendarChip(
+                                      text: festival!,
+                                      color: cs.tertiary,
+                                    ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: isDark ? 0.22 : 0.58),
-                      borderRadius: BorderRadius.circular(
-                        DesignTokens.radiusControl,
-                      ),
-                      border: Border.all(
-                        color: foreground.withValues(
-                          alpha: isDark ? 0.12 : 0.10,
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TodayYijiPreview(
+                          label: '宜',
+                          text: suitable,
+                          color: const Color(0xFF2E7D32),
+                          foreground: foreground,
+                          isDark: isDark,
                         ),
-                        width: 0.55,
                       ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${now.day}',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: foreground,
-                        fontSize: 27,
-                        height: 1,
-                        fontWeight: FontWeight.normal,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _TodayYijiPreview(
+                          label: '忌',
+                          text: avoid,
+                          color: const Color(0xFFC62828),
+                          foreground: foreground,
+                          isDark: isDark,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
+              ),
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TodayDateBadge extends StatelessWidget {
+  final DateTime date;
+  final Color accent;
+  final Color foreground;
+  final Color muted;
+  final bool isDark;
+
+  const _TodayDateBadge({
+    required this.date,
+    required this.accent,
+    required this.foreground,
+    required this.muted,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: 68,
+      height: 76,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: foreground.withValues(alpha: isDark ? 0.08 : 0.05),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        border: Border.all(
+          color: foreground.withValues(alpha: isDark ? 0.12 : 0.10),
+          width: 0.55,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.045),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            color: accent.withValues(alpha: isDark ? 0.20 : 0.13),
+            child: Text(
+              '${date.month}月',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: accent,
+                fontSize: 11,
+                height: 1,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 44,
+                  height: 31,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${date.day}',
+                      maxLines: 1,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: foreground,
+                        fontSize: 30,
+                        height: 0.96,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${date.year}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: muted,
+                    fontSize: 10,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -705,14 +871,83 @@ class _TodayCalendarChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
         border: Border.all(color: color.withValues(alpha: 0.16), width: 0.45),
       ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: 11,
-          color: color,
-          height: 1.1,
-          fontWeight: FontWeight.normal,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 128),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontSize: 11,
+            color: color,
+            height: 1.1,
+            fontWeight: FontWeight.normal,
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _TodayYijiPreview extends StatelessWidget {
+  final String label;
+  final String text;
+  final Color color;
+  final Color foreground;
+  final bool isDark;
+
+  const _TodayYijiPreview({
+    required this.label,
+    required this.text,
+    required this.color,
+    required this.foreground,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.17 : 0.105),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.22), width: 0.45),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                height: 1,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: foreground.withValues(alpha: isDark ? 0.88 : 0.82),
+                fontSize: 11.5,
+                height: 1.16,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -773,7 +1008,9 @@ class _TodayProductivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final scoreDelta = comparison.productivityScore.difference.round();
     final trendColor = _trendColor(cs, comparison.productivityScore.direction);
     return AppSurfaceCard(
@@ -781,6 +1018,25 @@ class _TodayProductivityCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(
+            cs.primary.withValues(alpha: isDark ? 0.075 : 0.035),
+            cs.surface,
+          ),
+          Color.alphaBlend(
+            trendColor.withValues(alpha: isDark ? 0.070 : 0.030),
+            cs.surface,
+          ),
+        ],
+      ),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: isDark ? 0.16 : 0.20),
+        width: 0.55,
+      ),
+      elevation: 1.5,
       child: Row(
         children: [
           Container(
@@ -789,8 +1045,18 @@ class _TodayProductivityCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: cs.primary.withValues(alpha: 0.1),
-              border: Border.all(color: cs.primary.withValues(alpha: 0.24)),
+              color: Color.alphaBlend(
+                cs.primary.withValues(alpha: isDark ? 0.18 : 0.11),
+                cs.surface,
+              ),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -825,7 +1091,7 @@ class _TodayProductivityCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         I18n.tr('today.productivity.weekly'),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 16,
                           fontWeight: FontWeight.normal,
                         ),
@@ -915,25 +1181,40 @@ class _TodayProductivityPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.18),
+          width: 0.45,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSurface.withValues(alpha: 0.56),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 150),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: cs.onSurface.withValues(alpha: 0.56),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1220,9 +1501,10 @@ class _TodoTemplateAvatar extends StatelessWidget {
 }
 
 class _TodayTodoLeading extends StatelessWidget {
-  static const double width = 30;
-  static const double height = 28;
-  static const double statusButtonSize = 22;
+  static const double width = 44;
+  static const double height = 44;
+  static const double touchTargetSize = 44;
+  static const double statusButtonSize = 24;
 
   final Color? statusColor;
   final bool isCompleted;
@@ -1331,22 +1613,34 @@ class _TodayTodoStatusToggle extends StatelessWidget {
       checked: isCompleted,
       label: isCompleted ? '标记为未完成' : '标记为完成',
       child: Material(
-        color: background,
-        shape: CircleBorder(
-          side: BorderSide(
-            color: accent.withValues(alpha: isCompleted ? 0.24 : 0.34),
-            width: 0.9,
-          ),
-        ),
+        color: Colors.transparent,
+        shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: enabled ? () => onChanged?.call(!isCompleted) : null,
           child: SizedBox(
-            width: _TodayTodoLeading.statusButtonSize,
-            height: _TodayTodoLeading.statusButtonSize,
-            child: isCompleted
-                ? Icon(Icons.check_rounded, size: 14, color: foreground)
-                : null,
+            width: _TodayTodoLeading.touchTargetSize,
+            height: _TodayTodoLeading.touchTargetSize,
+            child: Center(
+              child: Container(
+                width: _TodayTodoLeading.statusButtonSize,
+                height: _TodayTodoLeading.statusButtonSize,
+                decoration: ShapeDecoration(
+                  color: background,
+                  shape: CircleBorder(
+                    side: BorderSide(
+                      color: accent.withValues(
+                        alpha: isCompleted ? 0.24 : 0.34,
+                      ),
+                      width: 0.9,
+                    ),
+                  ),
+                ),
+                child: isCompleted
+                    ? Icon(Icons.check_rounded, size: 15, color: foreground)
+                    : null,
+              ),
+            ),
           ),
         ),
       ),
@@ -1903,10 +2197,10 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
                         textStyle: theme.textTheme.labelSmall?.copyWith(
                           fontWeight: FontWeight.normal,
                         ),
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(44, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        tapTargetSize: MaterialTapTargetSize.padded,
                       ),
                       child: Text(I18n.tr('today.view')),
                     ),
@@ -2370,16 +2664,16 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
                 _sameDay(t.date, widget.todayKey) || t.isArchivedAfterRollover
                 ? null
                 : SizedBox(
-                    width: 74,
-                    height: 30,
+                    width: 88,
+                    height: 40,
                     child: TextButton(
                       key: ValueKey('today_suggestion_add_${t.id}'),
                       onPressed: adding ? null : () => _addToday(t),
                       style: TextButton.styleFrom(
-                        minimumSize: Size.zero,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(64, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        tapTargetSize: MaterialTapTargetSize.padded,
                       ),
                       child: adding
                           ? const SizedBox(
@@ -2417,11 +2711,29 @@ class _QuoteCardState extends State<_QuoteCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final cs = Theme.of(context).colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return AppSurfaceCard(
       onTap: () => setState(() => _text = DailyQuotes.random()),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       padding: const EdgeInsets.all(14),
+      gradient: LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Color.alphaBlend(
+            cs.secondary.withValues(alpha: isDark ? 0.08 : 0.04),
+            cs.surface,
+          ),
+          cs.surface,
+        ],
+      ),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: isDark ? 0.14 : 0.18),
+        width: 0.55,
+      ),
+      elevation: 1,
       child: Row(
         children: [
           Container(
@@ -2429,6 +2741,10 @@ class _QuoteCardState extends State<_QuoteCard> {
             decoration: BoxDecoration(
               color: cs.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.12),
+                width: 0.45,
+              ),
             ),
             child: Icon(
               Icons.format_quote,
@@ -2440,10 +2756,26 @@ class _QuoteCardState extends State<_QuoteCard> {
           Expanded(
             child: Text(
               _text,
-              style: const TextStyle(fontSize: 13, height: 1.6),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, height: 1.55),
             ),
           ),
-          Icon(Icons.refresh, size: 16, color: Colors.grey.shade500),
+          const SizedBox(width: 8),
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.refresh,
+              size: 15,
+              color: cs.onSurface.withValues(alpha: 0.48),
+            ),
+          ),
         ],
       ),
     );

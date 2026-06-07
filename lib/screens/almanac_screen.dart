@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/lunar_calendar.dart';
 import '../models/anniversary.dart';
@@ -33,6 +34,10 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   static final DateTime _lastSupportedDate = DateTime(2099, 12, 31);
 
   late DateTime _date;
+  final Map<String, _MonthCalendarData> _monthDataCache =
+      <String, _MonthCalendarData>{};
+  final Map<String, List<_MonthHighlight>> _fixedMonthHighlightCache =
+      <String, List<_MonthHighlight>>{};
 
   @override
   void initState() {
@@ -113,6 +118,34 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     setState(() => _date = _clampDate(returnedDate));
   }
 
+  _MonthCalendarData _monthDataFor(DateTime month) {
+    final key = '${I18n.current.name}-${month.year}-${month.month}';
+    return _monthDataCache.putIfAbsent(
+      key,
+      () => _MonthCalendarData.fromMonth(month),
+    );
+  }
+
+  List<_MonthHighlight> _monthHighlightsFor({
+    required DateTime month,
+    required Iterable<CountdownItem> countdowns,
+    required Iterable<Anniversary> anniversaries,
+  }) {
+    final key = '${I18n.current.name}-${month.year}-${month.month}';
+    final fixed = _fixedMonthHighlightCache.putIfAbsent(
+      key,
+      () => _buildFixedMonthHighlights(monthData: _monthDataFor(month)),
+    );
+    return _mergeMonthHighlights([
+      ...fixed,
+      ..._buildUserMonthHighlights(
+        month: month,
+        countdowns: countdowns,
+        anniversaries: anniversaries,
+      ),
+    ]);
+  }
+
   List<(String, Color)> _dateBadges({
     required String? term,
     required String? solarFestival,
@@ -150,14 +183,12 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
     );
     final countdownProvider = context.watch<CountdownProvider?>();
     final anniversaryProvider = context.watch<AnniversaryProvider?>();
-    final monthHighlights = _buildMonthHighlights(
+    final monthData = _monthDataFor(selectedDate);
+    final monthHighlights = _monthHighlightsFor(
       month: selectedDate,
       countdowns: countdownProvider?.items ?? const <CountdownItem>[],
       anniversaries: anniversaryProvider?.items ?? const <Anniversary>[],
     );
-    final monthHighlightDays = {
-      for (final highlight in monthHighlights) highlight.date.day,
-    };
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final routeBackground = theme.brightness == Brightness.dark
@@ -198,7 +229,7 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
             final wide = constraints.maxWidth >= 940;
             final monthCalendar = _MonthCalendar(
               date: selectedDate,
-              highlightDays: monthHighlightDays,
+              monthData: monthData,
               highlights: monthHighlights,
               onPick: _onDatePicked,
               onPreviousMonth: () => _shiftMonth(-1),
@@ -246,31 +277,115 @@ class _AlmanacScreenState extends State<AlmanacScreen> {
   }
 }
 
-List<_MonthHighlight> _buildMonthHighlights({
-  required DateTime month,
-  required Iterable<CountdownItem> countdowns,
-  required Iterable<Anniversary> anniversaries,
+class _MonthCalendarData {
+  final int year;
+  final int month;
+  final int daysInMonth;
+  final int firstWeekdayOffset;
+  final int rowCount;
+  final List<_MonthDayData> days;
+
+  const _MonthCalendarData({
+    required this.year,
+    required this.month,
+    required this.daysInMonth,
+    required this.firstWeekdayOffset,
+    required this.rowCount,
+    required this.days,
+  });
+
+  factory _MonthCalendarData.fromMonth(DateTime month) {
+    final first = DateTime(month.year, month.month, 1);
+    final last = DateTime(month.year, month.month + 1, 0);
+    final offset = first.weekday - 1; // 周一为 0
+    final days = <_MonthDayData>[];
+    for (
+      var day = first;
+      !day.isAfter(last);
+      day = day.add(const Duration(days: 1))
+    ) {
+      final lunar = I18n.current == AppLocale.zh
+          ? LunarCalendar.fromSolar(day)
+          : null;
+      final term = LunarCalendar.solarTerm(day);
+      final solarFestival = LunarCalendar.solarFestival(day);
+      final lunarFestival = lunar == null
+          ? null
+          : LunarCalendar.lunarFestival(lunar);
+      days.add(
+        _MonthDayData(
+          date: day,
+          day: day.day,
+          label:
+              term ??
+              solarFestival ??
+              lunarFestival ??
+              lunar?.shortDayOrMonth ??
+              '',
+          term: term,
+          solarFestival: solarFestival,
+          lunarFestival: lunarFestival,
+          isWeekend: day.weekday >= DateTime.saturday,
+          isHoliday: HolidayCalendar.isHoliday(day),
+          isWorkMakeupDay: HolidayCalendar.isWorkMakeupDay(day),
+        ),
+      );
+    }
+    return _MonthCalendarData(
+      year: month.year,
+      month: month.month,
+      daysInMonth: last.day,
+      firstWeekdayOffset: offset,
+      rowCount: ((last.day + offset) / 7).ceil(),
+      days: List.unmodifiable(days),
+    );
+  }
+
+  _MonthDayData? dayAt(int day) {
+    if (day < 1 || day > daysInMonth) return null;
+    return days[day - 1];
+  }
+}
+
+class _MonthDayData {
+  final DateTime date;
+  final int day;
+  final String label;
+  final String? term;
+  final String? solarFestival;
+  final String? lunarFestival;
+  final bool isWeekend;
+  final bool isHoliday;
+  final bool isWorkMakeupDay;
+
+  const _MonthDayData({
+    required this.date,
+    required this.day,
+    required this.label,
+    required this.term,
+    required this.solarFestival,
+    required this.lunarFestival,
+    required this.isWeekend,
+    required this.isHoliday,
+    required this.isWorkMakeupDay,
+  });
+}
+
+List<_MonthHighlight> _buildFixedMonthHighlights({
+  required _MonthCalendarData monthData,
 }) {
-  final first = DateTime(month.year, month.month, 1);
-  final last = DateTime(month.year, month.month + 1, 0);
   final labelsByDay = <int, List<_HighlightLabel>>{};
 
-  void add(DateTime date, String label, IconData icon, Color color) {
-    if (date.year != month.year || date.month != month.month) return;
+  void add(_MonthDayData day, String label, IconData icon, Color color) {
     labelsByDay
-        .putIfAbsent(date.day, () => <_HighlightLabel>[])
+        .putIfAbsent(day.day, () => <_HighlightLabel>[])
         .add(_HighlightLabel(label: label, icon: icon, color: color));
   }
 
-  for (
-    var day = first;
-    !day.isAfter(last);
-    day = day.add(const Duration(days: 1))
-  ) {
-    final lunar = LunarCalendar.fromSolar(day);
-    final term = LunarCalendar.solarTerm(day);
-    final solarFestival = LunarCalendar.solarFestival(day);
-    final lunarFestival = LunarCalendar.lunarFestival(lunar);
+  for (final day in monthData.days) {
+    final term = day.term;
+    final solarFestival = day.solarFestival;
+    final lunarFestival = day.lunarFestival;
     if (term != null) {
       add(day, '节气 · $term', Icons.eco_outlined, const Color(0xFF43A047));
     }
@@ -290,12 +405,34 @@ List<_MonthHighlight> _buildMonthHighlights({
         const Color(0xFFE91E63),
       );
     }
-    if (HolidayCalendar.isHoliday(day)) {
+    if (day.isHoliday) {
       add(day, '法定假日', Icons.beach_access_outlined, const Color(0xFF00897B));
     }
-    if (HolidayCalendar.isWorkMakeupDay(day)) {
+    if (day.isWorkMakeupDay) {
       add(day, '调休上班', Icons.work_outline, const Color(0xFF5E35B1));
     }
+  }
+
+  return _highlightsFromLabels(
+    year: monthData.year,
+    month: monthData.month,
+    labelsByDay: labelsByDay,
+  );
+}
+
+List<_MonthHighlight> _buildUserMonthHighlights({
+  required DateTime month,
+  required Iterable<CountdownItem> countdowns,
+  required Iterable<Anniversary> anniversaries,
+}) {
+  final first = DateTime(month.year, month.month, 1);
+  final labelsByDay = <int, List<_HighlightLabel>>{};
+
+  void add(DateTime date, String label, IconData icon, Color color) {
+    if (date.year != month.year || date.month != month.month) return;
+    labelsByDay
+        .putIfAbsent(date.day, () => <_HighlightLabel>[])
+        .add(_HighlightLabel(label: label, icon: icon, color: color));
   }
 
   for (final item in countdowns) {
@@ -339,9 +476,37 @@ List<_MonthHighlight> _buildMonthHighlights({
     add(occurrence, label, icon, color);
   }
 
+  return _highlightsFromLabels(
+    year: first.year,
+    month: first.month,
+    labelsByDay: labelsByDay,
+  );
+}
+
+List<_MonthHighlight> _mergeMonthHighlights(List<_MonthHighlight> highlights) {
+  final labelsByDay = <int, List<_HighlightLabel>>{};
+  for (final highlight in highlights) {
+    labelsByDay
+        .putIfAbsent(highlight.date.day, () => <_HighlightLabel>[])
+        .addAll(highlight.labels);
+  }
+  if (highlights.isEmpty) return const <_MonthHighlight>[];
+  final sample = highlights.first.date;
+  return _highlightsFromLabels(
+    year: sample.year,
+    month: sample.month,
+    labelsByDay: labelsByDay,
+  );
+}
+
+List<_MonthHighlight> _highlightsFromLabels({
+  required int year,
+  required int month,
+  required Map<int, List<_HighlightLabel>> labelsByDay,
+}) {
   final highlights = labelsByDay.entries.map((entry) {
     return _MonthHighlight(
-      date: DateTime(month.year, month.month, entry.key),
+      date: DateTime(year, month, entry.key),
       labels: entry.value,
     );
   }).toList();
@@ -410,9 +575,28 @@ class _MonthHighlightsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(
+            cs.primary.withValues(alpha: isDark ? 0.050 : 0.026),
+            cs.surface,
+          ),
+          cs.surface,
+        ],
+      ),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: isDark ? 0.14 : 0.18),
+        width: 0.55,
+      ),
+      elevation: 1,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -537,28 +721,32 @@ class _SoftAlmanacTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final color = Color.lerp(label.color, cs.onSurface, 0.28) ?? label.color;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(label.icon, size: 12, color: color.withValues(alpha: 0.82)),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: appSecondaryControlLabelStyle(
-                context,
-              ).copyWith(color: cs.onSurface.withValues(alpha: 0.70)),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(label.icon, size: 12, color: color.withValues(alpha: 0.82)),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: appSecondaryControlLabelStyle(
+                  context,
+                ).copyWith(color: cs.onSurface.withValues(alpha: 0.70)),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -586,93 +774,119 @@ class _SelectedDateSummaryCard extends StatelessWidget {
     return Material(
       key: const ValueKey('selected_date_almanac_summary_card'),
       color: bg,
-      borderRadius: BorderRadius.circular(14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.14 : 0.18),
+          width: 0.55,
+        ),
+      ),
+      elevation: isDark ? 0 : 1,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpenAlmanac,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Semantics(
+        button: true,
+        label: '查看黄历详情',
+        child: Tooltip(
+          message: '查看黄历详情',
+          child: InkWell(
+            onTap: onOpenAlmanac,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 12, 13),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          detail.lunarDate.chineseText,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                              ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              detail.lunarDate.chineseText,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.normal,
+                                    color: cs.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              _spacedGanzhiLine(detail.ganzhiLine),
+                              style: appSecondaryControlTextStyle(context)
+                                  .copyWith(
+                                    color: cs.onSurface.withValues(alpha: 0.62),
+                                    height: 1.25,
+                                  ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 5),
-                        Text(
-                          _spacedGanzhiLine(detail.ganzhiLine),
-                          style: appSecondaryControlTextStyle(context).copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.62),
-                            height: 1.25,
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 20,
+                        color: cs.onSurface.withValues(alpha: 0.42),
+                      ),
+                    ],
+                  ),
+                  if (badges.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: badges
+                          .map(
+                            (badge) =>
+                                _AlmanacBadge(text: badge.$1, color: badge.$2),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.surface.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark
+                            ? 0.32
+                            : 0.62,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.14),
+                        width: 0.45,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _SummaryYijiLine(
+                          label: '宜',
+                          text: _summaryTerms(detail.suitable),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          child: Divider(
+                            height: 1,
+                            thickness: 0.45,
+                            color: cs.outlineVariant.withValues(alpha: 0.20),
                           ),
+                        ),
+                        _SummaryYijiLine(
+                          label: '忌',
+                          text: _summaryTerms(detail.avoid),
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-              if (badges.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: badges
-                      .map(
-                        (badge) =>
-                            _AlmanacBadge(text: badge.$1, color: badge.$2),
-                      )
-                      .toList(),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: cs.surface.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark
-                        ? 0.32
-                        : 0.62,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  children: [
-                    _SummaryYijiLine(
-                      label: '宜',
-                      text: _summaryTerms(detail.suitable),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      child: Divider(
-                        height: 1,
-                        thickness: 0.45,
-                        color: cs.outlineVariant.withValues(alpha: 0.20),
-                      ),
-                    ),
-                    _SummaryYijiLine(
-                      label: '忌',
-                      text: _summaryTerms(detail.avoid),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -737,7 +951,8 @@ class _AlmanacDetailPage extends StatefulWidget {
 }
 
 class _AlmanacDetailPageState extends State<_AlmanacDetailPage> {
-  static const int _initialPage = 10000;
+  static final DateTime _firstSupportedDate = DateTime(1900);
+  static final DateTime _lastSupportedDate = DateTime(2099, 12, 31);
   late final PageController _pageController;
   late DateTime _date;
   final Map<int, LunarAlmanacDetail> _detailCache = <int, LunarAlmanacDetail>{};
@@ -746,8 +961,8 @@ class _AlmanacDetailPageState extends State<_AlmanacDetailPage> {
   @override
   void initState() {
     super.initState();
-    _date = _dateOnly(widget.date);
-    _pageController = PageController(initialPage: _initialPage);
+    _date = _clampDate(widget.date);
+    _pageController = PageController(initialPage: _pageForDate(_date));
   }
 
   @override
@@ -756,8 +971,21 @@ class _AlmanacDetailPageState extends State<_AlmanacDetailPage> {
     super.dispose();
   }
 
+  DateTime _clampDate(DateTime value) {
+    final day = _dateOnly(value);
+    if (day.isBefore(_firstSupportedDate)) return _firstSupportedDate;
+    if (day.isAfter(_lastSupportedDate)) return _lastSupportedDate;
+    return day;
+  }
+
+  int get _pageCount =>
+      _lastSupportedDate.difference(_firstSupportedDate).inDays + 1;
+
+  int _pageForDate(DateTime date) =>
+      _clampDate(date).difference(_firstSupportedDate).inDays;
+
   DateTime _dateForPage(int page) {
-    return _dateOnly(widget.date).add(Duration(days: page - _initialPage));
+    return _clampDate(_firstSupportedDate.add(Duration(days: page)));
   }
 
   LunarAlmanacDetail _detailFor(DateTime date) {
@@ -816,6 +1044,7 @@ class _AlmanacDetailPageState extends State<_AlmanacDetailPage> {
                 final horizontal = constraints.maxWidth <= 420 ? 20.0 : 24.0;
                 return PageView.builder(
                   controller: _pageController,
+                  itemCount: _pageCount,
                   onPageChanged: (page) {
                     setState(() => _date = _dateForPage(page));
                   },
@@ -919,10 +1148,19 @@ class _ClassicalAlmanacCard extends StatelessWidget {
             theme.colorScheme.surface,
           )
         : Colors.white;
+    final paperTint = Color.alphaBlend(
+      gold.withValues(alpha: isDark ? 0.030 : 0.018),
+      cardColor,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final textScale = _clampDouble(
+          MediaQuery.textScalerOf(context).scale(1.0),
+          1.0,
+          1.28,
+        );
         final pengZuLineCount = _splitPengZuLines(detail.pengZu).length;
         final fiveElementLineCount = _splitFiveElementLines(
           detail.fiveElements,
@@ -931,22 +1169,34 @@ class _ClassicalAlmanacCard extends StatelessWidget {
         final sideLineCount = fiveElementLineCount > clashLineCount
             ? fiveElementLineCount
             : clashLineCount;
-        final topMinHeight = _clampDouble(width * 0.66, 246, 330);
+        final topMinHeight = _clampDouble(width * 0.66 * textScale, 246, 370);
         final tableHeight = _clampDouble(
           width * 0.62 +
               (pengZuLineCount > 4 ? (pengZuLineCount - 4) * 15 : 0) +
-              (sideLineCount > 2 ? (sideLineCount - 2) * 9 : 0),
+              (sideLineCount > 2 ? (sideLineCount - 2) * 9 : 0) +
+              ((textScale - 1) * 80),
           236,
-          348,
+          390,
         );
-        final hourHeight = _clampDouble(width * 0.17, 58, 68);
+        final hourHeight = _clampDouble(width * 0.17 * textScale, 58, 76);
 
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: cardColor,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [paperTint, cardColor],
+            ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: lineColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.075),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
@@ -1004,16 +1254,17 @@ class _AlmanacTopVisual extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          flex: 34,
+          flex: 32,
           child: _VerticalYijiPanel(
             suitable: detail.suitable,
             avoid: detail.avoid,
             gold: gold,
+            lineColor: lineColor,
           ),
         ),
         _ClassicalVerticalDivider(color: lineColor),
         Expanded(
-          flex: 66,
+          flex: 68,
           child: _DateHeroPanel(detail: detail, gold: gold),
         ),
       ],
@@ -1025,29 +1276,32 @@ class _VerticalYijiPanel extends StatelessWidget {
   final String suitable;
   final String avoid;
   final Color gold;
+  final Color lineColor;
 
   const _VerticalYijiPanel({
     required this.suitable,
     required this.avoid,
     required this.gold,
+    required this.lineColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final darkText = Theme.of(
-      context,
-    ).colorScheme.onSurface.withValues(alpha: 0.86);
+    final cs = Theme.of(context).colorScheme;
+    final darkText = cs.onSurface.withValues(alpha: 0.86);
     final suitableTerms = _splitAlmanacTerms(suitable).take(5).toList();
     final avoidTerms = _splitAlmanacTerms(avoid).take(5).toList();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 13, 10, 10),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final textSize = constraints.maxWidth < 132 ? 13.0 : 14.0;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columnWidth =
+            (constraints.maxWidth - 1).clamp(0, double.infinity) / 2;
+        final textSize = columnWidth < 58 ? 12.8 : 14.0;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 13, 8, 10),
                 child: _VerticalYijiColumn(
                   title: '宜',
                   terms: suitableTerms,
@@ -1055,8 +1309,11 @@ class _VerticalYijiPanel extends StatelessWidget {
                   fontSize: textSize,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
+            ),
+            _ClassicalVerticalDivider(color: lineColor),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 13, 10, 10),
                 child: _VerticalYijiColumn(
                   title: '忌',
                   terms: avoidTerms,
@@ -1064,10 +1321,10 @@ class _VerticalYijiPanel extends StatelessWidget {
                   fontSize: textSize,
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1197,8 +1454,10 @@ class _DateHeroPanel extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 detail.lunarDate.chineseText,
-                maxLines: 1,
-                softWrap: false,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                softWrap: true,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: lunarSize,
                   height: 1.1,
@@ -1291,7 +1550,6 @@ class _ClassicalInfoCell extends StatelessWidget {
     final isPengZu = title == '彭祖';
     final isFiveElement = title == '五行';
     final isClash = title == '冲煞';
-    final isCompactBody = isFiveElement || isClash;
     final valueLines = isPengZu
         ? _splitPengZuLines(value)
         : isFiveElement
@@ -1299,24 +1557,12 @@ class _ClassicalInfoCell extends StatelessWidget {
         : isClash
         ? _splitClashLines(value)
         : [value.trim()];
-    final titleSize = isPengZu
-        ? 18.0
-        : isCompactBody
-        ? 16.0
-        : 17.0;
-    final valueSize = isPengZu
-        ? 11.4
-        : isCompactBody
-        ? 10.8
-        : 13.8;
-    final valueHeight = isPengZu
-        ? 1.34
-        : isCompactBody
-        ? 1.30
-        : 1.34;
+    final titleSize = isPengZu ? 18.0 : 17.0;
+    const valueSize = 13.6;
+    final valueHeight = isPengZu ? 1.20 : 1.30;
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: isPengZu ? 10 : 8,
+        horizontal: isPengZu ? 8 : 8,
         vertical: isPengZu ? 12 : 10,
       ),
       child: Column(
@@ -1339,16 +1585,34 @@ class _ClassicalInfoCell extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final line in valueLines)
-                Text(
-                  line,
-                  textAlign: TextAlign.center,
-                  softWrap: true,
-                  style: TextStyle(
-                    fontSize: valueSize,
-                    height: valueHeight,
-                    color: cs.onSurface.withValues(alpha: 0.66),
+                if (line.isEmpty)
+                  SizedBox(height: valueSize * 0.62)
+                else if (isClash)
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.visible,
+                      textAlign: TextAlign.center,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: valueSize,
+                        height: valueHeight,
+                        color: cs.onSurface.withValues(alpha: 0.66),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    line,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: valueSize,
+                      height: valueHeight,
+                      color: cs.onSurface.withValues(alpha: 0.66),
+                    ),
                   ),
-                ),
             ],
           ),
         ],
@@ -1402,15 +1666,21 @@ class _ClassicalHourCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final luckColor = fortune.isAuspicious
         ? gold
         : cs.onSurface.withValues(alpha: 0.78);
+    final cellFill = fortune.isAuspicious
+        ? gold.withValues(alpha: isDark ? 0.055 : 0.040)
+        : Colors.transparent;
     return InkWell(
       onTap: () => _showHourFortuneDialog(context, fortune),
       child: Container(
         height: double.infinity,
         decoration: BoxDecoration(
+          color: cellFill,
           border: Border(
             right: showRightBorder
                 ? BorderSide(color: lineColor, width: 0.55)
@@ -1581,18 +1851,24 @@ class _AlmanacBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.normal,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 180),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.14), width: 0.45),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+          ),
         ),
       ),
     );
@@ -1601,7 +1877,7 @@ class _AlmanacBadge extends StatelessWidget {
 
 class _MonthCalendar extends StatelessWidget {
   final DateTime date;
-  final Set<int> highlightDays;
+  final _MonthCalendarData monthData;
   final List<_MonthHighlight> highlights;
   final ValueChanged<DateTime> onPick;
   final VoidCallback onPreviousMonth;
@@ -1610,7 +1886,7 @@ class _MonthCalendar extends StatelessWidget {
 
   const _MonthCalendar({
     required this.date,
-    required this.highlightDays,
+    required this.monthData,
     required this.highlights,
     required this.onPick,
     required this.onPreviousMonth,
@@ -1620,270 +1896,367 @@ class _MonthCalendar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final first = DateTime(date.year, date.month, 1);
-    final last = DateTime(date.year, date.month + 1, 0);
-    final offset = first.weekday - 1; // 周一为 0
-    final cs = Theme.of(context).colorScheme;
-
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final compact = MediaQuery.sizeOf(context).width < 380;
+    final cellHeight = compact ? 46.0 : 48.0;
+    final cellRadius = compact ? 10.0 : 12.0;
+    final cellMargin = compact ? 0.5 : 1.5;
+    final dayFontSize = compact ? 13.0 : 14.0;
+    final labelFontSize = compact ? 8.5 : 9.0;
     final highlightByDay = {for (final item in highlights) item.date.day: item};
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
-          child: Row(
-            children: [
-              _MonthNavButton(
-                tooltip: '上个月',
-                icon: Icons.chevron_left,
-                onPressed: onPreviousMonth,
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: onTitleTap,
-                  child: Column(
-                    children: [
-                      Text(
-                        '${date.month}月',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 24,
-                          fontWeight: FontWeight.normal,
-                          letterSpacing: 0,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${date.year}年',
-                        style: appSecondaryControlLabelStyle(
-                          context,
-                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.48)),
-                      ),
-                    ],
-                  ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  cs.primary.withValues(alpha: isDark ? 0.10 : 0.045),
+                  cs.surface,
                 ),
-              ),
-              _MonthNavButton(
-                tooltip: '下个月',
-                icon: Icons.chevron_right,
-                onPressed: onNextMonth,
+                Color.alphaBlend(
+                  const Color(
+                    0xFFB39162,
+                  ).withValues(alpha: isDark ? 0.08 : 0.035),
+                  cs.surface,
+                ),
+              ],
+            ),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: isDark ? 0.18 : 0.22),
+              width: 0.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.10 : 0.045),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: const ['一', '二', '三', '四', '五', '六', '日']
-              .map(
-                (d) => Expanded(
-                  child: Center(
-                    child: Text(
-                      d,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.normal,
-                      ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
+                child: Row(
+                  children: [
+                    _MonthNavButton(
+                      tooltip: '上个月',
+                      icon: Icons.chevron_left,
+                      onPressed: onPreviousMonth,
                     ),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(((last.day + offset) / 7).ceil(), (row) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 1),
-            child: Row(
-              children: List.generate(7, (col) {
-                final d = row * 7 + col - offset + 1;
-                if (d < 1 || d > last.day) {
-                  return const Expanded(child: SizedBox(height: 48));
-                }
-                final day = DateTime(date.year, date.month, d);
-                final lunar = I18n.current == AppLocale.zh
-                    ? LunarCalendar.fromSolar(day)
-                    : null;
-                final term = LunarCalendar.solarTerm(day);
-                final solarFestival = LunarCalendar.solarFestival(day);
-                final lunarFestival = lunar == null
-                    ? null
-                    : LunarCalendar.lunarFestival(lunar);
-                final dayLabel =
-                    term ??
-                    solarFestival ??
-                    lunarFestival ??
-                    lunar?.shortDayOrMonth ??
-                    '';
-                final isSelected =
-                    day.year == date.year &&
-                    day.month == date.month &&
-                    day.day == date.day;
-                final today = DateTime.now();
-                final isToday =
-                    day.year == today.year &&
-                    day.month == today.month &&
-                    day.day == today.day;
-                final hasHighlight = highlightDays.contains(d);
-                final highlight = highlightByDay[d];
-                final isWeekend = day.weekday >= DateTime.saturday;
-                final isHoliday = HolidayCalendar.isHoliday(day);
-                final isWorkMakeupDay = HolidayCalendar.isWorkMakeupDay(day);
-                final selectedFill = Color.alphaBlend(
-                  cs.primary.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark
-                        ? 0.18
-                        : 0.11,
-                  ),
-                  cs.surface,
-                );
-                final selectedText = cs.onSurface;
-                final festivalColor = Color.lerp(
-                  const Color(0xFFEF6C00),
-                  cs.onSurface,
-                  Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.30,
-                )!;
-                final termColor = Color.lerp(
-                  const Color(0xFF2E7D32),
-                  cs.onSurface,
-                  Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.24,
-                )!;
-                final restColor = Color.lerp(
-                  const Color(0xFFC62828),
-                  cs.onSurface,
-                  0.28,
-                )!;
-                final workColor = Color.lerp(
-                  const Color(0xFF5E35B1),
-                  cs.onSurface,
-                  0.30,
-                )!;
-
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onPick(day),
-                    child: Container(
-                      height: 48,
-                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? selectedFill
-                            : isToday
-                            ? cs.primary.withValues(alpha: 0.055)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: isSelected
-                            ? Border.all(
-                                color: cs.primary.withValues(alpha: 0.20),
-                                width: 0.45,
-                              )
-                            : null,
-                      ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Center(
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        label: '选择日期',
+                        child: Tooltip(
+                          message: '选择日期',
+                          child: GestureDetector(
+                            onTap: onTitleTap,
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  '$d',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.normal,
-                                    color: isSelected
-                                        ? selectedText
-                                        : isWorkMakeupDay
-                                        ? workColor
-                                        : isHoliday || isWeekend
-                                        ? restColor
-                                        : (isToday
-                                              ? cs.primary
-                                              : cs.onSurface.withValues(
-                                                  alpha: 0.88,
-                                                )),
-                                  ),
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 14,
+                                  color: cs.onSurface.withValues(alpha: 0.46),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  dayLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: isSelected
-                                        ? selectedText.withValues(alpha: 0.60)
-                                        : term != null
-                                        ? termColor
-                                        : solarFestival != null ||
-                                              lunarFestival != null
-                                        ? festivalColor
-                                        : cs.onSurface.withValues(alpha: 0.42),
-                                  ),
+                                  '${date.month}月',
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.normal,
+                                        letterSpacing: 0,
+                                        color: cs.onSurface,
+                                      ),
                                 ),
-                                if (hasHighlight)
-                                  Container(
-                                    width: 3.5,
-                                    height: 3.5,
-                                    margin: const EdgeInsets.only(top: 3),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? selectedText.withValues(alpha: 0.70)
-                                          : cs.primary.withValues(alpha: 0.58),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${date.year}年',
+                                  style: appSecondaryControlLabelStyle(context)
+                                      .copyWith(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.48,
+                                        ),
+                                      ),
+                                ),
                               ],
                             ),
                           ),
-                          if (isHoliday || isWorkMakeupDay)
-                            Positioned(
-                              top: 3,
-                              right: 4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 3,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      (isWorkMakeupDay ? workColor : restColor)
-                                          .withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  isWorkMakeupDay ? '班' : '休',
-                                  style: TextStyle(
-                                    color:
-                                        (isWorkMakeupDay
-                                                ? workColor
-                                                : restColor)
-                                            .withValues(alpha: 0.82),
-                                    fontSize: 8,
-                                    height: 1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          if (highlight != null && highlight.labels.length > 1)
-                            Positioned(
-                              bottom: 4,
-                              right: 5,
-                              child: Text(
-                                '+${highlight.labels.length - 1}',
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.34),
-                                  fontSize: 8,
-                                ),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
                     ),
+                    _MonthNavButton(
+                      tooltip: '下个月',
+                      icon: Icons.chevron_right,
+                      onPressed: onNextMonth,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: const ['一', '二', '三', '四', '五', '六', '日']
+                    .map(
+                      (d) => Expanded(
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 8),
+              ...List.generate(monthData.rowCount, (row) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1),
+                  child: Row(
+                    children: List.generate(7, (col) {
+                      final d =
+                          row * 7 + col - monthData.firstWeekdayOffset + 1;
+                      final dayData = monthData.dayAt(d);
+                      if (dayData == null) {
+                        return Expanded(child: SizedBox(height: cellHeight));
+                      }
+                      final day = dayData.date;
+                      final dayLabel = dayData.label;
+                      final isSelected =
+                          day.year == date.year &&
+                          day.month == date.month &&
+                          day.day == date.day;
+                      final highlight = highlightByDay[d];
+                      final hasHighlight = highlight != null;
+                      final isToday = day == today;
+                      final isWeekend = dayData.isWeekend;
+                      final isHoliday = dayData.isHoliday;
+                      final isWorkMakeupDay = dayData.isWorkMakeupDay;
+                      final selectedFill = Color.alphaBlend(
+                        cs.primary.withValues(alpha: isDark ? 0.20 : 0.12),
+                        cs.surface,
+                      );
+                      final selectedText = cs.onSurface;
+                      final festivalColor = Color.lerp(
+                        const Color(0xFFEF6C00),
+                        cs.onSurface,
+                        isDark ? 0.20 : 0.30,
+                      )!;
+                      final termColor = Color.lerp(
+                        const Color(0xFF2E7D32),
+                        cs.onSurface,
+                        isDark ? 0.20 : 0.24,
+                      )!;
+                      final restColor = Color.lerp(
+                        const Color(0xFFC62828),
+                        cs.onSurface,
+                        0.28,
+                      )!;
+                      final workColor = Color.lerp(
+                        const Color(0xFF5E35B1),
+                        cs.onSurface,
+                        0.30,
+                      )!;
+
+                      return Expanded(
+                        child: Semantics(
+                          button: true,
+                          selected: isSelected,
+                          label: '${day.year}年${day.month}月$d日 $dayLabel',
+                          child: Container(
+                            height: cellHeight,
+                            margin: EdgeInsets.symmetric(
+                              horizontal: cellMargin,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? selectedFill
+                                  : isToday
+                                  ? cs.primary.withValues(
+                                      alpha: isDark ? 0.10 : 0.06,
+                                    )
+                                  : hasHighlight
+                                  ? cs.surfaceContainerHighest.withValues(
+                                      alpha: isDark ? 0.12 : 0.22,
+                                    )
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(cellRadius),
+                              border: Border.all(
+                                color: isSelected
+                                    ? cs.primary.withValues(alpha: 0.24)
+                                    : isToday
+                                    ? cs.primary.withValues(alpha: 0.16)
+                                    : hasHighlight
+                                    ? cs.outlineVariant.withValues(
+                                        alpha: isDark ? 0.14 : 0.18,
+                                      )
+                                    : Colors.transparent,
+                                width: isSelected ? 0.7 : 0.45,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: cs.primary.withValues(
+                                          alpha: isDark ? 0.16 : 0.10,
+                                        ),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: InkWell(
+                                onTap: () => onPick(day),
+                                borderRadius: BorderRadius.circular(cellRadius),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            '$d',
+                                            style: TextStyle(
+                                              fontSize: dayFontSize,
+                                              fontWeight: FontWeight.normal,
+                                              color: isSelected
+                                                  ? selectedText
+                                                  : isWorkMakeupDay
+                                                  ? workColor
+                                                  : isHoliday || isWeekend
+                                                  ? restColor
+                                                  : (isToday
+                                                        ? cs.primary
+                                                        : cs.onSurface
+                                                              .withValues(
+                                                                alpha: 0.88,
+                                                              )),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            dayLabel,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: labelFontSize,
+                                              color: isSelected
+                                                  ? selectedText.withValues(
+                                                      alpha: 0.60,
+                                                    )
+                                                  : dayData.term != null
+                                                  ? termColor
+                                                  : dayData.solarFestival !=
+                                                            null ||
+                                                        dayData.lunarFestival !=
+                                                            null
+                                                  ? festivalColor
+                                                  : cs.onSurface.withValues(
+                                                      alpha: 0.42,
+                                                    ),
+                                            ),
+                                          ),
+                                          if (hasHighlight)
+                                            Container(
+                                              width: 3.5,
+                                              height: 3.5,
+                                              margin: const EdgeInsets.only(
+                                                top: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? selectedText.withValues(
+                                                        alpha: 0.70,
+                                                      )
+                                                    : cs.primary.withValues(
+                                                        alpha: 0.58,
+                                                      ),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isHoliday || isWorkMakeupDay)
+                                      Positioned(
+                                        top: 3,
+                                        right: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                (isWorkMakeupDay
+                                                        ? workColor
+                                                        : restColor)
+                                                    .withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(
+                                              5,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isWorkMakeupDay ? '班' : '休',
+                                            style: TextStyle(
+                                              color:
+                                                  (isWorkMakeupDay
+                                                          ? workColor
+                                                          : restColor)
+                                                      .withValues(alpha: 0.82),
+                                              fontSize: 8,
+                                              height: 1,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    if (highlight != null &&
+                                        highlight.labels.length > 1)
+                                      Positioned(
+                                        bottom: 4,
+                                        right: 5,
+                                        child: Text(
+                                          '+${highlight.labels.length - 1}',
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.34,
+                                            ),
+                                            fontSize: 8,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ),
                 );
               }),
-            ),
-          );
-        }),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1908,8 +2281,8 @@ class _MonthNavButton extends StatelessWidget {
       onPressed: onPressed,
       icon: Icon(icon, size: 20),
       style: IconButton.styleFrom(
-        minimumSize: const Size(34, 34),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(48, 48),
+        tapTargetSize: MaterialTapTargetSize.padded,
         foregroundColor: cs.onSurface.withValues(alpha: 0.62),
         backgroundColor: cs.surface.withValues(
           alpha: Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.58,
@@ -1973,6 +2346,9 @@ List<String> _splitPengZuLines(String value) {
         .map((match) => match.group(0) ?? '')
         .where((part) => part.isNotEmpty);
     lines.addAll(parts);
+  }
+  if (lines.length >= 4) {
+    return <String>[...lines.take(2), '', ...lines.skip(2)];
   }
   return lines.isEmpty ? [value.trim()] : lines;
 }

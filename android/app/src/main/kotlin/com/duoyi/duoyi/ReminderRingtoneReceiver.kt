@@ -48,6 +48,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             ReminderRingtoneService.cancelFlutterPluginNotification(context, rootId)
             ReminderRingtoneService.cancelFlutterPluginNotificationSoon(context, rootId)
         }
+        ReminderRingtoneScheduler.recordNotificationPermissionIssueIfDenied(context, id)
         val serviceIntent = ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

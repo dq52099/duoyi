@@ -21,6 +21,14 @@ Future<SystemNotificationAudioStatus?> _okAudioStatus() async =>
       notificationPolicyAccessGranted: false,
     );
 
+Set<String> _allNotificationChannelIds() => <String>{
+  NotificationService.channelId,
+  AlarmService.channelId,
+  NativeReminderRingtone.statusChannelId,
+  NativeReminderRingtone.fallbackChannelId,
+  LocalNotifications.quickAddChannelId,
+};
+
 void main() {
   test('通知未授权时返回阻断状态', () async {
     final service = PermissionHealthService(
@@ -303,6 +311,71 @@ void main() {
     expect(sound.subtitle, contains('已静音 普通提醒'));
     expect(sound.actionLabel, '渠道设置');
     expect(sound.actionChannelIds, contains(NotificationService.channelId));
+  });
+
+  test('通知渠道读取失败时继续输出未知诊断', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => throw StateError('channel list failed'),
+    );
+
+    final report = await service.check();
+
+    expect(report.channelIds, isNull);
+    expect(report.hasUnknown, isTrue);
+    final channels = report.checks.firstWhere(
+      (check) => check.id == 'notification_channels',
+    );
+    expect(channels.status, PermissionHealthStatus.unknown);
+    expect(channels.subtitle, contains('无法读取系统通知渠道状态'));
+  });
+
+  test('通知渠道状态读取失败时继续提示打开系统设置', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => _allNotificationChannelIds(),
+      channelStatusesReader: (_) async =>
+          throw StateError('channel status failed'),
+    );
+
+    final report = await service.check();
+
+    expect(report.channelStatuses, isNull);
+    expect(report.hasUnknown, isTrue);
+    final channels = report.checks.firstWhere(
+      (check) => check.id == 'notification_channels',
+    );
+    expect(channels.status, PermissionHealthStatus.ok);
+    final status = report.checks.firstWhere(
+      (check) => check.id == 'notification_channel_status',
+    );
+    expect(status.status, PermissionHealthStatus.unknown);
+    expect(status.action, PermissionHealthAction.openAppSettings);
+    expect(status.actionLabel, '系统设置');
+    expect(status.subtitle, contains('channel status failed'));
+    expect(status.actionChannelIds, containsAll(_allNotificationChannelIds()));
   });
 
   test('通知渠道优先级过低时提示打开横幅和声音入口', () async {

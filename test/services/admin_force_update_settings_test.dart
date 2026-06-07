@@ -195,6 +195,8 @@ void main() {
     );
     expect(workflow, contains('exit 1'));
     expect(workflow, isNot(contains('APK will use debug signing')));
+    expect(workflow, contains("FLUTTER_VERSION: '3.44.1'"));
+    expect(workflow, isNot(contains("FLUTTER_VERSION: '3.41.9'")));
   });
 
   test(

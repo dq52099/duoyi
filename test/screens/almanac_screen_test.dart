@@ -215,20 +215,18 @@ void main() {
     expect(find.textContaining('子吉 丑吉 寅凶'), findsNothing);
 
     final fetalGodText = tester.widget<Text>(find.text('房床炉房内中'));
+    final mansionText = tester.widget<Text>(find.textContaining('东方箕水豹-吉'));
     final pengZuText = tester.widget<Text>(find.text('戊不受田'));
     final fiveElementText = tester.widget<Text>(find.text('大驿土  平执位'));
     final clashText = tester.widget<Text>(find.text('猴日冲虎（壬寅）'));
     final clashDirectionText = tester.widget<Text>(find.text('煞南'));
-    expect(pengZuText.style?.fontSize, lessThanOrEqualTo(12));
-    expect(fiveElementText.style?.fontSize, lessThanOrEqualTo(11.2));
-    expect(clashText.style?.fontSize, lessThanOrEqualTo(11.2));
+    expect(pengZuText.style?.fontSize, mansionText.style?.fontSize);
+    expect(fiveElementText.style?.fontSize, mansionText.style?.fontSize);
+    expect(clashText.style?.fontSize, mansionText.style?.fontSize);
     expect(clashDirectionText.style?.fontSize, clashText.style?.fontSize);
-    expect(pengZuText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
-    expect(
-      fiveElementText.style?.fontSize,
-      lessThan(fetalGodText.style!.fontSize!),
-    );
-    expect(clashText.style?.fontSize, lessThan(fetalGodText.style!.fontSize!));
+    expect(clashText.maxLines, 1);
+    expect(clashText.softWrap, isFalse);
+    expect(pengZuText.style?.fontSize, fetalGodText.style?.fontSize);
 
     for (final branch in [
       '子',
@@ -315,10 +313,11 @@ void main() {
     expect(end, greaterThan(start));
     final section = source.substring(start, end);
 
-    expect(section, contains('return Padding('));
+    expect(section, contains('return LayoutBuilder('));
     expect(section, contains('Row('));
     expect(section, contains("title: '宜'"));
     expect(section, contains("title: '忌'"));
+    expect(section, contains('_ClassicalVerticalDivider(color: lineColor)'));
     expect(section, contains('class _VerticalYijiColumn'));
   });
 
@@ -338,7 +337,7 @@ void main() {
       expect(source, contains('class _AlmanacDetailPage'));
       expect(source, contains('class _ClassicalAlmanacCard'));
       final monthCalendar = source.substring(
-        source.indexOf('class _MonthCalendar'),
+        source.indexOf('class _MonthCalendar extends StatelessWidget'),
         source.indexOf('class _MonthNavButton'),
       );
       expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
@@ -346,6 +345,15 @@ void main() {
       expect(source, contains('class _SoftAlmanacTag'));
       expect(source, contains('Navigator.of(context).push<DateTime>('));
       expect(source, contains('PageView.builder'));
+      expect(source, contains('itemCount: _pageCount'));
+      expect(source, contains('DateTime _clampDate(DateTime value)'));
+      expect(
+        source,
+        contains("label: '\${day.year}年\${day.month}月\$d日 \$dayLabel'"),
+      );
+      expect(source, contains('Semantics('));
+      expect(source, contains('button: true'));
+      expect(source, contains('InkWell('));
       expect(source, contains('_detailCache.putIfAbsent'));
       expect(source, contains('onPageChanged: (page)'));
       expect(source, isNot(contains('showModalBottomSheet<void>')));

@@ -7,9 +7,7 @@ import 'package:duoyi/widgets/app_date_picker.dart';
 
 void main() {
   test('日期和时间选择器避免二级页面大字号和厚边框回退', () {
-    final timePicker = File(
-      'lib/widgets/app_time_picker.dart',
-    ).readAsStringSync();
+    final timePicker = _readSource('lib/widgets/app_time_picker.dart');
     expect(timePicker, isNot(contains('fontSize: 34')));
     expect(timePicker, contains('fontSize: 24'));
     expect(timePicker, contains('fontWeight: FontWeight.normal'));
@@ -22,9 +20,7 @@ void main() {
       ),
     );
 
-    final datePicker = File(
-      'lib/widgets/app_date_picker.dart',
-    ).readAsStringSync();
+    final datePicker = _readSource('lib/widgets/app_date_picker.dart');
     expect(datePicker, isNot(contains('width: 1.2')));
     expect(
       datePicker,
@@ -133,4 +129,8 @@ void main() {
     );
     expect(outsideText.style?.color, isNot(scheme.onSurface));
   });
+}
+
+String _readSource(String path) {
+  return File(path).readAsStringSync().replaceAll('\r\n', '\n');
 }

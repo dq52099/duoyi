@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
@@ -693,6 +694,7 @@ class _TodoScreenState extends State<TodoScreen> {
                             ),
                           ),
                           _TodoViewMode.list => ListView.builder(
+                            // ignore: deprecated_member_use
                             cacheExtent: 640,
                             itemCount: listGroupEntries.length,
                             itemBuilder: (context, index) {
@@ -1643,7 +1645,7 @@ class _TodoKanbanView extends StatelessWidget {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            cacheExtent: 560,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(560),
             itemCount: columns.length,
             itemBuilder: (context, index) {
               final column = columns[index];
@@ -1908,7 +1910,9 @@ class _KanbanColumn extends StatelessWidget {
                           ),
                         )
                       : ListView.builder(
-                          cacheExtent: 560,
+                          scrollCacheExtent: const ScrollCacheExtent.pixels(
+                            560,
+                          ),
                           itemCount: listEntries.length,
                           itemBuilder: (context, index) {
                             final entry = listEntries[index];
@@ -2672,7 +2676,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: widget.todos.length,
-      onReorder: _reorderTodos,
+      onReorderItem: _reorderTodos,
       proxyDecorator: (child, index, animation) => Material(
         type: MaterialType.transparency,
         child: ScaleTransition(
@@ -2721,8 +2725,8 @@ class _ListGroupTileState extends State<_ListGroupTile> {
   }
 
   Future<void> _reorderTodos(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex == newIndex) return;
+    if (newIndex > oldIndex) newIndex -= 1;
 
     final ids = widget.todos.map((todo) => todo.id).toList();
     final moved = ids.removeAt(oldIndex);
@@ -3677,7 +3681,7 @@ class QuadrantListScreen extends StatelessWidget {
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
           : ListView.builder(
-              cacheExtent: 640,
+              scrollCacheExtent: const ScrollCacheExtent.pixels(640),
               itemCount: todos.length,
               itemBuilder: (context, index) {
                 final todo = todos[index];

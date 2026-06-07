@@ -223,7 +223,7 @@ void main() {
   });
 
   group('shouldShowInToday - 日期边界', () {
-    test('明日截止的 todo → shouldShowInToday = false；'
+    test('明日进入的 todo → shouldShowInToday = false；'
         '昨日截止的 todo → shouldShowInToday = false', () {
       final rng = Random(kSeed);
       final now = DateTime.now();
@@ -256,7 +256,7 @@ void main() {
         expect(
           CompletionVisibilityPolicy.shouldShowInToday(tomorrowTodo, now),
           isFalse,
-          reason: 'iter=$iter offset=+$offsetDays — 未来日期不应出现在今日视图',
+          reason: 'iter=$iter offset=+$offsetDays — 未到进入日期不应出现在今日视图',
         );
 
         final yesterday = today.subtract(Duration(days: offsetDays));
@@ -285,13 +285,14 @@ void main() {
       }
     });
 
-    test('无截止日期未完成任务展示；今天截止展示；逾期/未来/完成不展示', () {
+    test('从进入日期起展示；未来截止继续展示；逾期/完成不展示', () {
       final now = DateTime(2026, 6, 1, 12);
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = today.subtract(const Duration(days: 1));
       final tomorrow = today.add(const Duration(days: 1));
 
-      final noDue = TodoItem(title: '无截止日期', date: tomorrow);
+      final noDue = TodoItem(title: '无截止日期', date: yesterday);
+      final noDueFutureStart = TodoItem(title: '未来进入无截止', date: tomorrow);
       final dueToday = TodoItem(
         title: '今天截止',
         date: yesterday,
@@ -327,6 +328,10 @@ void main() {
 
       expect(CompletionVisibilityPolicy.shouldShowInToday(noDue, now), isTrue);
       expect(
+        CompletionVisibilityPolicy.shouldShowInToday(noDueFutureStart, now),
+        isFalse,
+      );
+      expect(
         CompletionVisibilityPolicy.shouldShowInToday(dueToday, now),
         isTrue,
       );
@@ -336,16 +341,17 @@ void main() {
       );
       expect(
         CompletionVisibilityPolicy.shouldShowInToday(dueEarlierToday, now),
-        isFalse,
+        isTrue,
+      );
+      expect(
+        CompletionVisibilityPolicy.visualState(dueEarlierToday, now: now),
+        TodoVisualState.overdue,
       );
       expect(
         CompletionVisibilityPolicy.shouldShowInToday(overdue, now),
         isFalse,
       );
-      expect(
-        CompletionVisibilityPolicy.shouldShowInToday(future, now),
-        isFalse,
-      );
+      expect(CompletionVisibilityPolicy.shouldShowInToday(future, now), isTrue);
       expect(
         CompletionVisibilityPolicy.shouldShowInToday(completed, now),
         isFalse,

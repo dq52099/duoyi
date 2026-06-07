@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../core/platform_info.dart';
 import '../providers/notification_service.dart';
 import 'alarm_service.dart';
@@ -218,8 +220,20 @@ class PermissionHealthService {
         ? await _fullScreenIntentGrantedReader()
         : true;
     final device = isAndroid ? await _androidDeviceReader() : null;
-    final channelIds = isAndroid ? await _channelIdsReader() : const <String>{};
+    Set<String>? channelIds = const <String>{};
+    if (isAndroid) {
+      try {
+        channelIds = await _channelIdsReader();
+      } catch (e, st) {
+        channelIds = null;
+        debugPrint(
+          '[PermissionHealthService] notification channel list probe failed: '
+          '$e\n$st',
+        );
+      }
+    }
     Map<String, NotificationChannelStatus>? channelStatuses;
+    Object? channelStatusProbeError;
 
     final checks = <PermissionHealthCheck>[
       PermissionHealthCheck(
@@ -308,7 +322,15 @@ class PermissionHealthService {
         } else {
           final missing = required.difference(channelIds);
           final stale = channelIds.intersection(legacy);
-          channelStatuses = await _channelStatusesReader(required);
+          try {
+            channelStatuses = await _channelStatusesReader(required);
+          } catch (e, st) {
+            channelStatusProbeError = e;
+            debugPrint(
+              '[PermissionHealthService] notification channel status probe failed: '
+              '$e\n$st',
+            );
+          }
           checks.add(
             PermissionHealthCheck(
               id: 'notification_channels',
@@ -333,6 +355,20 @@ class PermissionHealthService {
                 status: PermissionHealthStatus.warning,
                 action: PermissionHealthAction.none,
                 manual: true,
+              ),
+            );
+          }
+          if (channelStatusProbeError != null) {
+            checks.add(
+              PermissionHealthCheck(
+                id: 'notification_channel_status',
+                title: '通知渠道状态',
+                subtitle:
+                    '无法读取系统通知渠道声音/静音状态，请打开系统通知设置确认普通提醒、强提醒和闹钟兜底通知均未关闭。($channelStatusProbeError)',
+                status: PermissionHealthStatus.unknown,
+                action: PermissionHealthAction.openAppSettings,
+                actionLabel: '系统设置',
+                actionChannelIds: required.toList(growable: false),
               ),
             );
           }

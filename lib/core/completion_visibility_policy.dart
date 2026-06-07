@@ -30,17 +30,21 @@ class CompletionVisibilityPolicy {
   ///
   /// 规则：
   /// 1. 已归档、已完成任务不展示。
-  /// 2. 无截止日期的未完成任务展示，避免遗漏。
-  /// 3. 有截止日期时，只展示本地日期等于今天且未逾期的任务；逾期与未来任务不展示。
+  /// 2. 今天早于任务进入日期时不展示。
+  /// 3. 无截止日期的未完成任务，从进入日期起持续展示，避免遗漏。
+  /// 4. 有截止日期时，从进入日期起展示到截止日期当天结束。
   ///    兼容只保存日期、不保存具体时刻的旧数据：当天 00:00 视为全天截止。
   static bool shouldShowInToday(TodoItem t, DateTime now) {
     if (t.isArchivedAfterRollover) return false;
     if (t.isCompleted) return false;
     final today = dateOnly(now);
+    final start = dateOnly(t.date);
+    if (today.isBefore(start)) return false;
     final due = t.dueDate;
     if (due == null) return true;
-    if (dateOnly(due) != today) return false;
-    return due == today || !due.isBefore(now);
+    final dueDay = dateOnly(due);
+    if (today.isAfter(dueDay)) return false;
+    return true;
   }
 
   /// 把一条 Todo 映射到它当前的可视语义状态。
@@ -87,6 +91,14 @@ class CompletionVisibilityPolicy {
   /// 公开此工具是为了让 `DailyRollover`、`TodoProvider` 等调用方
   /// 与本策略保持相同的"当日"判定口径。
   static DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// 是否是仅表示本地日期的时间戳。
+  static bool isDateOnly(DateTime d) =>
+      d.hour == 0 &&
+      d.minute == 0 &&
+      d.second == 0 &&
+      d.millisecond == 0 &&
+      d.microsecond == 0;
 
   /// 每日跨天的"滚动归档"批处理入口（P5 / Requirement 3.3-3.6）。
   ///

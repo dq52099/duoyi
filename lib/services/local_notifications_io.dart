@@ -341,18 +341,16 @@ class LocalNotifications {
       return false;
     }
     if (_isAndroid) {
-      try {
-        final android = _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-        _granted =
-            await android?.requestNotificationsPermission() ??
-            await Permission.notification.request().isGranted;
-      } catch (_) {
-        final status = await Permission.notification.request();
-        _granted = status.isGranted;
-      }
+      final pluginGranted = await _requestAndroidNotificationPermission();
+      final handlerGranted = await _permissionHandlerNotificationGranted(
+        request: true,
+      );
+      final appEnabled = await _androidNotificationsEnabled();
+      _granted = _combineKnownPermissionSignals(
+        pluginGranted,
+        handlerGranted,
+        appEnabled,
+      );
       return _granted;
     }
     if (_isIOS) {
@@ -376,27 +374,99 @@ class LocalNotifications {
   }
 
   Future<void> _probePermission() async {
-    if (_isAndroid || _isIOS) {
-      try {
-        _granted = await Permission.notification.status.isGranted;
-      } catch (_) {
-        _granted = true;
-      }
-    } else {
-      _granted = true;
+    if (_isAndroid) {
+      final handlerGranted = await _permissionHandlerNotificationGranted();
+      final appEnabled = await _androidNotificationsEnabled();
+      _granted = _combineKnownPermissionSignals(handlerGranted, appEnabled);
+      return;
     }
+    if (_isIOS) {
+      _granted = await _permissionHandlerNotificationGranted() ?? false;
+      return;
+    }
+    _granted = true;
+  }
+
+  Future<bool?> _requestAndroidNotificationPermission() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      return await android?.requestNotificationsPermission();
+    } catch (e, st) {
+      debugPrint(
+        '[LocalNotifications] Android notification permission request failed: '
+        '$e\n$st',
+      );
+      return null;
+    }
+  }
+
+  Future<bool?> _androidNotificationsEnabled() async {
+    if (!_isAndroid) return null;
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      return await android?.areNotificationsEnabled();
+    } catch (e, st) {
+      debugPrint(
+        '[LocalNotifications] Android notification enabled probe failed: '
+        '$e\n$st',
+      );
+      return null;
+    }
+  }
+
+  Future<bool?> _permissionHandlerNotificationGranted({
+    bool request = false,
+  }) async {
+    try {
+      final status = request
+          ? await Permission.notification.request()
+          : await Permission.notification.status;
+      return status.isGranted;
+    } catch (e, st) {
+      debugPrint(
+        '[LocalNotifications] permission_handler notification probe failed: '
+        '$e\n$st',
+      );
+      return null;
+    }
+  }
+
+  bool _combineKnownPermissionSignals(
+    bool? first, [
+    bool? second,
+    bool? third,
+  ]) {
+    final signals = <bool>[?first, ?second, ?third];
+    if (signals.isEmpty) return false;
+    return signals.every((granted) => granted);
   }
 
   /// 重新探测当前通知权限状态，不弹系统对话框。
   Future<bool> refreshPermission() async {
-    if (!_initialized) await init();
-    await _probePermission();
+    try {
+      if (!_initialized) await init();
+      await _probePermission();
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] refreshPermission failed: $e\n$st');
+      _granted = false;
+    }
     return _granted;
   }
 
   Future<bool> ensurePermission() async {
-    if (!_initialized) await init();
-    await _probePermission();
+    try {
+      if (!_initialized) await init();
+      await _probePermission();
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] ensurePermission probe failed: $e\n$st');
+      _granted = false;
+    }
     if (_granted) return true;
     return requestPermission();
   }
@@ -654,7 +724,7 @@ class LocalNotifications {
     String? channelId,
   }) async {
     if (!_initialized) await init();
-    await _ensureAndroidFallbackChannels();
+    await _ensureAndroidFallbackChannelsForOperation('show');
     await _ensureDeliveryPermission('show');
     final effectiveChannelId = channelId ?? _defaultChannelId;
     if (!_reserveVisibleNotificationSlot(
@@ -696,12 +766,24 @@ class LocalNotifications {
     required String operation,
   }) async {
     var failureCount = 0;
+    var skipPluginCleanup = false;
     for (final queueId in _queueIdsFor(id)) {
-      try {
-        await _plugin.cancel(queueId);
-      } catch (e, st) {
-        failureCount++;
-        debugPrint('[LocalNotifications] $operation cancel failed: $e\n$st');
+      if (!skipPluginCleanup) {
+        try {
+          await _plugin.cancel(queueId);
+          continue;
+        } catch (e, st) {
+          failureCount++;
+          debugPrint('[LocalNotifications] $operation cancel failed: $e\n$st');
+          if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+            skipPluginCleanup = true;
+          } else {
+            continue;
+          }
+        }
+      }
+      if (_isAndroid) {
+        await NativeReminderRingtone.cancel(queueId);
       }
     }
     if (failureCount > 0) {
@@ -765,7 +847,7 @@ class LocalNotifications {
     if (!when.isAfter(DateTime.now())) {
       throw StateError('提醒时间已过去，未注册到系统通知');
     }
-    await _ensureAndroidFallbackChannels();
+    await _ensureAndroidFallbackChannelsForOperation('scheduleOnce');
     await _ensureDeliveryPermission(
       'scheduleOnce',
       requestIfNeeded: requestIfNeeded,
@@ -820,7 +902,7 @@ class LocalNotifications {
     bool requestIfNeeded = false,
   }) async {
     if (!_initialized) await init();
-    await _ensureAndroidFallbackChannels();
+    await _ensureAndroidFallbackChannelsForOperation('scheduleDaily');
     await _ensureDeliveryPermission(
       'scheduleDaily',
       requestIfNeeded: requestIfNeeded,
@@ -915,32 +997,46 @@ class LocalNotifications {
   }) async {
     final expected = ids.toSet();
     if (expected.isEmpty) return;
+    Set<int> missing;
     try {
       final pending = await _plugin.pendingNotificationRequests();
       final actual = pending.map((request) => request.id).toSet();
-      final missing = expected.difference(actual);
-      if (missing.isEmpty) return;
-      debugPrint(
-        '[LocalNotifications] $operation pending verification missing ids: '
-        '${missing.join(',')}; keeping schedule because the platform accepted '
-        'zonedSchedule and pendingNotificationRequests can be incomplete on '
-        'some launchers/plugin versions.',
-      );
+      missing = expected.difference(actual);
     } catch (e, st) {
       debugPrint(
         '[LocalNotifications] $operation pending verification skipped: $e\n$st',
       );
+      return;
     }
+    if (missing.isEmpty) return;
+    debugPrint(
+      '[LocalNotifications] $operation pending verification missing ids: '
+      '${missing.join(',')}; keeping schedule because the platform accepted '
+      'zonedSchedule and pendingNotificationRequests can be incomplete on '
+      'some launchers/plugin versions.',
+    );
   }
 
   Future<void> _cancelScheduledIds(Iterable<int> ids) async {
+    var skipPluginCleanup = false;
     for (final id in ids.toSet()) {
-      try {
-        await _plugin.cancel(id);
-      } catch (e, st) {
-        debugPrint(
-          '[LocalNotifications] partial schedule cleanup failed: $e\n$st',
-        );
+      if (!skipPluginCleanup) {
+        try {
+          await _plugin.cancel(id);
+          continue;
+        } catch (e, st) {
+          debugPrint(
+            '[LocalNotifications] partial schedule cleanup failed: $e\n$st',
+          );
+          if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+            skipPluginCleanup = true;
+          } else {
+            continue;
+          }
+        }
+      }
+      if (_isAndroid) {
+        await NativeReminderRingtone.cancel(id);
       }
     }
   }
@@ -950,6 +1046,12 @@ class LocalNotifications {
     final msg = '${e.message ?? ''} ${e.details ?? ''}';
     return msg.contains('SCHEDULE_EXACT_ALARM') ||
         msg.contains('exact_alarms_not_permitted');
+  }
+
+  static bool _isPendingIntentLimitExceeded(Object e) {
+    final msg = e.toString();
+    return msg.contains('Too many PendingIntent created') ||
+        msg.contains('10000 PendingIntents');
   }
 
   int _subId(int base, int weekday) {
@@ -995,13 +1097,20 @@ class LocalNotifications {
     }
     Object? firstError;
     StackTrace? firstStack;
+    var skipPluginCancel = false;
     for (final queueId in _queueIdsFor(id)) {
-      try {
-        await _plugin.cancel(queueId);
-      } catch (e, st) {
-        firstError ??= e;
-        firstStack ??= st;
-        debugPrint('[LocalNotifications] cancel failed: $e\n$st');
+      if (!skipPluginCancel) {
+        try {
+          await _plugin.cancel(queueId);
+        } catch (e, st) {
+          debugPrint('[LocalNotifications] cancel failed: $e\n$st');
+          if (_isAndroid && _isPendingIntentLimitExceeded(e)) {
+            skipPluginCancel = true;
+          } else {
+            firstError ??= e;
+            firstStack ??= st;
+          }
+        }
       }
       if (_isAndroid) {
         await NativeReminderRingtone.cancel(queueId);
@@ -1042,9 +1151,14 @@ class LocalNotifications {
   }
 
   Future<List<int>> pendingIds() async {
-    if (!_initialized) return const [];
-    final pending = await _plugin.pendingNotificationRequests();
-    return pending.map((e) => e.id).toList();
+    try {
+      if (!_initialized) await init();
+      final pending = await _plugin.pendingNotificationRequests();
+      return pending.map((e) => e.id).toList();
+    } catch (e, st) {
+      debugPrint('[LocalNotifications] pendingIds failed: $e\n$st');
+      return <int>[];
+    }
   }
 
   String? takeLaunchPayload() {
@@ -1055,8 +1169,8 @@ class LocalNotifications {
 
   Future<Set<String>?> notificationChannelIds() async {
     if (!_isAndroid) return const <String>{};
-    if (!_initialized) await init();
     try {
+      if (!_initialized) await init();
       final android = _plugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
@@ -1097,6 +1211,20 @@ class LocalNotifications {
       Importance.max,
       AudioAttributesUsage.alarm,
     );
+  }
+
+  Future<void> _ensureAndroidFallbackChannelsForOperation(
+    String operation,
+  ) async {
+    if (!_isAndroid) return;
+    try {
+      await _ensureAndroidFallbackChannels();
+    } catch (e, st) {
+      debugPrint(
+        '[LocalNotifications] $operation channel setup failed; continuing '
+        'notification registration: $e\n$st',
+      );
+    }
   }
 
   Future<void> _ensureAndroidFallbackChannelSound(

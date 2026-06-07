@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/design_tokens.dart';
 import '../core/i18n_date_format.dart';
 
 class HabitHeatmap extends StatelessWidget {
@@ -8,32 +9,59 @@ class HabitHeatmap extends StatelessWidget {
 
   const HabitHeatmap({super.key, required this.heatmapData, this.weeks = 12});
 
-  Color _cellColor(int intensity, Color primary) {
-    if (intensity == 0) return primary.withValues(alpha: 0.06);
-    if (intensity >= 5) return const Color(0xFF4CAF50);
-    final opacities = [0.0, 0.20, 0.34, 0.50, 0.68];
-    return const Color(
-      0xFFFFB74D,
-    ).withValues(alpha: opacities[intensity.clamp(0, 4)]);
+  Color _cellColor({
+    required int intensity,
+    required ColorScheme cs,
+    required bool isDark,
+    required bool isFuture,
+  }) {
+    if (isFuture) {
+      return cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.12 : 0.22);
+    }
+    if (intensity <= 0) {
+      return Color.alphaBlend(
+        cs.primary.withValues(alpha: isDark ? 0.08 : 0.055),
+        cs.surface,
+      );
+    }
+    if (intensity >= 5) return const Color(0xFF2E7D32);
+    final palette = <Color>[
+      const Color(0xFFFFF3D7),
+      const Color(0xFFFFD58A),
+      const Color(0xFFFFAF54),
+      const Color(0xFF71B77A),
+    ];
+    return Color.lerp(
+          palette[intensity.clamp(1, 4) - 1],
+          cs.primary,
+          isDark ? 0.22 : 0.08,
+        ) ??
+        palette[intensity.clamp(1, 4) - 1];
   }
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final now = DateTime.now();
-    final startDate = now.subtract(Duration(days: weeks * 7 - 1));
+    final today = DateTime(now.year, now.month, now.day);
+    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
+    final startDate = thisMonday.subtract(Duration(days: (weeks - 1) * 7));
     final columns = weeks;
     final rows = 7;
 
-    final cs = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : 360.0;
-        final cell = ((available - 36 - columns * 2.5) / columns).clamp(
+        final cell = ((available - 38 - columns * 3.0) / columns).clamp(
           10.0,
-          17.0,
+          18.0,
+        );
+        final cellRadius = BorderRadius.circular(
+          cell >= 15 ? DesignTokens.radiusXs : 3,
         );
         final grid = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,8 +77,9 @@ class HabitHeatmap extends StatelessWidget {
                         ? Text(
                             '${w.month}月',
                             style: TextStyle(
-                              fontSize: 9,
-                              color: cs.onSurfaceVariant,
+                              fontSize: 9.5,
+                              height: 1,
+                              color: cs.onSurface.withValues(alpha: 0.48),
                             ),
                           )
                         : const SizedBox(),
@@ -62,19 +91,22 @@ class HabitHeatmap extends StatelessWidget {
             Row(
               children: [
                 Column(
-                  children: ['一', '', '三', '', '五', '', '日']
+                  children: const ['一', '', '三', '', '五', '', '日']
                       .map(
                         (s) => SizedBox(
-                          height: cell + 2,
-                          width: 22,
+                          height: cell + 3,
+                          width: 24,
                           child: s.isEmpty
                               ? null
                               : Center(
                                   child: Text(
                                     s,
                                     style: TextStyle(
-                                      fontSize: 9,
-                                      color: cs.onSurfaceVariant,
+                                      fontSize: 9.5,
+                                      height: 1,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.46,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -89,21 +121,42 @@ class HabitHeatmap extends StatelessWidget {
                       final key =
                           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                       final intensity = heatmapData[key] ?? 0;
+                      final isToday = date == today;
+                      final isFuture = date.isAfter(today);
+                      final cellColor = _cellColor(
+                        intensity: intensity,
+                        cs: cs,
+                        isDark: isDark,
+                        isFuture: isFuture,
+                      );
                       return Tooltip(
                         message: '${I18nDateFormat.date(date)} · $intensity 次',
                         child: Container(
                           width: cell,
                           height: cell,
-                          margin: const EdgeInsets.all(1.25),
+                          margin: const EdgeInsets.all(1.5),
                           decoration: BoxDecoration(
-                            color: _cellColor(intensity, primary),
-                            borderRadius: BorderRadius.circular(4),
+                            color: cellColor,
+                            borderRadius: cellRadius,
                             border: Border.all(
-                              color: intensity == 0
-                                  ? cs.outlineVariant.withValues(alpha: 0.22)
-                                  : primary.withValues(alpha: 0.22),
-                              width: 0.5,
+                              color: isToday
+                                  ? cs.primary.withValues(alpha: 0.76)
+                                  : intensity == 0 || isFuture
+                                  ? cs.outlineVariant.withValues(alpha: 0.20)
+                                  : cellColor.withValues(alpha: 0.72),
+                              width: isToday ? 1.15 : 0.55,
                             ),
+                            boxShadow: intensity > 0 && !isFuture
+                                ? [
+                                    BoxShadow(
+                                      color: cellColor.withValues(
+                                        alpha: isDark ? 0.18 : 0.22,
+                                      ),
+                                      blurRadius: 5,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
                           ),
                         ),
                       );
@@ -112,14 +165,83 @@ class HabitHeatmap extends StatelessWidget {
                 }),
               ],
             ),
+            const SizedBox(height: 10),
+            _HabitHeatmapLegend(cs: cs, isDark: isDark),
           ],
         );
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
           child: grid,
         );
       },
+    );
+  }
+}
+
+class _HabitHeatmapLegend extends StatelessWidget {
+  final ColorScheme cs;
+  final bool isDark;
+
+  const _HabitHeatmapLegend({required this.cs, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final samples = [0, 1, 2, 3, 5];
+    Color sampleColor(int value) {
+      if (value == 0) {
+        return Color.alphaBlend(
+          cs.primary.withValues(alpha: isDark ? 0.08 : 0.055),
+          cs.surface,
+        );
+      }
+      if (value >= 5) return const Color(0xFF2E7D32);
+      final palette = <Color>[
+        const Color(0xFFFFF3D7),
+        const Color(0xFFFFD58A),
+        const Color(0xFFFFAF54),
+      ];
+      return Color.lerp(palette[value - 1], cs.primary, isDark ? 0.22 : 0.08) ??
+          palette[value - 1];
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '少',
+          style: TextStyle(
+            fontSize: 10,
+            color: cs.onSurface.withValues(alpha: 0.48),
+            height: 1,
+          ),
+        ),
+        const SizedBox(width: 6),
+        ...samples.map(
+          (value) => Container(
+            width: 12,
+            height: 12,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: sampleColor(value),
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.18),
+                width: 0.45,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '多',
+          style: TextStyle(
+            fontSize: 10,
+            color: cs.onSurface.withValues(alpha: 0.48),
+            height: 1,
+          ),
+        ),
+      ],
     );
   }
 }
