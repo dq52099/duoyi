@@ -476,7 +476,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         showCheckmark: false,
         labelStyle: appSecondaryControlLabelStyle(context),
         visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         side: BorderSide(
           color: selected
               ? cs.primary.withValues(alpha: 0.24)
@@ -502,7 +502,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         label: label,
         labelStyle: appSecondaryControlLabelStyle(context),
         visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         side: BorderSide(
           color: cs.outlineVariant.withValues(alpha: 0.16),
           width: 0.45,
@@ -530,7 +530,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   }) {
     return SizedBox(
       key: const ValueKey('calendar_unified_filter_strip'),
-      height: 36,
+      height: 48,
       child: DefaultTextStyle.merge(
         style: appSecondaryControlLabelStyle(context),
         child: ListView(
@@ -1685,7 +1685,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
                         icon: Icons.chevron_left,
                         onPressed: previous,
                         tooltip: previousTooltip,
-                        dimension: compact ? 36 : 40,
+                        dimension: 48,
                       ),
                       SizedBox(width: compact ? 3 : 4),
                       Expanded(
@@ -1747,7 +1747,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
                         icon: Icons.chevron_right,
                         onPressed: next,
                         tooltip: nextTooltip,
-                        dimension: compact ? 36 : 40,
+                        dimension: 48,
                       ),
                     ],
                   ),
@@ -1786,7 +1786,7 @@ class _NavIconButton extends StatelessWidget {
         style: IconButton.styleFrom(
           fixedSize: Size.square(dimension),
           minimumSize: Size.square(dimension),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          tapTargetSize: MaterialTapTargetSize.padded,
         ),
         icon: Icon(icon),
         onPressed: onPressed,

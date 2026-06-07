@@ -840,60 +840,92 @@ class _HabitTodaySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 3),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 7),
       child: AppSurfaceCard(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-        borderRadius: BorderRadius.circular(10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              cs.primary.withValues(alpha: isDark ? 0.13 : 0.065),
+              cs.surface,
+            ),
+            Color.alphaBlend(
+              cs.secondary.withValues(alpha: isDark ? 0.09 : 0.04),
+              cs.surface,
+            ),
+          ],
+        ),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: isDark ? 0.18 : 0.13),
+          width: 0.6,
+        ),
         child: Row(
           children: [
             SizedBox(
-              width: 26,
-              height: 26,
+              width: 40,
+              height: 40,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   CircularProgressIndicator(
                     value: progress,
-                    strokeWidth: 3,
+                    strokeWidth: 4,
+                    strokeCap: StrokeCap.round,
                     backgroundColor: cs.primary.withValues(alpha: 0.12),
+                    color: progress >= 1 ? const Color(0xFF2E7D32) : cs.primary,
                   ),
                   Text(
                     '${(progress * 100).toInt()}%',
                     style: TextStyle(
-                      fontSize: 10.5,
+                      fontSize: 10,
                       fontWeight: FontWeight.normal,
-                      color: cs.primary,
+                      color: progress >= 1
+                          ? const Color(0xFF2E7D32)
+                          : cs.primary,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '$completedCount / $totalCount $doneLabel',
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 13,
                       fontWeight: FontWeight.normal,
                       height: 1.1,
                     ),
                   ),
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 4),
                   Text(
                     '$streakLabel $longestStreak 天',
                     style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 10,
-                      height: 1.1,
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                      fontSize: 11,
+                      height: 1.15,
                     ),
                   ),
                 ],
               ),
+            ),
+            Icon(
+              Icons.task_alt_rounded,
+              size: 18,
+              color: progress >= 1
+                  ? const Color(0xFF2E7D32)
+                  : cs.primary.withValues(alpha: 0.62),
             ),
           ],
         ),
@@ -1177,7 +1209,9 @@ class _HabitCheckinCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final isNegative = habit.kind == HabitKind.negative;
     final todayCount = habit.todayCount();
     final flexProgress = habit.flexProgressForDate(DateTime.now());
@@ -1206,21 +1240,34 @@ class _HabitCheckinCard extends StatelessWidget {
     return _HabitSwipeActionWrapper(
       habit: habit,
       actionMargin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       child: AppSurfaceCard(
         key: ValueKey('habit_checkin_card_${habit.id}'),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 1),
         padding: const EdgeInsets.fromLTRB(7, 2, 6, 2),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => HabitDetailScreen(habitId: habit.id),
           ),
         ),
-        border: isDone || hasNegativeOccurrence
-            ? Border.all(color: habitColor.withValues(alpha: 0.12), width: 0.45)
+        gradient: isDone || hasNegativeOccurrence
+            ? LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  habitColor.withValues(alpha: isDark ? 0.16 : 0.08),
+                  cs.surface.withValues(alpha: 0.98),
+                ],
+              )
             : null,
+        border: Border.all(
+          color: isDone || hasNegativeOccurrence
+              ? habitColor.withValues(alpha: isDark ? 0.24 : 0.16)
+              : cs.outlineVariant.withValues(alpha: isDark ? 0.10 : 0.14),
+          width: 0.55,
+        ),
         child: SizedBox(
           height: _habitCheckinCardBodyHeight,
           child: Row(
@@ -1231,9 +1278,13 @@ class _HabitCheckinCard extends StatelessWidget {
                 height: 20,
                 decoration: BoxDecoration(
                   color: habitColor.withValues(
-                    alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.15,
+                    alpha: isDone && !hasNegativeOccurrence ? 0.22 : 0.13,
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(
+                    color: habitColor.withValues(alpha: 0.14),
+                    width: 0.45,
+                  ),
                 ),
                 child: Icon(
                   _habitDisplayIcon(habit),
@@ -1241,7 +1292,7 @@ class _HabitCheckinCard extends StatelessWidget {
                   size: 12,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1259,7 +1310,7 @@ class _HabitCheckinCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: DesignTokens.fontWeightRegular,
-                                fontSize: 12,
+                                fontSize: 13,
                                 height: 1.14,
                                 decoration: isDone && !isNegative
                                     ? TextDecoration.lineThrough
@@ -1267,8 +1318,8 @@ class _HabitCheckinCard extends StatelessWidget {
                                 color: hasNegativeOccurrence
                                     ? cs.error
                                     : (isDone && !isNegative
-                                          ? Colors.grey
-                                          : null),
+                                          ? cs.onSurface.withValues(alpha: 0.46)
+                                          : cs.onSurface),
                               ),
                             ),
                           ),
@@ -1321,9 +1372,9 @@ class _HabitCheckinCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontSize: 10,
-                              height: 1.1,
+                              color: cs.onSurface.withValues(alpha: 0.56),
+                              fontSize: 10.5,
+                              height: 1.18,
                             ),
                           ),
                         ),
@@ -1341,7 +1392,9 @@ class _HabitCheckinCard extends StatelessWidget {
                             Container(
                               height: 2,
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: cs.surfaceContainerHighest.withValues(
+                                  alpha: isDark ? 0.20 : 0.44,
+                                ),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -1401,8 +1454,11 @@ class _HabitCheckinCard extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           backgroundColor: habitColor,
                           foregroundColor: _habitButtonForeground(habitColor),
-                          disabledBackgroundColor: Colors.grey.shade200,
-                          disabledForegroundColor: Colors.grey.shade600,
+                          disabledBackgroundColor: cs.surfaceContainerHighest
+                              .withValues(alpha: isDark ? 0.28 : 0.72),
+                          disabledForegroundColor: cs.onSurface.withValues(
+                            alpha: 0.54,
+                          ),
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           minimumSize: const Size(_habitCheckinButtonWidth, 25),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1739,31 +1795,47 @@ class _HabitStreakBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final accent = Color.lerp(
+      const Color(0xFFF57C00),
+      cs.primary,
+      isDark ? 0.18 : 0.06,
+    )!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3E0),
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isDark ? 0.15 : 0.10),
+          cs.surface,
+        ),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.22 : 0.14),
+          width: 0.45,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.local_fire_department,
-            size: 11,
-            color: Colors.orange,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            '${habit.currentStreak} ${habit.streakUnitLabel}',
-            style: const TextStyle(
-              color: Colors.orange,
-              fontWeight: FontWeight.normal,
-              fontSize: 10,
-              height: 1.0,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_fire_department, size: 11, color: accent),
+            const SizedBox(width: 3),
+            Text(
+              '${habit.currentStreak} ${habit.streakUnitLabel}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent,
+                fontWeight: FontWeight.normal,
+                fontSize: 10,
+                height: 1.0,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1829,21 +1901,26 @@ class _HabitFeedbackBadge extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 10, color: color),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.normal,
-                height: 1.0,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 10, color: color),
+              const SizedBox(width: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.normal,
+                  height: 1.0,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

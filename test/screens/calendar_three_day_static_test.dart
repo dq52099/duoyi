@@ -100,7 +100,7 @@ void main() {
       headerSource,
       contains("key: const ValueKey('calendar_navigation_header_bar')"),
     );
-    expect(headerSource, contains('dimension: compact ? 36 : 40'));
+    expect(headerSource, contains('dimension: 48'));
     expect(headerSource, contains('Icons.calendar_month_outlined'));
     expect(headerSource, contains('if (!compact) ...['));
     expect(headerSource, contains('child: Text('));
@@ -188,13 +188,13 @@ void main() {
     expect(source, contains('Widget _calendarFilterChip({'));
     expect(
       source,
-      contains('materialTapTargetSize: MaterialTapTargetSize.shrinkWrap'),
+      contains('materialTapTargetSize: MaterialTapTargetSize.padded'),
     );
     expect(source, contains('width: 0.45'));
     expect(source, contains('alpha: 0.16'));
     expect(source, contains('appSecondaryControlLabelStyle(context)'));
     expect(source, contains('Tab(height: 34'));
-    expect(source, contains('height: 36'));
+    expect(source, contains('height: 48'));
     expect(source, contains('AppSecondaryControlTheme('));
     expect(source, contains('AppSecondaryMenuText('));
     expect(source, contains('AppDropdownField<TimeEntryCategory>'));

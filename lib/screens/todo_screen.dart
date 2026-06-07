@@ -693,6 +693,7 @@ class _TodoScreenState extends State<TodoScreen> {
                             ),
                           ),
                           _TodoViewMode.list => ListView.builder(
+                            // ignore: deprecated_member_use
                             cacheExtent: 640,
                             itemCount: listGroupEntries.length,
                             itemBuilder: (context, index) {
@@ -2672,7 +2673,10 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: widget.todos.length,
-      onReorder: _reorderTodos,
+      onReorder: (oldIndex, newIndex) {
+        final targetIndex = oldIndex < newIndex ? newIndex - 1 : newIndex;
+        _reorderTodos(oldIndex, targetIndex);
+      },
       proxyDecorator: (child, index, animation) => Material(
         type: MaterialType.transparency,
         child: ScaleTransition(
@@ -2721,8 +2725,8 @@ class _ListGroupTileState extends State<_ListGroupTile> {
   }
 
   Future<void> _reorderTodos(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex == newIndex) return;
+    if (newIndex > oldIndex) newIndex -= 1;
 
     final ids = widget.todos.map((todo) => todo.id).toList();
     final moved = ids.removeAt(oldIndex);

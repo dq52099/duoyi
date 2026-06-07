@@ -36,6 +36,10 @@ class LocalTimezoneResolver {
   @visibleForTesting
   static Future<String?> Function()? debugNativeSystemTimeZoneReader;
 
+  static bool get _hasDebugTimeZoneReaders =>
+      debugSystemTimeZoneReader != null ||
+      debugNativeSystemTimeZoneReader != null;
+
   /// 非理想路径的日志（`flutter_timezone` 失败 / 回退次数等），便于 QA 排查。
   static final List<String> diagnostics = [];
 
@@ -107,6 +111,12 @@ class LocalTimezoneResolver {
 
       final systemName = await _readSystemIanaName();
       if (systemName != null) return systemName;
+      if (_hasDebugTimeZoneReaders) {
+        _log(
+          'debug timezone readers resolved no usable non-UTC zone; fallback to $defaultIana',
+        );
+        return defaultIana;
+      }
 
       final offsetName = _offsetBasedIanaName(DateTime.now().timeZoneOffset);
       if (offsetName != null) {

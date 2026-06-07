@@ -5,9 +5,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('共享二级控件样式和主菜单字号字重一致', () {
-    final source = File(
-      'lib/widgets/surface_components.dart',
-    ).readAsStringSync();
+    final source = _readSource('lib/widgets/surface_components.dart');
 
     final controlStyle = source.substring(
       source.indexOf('TextStyle appSecondaryControlTextStyle'),
@@ -263,9 +261,7 @@ void main() {
   });
 
   test('危险按钮和状态徽标显式使用高对比前景色', () {
-    final surface = File(
-      'lib/widgets/surface_components.dart',
-    ).readAsStringSync();
+    final surface = _readSource('lib/widgets/surface_components.dart');
     final notification = File(
       'lib/screens/notification_history_screen.dart',
     ).readAsStringSync();
@@ -281,9 +277,7 @@ void main() {
   });
 
   test('共享卡片、弹框和底部面板有样式回归护栏', () {
-    final source = File(
-      'lib/widgets/surface_components.dart',
-    ).readAsStringSync();
+    final source = _readSource('lib/widgets/surface_components.dart');
 
     expect(source, contains('class AppSurfaceCard'));
     expect(source, contains('border ??'));
@@ -489,9 +483,7 @@ void main() {
   });
 
   test('二级控件选中态浅深主题下保持可读且克制', () {
-    final source = File(
-      'lib/widgets/surface_components.dart',
-    ).readAsStringSync();
+    final source = _readSource('lib/widgets/surface_components.dart');
     final controls = source.substring(
       source.indexOf('final selectedControlBackground'),
       source.indexOf('return Theme('),
@@ -541,6 +533,10 @@ void main() {
       );
     }
   });
+}
+
+String _readSource(String path) {
+  return File(path).readAsStringSync().replaceAll('\r\n', '\n');
 }
 
 Color _readableForeground(Color background, Color preferred) {

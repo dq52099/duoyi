@@ -61,8 +61,9 @@ void main() {
     expect(today, contains('leading: _TodayTodoLeading('));
     expect(today, contains('class _TodayTodoStatusToggle'));
     expect(today, contains('class _TodayTodoTitleLine'));
-    expect(today, contains('static const double width = 30'));
-    expect(today, contains('static const double statusButtonSize = 22'));
+    expect(today, contains('static const double width = 44'));
+    expect(today, contains('static const double touchTargetSize = 44'));
+    expect(today, contains('static const double statusButtonSize = 24'));
 
     expect(
       today,

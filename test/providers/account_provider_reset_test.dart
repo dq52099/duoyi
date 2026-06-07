@@ -124,7 +124,7 @@ void main() {
   });
 
   test(
-    'AuthProvider does not clear auth state when logout cleanup fails',
+    'AuthProvider clears auth state even when logout cleanup fails',
     () async {
       const adminState = AuthState(
         userId: 'admin-id',
@@ -166,10 +166,11 @@ void main() {
       await expectLater(auth.logout(), throwsStateError);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(auth.state.userId, 'admin-id');
-      expect(auth.state.coinBalance, 999);
-      expect(auth.client.token, 'admin-token');
-      expect(prefs.getString('auth_state'), isNotNull);
+      expect(auth.state.isLoggedIn, isFalse);
+      expect(auth.state.userId, isNull);
+      expect(auth.state.coinBalance, 0);
+      expect(auth.client.token, isNull);
+      expect(prefs.getString('auth_state'), isNull);
       expect(prefs.getString('habits'), isNotNull);
       expect(prefs.getString('active_brand'), 'admin-theme');
       expect(prefs.getString('duoyi_virtual_rewards'), isNotNull);

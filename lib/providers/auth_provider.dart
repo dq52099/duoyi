@@ -416,13 +416,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearLocalSession() async {
-    await _notifyAccountLoggedOut();
+    Object? cleanupError;
+    StackTrace? cleanupStackTrace;
+    try {
+      await _notifyAccountLoggedOut();
+    } catch (e, st) {
+      cleanupError = e;
+      cleanupStackTrace = st;
+    }
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_state');
     notifyListeners();
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+    }
   }
 
   Future<void> refreshMe({String reason = 'manual'}) async {

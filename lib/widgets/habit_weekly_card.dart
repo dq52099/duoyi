@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../core/design_tokens.dart';
 import '../providers/habit_provider.dart';
 import 'surface_components.dart';
@@ -15,6 +16,7 @@ class HabitWeeklyCard extends StatelessWidget {
     final todayDOW = DateTime.now().weekday - 1;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final primaryColor = cs.primary;
     final elapsed = todayDOW + 1;
     final weekAverage =
@@ -31,6 +33,25 @@ class HabitWeeklyCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(
+            primaryColor.withValues(alpha: isDark ? 0.16 : 0.08),
+            cs.surface,
+          ),
+          Color.alphaBlend(
+            cs.tertiary.withValues(alpha: isDark ? 0.10 : 0.045),
+            cs.surface,
+          ),
+        ],
+      ),
+      border: Border.all(
+        color: primaryColor.withValues(alpha: isDark ? 0.22 : 0.16),
+        width: 0.65,
+      ),
+      elevation: 1,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -42,12 +63,16 @@ class HabitWeeklyCard extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.13),
+                  color: primaryColor.withValues(alpha: isDark ? 0.18 : 0.11),
                   borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+                  border: Border.all(
+                    color: primaryColor.withValues(alpha: 0.12),
+                    width: 0.5,
+                  ),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_rounded,
-                  size: 16,
+                  size: 18,
                   color: primaryColor,
                 ),
               ),
@@ -64,12 +89,12 @@ class HabitWeeklyCard extends StatelessWidget {
                         height: 1.12,
                       ),
                     ),
-                    const SizedBox(height: 1),
+                    const SizedBox(height: 3),
                     Text(
                       '今日 $completedToday/$activeToday 达标',
                       style: appSecondaryControlLabelStyle(context).copyWith(
                         fontSize: DesignTokens.fontSizeCaption,
-                        color: cs.onSurface.withValues(alpha: 0.62),
+                        color: cs.onSurface.withValues(alpha: 0.58),
                         height: 1.12,
                       ),
                     ),
@@ -77,12 +102,12 @@ class HabitWeeklyCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(11),
+                  color: cs.surface.withValues(alpha: isDark ? 0.26 : 0.70),
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(
-                    color: primaryColor.withValues(alpha: 0.16),
+                    color: primaryColor.withValues(alpha: 0.14),
                     width: 0.6,
                   ),
                 ),
@@ -95,7 +120,7 @@ class HabitWeeklyCard extends StatelessWidget {
                       key: const ValueKey('habit_weekly_overview_percent'),
                       style: TextStyle(
                         color: primaryColor,
-                        fontSize: 13,
+                        fontSize: 15,
                         height: 1.0,
                         fontWeight: DesignTokens.fontWeightRegular,
                       ),
@@ -114,85 +139,107 @@ class HabitWeeklyCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
               key: const ValueKey('habit_weekly_overview_progress_bar'),
               value: weekAverage.clamp(0.0, 1.0).toDouble(),
               minHeight: 3,
-              backgroundColor: primaryColor.withValues(alpha: 0.10),
+              backgroundColor: cs.surfaceContainerHighest.withValues(
+                alpha: isDark ? 0.20 : 0.42,
+              ),
               color: primaryColor,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (i) {
               final val = data[i];
+              final isToday = i == todayDOW;
               Color bg;
-              Color textColor = Colors.white;
+              Color textColor = cs.onSurface;
+              Color borderColor = Colors.transparent;
 
               if (i > todayDOW) {
-                bg = Colors.grey.withValues(alpha: 0.1);
-                textColor = Colors.grey.shade400;
+                bg = cs.surfaceContainerHighest.withValues(
+                  alpha: isDark ? 0.15 : 0.34,
+                );
+                textColor = cs.onSurface.withValues(alpha: 0.36);
+                borderColor = cs.outlineVariant.withValues(alpha: 0.12);
               } else if (val >= 1.0) {
-                bg = const Color(0xFF4CAF50);
+                bg = const Color(0xFF2E7D32);
+                textColor = Colors.white;
               } else if (val > 0) {
                 bg = const Color(0xFFFFB74D);
+                textColor = const Color(0xFF2D1F0F);
               } else {
-                bg = Colors.grey.withValues(alpha: 0.2);
-                textColor = Colors.grey.shade600;
+                bg = cs.surface.withValues(alpha: isDark ? 0.28 : 0.70);
+                textColor = cs.onSurface.withValues(alpha: 0.52);
+                borderColor = cs.outlineVariant.withValues(alpha: 0.18);
               }
 
-              final isToday = i == todayDOW;
-
-              return Column(
-                children: [
-                  Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontSize: DesignTokens.fontSizeCaption,
-                      fontWeight: DesignTokens.fontWeightRegular,
-                      color: isToday ? primaryColor : Colors.grey.shade600,
+              return Container(
+                width: 30,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: isToday
+                      ? primaryColor.withValues(alpha: isDark ? 0.13 : 0.08)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      labels[i],
+                      style: TextStyle(
+                        fontSize: DesignTokens.fontSizeCaption,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                        color: isToday
+                            ? primaryColor
+                            : cs.onSurface.withValues(alpha: 0.56),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Container(
-                    key: ValueKey('habit_weekly_overview_day_$i'),
-                    width: 25,
-                    height: 25,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      shape: BoxShape.circle,
-                      border: isToday
-                          ? Border.all(
-                              color: primaryColor.withValues(alpha: 0.34),
-                              width: 0.8,
-                            )
-                          : null,
-                      boxShadow: isToday && val > 0
-                          ? [
-                              BoxShadow(
-                                color: bg.withValues(alpha: 0.22),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Center(
-                      child: Text(
-                        i > todayDOW ? '-' : '${(val * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 8.5,
-                          color: textColor,
-                          fontWeight: DesignTokens.fontWeightRegular,
+                    const SizedBox(height: 5),
+                    Container(
+                      key: ValueKey('habit_weekly_overview_day_$i'),
+                      width: 25,
+                      height: 25,
+                      decoration: BoxDecoration(
+                        color: bg,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isToday
+                              ? primaryColor.withValues(alpha: 0.46)
+                              : borderColor,
+                          width: isToday ? 1.05 : 0.55,
+                        ),
+                        boxShadow: isToday && val > 0
+                            ? [
+                                BoxShadow(
+                                  color: bg.withValues(
+                                    alpha: isDark ? 0.20 : 0.26,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Center(
+                        child: Text(
+                          i > todayDOW ? '-' : '${(val * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            color: textColor,
+                            fontWeight: DesignTokens.fontWeightRegular,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             }),
           ),

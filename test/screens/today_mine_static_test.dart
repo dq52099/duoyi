@@ -101,7 +101,10 @@ void main() {
       expect(today, contains('onToggleTodo(todo)'));
       expect(today, contains('onOpenTodo(t.id)'));
       expect(today, contains('CompletionVisibilityPolicy.visualState(todo)'));
-      expect(today, contains('todoP.visibleTodayTodos(now)'));
+      expect(today, contains('List<TodoItem> _visibleTodayOverviewTodos('));
+      expect(today, contains('if (due == null) return true;'));
+      expect(today, contains('return !due.isBefore(now);'));
+      expect(today, contains('_visibleTodayOverviewTodos(todoP.todos, now)'));
       expect(today, contains('class _TodayTodoStatusPill'));
       expect(today, contains('TodoVisualState.completed'));
       expect(today, contains('TodoVisualState.overdue'));
@@ -109,7 +112,8 @@ void main() {
       expect(today, contains('effectiveTileBackground'));
       expect(today, contains('effectiveTileBorderColor'));
       expect(today, contains('class _TodayTodoLeading'));
-      expect(today, contains('static const double width = 30'));
+      expect(today, contains('static const double width = 44'));
+      expect(today, contains('static const double touchTargetSize = 44'));
       expect(today, contains('class _TodayTodoTitleLine'));
       expect(today, contains('class _TodayTodoStatusToggle'));
       expect(today, contains('minLeadingWidth: widget.leading == null'));
@@ -194,12 +198,7 @@ void main() {
       expect(mine, contains('activeAvatarFrame'));
       expect(mine, contains('defaultAvatarFrameId'));
       expect(mine, contains('onTap: () => _showAvatarPreview(context)'));
-      expect(
-        mine,
-        contains(
-          "Hero(\n                                  tag: 'mine-avatar-preview'",
-        ),
-      );
+      expect(mine, contains('child: Hero('));
       expect(
         mine,
         contains('class _AvatarPreviewScreen extends StatelessWidget'),

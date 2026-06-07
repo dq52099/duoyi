@@ -952,10 +952,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               physics: const NeverScrollableScrollPhysics(),
               onReorder: (oldI, newI) {
                 if (!canEdit) return;
+                final targetIndex = oldI < newI ? newI - 1 : newI;
                 final ids = _todo.subtasks.map((e) => e.id).toList();
-                if (newI > oldI) newI -= 1;
                 final id = ids.removeAt(oldI);
-                ids.insert(newI, id);
+                ids.insert(targetIndex, id);
                 context.read<TodoProvider>().reorderSubtasks(
                   widget.todoId,
                   ids,

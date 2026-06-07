@@ -390,8 +390,8 @@ void main() {
       if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
         return;
       }
-      final ffprobe = Process.runSync('which', ['ffprobe']);
-      if (ffprobe.exitCode != 0) {
+      final ffprobe = _findExecutable('ffprobe');
+      if (ffprobe == null) {
         return;
       }
 
@@ -437,8 +437,8 @@ void main() {
       if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
         return;
       }
-      final ffmpeg = Process.runSync('which', ['ffmpeg']);
-      if (ffmpeg.exitCode != 0) {
+      final ffmpeg = _findExecutable('ffmpeg');
+      if (ffmpeg == null) {
         return;
       }
 
@@ -508,8 +508,8 @@ void main() {
       if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
         return;
       }
-      final ffmpeg = Process.runSync('which', ['ffmpeg']);
-      if (ffmpeg.exitCode != 0) {
+      final ffmpeg = _findExecutable('ffmpeg');
+      if (ffmpeg == null) {
         return;
       }
       for (final file in files) {
@@ -521,6 +521,22 @@ void main() {
       }
     });
   });
+}
+
+String? _findExecutable(String executable) {
+  final probe = Platform.isWindows ? 'where.exe' : 'which';
+  try {
+    final result = Process.runSync(probe, [executable]);
+    if (result.exitCode != 0) return null;
+    final firstLine = result.stdout
+        .toString()
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .firstWhere((line) => line.isNotEmpty, orElse: () => '');
+    return firstLine.isEmpty ? null : firstLine;
+  } on ProcessException {
+    return null;
+  }
 }
 
 Map<String, dynamic> _readWhiteNoiseManifest() {

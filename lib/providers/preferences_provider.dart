@@ -953,14 +953,25 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setDailyReminderEnabled(bool value) async {
-    _dailyReminderEnabled = value;
-    _dailyReminderSlots = _replaceSlot(
-      0,
-      _dailyReminderSlots[0].copyWith(enabled: value),
-    );
+    final currentSlot = _dailyReminderSlots[0];
+    final nextSlot = value && currentSlot.kind == ReminderKind.off
+        ? currentSlot.copyWith(enabled: true, kind: ReminderKind.push)
+        : currentSlot.copyWith(enabled: value);
+    _dailyReminderEnabled = nextSlot.enabled;
+    _dailyReminderKind = nextSlot.kind;
+    _dailyReminderSlots = _replaceSlot(0, nextSlot);
+
+    final changedKeys = <String>[_kDailyReminderEnabled];
+    if (nextSlot.kind != currentSlot.kind) {
+      changedKeys.add(_kDailyReminderKind);
+    }
+
     final p = await SharedPreferences.getInstance();
-    await p.setBool(_kDailyReminderEnabled, value);
-    _notifyPreferenceKeys(const [_kDailyReminderEnabled]);
+    await p.setBool(_kDailyReminderEnabled, nextSlot.enabled);
+    if (nextSlot.kind != currentSlot.kind) {
+      await p.setString(_kDailyReminderKind, nextSlot.kind.name);
+    }
+    _notifyPreferenceKeys(changedKeys);
   }
 
   Future<void> setDailyReminderTime(int hour, int minute) async {

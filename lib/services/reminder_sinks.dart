@@ -131,6 +131,10 @@ abstract class ReminderScheduleIssueSink {
   });
 }
 
+abstract class ReminderScheduleIssueClearSink {
+  void clearReminderScheduleIssue();
+}
+
 /// 邮件提醒出口。
 ///
 /// 当前客户端只负责把邮件提醒解析成可投递请求；真正投递可以由后端、

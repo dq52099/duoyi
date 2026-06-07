@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
 void main() {
   late Directory tempDir;
   late Directory binDir;
@@ -42,12 +44,20 @@ printf 'List of devices attached\n\n'
         'bash',
         ['scripts/generate_device_readiness_report.sh'],
         workingDirectory: Directory.current.path,
-        environment: {
-          'FLUTTER_BIN': flutter.path,
-          'ADB_BIN': adb.path,
-          'ANDROID_SDK_ROOT': sdkDir.path,
-          'OUTPUT_DIR': outputDir.path,
-        },
+        environment: bashEnvironment(
+          {
+            'FLUTTER_BIN': flutter.path,
+            'ADB_BIN': adb.path,
+            'ANDROID_SDK_ROOT': sdkDir.path,
+            'OUTPUT_DIR': outputDir.path,
+          },
+          pathVariables: {
+            'FLUTTER_BIN',
+            'ADB_BIN',
+            'ANDROID_SDK_ROOT',
+            'OUTPUT_DIR',
+          },
+        ),
         includeParentEnvironment: true,
       );
 
@@ -89,13 +99,22 @@ printf 'List of devices attached\n\n'
         'bash',
         ['scripts/generate_device_readiness_report.sh'],
         workingDirectory: Directory.current.path,
-        environment: {
-          'FLUTTER_BIN': flutter.path,
-          'ADB_BIN': adb.path,
-          'ANDROID_SDK_ROOT': sdkDir.path,
-          'OUTPUT_DIR': outputDir.path,
-          'KVM_DEVICE': '${tempDir.path}/missing-kvm',
-        },
+        environment: bashEnvironment(
+          {
+            'FLUTTER_BIN': flutter.path,
+            'ADB_BIN': adb.path,
+            'ANDROID_SDK_ROOT': sdkDir.path,
+            'OUTPUT_DIR': outputDir.path,
+            'KVM_DEVICE': '${tempDir.path}/missing-kvm',
+          },
+          pathVariables: {
+            'FLUTTER_BIN',
+            'ADB_BIN',
+            'ANDROID_SDK_ROOT',
+            'OUTPUT_DIR',
+            'KVM_DEVICE',
+          },
+        ),
         includeParentEnvironment: true,
       );
 
@@ -165,10 +184,10 @@ kvm\tavailable\t/dev/kvm exists
       'bash',
       ['scripts/summarize_device_readiness_missing.sh'],
       workingDirectory: Directory.current.path,
-      environment: {
-        'READINESS_DIR': outputDir.path,
-        'OUTPUT_DIR': missingDir.path,
-      },
+      environment: bashEnvironment(
+        {'READINESS_DIR': outputDir.path, 'OUTPUT_DIR': missingDir.path},
+        pathVariables: {'READINESS_DIR', 'OUTPUT_DIR'},
+      ),
       includeParentEnvironment: true,
     );
 
@@ -182,7 +201,10 @@ kvm\tavailable\t/dev/kvm exists
       'bash',
       ['scripts/validate_device_readiness_missing.sh'],
       workingDirectory: Directory.current.path,
-      environment: {'REPORT_DIR': missingDir.path},
+      environment: bashEnvironment(
+        {'REPORT_DIR': missingDir.path},
+        pathVariables: {'REPORT_DIR'},
+      ),
       includeParentEnvironment: true,
     );
     expect(validation.exitCode, 0, reason: _combinedOutput(validation));
@@ -191,7 +213,7 @@ kvm\tavailable\t/dev/kvm exists
 
 File _writeExecutable(String path, String content) {
   final file = File(path)..writeAsStringSync(content);
-  final result = Process.runSync('chmod', ['+x', path]);
+  final result = chmodForBash(path);
   if (result.exitCode != 0) {
     throw StateError(_combinedOutput(result));
   }
@@ -203,7 +225,10 @@ Future<ProcessResult> _runValidator(Directory outputDir) {
     'bash',
     ['scripts/validate_device_readiness_report.sh'],
     workingDirectory: Directory.current.path,
-    environment: {'REPORT_DIR': outputDir.path},
+    environment: bashEnvironment(
+      {'REPORT_DIR': outputDir.path},
+      pathVariables: {'REPORT_DIR'},
+    ),
     includeParentEnvironment: true,
   );
 }

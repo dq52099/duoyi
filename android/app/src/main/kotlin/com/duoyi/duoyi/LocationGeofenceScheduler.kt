@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
@@ -30,6 +31,7 @@ data class LocationGeofenceReminder(
 )
 
 object LocationGeofenceScheduler {
+    private const val tag = "DuoyiGeofence"
     private const val prefsName = "duoyi_location_geofences"
     private const val metadataKey = "metadata_json"
     private const val requestCode = 57219
@@ -60,7 +62,7 @@ object LocationGeofenceScheduler {
         onResult: (Map<String, Any?>) -> Unit,
         onError: (String, String) -> Unit,
     ) {
-        remember(context, reminders)
+        val previous = allMetadata(context)
         if (!hasRequiredPermission(context)) {
             clearRegisteredGeofences(context) {
                 onResult(
@@ -77,6 +79,7 @@ object LocationGeofenceScheduler {
 
         clearRegisteredGeofences(context) {
             if (reminders.isEmpty()) {
+                remember(context, emptyList())
                 onResult(
                     mapOf(
                         "available" to true,
@@ -86,7 +89,39 @@ object LocationGeofenceScheduler {
                 )
                 return@clearRegisteredGeofences
             }
-            addGeofences(context, reminders, onResult, onError)
+            addGeofences(
+                context,
+                reminders,
+                onSuccess = {
+                    remember(context, reminders)
+                    onResult(
+                        mapOf(
+                            "available" to true,
+                            "scheduledCount" to reminders.size,
+                            "status" to "scheduled",
+                        ),
+                    )
+                },
+                onFailure = { code, message ->
+                    remember(context, previous)
+                    if (previous.isNotEmpty()) {
+                        addGeofences(
+                            context,
+                            previous,
+                            onSuccess = {
+                                Log.w(tag, "restored previous geofences after sync failure")
+                            },
+                            onFailure = { restoreCode, restoreMessage ->
+                                Log.w(
+                                    tag,
+                                    "failed to restore previous geofences: $restoreCode $restoreMessage",
+                                )
+                            },
+                        )
+                    }
+                    onError(code, message)
+                },
+            )
         }
     }
 
@@ -111,6 +146,27 @@ object LocationGeofenceScheduler {
         val next = allMetadata(context).filterNot { it.id == id }
         remember(context, next)
         geofencingClient(context).removeGeofences(listOf(id))
+    }
+
+    fun restoreRemembered(context: Context) {
+        val remembered = allMetadata(context)
+        if (remembered.isEmpty()) return
+        if (!hasRequiredPermission(context)) {
+            Log.w(tag, "skip geofence restore because location permission is missing")
+            return
+        }
+        clearRegisteredGeofences(context) {
+            addGeofences(
+                context,
+                remembered,
+                onSuccess = {
+                    Log.i(tag, "restored ${remembered.size} remembered geofences")
+                },
+                onFailure = { code, message ->
+                    Log.w(tag, "remembered geofence restore failed: $code $message")
+                },
+            )
+        }
     }
 
     private fun allMetadata(context: Context): List<LocationGeofenceReminder> {
@@ -164,30 +220,19 @@ object LocationGeofenceScheduler {
     private fun addGeofences(
         context: Context,
         reminders: List<LocationGeofenceReminder>,
-        onResult: (Map<String, Any?>) -> Unit,
-        onError: (String, String) -> Unit,
+        onSuccess: () -> Unit,
+        onFailure: (String, String) -> Unit,
     ) {
         val request = GeofencingRequest.Builder()
             .setInitialTrigger(0)
             .addGeofences(reminders.map { it.toGeofence() })
             .build()
         geofencingClient(context).addGeofences(request, pendingIntent(context))
-            .addOnSuccessListener {
-                onResult(
-                    mapOf(
-                        "available" to true,
-                        "scheduledCount" to reminders.length,
-                        "status" to "scheduled",
-                    ),
-                )
-            }
+            .addOnSuccessListener { onSuccess() }
             .addOnFailureListener { e ->
-                onError("geofence_add_failed", e.message ?: "注册 geofence 失败")
+                onFailure("geofence_add_failed", e.message ?: "注册 geofence 失败")
             }
     }
-
-    private val List<LocationGeofenceReminder>.length: Int
-        get() = size
 
     private fun LocationGeofenceReminder.toGeofence(): Geofence {
         val transition = if (trigger == "leave") {

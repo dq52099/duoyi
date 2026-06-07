@@ -206,8 +206,8 @@ ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
     side: BorderSide(color: background.withValues(alpha: 0.16), width: 0.45),
     visualDensity: VisualDensity.compact,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    minimumSize: const Size(0, 36),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+    minimumSize: const Size(0, 34),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     textStyle: appSecondaryMenuItemTextStyle(context),
   );
 }
@@ -1506,14 +1506,15 @@ class AppPickerSheet<T> extends StatelessWidget {
         : cs.onSurface.withValues(alpha: 0.38);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected
-              ? accent.withValues(alpha: 0.08)
-              : cs.surfaceContainerHighest.withValues(alpha: 0.22),
+      child: Material(
+        color: selected
+            ? accent.withValues(alpha: 0.08)
+            : cs.surfaceContainerHighest.withValues(alpha: 0.22),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor, width: 0.45),
+          side: BorderSide(color: borderColor, width: 0.45),
         ),
+        clipBehavior: Clip.antiAlias,
         child: ListTile(
           enabled: option.enabled,
           dense: true,

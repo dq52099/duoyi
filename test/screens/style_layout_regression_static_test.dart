@@ -624,6 +624,8 @@ void main() {
       expect(source, contains('final selectedForeground = cs.onSurface'));
       expect(source, contains('cs.primary.withValues('));
       expect(source, contains('Border.all('));
+      expect(source, contains('button: true'));
+      expect(source, contains('selected: isSelected'));
       expect(source, isNot(contains('? cs.onPrimary')));
       expect(
         source,
@@ -634,6 +636,8 @@ void main() {
         ),
       );
     }
+    expect(weekStrip, contains('d.year == selectedDay.year'));
+    expect(weekStrip, contains('d.year == today.year'));
     expect(monthGrid, contains('final selectedDotColor = cs.onSurface'));
     expect(monthGrid, isNot(contains('? Colors.white')));
     expect(monthGrid, isNot(contains('? Colors.white70')));
@@ -1015,7 +1019,7 @@ void main() {
     expect(calendar, contains('scrollable: false'));
     expect(calendar, contains('horizontalPadding: 8'));
     expect(calendar, contains('maxLines: 2'));
-    expect(calendar, contains('dimension: compact ? 36 : 40'));
+    expect(calendar, contains('dimension: 48'));
     final eventSheet = File(
       'lib/widgets/calendar_event_sheet.dart',
     ).readAsStringSync();

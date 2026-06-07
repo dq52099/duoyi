@@ -48,7 +48,7 @@ void main() {
     expect(source, contains('class _ClassicalHourCell'));
     expect(source, isNot(contains('Widget _aboutCard()')));
     final monthCalendar = source.substring(
-      source.indexOf('class _MonthCalendar'),
+      source.indexOf('class _MonthCalendar extends StatelessWidget'),
       source.indexOf('class _MonthNavButton'),
     );
     expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));

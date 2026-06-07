@@ -21,7 +21,7 @@ void main() {
     ).readAsStringSync();
     final alarmService = File(
       'lib/services/alarm_service.dart',
-    ).readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     final native = File(
       'lib/services/native_reminder_ringtone.dart',
     ).readAsStringSync();
@@ -269,6 +269,35 @@ void main() {
     expect(
       scheduler,
       contains('expired restore delivery skipped after app update'),
+    );
+    final expiredRestoreStart = scheduler.indexOf(
+      'if (reserveDelivery(context, id, rootId, storedDeliveryToken))',
+    );
+    final encodeEntryStart = scheduler.indexOf(
+      'private fun encodeEntry',
+      expiredRestoreStart,
+    );
+    expect(expiredRestoreStart, greaterThanOrEqualTo(0));
+    expect(encodeEntryStart, greaterThan(expiredRestoreStart));
+    final expiredRestore = scheduler.substring(
+      expiredRestoreStart,
+      encodeEntryStart,
+    );
+    expect(
+      expiredRestore,
+      contains('recordNotificationPermissionIssueIfDenied(context, id)'),
+      reason:
+          'Boot restore delivery should surface denied notification permission even when native audio can still try to play.',
+    );
+    expect(
+      expiredRestore,
+      contains('if (!startRingtoneService(context, intent))'),
+      reason:
+          'An expired reminder delivered after boot still needs the same fallback path as a normal alarm receiver.',
+    );
+    expect(
+      expiredRestore,
+      contains('ReminderRingtoneReceiver.showFallbackNotification('),
     );
     expect(bootReceiver, contains('Intent.ACTION_BOOT_COMPLETED'));
     expect(service, contains('AudioAttributes.USAGE_ALARM'));
@@ -566,7 +595,7 @@ void main() {
   test('原生每日铃声调度跟随手机时区，不把 UTC 兜底到上海', () {
     final scheduler = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
-    ).readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     final mainActivity = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
     ).readAsStringSync();
@@ -783,7 +812,8 @@ void main() {
     expect(oncePermissionHandler, contains('已保留内置闹钟铃声，提醒仍会响铃'));
     expect(oncePermissionHandler, contains('请开启通知权限以显示停止/稍后按钮'));
     final onceNativeReturnIndex = once.indexOf(
-      'if (_isAndroid && nativeRingtoneOk) {\n      _finishScheduleIssue(',
+      '_finishScheduleIssue(',
+      once.indexOf("_ensureNotificationPermission('scheduleFullScreen')"),
     );
     expect(
       onceNativeReturnIndex,
@@ -811,7 +841,8 @@ void main() {
     expect(showTest, contains('if (_isAndroid && nativeRingtoneOk) return;'));
     expect(showTest, contains('内置铃声已启动测试，但系统通知权限关闭，通知栏可能看不到停止按钮。'));
     final showTestNativeReturnIndex = showTest.indexOf(
-      'if (_isAndroid && nativeRingtoneOk) {\n      _finishScheduleIssue(',
+      '_finishScheduleIssue(',
+      showTest.indexOf("_ensureNotificationPermission('showFullScreenTest')"),
     );
     expect(
       showTestNativeReturnIndex,
@@ -856,7 +887,8 @@ void main() {
     expect(dailyPermissionHandler, contains('已保留内置重复闹钟铃声，提醒仍会响铃'));
     expect(dailyPermissionHandler, contains('请开启通知权限以显示停止/稍后按钮'));
     final dailyNativeReturnIndex = daily.indexOf(
-      'if (_isAndroid && nativeRingtoneOk) {\n      _finishScheduleIssue(',
+      '_finishScheduleIssue(',
+      daily.indexOf("_ensureNotificationPermission('scheduleDailyFullScreen')"),
     );
     expect(
       dailyNativeReturnIndex,
@@ -918,6 +950,16 @@ void main() {
     expect(alarmService, contains('精准闹钟权限未开启'));
     expect(alarmService, contains('闹钟已注册，但系统只能使用非精准唤醒'));
     expect(alarmService, contains('强提醒渠道需要检查'));
+    expect(alarmService, contains('强提醒渠道状态无法确认，闹钟会继续注册'));
+    expect(
+      alarmService,
+      contains('scheduleFullScreen inexact fallback failed'),
+    );
+    expect(
+      alarmService,
+      contains('scheduleDailyFullScreen inexact fallback failed'),
+    );
+    expect(alarmService, contains('非精准回退错误'));
 
     final onceStart = alarmService.indexOf('Future<void> scheduleFullScreen');
     final dailyStart = alarmService.indexOf(
@@ -1100,7 +1142,61 @@ void main() {
     );
   });
 
-  test('强提醒系统通知注册后必须确认 pending 队列', () {
+  test(
+    'Android native ringtone records POST_NOTIFICATIONS risk and guards update restore',
+    () {
+      final scheduler = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
+      ).readAsStringSync();
+      final receiver = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt',
+      ).readAsStringSync();
+      final updateReceiver = File(
+        'android/app/src/main/kotlin/com/dexterous/flutterlocalnotifications/DuoyiScheduledNotificationUpdateReceiver.kt',
+      ).readAsStringSync();
+
+      expect(scheduler, contains('Manifest.permission.POST_NOTIFICATIONS'));
+      expect(scheduler, contains('Build.VERSION_CODES.TIRAMISU'));
+      expect(
+        scheduler,
+        contains('fun recordNotificationPermissionIssueIfDenied('),
+      );
+      expect(scheduler, contains('"notification_permission_denied"'));
+      final showNowStart = scheduler.indexOf('fun showNow(');
+      final scheduleOnceStart = scheduler.indexOf(
+        'fun scheduleOnce(',
+        showNowStart,
+      );
+      expect(showNowStart, greaterThanOrEqualTo(0));
+      expect(scheduleOnceStart, greaterThan(showNowStart));
+      final showNow = scheduler.substring(showNowStart, scheduleOnceStart);
+      expect(
+        showNow.indexOf(
+          'recordNotificationPermissionIssueIfDenied(context, id)',
+        ),
+        lessThan(showNow.indexOf('startRingtoneService(context, intent)')),
+      );
+      expect(
+        receiver,
+        contains(
+          'ReminderRingtoneScheduler.recordNotificationPermissionIssueIfDenied(context, id)',
+        ),
+      );
+      expect(updateReceiver, contains('runCatching {'));
+      expect(
+        updateReceiver,
+        contains(
+          'FlutterLocalNotificationsPlugin.rescheduleNotifications(context)',
+        ),
+      );
+      expect(
+        updateReceiver,
+        contains('failed to reschedule scheduled notifications after update'),
+      );
+    },
+  );
+
+  test('强提醒系统通知注册后保留已接受调度并记录 pending 诊断', () {
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync();
@@ -1108,8 +1204,21 @@ void main() {
     expect(alarmService, contains('Future<void> _verifyPluginPendingIds('));
     expect(alarmService, contains('_plugin.pendingNotificationRequests()'));
     expect(alarmService, contains('expected.difference(actual)'));
-    expect(alarmService, contains('系统闹钟注册后未出现在待触发队列，提醒未确认成功'));
-    expect(alarmService, contains('闹钟提醒未进入系统待触发队列'));
+    expect(alarmService, contains('系统闹钟已提交注册，但待触发队列状态无法确认'));
+    expect(alarmService, contains('系统闹钟已提交注册，但待触发队列未返回完整记录'));
+    expect(alarmService, contains('闹钟提醒待触发队列需确认'));
+    final helperStart = alarmService.indexOf(
+      'Future<void> _verifyPluginPendingIds(',
+    );
+    final helperEnd = alarmService.indexOf(
+      'Future<Set<String>?> notificationChannelIds()',
+      helperStart,
+    );
+    expect(helperStart, greaterThanOrEqualTo(0));
+    expect(helperEnd, greaterThan(helperStart));
+    final helper = alarmService.substring(helperStart, helperEnd);
+    expect(helper, contains('return;'));
+    expect(helper, isNot(contains('throw StateError')));
 
     final onceStart = alarmService.indexOf('Future<void> scheduleFullScreen');
     final dailyStart = alarmService.indexOf(
@@ -1122,15 +1231,6 @@ void main() {
     expect(
       once.indexOf('_plugin.zonedSchedule('),
       lessThan(once.indexOf('_verifyPluginPendingIds(')),
-    );
-    expect(once, contains('} on StateError catch (e, st) {'));
-    expect(once, contains('scheduleFullScreen not confirmed'));
-    expect(
-      once,
-      contains(
-        'await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});',
-      ),
-      reason: 'pending 校验失败后必须清理已部分注册的 Flutter 闹钟，避免后续兜底重复弹。',
     );
 
     final dailyEnd = alarmService.indexOf(
@@ -1145,13 +1245,6 @@ void main() {
     expect(
       daily.indexOf('scheduledIds.add(scheduleId);'),
       lessThan(daily.lastIndexOf('_verifyPluginPendingIds(')),
-    );
-    expect(
-      daily,
-      contains(
-        'await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);',
-      ),
-      reason: '重复闹钟 pending 校验失败后必须清理已注册的 weekday 子任务。',
     );
   });
 
@@ -1329,7 +1422,7 @@ void main() {
     expect(cancel, contains('cancelFlutterPluginScheduled(context, id)'));
     expect(
       cancel.indexOf('cancelFlutterPluginScheduled(context, id)'),
-      lessThan(cancel.indexOf('manager.cancel(')),
+      lessThan(cancel.indexOf('cancelPendingIntent(')),
       reason: '取消原生队列时也必须撤销插件队列，避免保存/删除后仍双弹。',
     );
     expect(cancel, contains('cancelFlutterPluginScheduled(context, childId)'));
@@ -1776,6 +1869,81 @@ void main() {
     expect(alarmService, contains('_initFuture = null'));
   });
 
+  test('取消旧提醒遇到 PendingIntent 上限时不会继续扩大系统队列', () {
+    final alarmService = File(
+      'lib/services/alarm_service.dart',
+    ).readAsStringSync();
+    final localNotifications = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
+    final scheduler = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
+    ).readAsStringSync();
+
+    final flutterCleanupStart = alarmService.indexOf(
+      'Future<void> _cancelFlutterAlarmQueue(',
+    );
+    final nativeCleanupStart = alarmService.indexOf(
+      'Future<void> _cancelNativeAlarmQueue(',
+      flutterCleanupStart,
+    );
+    expect(flutterCleanupStart, greaterThanOrEqualTo(0));
+    expect(nativeCleanupStart, greaterThan(flutterCleanupStart));
+    final flutterCleanup = alarmService.substring(
+      flutterCleanupStart,
+      nativeCleanupStart,
+    );
+    expect(flutterCleanup, contains('var skipPluginCleanup = false'));
+    expect(flutterCleanup, contains('_isPendingIntentLimitExceeded(e)'));
+    expect(flutterCleanup, contains('skipPluginCleanup = true'));
+    expect(
+      flutterCleanup,
+      contains('await NativeReminderRingtone.cancelOrThrow(pluginId);'),
+      reason: '插件取消触发系统 PendingIntent 上限后，应改走 no-create 原生清理兜底。',
+    );
+
+    final partialCleanupStart = localNotifications.indexOf(
+      'Future<void> _cancelScheduledIds(',
+    );
+    final exactAlarmStart = localNotifications.indexOf(
+      'static bool _isExactAlarmDenied',
+      partialCleanupStart,
+    );
+    expect(partialCleanupStart, greaterThanOrEqualTo(0));
+    expect(exactAlarmStart, greaterThan(partialCleanupStart));
+    final partialCleanup = localNotifications.substring(
+      partialCleanupStart,
+      exactAlarmStart,
+    );
+    expect(partialCleanup, contains('var skipPluginCleanup = false'));
+    expect(partialCleanup, contains('_isPendingIntentLimitExceeded(e)'));
+    expect(partialCleanup, contains('skipPluginCleanup = true'));
+    expect(
+      partialCleanup,
+      contains('await NativeReminderRingtone.cancel(id);'),
+    );
+
+    final cancelPendingStart = scheduler.indexOf(
+      'private fun cancelPendingIntent(',
+    );
+    final scheduledExistsStart = scheduler.indexOf(
+      'private fun scheduledPendingIntentExists',
+      cancelPendingStart,
+    );
+    expect(cancelPendingStart, greaterThanOrEqualTo(0));
+    expect(scheduledExistsStart, greaterThan(cancelPendingStart));
+    final cancelPending = scheduler.substring(
+      cancelPendingStart,
+      scheduledExistsStart,
+    );
+    expect(
+      cancelPending,
+      contains('existingPendingIntent(context, id, intent)'),
+    );
+    expect(cancelPending, isNot(contains('pendingIntent(context')));
+    expect(scheduler, contains('PendingIntent.FLAG_NO_CREATE'));
+  });
+
   test('AlarmService 未初始化时取消也会真实清理系统队列', () {
     final alarmService = File(
       'lib/services/alarm_service.dart',
@@ -1817,5 +1985,16 @@ void main() {
     expect(cancelAll, contains('await _plugin.cancelAll();'));
     expect(cancelAll, contains('await NativeReminderRingtone.cancelAll();'));
     expect(cancelAll, contains('闹钟队列批量清理失败'));
+
+    final pendingEnd = alarmService.indexOf(
+      'Future<void> _verifyPluginPendingIds',
+      pendingStart,
+    );
+    expect(pendingEnd, greaterThan(pendingStart));
+    final pending = alarmService.substring(pendingStart, pendingEnd);
+    expect(pending, contains('if (!_initialized) await init();'));
+    expect(pending, contains('_plugin.pendingNotificationRequests()'));
+    expect(pending, contains('NativeReminderRingtone.pendingIdsOrThrow()'));
+    expect(pending, isNot(contains('return const [];')));
   });
 }

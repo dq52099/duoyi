@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:duoyi/core/achievements.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -223,6 +224,28 @@ void main() {
       for (final raw in persisted) {
         expect(jsonDecode(raw), containsPair('isRead', true));
       }
+    });
+
+    test('旧成就通知缺少 relatedId 时不会重复新增未读记录', () {
+      final service = NotificationService();
+      final achievement = Achievements.all.first;
+
+      service.addHistoryForTest(
+        NotificationItem(
+          id: 'legacy-achievement',
+          title: '成就解锁：${achievement.title}',
+          body: achievement.description,
+          scheduledTime: DateTime(2026, 5, 24, 13),
+          type: NotificationType.general,
+          isRead: true,
+        ),
+      );
+
+      service.notifyAchievementUnlocked(achievement);
+
+      expect(service.historyCount, 1);
+      expect(service.unreadCount, 0);
+      expect(service.hasUnreadHistory, isFalse);
     });
   });
 }

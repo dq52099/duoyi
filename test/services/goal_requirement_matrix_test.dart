@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
 void main() {
   test(
     'goal requirement matrix maps user requests to eight regression groups',
@@ -78,7 +80,10 @@ void main() {
         'bash',
         ['scripts/validate_goal_requirement_matrix.sh'],
         workingDirectory: Directory.current.path,
-        environment: {'MATRIX_FILE': matrixFile.path},
+        environment: bashEnvironment(
+          {'MATRIX_FILE': matrixFile.path},
+          pathVariables: {'MATRIX_FILE'},
+        ),
         includeParentEnvironment: true,
       );
 
@@ -118,7 +123,10 @@ void main() {
           'bash',
           ['scripts/validate_goal_requirement_matrix.sh'],
           workingDirectory: Directory.current.path,
-          environment: {'MATRIX_FILE': matrixFile.path},
+          environment: bashEnvironment(
+            {'MATRIX_FILE': matrixFile.path},
+            pathVariables: {'MATRIX_FILE'},
+          ),
           includeParentEnvironment: true,
         );
 

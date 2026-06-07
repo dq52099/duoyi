@@ -16,16 +16,25 @@ void main() {
     expect(source, contains('availableRowHeight.clamp(30.0, maxRowHeight)'));
     expect(source, contains('(rowSlotHeight - 4).clamp(28.0, maxRowHeight)'));
     expect(source, contains('child: ClipRect('));
-    expect(source, contains('height: cellHeight < 14 ? 0.95 : 1.05'));
+    expect(source, contains('height: cellHeight < 14'));
+    expect(source, contains('? 0.95'));
+    expect(source, contains(': 1.05'));
     expect(source, contains('final showDots = cellHeight >= 36'));
     expect(source, contains('final canShowEventCount = cellHeight >= 40'));
     expect(source, contains('final showEventCount ='));
-    expect(source, contains('canShowEventCount && eventCount > 0'));
+    expect(source, contains('final showEventCountBadge ='));
+    expect(source, contains('showEventCount &&'));
+    expect(source, contains('eventCount > 1'));
     expect(source, contains('Widget _eventDots('));
     expect(
       source,
       contains('final showSubText = showLunar && cellHeight >= 44'),
     );
+    expect(source, contains('button: true'));
+    expect(source, contains('selected: isSelected'));
+    expect(source, contains('label: semanticLabel'));
+    expect(source, contains('child: InkWell('));
+    expect(source, contains('String _daySemanticLabel('));
   });
 
   test('月视图日期格直接展示当天事项数量', () {

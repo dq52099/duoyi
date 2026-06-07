@@ -807,6 +807,32 @@ class ReminderScheduler {
     );
   }
 
+  void _recordAlarmScheduleIssue({
+    required String relatedId,
+    DateTime? scheduledTime,
+    bool blocking = false,
+  }) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null || alarm is! AlarmService) return;
+    final issue = (alarm as AlarmService).lastScheduleIssue;
+    if (issue == null) {
+      final clearSink = notif is ReminderScheduleIssueClearSink
+          ? notif as ReminderScheduleIssueClearSink
+          : null;
+      clearSink?.clearReminderScheduleIssue();
+      return;
+    }
+    issueSink.recordReminderScheduleIssue(
+      title: issue.title,
+      message: issue.message,
+      scheduledTime: issue.scheduledTime ?? scheduledTime,
+      relatedId: relatedId,
+      blocking: blocking,
+    );
+  }
+
   /// 按最新的 [habits] 幂等地重新同步习惯提醒。
   ///
   /// 习惯提醒按用户选择走通知、应用内弹窗或柔和强提醒闹钟。闹钟权限不足时
@@ -939,6 +965,7 @@ class ReminderScheduler {
             snoozeMinutes: rule.snoozeMinutes,
             repeatCount: rule.repeatCount,
           );
+          _recordAlarmScheduleIssue(relatedId: habit.id);
           return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
@@ -953,9 +980,20 @@ class ReminderScheduler {
               weekdays: weekdays,
             ),
           )) {
+            _recordAlarmScheduleIssue(relatedId: habit.id);
             return true;
           }
-          return _scheduleHabitPush(habit, hour, minute, weekdays);
+          final fallbackScheduled = await _scheduleHabitPush(
+            habit,
+            hour,
+            minute,
+            weekdays,
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: habit.id,
+            blocking: !fallbackScheduled,
+          );
+          return fallbackScheduled;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] habit alarm notification permission denied for ${habit.id}: $e',
@@ -969,13 +1007,25 @@ class ReminderScheduler {
               weekdays: weekdays,
             ),
           )) {
+            _recordAlarmScheduleIssue(relatedId: habit.id);
             return true;
           }
-          return _scheduleHabitPush(habit, hour, minute, weekdays);
+          final fallbackScheduled = await _scheduleHabitPush(
+            habit,
+            hour,
+            minute,
+            weekdays,
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: habit.id,
+            blocking: !fallbackScheduled,
+          );
+          return fallbackScheduled;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] habit alarm queue handoff failed for ${habit.id}: $e',
           );
+          _recordAlarmScheduleIssue(relatedId: habit.id, blocking: true);
           return false;
         } catch (e, st) {
           debugPrint(
@@ -990,9 +1040,20 @@ class ReminderScheduler {
               weekdays: weekdays,
             ),
           )) {
+            _recordAlarmScheduleIssue(relatedId: habit.id);
             return true;
           }
-          return _scheduleHabitPush(habit, hour, minute, weekdays);
+          final fallbackScheduled = await _scheduleHabitPush(
+            habit,
+            hour,
+            minute,
+            weekdays,
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: habit.id,
+            blocking: !fallbackScheduled,
+          );
+          return fallbackScheduled;
         }
       case ReminderKind.email:
       case ReminderKind.off:
@@ -1446,6 +1507,10 @@ class ReminderScheduler {
             snoozeMinutes: payload.snoozeMinutes,
             repeatCount: payload.repeatCount,
           );
+          _recordAlarmScheduleIssue(
+            relatedId: payload.payload ?? payload.id.toString(),
+            scheduledTime: payload.when,
+          );
           return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
@@ -1455,6 +1520,10 @@ class ReminderScheduler {
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+            );
             return true;
           }
           try {
@@ -1465,15 +1534,29 @@ class ReminderScheduler {
               when: payload.when,
               payload: _fallbackPayload(payload.payload),
             );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+            );
             return true;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification permission denied for ${payload.id}: $fallbackError',
             );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+              blocking: true,
+            );
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification dispatch failed for ${payload.id}: $fallbackError\n$fallbackStack',
+            );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+              blocking: true,
             );
             return false;
           }
@@ -1485,12 +1568,26 @@ class ReminderScheduler {
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+            );
             return true;
           }
+          _recordAlarmScheduleIssue(
+            relatedId: payload.payload ?? payload.id.toString(),
+            scheduledTime: payload.when,
+            blocking: true,
+          );
           return false;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] alarm queue handoff failed for ${payload.id}: $e',
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: payload.payload ?? payload.id.toString(),
+            scheduledTime: payload.when,
+            blocking: true,
           );
           return false;
         } catch (e, st) {
@@ -1501,6 +1598,10 @@ class ReminderScheduler {
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+            );
             return true;
           }
           try {
@@ -1511,15 +1612,29 @@ class ReminderScheduler {
               when: payload.when,
               payload: _fallbackPayload(payload.payload),
             );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+            );
             return true;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification permission denied for ${payload.id}: $fallbackError',
             );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+              blocking: true,
+            );
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification dispatch failed for ${payload.id}: $fallbackError\n$fallbackStack',
+            );
+            _recordAlarmScheduleIssue(
+              relatedId: payload.payload ?? payload.id.toString(),
+              scheduledTime: payload.when,
+              blocking: true,
             );
             return false;
           }
@@ -1598,6 +1713,7 @@ class ReminderScheduler {
             snoozeMinutes: rule.snoozeMinutes,
             repeatCount: rule.repeatCount,
           );
+          _recordAlarmScheduleIssue(relatedId: rule.key);
           return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
@@ -1608,6 +1724,7 @@ class ReminderScheduler {
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
           )) {
+            _recordAlarmScheduleIssue(relatedId: rule.key);
             return true;
           }
           try {
@@ -1620,16 +1737,19 @@ class ReminderScheduler {
               weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
               payload: _fallbackPayload(rule.payload),
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key);
             return true;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback permission denied for ${rule.key}: $fallbackError',
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback dispatch failed for ${rule.key}: $fallbackError\n$fallbackStack',
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
             return false;
           }
         } on NotificationPermissionDeniedException catch (e) {
@@ -1641,13 +1761,16 @@ class ReminderScheduler {
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
           )) {
+            _recordAlarmScheduleIssue(relatedId: rule.key);
             return true;
           }
+          _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
           return false;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] repeating alarm queue handoff failed for ${rule.key}: $e',
           );
+          _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
           return false;
         } catch (e, st) {
           debugPrint(
@@ -1659,6 +1782,7 @@ class ReminderScheduler {
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
           )) {
+            _recordAlarmScheduleIssue(relatedId: rule.key);
             return true;
           }
           try {
@@ -1671,16 +1795,19 @@ class ReminderScheduler {
               weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
               payload: _fallbackPayload(rule.payload),
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key);
             return true;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback permission denied for ${rule.key}: $fallbackError',
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback dispatch failed for ${rule.key}: $fallbackError\n$fallbackStack',
             );
+            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
             return false;
           }
         }
@@ -1969,8 +2096,25 @@ class ReminderScheduler {
       return true;
     } catch (e, st) {
       debugPrint('[ReminderScheduler] cancel failed for $label: $e\n$st');
+      _recordCancellationIssue(label: label, error: e);
       return false;
     }
+  }
+
+  void _recordCancellationIssue({
+    required String label,
+    required Object error,
+  }) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
+    issueSink.recordReminderScheduleIssue(
+      title: '提醒交接失败',
+      message: '旧提醒清理失败，已保留原注册状态并暂缓新提醒以避免重复弹出；请重新保存提醒或检查系统提醒权限。($error)',
+      relatedId: label,
+      blocking: true,
+    );
   }
 
   Future<void> _syncRuleObjects({
@@ -2241,6 +2385,16 @@ class ReminderScheduler {
       debugPrint(
         '[ReminderScheduler] pending probe failed for $label: $e\n$st',
       );
+      _recordPendingProbeIssue(
+        title: switch (kind) {
+          ReminderKind.push => '普通通知状态无法确认',
+          ReminderKind.alarm => '闹钟提醒状态无法确认',
+          _ => '提醒状态无法确认',
+        },
+        message: '系统待触发队列查询失败，将重新注册提醒以修复可能丢失的系统队列；请检查系统提醒权限。',
+        label: label,
+        error: e,
+      );
       return false;
     }
   }
@@ -2272,6 +2426,12 @@ class ReminderScheduler {
         '[ReminderScheduler] notification fallback pending probe failed for '
         '$label; keep prior state to avoid duplicate delivery: $e\n$st',
       );
+      _recordPendingProbeIssue(
+        title: '普通通知兜底状态无法确认',
+        message: '普通通知兜底队列查询失败，已保留现有状态以避免重复弹出；请重新保存提醒或检查系统通知权限。',
+        label: label,
+        error: e,
+      );
       return true;
     }
   }
@@ -2298,10 +2458,36 @@ class ReminderScheduler {
       return owns;
     } catch (e, st) {
       debugPrint(
-        '[ReminderScheduler] alarm fallback pending probe failed for $label; skip notification fallback to avoid duplicate delivery: $e\n$st',
+        '[ReminderScheduler] alarm fallback pending probe failed for $label; '
+        'attempt notification fallback because alarm ownership was not confirmed: '
+        '$e\n$st',
       );
-      return true;
+      _recordPendingProbeIssue(
+        title: '闹钟提醒状态无法确认',
+        message: '系统待触发队列查询失败，已尝试使用普通通知兜底保住提醒；请重新保存提醒或检查系统提醒权限。',
+        label: label,
+        error: e,
+      );
+      return false;
     }
+  }
+
+  void _recordPendingProbeIssue({
+    required String title,
+    required String message,
+    required String label,
+    required Object error,
+  }) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
+    issueSink.recordReminderScheduleIssue(
+      title: title,
+      message: '$message($error)',
+      relatedId: label,
+      blocking: false,
+    );
   }
 
   Future<bool> _cancelStalePeerPending({
@@ -2324,6 +2510,12 @@ class ReminderScheduler {
         debugPrint(
           '[ReminderScheduler] stale $staleLabel pending probe failed for '
           '$label: $e\n$st',
+        );
+        _recordPendingProbeIssue(
+          title: '残留提醒状态无法确认',
+          message: '旧提醒队列查询失败，已保留当前注册状态以避免重复弹出；请重新保存提醒或检查系统提醒权限。',
+          label: '$label stale $staleLabel',
+          error: e,
         );
         ok = false;
         return;
@@ -3179,6 +3371,10 @@ class ReminderScheduler {
             when: remindAt,
             payload: 'duoyi://anniversary/${item.id}',
           );
+          _recordAlarmScheduleIssue(
+            relatedId: item.id,
+            scheduledTime: remindAt,
+          );
           return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
@@ -3189,9 +3385,21 @@ class ReminderScheduler {
             label: 'anniversary:${item.id}',
             expected: <int>{id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: item.id,
+              scheduledTime: remindAt,
+            );
             return true;
           }
-          return _scheduleAnniversaryPushFallback(item);
+          final fallbackScheduled = await _scheduleAnniversaryPushFallback(
+            item,
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: item.id,
+            scheduledTime: remindAt,
+            blocking: !fallbackScheduled,
+          );
+          return fallbackScheduled;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] anniversary notification permission denied for ${item.id}: $e',
@@ -3201,12 +3409,26 @@ class ReminderScheduler {
             label: 'anniversary:${item.id}',
             expected: <int>{id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: item.id,
+              scheduledTime: remindAt,
+            );
             return true;
           }
+          _recordAlarmScheduleIssue(
+            relatedId: item.id,
+            scheduledTime: remindAt,
+            blocking: true,
+          );
           return false;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] anniversary alarm queue handoff failed for ${item.id}: $e',
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: item.id,
+            scheduledTime: remindAt,
+            blocking: true,
           );
           return false;
         } catch (e, st) {
@@ -3218,9 +3440,21 @@ class ReminderScheduler {
             label: 'anniversary:${item.id}',
             expected: <int>{id},
           )) {
+            _recordAlarmScheduleIssue(
+              relatedId: item.id,
+              scheduledTime: remindAt,
+            );
             return true;
           }
-          return _scheduleAnniversaryPushFallback(item);
+          final fallbackScheduled = await _scheduleAnniversaryPushFallback(
+            item,
+          );
+          _recordAlarmScheduleIssue(
+            relatedId: item.id,
+            scheduledTime: remindAt,
+            blocking: !fallbackScheduled,
+          );
+          return fallbackScheduled;
         }
       case ReminderKind.email:
         try {

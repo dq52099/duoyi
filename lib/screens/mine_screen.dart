@@ -936,11 +936,20 @@ class MineScreen extends StatelessWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await context.read<AuthProvider>().logout();
+    var cleanupFailed = false;
+    try {
+      await context.read<AuthProvider>().logout();
+    } catch (_) {
+      cleanupFailed = true;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已退出登录')));
+    ).showSnackBar(
+      SnackBar(
+        content: Text(cleanupFailed ? '已退出登录，本机数据将在下次登录前重试清理' : '已退出登录'),
+      ),
+    );
   }
 
   Future<void> _pickAndSaveAvatar(BuildContext context) async {

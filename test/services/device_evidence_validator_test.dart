@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
 void main() {
   late Directory tempDir;
 
@@ -41,7 +43,9 @@ void main() {
     expect(result.exitCode, isNot(0));
     expect(
       _combinedOutput(result),
-      contains('missing file: ${androidDir.path}/default_soft_ringtone.txt'),
+      contains(
+        'missing file: ${_scriptFile(androidDir, 'default_soft_ringtone.txt')}',
+      ),
     );
   });
 
@@ -64,7 +68,7 @@ void main() {
         _combinedOutput(result),
         contains(
           'missing file: '
-          '${androidDir.path}/deeplink_duoyi___action_quick_todo.txt',
+          '${_scriptFile(androidDir, 'deeplink_duoyi___action_quick_todo.txt')}',
         ),
       );
     },
@@ -136,7 +140,9 @@ void main() {
       expect(result.exitCode, isNot(0));
       expect(
         _combinedOutput(result),
-        contains('empty file: ${androidDir.path}/default_soft_ringtone.txt'),
+        contains(
+          'empty file: ${_scriptFile(androidDir, 'default_soft_ringtone.txt')}',
+        ),
       );
     },
   );
@@ -176,7 +182,10 @@ void main() {
       final output = _combinedOutput(result);
       expect(result.exitCode, isNot(0));
       expect(
-        _occurrences(output, '${androidDir.path}/manual_evidence_manifest.md'),
+        _occurrences(
+          output,
+          _scriptFile(androidDir, 'manual_evidence_manifest.md'),
+        ),
         1,
       );
       expect(
@@ -288,7 +297,8 @@ duplicate_delivery_count=0
       expect(
         _combinedOutput(result),
         contains(
-          'empty file: ${androidDir.path}/notification_today_progress.txt',
+          'empty file: '
+          '${_scriptFile(androidDir, 'notification_today_progress.txt')}',
         ),
       );
     },
@@ -343,7 +353,8 @@ duplicate_delivery_count=pending
       expect(
         _combinedOutput(result),
         contains(
-          'missing file: ${androidDir.path}/single_delivery_no_duplicate.txt',
+          'missing file: '
+          '${_scriptFile(androidDir, 'single_delivery_no_duplicate.txt')}',
         ),
       );
     },
@@ -362,7 +373,8 @@ duplicate_delivery_count=pending
     expect(
       _combinedOutput(result),
       contains(
-        'missing file: ${androidDir.path}/evidence/manual/android_notification_progress.png',
+        'missing file: '
+        '${_scriptFile(androidDir, 'evidence/manual/android_notification_progress.png')}',
       ),
     );
   });
@@ -489,7 +501,7 @@ duplicate_delivery_count=pending
         _combinedOutput(result),
         contains(
           'missing file: '
-          '${iosDir.path}/widgetkit_calendar_countdown_deeplink.log',
+          '${_scriptFile(iosDir, 'widgetkit_calendar_countdown_deeplink.log')}',
         ),
       );
     },
@@ -508,7 +520,10 @@ duplicate_delivery_count=pending
       final output = _combinedOutput(result);
       expect(result.exitCode, isNot(0));
       expect(
-        _occurrences(output, '${iosDir.path}/manual_evidence_manifest.md'),
+        _occurrences(
+          output,
+          _scriptFile(iosDir, 'manual_evidence_manifest.md'),
+        ),
         1,
       );
       expect(
@@ -550,7 +565,8 @@ duplicate_delivery_count=pending
     expect(
       _combinedOutput(result),
       contains(
-        'missing file: ${iosDir.path}/evidence/manual/ios_widget_gallery.png',
+        'missing file: '
+        '${_scriptFile(iosDir, 'evidence/manual/ios_widget_gallery.png')}',
       ),
     );
   });
@@ -608,9 +624,16 @@ Future<ProcessResult> _runValidator(
     'bash',
     ['scripts/validate_device_evidence.sh', platform],
     workingDirectory: Directory.current.path,
-    environment: environment,
+    environment: bashEnvironment(
+      environment,
+      pathVariables: environment.keys.toSet(),
+    ),
     includeParentEnvironment: true,
   );
+}
+
+String _scriptFile(Directory dir, String relativePath) {
+  return '${bashPath(dir.path)}/$relativePath';
 }
 
 void _writeAndroidEvidence(

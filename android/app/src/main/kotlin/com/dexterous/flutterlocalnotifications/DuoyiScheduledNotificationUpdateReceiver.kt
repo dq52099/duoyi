@@ -12,7 +12,11 @@ class DuoyiScheduledNotificationUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         pruneExpiredOneShotNotifications(context)
-        FlutterLocalNotificationsPlugin.rescheduleNotifications(context)
+        runCatching {
+            FlutterLocalNotificationsPlugin.rescheduleNotifications(context)
+        }.onFailure { error ->
+            Log.w(tag, "failed to reschedule scheduled notifications after update", error)
+        }
     }
 
     private fun pruneExpiredOneShotNotifications(context: Context) {

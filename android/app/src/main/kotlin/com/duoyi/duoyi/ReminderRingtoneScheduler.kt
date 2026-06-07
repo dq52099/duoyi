@@ -1,12 +1,15 @@
 package com.duoyi.duoyi
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -71,6 +74,7 @@ object ReminderRingtoneScheduler {
         // own duplicate-delivery guard, but applying the same 45s guard here
         // makes rapid strong-reminder retries report success without actually
         // starting playback.
+        recordNotificationPermissionIssueIfDenied(context, id)
         if (startRingtoneService(context, intent)) return true
         return ReminderRingtoneReceiver.showFallbackNotification(
             context,
@@ -268,16 +272,15 @@ object ReminderRingtoneScheduler {
     private fun cancelScheduledOnly(context: Context, id: Int) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelFlutterPluginScheduled(context, id)
-        manager.cancel(pendingIntent(context, id, baseIntent(context, id, "", "", null)))
+        cancelPendingIntent(manager, context, id, baseIntent(context, id, "", "", null))
         forgetId(context, id)
         for (childId in followUpIds(id)) {
             cancelFlutterPluginScheduled(context, childId)
-            manager.cancel(
-                pendingIntent(
-                    context,
-                    childId,
-                    baseIntent(context, childId, "", "", null, rootId = id),
-                ),
+            cancelPendingIntent(
+                manager,
+                context,
+                childId,
+                baseIntent(context, childId, "", "", null, rootId = id),
             )
             forgetId(context, childId)
         }
@@ -288,12 +291,11 @@ object ReminderRingtoneScheduler {
         for (childId in followUpIds(rootId)) {
             if (childId == keepId) continue
             cancelFlutterPluginScheduled(context, childId)
-            manager.cancel(
-                pendingIntent(
-                    context,
-                    childId,
-                    baseIntent(context, childId, "", "", null, rootId = rootId),
-                ),
+            cancelPendingIntent(
+                manager,
+                context,
+                childId,
+                baseIntent(context, childId, "", "", null, rootId = rootId),
             )
             forgetId(context, childId)
             ReminderRingtoneService.stopIfActive(context, childId)
@@ -407,6 +409,24 @@ object ReminderRingtoneScheduler {
         prefs(context).edit().remove(lastIssueKey).apply()
     }
 
+    fun recordNotificationPermissionIssueIfDenied(context: Context, id: Int): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        recordDeliveryIssue(
+            context,
+            id,
+            "notification_permission_denied",
+            "系统通知权限关闭，内置铃声会继续尝试播放，但停止、稍后提醒或兜底通知可能无法显示；请开启通知权限后重新保存提醒。",
+        )
+        return true
+    }
+
     fun recordPlaybackStarted(
         context: Context,
         id: Int,
@@ -488,11 +508,24 @@ object ReminderRingtoneScheduler {
         return PendingIntent.getBroadcast(context, id, intent, flags)
     }
 
+    private fun existingPendingIntent(context: Context, id: Int, intent: Intent): PendingIntent? {
+        val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, id, intent, flags)
+    }
+
+    private fun cancelPendingIntent(
+        manager: AlarmManager,
+        context: Context,
+        id: Int,
+        intent: Intent,
+    ) {
+        existingPendingIntent(context, id, intent)?.let { manager.cancel(it) }
+    }
+
     private fun scheduledPendingIntentExists(context: Context, id: Int, json: JSONObject): Boolean {
         val rootId = json.optInt("rootId", id)
         val intent = baseIntent(context, id, "", "", null, rootId = rootId)
-        val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(context, id, intent, flags) != null
+        return existingPendingIntent(context, id, intent) != null
     }
 
     private fun cancelFlutterPluginScheduled(context: Context, id: Int) {
@@ -501,7 +534,7 @@ object ReminderRingtoneScheduler {
             val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             ids.forEach { pluginId ->
                 val intent = Intent(context, ScheduledNotificationReceiver::class.java)
-                manager.cancel(pendingIntent(context, pluginId, intent))
+                cancelPendingIntent(manager, context, pluginId, intent)
                 NotificationManagerCompat.from(context).cancel(pluginId)
             }
         }.onFailure { error ->
@@ -813,6 +846,7 @@ object ReminderRingtoneScheduler {
                 return
             }
             if (reserveDelivery(context, id, rootId, storedDeliveryToken)) {
+                recordNotificationPermissionIssueIfDenied(context, id)
                 if (!startRingtoneService(context, intent)) {
                     ReminderRingtoneReceiver.showFallbackNotification(
                         context,

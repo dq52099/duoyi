@@ -204,6 +204,40 @@ void main() {
     );
   });
 
+  test('enabling a legacy off daily reminder restores a push slot', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'pref_daily_reminder_enabled': false,
+      'pref_daily_reminder_kind': 'off',
+    });
+
+    final provider = PreferencesProvider();
+    await provider.loadFromStorage();
+
+    expect(provider.dailyReminderSlots[0].kind, ReminderKind.off);
+    expect(provider.dailyReminderSlots[0].enabled, isFalse);
+
+    await provider.setDailyReminderEnabled(true);
+
+    expect(provider.dailyReminderEnabled, isTrue);
+    expect(provider.dailyReminderSlots[0].enabled, isTrue);
+    expect(provider.dailyReminderSlots[0].kind, ReminderKind.push);
+    expect(
+      effectiveDailyReminderScheduleSlots(provider.dailyReminderSlots),
+      hasLength(1),
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('pref_daily_reminder_enabled'), isTrue);
+    expect(prefs.getString('pref_daily_reminder_kind'), 'push');
+
+    final reloaded = PreferencesProvider();
+    await reloaded.loadFromStorage();
+
+    expect(reloaded.dailyReminderEnabled, isTrue);
+    expect(reloaded.dailyReminderSlots[0].enabled, isTrue);
+    expect(reloaded.dailyReminderSlots[0].kind, ReminderKind.push);
+  });
+
   test('每日提醒调度槽位会按同一时间去重，避免同一时刻弹两条', () {
     final slots = effectiveDailyReminderScheduleSlots(const [
       DailyReminderSlot(

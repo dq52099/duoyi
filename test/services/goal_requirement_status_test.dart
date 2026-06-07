@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
 void main() {
   late Directory tempDir;
   late Directory alignmentDir;
@@ -219,12 +221,20 @@ Future<ProcessResult> _runGenerator({
     'bash',
     ['scripts/generate_goal_requirement_status.sh'],
     workingDirectory: Directory.current.path,
-    environment: {
-      'MATRIX_FILE': matrixFile.path,
-      'ALIGNMENT_REPORT_DIR': alignmentDir.path,
-      'GOAL_REPORT_DIR': goalDir.path,
-      'OUTPUT_DIR': outputDir.path,
-    },
+    environment: bashEnvironment(
+      {
+        'MATRIX_FILE': matrixFile.path,
+        'ALIGNMENT_REPORT_DIR': alignmentDir.path,
+        'GOAL_REPORT_DIR': goalDir.path,
+        'OUTPUT_DIR': outputDir.path,
+      },
+      pathVariables: {
+        'MATRIX_FILE',
+        'ALIGNMENT_REPORT_DIR',
+        'GOAL_REPORT_DIR',
+        'OUTPUT_DIR',
+      },
+    ),
     includeParentEnvironment: true,
   );
 }
@@ -238,11 +248,18 @@ Future<ProcessResult> _runStatusValidator(
     'bash',
     ['scripts/validate_goal_requirement_status.sh'],
     workingDirectory: Directory.current.path,
-    environment: {
-      'STATUS_DIR': outputDir.path,
-      if (alignmentDir != null) 'REPORT_DIR': alignmentDir.path,
-      if (goalDir != null) 'GOAL_REPORT_DIR': goalDir.path,
-    },
+    environment: bashEnvironment(
+      {
+        'STATUS_DIR': outputDir.path,
+        if (alignmentDir != null) 'REPORT_DIR': alignmentDir.path,
+        if (goalDir != null) 'GOAL_REPORT_DIR': goalDir.path,
+      },
+      pathVariables: {
+        'STATUS_DIR',
+        if (alignmentDir != null) 'REPORT_DIR',
+        if (goalDir != null) 'GOAL_REPORT_DIR',
+      },
+    ),
     includeParentEnvironment: true,
   );
 }
@@ -263,7 +280,7 @@ void _writeAlignmentSummary(Directory dir, {required String eighthStatus}) {
     final log = File('${dir.path}/${group.hashCode}.log')
       ..writeAsStringSync(group);
     final status = group.startsWith('8/8') ? eighthStatus : 'passed';
-    summary.writeln('$group\t$status\t1\t${log.path}');
+    summary.writeln('$group\t$status\t1\t${bashPath(log.path)}');
   }
   File('${dir.path}/summary.tsv').writeAsStringSync(summary.toString());
 }
@@ -283,7 +300,7 @@ void _writeGoalSummary(
   for (final entry in rows.entries) {
     final log = File('${dir.path}/${entry.key}.log')
       ..writeAsStringSync(entry.key);
-    summary.writeln('${entry.key}\t${entry.value}\t${log.path}');
+    summary.writeln('${entry.key}\t${entry.value}\t${bashPath(log.path)}');
   }
   File('${dir.path}/summary.tsv').writeAsStringSync(summary.toString());
 }

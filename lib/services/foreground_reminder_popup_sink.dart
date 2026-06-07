@@ -50,6 +50,20 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       when: when,
       payload: payload,
     );
+    final hasFallback = notificationFallback != null;
+    if (!hasFallback) {
+      _timers[id] = Timer(delay, () {
+        _timers.remove(id);
+        _showOrFallback(
+          id: id,
+          title: title,
+          body: body,
+          payload: payload,
+          fallbackWasCancelled: false,
+        );
+      });
+      return;
+    }
     _timers[id] = Timer(_foregroundLeadDelay(delay), () {
       _prepareForegroundDelivery(
         id: id,
@@ -57,7 +71,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
         body: body,
         when: when,
         payload: payload,
-        cancelFallbackBeforeDialog: true,
+        cancelFallbackBeforeDialog: hasFallback,
       );
     });
   }
@@ -86,6 +100,22 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     void scheduleNext() {
       final next = _nextOccurrence(hour, minute, weekdays);
       final delay = next.difference(DateTime.now());
+      final hasFallback = notificationFallback != null;
+      if (!hasFallback) {
+        _timers[id] = Timer(delay, () {
+          _timers.remove(id);
+          _showOrFallback(
+            id: id,
+            title: title,
+            body: body,
+            payload: payload,
+            fallbackWasCancelled: false,
+            onForegroundDelivered: scheduleNext,
+            onBackgroundDelivered: scheduleNext,
+          );
+        });
+        return;
+      }
       _timers[id] = Timer(_foregroundLeadDelay(delay), () {
         _prepareForegroundDelivery(
           id: id,
@@ -93,7 +123,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
           body: body,
           when: next,
           payload: payload,
-          cancelFallbackBeforeDialog: true,
+          cancelFallbackBeforeDialog: hasFallback,
           onForegroundDelivered: () {
             unawaited(
               _scheduleFallbackRepeating(

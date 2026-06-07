@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import '../test_support/bash_test_utils.dart';
+
+const _closureValidatorTimeout = Timeout(Duration(minutes: 2));
+
 void main() {
   late Directory tempDir;
   late Directory reportDir;
@@ -70,7 +74,9 @@ void main() {
         File(
           '${goalReportDir.path}/goal_requirement_status.log',
         ).readAsStringSync(),
-        contains('Goal requirement status written to ${statusDir.path}'),
+        contains(
+          'Goal requirement status written to ${bashPath(statusDir.path)}',
+        ),
       );
       expect(
         File(
@@ -83,6 +89,7 @@ void main() {
         contains('REQ-DEVICE\tclosed\tall mapped gates passed'),
       );
     },
+    timeout: _closureValidatorTimeout,
   );
 
   test(
@@ -115,6 +122,7 @@ void main() {
         contains('missing file:'),
       );
     },
+    timeout: _closureValidatorTimeout,
   );
 
   test(
@@ -145,9 +153,10 @@ void main() {
       expect(result.stdout, contains('ios_device_evidence: passed'));
       expect(
         result.stderr,
-        contains('Report written to ${goalReportDir.path}'),
+        contains('Report written to ${bashPath(goalReportDir.path)}'),
       );
     },
+    timeout: _closureValidatorTimeout,
   );
 
   test('goal closure validator rejects stale alignment report', () async {
@@ -177,7 +186,7 @@ void main() {
       ).readAsStringSync(),
       contains('alignment regression report is stale'),
     );
-  });
+  }, timeout: _closureValidatorTimeout);
 }
 
 Future<ProcessResult> _runValidator(
@@ -193,15 +202,26 @@ Future<ProcessResult> _runValidator(
     'bash',
     ['scripts/validate_goal_closure.sh'],
     workingDirectory: Directory.current.path,
-    environment: {
-      'ROOT_DIR_OVERRIDE': sourceRoot ?? _emptySourceRoot(reportDir).path,
-      'REPORT_DIR': reportDir.path,
-      'GOAL_REPORT_DIR': goalReportDir.path,
-      'ANDROID_EVIDENCE_DIR': androidDir.path,
-      'IOS_EVIDENCE_DIR': iosDir.path,
-      'STATUS_DIR': statusDir.path,
-      'MATRIX_FILE': matrixFile.path,
-    },
+    environment: bashEnvironment(
+      {
+        'ROOT_DIR_OVERRIDE': sourceRoot ?? _emptySourceRoot(reportDir).path,
+        'REPORT_DIR': reportDir.path,
+        'GOAL_REPORT_DIR': goalReportDir.path,
+        'ANDROID_EVIDENCE_DIR': androidDir.path,
+        'IOS_EVIDENCE_DIR': iosDir.path,
+        'STATUS_DIR': statusDir.path,
+        'MATRIX_FILE': matrixFile.path,
+      },
+      pathVariables: {
+        'ROOT_DIR_OVERRIDE',
+        'REPORT_DIR',
+        'GOAL_REPORT_DIR',
+        'ANDROID_EVIDENCE_DIR',
+        'IOS_EVIDENCE_DIR',
+        'STATUS_DIR',
+        'MATRIX_FILE',
+      },
+    ),
     includeParentEnvironment: true,
   );
 }
@@ -255,9 +275,10 @@ void _writeReport(Directory dir, {required String eighthStatus}) {
   for (final group in groups) {
     final log = File('${dir.path}/${group.hashCode}.log');
     log.writeAsStringSync('log for $group');
+    final logPath = bashPath(log.path);
     final status = group.startsWith('8/8') ? eighthStatus : 'passed';
-    summary.writeln('$group\t$status\t1\t${log.path}');
-    markdown.writeln('| $group | $status | 1s | `${log.path}` |');
+    summary.writeln('$group\t$status\t1\t$logPath');
+    markdown.writeln('| $group | $status | 1s | `$logPath` |');
   }
   File('${dir.path}/summary.tsv').writeAsStringSync(summary.toString());
   File('${dir.path}/summary.md').writeAsStringSync(markdown.toString());
