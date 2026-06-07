@@ -3,6 +3,37 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'account-scoped providers guard reset against stale storage reloads',
+    () {
+      for (final path in const [
+        'lib/providers/user_provider.dart',
+        'lib/providers/achievement_provider.dart',
+        'lib/providers/theme_provider.dart',
+        'lib/providers/habit_provider.dart',
+      ]) {
+        final source = File(path).readAsStringSync();
+        expect(source, contains('int _storageGeneration = 0;'), reason: path);
+        expect(
+          source,
+          contains('final generation = _storageGeneration;'),
+          reason: path,
+        );
+        expect(
+          source,
+          contains('if (generation != _storageGeneration) return;'),
+          reason: path,
+        );
+        final reset = _sourceBlock(
+          source,
+          'void resetLocalState() {',
+          'notifyListeners();',
+        );
+        expect(reset, contains('_storageGeneration++;'), reason: path);
+      }
+    },
+  );
+
   test('AuthProvider supports account profile and password reset APIs', () {
     final source = File('lib/providers/auth_provider.dart').readAsStringSync();
 
@@ -338,7 +369,10 @@ void main() {
       '_firstNonEmpty([p.avatarUrl, p.avatarInitials])',
       'avatar: avatarValue',
       'final metadata = <Widget>[',
-      'return Row(',
+      'return SizedBox(',
+      "key: const ValueKey('mine_header_stable_box')",
+      'height: headerHeight',
+      'child: Row(',
       'crossAxisAlignment: CrossAxisAlignment.center',
       "key: const ValueKey('mine_avatar_row')",
       'child: avatar',
@@ -466,14 +500,15 @@ void main() {
 
     for (final field in [
       'authProvider.onAccountProfileChanged = (state) async',
-      'await userProvider.updateProfile(',
+      'await cloudSyncProvider.suppressDirtyMarkWhile(',
+      '() => userProvider.applyAccountSnapshot(',
       'displayName: state.displayName ??',
       'email: state.email ??',
       'emailVerified: state.emailVerified',
       'avatarUrl: state.avatar ??',
       'bio: state.bio ??',
       'authProvider.onAccountLoggedOut = ()',
-      'userProvider.clearAccountProfileCache()',
+      "clearAccountLocalData(reason: 'logout')",
       'authProvider.loadFromStorage(refreshServerConfig: false)',
       "'server config refresh'",
       'authProvider.refreshServerConfigFromServer()',
@@ -507,4 +542,12 @@ void main() {
       }
     },
   );
+}
+
+String _sourceBlock(String source, String startMarker, String endMarker) {
+  final start = source.indexOf(startMarker);
+  expect(start, isNonNegative, reason: startMarker);
+  final end = source.indexOf(endMarker, start + startMarker.length);
+  expect(end, isNonNegative, reason: endMarker);
+  return source.substring(start, end);
 }

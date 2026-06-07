@@ -158,5 +158,71 @@ void main() {
       expect(service.unreadCount, 1);
       expect(service.hasUnreadHistory, isTrue);
     });
+
+    test('新通知默认未读，单条已读后仍可批量全部已读', () async {
+      final service = NotificationService();
+      final newest = DateTime(2026, 6, 7, 21);
+      final older = DateTime(2026, 6, 7, 20);
+
+      service.addHistoryForTest(
+        NotificationItem(
+          id: 'older-default-unread',
+          title: '旧提醒',
+          body: '未传 isRead 时必须默认未读',
+          scheduledTime: older,
+          type: NotificationType.todo,
+        ),
+      );
+      service.addHistoryForTest(
+        NotificationItem(
+          id: 'newest-default-unread',
+          title: '新提醒',
+          body: '进入通知记录后也不能自动已读',
+          scheduledTime: newest,
+          type: NotificationType.general,
+        ),
+      );
+
+      expect(service.history.map((item) => item.id), [
+        'newest-default-unread',
+        'older-default-unread',
+      ]);
+      expect(service.history.every((item) => !item.isRead), isTrue);
+      expect(service.unreadCount, 2);
+      expect(service.hasUnreadHistory, isTrue);
+
+      await service.markHistoryItemRead('older-default-unread');
+
+      expect(
+        service.history
+            .firstWhere((item) => item.id == 'older-default-unread')
+            .isRead,
+        isTrue,
+      );
+      expect(
+        service.history
+            .firstWhere((item) => item.id == 'newest-default-unread')
+            .isRead,
+        isFalse,
+      );
+      expect(service.unreadCount, 1);
+
+      await service.markAllHistoryRead();
+
+      expect(service.history.every((item) => item.isRead), isTrue);
+      expect(service.unreadCount, 0);
+      expect(service.hasUnreadHistory, isFalse);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString('duoyi_notif_history_seen_at'),
+        newest.toIso8601String(),
+      );
+      final persisted = prefs.getStringList('duoyi_notif_history') ?? [];
+      expect(persisted, hasLength(2));
+      for (final raw in persisted) {
+        expect(jsonDecode(raw), containsPair('isRead', true));
+      }
+    });
   });
 }

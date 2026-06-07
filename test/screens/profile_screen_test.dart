@@ -3,10 +3,18 @@ import 'dart:io';
 
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/auth_provider.dart';
+import 'package:duoyi/providers/habit_provider.dart';
+import 'package:duoyi/providers/notification_service.dart';
+import 'package:duoyi/providers/pomodoro_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
+import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
+import 'package:duoyi/core/app_version.dart';
+import 'package:duoyi/screens/mine_screen.dart';
 import 'package:duoyi/screens/profile_screen.dart';
 import 'package:duoyi/services/api_client.dart';
+import 'package:duoyi/services/ai_service.dart';
+import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/widgets/cached_avatar_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,9 +23,226 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+Widget _wrapMineHeaderTest({
+  required AuthProvider auth,
+  required UserProvider userProvider,
+}) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider(create: (_) => TodoProvider()),
+      ChangeNotifierProvider(create: (_) => HabitProvider()),
+      ChangeNotifierProvider(create: (_) => PomodoroProvider()),
+      ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ChangeNotifierProvider<UserProvider>.value(value: userProvider),
+      ChangeNotifierProvider(create: (_) => NotificationService()),
+      ChangeNotifierProvider<AuthProvider>.value(value: auth),
+      ChangeNotifierProvider(create: (_) => AiService()),
+      ChangeNotifierProvider(create: (_) => AchievementProvider()),
+      ChangeNotifierProvider(
+        create: (_) => AppUpdateService(
+          repo: 'dq52099/duoyi',
+          currentVersion: AppVersion.name,
+        ),
+      ),
+    ],
+    child: const MaterialApp(home: MineScreen()),
+  );
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('mine header stays stable when admin avatar syncs in', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final auth = AuthProvider(
+      initialState: const AuthState(
+        userId: 'admin-1',
+        username: 'admin',
+        displayName: '后台管理员',
+        token: 'token-1',
+        isAdmin: true,
+        coinBalance: 20,
+      ),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((_) async => http.Response('not found', 404)),
+      ),
+    );
+    final userProvider = UserProvider();
+    await userProvider.applyAccountSnapshot(
+      username: 'admin',
+      displayName: '后台管理员',
+      avatarInitials: '管',
+    );
+
+    await tester.pumpWidget(
+      _wrapMineHeaderTest(auth: auth, userProvider: userProvider),
+    );
+    await tester.pump();
+
+    final header = find.byKey(const ValueKey('mine_header_stable_box'));
+    final userInfoRow = find.byKey(const ValueKey('mine_user_info_row'));
+    final avatarRow = find.byKey(const ValueKey('mine_avatar_row'));
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).last,
+    );
+    final beforeHeader = tester.getRect(header);
+    final beforeUserInfo = tester.getRect(userInfoRow);
+    final beforeAvatar = tester.getRect(avatarRow);
+    final beforeScrollOffset = scrollable.position.pixels;
+
+    await auth.applyServerAccountSnapshot({
+      'user': {
+        'user_id': 'admin-1',
+        'username': 'admin',
+        'display_name': '后台管理员',
+        'avatar': 'https://duoyi.test/uploads/admin.png',
+        'is_admin': true,
+        'coin_balance': 1888,
+        'lifetime_coins': 1888,
+      },
+    }, reason: 'admin_return_profile_sync');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final afterHeader = tester.getRect(header);
+    final afterUserInfo = tester.getRect(userInfoRow);
+    final afterAvatar = tester.getRect(avatarRow);
+
+    expect(find.byType(CachedAvatarImage), findsOneWidget);
+    expect(afterHeader.height, closeTo(beforeHeader.height, 0.1));
+    expect(afterUserInfo.height, closeTo(beforeUserInfo.height, 0.1));
+    expect(afterAvatar.top, closeTo(beforeAvatar.top, 0.1));
+    expect(afterAvatar.height, closeTo(beforeAvatar.height, 0.1));
+    expect(scrollable.position.pixels, closeTo(beforeScrollOffset, 0.1));
+  });
+
+  testWidgets(
+    'mine keeps restored scroll offset when admin avatar syncs back',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-1',
+          username: 'admin',
+          displayName: '后台管理员',
+          token: 'token-1',
+          isAdmin: true,
+          coinBalance: 20,
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((_) async => http.Response('not found', 404)),
+        ),
+      );
+      final userProvider = UserProvider();
+      await userProvider.applyAccountSnapshot(
+        username: 'admin',
+        displayName: '后台管理员',
+        avatarInitials: '管',
+      );
+
+      await tester.pumpWidget(
+        _wrapMineHeaderTest(auth: auth, userProvider: userProvider),
+      );
+      await tester.pump();
+
+      Finder mineScrollable() => find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.restorationId == 'mine_screen_list',
+      );
+
+      final scrollable = tester.state<ScrollableState>(mineScrollable());
+      final targetOffset = scrollable.position.maxScrollExtent < 36
+          ? scrollable.position.maxScrollExtent
+          : 36.0;
+      scrollable.position.jumpTo(targetOffset);
+      await tester.pump();
+
+      final header = find.byKey(const ValueKey('mine_header_stable_box'));
+      final avatarRow = find.byKey(const ValueKey('mine_avatar_row'));
+      final beforeHeader = tester.getRect(header);
+      final beforeAvatar = tester.getRect(avatarRow);
+      final beforeScrollOffset = scrollable.position.pixels;
+
+      Navigator.of(tester.element(find.byType(MineScreen))).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('管理员后台')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await auth.applyServerAccountSnapshot({
+        'user': {
+          'user_id': 'admin-1',
+          'username': 'admin',
+          'display_name': '后台管理员',
+          'avatar': 'https://duoyi.test/uploads/admin.png',
+          'is_admin': true,
+          'coin_balance': 1888,
+          'lifetime_coins': 1888,
+        },
+      }, reason: 'admin_return_from_route_avatar_sync');
+      await tester.pump();
+
+      Navigator.of(tester.element(find.text('管理员后台'))).pop();
+      await tester.pumpAndSettle();
+
+      final afterScrollable = tester.state<ScrollableState>(mineScrollable());
+      final afterHeader = tester.getRect(header);
+      final afterAvatar = tester.getRect(avatarRow);
+
+      expect(find.byType(CachedAvatarImage), findsOneWidget);
+      expect(afterScrollable.position.pixels, closeTo(beforeScrollOffset, 0.1));
+      expect(afterHeader.height, closeTo(beforeHeader.height, 0.1));
+      expect(afterAvatar.top, closeTo(beforeAvatar.top, 0.1));
+      expect(afterAvatar.height, closeTo(beforeAvatar.height, 0.1));
+    },
+  );
+
+  testWidgets('cached avatar reserves requested size while fallback is shown', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(240, 240);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    Widget buildAvatar(String url) {
+      return MaterialApp(
+        home: Center(
+          child: CachedAvatarImage(
+            key: const ValueKey('stable_cached_avatar'),
+            url: url,
+            width: 64,
+            height: 64,
+            fallbackBuilder: (_) => const Text('管'),
+          ),
+        ),
+      );
+    }
+
+    final avatar = find.byKey(const ValueKey('stable_cached_avatar'));
+
+    await tester.pumpWidget(buildAvatar(''));
+    expect(tester.getSize(avatar), const Size(64, 64));
+
+    await tester.pumpWidget(
+      buildAvatar('https://duoyi.test/uploads/admin.png'),
+    );
+    await tester.pump();
+    expect(tester.getSize(avatar), const Size(64, 64));
   });
 
   testWidgets('local profile removes avatar URL editor', (tester) async {

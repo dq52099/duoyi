@@ -57,47 +57,62 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   @override
   Widget build(BuildContext context) {
     if (widget.url.trim().isEmpty) {
-      return widget.fallbackBuilder(context);
+      return _stableFrame(widget.fallbackBuilder(context), center: true);
     }
     final cached = _cachedFile;
     if (cached != null) {
       return _fileImage(cached);
     }
     if (!_cacheLookupComplete || _networkFailed) {
-      return widget.fallbackBuilder(context);
+      return _stableFrame(widget.fallbackBuilder(context), center: true);
     }
-    return Image.network(
-      widget.url,
-      width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      errorBuilder: (context, _, _) {
-        if (!_networkFailed) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _networkFailed = true);
-          });
-        }
-        return cached == null
-            ? widget.fallbackBuilder(context)
-            : _fileImage(cached);
-      },
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (frame != null || wasSynchronouslyLoaded) {
-          _cacheNetworkAvatarOnce();
-        }
-        return child;
-      },
+    return _stableFrame(
+      Image.network(
+        widget.url,
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
+        errorBuilder: (context, _, _) {
+          if (!_networkFailed) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _networkFailed = true);
+            });
+          }
+          return cached == null
+              ? _stableFrame(widget.fallbackBuilder(context), center: true)
+              : _fileImage(cached);
+        },
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame != null || wasSynchronouslyLoaded) {
+            _cacheNetworkAvatarOnce();
+          }
+          return child;
+        },
+      ),
+      center: false,
     );
   }
 
   Widget _fileImage(File file) {
-    return Image.file(
-      file,
-      width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      errorBuilder: (context, _, _) => widget.fallbackBuilder(context),
+    return _stableFrame(
+      Image.file(
+        file,
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
+        errorBuilder: (context, _, _) =>
+            _stableFrame(widget.fallbackBuilder(context), center: true),
+      ),
+      center: false,
     );
+  }
+
+  Widget _stableFrame(Widget child, {required bool center}) {
+    final width = widget.width.isFinite ? widget.width : null;
+    final height = widget.height.isFinite ? widget.height : null;
+    final content = center ? Center(child: child) : child;
+    if (width == null && height == null) return content;
+    return SizedBox(width: width, height: height, child: content);
   }
 
   Future<void> _loadCachedFile() async {

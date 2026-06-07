@@ -23,6 +23,11 @@ class NoteProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _notes = [];
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     final data = _notes.map((e) => jsonEncode(e.toJson())).toList();

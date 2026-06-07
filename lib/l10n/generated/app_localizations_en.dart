@@ -2228,6 +2228,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get anniversaryUpcomingEmpty => 'No events in the next 30 days';
 
   @override
+  String get anniversarySummaryWithin30Days => 'Within 30 days';
+
+  @override
+  String get anniversaryListSuffix => 'list';
+
+  @override
+  String get anniversaryListSubtitle =>
+      'Long press to pin, swipe left to delete, tap to edit';
+
+  @override
   String get anniversaryDeleteTitle => 'Delete?';
 
   @override

@@ -223,15 +223,23 @@ class AppUpdateService extends ChangeNotifier {
       final data = decoded['app_update'] is Map
           ? Map<String, dynamic>.from(decoded['app_update'] as Map)
           : rawConfig;
-      final latest = _stringValue(data['latest_version']);
-      final latestCode = _intValue(data['latest_version_code']);
+      final rawLatest = _stringValue(data['latest_version']);
+      final latest = _versionAtLeastCurrent(rawLatest);
+      final latestCode = _versionCodeAtLeastCurrent(
+        rawLatest,
+        _intValue(data['latest_version_code']),
+      );
       final downloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['update_download_url']),
       );
       final notes = _stringValue(data['update_notes']);
-      final minimum = _stringValue(data['minimum_supported_version']);
-      final minimumCode = _intValue(data['minimum_supported_version_code']);
+      final rawMinimum = _stringValue(data['minimum_supported_version']);
+      final minimum = _versionAtLeastCurrent(rawMinimum);
+      final minimumCode = _versionCodeAtLeastCurrent(
+        rawMinimum,
+        _intValue(data['minimum_supported_version_code']),
+      );
       final hasNewerLatest =
           _hasNewerVersionCode(latestCode) ||
           (latest.isNotEmpty && compareAppVersions(latest, currentVersion) > 0);
@@ -299,15 +307,23 @@ class AppUpdateService extends ChangeNotifier {
           allowGitHubFallback: true,
         );
       }
-      final latest = _stringValue(data['latest_version_name']);
-      final latestCode = _intValue(data['latest_version_code']);
+      final rawLatest = _stringValue(data['latest_version_name']);
+      final latest = _versionAtLeastCurrent(rawLatest);
+      final latestCode = _versionCodeAtLeastCurrent(
+        rawLatest,
+        _intValue(data['latest_version_code']),
+      );
       final downloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['download_url']),
       );
       final notes = _stringValue(data['release_notes']);
-      final minimum = _stringValue(data['minimum_supported_version']);
-      final minimumCode = _intValue(data['minimum_supported_version_code']);
+      final rawMinimum = _stringValue(data['minimum_supported_version']);
+      final minimum = _versionAtLeastCurrent(rawMinimum);
+      final minimumCode = _versionCodeAtLeastCurrent(
+        rawMinimum,
+        _intValue(data['minimum_supported_version_code']),
+      );
       final blockedReason = _stringValue(data['force_update_blocked_reason']);
       final available =
           data['available'] == true ||
@@ -347,6 +363,23 @@ class AppUpdateService extends ChangeNotifier {
   String get _serverBaseUrl => backendBaseUrl ?? AppConfig.bakedServerUrl;
 
   String _stringValue(dynamic value) => (value ?? '').toString().trim();
+
+  String _versionAtLeastCurrent(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return '';
+    return compareAppVersions(currentVersion, normalized) > 0
+        ? currentVersion
+        : normalized;
+  }
+
+  int? _versionCodeAtLeastCurrent(String version, int? code) {
+    if (code == null) return null;
+    final normalized = version.trim();
+    if (normalized.isEmpty) return code;
+    if (compareAppVersions(currentVersion, normalized) <= 0) return code;
+    final currentCode = currentVersionCode ?? _versionToCode(currentVersion);
+    return code < currentCode ? currentCode : code;
+  }
 
   int? _intValue(dynamic value) {
     if (value is int) return value;

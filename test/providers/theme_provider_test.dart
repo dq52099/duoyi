@@ -200,4 +200,48 @@ void main() {
     expect(provider.lifetimeCoins, 200);
     expect(persisted['balance'], 60);
   });
+
+  test(
+    'loadFromStorage resets theme state when account keys are removed',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'active_brand': 're0',
+        'theme_switch_count': 4,
+        'theme_unlocked_brands': <String>['defaultBrand', 're0'],
+        'theme_shop_state': json.encode({
+          'activeBrand': 're0',
+          'switchCount': 4,
+          'unlockedBrandIds': ['defaultBrand', 're0'],
+          'activeFocusBackdropId': 'forest_focus',
+          'unlockedFocusBackdropIds': ['classic_focus', 'forest_focus'],
+          'updatedAt': '2026-06-01T00:00:00.000Z',
+        }),
+      });
+      final provider = ThemeProvider();
+
+      await provider.loadFromStorage();
+      expect(provider.brand.id, 're0');
+      expect(provider.themeSwitchCount, 4);
+      expect(provider.activeFocusBackdrop.id, 'forest_focus');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('theme_shop_state');
+      await prefs.remove('active_brand');
+      await prefs.remove('theme_switch_count');
+      await prefs.remove('theme_unlocked_brands');
+      await provider.loadFromStorage();
+
+      expect(provider.brand.id, 'defaultBrand');
+      expect(provider.themeSwitchCount, 0);
+      expect(provider.unlockedBrandIds, {'defaultBrand'});
+      expect(
+        provider.activeFocusBackdrop.id,
+        ThemeProvider.defaultFocusBackdropId,
+      );
+      expect(
+        provider.activeWidgetBackgroundId,
+        ThemeProvider.widgetFollowThemeId,
+      );
+    },
+  );
 }

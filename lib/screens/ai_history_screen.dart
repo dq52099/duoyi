@@ -8,8 +8,15 @@ import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
 
 /// AI 周回顾历史：本地持久化最近 50 条。
-class AiHistoryScreen extends StatelessWidget {
+class AiHistoryScreen extends StatefulWidget {
   const AiHistoryScreen({super.key});
+
+  @override
+  State<AiHistoryScreen> createState() => _AiHistoryScreenState();
+}
+
+class _AiHistoryScreenState extends State<AiHistoryScreen> {
+  final Set<String> _expandedReviewIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +70,7 @@ class AiHistoryScreen extends StatelessWidget {
                 final theme = Theme.of(context);
                 final cs = theme.colorScheme;
                 final createdAt = I18nDateFormat.fullDateTime(e.createdAt);
+                final expanded = _expandedReviewIds.contains(e.id);
                 return AppSurfaceCard(
                   padding: const EdgeInsets.all(14),
                   child: Padding(
@@ -78,24 +86,37 @@ class AiHistoryScreen extends StatelessWidget {
                               color: cs.primary,
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              createdAt,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.62),
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (e.model.isNotEmpty)
-                              AppStatusBadge(
-                                label: e.model,
-                                color: cs.primary,
-                                icon: Icons.memory_outlined,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
+                            Expanded(
+                              child: Text(
+                                createdAt,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.62),
+                                  fontWeight: FontWeight.normal,
                                 ),
                               ),
+                            ),
+                            IconButton(
+                              key: ValueKey('ai_history_toggle_${e.id}'),
+                              tooltip: expanded ? '收起回顾' : '展开回顾',
+                              visualDensity: VisualDensity.compact,
+                              iconSize: 18,
+                              onPressed: () {
+                                setState(() {
+                                  if (expanded) {
+                                    _expandedReviewIds.remove(e.id);
+                                  } else {
+                                    _expandedReviewIds.add(e.id);
+                                  }
+                                });
+                              },
+                              icon: Icon(
+                                expanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                              ),
+                            ),
                             PopupMenuButton<String>(
                               iconSize: 18,
                               onSelected: (v) async {
@@ -133,6 +154,18 @@ class AiHistoryScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                        if (e.model.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          AppStatusBadge(
+                            label: e.model,
+                            color: cs.primary,
+                            icon: Icons.memory_outlined,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         Text(
                           e.summary,
@@ -141,12 +174,24 @@ class AiHistoryScreen extends StatelessWidget {
                             fontWeight: FontWeight.normal,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          e.content,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface,
-                            height: 1.62,
+                        ClipRect(
+                          key: ValueKey('ai_history_content_${e.id}'),
+                          child: AnimatedSize(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            child: expanded
+                                ? Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      e.content,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: cs.onSurface,
+                                            height: 1.62,
+                                          ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ),
                       ],

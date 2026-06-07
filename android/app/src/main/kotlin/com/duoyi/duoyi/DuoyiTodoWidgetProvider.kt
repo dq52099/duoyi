@@ -62,6 +62,9 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_todo_nav_todo,
                     R.id.widget_todo_quick_add,
                     R.id.widget_todo_today_summary,
+                    R.id.widget_todo_done_1,
+                    R.id.widget_todo_done_2,
+                    R.id.widget_todo_done_3,
                 ),
                 bodyIds = intArrayOf(
                     R.id.widget_todo_item_1,
@@ -77,7 +80,12 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             DuoyiWidgetTheme.applyButtonSurfaces(
                 views,
                 prefs,
-                secondaryIds = intArrayOf(R.id.widget_todo_quick_add),
+                secondaryIds = intArrayOf(
+                    R.id.widget_todo_quick_add,
+                    R.id.widget_todo_done_1,
+                    R.id.widget_todo_done_2,
+                    R.id.widget_todo_done_3,
+                ),
             )
 
             views.setTextViewText(
@@ -98,15 +106,15 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setTextViewText(R.id.widget_todo_nav_focus, tabFocus)
             views.setTextViewText(
                 R.id.widget_todo_item_1,
-                prefs.getString("todo_top3_1", "") ?: ""
+                cleanTodoTitle(prefs.getString("todo_top3_1", "") ?: "")
             )
             views.setTextViewText(
                 R.id.widget_todo_item_2,
-                prefs.getString("todo_top3_2", "") ?: ""
+                cleanTodoTitle(prefs.getString("todo_top3_2", "") ?: "")
             )
             views.setTextViewText(
                 R.id.widget_todo_item_3,
-                prefs.getString("todo_top3_3", "") ?: ""
+                cleanTodoTitle(prefs.getString("todo_top3_3", "") ?: "")
             )
             views.setTextViewText(
                 R.id.widget_todo_today_summary,
@@ -216,6 +224,11 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                 Uri.parse("duoyi://action/complete_todo?id=$encodedTodoId")
             )
         )
+    }
+
+    private fun cleanTodoTitle(raw: String): String {
+        val title = raw.trim().removePrefix("·").trim()
+        return title.ifBlank { raw }
     }
 
     companion object {

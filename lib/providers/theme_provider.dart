@@ -193,6 +193,7 @@ class ThemeProvider extends ChangeNotifier {
   String _activeWidgetCardSkinId = widgetFollowCardSkinId;
   String _shopStateUpdatedAt = '';
   bool _serverConfirmedChangePending = false;
+  int _storageGeneration = 0;
 
   AppBrand get brand => _brand;
   List<AppBrand> get brands => AppBrands.all;
@@ -225,6 +226,32 @@ class ThemeProvider extends ChangeNotifier {
     final value = _serverConfirmedChangePending;
     _serverConfirmedChangePending = false;
     return value;
+  }
+
+  void resetLocalState() {
+    _storageGeneration++;
+    _brand = AppBrands.defaultBrand;
+    _switchCount = 0;
+    _unlockedBrandIds
+      ..clear()
+      ..add(AppBrands.defaultBrand.id);
+    _unlockedFocusBackdropIds
+      ..clear()
+      ..add(defaultFocusBackdropId);
+    _unlockedAvatarFrameIds
+      ..clear()
+      ..add(defaultAvatarFrameId);
+    _unlockedCardSkinIds
+      ..clear()
+      ..add(defaultCardSkinId);
+    _activeFocusBackdropId = defaultFocusBackdropId;
+    _activeAvatarFrameId = defaultAvatarFrameId;
+    _activeCardSkinId = defaultCardSkinId;
+    _activeWidgetBackgroundId = widgetFollowThemeId;
+    _activeWidgetCardSkinId = widgetFollowCardSkinId;
+    _shopStateUpdatedAt = '';
+    _serverConfirmedChangePending = false;
+    notifyListeners();
   }
 
   bool isBrandUnlocked(String id) =>
@@ -273,7 +300,9 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final shopState = _readShopState(prefs);
     if (shopState != null && _isIncomingShopStateOlder(shopState)) {
       debugPrint(

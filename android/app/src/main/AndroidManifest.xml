@@ -14,6 +14,7 @@
     <!-- 白噪音前台服务（锁屏不被杀） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -81,6 +82,9 @@
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
 
         <!-- 白噪音前台播放服务：音频由 Flutter audioplayers 播放，原生服务负责
              mediaPlayback 前台保活和播放状态通知。 -->
@@ -93,7 +97,12 @@
             android:name=".ReminderRingtoneService"
             android:exported="false"
             android:enabled="true"
-            android:foregroundServiceType="mediaPlayback" />
+            android:stopWithTask="false"
+            android:foregroundServiceType="mediaPlayback|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Scheduled reminder ringtone playback after an alarm fires" />
+        </service>
         <service
             android:name=".DuoyiFocusBlockerAccessibilityService"
             android:exported="true"
@@ -445,12 +454,11 @@
                 android:name="miui.appwidget.previewImage"
                 android:resource="@drawable/widget_diary_preview" />
         </receiver>
-        <!-- 应用内添加用样式变体：默认禁用，requestPinWidget 前按需启用，避免系统默认列表膨胀。 -->
+        <!-- 系统小组件列表公开三种尺寸；应用内添加仍按所选样式请求。 -->
         <receiver
             android:name=".DuoyiTodoCompactWidgetProvider"
             android:label="@string/widget_todo_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -464,8 +472,7 @@
         <receiver
             android:name=".DuoyiTodoDetailedWidgetProvider"
             android:label="@string/widget_todo_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -479,8 +486,7 @@
         <receiver
             android:name=".DuoyiFocusHabitCompactWidgetProvider"
             android:label="@string/widget_focus_habit_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -494,8 +500,7 @@
         <receiver
             android:name=".DuoyiFocusHabitDetailedWidgetProvider"
             android:label="@string/widget_focus_habit_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -509,8 +514,7 @@
         <receiver
             android:name=".DuoyiHabitCompactWidgetProvider"
             android:label="@string/widget_habit_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -524,8 +528,7 @@
         <receiver
             android:name=".DuoyiHabitDetailedWidgetProvider"
             android:label="@string/widget_habit_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -539,8 +542,7 @@
         <receiver
             android:name=".DuoyiCalendarCompactWidgetProvider"
             android:label="@string/widget_calendar_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -554,8 +556,7 @@
         <receiver
             android:name=".DuoyiCalendarDetailedWidgetProvider"
             android:label="@string/widget_calendar_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -569,8 +570,7 @@
         <receiver
             android:name=".DuoyiScheduleCompactWidgetProvider"
             android:label="@string/widget_schedule_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -584,8 +584,7 @@
         <receiver
             android:name=".DuoyiScheduleDetailedWidgetProvider"
             android:label="@string/widget_schedule_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -599,8 +598,7 @@
         <receiver
             android:name=".DuoyiGoalCompactWidgetProvider"
             android:label="@string/widget_goal_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -614,8 +612,7 @@
         <receiver
             android:name=".DuoyiGoalDetailedWidgetProvider"
             android:label="@string/widget_goal_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -629,8 +626,7 @@
         <receiver
             android:name=".DuoyiCourseCompactWidgetProvider"
             android:label="@string/widget_course_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -644,8 +640,7 @@
         <receiver
             android:name=".DuoyiCourseDetailedWidgetProvider"
             android:label="@string/widget_course_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -659,8 +654,7 @@
         <receiver
             android:name=".DuoyiNoteCompactWidgetProvider"
             android:label="@string/widget_note_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -674,8 +668,7 @@
         <receiver
             android:name=".DuoyiNoteDetailedWidgetProvider"
             android:label="@string/widget_note_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -689,8 +682,7 @@
         <receiver
             android:name=".DuoyiAnniversaryCompactWidgetProvider"
             android:label="@string/widget_anniversary_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -704,8 +696,7 @@
         <receiver
             android:name=".DuoyiAnniversaryDetailedWidgetProvider"
             android:label="@string/widget_anniversary_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -719,8 +710,7 @@
         <receiver
             android:name=".DuoyiDiaryCompactWidgetProvider"
             android:label="@string/widget_diary_label_compact"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
@@ -734,8 +724,7 @@
         <receiver
             android:name=".DuoyiDiaryDetailedWidgetProvider"
             android:label="@string/widget_diary_label_detailed"
-            android:exported="true"
-            android:enabled="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />

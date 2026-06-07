@@ -50,6 +50,10 @@ import 'profile_screen.dart';
 import 'more_apps_screen.dart';
 import 'notification_history_screen.dart';
 
+const double _mineHeaderCompactHeight = 76;
+const double _mineHeaderRegularHeight = 80;
+const double _mineHeaderMetadataHeight = 44;
+
 class MineScreen extends StatelessWidget {
   final List<int>? visibleBottomNavTabs;
   final bool useShellBackground;
@@ -135,6 +139,8 @@ class MineScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
+        key: const PageStorageKey<String>('mine_screen_list'),
+        restorationId: 'mine_screen_list',
         children: [
           AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
@@ -144,6 +150,9 @@ class MineScreen extends StatelessWidget {
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 360;
                 final avatarSize = compact ? 50.0 : 56.0;
+                final headerHeight = compact
+                    ? _mineHeaderCompactHeight
+                    : _mineHeaderRegularHeight;
                 final avatar = SizedBox(
                   width: avatarSize + 6,
                   height: avatarSize + 6,
@@ -318,60 +327,81 @@ class MineScreen extends StatelessWidget {
                   if (auth.state.isLoggedIn && auth.state.isAdmin)
                     _MineUserLineChip(label: '管理员', color: cs.primary),
                 ];
-                return Row(
-                  key: const ValueKey('mine_user_info_row'),
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Center(
-                      key: const ValueKey('mine_avatar_row'),
-                      child: avatar,
-                    ),
-                    SizedBox(width: compact ? 10 : 12),
-                    Expanded(
-                      child: Semantics(
-                        button: true,
-                        label: '查看个人资料',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(
-                            DesignTokens.radiusCard,
-                          ),
-                          onTap: () => _openProfileEditor(context),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                              horizontal: 2,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  nameText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(
-                                        fontSize: 15,
-                                        color: cs.onSurface,
-                                        height: 1.18,
+                return SizedBox(
+                  key: const ValueKey('mine_header_stable_box'),
+                  height: headerHeight,
+                  child: Row(
+                    key: const ValueKey('mine_user_info_row'),
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Center(
+                        key: const ValueKey('mine_avatar_row'),
+                        child: avatar,
+                      ),
+                      SizedBox(width: compact ? 10 : 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: headerHeight,
+                          child: Semantics(
+                            button: true,
+                            label: '查看个人资料',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.radiusCard,
+                              ),
+                              onTap: () => _openProfileEditor(context),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                  horizontal: 2,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      nameText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontSize: 15,
+                                            color: cs.onSurface,
+                                            height: 1.18,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    SizedBox(
+                                      height: _mineHeaderMetadataHeight,
+                                      child: ClipRect(
+                                        child: Align(
+                                          alignment: Alignment.topLeft,
+                                          child: Wrap(
+                                            spacing: compact ? 8 : 10,
+                                            runSpacing: 4,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: metadata,
+                                          ),
+                                        ),
                                       ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 5),
-                                Wrap(
-                                  spacing: compact ? 8 : 10,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: metadata,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    accountAction,
-                  ],
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: headerHeight,
+                        child: Center(child: accountAction),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -785,7 +815,7 @@ class MineScreen extends StatelessWidget {
               _Tile(
                 icon: Icons.notifications_outlined,
                 label: '通知设置',
-                subtitle: '提醒时间、权限、铃声和记录保留',
+                subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留',
                 color: Colors.orange,
                 onTap: () => _openNotificationSettings(context),
               ),
@@ -1575,6 +1605,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   String? _summary;
   String? _error;
   bool _generatedToday = false;
+  bool _reviewExpanded = false;
 
   @override
   void didChangeDependencies() {
@@ -1584,6 +1615,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
       _result = cached.content;
       _summary = cached.summary;
       _generatedToday = true;
+      _reviewExpanded = false;
     }
   }
 
@@ -1594,6 +1626,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
         _result = cached.content;
         _summary = cached.summary;
         _generatedToday = true;
+        _reviewExpanded = false;
         _error = null;
       });
       return;
@@ -1631,6 +1664,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
       _summary =
           '$label数据：完成 $completed / $total 项待办，专注 $focus 分钟，习惯连续打卡 $streak 天。';
       _generatedToday = true;
+      _reviewExpanded = true;
     } on AiException catch (e) {
       _error = e.message;
     } catch (e) {
@@ -1659,6 +1693,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final hasReview = _result != null;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(14),
       borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
@@ -1681,6 +1716,19 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                 style: TextStyle(fontWeight: FontWeight.normal),
               ),
               const Spacer(),
+              if (hasReview)
+                IconButton(
+                  key: const ValueKey('mine_ai_review_toggle'),
+                  tooltip: _reviewExpanded ? '收起回顾' : '展开回顾',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      setState(() => _reviewExpanded = !_reviewExpanded),
+                  icon: Icon(
+                    _reviewExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
+                ),
               TextButton(
                 onPressed: _busy || _generatedToday ? null : _run,
                 child: _busy
@@ -1717,10 +1765,30 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                     ),
                     const SizedBox(height: 6),
                   ],
-                  Text(
-                    _result!,
-                    style: const TextStyle(fontSize: 13, height: 1.6),
+                  ClipRect(
+                    key: const ValueKey('mine_ai_review_content'),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      child: _reviewExpanded
+                          ? Text(
+                              _result!,
+                              style: const TextStyle(fontSize: 13, height: 1.6),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                   ),
+                  if (!_reviewExpanded)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () => setState(() => _reviewExpanded = true),
+                      icon: const Icon(Icons.unfold_more, size: 15),
+                      label: const Text('展开完整回顾'),
+                    ),
                 ],
               ),
             )

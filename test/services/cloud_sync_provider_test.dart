@@ -1,8 +1,153 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/providers/cloud_sync_provider.dart';
+import 'package:duoyi/services/api_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('账号切换会冻结云同步并阻断旧账号异步回写', () {
+    final providerSource = File(
+      'lib/providers/cloud_sync_provider.dart',
+    ).readAsStringSync();
+    final mainSource = File('lib/main.dart').readAsStringSync();
+
+    for (final field in const [
+      'int _accountGeneration = 0;',
+      'bool _syncSuspendedForAccountChange = false;',
+      'Future<void>? _activeLocalWriteback;',
+      'Future<T> _runAccountBoundWriteback<T>',
+      'Future<void> resetForAccountChange() async',
+      '_syncSuspendedForAccountChange = true;',
+      'final activeWriteback = _activeLocalWriteback;',
+      'await activeWriteback;',
+      'void resumeForActiveAccount()',
+      'expectedAccountGeneration',
+      '_pullRemoteChanges(expectedAccountGeneration: accountGenerationAtStart)',
+      'accountGenerationAtStart: accountGenerationAtStart',
+    ]) {
+      expect(providerSource, contains(field), reason: field);
+    }
+
+    expect(
+      providerSource,
+      contains('if (_syncSuspendedForAccountChange) {\n      return;\n    }'),
+    );
+    expect(
+      mainSource,
+      contains('await cloudSyncProvider.resetForAccountChange();'),
+    );
+    expect(mainSource, contains('cloudSyncProvider.resumeForActiveAccount();'));
+  });
+
+  test('resetForAccountChange 后旧账号 sync 响应不会写回本地', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'todos': json.encode([
+        {'id': 'local-before-switch', 'title': '切号前本地数据'},
+      ]),
+    });
+    final requestStarted = Completer<void>();
+    final responseCompleter = Completer<http.Response>();
+    final client = ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'admin-token',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/sync') {
+          if (!requestStarted.isCompleted) requestStarted.complete();
+          return responseCompleter.future;
+        }
+        return http.Response('{}', 200);
+      }),
+    );
+    final provider = CloudSyncProvider();
+    provider.apiClientGetter = () => client;
+    provider.serverConfigGetter = () => {'backup_enabled': true};
+
+    final syncFuture = provider.syncNow();
+    await requestStarted.future.timeout(const Duration(seconds: 1));
+    await provider.resetForAccountChange();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'todos',
+      json.encode([
+        {'id': 'test-local', 'title': '新账号清理后的本地数据'},
+      ]),
+    );
+    responseCompleter.complete(
+      http.Response(
+        json.encode({
+          'server_updated_at': '2026-06-07T00:00:00.000Z',
+          'server_version': 1,
+          'todos': [
+            {'id': 'admin-remote', 'title': '旧账号远端数据'},
+          ],
+        }),
+        200,
+        headers: const {'content-type': 'application/json'},
+      ),
+    );
+
+    await syncFuture.timeout(const Duration(seconds: 2));
+    final todos = prefs.getString('todos') ?? '';
+    expect(todos, contains('test-local'));
+    expect(todos, isNot(contains('admin-remote')));
+
+    provider.dispose();
+  });
+
+  test('resetForAccountChange 会等待进行中的同步回调退出', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final onSyncedStarted = Completer<void>();
+    final releaseOnSynced = Completer<void>();
+    final client = ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'admin-token',
+      httpClient: MockClient((request) async {
+        return http.Response(
+          json.encode({
+            'server_updated_at': '2026-06-07T00:00:00.000Z',
+            'server_version': 1,
+            'todos': [
+              {'id': 'remote-during-switch', 'title': '写回中'},
+            ],
+          }),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+      }),
+    );
+    final provider = CloudSyncProvider();
+    provider.apiClientGetter = () => client;
+    provider.serverConfigGetter = () => {'backup_enabled': true};
+    provider.onSynced = (changedCollections) async {
+      expect(changedCollections, contains('todos'));
+      if (!onSyncedStarted.isCompleted) onSyncedStarted.complete();
+      await releaseOnSynced.future;
+    };
+
+    final syncFuture = provider.syncNow();
+    await onSyncedStarted.future.timeout(const Duration(seconds: 1));
+
+    var resetCompleted = false;
+    final resetFuture = provider.resetForAccountChange().then((_) {
+      resetCompleted = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(resetCompleted, isFalse);
+
+    releaseOnSynced.complete();
+    await resetFuture.timeout(const Duration(seconds: 1));
+    await syncFuture.timeout(const Duration(seconds: 1));
+    expect(resetCompleted, isTrue);
+
+    provider.dispose();
+  });
+
   test('本地改动会后台自动同步，不需要手动入口', () {
     final source = File(
       'lib/providers/cloud_sync_provider.dart',
@@ -54,7 +199,7 @@ void main() {
     expect(source, contains('prefs.getBool(_pendingLocalChangesStorageKey)'));
     expect(source, contains('unawaited(_persistPendingChanges(true))'));
     expect(source, contains('Future<void> _setPendingChanges('));
-    expect(source, contains('await _setPendingChanges('));
+    expect(source, contains('() => _setPendingChanges('));
     expect(
       source,
       contains('var shouldRetryLocalChanges = _hasPendingChanges'),
@@ -88,7 +233,10 @@ void main() {
     expect(providerSource, contains("'server_version'"));
     expect(providerSource, contains('_lastServerVersion'));
     expect(providerSource, contains('serverVersion <= _lastServerVersion!'));
-    expect(providerSource, contains('await _pullRemoteChanges();'));
+    expect(
+      providerSource,
+      contains('await _pullRemoteChanges(\n        expectedAccountGeneration:'),
+    );
     expect(providerSource, contains('_hasPendingChanges || _isSyncing'));
     expect(providerSource, contains('_scheduleRemotePoll();'));
     expect(mainSource, contains('Future<void> startCloudSyncAfterAuth'));
@@ -198,7 +346,12 @@ void main() {
     ).readAsStringSync();
     final backendSource = File('backend/main.py').readAsStringSync();
 
-    expect(providerSource, contains('Future<void> _pullRemoteChanges()'));
+    expect(
+      providerSource,
+      contains(
+        'Future<void> _pullRemoteChanges({int? expectedAccountGeneration})',
+      ),
+    );
     expect(providerSource, contains("client.post('/api/sync/pull'"));
     expect(providerSource, contains("'collection_hashes'"));
     expect(providerSource, contains('_buildCollectionHashes(payload)'));
@@ -207,7 +360,10 @@ void main() {
     expect(providerSource, contains('.convert(utf8.encode'));
     expect(providerSource, contains('SplayTreeMap<String, Object?>'));
     expect(providerSource, contains('await _applySyncResponse('));
-    expect(providerSource, contains('await _pullRemoteChanges();'));
+    expect(
+      providerSource,
+      contains('await _pullRemoteChanges(\n        expectedAccountGeneration:'),
+    );
 
     final pollBody = providerSource.substring(
       providerSource.indexOf('Future<void> _pollRemoteChanges()'),
@@ -255,7 +411,9 @@ void main() {
 
     final syncBody = providerSource.substring(
       providerSource.indexOf('Future<void> syncNow()'),
-      providerSource.indexOf('Future<void> _pullRemoteChanges()'),
+      providerSource.indexOf(
+        'Future<void> _pullRemoteChanges({int? expectedAccountGeneration})',
+      ),
     );
     expect(syncBody, contains("client.post('/api/sync', payload)"));
     expect(syncBody, contains("client.post('/api/sync/delta'"));
@@ -292,7 +450,9 @@ void main() {
 
     final syncBody = providerSource.substring(
       providerSource.indexOf('Future<void> syncNow()'),
-      providerSource.indexOf('Future<void> _pullRemoteChanges()'),
+      providerSource.indexOf(
+        'Future<void> _pullRemoteChanges({int? expectedAccountGeneration})',
+      ),
     );
     expect(syncBody, contains("client.post('/api/sync/item-delta'"));
     expect(syncBody, contains("client.post('/api/sync/delta'"));

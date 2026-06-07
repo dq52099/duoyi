@@ -312,13 +312,8 @@ object DuoyiWidgetProviderRegistry {
             )
             return false
         }
-        context.packageManager.setComponentEnabledSetting(
-            component,
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP,
-        )
-        Log.i(tag, "disable_unused_variant_provider provider=${component.className}")
-        return true
+        Log.i(tag, "keep_system_visible_variant_provider provider=${component.className}")
+        return false
     }
 
     fun scheduleDisableVariantProviderIfUnused(

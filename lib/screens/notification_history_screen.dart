@@ -19,6 +19,7 @@ import '../services/notification_settings.dart';
 import '../services/notification_status_bar_sync_bridge.dart';
 import '../services/native_reminder_ringtone.dart';
 import '../services/reminder_ringtone_settings.dart';
+import '../services/reminder_scheduler.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -26,9 +27,10 @@ import '../widgets/surface_components.dart';
 enum _NotificationReadFilter { all, unread, read }
 
 class NotificationHistoryScreen extends StatefulWidget {
+  /// 兼容旧路由参数；通知记录现在只通过用户手动操作标记已读。
   final bool markReadOnOpen;
 
-  const NotificationHistoryScreen({super.key, this.markReadOnOpen = true});
+  const NotificationHistoryScreen({super.key, this.markReadOnOpen = false});
 
   @override
   State<NotificationHistoryScreen> createState() =>
@@ -42,20 +44,6 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
   NotificationType? _typeFilter;
   _NotificationReadFilter _readFilter = _NotificationReadFilter.all;
   int _page = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.markReadOnOpen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final service = context.read<NotificationService>();
-        if (service.unreadCount > 0) {
-          service.markHistorySeen();
-        }
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -523,6 +511,8 @@ class _NotificationSettingsScreenState
   int? _pendingAlarmCount;
   bool? _exactAlarmGranted;
   Map<String, NotificationChannelStatus>? _channelStatuses;
+  List<ReminderScheduleSnapshotEntry> _registeredReminders =
+      const <ReminderScheduleSnapshotEntry>[];
   bool _busy = false;
   int _statusBarPreferenceGeneration = 0;
 
@@ -537,6 +527,7 @@ class _NotificationSettingsScreenState
 
   Future<void> _refreshStatus() async {
     final service = context.read<NotificationService>();
+    final scheduler = context.read<ReminderScheduler?>();
     setState(() => _busy = true);
     try {
       await service.refreshPermission();
@@ -552,12 +543,16 @@ class _NotificationSettingsScreenState
             NativeReminderRingtone.statusChannelId,
             NativeReminderRingtone.fallbackChannelId,
           ]);
+      final registeredReminders =
+          await scheduler?.registeredRemindersSnapshot() ??
+          const <ReminderScheduleSnapshotEntry>[];
       if (!mounted) return;
       setState(() {
         _pendingPushCount = pendingIds.length;
         _pendingAlarmCount = pendingAlarmIds.length;
         _exactAlarmGranted = exactAlarmGranted;
         _channelStatuses = channelStatuses;
+        _registeredReminders = registeredReminders;
       });
     } catch (e, st) {
       debugPrint('[NotificationSettings] refresh status failed: $e\n$st');
@@ -749,14 +744,75 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _sendScheduledTest() async {
+    final kind = _scheduledTestReminderKind(context);
+    await _sendScheduledDiagnostic(kind: kind);
+  }
+
+  Future<void> _sendScheduledPushTest() {
+    return _sendScheduledDiagnostic(kind: ReminderKind.push);
+  }
+
+  Future<void> _sendScheduledPopupTest() {
+    return _sendScheduledDiagnostic(kind: ReminderKind.popup);
+  }
+
+  Future<void> _sendScheduledAlarmTest() {
+    return _sendScheduledDiagnostic(
+      kind: ReminderKind.alarm,
+      fullScreenAlarm: false,
+    );
+  }
+
+  Future<void> _sendScheduledFullScreenAlarmTest() {
+    return _sendScheduledDiagnostic(kind: ReminderKind.alarm);
+  }
+
+  Future<void> _sendScheduledDiagnostic({
+    required ReminderKind kind,
+    bool fullScreenAlarm = true,
+  }) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await context.read<NotificationService>().sendScheduledTest();
+      final service = context.read<NotificationService>();
+      final scheduler = context.read<ReminderScheduler?>();
+      final granted = await service.requestPermission();
+      if (!granted) {
+        throw const NotificationPermissionDeniedException();
+      }
+      if (kind == ReminderKind.alarm) {
+        await AlarmService.instance.init();
+        final exactAlarmGranted =
+            await AlarmService.instance.hasExactAlarmPermission() ||
+            await AlarmService.instance.requestExactAlarmPermission();
+        debugPrint(
+          '[NotificationSettings] scheduled alarm exact permission: '
+          '$exactAlarmGranted',
+        );
+        if (fullScreenAlarm) {
+          final fullScreenGranted =
+              await AlarmService.instance.hasFullScreenIntentPermission() ||
+              await AlarmService.instance.requestFullScreenIntentPermission();
+          debugPrint(
+            '[NotificationSettings] scheduled alarm fullscreen permission: '
+            '$fullScreenGranted',
+          );
+        }
+      }
+      await service.sendScheduledTest(
+        reminderKind: kind,
+        fullScreenAlarm: fullScreenAlarm,
+        popup: scheduler?.popup,
+        alarm: scheduler?.alarm,
+      );
       if (!mounted) return;
+      final label = _diagnosticKindLabel(
+        kind,
+        fullScreenAlarm: fullScreenAlarm,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('已注册 1 分钟后的定时通知测试'),
+        SnackBar(
+          content: Text('已注册 1 分钟后的$label测试'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -785,15 +841,51 @@ class _NotificationSettingsScreenState
     }
   }
 
+  String _diagnosticKindLabel(
+    ReminderKind kind, {
+    bool fullScreenAlarm = true,
+  }) {
+    return switch (DailyReminderSlot.normalizeKind(kind)) {
+      ReminderKind.popup => '弹出提醒',
+      ReminderKind.alarm => fullScreenAlarm ? '全屏闹钟提醒' : '闹钟提醒',
+      ReminderKind.push || ReminderKind.email || ReminderKind.off => '普通定时通知',
+    };
+  }
+
+  ReminderKind _scheduledTestReminderKind(BuildContext context) {
+    final prefs = context.read<PreferencesProvider?>();
+    final slots = prefs?.dailyReminderSlots ?? const <DailyReminderSlot>[];
+    for (final slot in slots) {
+      final kind = DailyReminderSlot.normalizeKind(slot.kind);
+      if (slot.enabled && kind != ReminderKind.off) return kind;
+    }
+    return ReminderKind.push;
+  }
+
   Future<void> _sendStrongTest() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      final service = context.read<NotificationService>();
+      final notificationGranted = await service.requestPermission();
+      await AlarmService.instance.init();
+      final exactAlarmGranted =
+          await AlarmService.instance.hasExactAlarmPermission() ||
+          await AlarmService.instance.requestExactAlarmPermission();
+      final fullScreenGranted =
+          await AlarmService.instance.hasFullScreenIntentPermission() ||
+          await AlarmService.instance.requestFullScreenIntentPermission();
       await AlarmService.instance.showFullScreenTest();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('强提醒测试已启动，可在通知上手动停止响铃'),
+        SnackBar(
+          content: Text(
+            _strongTestMessage(
+              notificationGranted: notificationGranted,
+              exactAlarmGranted: exactAlarmGranted,
+              fullScreenGranted: fullScreenGranted,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -837,6 +929,22 @@ class _NotificationSettingsScreenState
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  String _strongTestMessage({
+    required bool notificationGranted,
+    required bool exactAlarmGranted,
+    required bool fullScreenGranted,
+  }) {
+    final missing = <String>[
+      if (!notificationGranted) '通知权限',
+      if (!exactAlarmGranted) '精准闹钟权限',
+      if (!fullScreenGranted) '全屏提醒权限',
+    ];
+    if (missing.isEmpty) {
+      return '强提醒测试已启动，可在通知上手动停止响铃';
+    }
+    return '强提醒测试已启动；仍需开启${missing.join('、')}，否则闹钟、全屏或停止按钮可能异常。';
   }
 
   NotificationChannelStatus? _channelStatus(String channelId) {
@@ -890,6 +998,18 @@ class _NotificationSettingsScreenState
         ),
       ],
     );
+  }
+
+  String _registeredReminderSummary() {
+    if (_registeredReminders.isEmpty) {
+      return _busy ? '正在读取提醒注册表' : '暂无通过提醒调度器注册的提醒';
+    }
+    final objectCount = _registeredReminders.length;
+    final idCount = _registeredReminders.fold<int>(
+      0,
+      (sum, entry) => sum + entry.idCount,
+    );
+    return '$objectCount 个提醒对象 · $idCount 个系统队列 ID';
   }
 
   @override
@@ -1078,8 +1198,38 @@ class _NotificationSettingsScreenState
                           AppSettingsTile(
                             icon: Icons.schedule_send_outlined,
                             color: Colors.cyan,
-                            title: '1 分钟后定时测试',
-                            subtitle: '验证系统定时调度链路，到点应收到普通提醒',
+                            title: '1 分钟后普通定时',
+                            subtitle: '验证系统定时调度链路，到点应收到普通通知',
+                            onTap: _busy ? null : _sendScheduledPushTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.open_in_new_outlined,
+                            color: Colors.teal,
+                            title: '1 分钟后弹出测试',
+                            subtitle: '应用在前台应弹出窗口，后台保留通知兜底',
+                            onTap: _busy ? null : _sendScheduledPopupTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.alarm_outlined,
+                            color: Colors.amber.shade800,
+                            title: '1 分钟后闹钟测试',
+                            subtitle: '验证闹钟响铃和通知停止链路，不强制全屏遮挡',
+                            onTap: _busy ? null : _sendScheduledAlarmTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.fullscreen_outlined,
+                            color: Colors.deepOrange,
+                            title: '1 分钟后全屏闹钟',
+                            subtitle: '验证定时闹钟、响铃、震动和全屏弹出',
+                            onTap: _busy
+                                ? null
+                                : _sendScheduledFullScreenAlarmTest,
+                          ),
+                          AppSettingsTile(
+                            icon: Icons.rule_folder_outlined,
+                            color: Colors.blueGrey,
+                            title: '1 分钟后默认方式',
+                            subtitle: '按每日提醒里当前启用的提醒方式注册一次测试',
                             onTap: _busy ? null : _sendScheduledTest,
                           ),
                           AppSettingsTile(
@@ -1124,6 +1274,35 @@ class _NotificationSettingsScreenState
                               child: const Text('精准闹钟'),
                             ),
                           ),
+                          AppSettingsTile(
+                            icon: Icons.fact_check_outlined,
+                            color: Colors.indigo,
+                            title: '已注册提醒明细',
+                            subtitle: _registeredReminderSummary(),
+                            trailing: IconButton(
+                              tooltip: '刷新',
+                              onPressed: _busy ? null : _refreshStatus,
+                              icon: const Icon(Icons.refresh),
+                            ),
+                          ),
+                          if (_registeredReminders.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            for (final entry in _registeredReminders.take(6))
+                              _RegisteredReminderSnapshotRow(entry: entry),
+                            if (_registeredReminders.length > 6)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                                child: Text(
+                                  '还有 ${_registeredReminders.length - 6} 个注册提醒，刷新后会同步最新队列。',
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.58,
+                                        ),
+                                      ),
+                                ),
+                              ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1203,7 +1382,7 @@ class _NotificationSettingsScreenState
                                 MaterialPageRoute(
                                   builder: (_) =>
                                       const NotificationHistoryScreen(
-                                        markReadOnOpen: true,
+                                        markReadOnOpen: false,
                                       ),
                                 ),
                               ),
@@ -1273,6 +1452,70 @@ class _NotificationSettingsScreenState
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RegisteredReminderSnapshotRow extends StatelessWidget {
+  final ReminderScheduleSnapshotEntry entry;
+
+  const _RegisteredReminderSnapshotRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final typeLabel = _registeredReminderTypeLabel(entry.objectType);
+    final previewIds = entry.ids.take(4).join(', ');
+    final overflowCount = entry.ids.length - entry.ids.take(4).length;
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.22),
+          width: 0.4,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppStatusBadge(
+            label: typeLabel,
+            color: _registeredReminderTypeColor(entry.objectType, cs),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.objectId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  overflowCount > 0
+                      ? '$previewIds 等 ${entry.idCount} 个队列 ID'
+                      : '$previewIds · ${entry.idCount} 个队列 ID',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.58),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1725,6 +1968,28 @@ String _kindDescription(ReminderKind kind) {
     ReminderKind.email => I18n.tr(
       'preferences.daily_reminder.kind.push.description',
     ),
+  };
+}
+
+String _registeredReminderTypeLabel(String objectType) {
+  return switch (objectType) {
+    'todo' => '待办',
+    'goal' => '目标',
+    'habit' => '习惯',
+    'anniversary' => '纪念日',
+    'countdown' => '倒数日',
+    _ => objectType,
+  };
+}
+
+Color _registeredReminderTypeColor(String objectType, ColorScheme cs) {
+  return switch (objectType) {
+    'todo' => Colors.blue,
+    'goal' => Colors.indigo,
+    'habit' => Colors.green,
+    'anniversary' => Colors.pink,
+    'countdown' => Colors.deepOrange,
+    _ => cs.primary,
   };
 }
 

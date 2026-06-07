@@ -3,6 +3,34 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
+  test('force update defaults use current 1.1.30 version floor', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final appVersion = File('lib/core/app_version.dart').readAsStringSync();
+    final backend = File('backend/main.py').readAsStringSync();
+    final adminScreen = File(
+      'lib/screens/admin_screen.dart',
+    ).readAsStringSync();
+
+    expect(pubspec, contains('version: 1.1.30+130102'));
+    expect(appVersion, contains("static const name = '1.1.30';"));
+    expect(appVersion, contains('static const build = 130102;'));
+    expect(backend, contains('return "1.1.30", 130102'));
+    expect(backend, contains('def _normalize_update_version_floor'));
+    expect(
+      backend,
+      contains('_normalize_update_version_floor(latest_version)'),
+    );
+    expect(
+      backend,
+      contains('_normalize_update_version_floor(minimum_supported_version)'),
+    );
+    expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
+    expect(
+      '$pubspec$appVersion$backend$adminScreen',
+      isNot(contains('1.1.20')),
+    );
+  });
+
   test('admin settings expose force update policy through config', () {
     final backend = File('backend/main.py').readAsStringSync();
     final adminApi = File('lib/services/admin_api.dart').readAsStringSync();

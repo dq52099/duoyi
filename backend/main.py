@@ -253,7 +253,7 @@ def _pubspec_app_version() -> tuple[str, int]:
             return match.group(1), int(match.group(2) or "0")
     except (OSError, ValueError):
         pass
-    return "1.1.19", 120019
+    return "1.1.30", 130102
 
 
 _DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()
@@ -501,6 +501,13 @@ def _has_effective_update_policy(
     )
 
 
+def _normalize_update_version_floor(value: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized and _version_gt(APP_CURRENT_VERSION, normalized):
+        return APP_CURRENT_VERSION
+    return normalized
+
+
 def _version_to_code(value: str) -> int:
     parts = _version_parts(value)
     major = parts[0] if len(parts) > 0 else 0
@@ -616,8 +623,13 @@ def _update_release_defaults(db) -> dict:
     force_update_required = _as_bool(
         _setting_get(db, "force_update_required", False)
     ) or _as_bool(_setting_get(db, "force_app_update_enabled", False))
-    latest_version = latest_version or APP_CURRENT_VERSION
-    minimum_supported_version = minimum_supported_version or APP_CURRENT_VERSION
+    latest_version = (
+        _normalize_update_version_floor(latest_version) or APP_CURRENT_VERSION
+    )
+    minimum_supported_version = (
+        _normalize_update_version_floor(minimum_supported_version)
+        or APP_CURRENT_VERSION
+    )
     if force_update_required:
         if not update_notes:
             update_notes = APP_UPDATE_DEFAULT_NOTES
@@ -775,6 +787,11 @@ def _coerce_update_settings(db, update_items: dict) -> None:
         )
         or ""
     ).strip()
+    normalized_latest_version = _normalize_update_version_floor(latest_version)
+    if latest_version and normalized_latest_version != latest_version:
+        latest_version = normalized_latest_version
+        update_items["latest_version"] = latest_version
+        update_items["latest_version_name"] = latest_version
     minimum_supported_version = str(
         update_items.get(
             "minimum_supported_version",
@@ -782,6 +799,15 @@ def _coerce_update_settings(db, update_items: dict) -> None:
         )
         or ""
     ).strip()
+    normalized_minimum_supported_version = _normalize_update_version_floor(
+        minimum_supported_version
+    )
+    if (
+        minimum_supported_version
+        and normalized_minimum_supported_version != minimum_supported_version
+    ):
+        minimum_supported_version = normalized_minimum_supported_version
+        update_items["minimum_supported_version"] = minimum_supported_version
     update_notes = str(
         update_items.get(
             "update_notes",

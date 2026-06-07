@@ -172,6 +172,16 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
+  void resetLocalState() {
+    _todos = [];
+    _storageLoaded = false;
+    _storageLoadFuture = null;
+    _lastReminderSyncIssue = null;
+    _lastReminderSyncAttemptAt = null;
+    _lastReminderSyncSucceededAt = null;
+    _notify();
+  }
+
   Future<void> _loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString('todos');

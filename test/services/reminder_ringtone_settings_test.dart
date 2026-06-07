@@ -261,7 +261,14 @@ void main() {
     expect(service, contains('media_volume_zero'));
     expect(service, contains('AudioManager.STREAM_MUSIC'));
     expect(service, contains('AudioManager.STREAM_ALARM'));
-    expect(service, isNot(contains('alarm_volume_zero')));
+    final previewStart = service.indexOf('fun previewCurrentSound');
+    final previewEnd = service.indexOf('@Synchronized', previewStart);
+    expect(previewStart, greaterThanOrEqualTo(0));
+    expect(previewEnd, greaterThan(previewStart));
+    final previewCurrentSound = service.substring(previewStart, previewEnd);
+    expect(previewCurrentSound, isNot(contains('alarm_volume_zero')));
+    expect(service, contains('alarm_volume_zero_media_fallback'));
+    expect(service, contains('mediaAudioAttributes()'));
     expect(
       service.indexOf('reason = "media_volume_zero"'),
       lessThan(service.indexOf('val soundName = selectedSoundName')),

@@ -116,6 +116,8 @@ class AuthProvider extends ChangeNotifier {
   void Function(Map<String, dynamic> cfg)? onServerConfigChanged;
   Future<void> Function(AuthState state)? onAccountProfileChanged;
   Future<void> Function(Map<String, dynamic> payload)? onAccountPayloadChanged;
+  Future<void> Function(AuthState previous, AuthState next)?
+  onAccountIdentityChanging;
   Future<void> Function()? onAccountLoggedOut;
 
   AuthState get state => _state;
@@ -234,7 +236,13 @@ class AuthProvider extends ChangeNotifier {
         'invitation_code': inviteCode,
       },
     });
-    _state = _stateFromAuthResponse(res);
+    final previousState = _state;
+    final nextState = _stateFromAuthResponse(
+      res,
+      fallbackState: const AuthState(),
+    );
+    await _notifyAccountIdentityChanging(previousState, nextState);
+    _state = nextState;
     _markAccountMutation('register');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
@@ -327,7 +335,13 @@ class AuthProvider extends ChangeNotifier {
       if (_looksLikeEmail(username)) 'email': username,
       'password': password,
     });
-    _state = _stateFromAuthResponse(res);
+    final previousState = _state;
+    final nextState = _stateFromAuthResponse(
+      res,
+      fallbackState: const AuthState(),
+    );
+    await _notifyAccountIdentityChanging(previousState, nextState);
+    _state = nextState;
     _markAccountMutation('login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
@@ -363,7 +377,13 @@ class AuthProvider extends ChangeNotifier {
       ],
       {'email': email, 'code': code, 'email_code': code},
     );
-    _state = _stateFromAuthResponse(res);
+    final previousState = _state;
+    final nextState = _stateFromAuthResponse(
+      res,
+      fallbackState: const AuthState(),
+    );
+    await _notifyAccountIdentityChanging(previousState, nextState);
+    _state = nextState;
     _markAccountMutation('email_login');
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistState();
@@ -396,12 +416,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearLocalSession() async {
+    await _notifyAccountLoggedOut();
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_state');
-    await _notifyAccountLoggedOut();
     notifyListeners();
   }
 
@@ -705,7 +725,9 @@ class AuthProvider extends ChangeNotifier {
   AuthState _stateFromAuthResponse(
     Map<String, dynamic> data, {
     bool keepToken = false,
+    AuthState? fallbackState,
   }) {
+    final fallback = fallbackState ?? _state;
     final source = data['user'] ?? data['profile'] ?? data['data'];
     final payload = source is Map<String, dynamic>
         ? source
@@ -724,11 +746,11 @@ class AuthProvider extends ChangeNotifier {
         data,
         'coinBalance',
         rewardsPayload == null
-            ? _state.coinBalance
+            ? fallback.coinBalance
             : _intField(
                 rewardsPayload,
                 'balance',
-                _intField(rewardsPayload, 'coin_balance', _state.coinBalance),
+                _intField(rewardsPayload, 'coin_balance', fallback.coinBalance),
               ),
       ),
     );
@@ -739,14 +761,14 @@ class AuthProvider extends ChangeNotifier {
         data,
         'lifetimeCoins',
         rewardsPayload == null
-            ? _state.lifetimeCoins
+            ? fallback.lifetimeCoins
             : _intField(
                 rewardsPayload,
                 'lifetime',
                 _intField(
                   rewardsPayload,
                   'lifetime_coins',
-                  _state.lifetimeCoins,
+                  fallback.lifetimeCoins,
                 ),
               ),
       ),
@@ -755,23 +777,23 @@ class AuthProvider extends ChangeNotifier {
       userId: _stringField(
         payload,
         'user_id',
-        _stringField(payload, 'id', _state.userId),
+        _stringField(payload, 'id', fallback.userId),
       ),
       username: _stringField(
         payload,
         'username',
-        _stringField(payload, 'identifier', _state.username),
+        _stringField(payload, 'identifier', fallback.username),
       ),
-      email: _stringField(payload, 'email', _state.email),
+      email: _stringField(payload, 'email', fallback.email),
       emailVerified: _boolField(
         payload,
         'email_verified',
-        _boolField(payload, 'emailVerified', _state.emailVerified),
+        _boolField(payload, 'emailVerified', fallback.emailVerified),
       ),
       displayName: _stringField(
         payload,
         'display_name',
-        _stringField(payload, 'displayName', _state.displayName),
+        _stringField(payload, 'displayName', fallback.displayName),
       ),
       avatar: _avatarField(
         payload,
@@ -785,12 +807,12 @@ class AuthProvider extends ChangeNotifier {
             _avatarField(
               payload,
               'url',
-              _avatarField(payload, 'path', _state.avatar),
+              _avatarField(payload, 'path', fallback.avatar),
             ),
           ),
         ),
       ),
-      bio: _stringField(payload, 'bio', _state.bio),
+      bio: _stringField(payload, 'bio', fallback.bio),
       coinBalance: _intField(
         payload,
         'coin_balance',
@@ -802,18 +824,18 @@ class AuthProvider extends ChangeNotifier {
         _intField(payload, 'lifetimeCoins', rootLifetimeCoins),
       ),
       token: keepToken
-          ? _state.token
-          : _stringField(payload, 'token', _state.token),
+          ? fallback.token
+          : _stringField(payload, 'token', fallback.token),
       isAdmin: _boolField(
         payload,
         'is_admin',
-        _boolField(payload, 'isAdmin', _state.isAdmin),
+        _boolField(payload, 'isAdmin', fallback.isAdmin),
       ),
       adminPermissions: payload.containsKey('admin_permissions')
           ? _stringListFromJson(payload['admin_permissions'])
           : payload.containsKey('permissions')
           ? _stringListFromJson(payload['permissions'])
-          : _state.adminPermissions,
+          : fallback.adminPermissions,
     );
   }
 
@@ -1037,6 +1059,21 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _notifyAccountIdentityChanging(
+    AuthState previous,
+    AuthState next,
+  ) async {
+    if (!_shouldClearLocalAccountDataBeforeApplying(previous, next)) return;
+    final callback = onAccountIdentityChanging;
+    if (callback == null) return;
+    try {
+      await callback(previous, next);
+    } catch (e, st) {
+      debugPrint('[auth] account switch cleanup failed: $e\n$st');
+      rethrow;
+    }
+  }
+
   Future<void> _notifyAccountLoggedOut() async {
     final callback = onAccountLoggedOut;
     if (callback == null) return;
@@ -1044,7 +1081,32 @@ class AuthProvider extends ChangeNotifier {
       await callback();
     } catch (e, st) {
       debugPrint('[auth] account logout cleanup failed: $e\n$st');
+      rethrow;
     }
+  }
+
+  bool _shouldClearLocalAccountDataBeforeApplying(
+    AuthState previous,
+    AuthState next,
+  ) {
+    if (!next.isLoggedIn) return false;
+    if (!previous.isLoggedIn) return true;
+    final previousIdentity = _stableAccountIdentity(previous);
+    final nextIdentity = _stableAccountIdentity(next);
+    if (previousIdentity != null && nextIdentity != null) {
+      return previousIdentity != nextIdentity;
+    }
+    return previous.token != next.token;
+  }
+
+  String? _stableAccountIdentity(AuthState state) {
+    final userId = state.userId?.trim();
+    if (userId != null && userId.isNotEmpty) return 'id:$userId';
+    final username = state.username?.trim().toLowerCase();
+    if (username != null && username.isNotEmpty) return 'username:$username';
+    final email = state.email?.trim().toLowerCase();
+    if (email != null && email.isNotEmpty) return 'email:$email';
+    return null;
   }
 }
 

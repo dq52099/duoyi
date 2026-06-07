@@ -32,6 +32,33 @@ void main() {
     expect(manifest, contains('android:name=".ReminderRingtoneService"'));
     expect(manifest, contains('android:name=".ReminderRingtoneReceiver"'));
     expect(manifest, contains('android:name=".ReminderRingtoneBootReceiver"'));
+    final ringtoneServiceStart = manifest.indexOf(
+      'android:name=".ReminderRingtoneService"',
+    );
+    final ringtoneServiceEnd = manifest.indexOf(
+      '</service>',
+      ringtoneServiceStart,
+    );
+    expect(ringtoneServiceStart, greaterThanOrEqualTo(0));
+    expect(ringtoneServiceEnd, greaterThan(ringtoneServiceStart));
+    final ringtoneServiceManifest = manifest.substring(
+      ringtoneServiceStart,
+      ringtoneServiceEnd,
+    );
+    expect(ringtoneServiceManifest, contains('android:exported="false"'));
+    expect(ringtoneServiceManifest, contains('android:enabled="true"'));
+    expect(ringtoneServiceManifest, contains('android:stopWithTask="false"'));
+    expect(ringtoneServiceManifest, contains('mediaPlayback'));
+    expect(ringtoneServiceManifest, contains('specialUse'));
+    expect(
+      ringtoneServiceManifest,
+      contains('android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE'),
+      reason: 'Android 14+ specialUse 前台服务必须声明具体用途。',
+    );
+    expect(
+      ringtoneServiceManifest,
+      contains('Scheduled reminder ringtone playback after an alarm fires'),
+    );
     final nativeBootReceiverStart = manifest.indexOf(
       'android:name=".ReminderRingtoneBootReceiver"',
     );
@@ -114,7 +141,38 @@ void main() {
       contains('!item.isNull("matchDateTimeComponents")'),
     );
     expect(manifest, contains('android.permission.FOREGROUND_SERVICE'));
+    expect(
+      manifest,
+      contains('android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK'),
+    );
+    expect(
+      manifest,
+      contains('android.permission.FOREGROUND_SERVICE_SPECIAL_USE'),
+    );
+    expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
+    expect(manifest, contains('android.permission.RECEIVE_BOOT_COMPLETED'));
+    expect(manifest, contains('android.permission.SCHEDULE_EXACT_ALARM'));
+    expect(manifest, contains('android.permission.USE_EXACT_ALARM'));
+    expect(manifest, contains('android.permission.USE_FULL_SCREEN_INTENT'));
     expect(manifest, contains('android.permission.VIBRATE'));
+    final actionReceiverStart = manifest.indexOf(
+      'android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"',
+    );
+    final actionReceiverEnd = manifest.indexOf(
+      '/>',
+      actionReceiverStart,
+    );
+    expect(actionReceiverStart, greaterThanOrEqualTo(0));
+    expect(actionReceiverEnd, greaterThan(actionReceiverStart));
+    final actionReceiverManifest = manifest.substring(
+      actionReceiverStart,
+      actionReceiverEnd,
+    );
+    expect(
+      actionReceiverManifest,
+      contains('android:exported="false"'),
+      reason: '通知按钮回调需要插件 action receiver，但不能对外暴露。',
+    );
     expect(receiver, contains('context.startForegroundService(serviceIntent)'));
     expect(receiver, contains('try {'));
     expect(receiver, contains('showFallbackNotification('));

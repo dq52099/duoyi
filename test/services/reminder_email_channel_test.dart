@@ -76,27 +76,28 @@ void main() {
   });
 
   test(
-    'foreground popup reminders do not also schedule notification fallback',
+    'foreground popup reminders register notification fallback and cancel it in foreground',
     () {
       final popupSink = File(
         'lib/services/foreground_reminder_popup_sink.dart',
       ).readAsStringSync();
+      final main = File('lib/main.dart').readAsStringSync();
 
       expect(
         popupSink,
-        isNot(contains('final ReminderNotificationSink? notificationFallback')),
+        contains('final ReminderNotificationSink? notificationFallback'),
       );
-      expect(popupSink, isNot(contains('notificationFallback?.scheduleOnce')));
-      expect(popupSink, isNot(contains('notificationFallback?.scheduleDaily')));
-      expect(popupSink, isNot(contains('notificationFallback?.cancel(id)')));
+      expect(popupSink, contains('fallback.scheduleOnce('));
+      expect(popupSink, contains('fallback.scheduleDaily('));
+      expect(popupSink, contains('notificationFallback?.cancel(id)'));
+      expect(popupSink, contains('isForegroundGetter'));
+      expect(popupSink, contains('AppLifecycleState.resumed'));
+      expect(main, contains('notificationFallback: notificationService'));
+      expect(popupSink, contains("'fallback', () => 'popup_notification'"));
       expect(
         popupSink,
-        isNot(contains("'fallback', () => 'popup_notification'")),
-      );
-      expect(
-        popupSink,
-        contains('_show(id: id, title: title, body: body, payload: payload);'),
-        reason: '用户选择弹出框时不应同时再弹一条系统通知。',
+        contains('_showOrFallback('),
+        reason: '用户选择弹出框时，后台应保留系统通知兜底，前台显示弹窗前再取消兜底。',
       );
       expect(popupSink, contains('_visibleDialogIds.add(id)'));
       expect(popupSink, contains('_visibleNavigators'));

@@ -144,7 +144,7 @@ void main() {
       notificationSettingsScreen,
       contains("preferences.notification_status_bar.sync_failed"),
     );
-    expect(notificationSettingsScreen, contains("markReadOnOpen: true"));
+    expect(notificationSettingsScreen, contains("markReadOnOpen: false"));
     expect(preferencesScreen, isNot(contains("p.notificationQuickAdd")));
     expect(preferencesScreen, isNot(contains("setNotificationQuickAdd")));
 
@@ -586,6 +586,9 @@ void main() {
       919002,
       919003,
       919004,
+      919005,
+      919006,
+      919007,
     ]) {
       expect(scheduler, contains('$id'));
     }

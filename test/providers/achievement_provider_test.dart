@@ -43,4 +43,47 @@ void main() {
       expect(provider.takeUnlockedFeedback(), isEmpty);
     },
   );
+
+  test(
+    'loadFromStorage clears stale rewards when account keys are removed',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'duoyi_achievements_unlocked': json.encode({
+          'first_todo': '2026-06-01T00:00:00.000Z',
+        }),
+        'duoyi_achievements_notified': <String>['first_todo'],
+        'duoyi_virtual_rewards': json.encode({
+          'balance': 88,
+          'lifetime': 120,
+          'grantIds': <String>['admin-grant'],
+          'ledger': <Map<String, Object>>[
+            {
+              'id': 'admin-grant',
+              'title': 'Admin reward',
+              'coins': 88,
+              'reason': 'old account data',
+              'awardedAt': '2026-06-01T00:00:00.000Z',
+            },
+          ],
+          'updatedAt': '2026-06-01T00:00:00.000Z',
+        }),
+      });
+      final provider = AchievementProvider();
+      await provider.loadFromStorage();
+      expect(provider.coinBalance, 88);
+      expect(provider.unlockedAt, isNotEmpty);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('duoyi_achievements_unlocked');
+      await prefs.remove('duoyi_achievements_notified');
+      await prefs.remove('duoyi_virtual_rewards');
+      await provider.loadFromStorage();
+
+      expect(provider.coinBalance, 0);
+      expect(provider.lifetimeCoins, 0);
+      expect(provider.rewardLedger, isEmpty);
+      expect(provider.unlockedAt, isEmpty);
+      provider.dispose();
+    },
+  );
 }

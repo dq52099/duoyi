@@ -134,6 +134,12 @@ class LocationReminderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _reminders.clear();
+    _inRange.clear();
+    notifyListeners();
+  }
+
   Future<void> add(LocationReminder reminder) async {
     _reminders.add(reminder);
     await _save();

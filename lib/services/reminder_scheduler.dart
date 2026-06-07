@@ -50,6 +50,22 @@ class TodoReminderPreflightResult {
   }
 }
 
+@immutable
+class ReminderScheduleSnapshotEntry {
+  final String objectType;
+  final String objectId;
+  final List<int> ids;
+
+  const ReminderScheduleSnapshotEntry({
+    required this.objectType,
+    required this.objectId,
+    required this.ids,
+  });
+
+  int get idCount => ids.length;
+  String get objectKey => '$objectType:$objectId';
+}
+
 TodoReminderPreflightResult preflightTodoReminderPlan(
   TodoItem todo, {
   DateTime? now,
@@ -601,6 +617,14 @@ class _ResolvedRule {
 /// R4.1 / R4.4 / R4.5 / R4.7 / R4.8：本类是协调器，职责严格与
 /// `NotificationService` 和 `AlarmService` 分离；两者互不直接通话。
 class ReminderScheduler {
+  static const List<String> _registryObjectTypes = <String>[
+    'todo',
+    'goal',
+    'habit',
+    'anniversary',
+    'countdown',
+  ];
+
   final ReminderNotificationSink notif;
   final ReminderAlarmSink alarm;
   final ReminderEmailSink email;
@@ -633,6 +657,82 @@ class ReminderScheduler {
   @visibleForTesting
   int debugScheduledTodoRuleCount(String todoId) {
     return _scheduledTodoRules[todoId]?.length ?? 0;
+  }
+
+  Future<List<ReminderScheduleSnapshotEntry>> registeredRemindersSnapshot() {
+    return _runSerialized(_registeredRemindersSnapshotLocked);
+  }
+
+  Future<List<ReminderScheduleSnapshotEntry>>
+  _registeredRemindersSnapshotLocked() async {
+    final result = <ReminderScheduleSnapshotEntry>[];
+    for (final objectType in _registryObjectTypes) {
+      final byObject = await registry.idsByObject(objectType);
+      for (final entry in byObject.entries) {
+        final ids = entry.value.where((id) => id != 0).toList()..sort();
+        if (ids.isEmpty) continue;
+        result.add(
+          ReminderScheduleSnapshotEntry(
+            objectType: objectType,
+            objectId: entry.key,
+            ids: List<int>.unmodifiable(ids),
+          ),
+        );
+      }
+    }
+    result.sort((a, b) {
+      final typeCompare = _registryObjectTypes
+          .indexOf(a.objectType)
+          .compareTo(_registryObjectTypes.indexOf(b.objectType));
+      if (typeCompare != 0) return typeCompare;
+      return a.objectId.compareTo(b.objectId);
+    });
+    return List<ReminderScheduleSnapshotEntry>.unmodifiable(result);
+  }
+
+  /// Clears scheduler-owned in-memory state during account cleanup.
+  ///
+  /// Platform notifications and alarms may already have been removed by their
+  /// services, but popup timers and this scheduler's rule cache live in memory.
+  /// If they survive an account switch, a same-id/same-rule reminder from the
+  /// next account can be treated as already scheduled, especially for popup
+  /// reminders which do not expose a system pending queue.
+  Future<void> resetInMemoryState() {
+    return _runSerialized(_resetInMemoryStateLocked);
+  }
+
+  Future<void> _resetInMemoryStateLocked() async {
+    for (final entry in _scheduledTodoRules.entries.toList()) {
+      await _cancelRuleObjects('todo', entry.key, entry.value.keys);
+      await _cancelTodoLegacy(entry.key);
+      await registry.removeObject('todo', entry.key);
+    }
+    _scheduledTodoRules.clear();
+
+    for (final entry in _scheduledGoalRules.entries.toList()) {
+      await _cancelRuleObjects('goal', entry.key, entry.value.keys);
+      await _cancelGoalLegacy(entry.key);
+      await registry.removeObject('goal', entry.key);
+    }
+    _scheduledGoalRules.clear();
+
+    for (final id in _scheduledHabitScopes.keys.toList()) {
+      await _cancelHabit(id);
+      await registry.removeObject('habit', id);
+    }
+    _scheduledHabitScopes.clear();
+
+    for (final id in _scheduledAnniversaryScopes.keys.toList()) {
+      await _cancelAnniversary(id);
+      await registry.removeObject('anniversary', id);
+    }
+    _scheduledAnniversaryScopes.clear();
+
+    for (final id in _scheduledCountdownScopes.keys.toList()) {
+      await _cancelCountdown(id);
+      await registry.removeObject('countdown', id);
+    }
+    _scheduledCountdownScopes.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -3199,6 +3299,9 @@ class ReminderScheduler {
     919002,
     919003,
     919004,
+    919005,
+    919006,
+    919007,
   };
 
   DateTime _anniversaryReminderAt(Anniversary item) {

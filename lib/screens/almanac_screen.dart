@@ -1022,6 +1022,8 @@ class _AlmanacTopVisual extends StatelessWidget {
 }
 
 class _VerticalYijiPanel extends StatelessWidget {
+  static const int _visibleTermLimit = 5;
+
   final String suitable;
   final String avoid;
   final Color gold;
@@ -1037,18 +1039,24 @@ class _VerticalYijiPanel extends StatelessWidget {
     final darkText = Theme.of(
       context,
     ).colorScheme.onSurface.withValues(alpha: 0.86);
-    final suitableTerms = _splitAlmanacTerms(suitable).take(5).toList();
-    final avoidTerms = _splitAlmanacTerms(avoid).take(5).toList();
+    final suitableTerms = _splitAlmanacTerms(
+      suitable,
+    ).take(_visibleTermLimit).toList(growable: false);
+    final avoidTerms = _splitAlmanacTerms(
+      avoid,
+    ).take(_visibleTermLimit).toList(growable: false);
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 13, 10, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final textSize = constraints.maxWidth < 132 ? 13.0 : 14.0;
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                 child: _VerticalYijiColumn(
+                  key: const ValueKey('almanac_vertical_suitable_column'),
+                  keyName: 'suitable',
                   title: '宜',
                   terms: suitableTerms,
                   color: gold,
@@ -1058,6 +1066,8 @@ class _VerticalYijiPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _VerticalYijiColumn(
+                  key: const ValueKey('almanac_vertical_avoid_column'),
+                  keyName: 'avoid',
                   title: '忌',
                   terms: avoidTerms,
                   color: darkText,
@@ -1073,12 +1083,15 @@ class _VerticalYijiPanel extends StatelessWidget {
 }
 
 class _VerticalYijiColumn extends StatelessWidget {
+  final String keyName;
   final String title;
   final List<String> terms;
   final Color color;
   final double fontSize;
 
   const _VerticalYijiColumn({
+    super.key,
+    required this.keyName,
     required this.title,
     required this.terms,
     required this.color,
@@ -1112,19 +1125,30 @@ class _VerticalYijiColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final term in terms)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: _VerticalTerm(
-                  term: term,
-                  color: color,
-                  fontSize: fontSize,
-                ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: FittedBox(
+              key: ValueKey('almanac_vertical_${keyName}_terms_box'),
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: Column(
+                key: ValueKey('almanac_vertical_${keyName}_terms'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final term in terms)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: _VerticalTerm(
+                        term: term,
+                        color: color,
+                        fontSize: fontSize,
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ],
     );

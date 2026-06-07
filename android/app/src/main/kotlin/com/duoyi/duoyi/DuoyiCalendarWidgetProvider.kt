@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.util.TypedValue
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -54,6 +56,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 primaryIds = intArrayOf(
                     R.id.widget_calendar_title,
                     R.id.widget_calendar_summary,
+                    R.id.widget_calendar_today_button,
                     R.id.widget_calendar_nav_calendar,
                 ),
                 bodyIds = intArrayOf(R.id.widget_calendar_grid),
@@ -64,15 +67,32 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_calendar_nav_focus,
                 ),
             )
+            DuoyiWidgetTheme.applyButtonSurfaces(
+                views,
+                prefs,
+                secondaryIds = intArrayOf(R.id.widget_calendar_today_button),
+            )
             val now = Calendar.getInstance()
-            val monthTitle = SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(now.time)
+            val compact = DuoyiWidgetDisplayMode.isCompact(prefs, id)
+            val detailed = DuoyiWidgetDisplayMode.isDetailed(prefs, id)
+            val monthPattern = if (compact) "M月" else "yyyy年M月"
+            val monthTitle = SimpleDateFormat(monthPattern, Locale.getDefault()).format(now.time)
 
+            views.setViewVisibility(
+                R.id.widget_calendar_title,
+                if (compact) View.GONE else View.VISIBLE
+            )
             views.setTextViewText(
                 R.id.widget_calendar_title,
                 prefs.getString("brand_app_title", "多仪") ?: "多仪"
             )
             views.setTextViewText(R.id.widget_calendar_month, monthTitle)
-            views.setTextViewText(R.id.widget_calendar_grid, buildMonthGrid(now))
+            views.setTextViewText(R.id.widget_calendar_grid, buildMonthGrid(now, compact, detailed))
+            views.setTextViewTextSize(
+                R.id.widget_calendar_grid,
+                TypedValue.COMPLEX_UNIT_SP,
+                if (compact) 8.5f else if (detailed) 12f else 11f
+            )
             views.setTextViewText(
                 R.id.widget_calendar_summary,
                 prefs.getString("calendar_month_summary", "本月日期 · 今日已标记") ?: "本月日期 · 今日已标记"
@@ -111,6 +131,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_calendar_root, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_title, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_month, openCalendar)
+            views.setOnClickPendingIntent(R.id.widget_calendar_today_button, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_grid, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_summary, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_nav_todo, openTodo)
@@ -122,7 +143,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
         }
     }
 
-    private fun buildMonthGrid(now: Calendar): String {
+    private fun buildMonthGrid(now: Calendar, compact: Boolean, detailed: Boolean): String {
         val cal = now.clone() as Calendar
         val today = cal.get(Calendar.DAY_OF_MONTH)
         cal.set(Calendar.DAY_OF_MONTH, 1)
@@ -130,11 +151,16 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
         val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
         val cells = MutableList(42) { "  " }
         for (day in 1..maxDay) {
-            val label = if (day == today) "*${day.toString().padStart(1, ' ')}" else day.toString().padStart(2, ' ')
-            cells[firstWeekday + day - 1] = label.takeLast(2)
+            cells[firstWeekday + day - 1] = day.toString().padStart(2, ' ')
+        }
+        val currentWeek = ((firstWeekday + today - 1) / 7).coerceIn(0, 5)
+        val visibleWeeks = when {
+            compact -> currentWeek..currentWeek
+            detailed -> 0..5
+            else -> maxOf(0, currentWeek - 1)..minOf(5, currentWeek + 2)
         }
         val lines = mutableListOf("一 二 三 四 五 六 日")
-        for (week in 0 until 6) {
+        for (week in visibleWeeks) {
             lines += cells.subList(week * 7, week * 7 + 7).joinToString(" ")
         }
         return lines.joinToString("\n")

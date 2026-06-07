@@ -510,11 +510,11 @@ void main() {
     expect(habit, contains('backgroundColor: routeBackground'));
     expect(
       habit,
-      contains('labelStyle: appSecondaryMenuItemTextStyle(context)'),
+      contains('labelStyle: appSecondaryControlLabelStyle(context)'),
     );
     expect(
       habit,
-      contains('unselectedLabelStyle: appSecondaryMenuItemTextStyle(context)'),
+      contains('unselectedLabelStyle: appSecondaryControlLabelStyle(context)'),
     );
     expect(habit, isNot(contains('backgroundColor: Colors.transparent')));
 
@@ -701,12 +701,12 @@ void main() {
       'lib/screens/more_apps_screen.dart',
     ).readAsStringSync();
 
+    final nameTextIndex = mine.indexOf('nameText,');
+    expect(nameTextIndex, greaterThanOrEqualTo(0));
+    final nameTextStart = mine.lastIndexOf('Text(', nameTextIndex);
     final mineProfileHeader = mine.substring(
-      mine.indexOf('Text(\n                                  nameText'),
-      mine.indexOf(
-        'Wrap(',
-        mine.indexOf('Text(\n                                  nameText'),
-      ),
+      nameTextStart,
+      mine.indexOf('const SizedBox(height: 5)', nameTextIndex),
     );
     final mainRegularSize = _requiredFontSize(mineProfileHeader);
     expect(mainRegularSize, equals(15));

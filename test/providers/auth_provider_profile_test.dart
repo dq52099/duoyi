@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:duoyi/providers/auth_provider.dart';
+import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +14,27 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  test(
+    'UserProvider loadFromStorage clears profile when account key is removed',
+    () async {
+      final provider = UserProvider();
+      await provider.updateProfile(
+        username: 'admin',
+        displayName: 'Admin',
+        email: 'admin@example.com',
+      );
+      expect(provider.profile.username, 'admin');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_profile');
+      await provider.loadFromStorage();
+
+      expect(provider.profile.username, '用户');
+      expect(provider.profile.displayName, isEmpty);
+      expect(provider.profile.email, isEmpty);
+    },
+  );
 
   test(
     'bindEmail keeps immutable username/avatar out of profile payload',
@@ -156,6 +178,230 @@ void main() {
     ]);
     expect(auth.state.token, 'token-1');
   });
+
+  test(
+    'login notifies account identity changing before applying new account',
+    () async {
+      const adminState = AuthState(
+        userId: 'admin-id',
+        username: 'admin',
+        token: 'admin-token',
+        coinBalance: 999,
+        lifetimeCoins: 1999,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_state', json.encode(adminState.toJson()));
+      final cleanupCalls = <String>[];
+      String? stateUserIdDuringCleanup;
+      int? coinBalanceDuringCleanup;
+      int? lifetimeCoinsDuringCleanup;
+      String? persistedUserIdDuringCleanup;
+      late final AuthProvider auth;
+      auth = AuthProvider(
+        initialState: adminState,
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        stateUserIdDuringCleanup = auth.state.userId;
+        coinBalanceDuringCleanup = auth.state.coinBalance;
+        lifetimeCoinsDuringCleanup = auth.state.lifetimeCoins;
+        final persisted =
+            json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+        persistedUserIdDuringCleanup = persisted['user_id'] as String?;
+      };
+
+      await auth.login(username: 'test', password: 'pw');
+
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(stateUserIdDuringCleanup, 'admin-id');
+      expect(coinBalanceDuringCleanup, 999);
+      expect(lifetimeCoinsDuringCleanup, 1999);
+      expect(persistedUserIdDuringCleanup, 'admin-id');
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+      expect(auth.state.lifetimeCoins, 0);
+      expect(persisted['user_id'], 'test-id');
+      expect(persisted['coin_balance'], 0);
+      expect(persisted['lifetime_coins'], 0);
+    },
+  );
+
+  test(
+    'login from signed-out state clears residual local account data first',
+    () async {
+      AuthState? previousDuringCleanup;
+      AuthState? nextDuringCleanup;
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        previousDuringCleanup = previous;
+        nextDuringCleanup = next;
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.login(username: 'test', password: 'pw');
+
+      expect(previousDuringCleanup?.isLoggedIn, isFalse);
+      expect(nextDuringCleanup?.userId, 'test-id');
+      expect(stateUserIdDuringCleanup, isNull);
+      expect(auth.state.userId, 'test-id');
+    },
+  );
+
+  test('login is blocked when account cleanup fails', () async {
+    final auth = AuthProvider(
+      client: ApiClient(
+        baseUrl: 'http://127.0.0.1:1',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/auth/login');
+          return http.Response(
+            json.encode({
+              'user_id': 'test-id',
+              'username': 'test',
+              'token': 'test-token',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+    auth.onAccountIdentityChanging = (_, _) async {
+      throw StateError('cleanup failed');
+    };
+
+    await expectLater(
+      auth.login(username: 'test', password: 'pw'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(auth.state.isLoggedIn, isFalse);
+  });
+
+  test(
+    'email login notifies account identity changing before applying new account',
+    () async {
+      final cleanupCalls = <String>[];
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-id',
+          username: 'admin',
+          token: 'admin-token',
+          coinBalance: 999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/email-login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'email': 'test@example.com',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.emailLogin(email: 'test@example.com', code: '654321');
+
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(stateUserIdDuringCleanup, 'admin-id');
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+    },
+  );
+
+  test(
+    'register notifies account identity changing before applying new account',
+    () async {
+      final cleanupCalls = <String>[];
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-id',
+          username: 'admin',
+          token: 'admin-token',
+          coinBalance: 999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/register');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.register(username: 'test', password: 'pw');
+
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(stateUserIdDuringCleanup, 'admin-id');
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+    },
+  );
 
   test('binding email code uses authenticated me route', () async {
     Map<String, dynamic>? requestBody;
@@ -896,6 +1142,8 @@ void main() {
     () async {
       final paths = <String>[];
       var loggedOut = false;
+      String? stateUserIdDuringLogout;
+      String? persistedUserIdDuringLogout;
       final auth = AuthProvider(
         initialState: const AuthState(
           userId: 'u-1',
@@ -922,12 +1170,17 @@ void main() {
           }),
         ),
       );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_state', json.encode(auth.state.toJson()));
       auth.onAccountLoggedOut = () async {
         loggedOut = true;
+        stateUserIdDuringLogout = auth.state.userId;
+        final persisted =
+            json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+        persistedUserIdDuringLogout = persisted['user_id'] as String?;
       };
 
       await auth.logout();
-      final prefs = await SharedPreferences.getInstance();
 
       expect(paths, [
         'POST /api/auth/logout',
@@ -939,6 +1192,8 @@ void main() {
       expect(auth.client.token, isNull);
       expect(prefs.getString('auth_state'), isNull);
       expect(loggedOut, isTrue);
+      expect(stateUserIdDuringLogout, 'u-1');
+      expect(persistedUserIdDuringLogout, 'u-1');
     },
   );
 

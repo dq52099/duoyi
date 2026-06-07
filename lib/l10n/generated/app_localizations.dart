@@ -4304,6 +4304,24 @@ abstract class AppLocalizations {
   /// **'未来 30 天内没有安排'**
   String get anniversaryUpcomingEmpty;
 
+  /// No description provided for @anniversarySummaryWithin30Days.
+  ///
+  /// In zh, this message translates to:
+  /// **'30 天内'**
+  String get anniversarySummaryWithin30Days;
+
+  /// No description provided for @anniversaryListSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'列表'**
+  String get anniversaryListSuffix;
+
+  /// No description provided for @anniversaryListSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'长按置顶，左滑删除，点击进入编辑'**
+  String get anniversaryListSubtitle;
+
   /// No description provided for @anniversaryDeleteTitle.
   ///
   /// In zh, this message translates to:

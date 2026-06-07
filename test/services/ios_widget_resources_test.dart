@@ -505,6 +505,8 @@ void main() {
         expect(swift, contains('readTodoRows'));
         expect(swift, contains('todo_top3_\\(index)_id'));
         expect(swift, contains('ForEach(visibleTodoRows)'));
+        expect(swift, contains('Text("o")'));
+        expect(swift, isNot(contains('Text("完成")')));
         expect(swift, isNot(contains('duoyi://action/start_focus')));
 
         final main = File('lib/main.dart').readAsStringSync();

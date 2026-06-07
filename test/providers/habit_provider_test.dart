@@ -241,6 +241,21 @@ void main() {
       expect(scheduler.habitSyncs.last, isEmpty);
     },
   );
+
+  test(
+    'loadFromStorage clears stale habits when account key is removed',
+    () async {
+      final provider = HabitProvider();
+      await provider.addHabit(Habit(id: 'admin-habit', name: 'Admin habit'));
+      expect(provider.habits, hasLength(1));
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('habits');
+      await provider.loadFromStorage();
+
+      expect(provider.habits, isEmpty);
+    },
+  );
 }
 
 class _FailingTimeAuditProvider extends TimeAuditProvider {

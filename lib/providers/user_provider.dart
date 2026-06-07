@@ -6,6 +6,7 @@ import '../models/user_profile.dart';
 
 class UserProvider extends ChangeNotifier {
   UserProfile _profile = UserProfile();
+  int _storageGeneration = 0;
 
   UserProfile get profile => _profile;
 
@@ -44,12 +45,22 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getString('user_profile');
     if (data != null) {
       _profile = UserProfile.fromJson(json.decode(data));
-      notifyListeners();
+    } else {
+      _profile = UserProfile();
     }
+    notifyListeners();
+  }
+
+  void resetLocalState() {
+    _storageGeneration++;
+    _profile = UserProfile();
+    notifyListeners();
   }
 
   Future<void> _save() async {

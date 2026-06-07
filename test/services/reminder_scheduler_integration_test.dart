@@ -526,6 +526,77 @@ void main() {
   });
 
   group('ReminderScheduler 集成', () {
+    test(
+      'registeredRemindersSnapshot exposes sorted registry details',
+      () async {
+        await registry.replaceObject('habit', 'habit-b', {301, 0, 300});
+        await registry.replaceObject('todo', 'todo-b', {102, 101});
+        await registry.replaceObject('countdown', 'countdown-a', {501});
+        await registry.replaceObject('todo', 'todo-a', {201});
+        await registry.replaceObject('memo', 'ignored', {900});
+
+        final snapshot = await scheduler.registeredRemindersSnapshot();
+
+        expect(snapshot.map((entry) => entry.objectKey), [
+          'todo:todo-a',
+          'todo:todo-b',
+          'habit:habit-b',
+          'countdown:countdown-a',
+        ]);
+        expect(snapshot.map((entry) => entry.ids), [
+          [201],
+          [101, 102],
+          [300, 301],
+          [501],
+        ]);
+        expect(snapshot[1].idCount, 2);
+        expect(() => snapshot.add(snapshot.first), throwsUnsupportedError);
+        expect(() => snapshot[1].ids.add(999), throwsUnsupportedError);
+      },
+    );
+
+    test(
+      'resetInMemoryState clears cached popup rules before account rebuild',
+      () async {
+        final when = DateTime.now().add(const Duration(hours: 2));
+        final todo = TodoItem(
+          id: 'same-popup-id-after-account-switch',
+          title: '账号切换后仍需重建的弹出提醒',
+          dueDate: when,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.popup,
+                hour: when.hour,
+                minute: when.minute,
+              ),
+            ],
+          ),
+        );
+        final expectedId = _idFor('todo:${todo.id}:r1');
+
+        await scheduler.syncTodos([todo]);
+
+        expect(popup.scheduled.map((entry) => entry['id']), [expectedId]);
+        expect(scheduler.debugScheduledTodoRuleCount(todo.id), 1);
+
+        await scheduler.resetInMemoryState();
+
+        expect(popup.cancelled, contains(expectedId));
+        expect(scheduler.debugScheduledTodoRuleCount(todo.id), 0);
+        expect(await registry.idsByObject('todo'), isEmpty);
+
+        popup.scheduled.clear();
+
+        await scheduler.syncTodos([todo]);
+
+        expect(popup.scheduled.map((entry) => entry['id']), [expectedId]);
+      },
+    );
+
     test('preflight blocks enabled one-shot todo reminders in the past', () {
       final now = DateTime(2026, 5, 24, 10);
       final todo = TodoItem(

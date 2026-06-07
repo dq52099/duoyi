@@ -50,6 +50,15 @@ class CalendarProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _events.clear();
+    _localEvents.clear();
+    _externalEvents = const <CalendarEvent>[];
+    _lastRebuildSignature = null;
+    _sourceRevision++;
+    notifyListeners();
+  }
+
   Future<void> addLocalEvent(CalendarEvent event) async {
     _localEvents.add(_asLocalEvent(event));
     await _saveLocalEvents();

@@ -341,7 +341,7 @@ class _WidgetScreenState extends State<WidgetScreen>
               color: Colors.teal,
               title: '添加桌面无权限时的处理',
               message:
-                  '这里选择的是新添加小组件的默认样式/请求尺寸；已添加到桌面的实例不会被修改。若无法应用内添加，系统小组件列表只能添加标准尺寸；紧凑或详细样式需要当前桌面支持应用内添加。',
+                  '这里选择的是新添加小组件的默认样式/请求尺寸；已添加到桌面的实例不会被修改。系统小组件列表也提供紧凑 2×2、标准 3×2 和详细 4×3 入口。',
             ),
           ],
         ),
@@ -398,15 +398,15 @@ class _WidgetPinSupportBanner extends StatelessWidget {
         ? '选择紧凑 2×2、标准 3×2 或详细 4×3 后再添加；这是新添加实例的请求尺寸，最终占位仍由桌面网格决定。'
         : switch (support) {
             AndroidWidgetPinResult.unsupportedPlatform =>
-              '请在 Android 手机上使用系统小组件列表添加多仪；系统列表只能添加标准尺寸，紧凑或详细样式需要应用内添加。',
+              '请在 Android 手机上使用系统小组件列表添加多仪，可选择紧凑 2×2、标准 3×2 或详细 4×3。',
             AndroidWidgetPinResult.unsupportedLauncher =>
-              '当前桌面启动器未开放应用内添加；系统小组件列表只能添加标准尺寸，紧凑或详细样式需要桌面支持应用内添加。',
+              '当前桌面启动器未开放应用内添加；请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
             AndroidWidgetPinResult.permissionDenied =>
-              '系统拒绝了添加请求，通常是桌面小组件权限未允许。请在系统设置里允许多仪添加桌面小组件后重试；系统列表只能添加标准尺寸。',
+              '系统拒绝了添加请求，通常是桌面小组件权限未允许。请在系统设置里允许多仪添加桌面小组件后重试，或从系统小组件列表选择尺寸。',
             AndroidWidgetPinResult.confirmationBlocked =>
-              '桌面没有展示或接受系统确认弹窗，常见于后台弹窗/悬浮窗限制。请允许多仪显示系统确认后重试；系统列表只能添加标准尺寸。',
+              '桌面没有展示或接受系统确认弹窗，常见于后台弹窗/悬浮窗限制。请允许多仪显示系统确认后重试，或从系统小组件列表选择尺寸。',
             AndroidWidgetPinResult.invalidKind => '请更新应用后重试。',
-            _ => '如果点击添加后没有系统确认框，请打开系统设置检查桌面小组件权限、后台弹窗权限后重试；系统列表只能添加标准尺寸。',
+            _ => '如果点击添加后没有系统确认框，请打开系统设置检查桌面小组件权限、后台弹窗权限后重试，或从系统小组件列表选择尺寸。',
           };
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
@@ -708,18 +708,18 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
   ) async {
     final message = switch (result) {
       AndroidWidgetPinResult.unsupported =>
-        '当前桌面不支持应用内直接添加小组件。系统小组件列表只能添加标准尺寸；紧凑或详细样式需要桌面支持应用内添加。',
+        '当前桌面不支持应用内直接添加小组件。请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
       AndroidWidgetPinResult.unsupportedPlatform =>
-        '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上使用系统小组件列表添加多仪，系统列表只能添加标准尺寸。',
+        '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上使用系统小组件列表添加多仪，可选择紧凑 2×2、标准 3×2 或详细 4×3。',
       AndroidWidgetPinResult.unsupportedLauncher =>
-        '当前桌面启动器不支持应用内直接添加小组件。系统小组件列表只能添加标准尺寸；紧凑或详细样式需要桌面支持应用内添加。',
+        '当前桌面启动器不支持应用内直接添加小组件。请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
       AndroidWidgetPinResult.permissionDenied =>
-        '系统拒绝了本次添加请求，通常是桌面小组件权限未允许；也可能没有桌面添加权限。请在系统设置里允许多仪添加桌面小组件后重试；系统列表只能添加标准尺寸。',
+        '系统拒绝了本次添加请求，通常是桌面小组件权限未允许；也可能没有桌面添加权限。请在系统设置里允许多仪添加桌面小组件后重试，或从系统小组件列表选择尺寸。',
       AndroidWidgetPinResult.confirmationBlocked =>
-        '桌面没有展示或接受系统确认弹窗，常见于后台弹出确认、后台弹窗或悬浮窗限制，或桌面拦截了确认流程。请允许多仪显示系统确认后重试；系统列表只能添加标准尺寸。',
+        '桌面没有展示或接受系统确认弹窗，常见于后台弹出确认、后台弹窗或悬浮窗限制，或桌面拦截了确认流程。请允许多仪显示系统确认后重试，或从系统小组件列表选择尺寸。',
       AndroidWidgetPinResult.invalidKind => '当前小组件类型暂不支持添加，请更新应用后重试。',
       AndroidWidgetPinResult.unavailable =>
-        '无法发起添加到桌面。可打开系统设置检查桌面小组件权限、后台弹窗权限后重试；系统列表只能添加标准尺寸。',
+        '无法发起添加到桌面。可打开系统设置检查桌面小组件权限、后台弹窗权限后重试，或从系统小组件列表选择尺寸。',
       AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面确认小组件。',
     };
     await showDialog<void>(
@@ -758,7 +758,7 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
       ),
       AndroidWidgetPinFinalStatus.timeout => (
         '等待桌面确认',
-        '已发起添加请求，但桌面暂未返回确认结果。部分桌面会延迟回调，可先回到桌面查看；如果一直没有确认弹窗，请检查桌面小组件权限和后台弹窗权限。系统列表只能添加标准尺寸。',
+        '已发起添加请求，但桌面暂未返回确认结果。部分桌面会延迟回调，可先回到桌面查看；如果一直没有确认弹窗，请检查桌面小组件权限和后台弹窗权限，或从系统小组件列表选择尺寸。',
       ),
       AndroidWidgetPinFinalStatus.unavailable => (
         '添加状态异常',
@@ -1180,14 +1180,14 @@ class _WidgetPreviewTodoBody extends StatelessWidget {
           text: '逾期 1 项 · 20:25 有提醒 · 今日优先处理',
         ),
         const SizedBox(height: 5),
-        const _WidgetPreviewTodoRow(text: '整理今日计划', checked: false),
+        const _WidgetPreviewTodoRow(text: '整理今日计划'),
         if (maxLines >= 2) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '完成项目复盘 · 3 个子任务', checked: false),
+          const _WidgetPreviewTodoRow(text: '项目复盘 · 3 个子任务'),
         ],
         if (maxLines >= 3) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟', checked: true),
+          const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟'),
           const SizedBox(height: 6),
           const _WidgetPreviewQuickAdd(label: '+ 添加待办'),
           const SizedBox(height: 5),
@@ -1339,27 +1339,139 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
-    final rows = switch (maxLines) {
-      1 => '一 二 三 四 五 六 日\n11 12 13 14 15 16 17',
-      2 =>
-        '一 二 三 四 五 六 日\n          1  2  3\n 4  5  6  7  8  9 10\n11 12 13 14 15 16 17',
-      _ =>
-        '一 二 三 四 五 六 日\n          1  2  3\n 4  5  6  7  8  9 10\n11 12 13 14 15 16 17\n18 19 20 21 22 23 24\n25 26 27 28 29 30 31',
+    final visibleWeeks = switch (maxLines) {
+      1 => [2],
+      2 => [0, 1, 2, 3],
+      _ => [0, 1, 2, 3, 4],
     };
+    const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
+    const monthWeeks = <List<int?>>[
+      [null, null, null, null, 1, 2, 3],
+      [4, 5, 6, 7, 8, 9, 10],
+      [11, 12, 13, 14, 15, 16, 17],
+      [18, 19, 20, 21, 22, 23, 24],
+      [25, 26, 27, 28, 29, 30, 31],
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          rows,
-          style: TextStyle(
-            fontSize: 11,
-            height: 1.25,
-            letterSpacing: 0,
-            fontFamily: 'monospace',
-            color: cs.onSurface,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '2026年5月',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ),
+            Container(
+              height: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.blue.withValues(alpha: 0.28),
+                  width: 0.45,
+                ),
+              ),
+              child: const Text(
+                '今天',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        _WidgetPreviewCalendarGrid(
+          weekLabels: weekLabels,
+          weeks: [for (final index in visibleWeeks) monthWeeks[index]],
         ),
       ],
+    );
+  }
+}
+
+class _WidgetPreviewCalendarGrid extends StatelessWidget {
+  final List<String> weekLabels;
+  final List<List<int?>> weeks;
+
+  const _WidgetPreviewCalendarGrid({
+    required this.weekLabels,
+    required this.weeks,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final label in weekLabels)
+              Expanded(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        for (final week in weeks) ...[
+          Row(
+            children: [
+              for (final day in week)
+                Expanded(child: _WidgetPreviewCalendarCell(day: day)),
+            ],
+          ),
+          const SizedBox(height: 3),
+        ],
+      ],
+    );
+  }
+}
+
+class _WidgetPreviewCalendarCell extends StatelessWidget {
+  final int? day;
+
+  const _WidgetPreviewCalendarCell({required this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isToday = day == 17;
+    return Center(
+      child: Container(
+        width: 22,
+        height: 20,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isToday ? Colors.blue : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          day == null ? '' : '$day',
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: TextStyle(
+            fontSize: 10,
+            color: isToday ? Colors.white : cs.onSurface,
+            fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1566,27 +1678,45 @@ class _WidgetPreviewLine extends StatelessWidget {
 
 class _WidgetPreviewTodoRow extends StatelessWidget {
   final String text;
-  final bool checked;
 
-  const _WidgetPreviewTodoRow({required this.text, required this.checked});
+  const _WidgetPreviewTodoRow({required this.text});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.blue.withValues(alpha: 0.28),
+              width: 0.45,
+            ),
+          ),
+          child: const Text(
+            'o',
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              color: Colors.blue,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 7),
         Expanded(
           child: Text(
-            '- $text',
+            text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 12, color: cs.onSurface),
           ),
-        ),
-        Icon(
-          checked ? Icons.check_circle : Icons.radio_button_unchecked,
-          size: 16,
-          color: checked ? Colors.green : cs.onSurfaceVariant,
         ),
       ],
     );

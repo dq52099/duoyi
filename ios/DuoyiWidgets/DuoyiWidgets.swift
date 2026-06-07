@@ -482,7 +482,7 @@ private struct DuoyiWidgetView: View {
             Spacer(minLength: 0)
             if let completeURL = row.completeURL {
                 Link(destination: completeURL) {
-                    Text("完成")
+                    Text("o")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(entry.theme.primary)
                         .lineLimit(1)

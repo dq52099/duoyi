@@ -143,8 +143,14 @@ void main() {
       );
       expect(mine, contains('final compact = constraints.maxWidth < 360'));
       expect(mine, contains('final avatarSize = compact ? 50.0 : 56.0'));
+      expect(mine, contains('final headerHeight = compact'));
+      expect(mine, contains("key: const ValueKey('mine_header_stable_box')"));
+      expect(mine, contains('height: headerHeight'));
+      expect(mine, contains('height: _mineHeaderMetadataHeight'));
+      expect(mine, contains('ClipRect('));
       expect(mine, contains('final metadata = <Widget>['));
-      expect(mine, contains('return Row('));
+      expect(mine, contains('return SizedBox('));
+      expect(mine, contains('child: Row('));
       expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
       expect(mine, contains("key: const ValueKey('mine_avatar_row')"));
       expect(mine, contains('child: avatar'));
@@ -357,7 +363,11 @@ void main() {
           '_openBrandedRoute(context, const NotificationSettingsScreen())',
         ),
       );
-      expect(mine, contains("subtitle: '提醒时间、权限、铃声和记录保留'"));
+      expect(mine, contains("subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留'"));
+      expect(mine, contains("key: const ValueKey('mine_ai_review_toggle')"));
+      expect(mine, contains("key: const ValueKey('mine_ai_review_content')"));
+      expect(mine, contains("tooltip: _reviewExpanded ? '收起回顾' : '展开回顾'"));
+      expect(mine, contains("label: const Text('展开完整回顾')"));
       expect(mine, isNot(contains("title: '智能工具'")));
       expect(mine, isNot(contains("label: '底部导航栏'")));
       expect(

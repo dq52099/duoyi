@@ -36,6 +36,13 @@ class CourseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _courses = [];
+    _settings = ScheduleSettings();
+    _viewingWeek = currentWeek;
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(

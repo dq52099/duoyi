@@ -2131,6 +2131,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get anniversaryUpcomingEmpty => '未来 30 天内没有安排';
 
   @override
+  String get anniversarySummaryWithin30Days => '30 天内';
+
+  @override
+  String get anniversaryListSuffix => '列表';
+
+  @override
+  String get anniversaryListSubtitle => '长按置顶，左滑删除，点击进入编辑';
+
+  @override
   String get anniversaryDeleteTitle => '确认删除？';
 
   @override

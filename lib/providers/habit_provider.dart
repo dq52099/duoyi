@@ -14,6 +14,7 @@ class HabitProvider extends ChangeNotifier {
   List<Habit> _habits = [];
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
+  int _storageGeneration = 0;
 
   List<Habit> get habits => _habits;
 
@@ -45,12 +46,22 @@ class HabitProvider extends ChangeNotifier {
   // --- Persistence ---
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getString('habits');
     if (data != null) {
       final list = json.decode(data) as List;
       _habits = list.map((e) => Habit.fromJson(e)).toList();
+    } else {
+      _habits = [];
     }
+    notifyListeners();
+  }
+
+  void resetLocalState() {
+    _storageGeneration++;
+    _habits = [];
     notifyListeners();
   }
 

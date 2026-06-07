@@ -114,6 +114,7 @@ void main() {
           '@+id/widget_calendar_nav_focus',
           '@+id/widget_calendar_grid',
           '@+id/widget_calendar_summary',
+          '@+id/widget_calendar_today_button',
         ],
         compact: true,
       ),
@@ -636,7 +637,7 @@ void main() {
       expect(widgetScreen, contains('WidgetPreviewCard.goal'));
       expect(focusLayout, isNot(contains('专注与习惯')));
       expect(focusLayout, isNot(contains('习惯完成')));
-      expect(calendarLayout, isNot(contains('widget_calendar_today_')));
+      expect(calendarLayout, contains('widget_calendar_today_button'));
       expect(calendarProvider, isNot(contains('calendar_day_summary_')));
       expect(manager, contains('DuoyiWidgetKind.focus'));
       expect(manager, contains('DuoyiWidgetKind.habit'));
@@ -925,6 +926,107 @@ void main() {
       );
     });
 
+    test('待办小组件未完成任务使用 o 圆圈并保留交互按钮', () {
+      final layout = File(
+        'android/app/src/main/res/layout/duoyi_todo_widget.xml',
+      ).readAsStringSync();
+      final provider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiTodoWidgetProvider.kt',
+      ).readAsStringSync();
+      final widgetScreen = File(
+        'lib/screens/widget_screen.dart',
+      ).readAsStringSync();
+
+      for (final index in [1, 2, 3]) {
+        final doneView = _xmlTextViewWithId(layout, 'widget_todo_done_$index');
+        expect(
+          doneView,
+          contains('android:text="o"'),
+          reason: '待办小组件展示的是未完成任务，右侧操作符号应是 o/圆圈，不应误导成已完成勾选。',
+        );
+        expect(doneView, isNot(contains('android:text="✓"')));
+      }
+
+      expect(provider, contains('private fun bindTodoRow('));
+      expect(provider, contains('val encodedTodoId = Uri.encode(todoId)'));
+      expect(provider, contains(r'Uri.parse("duoyi://todo/$encodedTodoId")'));
+      expect(
+        provider,
+        contains(
+          r'Uri.parse("duoyi://action/complete_todo?id=$encodedTodoId")',
+        ),
+      );
+      expect(provider, contains('R.id.widget_todo_quick_add, quickAdd'));
+      expect(provider, contains('Uri.parse("duoyi://action/quick_todo")'));
+
+      final todoBody = widgetScreen.substring(
+        widgetScreen.indexOf('class _WidgetPreviewTodoBody'),
+        widgetScreen.indexOf('class _WidgetPreviewFocusBody'),
+      );
+      expect(todoBody, contains("const _WidgetPreviewTodoRow(text: '整理今日计划')"));
+      expect(
+        todoBody,
+        contains("const _WidgetPreviewTodoRow(text: '项目复盘 · 3 个子任务')"),
+      );
+      expect(
+        todoBody,
+        contains("const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟')"),
+      );
+      expect(
+        todoBody,
+        contains("const _WidgetPreviewQuickAdd(label: '+ 添加待办')"),
+      );
+
+      final previewRow = widgetScreen.substring(
+        widgetScreen.indexOf('class _WidgetPreviewTodoRow'),
+        widgetScreen.indexOf('class _WidgetPreviewMetric'),
+      );
+      expect(previewRow, contains("child: const Text(\n            'o',"));
+      expect(previewRow, isNot(contains('Icons.check_circle')));
+    });
+
+    test('月历小组件按尺寸裁剪网格并提供今天交互按钮', () {
+      final layout = File(
+        'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
+      ).readAsStringSync();
+      final provider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiCalendarWidgetProvider.kt',
+      ).readAsStringSync();
+      final widgetScreen = File(
+        'lib/screens/widget_screen.dart',
+      ).readAsStringSync();
+
+      expect(layout, contains('@+id/widget_calendar_today_button'));
+      expect(layout, contains('android:text="今天"'));
+      expect(provider, contains('R.id.widget_calendar_today_button'));
+      expect(provider, contains('DuoyiWidgetTheme.applyButtonSurfaces'));
+      expect(provider, contains('DuoyiWidgetDisplayMode.isCompact(prefs, id)'));
+      expect(
+        provider,
+        contains('DuoyiWidgetDisplayMode.isDetailed(prefs, id)'),
+      );
+      expect(provider, contains('buildMonthGrid(now, compact, detailed)'));
+      expect(provider, contains('views.setTextViewTextSize('));
+      expect(provider, contains('TypedValue.COMPLEX_UNIT_SP'));
+      expect(provider, contains('if (compact) "M月" else "yyyy年M月"'));
+      expect(provider, contains('if (compact) View.GONE else View.VISIBLE'));
+      expect(
+        provider,
+        contains(
+          'views.setOnClickPendingIntent(R.id.widget_calendar_today_button, openCalendar)',
+        ),
+      );
+      expect(provider, contains('compact -> currentWeek..currentWeek'));
+      expect(provider, contains('detailed -> 0..5'));
+      expect(provider, contains('currentWeek - 1'));
+      expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
+      expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
+      expect(
+        widgetScreen,
+        contains("child: const Text(\n                '今天',"),
+      );
+    });
+
     test('小组件样式密度设置同步预览、新增固定请求和系统添加默认值', () {
       final service = File(
         'lib/services/home_widget_service.dart',
@@ -1003,7 +1105,9 @@ void main() {
         widgetScreen,
         contains('for (final line in lines.take(maxLines))'),
       );
-      expect(widgetScreen, contains('final rows = switch (maxLines)'));
+      expect(widgetScreen, contains('final visibleWeeks = switch (maxLines)'));
+      expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
+      expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
       expect(
         widgetScreen,
         contains('displayMode != WidgetDisplayMode.compact'),
@@ -1278,8 +1382,8 @@ void main() {
       expect(widgetScreen, contains('桌面没有展示或接受系统确认弹窗'));
       expect(widgetScreen, contains('仅 Android 支持应用内添加'));
       expect(widgetScreen, contains('请从系统小组件列表添加'));
-      expect(widgetScreen, contains('系统列表只能添加标准尺寸'));
-      expect(widgetScreen, contains('紧凑或详细样式需要'));
+      expect(widgetScreen, contains('紧凑 2×2、标准 3×2 或详细 4×3'));
+      expect(widgetScreen, isNot(contains('系统列表只能添加标准尺寸')));
       expect(widgetScreen, contains('桌面小组件权限'));
       expect(widgetScreen, contains('后台弹窗'));
       expect(widgetScreen, contains('launcherRequestLabel'));
@@ -1780,11 +1884,15 @@ void main() {
       expect(variants, contains('Handler(Looper.getMainLooper()).postDelayed'));
       expect(
         variants,
-        contains('PackageManager.COMPONENT_ENABLED_STATE_DISABLED'),
+        contains('keep_system_visible_variant_provider'),
         reason:
-            'Unused variant providers must be disabled again so launcher add targets do not become stale or duplicated.',
+            'Compact/detailed receivers are now system picker entries and must stay visible after failed or deleted pin attempts.',
       );
-      expect(variants, contains('disable_unused_variant_provider'));
+      expect(
+        variants,
+        isNot(contains('PackageManager.COMPONENT_ENABLED_STATE_DISABLED')),
+      );
+      expect(variants, isNot(contains('disable_unused_variant_provider')));
       expect(variants, contains('"compact" -> family.compact'));
       expect(
         variants,
@@ -1833,12 +1941,12 @@ void main() {
         expect(
           receiverBlock,
           contains('android:label="@string/${widget.labelResource}"'),
-          reason: '${widget.title} 标准 provider 应注册为唯一系统入口标签',
+          reason: '${widget.title} 标准 provider 应注册为标准 3x2 系统入口标签',
         );
         final compactBlock = _receiverBlock(manifest, widget.compactReceiver);
         final detailedBlock = _receiverBlock(manifest, widget.detailedReceiver);
-        expect(compactBlock, contains('android:enabled="false"'));
-        expect(detailedBlock, contains('android:enabled="false"'));
+        expect(compactBlock, isNot(contains('android:enabled="false"')));
+        expect(detailedBlock, isNot(contains('android:enabled="false"')));
         expect(
           compactBlock,
           contains('android:label="@string/${widget.labelResource}_compact"'),
@@ -2147,8 +2255,8 @@ void main() {
           hasLength(1),
           reason: '${widget.detailedReceiver} should be registered once',
         );
-        expect(compactBlock, contains('android:enabled="false"'));
-        expect(detailedBlock, contains('android:enabled="false"'));
+        expect(compactBlock, isNot(contains('android:enabled="false"')));
+        expect(detailedBlock, isNot(contains('android:enabled="false"')));
         expect(
           compactBlock,
           contains('android:resource="@xml/${baseName}_compact"'),
@@ -3023,6 +3131,14 @@ String _receiverBlock(String manifest, String receiverName) {
     '<receiver[\\s\\S]*?android:name="\\.$receiverName"[\\s\\S]*?</receiver>',
   ).firstMatch(manifest);
   expect(match, isNotNull, reason: '$receiverName receiver not found');
+  return match!.group(0)!;
+}
+
+String _xmlTextViewWithId(String source, String id) {
+  final match = RegExp(
+    '<TextView[\\s\\S]*?android:id="@\\+id/$id"[\\s\\S]*?/>',
+  ).firstMatch(source);
+  expect(match, isNotNull, reason: '$id TextView not found');
   return match!.group(0)!;
 }
 

@@ -72,8 +72,17 @@ void main() {
     expect(source, isNot(contains('更多')));
     expect(source, isNot(contains('_showAlmanacYijiDialog')));
     expect(source, isNot(contains('onTap: _showSelectedDateDetail')));
-    expect(source, contains('_splitAlmanacTerms(suitable).take(5).toList()'));
-    expect(source, contains('_splitAlmanacTerms(avoid).take(5).toList()'));
+    expect(source, contains('static const int _visibleTermLimit = 5'));
+    expect(source, contains('_splitAlmanacTerms('));
+    expect(
+      source,
+      contains(').take(_visibleTermLimit).toList(growable: false)'),
+    );
+    expect(source, contains("ValueKey('almanac_vertical_suitable_column')"));
+    expect(
+      source,
+      contains("ValueKey('almanac_vertical_\${keyName}_terms_box')"),
+    );
     expect(source, contains('const SizedBox(width: 10)'));
     expect(source, contains('class _VerticalTerm'));
     expect(

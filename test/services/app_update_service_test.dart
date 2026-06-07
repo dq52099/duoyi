@@ -446,6 +446,54 @@ void main() {
   });
 
   test(
+    'stale backend update versions are displayed as current version',
+    () async {
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.30',
+        currentVersionCode: 130102,
+        backendBaseUrl: 'https://duoyi.test',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/mobile/apps/duoyi/update') {
+            return http.Response.bytes(
+              utf8.encode(
+                json.encode(
+                  _mobileUpdatePayload(
+                    available: false,
+                    latestVersion: '1.1.20',
+                    latestVersionCode: 110020,
+                    forceUpdate: false,
+                    forceUpdateRequired: true,
+                    minimumSupportedVersion: '1.1.20',
+                    minimumSupportedVersionCode: 110020,
+                    releaseNotes: '旧强更配置应按当前版本展示',
+                    downloadUrl: 'https://cdn.duoyi.test/duoyi-1.1.20.apk',
+                  ),
+                ),
+              ),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
+          return http.Response('{"detail":"Not Found"}', 404);
+        }),
+      );
+
+      await service.checkNow();
+
+      expect(service.error, isNull);
+      expect(service.latestVersion, '1.1.30');
+      expect(service.latestVersionCode, 130102);
+      expect(service.minimumSupportedVersion, '1.1.30');
+      expect(service.minimumSupportedVersionCode, 130102);
+      expect(service.hasUpdate, isFalse);
+      expect(service.mustUpdate, isFalse);
+      expect(service.forceUpdateRequired, isTrue);
+      expect(service.latestNotesForDisplay, contains('旧强更配置应按当前版本展示'));
+    },
+  );
+
+  test(
     'mobile update 200 with route hash mismatch still falls back to GitHub',
     () async {
       final seen = <String>[];
@@ -594,6 +642,8 @@ Map<String, Object?> _mobileUpdatePayload({
   bool forceUpdateRequired = true,
   String minimumSupportedVersion = '1.1.9',
   int? minimumSupportedVersionCode,
+  String releaseNotes = '',
+  String downloadUrl = 'https://cdn.duoyi.test/duoyi-2.0.0.apk',
 }) {
   final payload = <String, Object?>{
     'api_contract_version': ApiClient.requiredApiContractVersion,
@@ -601,8 +651,8 @@ Map<String, Object?> _mobileUpdatePayload({
     'available': available,
     'latest_version_name': latestVersion,
     'minimum_supported_version': minimumSupportedVersion,
-    'download_url': 'https://cdn.duoyi.test/duoyi-2.0.0.apk',
-    'release_notes': '',
+    'download_url': downloadUrl,
+    'release_notes': releaseNotes,
     'force_update': forceUpdate,
     'force_update_required': forceUpdateRequired,
     'force_app_update_enabled': forceUpdateRequired,

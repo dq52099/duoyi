@@ -85,6 +85,57 @@ void main() {
     },
   );
 
+  testWidgets(
+    'almanac keeps June 28 vertical suitable terms inside detail card',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 6, 28))),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('selected_date_almanac_summary_card')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2026年6月28日星期日'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('almanac_vertical_suitable_column')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('almanac_vertical_avoid_column')),
+        findsOneWidget,
+      );
+
+      final suitableColumn = tester.getRect(
+        find.byKey(const ValueKey('almanac_vertical_suitable_column')),
+      );
+      final suitableTerms = tester.getRect(
+        find.byKey(const ValueKey('almanac_vertical_suitable_terms_box')),
+      );
+      final avoidColumn = tester.getRect(
+        find.byKey(const ValueKey('almanac_vertical_avoid_column')),
+      );
+      final avoidTerms = tester.getRect(
+        find.byKey(const ValueKey('almanac_vertical_avoid_terms_box')),
+      );
+
+      expect(suitableTerms.top, greaterThanOrEqualTo(suitableColumn.top));
+      expect(
+        suitableTerms.bottom,
+        lessThanOrEqualTo(suitableColumn.bottom + 0.5),
+      );
+      expect(avoidTerms.top, greaterThanOrEqualTo(avoidColumn.top));
+      expect(avoidTerms.bottom, lessThanOrEqualTo(avoidColumn.bottom + 0.5));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('almanac supports dark theme on a narrow viewport', (
     tester,
   ) async {

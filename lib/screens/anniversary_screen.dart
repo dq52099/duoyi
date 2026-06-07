@@ -308,6 +308,19 @@ class _AnniversaryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = fixedType?.name ?? 'all';
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle = appSecondaryRouteTitleTextStyle(context);
+    final upcoming = items.where((item) => item.daysRemaining >= 0).toList()
+      ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
+    final nearest = upcoming.isEmpty ? null : upcoming.first;
+    final soonCount = items
+        .where((item) => item.daysRemaining >= 0 && item.daysRemaining <= 30)
+        .length;
+    final listTitle = fixedType == AnniversaryType.birthday
+        ? I18n.tr('anniversary.birthday')
+        : fixedType == AnniversaryType.memorial
+        ? I18n.tr('anniversary.title')
+        : I18n.tr('anniversary.title');
     return items.isEmpty
         ? EmptyState(
             key: ValueKey('anniversary_fixed_$name'),
@@ -316,13 +329,136 @@ class _AnniversaryList extends StatelessWidget {
             actionLabel: onAdd == null ? null : I18n.tr('action.add'),
             onAction: onAdd,
           )
-        : ListView.builder(
+        : ListView(
             key: ValueKey('anniversary_fixed_$name'),
-            padding: const EdgeInsets.all(12),
-            itemCount: items.length,
-            itemBuilder: (context, index) =>
-                _AnniversaryCard(item: items[index]),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+            children: [
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        fixedType == AnniversaryType.birthday
+                            ? Icons.cake_outlined
+                            : Icons.event_available_outlined,
+                        color: cs.primary,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(listTitle, style: titleStyle),
+                          const SizedBox(height: 4),
+                          Text(
+                            nearest == null
+                                ? I18n.tr('anniversary.empty')
+                                : '${I18n.tr('countdown.nearest.prefix')}${nearest.title} · '
+                                      '${I18n.tr('countdown.nearest.days_prefix')}${nearest.daysRemaining} '
+                                      '${I18n.tr('unit.day')}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.68),
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              _AnniversarySummaryStat(
+                                key: const ValueKey(
+                                  'anniversary_summary_total',
+                                ),
+                                label: I18n.tr('countdown.summary.total'),
+                                value: '${items.length}',
+                                color: cs.primary,
+                              ),
+                              const SizedBox(width: 14),
+                              _AnniversarySummaryStat(
+                                key: const ValueKey(
+                                  'anniversary_summary_within_30_days',
+                                ),
+                                label: I18n.tr(
+                                  'anniversary.summary.within_30_days',
+                                ),
+                                value: '$soonCount',
+                                color: cs.tertiary,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppSectionHeader(
+                title: '$listTitle${I18n.tr('anniversary.list.suffix')}',
+                subtitle: I18n.tr('anniversary.list.subtitle'),
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              ),
+              ...items.map((item) => _AnniversaryCard(item: item)),
+            ],
           );
+  }
+}
+
+class _AnniversarySummaryStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _AnniversarySummaryStat({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.numbers, size: 15, color: color),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: appSecondaryRouteTitleTextStyle(
+            context,
+          ).copyWith(fontWeight: FontWeight.normal, color: cs.onSurface),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.62),
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+      ],
+    );
   }
 }
 

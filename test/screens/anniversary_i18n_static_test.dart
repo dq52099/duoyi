@@ -17,6 +17,9 @@ void main() {
       'anniversary.upcoming_30_days',
       'anniversary.empty',
       'anniversary.upcoming_empty',
+      'anniversary.summary.within_30_days',
+      'anniversary.list.suffix',
+      'anniversary.list.subtitle',
       'anniversary.delete.title',
       'anniversary.delete.content_suffix',
       'anniversary.occurrence.prefix',
@@ -172,6 +175,14 @@ void main() {
       source,
       contains('unselectedLabelStyle: appSecondaryMenuItemTextStyle(context)'),
     );
+    expect(source, contains("'anniversary_summary_total'"));
+    expect(source, contains("'anniversary_summary_within_30_days'"));
+    expect(source, contains('AppSectionHeader('));
+    expect(source, contains("I18n.tr('countdown.nearest.prefix')"));
+    expect(source, contains("I18n.tr('countdown.summary.total')"));
+    expect(source, contains("'anniversary.summary.within_30_days'"));
+    expect(source, contains("'anniversary.list.subtitle'"));
+    expect(source, contains('appSecondaryRouteTitleTextStyle('));
   });
 
   test('生日和纪念日固定类型添加页不允许切换到其他类型', () {

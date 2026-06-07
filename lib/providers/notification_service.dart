@@ -6,6 +6,7 @@ import '../core/achievements.dart';
 import '../core/brand_strings.dart';
 import '../core/notification_history_policy.dart';
 import '../models/location_reminder.dart';
+import '../models/goal.dart' show ReminderKind;
 import '../providers/location_reminder_provider.dart';
 import '../services/local_notifications.dart';
 import '../services/notification_permission_exception.dart';
@@ -106,6 +107,15 @@ class NotificationService extends ChangeNotifier
         ReminderScheduleIssueSink {
   static const _kHistoryKey = 'duoyi_notif_history';
   static const _kHistorySeenKey = 'duoyi_notif_history_seen_at';
+  static const int _scheduledPopupDiagnosticNotificationId = 919005;
+  static const int _scheduledAlarmDiagnosticNotificationId = 919006;
+  static const int _scheduledFullScreenDiagnosticNotificationId = 919007;
+  static const Set<int> _diagnosticNotificationIds = <int>{
+    LocalNotifications.scheduledDiagnosticNotificationId,
+    _scheduledPopupDiagnosticNotificationId,
+    _scheduledAlarmDiagnosticNotificationId,
+    _scheduledFullScreenDiagnosticNotificationId,
+  };
 
   /// 本服务使用的唯一通道 id。
   ///
@@ -175,6 +185,16 @@ class NotificationService extends ChangeNotifier
     return granted;
   }
 
+  void resetLocalState() {
+    _pomodoroNotificationTimer?.cancel();
+    _pendingNotifications = 0;
+    _historyLimit = NotificationHistoryPolicy.defaultLimit;
+    _history.clear();
+    _historyLastSeenAt = null;
+    _clearScheduleIssueState();
+    notifyListeners();
+  }
+
   void clearScheduleIssue() {
     if (_lastScheduleIssue == null) return;
     _clearScheduleIssueState();
@@ -241,13 +261,12 @@ class NotificationService extends ChangeNotifier
             final item = NotificationItem.fromJson(decoded);
             final hasReadState =
                 decoded.containsKey('isRead') || decoded.containsKey('read');
-            if (!hasReadState && _historyLastSeenAt == null) {
-              return item.copyWith(isRead: true);
-            }
-            if (!hasReadState &&
-                _historyLastSeenAt != null &&
-                !item.scheduledTime.isAfter(_historyLastSeenAt!)) {
-              return item.copyWith(isRead: true);
+            if (!hasReadState) {
+              final seenAt = _historyLastSeenAt;
+              if (seenAt != null && !item.scheduledTime.isAfter(seenAt)) {
+                return item.copyWith(isRead: true);
+              }
+              return item;
             }
             return item;
           } catch (_) {
@@ -374,7 +393,8 @@ class NotificationService extends ChangeNotifier
 
   int _avoidReservedNotificationId(int id) {
     var next = id;
-    while (LocalNotifications.reservedNotificationIds.contains(next)) {
+    while (LocalNotifications.reservedNotificationIds.contains(next) ||
+        _diagnosticNotificationIds.contains(next)) {
       next = (next + 1) & 0x7fffffff;
     }
     return next;
@@ -679,8 +699,8 @@ class NotificationService extends ChangeNotifier
   }
 
   void _addScheduledToHistory(NotificationItem item) {
-    // 调度记录用于排查“是否注册到系统”，不是用户已经收到的新通知。
-    final record = item.copyWith(isRead: true);
+    // 调度记录默认保留未读状态，必须由用户在通知记录页确认后手动标记。
+    final record = item;
     _history.removeWhere(
       (existing) => _sameScheduledHistoryRecord(existing, record),
     );
@@ -1257,32 +1277,245 @@ class NotificationService extends ChangeNotifier
 
   Future<void> sendScheduledTest({
     Duration delay = const Duration(minutes: 1),
+    ReminderKind reminderKind = ReminderKind.push,
+    bool fullScreenAlarm = true,
+    ReminderPopupSink? popup,
+    ReminderAlarmSink? alarm,
+    @visibleForTesting bool cancelSystemNotification = true,
   }) async {
     final when = DateTime.now().add(delay);
-    const notificationId = LocalNotifications.scheduledDiagnosticNotificationId;
-    final scheduled = await _scheduleOnceOrRecord(
-      id: notificationId,
-      title: '多仪 · 定时通知测试',
-      body: '如果到点能收到普通提醒，定时通知调度正常。',
-      when: when,
-      payload: 'duoyi://tab/mine',
-      issueTitle: '定时通知测试注册失败',
-      requestIfNeeded: true,
+    final kind = _diagnosticReminderKind(reminderKind);
+    final notificationId = _scheduledDiagnosticIdFor(
+      kind,
+      fullScreenAlarm: fullScreenAlarm,
     );
+    final kindLabel = _diagnosticReminderKindLabel(
+      kind,
+      fullScreenAlarm: fullScreenAlarm,
+    );
+    const payload = 'duoyi://tab/mine';
+    final title = _diagnosticReminderTitle(
+      kind,
+      fullScreenAlarm: fullScreenAlarm,
+    );
+    final body = '如果到点能收到$kindLabel，定时提醒调度正常。';
+
+    await _cancelScheduledDiagnosticAcrossChannels(
+      notificationId,
+      popup: popup,
+      alarm: alarm,
+      cancelSystemNotification: cancelSystemNotification,
+    );
+
+    final scheduled = switch (kind) {
+      ReminderKind.push => await _scheduleOnceOrRecord(
+        id: notificationId,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        issueTitle: '定时通知测试注册失败',
+        requestIfNeeded: true,
+      ),
+      ReminderKind.popup => await _schedulePopupDiagnosticOrRecord(
+        popup: popup,
+        id: notificationId,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      ),
+      ReminderKind.alarm => await _scheduleAlarmDiagnosticOrRecord(
+        alarm: alarm,
+        id: notificationId,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        fullScreen: fullScreenAlarm,
+      ),
+      ReminderKind.email || ReminderKind.off => false,
+    };
     if (!scheduled) return;
-    _pendingNotifications++;
+    if (kind == ReminderKind.push) {
+      _pendingNotifications++;
+    }
     _addScheduledToHistory(
       NotificationItem(
         id: notificationId.toString(),
         title: '定时测试通知',
         body:
-            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发普通通知',
+            '计划在 ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')} 触发$kindLabel',
         scheduledTime: when,
         type: NotificationType.general,
       ),
     );
     await _saveHistory();
     notifyListeners();
+  }
+
+  ReminderKind _diagnosticReminderKind(ReminderKind kind) {
+    return switch (kind) {
+      ReminderKind.popup || ReminderKind.alarm => kind,
+      ReminderKind.push ||
+      ReminderKind.email ||
+      ReminderKind.off => ReminderKind.push,
+    };
+  }
+
+  String _diagnosticReminderKindLabel(
+    ReminderKind kind, {
+    bool fullScreenAlarm = true,
+  }) {
+    return switch (_diagnosticReminderKind(kind)) {
+      ReminderKind.popup => '弹出提醒',
+      ReminderKind.alarm => fullScreenAlarm ? '全屏闹钟提醒' : '闹钟提醒',
+      ReminderKind.push || ReminderKind.email || ReminderKind.off => '普通通知',
+    };
+  }
+
+  int _scheduledDiagnosticIdFor(
+    ReminderKind kind, {
+    required bool fullScreenAlarm,
+  }) {
+    return switch (_diagnosticReminderKind(kind)) {
+      ReminderKind.popup => _scheduledPopupDiagnosticNotificationId,
+      ReminderKind.alarm =>
+        fullScreenAlarm
+            ? _scheduledFullScreenDiagnosticNotificationId
+            : _scheduledAlarmDiagnosticNotificationId,
+      ReminderKind.push ||
+      ReminderKind.email ||
+      ReminderKind.off => LocalNotifications.scheduledDiagnosticNotificationId,
+    };
+  }
+
+  String _diagnosticReminderTitle(
+    ReminderKind kind, {
+    required bool fullScreenAlarm,
+  }) {
+    return switch (_diagnosticReminderKind(kind)) {
+      ReminderKind.popup => '多仪 · 弹出提醒测试',
+      ReminderKind.alarm => fullScreenAlarm ? '多仪 · 全屏闹钟测试' : '多仪 · 闹钟测试',
+      ReminderKind.push ||
+      ReminderKind.email ||
+      ReminderKind.off => '多仪 · 定时通知测试',
+    };
+  }
+
+  Future<void> _cancelScheduledDiagnosticAcrossChannels(
+    int id, {
+    ReminderPopupSink? popup,
+    ReminderAlarmSink? alarm,
+    bool cancelSystemNotification = true,
+  }) async {
+    Future<void> cancelSafely(
+      String label,
+      Future<void> Function() action,
+    ) async {
+      try {
+        await action();
+      } catch (e, st) {
+        debugPrint(
+          '[NotificationService] diagnostic $label cancel failed: $e\n$st',
+        );
+      }
+    }
+
+    if (cancelSystemNotification) {
+      await cancelSafely(
+        'notification',
+        () => LocalNotifications.instance.cancel(id),
+      );
+    }
+    await cancelSafely('popup', () async {
+      await popup?.cancel(id);
+    });
+    await cancelSafely('alarm', () async {
+      await alarm?.cancel(id);
+    });
+  }
+
+  Future<bool> _schedulePopupDiagnosticOrRecord({
+    required ReminderPopupSink? popup,
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    required String payload,
+  }) async {
+    if (popup == null) {
+      return _scheduleOnceOrRecord(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        issueTitle: '定时弹出测试注册失败',
+        requestIfNeeded: true,
+      );
+    }
+    try {
+      await popup.scheduleOnce(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint('[NotificationService] scheduled popup test failed: $e\n$st');
+      _recordScheduleIssue(
+        title: '定时弹出测试注册失败',
+        message: '弹出提醒注册失败，请确认应用仍在前台或已允许通知兜底。',
+        scheduledTime: when,
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> _scheduleAlarmDiagnosticOrRecord({
+    required ReminderAlarmSink? alarm,
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    required String payload,
+    required bool fullScreen,
+  }) async {
+    if (alarm == null) {
+      return _scheduleOnceOrRecord(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        issueTitle: '定时闹钟测试注册失败',
+        requestIfNeeded: true,
+      );
+    }
+    try {
+      await alarm.scheduleFullScreen(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+        fullScreen: fullScreen,
+        vibrate: true,
+        snoozeMinutes: fullScreen ? 5 : 0,
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint('[NotificationService] scheduled alarm test failed: $e\n$st');
+      _recordScheduleIssue(
+        title: '定时闹钟测试注册失败',
+        message: '闹钟提醒注册失败，请检查通知权限、精准闹钟权限和强提醒渠道设置。',
+        scheduledTime: when,
+      );
+      rethrow;
+    }
   }
 
   void notifyAchievementUnlocked(Achievement achievement) {
