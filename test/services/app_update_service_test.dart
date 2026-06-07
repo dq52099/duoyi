@@ -450,8 +450,8 @@ void main() {
     () async {
       final service = AppUpdateService(
         repo: 'dq52099/duoyi',
-        currentVersion: '1.1.30',
-        currentVersionCode: 130102,
+        currentVersion: '1.1.32',
+        currentVersionCode: 130104,
         backendBaseUrl: 'https://duoyi.test',
         httpClient: MockClient((request) async {
           if (request.url.path == '/api/mobile/apps/duoyi/update') {
@@ -482,10 +482,10 @@ void main() {
       await service.checkNow();
 
       expect(service.error, isNull);
-      expect(service.latestVersion, '1.1.30');
-      expect(service.latestVersionCode, 130102);
-      expect(service.minimumSupportedVersion, '1.1.30');
-      expect(service.minimumSupportedVersionCode, 130102);
+      expect(service.latestVersion, '1.1.32');
+      expect(service.latestVersionCode, 130104);
+      expect(service.minimumSupportedVersion, '1.1.32');
+      expect(service.minimumSupportedVersionCode, 130104);
       expect(service.hasUpdate, isFalse);
       expect(service.mustUpdate, isFalse);
       expect(service.forceUpdateRequired, isTrue);
