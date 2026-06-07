@@ -114,6 +114,237 @@ void main() {
     expect(auth.state.token, 'token-1');
   });
 
+  test(
+    'login clears previous account before persisting next session and coins',
+    () async {
+      const previous = AuthState(
+        userId: 'admin',
+        username: 'admin',
+        token: 'admin-token',
+        coinBalance: 999,
+        lifetimeCoins: 1999,
+      );
+      SharedPreferences.setMockInitialValues({
+        'auth_state': json.encode(previous.toJson()),
+      });
+      final cleanupEvents = <String>[];
+      final auth = AuthProvider(
+        initialState: previous,
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/api/auth/login') {
+              final body = json.decode(request.body) as Map<String, dynamic>;
+              expect(body['username'], 'test');
+              expect(body['password'], 'password');
+              return http.Response(
+                json.encode({
+                  'user_id': 'test',
+                  'username': 'test',
+                  'token': 'test-token',
+                }),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            }
+            if (request.url.path == '/api/config') {
+              return http.Response(
+                json.encode({'registration_enabled': true}),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              json.encode({'detail': 'Not Found'}),
+              404,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previousState, nextState) async {
+        cleanupEvents.add('${previousState.userId}->${nextState.userId}');
+        expect(previousState.coinBalance, 999);
+        expect(nextState.coinBalance, 0);
+        expect(nextState.lifetimeCoins, 0);
+        final prefs = await SharedPreferences.getInstance();
+        final stored = prefs.getString('auth_state') ?? '';
+        expect(stored, contains('admin-token'));
+        expect(stored, isNot(contains('test-token')));
+      };
+
+      await auth.login(username: 'test', password: 'password');
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(cleanupEvents, ['admin->test']);
+      expect(auth.state.userId, 'test');
+      expect(auth.state.username, 'test');
+      expect(auth.state.coinBalance, 0);
+      expect(auth.state.lifetimeCoins, 0);
+      expect(auth.client.token, 'test-token');
+      expect(prefs.getString('auth_state'), contains('test-token'));
+    },
+  );
+
+  test(
+    'login from signed-out state clears residual local account data first',
+    () async {
+      AuthState? previousDuringCleanup;
+      AuthState? nextDuringCleanup;
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        previousDuringCleanup = previous;
+        nextDuringCleanup = next;
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.login(username: 'test', password: 'pw');
+
+      expect(previousDuringCleanup?.isLoggedIn, isFalse);
+      expect(nextDuringCleanup?.userId, 'test-id');
+      expect(stateUserIdDuringCleanup, isNull);
+      expect(auth.state.userId, 'test-id');
+    },
+  );
+
+  test('login is blocked when account cleanup fails', () async {
+    final auth = AuthProvider(
+      client: ApiClient(
+        baseUrl: 'http://127.0.0.1:1',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/auth/login');
+          return http.Response(
+            json.encode({
+              'user_id': 'test-id',
+              'username': 'test',
+              'token': 'test-token',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      ),
+    );
+    auth.onAccountIdentityChanging = (_, _) async {
+      throw StateError('cleanup failed');
+    };
+
+    await expectLater(
+      auth.login(username: 'test', password: 'pw'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(auth.state.isLoggedIn, isFalse);
+  });
+
+  test(
+    'email login notifies account identity changing before applying new account',
+    () async {
+      final cleanupCalls = <String>[];
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-id',
+          username: 'admin',
+          token: 'admin-token',
+          coinBalance: 999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/email-login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'email': 'test@example.com',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.emailLogin(email: 'test@example.com', code: '654321');
+
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(stateUserIdDuringCleanup, 'admin-id');
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+    },
+  );
+
+  test(
+    'register notifies account identity changing before applying new account',
+    () async {
+      final cleanupCalls = <String>[];
+      String? stateUserIdDuringCleanup;
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-id',
+          username: 'admin',
+          token: 'admin-token',
+          coinBalance: 999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/register');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        stateUserIdDuringCleanup = auth.state.userId;
+      };
+
+      await auth.register(username: 'test', password: 'pw');
+
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(stateUserIdDuringCleanup, 'admin-id');
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+    },
+  );
+
   test('email login retries compatible routes after 404', () async {
     final paths = <String>[];
     final auth = AuthProvider(

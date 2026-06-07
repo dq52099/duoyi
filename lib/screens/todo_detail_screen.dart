@@ -950,9 +950,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             ReorderableListView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              onReorderItem: (oldI, newI) {
+              onReorder: (oldI, newI) {
                 if (!canEdit) return;
                 final ids = _todo.subtasks.map((e) => e.id).toList();
+                if (newI > oldI) newI -= 1;
                 final id = ids.removeAt(oldI);
                 ids.insert(newI, id);
                 context.read<TodoProvider>().reorderSubtasks(

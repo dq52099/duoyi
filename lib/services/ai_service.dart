@@ -59,6 +59,11 @@ class AiService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _reviewHistory = [];
+    notifyListeners();
+  }
+
   Future<void> _saveHistory() async {
     final p = await SharedPreferences.getInstance();
     await p.setStringList(

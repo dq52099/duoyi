@@ -144,7 +144,7 @@ void main() {
       notificationSettingsScreen,
       contains("preferences.notification_status_bar.sync_failed"),
     );
-    expect(notificationSettingsScreen, contains("markReadOnOpen: true"));
+    expect(notificationSettingsScreen, contains("markReadOnOpen: false"));
     expect(preferencesScreen, isNot(contains("p.notificationQuickAdd")));
     expect(preferencesScreen, isNot(contains("setNotificationQuickAdd")));
 
@@ -224,7 +224,8 @@ void main() {
     );
     expect(main, contains("_durationUntilNextLocalDay"));
     expect(main, contains('final isTodayTodo = day == today;'));
-    expect(main, contains('isTodayTodo &&\n        !todo.isCompleted'));
+    expect(main, contains('return isTodayTodo &&'));
+    expect(main, contains('!todo.isCompleted &&'));
     expect(
       main,
       contains(

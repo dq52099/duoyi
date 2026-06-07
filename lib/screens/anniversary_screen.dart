@@ -362,6 +362,49 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
     AnniversaryType.custom => '🔁 ${I18n.tr('anniversary.custom')}',
   };
 
+  String _statusLabel(int days, bool isPast) {
+    if (item.isPinned) return I18n.tr('countdown.status.pinned');
+    if (isPast) return I18n.tr('countdown.status.expired');
+    if (days == 0) return I18n.tr('anniversary.status.today');
+    if (days <= 7) return I18n.tr('anniversary.status.soon');
+    return I18n.tr('anniversary.status.upcoming');
+  }
+
+  Color _statusColor(ColorScheme cs, Color color, int days, bool isPast) {
+    if (isPast) return Colors.grey;
+    if (!item.isPinned && days <= 7) return cs.error;
+    return color;
+  }
+
+  String _originDateText() {
+    if (item.ignoreYear) return I18nDateFormat.monthDay(item.originDate);
+    return I18nDateFormat.date(item.originDate);
+  }
+
+  String _reminderKindLabel(ReminderKind kind) {
+    return switch (kind) {
+      ReminderKind.push => I18n.tr('reminder.kind.push'),
+      ReminderKind.popup => I18n.tr('reminder.kind.popup'),
+      ReminderKind.alarm => I18n.tr('reminder.kind.alarm'),
+      ReminderKind.email => I18n.tr('reminder.kind.email'),
+      ReminderKind.off => I18n.tr('reminder.kind.off'),
+    };
+  }
+
+  String? _reminderLabel() {
+    if (!item.remind || item.reminderKind == ReminderKind.off) return null;
+    final timeText = I18nDateFormat.timeOfDay(
+      hour: item.remindHour,
+      minute: item.remindMinute,
+    );
+    return '${I18n.tr('anniversary.reminder.card_prefix')}'
+        '${_reminderKindLabel(item.reminderKind)} · '
+        '${I18n.tr('countdown.reminder.before_prefix')}'
+        '${item.remindDaysBefore}'
+        '${I18n.tr('countdown.reminder.before_suffix')} · '
+        '$timeText';
+  }
+
   void _closeSwipe() {
     if (!_swipeOpen || !mounted) return;
     setState(() => _swipeOffset = 0);
@@ -406,6 +449,9 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
     final isPast = item.type == AnniversaryType.normal && days < 0;
     final next = item.nextOccurrence;
     final lunar = LunarCalendar.fromSolar(next);
+    final status = _statusLabel(days, isPast);
+    final statusColor = _statusColor(cs, color, days, isPast);
+    final reminderLabel = _reminderLabel();
     final titleStyle = appSecondaryRouteTitleTextStyle(context);
     final metaStyle = appSecondaryControlLabelStyle(
       context,
@@ -476,6 +522,7 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                           spacing: 6,
                           runSpacing: 6,
                           children: [
+                            _AnniversaryPill(label: status, color: statusColor),
                             _AnniversaryPill(label: _typeLabel(), color: color),
                             if (item.calendarType ==
                                 AnniversaryCalendarType.lunar)
@@ -489,6 +536,12 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                                 '${I18n.tr('anniversary.years_elapsed.prefix')}${item.yearsPassed}${I18n.tr('anniversary.years_elapsed.suffix')}',
                                 style: metaStyle,
                               ),
+                            if (reminderLabel != null)
+                              _AnniversaryPill(
+                                label: reminderLabel,
+                                color: cs.primary,
+                                icon: Icons.notifications_active_outlined,
+                              ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -496,6 +549,15 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                           item.calendarType == AnniversaryCalendarType.lunar
                               ? '${I18n.tr('anniversary.next.prefix')}${I18nDateFormat.date(next)} (${I18n.tr('calendar.chinese_lunar')}: ${lunar.chineseText})'
                               : '${I18n.tr('anniversary.next.prefix')}${I18nDateFormat.date(next)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: metaStyle,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${I18n.tr('anniversary.date.origin_prefix')}${_originDateText()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: metaStyle,
                         ),
                         if (item.description != null &&
@@ -516,7 +578,10 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                   ),
                   const SizedBox(width: 12),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 54),
+                    constraints: const BoxConstraints(
+                      minWidth: 58,
+                      maxWidth: 76,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -526,6 +591,8 @@ class _AnniversaryCardState extends State<_AnniversaryCard> {
                               : (days == 0
                                     ? I18n.tr('today.anniversary.today')
                                     : I18n.tr('countdown.days.remaining')),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: metaStyle,
                         ),
                         const SizedBox(height: 2),
@@ -702,25 +769,42 @@ class _AnniversaryInlineSwipeButton extends StatelessWidget {
 class _AnniversaryPill extends StatelessWidget {
   final String label;
   final Color color;
+  final IconData? icon;
 
-  const _AnniversaryPill({required this.label, required this.color});
+  const _AnniversaryPill({required this.label, required this.color, this.icon});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxWidth: (MediaQuery.sizeOf(context).width - 72).clamp(120.0, 420.0),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.10), width: 0.45),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          color: color,
-          fontWeight: FontWeight.normal,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                color: color,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -54,6 +54,11 @@ class AnniversaryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _items = [];
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(

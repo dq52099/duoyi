@@ -602,6 +602,19 @@ class CalendarSyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _subscriptions.clear();
+    _oauthAccounts.clear();
+    _eventsBySubscription.clear();
+    _eventsByOAuthAccount.clear();
+    _writeTarget = null;
+    _syncing = false;
+    _testingWriteTarget = false;
+    _lastError = null;
+    _lastCalDavConflicts.clear();
+    notifyListeners();
+  }
+
   Future<void> addSubscription(IcsSubscription sub) async {
     _subscriptions.add(sub);
     await _save();

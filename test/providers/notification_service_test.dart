@@ -231,7 +231,7 @@ void main() {
       expect(historyEnd, greaterThan(historyStart));
       final historyMethod = source.substring(historyStart, historyEnd);
       expect(historyMethod, contains('NotificationHistoryScreen('));
-      expect(historyMethod, contains('markReadOnOpen: true'));
+      expect(historyMethod, contains('markReadOnOpen: false'));
       expect(source, isNot(contains('void _notifDialog')));
       expect(source, isNot(contains('onTap: () => _notifDialog')));
     },
@@ -294,7 +294,7 @@ void main() {
     expect(addMethod, contains('notifyListeners();'));
   });
 
-  test('opening notification pages clears the shared unread badge', () {
+  test('opening notification history keeps unread until manual action', () {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
@@ -303,27 +303,43 @@ void main() {
       'lib/screens/notification_history_screen.dart',
     ).readAsStringSync();
 
-    final start = source.indexOf('void markHistorySeen()');
-    final end = source.indexOf('Future<void> markHistoryItemRead', start);
-    expect(start, greaterThanOrEqualTo(0));
-    expect(end, greaterThan(start));
-    final method = source.substring(start, end);
+    final ctorStart = source.indexOf('const NotificationItem({');
+    final ctorEnd = source.indexOf(
+      'factory NotificationItem.fromJson',
+      ctorStart,
+    );
+    expect(ctorStart, greaterThanOrEqualTo(0));
+    expect(ctorEnd, greaterThan(ctorStart));
+    final constructor = source.substring(ctorStart, ctorEnd);
+    expect(constructor, contains('this.isRead = false'));
 
-    expect(method, contains('final nextSeenAt = _history.isEmpty'));
-    expect(method, contains('_historyLastSeenAt ?? DateTime.now()'));
-    expect(
-      method,
-      contains('final seenChanged = _historyLastSeenAt != nextSeenAt'),
+    final scheduledStart = source.indexOf('Future<bool> sendScheduledTest');
+    final scheduledEnd = source.indexOf(
+      'ReminderKind _diagnosticReminderKind',
+      scheduledStart,
     );
-    expect(method, contains('_historyLastSeenAt = nextSeenAt'));
-    expect(method, contains('if (seenChanged || changed)'));
-    expect(
-      method,
-      contains('_history[i] = _history[i].copyWith(isRead: true)'),
+    expect(scheduledStart, greaterThanOrEqualTo(0));
+    expect(scheduledEnd, greaterThan(scheduledStart));
+    final scheduledTest = source.substring(scheduledStart, scheduledEnd);
+    expect(scheduledTest, contains('_addScheduledToHistory('));
+    expect(scheduledTest, isNot(contains('isRead: true')));
+    expect(source, contains('if (!hasReadState) {'));
+    expect(source, contains('return item;'));
+
+    final historyScreenStart = settingsScreen.indexOf(
+      'class NotificationHistoryScreen',
     );
-    expect(method, contains('unawaited(_saveHistory())'));
-    expect(method, contains('unawaited(_saveHistorySeen())'));
-    expect(method, contains('notifyListeners();'));
+    final historyScreenEnd = settingsScreen.indexOf(
+      'class NotificationSettingsScreen',
+      historyScreenStart,
+    );
+    expect(historyScreenStart, greaterThanOrEqualTo(0));
+    expect(historyScreenEnd, greaterThan(historyScreenStart));
+    final historyScreen = settingsScreen.substring(
+      historyScreenStart,
+      historyScreenEnd,
+    );
+    expect(historyScreen, isNot(contains('markHistorySeen')));
 
     final settingsStart = mine.indexOf(
       'Future<void> _openNotificationSettings(BuildContext context)',
@@ -346,7 +362,7 @@ void main() {
     );
     expect(
       mine.substring(historyStart, historyEnd),
-      contains('NotificationHistoryScreen(markReadOnOpen: true)'),
+      contains('NotificationHistoryScreen(markReadOnOpen: false)'),
     );
     expect(mine.substring(historyStart, historyEnd), isNot(contains('await')));
 
@@ -366,6 +382,8 @@ void main() {
     expect(settingsInit, isNot(contains('service.unreadCount > 0')));
     expect(settingsInit, isNot(contains('markAllHistoryRead')));
     expect(settingsInit, contains('unawaited(_refreshStatus())'));
+    expect(settingsScreen, contains('this.markReadOnOpen = false'));
+    expect(settingsScreen, isNot(contains('service.markHistorySeen()')));
 
     final supportStart = mine.indexOf("title: '通知支持'");
     final supportEnd = mine.indexOf("label: '管理员后台'", supportStart);
@@ -443,8 +461,7 @@ void main() {
     expect(screen, contains('class NotificationHistoryScreen'));
     expect(screen, contains('class _NotificationHistoryScreenState'));
     expect(screen, contains("title: const Text('通知记录')"));
-    expect(screen, contains('if (service.unreadCount > 0)'));
-    expect(screen, contains('service.markHistorySeen()'));
+    expect(screen, contains('this.markReadOnOpen = false'));
     final settingsStart = screen.indexOf(
       'class _NotificationSettingsScreenState',
     );
@@ -529,6 +546,14 @@ void main() {
     expect(screen, contains("title: '系统通知'"));
     expect(screen, contains("title: '提醒入口'"));
     expect(screen, contains("preferences.section.daily_reminder"));
+    expect(screen, contains('List<int>? _pendingPushIds'));
+    expect(screen, contains('List<int>? _pendingAlarmIds'));
+    expect(screen, contains('_pendingPushIds = pendingIds;'));
+    expect(screen, contains('_pendingAlarmIds = pendingAlarmIds;'));
+    expect(screen, contains("title: '注册通知'"));
+    expect(screen, contains('_showRegisteredNotifications'));
+    expect(screen, contains('_registeredNotificationsSummary'));
+    expect(screen, contains('_registeredIdsText'));
     expect(screen, contains("title: '通知记录保留'"));
     expect(screen, contains('NotificationHistoryPolicy.options'));
     expect(screen, contains('setNotificationHistoryLimit'));
@@ -537,7 +562,7 @@ void main() {
     expect(screen, contains('_setNotificationStatusBarPreference'));
     expect(screen, contains('_syncNotificationStatusBarNow'));
     expect(screen, contains('preferences.notification_status_bar.sync_failed'));
-    expect(screen, contains('markReadOnOpen: true'));
+    expect(screen, contains('markReadOnOpen: false'));
     expect(screen, contains('setDailyReminderSlot'));
     expect(screen, contains('ReminderRingtoneSettings'));
     expect(screen, isNot(contains('PreferencesInitialSection')));
@@ -652,7 +677,7 @@ void main() {
     expect(scheduledStart, greaterThanOrEqualTo(0));
     expect(scheduledEnd, greaterThan(scheduledStart));
     final scheduledHelper = source.substring(scheduledStart, scheduledEnd);
-    expect(scheduledHelper, contains('item.copyWith(isRead: true)'));
+    expect(scheduledHelper, isNot(contains('item.copyWith(isRead: true)')));
 
     expect(source, contains('NotificationType.todo'));
     expect(source, contains('NotificationType.habit'));
@@ -665,8 +690,8 @@ void main() {
       final source = File(
         'lib/providers/notification_service.dart',
       ).readAsStringSync();
-      final start = source.indexOf('Future<void> sendTest()');
-      final end = source.indexOf('Future<void> sendScheduledTest', start);
+      final start = source.indexOf('Future<bool> sendTest()');
+      final end = source.indexOf('Future<bool> sendScheduledTest', start);
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
       final method = source.substring(start, end);
@@ -700,12 +725,33 @@ void main() {
     expect(notificationScreen, contains('普通提醒渠道静音，兜底也可能无声'));
     expect(notificationScreen, contains("title: '内置铃声状态渠道'"));
     expect(notificationScreen, contains("title: '1 分钟后定时测试'"));
+    expect(notificationScreen, contains('List<int>? _pendingPushIds'));
+    expect(notificationScreen, contains('List<int>? _pendingAlarmIds'));
+    expect(notificationScreen, contains('_pendingPushIds = pendingIds;'));
+    expect(notificationScreen, contains('_pendingAlarmIds = pendingAlarmIds;'));
+    expect(notificationScreen, contains("title: '注册通知'"));
+    expect(notificationScreen, contains('_showRegisteredNotifications'));
+    expect(notificationScreen, contains('_registeredNotificationsSummary'));
+    expect(notificationScreen, contains('_registeredIdsText'));
     expect(
       notificationScreen,
       contains('NativeReminderRingtone.statusChannelId'),
     );
     expect(notificationScreen, contains('AlarmService.channelId'));
-    expect(notificationScreen, contains('sendScheduledTest()'));
+    expect(notificationScreen, contains('sendScheduledTest('));
+    expect(
+      notificationScreen,
+      contains(
+        'final sent = await context.read<NotificationService>().sendTest();',
+      ),
+    );
+    expect(notificationScreen, contains("sent ? '测试通知已发送'"));
+    expect(notificationScreen, contains("'测试通知发送失败，请检查通知权限和渠道设置。'"));
+    expect(
+      notificationScreen,
+      contains('final scheduled = await service.sendScheduledTest('),
+    );
+    expect(notificationScreen, contains('if (!scheduled) {'));
     expect(
       notificationScreen,
       contains('NotificationSettings.notificationChannelStatuses'),
@@ -734,19 +780,22 @@ void main() {
     expect(preferences, isNot(contains('showAppModalSheet<void>')));
   });
 
-  test('scheduled diagnostic test uses ordinary notification path', () {
+  test('scheduled diagnostic test supports reminder mode routing', () {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendScheduledTest');
+    final start = source.indexOf('Future<bool> sendScheduledTest');
     final end = source.indexOf('void notifyAchievementUnlocked', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
 
+    expect(method, contains('ReminderKind reminderKind = ReminderKind.push'));
     expect(method, contains('_scheduleOnceOrRecord('));
-    expect(method, contains('定时通知调度正常'));
-    expect(method, isNot(contains('AlarmService.instance.scheduleFullScreen')));
+    expect(method, contains('_schedulePopupDiagnosticOrRecord('));
+    expect(method, contains('_scheduleAlarmDiagnosticOrRecord('));
+    expect(method, contains('alarm.scheduleFullScreen('));
+    expect(method, contains('popup.scheduleOnce('));
   });
 
   test('scheduled notifications require permission before registering', () {
@@ -948,7 +997,8 @@ void main() {
       expect(
         channelGuard,
         contains('channel setup failed; continuing'),
-        reason: 'Channel recreation failures should be diagnostic-only; the '
+        reason:
+            'Channel recreation failures should be diagnostic-only; the '
             'registration attempt still gets a chance to run.',
       );
       expect(channelGuard, isNot(contains('rethrow')));
@@ -1235,8 +1285,8 @@ void main() {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendTest');
-    final end = source.indexOf('Future<void> sendScheduledTest', start);
+    final start = source.indexOf('Future<bool> sendTest');
+    final end = source.indexOf('Future<bool> sendScheduledTest', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
@@ -1254,7 +1304,8 @@ void main() {
     expect(method, contains('LocalNotifications.instance.refreshPermission()'));
     expect(method, contains('系统通知权限未开启，测试通知未发送'));
     expect(method, contains('测试通知发送失败'));
-    expect(method, contains('return;'));
+    expect(method, contains('return false;'));
+    expect(method, contains('return true;'));
     expect(method, isNot(contains('rethrow;')));
     expect(method, contains('多仪 · 通知测试'));
     expect(method, isNot(contains('AlarmService.instance.showFullScreenTest')));
@@ -1301,6 +1352,36 @@ void main() {
         );
       }
       expect(prefs, contains('AlarmService.instance.showFullScreenTest()'));
+      final scheduledStart = prefs.indexOf('Future<void> _sendScheduledTest()');
+      final scheduledEnd = prefs.indexOf(
+        'Future<void> _sendStrongTest()',
+        scheduledStart,
+      );
+      expect(scheduledStart, greaterThanOrEqualTo(0));
+      expect(scheduledEnd, greaterThan(scheduledStart));
+      final scheduledTest = prefs.substring(scheduledStart, scheduledEnd);
+      expect(
+        scheduledTest,
+        contains('final service = context.read<NotificationService>();'),
+      );
+      expect(
+        scheduledTest,
+        contains('final granted = await service.requestPermission();'),
+      );
+      expect(
+        scheduledTest,
+        contains('throw const NotificationPermissionDeniedException();'),
+      );
+      expect(
+        scheduledTest.indexOf('service.requestPermission()'),
+        lessThan(scheduledTest.indexOf('service.sendScheduledTest(')),
+      );
+      expect(scheduledTest, contains('_scheduledTestReminderKind(context)'));
+      expect(scheduledTest, contains('context.read<ReminderScheduler?>()'));
+      expect(scheduledTest, contains('reminderKind: kind'));
+      expect(scheduledTest, contains('popup: scheduler?.popup'));
+      expect(scheduledTest, contains('alarm: scheduler?.alarm'));
+
       expect(prefs, contains('onTap: _busy ? null : _sendStrongTest'));
       expect(preferences, isNot(contains('_sendStrongTest')));
       expect(preferences, isNot(contains('showFullScreenTest')));
@@ -1313,7 +1394,7 @@ void main() {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendScheduledTest');
+    final start = source.indexOf('Future<bool> sendScheduledTest');
     final end = source.indexOf('void notifyAchievementUnlocked', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
@@ -1325,7 +1406,7 @@ void main() {
       reason: '重复注册定时测试时应替换同一条测试通知，不应保留两条。',
     );
     expect(method, contains('_scheduleOnceOrRecord('));
-    expect(method, contains("title: '多仪 · 定时通知测试'"));
+    expect(method, contains("const title = '多仪 · 定时通知测试'"));
   });
 
   test('location reminders use local notification, history and deep link', () {

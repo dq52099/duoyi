@@ -34,8 +34,98 @@ class HomeWidgetService {
   static const String _iosAnniversaryWidgetName = 'DuoyiAnniversaryWidget';
   static const String _iosDiaryWidgetName = 'DuoyiDiaryWidget';
   static const String _appGroupId = 'group.com.duoyi.duoyi';
+  @visibleForTesting
+  static const accountPayloadDefaults = <String, Object>{
+    'todo_count': 0,
+    'habit_percent': 0,
+    'pomodoro_today': 0,
+    'focus_minutes_today': 0,
+    'brand_app_title': '多仪',
+    'nav_todo': '待办',
+    'nav_habit': '习惯',
+    'nav_calendar': '日历',
+    'nav_focus': '专注',
+    'todo_top3_count': 0,
+    'todo_top3_1': '今天没有未完成待办',
+    'todo_top3_1_id': '',
+    'todo_top3_2': '',
+    'todo_top3_2_id': '',
+    'todo_top3_3': '',
+    'todo_top3_3_id': '',
+    'goal_highlight_1': '暂无进行中目标',
+    'goal_highlight_1_id': '',
+    'goal_highlight_2': '',
+    'goal_highlight_2_id': '',
+    'goal_highlight_3': '本周目标保持推进',
+    'goal_highlight_3_id': '',
+    'anniversary_highlight_1': '暂无近期纪念日',
+    'anniversary_highlight_1_id': '',
+    'anniversary_highlight_2': '',
+    'anniversary_highlight_2_id': '',
+    'course_highlight_1': '今日暂无课程',
+    'course_highlight_1_id': '',
+    'course_highlight_2': '',
+    'course_highlight_2_id': '',
+    'course_highlight_3': '',
+    'course_highlight_3_id': '',
+    'note_highlight_1': '暂无随手记',
+    'note_highlight_1_id': '',
+    'note_highlight_2': '',
+    'note_highlight_2_id': '',
+    'note_highlight_3': '',
+    'note_highlight_3_id': '',
+    'memorial_highlight_1': '暂无近期纪念日',
+    'memorial_highlight_1_id': '',
+    'memorial_highlight_2': '',
+    'memorial_highlight_2_id': '',
+    'memorial_highlight_3': '',
+    'memorial_highlight_3_id': '',
+    'diary_highlight_1': '暂无日记',
+    'diary_highlight_1_id': '',
+    'diary_highlight_2': '',
+    'diary_highlight_2_id': '',
+    'diary_highlight_3': '',
+    'diary_highlight_3_id': '',
+    'today_event_summary': '今日没有日程',
+    'schedule_highlight_1': '· 今日没有日程',
+    'schedule_highlight_1_id': '',
+    'schedule_highlight_2': '· 打开日历查看完整安排',
+    'schedule_highlight_2_id': '',
+    'schedule_highlight_3': '提醒会跟随系统时区',
+    'schedule_highlight_3_id': '',
+    'calendar_month_summary': '本月日期 · 今日已标记',
+    'focus_summary': '今日还未专注',
+    'habit_summary': '今日习惯待打卡',
+    'streak_summary': '连续记录 0 天',
+    'next_focus_label': '25 分钟专注',
+    'focus_timer_running': false,
+    'focus_timer_remaining_seconds': 0,
+    'focus_timer_total_seconds': 0,
+    'focus_timer_ends_at_millis': 0,
+    'focus_timer_label': '专注倒计时',
+    'habit_quick_check_id': '',
+    'habit_quick_check_label': '点击进入习惯打卡',
+    'widget_theme_brand_id': 'defaultBrand',
+    'widget_theme_card_skin_id': 'plain_card',
+    'widget_theme_dark': false,
+    'widget_theme_primary': '#FFFF6B6B',
+    'widget_theme_background': '#FFFFFFFF',
+    'widget_theme_surface': '#FFFFFFFF',
+    'widget_theme_nav_background': '#FFFFF6F2',
+    'widget_theme_border': '#22FF6B6B',
+    'widget_theme_text': '#FF333333',
+    'widget_theme_muted_text': '#FF666666',
+    'widget_theme_on_primary': '#FFFFFFFF',
+    'widget_theme_accent_start': '#FFFF6B6B',
+    'widget_theme_accent_end': '#FFFFB088',
+    'widget_theme_background_asset_key': '',
+    'widget_theme_corner_radius_dp': 13,
+    'widget_theme_control_radius_dp': 8,
+    'widget_theme_border_width_dp': 0,
+  };
   static String _lastThemeSignature = '';
   static String _lastPushSignature = '';
+  static Future<bool>? _accountPayloadClearInFlight;
 
   static bool get _supported {
     if (kIsWeb) return false;
@@ -66,6 +156,7 @@ class HomeWidgetService {
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
     if (!_supported) return true;
+    await _drainPendingAccountClear();
     final signature = theme.signature;
     if (signature == _lastThemeSignature) return true;
     try {
@@ -77,6 +168,56 @@ class HomeWidgetService {
       debugPrint('[HomeWidget] updateTheme failed: $e\n$st');
       return false;
     }
+  }
+
+  static void resetAccountCache() {
+    _lastThemeSignature = '';
+    _lastPushSignature = '';
+    _accountPayloadClearInFlight =
+        (_accountPayloadClearInFlight ?? Future<bool>.value(true)).then(
+          (_) => clearAccountWidgetData(),
+        );
+  }
+
+  static Future<bool> clearAccountWidgetData() async {
+    if (!_supported) return true;
+    try {
+      final initialized = await init();
+      if (!initialized) return false;
+      await AndroidWidgetManager.clearDisplayModeOverrides();
+      await Future.wait(
+        accountPayloadDefaults.entries.map(_saveAccountPayloadDefault),
+      );
+      return _updateAllWidgets();
+    } catch (e, st) {
+      debugPrint('[HomeWidget] clear account widget data failed: $e\n$st');
+      return false;
+    }
+  }
+
+  static Future<void> _drainPendingAccountClear() async {
+    while (true) {
+      final pending = _accountPayloadClearInFlight;
+      if (pending == null) return;
+      await pending;
+      if (identical(_accountPayloadClearInFlight, pending)) {
+        _accountPayloadClearInFlight = null;
+        return;
+      }
+    }
+  }
+
+  static Future<bool?> _saveAccountPayloadDefault(
+    MapEntry<String, Object> entry,
+  ) {
+    final value = entry.value;
+    if (value is bool) {
+      return HomeWidget.saveWidgetData<bool>(entry.key, value);
+    }
+    if (value is int) {
+      return HomeWidget.saveWidgetData<int>(entry.key, value);
+    }
+    return HomeWidget.saveWidgetData<String>(entry.key, value.toString());
   }
 
   static Future<bool> push({
@@ -116,6 +257,7 @@ class HomeWidgetService {
     required HomeWidgetThemePayload theme,
   }) async {
     if (!_supported) return true;
+    await _drainPendingAccountClear();
     final signature = _pushSignature(
       todoCount: todoCount,
       habitPercent: habitPercent,

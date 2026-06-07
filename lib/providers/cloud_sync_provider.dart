@@ -102,6 +102,10 @@ class _SyncApplyResult {
       skippedCollections.isNotEmpty || localChangedBeforeApply;
 }
 
+class _SyncCancelled implements Exception {
+  const _SyncCancelled();
+}
+
 typedef SyncChangedCollectionsCallback =
     Future<void> Function(Set<String> changedCollections);
 
@@ -173,7 +177,49 @@ class CloudSyncProvider extends ChangeNotifier {
   /// 是否有未同步到后端的本地改动（由 Provider 写入时打上时间戳；本次同步成功后清零）。
   bool _hasPendingChanges = false;
   int _localChangeGeneration = 0;
+  int _accountGeneration = 0;
+  bool _syncSuspendedForAccountChange = false;
+  Future<void>? _activeLocalWriteback;
   bool get hasPendingChanges => _hasPendingChanges;
+
+  bool _isCurrentAccountGeneration(int generation) =>
+      generation == _accountGeneration && !_syncSuspendedForAccountChange;
+
+  void _throwIfAccountGenerationChanged(int generation) {
+    if (!_isCurrentAccountGeneration(generation)) {
+      throw const _SyncCancelled();
+    }
+  }
+
+  Future<T> _guardAccountGeneration<T>(
+    int generation,
+    Future<T> Function() body,
+  ) async {
+    _throwIfAccountGenerationChanged(generation);
+    final result = await body();
+    _throwIfAccountGenerationChanged(generation);
+    return result;
+  }
+
+  Future<T> _runAccountBoundWriteback<T>(
+    int generation,
+    Future<T> Function() body,
+  ) async {
+    _throwIfAccountGenerationChanged(generation);
+    final completer = Completer<void>();
+    final activeFuture = completer.future;
+    _activeLocalWriteback = activeFuture;
+    try {
+      final result = await body();
+      _throwIfAccountGenerationChanged(generation);
+      return result;
+    } finally {
+      completer.complete();
+      if (identical(_activeLocalWriteback, activeFuture)) {
+        _activeLocalWriteback = null;
+      }
+    }
+  }
 
   void _notifySyncStateChanged() {
     if (_notifyQueued) return;
@@ -185,6 +231,10 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void _scheduleQueuedSyncIfNeeded() {
+    if (_syncSuspendedForAccountChange) {
+      _syncQueued = false;
+      return;
+    }
     if (_syncQueued && _config.autoSync) {
       _syncQueued = false;
       _scheduleAutoSync(const Duration(milliseconds: 1200));
@@ -222,7 +272,7 @@ class CloudSyncProvider extends ChangeNotifier {
   /// `onSynced → loadFromStorage` 触发的 notifyListeners 被当作"脏改动"
   /// 误报 badge，本方法仅在 [_suppressDirtyMark] = false 时生效。
   void markPendingLocalChange() {
-    if (_suppressDirtyMark) return;
+    if (_suppressDirtyMark || _syncSuspendedForAccountChange) return;
     _localChangeGeneration++;
     if (!_hasPendingChanges) {
       _hasPendingChanges = true;
@@ -279,6 +329,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   void _scheduleAutoSync([Duration delay = _autoSyncDelay]) {
     _autoSyncTimer?.cancel();
+    if (_syncSuspendedForAccountChange) return;
     if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
@@ -293,6 +344,7 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void startRemotePolling() {
+    if (_syncSuspendedForAccountChange) return;
     final alreadyPolling =
         _remoteEventSubscription != null || _remotePollTimer != null;
     _startRemoteEvents();
@@ -313,6 +365,7 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void _startRemoteEvents() {
+    if (_syncSuspendedForAccountChange) return;
     if (_remoteEventSubscription != null) return;
     if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
     final client = apiClientGetter?.call();
@@ -347,6 +400,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   void _scheduleRemoteEventReconnect([Duration delay = _autoRetryDelay]) {
     _remoteEventRetryTimer?.cancel();
+    if (_syncSuspendedForAccountChange) return;
     if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
     if (_remoteEventSubscription != null) return;
     final client = apiClientGetter?.call();
@@ -375,6 +429,7 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void _dispatchRemoteEvent() {
+    if (_syncSuspendedForAccountChange) return;
     final eventName = _remoteEventName.isEmpty ? 'message' : _remoteEventName;
     final rawData = _remoteEventDataLines.join('\n');
     _remoteEventName = '';
@@ -405,6 +460,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   void _scheduleRemotePoll([Duration delay = _remotePollDelay]) {
     _remotePollTimer?.cancel();
+    if (_syncSuspendedForAccountChange) return;
     if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
     if (_hasPendingChanges || _isSyncing) return;
     final client = apiClientGetter?.call();
@@ -450,12 +506,52 @@ class CloudSyncProvider extends ChangeNotifier {
     _dirtyMarkEnabled = value;
   }
 
+  Future<void> resetForAccountChange() async {
+    _accountGeneration++;
+    _syncSuspendedForAccountChange = true;
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
+    stopRemotePolling();
+    final activeWriteback = _activeLocalWriteback;
+    if (activeWriteback != null) {
+      await activeWriteback;
+    }
+    _isSyncing = false;
+    _syncQueued = false;
+    _notifyQueued = false;
+    _lastError = null;
+    _lastWorkspaceMergeDecisions = const <SyncMergeDecision>[];
+    _lastServerUpdatedAt = '';
+    _lastServerVersion = null;
+    _lastCollectionHashes = const <String, String>{};
+    _lastItemHashes = const <String, Map<String, String>>{};
+    _pendingPreferencesUpdatedAt = null;
+    _pendingPreferenceKeys.clear();
+    _pendingPreferencesFullSync = false;
+    _pendingQuickCaptureTemplatesUpdatedAt = null;
+    _hasPendingChanges = false;
+    _localChangeGeneration++;
+    _config = SyncConfig(
+      lastSync: DateTime.fromMillisecondsSinceEpoch(0),
+      autoSync: true,
+    );
+    _notifySyncStateChanged();
+  }
+
+  void resumeForActiveAccount() {
+    _syncSuspendedForAccountChange = false;
+  }
+
   /// cloud_sync_v2 特性开关：关闭时 [syncNow] 直接返回，不发出网络请求。
   /// 对应 Requirements 12.6。
   bool get isCloudSyncV2Enabled => FeatureFlags.cloudSyncV2;
 
   Future<void> _pollRemoteChanges() async {
-    if (!_config.autoSync || !FeatureFlags.cloudSyncV2) return;
+    if (_syncSuspendedForAccountChange ||
+        !_config.autoSync ||
+        !FeatureFlags.cloudSyncV2) {
+      return;
+    }
     if (_hasPendingChanges || _isSyncing) {
       _scheduleRemotePoll();
       return;
@@ -466,7 +562,9 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     try {
+      final accountGenerationAtStart = _accountGeneration;
       final status = await client.get('/api/sync/status');
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
       final serverVersion = (status['server_version'] as num?)?.toInt();
       final serverUpdatedAt = status['server_updated_at']?.toString() ?? '';
       final versionUnchanged =
@@ -486,7 +584,9 @@ class CloudSyncProvider extends ChangeNotifier {
         return;
       }
 
-      await _pullRemoteChanges();
+      await _pullRemoteChanges(
+        expectedAccountGeneration: accountGenerationAtStart,
+      );
     } catch (e) {
       _lastError = _userVisibleSyncError(e);
       _scheduleRemotePoll(_autoRetryDelay);
@@ -825,6 +925,9 @@ class CloudSyncProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('sync_auto', value);
     _config = SyncConfig(lastSync: _config.lastSync, autoSync: value);
+    if (value) {
+      resumeForActiveAccount();
+    }
     if (value && _hasPendingChanges) {
       _scheduleAutoSync();
     } else if (value) {
@@ -840,6 +943,9 @@ class CloudSyncProvider extends ChangeNotifier {
     _autoSyncTimer?.cancel();
     // Req 12.6：关闭 cloud_sync_v2 时完全离线可用，不发出任何网络请求。
     if (!FeatureFlags.cloudSyncV2) {
+      return;
+    }
+    if (_syncSuspendedForAccountChange) {
       return;
     }
     if (_isSyncing) {
@@ -865,11 +971,17 @@ class CloudSyncProvider extends ChangeNotifier {
     _isSyncing = true;
     _lastError = null;
     _notifySyncStateChanged();
+    final accountGenerationAtStart = _accountGeneration;
 
     SharedPreferences? prefs;
     var shouldRetryLocalChanges = _hasPendingChanges;
     try {
       prefs = await SharedPreferences.getInstance();
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
+      }
 
       final syncGeneration = _localChangeGeneration;
       final payload = _buildLocalSyncPayload(prefs);
@@ -877,6 +989,11 @@ class CloudSyncProvider extends ChangeNotifier {
       final localItemHashes = _buildItemHashes(payload);
       final itemDelta = _buildSyncItemDelta(payload, localItemHashes);
       final changedCollections = _changedSyncCollections(payload, localHashes);
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
+      }
       shouldRetryLocalChanges =
           shouldRetryLocalChanges ||
           changedCollections == null ||
@@ -885,21 +1002,35 @@ class CloudSyncProvider extends ChangeNotifier {
       if (changedCollections == null) {
         response = await client.post('/api/sync', payload);
       } else if (changedCollections.isEmpty) {
-        _lastCollectionHashes = localHashes;
-        _lastItemHashes = localItemHashes;
-        await prefs.setString(
-          _collectionHashesStorageKey,
-          json.encode(localHashes),
-        );
-        await prefs.setString(
-          _itemHashesStorageKey,
-          json.encode(localItemHashes),
-        );
-        await _persistPreferencesSnapshot(prefs, payload['preferences']);
-        await _setPendingChanges(
-          prefs,
-          _localChangeGeneration != syncGeneration,
-        );
+        await _runAccountBoundWriteback(accountGenerationAtStart, () async {
+          _lastCollectionHashes = localHashes;
+          _lastItemHashes = localItemHashes;
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => prefs!.setString(
+              _collectionHashesStorageKey,
+              json.encode(localHashes),
+            ),
+          );
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => prefs!.setString(
+              _itemHashesStorageKey,
+              json.encode(localItemHashes),
+            ),
+          );
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => _persistPreferencesSnapshot(prefs!, payload['preferences']),
+          );
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => _setPendingChanges(
+              prefs!,
+              _localChangeGeneration != syncGeneration,
+            ),
+          );
+        });
         _lastError = null;
         _isSyncing = false;
         if (_hasPendingChanges) {
@@ -921,27 +1052,52 @@ class CloudSyncProvider extends ChangeNotifier {
           'collection_hashes': localHashes,
         });
       }
-      final applyResult = await _applySyncResponse(
-        prefs,
-        response,
-        requestCollectionHashes: localHashes,
-        fallbackDeletedItems:
-            payload['deleted_items'] as Map<String, Map<String, String>>,
-      );
-
-      final now = DateTime.now();
-      _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
-      await prefs.setString('sync_last_time', now.toIso8601String());
-      await _setPendingChanges(
-        prefs,
-        _localChangeGeneration != syncGeneration ||
-            applyResult.hasSkippedLocalChanges,
-      );
-
-      if (applyResult.changedCollections.isNotEmpty) {
-        await onSynced?.call(applyResult.changedCollections);
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
       }
+      await _runAccountBoundWriteback(accountGenerationAtStart, () async {
+        final applyResult = await _applySyncResponse(
+          prefs!,
+          response,
+          accountGenerationAtStart: accountGenerationAtStart,
+          requestCollectionHashes: localHashes,
+          fallbackDeletedItems:
+              payload['deleted_items'] as Map<String, Map<String, String>>,
+        );
+
+        final now = DateTime.now();
+        _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
+        await _guardAccountGeneration(
+          accountGenerationAtStart,
+          () => prefs!.setString('sync_last_time', now.toIso8601String()),
+        );
+        await _guardAccountGeneration(
+          accountGenerationAtStart,
+          () => _setPendingChanges(
+            prefs!,
+            _localChangeGeneration != syncGeneration ||
+                applyResult.hasSkippedLocalChanges,
+          ),
+        );
+
+        if (applyResult.changedCollections.isNotEmpty) {
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          await onSynced?.call(applyResult.changedCollections);
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+        }
+      });
+    } on _SyncCancelled {
+      _isSyncing = false;
+      _notifySyncStateChanged();
+      return;
     } catch (e) {
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
+      }
       _lastError = _userVisibleSyncError(e);
       if (shouldRetryLocalChanges) {
         _hasPendingChanges = true;
@@ -955,6 +1111,10 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     _isSyncing = false;
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+      _notifySyncStateChanged();
+      return;
+    }
     if (_lastError != null && _hasPendingChanges) {
       _scheduleAutoSync(_autoRetryDelay);
     } else if (_lastError == null && _hasPendingChanges) {
@@ -966,7 +1126,11 @@ class CloudSyncProvider extends ChangeNotifier {
     _scheduleQueuedSyncIfNeeded();
   }
 
-  Future<void> _pullRemoteChanges() async {
+  Future<void> _pullRemoteChanges({int? expectedAccountGeneration}) async {
+    if (_syncSuspendedForAccountChange) return;
+    final accountGenerationAtStart =
+        expectedAccountGeneration ?? _accountGeneration;
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
     if (_isSyncing) {
       _syncQueued = true;
       return;
@@ -990,35 +1154,69 @@ class CloudSyncProvider extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
+      }
       final syncGeneration = _localChangeGeneration;
       final payload = _buildLocalSyncPayload(prefs);
       final localHashes = _buildCollectionHashes(payload);
       final response = await client.post('/api/sync/pull', {
         'collection_hashes': localHashes,
       });
-      final applyResult = await _applySyncResponse(
-        prefs,
-        response,
-        requestCollectionHashes: localHashes,
-        fallbackDeletedItems:
-            payload['deleted_items'] as Map<String, Map<String, String>>,
-      );
-      final now = DateTime.now();
-      _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
-      await prefs.setString('sync_last_time', now.toIso8601String());
-      await _setPendingChanges(
-        prefs,
-        _localChangeGeneration != syncGeneration ||
-            applyResult.hasSkippedLocalChanges,
-      );
-      if (applyResult.changedCollections.isNotEmpty) {
-        await onSynced?.call(applyResult.changedCollections);
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
       }
+      await _runAccountBoundWriteback(accountGenerationAtStart, () async {
+        final applyResult = await _applySyncResponse(
+          prefs,
+          response,
+          accountGenerationAtStart: accountGenerationAtStart,
+          requestCollectionHashes: localHashes,
+          fallbackDeletedItems:
+              payload['deleted_items'] as Map<String, Map<String, String>>,
+        );
+        final now = DateTime.now();
+        _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
+        await _guardAccountGeneration(
+          accountGenerationAtStart,
+          () => prefs.setString('sync_last_time', now.toIso8601String()),
+        );
+        await _guardAccountGeneration(
+          accountGenerationAtStart,
+          () => _setPendingChanges(
+            prefs,
+            _localChangeGeneration != syncGeneration ||
+                applyResult.hasSkippedLocalChanges,
+          ),
+        );
+        if (applyResult.changedCollections.isNotEmpty) {
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          await onSynced?.call(applyResult.changedCollections);
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+        }
+      });
+    } on _SyncCancelled {
+      _isSyncing = false;
+      _notifySyncStateChanged();
+      return;
     } catch (e) {
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        _isSyncing = false;
+        _notifySyncStateChanged();
+        return;
+      }
       _lastError = _userVisibleSyncError(e);
     }
 
     _isSyncing = false;
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+      _notifySyncStateChanged();
+      return;
+    }
     if (_lastError == null && !_hasPendingChanges) {
       _scheduleRemotePoll();
     } else if (_lastError == null && _hasPendingChanges) {
@@ -1293,9 +1491,17 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<_SyncApplyResult> _applySyncResponse(
     SharedPreferences prefs,
     Map<String, dynamic> response, {
+    required int accountGenerationAtStart,
     required Map<String, String> requestCollectionHashes,
     required Map<String, Map<String, String>> fallbackDeletedItems,
   }) async {
+    void throwIfAccountChanged() {
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+        throw const _SyncCancelled();
+      }
+    }
+
+    throwIfAccountChanged();
     final previousHashes = _buildCollectionHashes(
       _buildLocalSyncPayload(prefs),
     );
@@ -1322,14 +1528,17 @@ class CloudSyncProvider extends ChangeNotifier {
           : remoteDeletedItems;
       if (_syncPayloadHash(currentDeletedItems) !=
           _syncPayloadHash(mergedDeletedItems)) {
+        throwIfAccountChanged();
         await prefs.setString(
           deletedItemsStorageKey,
           json.encode(mergedDeletedItems),
         );
+        throwIfAccountChanged();
       }
     }
 
     for (final entry in _listPayloads.entries) {
+      throwIfAccountChanged();
       final remoteKey = entry.value;
       final localKey = entry.key;
       final value = response[remoteKey];
@@ -1349,8 +1558,10 @@ class CloudSyncProvider extends ChangeNotifier {
         continue;
       }
       await _writeLocalList(prefs, localKey, filteredValue);
+      throwIfAccountChanged();
     }
     for (final entry in _objectPayloads.entries) {
+      throwIfAccountChanged();
       final remoteKey = entry.value;
       final localKey = entry.key;
       final value = response[remoteKey];
@@ -1374,9 +1585,11 @@ class CloudSyncProvider extends ChangeNotifier {
         continue;
       }
       await _writeLocalObject(prefs, localKey, value);
+      throwIfAccountChanged();
     }
     final preferences = response['preferences'];
     if (preferences is Map) {
+      throwIfAccountChanged();
       final current = _buildPreferencesPayload(prefs);
       if (!_customCollectionStillMatchesRequest(
         current,
@@ -1386,10 +1599,12 @@ class CloudSyncProvider extends ChangeNotifier {
         skippedCollections.add('preferences');
       } else {
         await _writePreferencesPayload(prefs, preferences);
+        throwIfAccountChanged();
       }
     }
     final quickCaptureTemplates = response['quick_capture_templates'];
     if (quickCaptureTemplates is Map) {
+      throwIfAccountChanged();
       final current = _buildQuickCaptureTemplatesPayload(prefs);
       if (!_customCollectionStillMatchesRequest(
         current,
@@ -1399,11 +1614,13 @@ class CloudSyncProvider extends ChangeNotifier {
         skippedCollections.add('quick_capture_templates');
       } else {
         await _writeQuickCaptureTemplatesPayload(prefs, quickCaptureTemplates);
+        throwIfAccountChanged();
       }
     }
 
     final workspacePayloads = response['workspace_payloads'];
     if (workspacePayloads is Map) {
+      throwIfAccountChanged();
       _lastWorkspaceMergeDecisions = await _mergeWorkspacePayloads(
         prefs,
         workspacePayloads,
@@ -1417,7 +1634,9 @@ class CloudSyncProvider extends ChangeNotifier {
             .map((decision) => json.encode(decision.toJson()))
             .toList(),
       );
+      throwIfAccountChanged();
     }
+    throwIfAccountChanged();
     final nextPayload = _buildLocalSyncPayload(prefs);
     final nextHashes = _buildCollectionHashes(nextPayload);
     final changedCollections = {
@@ -1425,13 +1644,17 @@ class CloudSyncProvider extends ChangeNotifier {
         if (previousHashes[key] != nextHashes[key]) key,
     };
     if (!localChangedBeforeApply && skippedCollections.isEmpty) {
+      throwIfAccountChanged();
       await _persistServerRevision(prefs, response);
+      throwIfAccountChanged();
       await _persistPreferencesSnapshot(prefs, nextPayload['preferences']);
+      throwIfAccountChanged();
       _lastItemHashes = _buildItemHashes(nextPayload);
       await prefs.setString(
         _itemHashesStorageKey,
         json.encode(_lastItemHashes),
       );
+      throwIfAccountChanged();
     }
     return _SyncApplyResult(
       changedCollections: changedCollections,

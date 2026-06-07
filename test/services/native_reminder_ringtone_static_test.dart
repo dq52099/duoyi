@@ -32,6 +32,53 @@ void main() {
     expect(manifest, contains('android:name=".ReminderRingtoneService"'));
     expect(manifest, contains('android:name=".ReminderRingtoneReceiver"'));
     expect(manifest, contains('android:name=".ReminderRingtoneBootReceiver"'));
+    for (final permission in const [
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.RECEIVE_BOOT_COMPLETED',
+      'android.permission.WAKE_LOCK',
+      'android.permission.VIBRATE',
+      'android.permission.SCHEDULE_EXACT_ALARM',
+      'android.permission.USE_EXACT_ALARM',
+      'android.permission.USE_FULL_SCREEN_INTENT',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+    ]) {
+      expect(manifest, contains('android:name="$permission"'));
+    }
+    final mainActivityStart = manifest.indexOf('android:name=".MainActivity"');
+    final mainActivityEnd = manifest.indexOf('</activity>', mainActivityStart);
+    expect(mainActivityStart, greaterThanOrEqualTo(0));
+    expect(mainActivityEnd, greaterThan(mainActivityStart));
+    final mainActivity = manifest.substring(mainActivityStart, mainActivityEnd);
+    expect(mainActivity, contains('android:showWhenLocked="true"'));
+    expect(mainActivity, contains('android:turnScreenOn="true"'));
+    final ringtoneServiceStart = manifest.indexOf(
+      'android:name=".ReminderRingtoneService"',
+    );
+    final ringtoneServiceEnd = manifest.indexOf('/>', ringtoneServiceStart);
+    expect(ringtoneServiceStart, greaterThanOrEqualTo(0));
+    expect(ringtoneServiceEnd, greaterThan(ringtoneServiceStart));
+    final ringtoneServiceManifest = manifest.substring(
+      ringtoneServiceStart,
+      ringtoneServiceEnd,
+    );
+    expect(ringtoneServiceManifest, contains('android:exported="false"'));
+    expect(ringtoneServiceManifest, contains('android:enabled="true"'));
+    expect(
+      ringtoneServiceManifest,
+      contains('android:foregroundServiceType="mediaPlayback"'),
+    );
+    final ringtoneReceiverStart = manifest.indexOf(
+      'android:name=".ReminderRingtoneReceiver"',
+    );
+    final ringtoneReceiverEnd = manifest.indexOf('/>', ringtoneReceiverStart);
+    expect(ringtoneReceiverStart, greaterThanOrEqualTo(0));
+    expect(ringtoneReceiverEnd, greaterThan(ringtoneReceiverStart));
+    final ringtoneReceiverManifest = manifest.substring(
+      ringtoneReceiverStart,
+      ringtoneReceiverEnd,
+    );
+    expect(ringtoneReceiverManifest, contains('android:exported="false"'));
     final nativeBootReceiverStart = manifest.indexOf(
       'android:name=".ReminderRingtoneBootReceiver"',
     );
@@ -45,6 +92,7 @@ void main() {
       nativeBootReceiverStart,
       nativeBootReceiverEnd,
     );
+    expect(nativeBootReceiver, contains('android:exported="true"'));
     expect(
       nativeBootReceiver,
       contains('android.intent.action.MY_PACKAGE_REPLACED'),

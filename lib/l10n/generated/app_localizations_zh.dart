@@ -1744,6 +1744,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiHistoryDelete => '删除';
 
   @override
+  String get aiHistoryExpand => '展开全文';
+
+  @override
+  String get aiHistoryCollapse => '收起';
+
+  @override
   String get syncConflictTitle => '同步冲突记录';
 
   @override
@@ -2155,6 +2161,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get anniversaryTodayShort => '今天';
 
   @override
+  String get anniversaryStatusToday => '今天';
+
+  @override
+  String get anniversaryStatusSoon => '临近';
+
+  @override
+  String get anniversaryStatusUpcoming => '即将到来';
+
+  @override
+  String get anniversaryDateOriginPrefix => '起始: ';
+
+  @override
   String get anniversaryEditorAddTitle => '新增纪念';
 
   @override
@@ -2235,6 +2253,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get anniversaryReminderTimePast => '已保存，但提醒时间已过去，请重新选择提醒时间。';
+
+  @override
+  String get anniversaryReminderCardPrefix => '提醒: ';
 
   @override
   String get anniversaryLunarYearSuffix => '年';
@@ -2418,6 +2439,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get reminderKindAlarm => '闹钟';
+
+  @override
+  String get reminderKindEmail => '邮件';
 
   @override
   String get reminderKindOff => '关闭';

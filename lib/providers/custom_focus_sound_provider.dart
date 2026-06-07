@@ -81,6 +81,12 @@ class CustomFocusSoundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _sounds.clear();
+    _registerWithPlaybackService();
+    notifyListeners();
+  }
+
   Future<CustomFocusSound?> importAudio() async {
     if (kIsWeb) return null;
     final file = await openFile(

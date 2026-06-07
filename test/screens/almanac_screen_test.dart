@@ -126,6 +126,41 @@ void main() {
     expect(find.text('胎神'), findsNothing);
   });
 
+  testWidgets('almanac keeps 2026-06-28 summary text inside the card', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(home: AlmanacScreen(initialDate: DateTime(2026, 6, 28))),
+    );
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(
+      const ValueKey('selected_date_almanac_summary_card'),
+    );
+    expect(card, findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    final cardRect = tester.getRect(card);
+    final textFinder = find.descendant(of: card, matching: find.byType(Text));
+    for (final element in textFinder.evaluate()) {
+      final rect = tester.getRect(find.byWidget(element.widget));
+      expect(
+        rect.left,
+        greaterThanOrEqualTo(cardRect.left - 0.5),
+        reason: '黄历摘要文字不能越出卡片左边界',
+      );
+      expect(
+        rect.right,
+        lessThanOrEqualTo(cardRect.right + 0.5),
+        reason: '黄历摘要文字不能越出卡片右边界',
+      );
+    }
+  });
+
   testWidgets('almanac uses lunar library instead of single-day override', (
     tester,
   ) async {

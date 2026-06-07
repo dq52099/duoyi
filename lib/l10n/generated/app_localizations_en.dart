@@ -1826,6 +1826,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiHistoryDelete => 'Delete';
 
   @override
+  String get aiHistoryExpand => 'Show full review';
+
+  @override
+  String get aiHistoryCollapse => 'Collapse';
+
+  @override
   String get syncConflictTitle => 'Sync conflict log';
 
   @override
@@ -2252,6 +2258,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get anniversaryTodayShort => 'Today';
 
   @override
+  String get anniversaryStatusToday => 'Today';
+
+  @override
+  String get anniversaryStatusSoon => 'Soon';
+
+  @override
+  String get anniversaryStatusUpcoming => 'Upcoming';
+
+  @override
+  String get anniversaryDateOriginPrefix => 'Since: ';
+
+  @override
   String get anniversaryEditorAddTitle => 'Add anniversary';
 
   @override
@@ -2346,6 +2364,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get anniversaryReminderTimePast =>
       'Saved, but the reminder time is already in the past. Please choose another reminder time.';
+
+  @override
+  String get anniversaryReminderCardPrefix => 'Reminder: ';
 
   @override
   String get anniversaryLunarYearSuffix => '';
@@ -2530,6 +2551,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reminderKindAlarm => 'Alarm';
+
+  @override
+  String get reminderKindEmail => 'Email';
 
   @override
   String get reminderKindOff => 'Off';

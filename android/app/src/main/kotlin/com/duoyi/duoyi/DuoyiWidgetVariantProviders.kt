@@ -449,6 +449,30 @@ object DuoyiWidgetProviderRegistry {
         return appliedCount
     }
 
+    fun clearDisplayModeOverrides(context: Context): Int {
+        val manager = AppWidgetManager.getInstance(context)
+        val prefs = HomeWidgetPlugin.getData(context)
+        DuoyiWidgetDisplayMode.clearAll(prefs)
+        val standard = DuoyiWidgetPinStyle.fromId("standard")
+        var clearedCount = 0
+        for (providerClass in allWidgetProviderClasses()) {
+            val component = ComponentName(context, providerClass)
+            val ids = manager.getAppWidgetIds(component)
+            if (ids.isEmpty()) continue
+            for (id in ids) {
+                if (id == AppWidgetManager.INVALID_APPWIDGET_ID) continue
+                manager.updateAppWidgetOptions(id, standard.toOptions())
+                clearedCount += 1
+                Log.i(
+                    tag,
+                    "clear_display_mode widgetId=$id provider=${component.className}",
+                )
+            }
+        }
+        requestUpdateForAllWidgets(context)
+        return clearedCount
+    }
+
     private data class WidgetFamily(
         val kind: String,
         val standard: Class<out AppWidgetProvider>,

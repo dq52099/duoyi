@@ -70,6 +70,19 @@ class ShareProvider extends ChangeNotifier {
   List<WorkspaceLeaderboardEntry> leaderboardFor(String workspaceId) =>
       List.unmodifiable(_leaderboardByWorkspace[workspaceId] ?? const []);
 
+  void resetLocalState() {
+    _workspaces = const <Workspace>[];
+    _mentions = const <WorkspaceMention>[];
+    _commentsByWorkspace.clear();
+    _activitiesByWorkspace.clear();
+    _leaderboardByWorkspace.clear();
+    _loading = false;
+    _detailLoading = false;
+    _lastError = null;
+    _activeWorkspaceId = null;
+    notifyListeners();
+  }
+
   WorkspaceRole roleFor(String workspaceId) {
     if (workspaceId.isEmpty || workspaceId == 'private') {
       return WorkspaceRole.owner;

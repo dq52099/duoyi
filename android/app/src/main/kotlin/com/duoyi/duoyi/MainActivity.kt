@@ -454,6 +454,9 @@ class MainActivity : FlutterActivity() {
                         val style = call.argument<String>("style") ?: "standard"
                         result.success(DuoyiWidgetProviderRegistry.applyDisplayModeToExistingWidgets(this, style))
                     }
+                    "clearWidgetDisplayModes" -> {
+                        result.success(DuoyiWidgetProviderRegistry.clearDisplayModeOverrides(this))
+                    }
                     "refreshAllWidgets" -> {
                         DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(this)
                         result.success(DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(this))

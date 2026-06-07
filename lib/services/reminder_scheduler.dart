@@ -596,6 +596,51 @@ class ReminderScheduler {
     return _scheduledTodoRules[todoId]?.length ?? 0;
   }
 
+  /// Clears scheduler-owned in-memory state during account cleanup.
+  ///
+  /// Platform notifications and alarms may already have been removed by their
+  /// services, but popup timers and this scheduler's rule cache live in memory.
+  /// If they survive an account switch, a same-id/same-rule reminder from the
+  /// next account can be treated as already scheduled, especially for popup
+  /// reminders which do not expose a system pending queue.
+  Future<void> resetInMemoryState() {
+    return _runSerialized(_resetInMemoryStateLocked);
+  }
+
+  Future<void> _resetInMemoryStateLocked() async {
+    for (final entry in _scheduledTodoRules.entries.toList()) {
+      await _cancelRuleObjects('todo', entry.key, entry.value.keys);
+      await _cancelTodoLegacy(entry.key);
+      await registry.removeObject('todo', entry.key);
+    }
+    _scheduledTodoRules.clear();
+
+    for (final entry in _scheduledGoalRules.entries.toList()) {
+      await _cancelRuleObjects('goal', entry.key, entry.value.keys);
+      await _cancelGoalLegacy(entry.key);
+      await registry.removeObject('goal', entry.key);
+    }
+    _scheduledGoalRules.clear();
+
+    for (final id in _scheduledHabitScopes.keys.toList()) {
+      await _cancelHabit(id);
+      await registry.removeObject('habit', id);
+    }
+    _scheduledHabitScopes.clear();
+
+    for (final id in _scheduledAnniversaryScopes.keys.toList()) {
+      await _cancelAnniversary(id);
+      await registry.removeObject('anniversary', id);
+    }
+    _scheduledAnniversaryScopes.clear();
+
+    for (final id in _scheduledCountdownScopes.keys.toList()) {
+      await _cancelCountdown(id);
+      await registry.removeObject('countdown', id);
+    }
+    _scheduledCountdownScopes.clear();
+  }
+
   // -------------------------------------------------------------------------
   // 公共 API
   // -------------------------------------------------------------------------

@@ -227,6 +227,31 @@ class ThemeProvider extends ChangeNotifier {
     return value;
   }
 
+  void resetLocalState() {
+    _brand = AppBrands.defaultBrand;
+    _switchCount = 0;
+    _unlockedBrandIds
+      ..clear()
+      ..add(AppBrands.defaultBrand.id);
+    _unlockedFocusBackdropIds
+      ..clear()
+      ..add(defaultFocusBackdropId);
+    _unlockedAvatarFrameIds
+      ..clear()
+      ..add(defaultAvatarFrameId);
+    _unlockedCardSkinIds
+      ..clear()
+      ..add(defaultCardSkinId);
+    _activeFocusBackdropId = defaultFocusBackdropId;
+    _activeAvatarFrameId = defaultAvatarFrameId;
+    _activeCardSkinId = defaultCardSkinId;
+    _activeWidgetBackgroundId = widgetFollowThemeId;
+    _activeWidgetCardSkinId = widgetFollowCardSkinId;
+    _shopStateUpdatedAt = '';
+    _serverConfirmedChangePending = false;
+    notifyListeners();
+  }
+
   bool isBrandUnlocked(String id) =>
       id == AppBrands.defaultBrand.id || _unlockedBrandIds.contains(id);
 

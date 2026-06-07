@@ -54,6 +54,11 @@ class HabitProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _habits = [];
+    notifyListeners();
+  }
+
   // ignore: use_setters_to_change_properties
   set timeAudit(TimeAuditProvider? provider) {
     _timeAudit = provider;

@@ -59,6 +59,11 @@ class GoalProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _goals = [];
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(

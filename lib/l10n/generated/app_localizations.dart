@@ -3536,6 +3536,18 @@ abstract class AppLocalizations {
   /// **'删除'**
   String get aiHistoryDelete;
 
+  /// No description provided for @aiHistoryExpand.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开全文'**
+  String get aiHistoryExpand;
+
+  /// No description provided for @aiHistoryCollapse.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起'**
+  String get aiHistoryCollapse;
+
   /// No description provided for @syncConflictTitle.
   ///
   /// In zh, this message translates to:
@@ -4352,6 +4364,30 @@ abstract class AppLocalizations {
   /// **'今天'**
   String get anniversaryTodayShort;
 
+  /// No description provided for @anniversaryStatusToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天'**
+  String get anniversaryStatusToday;
+
+  /// No description provided for @anniversaryStatusSoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'临近'**
+  String get anniversaryStatusSoon;
+
+  /// No description provided for @anniversaryStatusUpcoming.
+  ///
+  /// In zh, this message translates to:
+  /// **'即将到来'**
+  String get anniversaryStatusUpcoming;
+
+  /// No description provided for @anniversaryDateOriginPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'起始: '**
+  String get anniversaryDateOriginPrefix;
+
   /// No description provided for @anniversaryEditorAddTitle.
   ///
   /// In zh, this message translates to:
@@ -4513,6 +4549,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'已保存，但提醒时间已过去，请重新选择提醒时间。'**
   String get anniversaryReminderTimePast;
+
+  /// No description provided for @anniversaryReminderCardPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒: '**
+  String get anniversaryReminderCardPrefix;
 
   /// No description provided for @anniversaryLunarYearSuffix.
   ///
@@ -4879,6 +4921,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'闹钟'**
   String get reminderKindAlarm;
+
+  /// No description provided for @reminderKindEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮件'**
+  String get reminderKindEmail;
 
   /// No description provided for @reminderKindOff.
   ///

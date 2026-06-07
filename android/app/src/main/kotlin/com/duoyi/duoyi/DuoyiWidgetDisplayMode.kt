@@ -49,6 +49,16 @@ object DuoyiWidgetDisplayMode {
         prefs.edit().remove(perWidgetKey(appWidgetId)).apply()
     }
 
+    fun clearAll(prefs: SharedPreferences) {
+        val editor = prefs.edit().remove(KEY)
+        for (key in prefs.all.keys) {
+            if (key.startsWith(PER_WIDGET_KEY_PREFIX)) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
+
     private fun modeFor(prefs: SharedPreferences, appWidgetId: Int?): String {
         val globalMode = normalize(prefs.getString(KEY, null))
         val instanceMode = appWidgetId

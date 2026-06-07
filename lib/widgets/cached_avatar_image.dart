@@ -12,6 +12,7 @@ class CachedAvatarImage extends StatefulWidget {
   final double height;
   final BoxFit fit;
   final Widget Function(BuildContext context) fallbackBuilder;
+  final Object? cacheKey;
 
   const CachedAvatarImage({
     super.key,
@@ -19,6 +20,7 @@ class CachedAvatarImage extends StatefulWidget {
     required this.width,
     required this.height,
     required this.fallbackBuilder,
+    this.cacheKey,
     this.fit = BoxFit.cover,
   });
 
@@ -40,7 +42,9 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   @override
   void didUpdateWidget(CachedAvatarImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url == widget.url) return;
+    if (oldWidget.url == widget.url && oldWidget.cacheKey == widget.cacheKey) {
+      return;
+    }
     _networkFailed = false;
     _cachedFile = null;
     _lastCachedUrl = null;
@@ -55,6 +59,7 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
     }
     return Image.network(
       widget.url,
+      key: ValueKey<Object>(widget.cacheKey ?? widget.url),
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
@@ -80,6 +85,7 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   Widget _fileImage(File file) {
     return Image.file(
       file,
+      key: ValueKey<Object>(widget.cacheKey ?? file.path),
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
@@ -122,7 +128,9 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
 
   Future<File> _avatarCacheFile(String url) async {
     final dir = await getApplicationDocumentsDirectory();
-    final digest = sha1.convert(url.codeUnits).toString();
+    final digest = sha1
+        .convert('${widget.cacheKey ?? ''}|$url'.codeUnits)
+        .toString();
     return File('${dir.path}/avatar_cache/$digest.img');
   }
 }

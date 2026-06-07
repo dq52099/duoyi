@@ -81,6 +81,11 @@ class DiaryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _entries = [];
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(

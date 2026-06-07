@@ -25,6 +25,10 @@ void main() {
       'anniversary.years_elapsed.suffix',
       'anniversary.next.prefix',
       'anniversary.today_short',
+      'anniversary.status.today',
+      'anniversary.status.soon',
+      'anniversary.status.upcoming',
+      'anniversary.date.origin_prefix',
       'anniversary.editor.add_title',
       'anniversary.editor.edit_title',
       'anniversary.field.title',
@@ -51,10 +55,12 @@ void main() {
       'anniversary.reminder.exception_prefix',
       'anniversary.reminder.saved_prefix',
       'anniversary.reminder.time_past',
+      'anniversary.reminder.card_prefix',
       'anniversary.lunar.year_suffix',
       'reminder.kind.push',
       'reminder.kind.popup',
       'reminder.kind.alarm',
+      'reminder.kind.email',
       'reminder.kind.off',
       'countdown.field.due_reminder',
       'countdown.field.remind_days',
@@ -103,6 +109,28 @@ void main() {
       reason:
           'anniversary_screen.dart should not contain hardcoded Chinese UI strings',
     );
+  });
+
+  test('纪念日和生日卡片参考倒数日展示状态、提醒和起始日期', () {
+    final source = File(
+      'lib/screens/anniversary_screen.dart',
+    ).readAsStringSync();
+    final card = source.substring(
+      source.indexOf('class _AnniversaryCard'),
+      source.indexOf('class _AnniversaryEditSheet'),
+    );
+
+    expect(card, contains('String _statusLabel(int days, bool isPast)'));
+    expect(card, contains("I18n.tr('anniversary.status.today')"));
+    expect(card, contains("I18n.tr('anniversary.status.soon')"));
+    expect(card, contains("I18n.tr('anniversary.status.upcoming')"));
+    expect(card, contains("I18n.tr('anniversary.date.origin_prefix')"));
+    expect(card, contains("I18n.tr('anniversary.reminder.card_prefix')"));
+    expect(card, contains("I18n.tr('reminder.kind.email')"));
+    expect(card, contains('I18nDateFormat.monthDay(item.originDate)'));
+    expect(card, contains('I18nDateFormat.date(item.originDate)'));
+    expect(card, contains('Icons.notifications_active_outlined'));
+    expect(card, contains('maxWidth: 76'));
   });
 
   test('纪念日和生日提供独立入口页面，倒数日使用独立倒数页', () {

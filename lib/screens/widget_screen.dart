@@ -1142,15 +1142,26 @@ class _WidgetPreviewDensity extends StatelessWidget {
       WidgetDisplayMode.standard => 2,
       WidgetDisplayMode.detailed => 3,
     };
-    return _WidgetPreviewDensityScope(maxLines: maxLines, child: child);
+    final calendarWeekRows = switch (mode) {
+      WidgetDisplayMode.compact => 1,
+      WidgetDisplayMode.standard => 3,
+      WidgetDisplayMode.detailed => 6,
+    };
+    return _WidgetPreviewDensityScope(
+      maxLines: maxLines,
+      calendarWeekRows: calendarWeekRows,
+      child: child,
+    );
   }
 }
 
 class _WidgetPreviewDensityScope extends InheritedWidget {
   final int maxLines;
+  final int calendarWeekRows;
 
   const _WidgetPreviewDensityScope({
     required this.maxLines,
+    required this.calendarWeekRows,
     required super.child,
   });
 
@@ -1161,9 +1172,17 @@ class _WidgetPreviewDensityScope extends InheritedWidget {
         2;
   }
 
+  static int calendarWeekRowsOf(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<_WidgetPreviewDensityScope>()
+            ?.calendarWeekRows ??
+        3;
+  }
+
   @override
   bool updateShouldNotify(_WidgetPreviewDensityScope oldWidget) {
-    return maxLines != oldWidget.maxLines;
+    return maxLines != oldWidget.maxLines ||
+        calendarWeekRows != oldWidget.calendarWeekRows;
   }
 }
 
@@ -1174,26 +1193,22 @@ class _WidgetPreviewTodoBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _WidgetPreviewLine(
-          icon: Icons.warning_amber_outlined,
-          text: '逾期 1 项 · 20:25 有提醒 · 今日优先处理',
-        ),
-        const SizedBox(height: 5),
-        const _WidgetPreviewTodoRow(text: '整理今日计划', checked: false),
+        const _WidgetPreviewQuickAdd(label: '+ 添加'),
+        const SizedBox(height: 7),
+        const _WidgetPreviewTodoRow(text: '整理今日计划 · 今日优先处理'),
         if (maxLines >= 2) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '完成项目复盘 · 3 个子任务', checked: false),
+          const _WidgetPreviewTodoRow(text: '完成项目复盘 · 3 个子任务'),
         ],
         if (maxLines >= 3) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟', checked: true),
+          const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟'),
           const SizedBox(height: 6),
-          const _WidgetPreviewQuickAdd(label: '+ 添加待办'),
-          const SizedBox(height: 5),
           const _WidgetPreviewLine(
             icon: Icons.subdirectory_arrow_right,
-            text: 'AI 子任务：列清单 / 订闹钟 / 完成确认 / 今日可见',
+            text: '今日待办 · 3 项',
           ),
         ],
       ],
@@ -1338,13 +1353,15 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
-    final rows = switch (maxLines) {
-      1 => '一 二 三 四 五 六 日\n11 12 13 14 15 16 17',
-      2 =>
-        '一 二 三 四 五 六 日\n          1  2  3\n 4  5  6  7  8  9 10\n11 12 13 14 15 16 17',
+    final calendarWeekRows = _WidgetPreviewDensityScope.calendarWeekRowsOf(
+      context,
+    );
+    final rows = switch (calendarWeekRows) {
+      1 => '一   二   三   四   五   六   日\n11  12  13  14  15  16  17*',
+      3 =>
+        '一   二   三   四   五   六   日\n 4   5   6   7   8   9  10 \n11  12  13  14  15  16  17*\n18  19  20  21  22  23  24 ',
       _ =>
-        '一 二 三 四 五 六 日\n          1  2  3\n 4  5  6  7  8  9 10\n11 12 13 14 15 16 17\n18 19 20 21 22 23 24\n25 26 27 28 29 30 31',
+        '一   二   三   四   五   六   日\n        1   2   3 \n 4   5   6   7   8   9  10 \n11  12  13  14  15  16  17*\n18  19  20  21  22  23  24 \n25  26  27  28  29  30  31 ',
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1359,6 +1376,34 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
             color: cs.onSurface,
           ),
         ),
+        if (calendarWeekRows >= 3) ...[
+          const SizedBox(height: 6),
+          Text(
+            '本月日期 · 今日已标记',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: cs.primary),
+          ),
+          const SizedBox(height: 6),
+          const Row(
+            children: [
+              Expanded(
+                child: _WidgetPreviewActionButton(
+                  label: '今天',
+                  primary: true,
+                  color: Colors.indigo,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _WidgetPreviewActionButton(
+                  label: '日程',
+                  color: Colors.indigo,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1566,9 +1611,8 @@ class _WidgetPreviewLine extends StatelessWidget {
 
 class _WidgetPreviewTodoRow extends StatelessWidget {
   final String text;
-  final bool checked;
 
-  const _WidgetPreviewTodoRow({required this.text, required this.checked});
+  const _WidgetPreviewTodoRow({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -1577,18 +1621,66 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '- $text',
+            '· $text',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 12, color: cs.onSurface),
           ),
         ),
-        Icon(
-          checked ? Icons.check_circle : Icons.radio_button_unchecked,
-          size: 16,
-          color: checked ? Colors.green : cs.onSurfaceVariant,
+        SizedBox(
+          width: 28,
+          height: 24,
+          child: Center(
+            child: Text(
+              'o',
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.green,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _WidgetPreviewActionButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool primary;
+
+  const _WidgetPreviewActionButton({
+    required this.label,
+    required this.color,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = primary ? Colors.white : color;
+    return Container(
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: primary ? color : color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: primary
+            ? null
+            : Border.all(color: color.withValues(alpha: 0.24), width: 0.45),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 10,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
     );
   }
 }

@@ -125,6 +125,8 @@ void main() {
       'aiHistoryTitle',
       'aiHistoryClearAction',
       'aiHistoryEmpty',
+      'aiHistoryExpand',
+      'aiHistoryCollapse',
       'syncConflictTitle',
       'syncConflictEmpty',
       'syncConflictKeepRemote',
@@ -237,6 +239,10 @@ void main() {
       'anniversaryYearsElapsedSuffix',
       'anniversaryNextPrefix',
       'anniversaryTodayShort',
+      'anniversaryStatusToday',
+      'anniversaryStatusSoon',
+      'anniversaryStatusUpcoming',
+      'anniversaryDateOriginPrefix',
       'anniversaryEditorAddTitle',
       'anniversaryEditorEditTitle',
       'anniversaryFieldTitle',
@@ -247,7 +253,9 @@ void main() {
       'anniversaryFieldDatePickerTitle',
       'anniversaryFieldDatePickerSubtitle',
       'anniversaryFieldColor',
+      'anniversaryReminderCardPrefix',
       'anniversaryLunarYearSuffix',
+      'reminderKindEmail',
       'courseWeekPrefix',
       'courseWeekSuffix',
       'courseWeekCountSuffix',
@@ -929,6 +937,11 @@ void main() {
         en: en.aiHistoryClearAction,
       ),
       'ai_history.empty': (zh: zh.aiHistoryEmpty, en: en.aiHistoryEmpty),
+      'ai_history.expand': (zh: zh.aiHistoryExpand, en: en.aiHistoryExpand),
+      'ai_history.collapse': (
+        zh: zh.aiHistoryCollapse,
+        en: en.aiHistoryCollapse,
+      ),
       'sync_conflict.title': (
         zh: zh.syncConflictTitle,
         en: en.syncConflictTitle,
@@ -1287,6 +1300,22 @@ void main() {
         zh: zh.anniversaryTodayShort,
         en: en.anniversaryTodayShort,
       ),
+      'anniversary.status.today': (
+        zh: zh.anniversaryStatusToday,
+        en: en.anniversaryStatusToday,
+      ),
+      'anniversary.status.soon': (
+        zh: zh.anniversaryStatusSoon,
+        en: en.anniversaryStatusSoon,
+      ),
+      'anniversary.status.upcoming': (
+        zh: zh.anniversaryStatusUpcoming,
+        en: en.anniversaryStatusUpcoming,
+      ),
+      'anniversary.date.origin_prefix': (
+        zh: zh.anniversaryDateOriginPrefix,
+        en: en.anniversaryDateOriginPrefix,
+      ),
       'anniversary.editor.add_title': (
         zh: zh.anniversaryEditorAddTitle,
         en: en.anniversaryEditorAddTitle,
@@ -1330,6 +1359,14 @@ void main() {
       'anniversary.lunar.year_suffix': (
         zh: zh.anniversaryLunarYearSuffix,
         en: en.anniversaryLunarYearSuffix,
+      ),
+      'anniversary.reminder.card_prefix': (
+        zh: zh.anniversaryReminderCardPrefix,
+        en: en.anniversaryReminderCardPrefix,
+      ),
+      'reminder.kind.email': (
+        zh: zh.reminderKindEmail,
+        en: en.reminderKindEmail,
       ),
       'course.week.prefix': (zh: zh.courseWeekPrefix, en: en.courseWeekPrefix),
       'course.week.suffix': (zh: zh.courseWeekSuffix, en: en.courseWeekSuffix),

@@ -44,6 +44,7 @@ import 'models/note.dart' show NoteItem;
 import 'models/pomodoro.dart' show PomodoroType;
 import 'models/todo.dart'
     show EisenhowerQuadrant, TodoItem, TodoPriority, TodoPriorityX;
+import 'services/account_local_data_cleaner.dart';
 import 'services/alarm_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/deep_link_service.dart';
@@ -98,6 +99,7 @@ typedef _ReminderResyncQueue =
 /// `AppLifecycleState.resumed` 检测到时区变化时读取，用于触发提醒重放。
 /// 放在顶层是因为 `_DuoyiAppState` 并不持有构造时的闭包引用。
 late ReminderScheduler _reminderScheduler;
+bool _reminderSchedulerReady = false;
 Future<bool> Function({bool force, bool requestIfNeeded})?
 _syncNotificationQuickAddDedupedCallback;
 _ReminderResyncQueue? _queueFullReminderResyncCallback;
@@ -282,6 +284,84 @@ void main() async {
     currentVersionCode: AppVersion.build,
   );
 
+  Future<void> clearAccountLocalData({required String reason}) async {
+    debugPrint('[auth] clear local account data reason=$reason');
+    await cloudSyncProvider.resetForAccountChange();
+
+    Future<void> guarded(String label, Future<void> Function() task) async {
+      try {
+        await task();
+      } catch (e, st) {
+        debugPrint('[auth] account cleanup $label failed: $e\n$st');
+      }
+    }
+
+    await cloudSyncProvider.suppressDirtyMarkWhile(() async {
+      await guarded('notifications', notificationService.cancelAll);
+      await guarded('alarms', AlarmService.instance.cancelAll);
+      if (_reminderSchedulerReady) {
+        await guarded(
+          'reminder scheduler state',
+          _reminderScheduler.resetInMemoryState,
+        );
+      }
+      await guarded('geofences', LocationGeofenceService.clearReminders);
+      await AccountLocalDataCleaner.clearSharedPreferences();
+
+      todoProvider.resetLocalState();
+      habitProvider.resetLocalState();
+      pomodoroProvider.resetLocalState();
+      countdownProvider.resetLocalState();
+      anniversaryProvider.resetLocalState();
+      diaryProvider.resetLocalState();
+      goalProvider.resetLocalState();
+      courseProvider.resetLocalState();
+      noteProvider.resetLocalState();
+      calendarProvider.resetLocalState();
+      timeAuditProvider.resetLocalState();
+      locationReminderProvider.resetLocalState();
+      userProvider.resetLocalState();
+      themeProvider.resetLocalState();
+      achievementProvider.resetLocalState();
+      quickCaptureTemplateProvider.resetLocalState();
+      customFocusSoundProvider.resetLocalState();
+      focusRoomProvider.resetLocalState();
+      shareProvider.resetLocalState();
+      calendarSyncProvider.resetLocalState();
+      aiService.resetLocalState();
+      notificationService.resetLocalState();
+      await guarded(
+        'local account files',
+        AccountLocalDataCleaner.clearLocalFiles,
+      );
+      await preferencesProvider.loadFromStorage();
+      await ReminderRingtoneSettings.applyPersistedSettingsToNative();
+
+      // A second pass closes races where an async platform or sync callback
+      // finishes after the first SharedPreferences cleanup.
+      await AccountLocalDataCleaner.clearSharedPreferences();
+    });
+
+    HomeWidgetService.resetAccountCache();
+    await guarded('home widget refresh', () async {
+      await HomeWidgetService.init();
+      await _pushHomeWidget(
+        todoProvider,
+        habitProvider,
+        pomodoroProvider,
+        calendarProvider,
+        countdownProvider,
+        timeAuditProvider,
+        goalProvider,
+        anniversaryProvider,
+        courseProvider,
+        noteProvider,
+        diaryProvider,
+        themeProvider,
+      );
+    });
+  }
+
   String firstNonEmptyProfileText(List<String?> values) {
     for (final value in values) {
       final trimmed = value?.trim();
@@ -348,8 +428,10 @@ void main() async {
       }
     });
   };
+  authProvider.onAccountIdentityChanging = (_, _) =>
+      clearAccountLocalData(reason: 'account switch');
   authProvider.onAccountLoggedOut = () =>
-      userProvider.clearAccountProfileCache();
+      clearAccountLocalData(reason: 'logout');
 
   void handleDeepLink(Uri uri) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -527,9 +609,11 @@ void main() async {
         if (uri == null) return;
         _handleWidgetUri(uri, pomodoroProvider);
       },
+      notificationFallback: notificationService,
     ),
   );
   _reminderScheduler = reminderScheduler;
+  _reminderSchedulerReady = true;
   // 注入到 Provider，供 Provider 内部的局部 hook（例如 postponeOverdue、
   // onTimezoneChanged）转发调度请求。
   todoProvider.scheduler = reminderScheduler;
@@ -1323,6 +1407,7 @@ void main() async {
       cloudSyncProvider.stopRemotePolling();
       return;
     }
+    cloudSyncProvider.resumeForActiveAccount();
     await _startupGuard(
       'cloud sync $reason',
       () => cloudSyncProvider.syncNow(),
@@ -1664,6 +1749,7 @@ void main() async {
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: aiService),
         ChangeNotifierProvider.value(value: appUpdate),
+        Provider<ReminderScheduler>.value(value: reminderScheduler),
         Provider.value(value: systemTray),
       ],
       child: const DuoyiApp(),
@@ -2986,7 +3072,7 @@ String _todayTaskProgressNotificationBody(
         final day = CompletionVisibilityPolicy.dateOnly(todo.date);
         final isTodayTodo = day == today;
         return isTodayTodo &&
-        !todo.isCompleted &&
+            !todo.isCompleted &&
             !todo.isArchivedAfterRollover;
       })
       .toList(growable: false);

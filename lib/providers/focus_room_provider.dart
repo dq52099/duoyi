@@ -333,6 +333,37 @@ class FocusRoomProvider extends ChangeNotifier {
     }
   }
 
+  void resetLocalState() {
+    _cancelAllRealtimeRankings(notify: false);
+    _realtimeNotifyDebounce?.cancel();
+    _realtimeNotifyDebounce = null;
+    _rooms = _defaultRooms;
+    _joinedRoomIds
+      ..clear()
+      ..add(defaultRoomId);
+    _remoteRankings.clear();
+    _inviteCache.clear();
+    _focusFriends = const <FocusFriend>[];
+    _incomingFriendRequests = const <FocusFriendRequest>[];
+    _outgoingFriendRequests = const <FocusFriendRequest>[];
+    _remoteFriendRanking = null;
+    _remoteGlobalRanking = null;
+    _activeRoomId = defaultRoomId;
+    _remoteLoading = false;
+    _friendLoading = false;
+    _globalLoading = false;
+    _lastRemoteError = null;
+    _lastRemoteSyncAt = null;
+    _lastFriendSyncAt = null;
+    _lastGlobalSyncAt = null;
+    _remoteRetryAfter = null;
+    _realtimeClientKey = null;
+    _realtimeRetryAfter = null;
+    _fallbackToLocal = false;
+    _realtimeFailureCount = 0;
+    notifyListeners();
+  }
+
   Future<void> joinRoom(String id) async {
     if (roomById(id) == null) return;
     if (_joinedRoomIds.contains(id) && _activeRoomId == id) return;

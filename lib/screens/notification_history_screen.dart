@@ -19,6 +19,7 @@ import '../services/notification_settings.dart';
 import '../services/notification_status_bar_sync_bridge.dart';
 import '../services/native_reminder_ringtone.dart';
 import '../services/reminder_ringtone_settings.dart';
+import '../services/reminder_scheduler.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -26,9 +27,10 @@ import '../widgets/surface_components.dart';
 enum _NotificationReadFilter { all, unread, read }
 
 class NotificationHistoryScreen extends StatefulWidget {
+  /// 兼容旧路由参数；通知记录现在只通过用户手动操作标记已读。
   final bool markReadOnOpen;
 
-  const NotificationHistoryScreen({super.key, this.markReadOnOpen = true});
+  const NotificationHistoryScreen({super.key, this.markReadOnOpen = false});
 
   @override
   State<NotificationHistoryScreen> createState() =>
@@ -42,20 +44,6 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
   NotificationType? _typeFilter;
   _NotificationReadFilter _readFilter = _NotificationReadFilter.all;
   int _page = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.markReadOnOpen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final service = context.read<NotificationService>();
-        if (service.unreadCount > 0) {
-          service.markHistorySeen();
-        }
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -509,6 +497,39 @@ class _NotificationRecordCard extends StatelessWidget {
   }
 }
 
+class _RegisteredNotificationGroup extends StatelessWidget {
+  final String title;
+  final String idsText;
+
+  const _RegisteredNotificationGroup({
+    required this.title,
+    required this.idsText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.74),
+          ),
+        ),
+        const SizedBox(height: 6),
+        SelectableText(
+          idsText,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.82),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -521,6 +542,8 @@ class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
   int? _pendingPushCount;
   int? _pendingAlarmCount;
+  List<int>? _pendingPushIds;
+  List<int>? _pendingAlarmIds;
   bool? _exactAlarmGranted;
   Map<String, NotificationChannelStatus>? _channelStatuses;
   bool _busy = false;
@@ -555,6 +578,8 @@ class _NotificationSettingsScreenState
       setState(() {
         _pendingPushCount = pendingIds.length;
         _pendingAlarmCount = pendingAlarmIds.length;
+        _pendingPushIds = pendingIds;
+        _pendingAlarmIds = pendingAlarmIds;
         _exactAlarmGranted = exactAlarmGranted;
         _channelStatuses = channelStatuses;
       });
@@ -579,6 +604,63 @@ class _NotificationSettingsScreenState
       debugPrint('[NotificationSettings] pending alarm probe failed: $e\n$st');
       return const <int>[];
     }
+  }
+
+  String _registeredNotificationsSummary() {
+    if (_pendingPushIds == null || _pendingAlarmIds == null) {
+      return '正在读取注册通知';
+    }
+    return '普通 ${_pendingPushIds!.length} 条 · 闹钟 ${_pendingAlarmIds!.length} 条';
+  }
+
+  String _registeredIdsText(List<int>? ids) {
+    if (ids == null) return '正在读取';
+    if (ids.isEmpty) return '暂无';
+    final sorted = ids.toList()..sort();
+    return sorted.map((id) => '#$id').join('、');
+  }
+
+  Future<void> _showRegisteredNotifications() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: const Text('注册通知'),
+        icon: const Icon(Icons.fact_check_outlined),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 360),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RegisteredNotificationGroup(
+                  title: '普通提醒',
+                  idsText: _registeredIdsText(_pendingPushIds),
+                ),
+                const SizedBox(height: 12),
+                _RegisteredNotificationGroup(
+                  title: '闹钟提醒',
+                  idsText: _registeredIdsText(_pendingAlarmIds),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              unawaited(_refreshStatus());
+            },
+            child: const Text('刷新'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestPermission() async {
@@ -695,11 +777,11 @@ class _NotificationSettingsScreenState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await context.read<NotificationService>().sendTest();
+      final sent = await context.read<NotificationService>().sendTest();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('测试通知已发送'),
+        SnackBar(
+          content: Text(sent ? '测试通知已发送' : '测试通知发送失败，请检查通知权限和渠道设置。'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -732,11 +814,32 @@ class _NotificationSettingsScreenState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await context.read<NotificationService>().sendScheduledTest();
+      final service = context.read<NotificationService>();
+      final kind = _scheduledTestReminderKind(context);
+      final scheduler = context.read<ReminderScheduler?>();
+      final granted = await service.requestPermission();
+      if (!granted) {
+        throw const NotificationPermissionDeniedException();
+      }
+      final scheduled = await service.sendScheduledTest(
+        reminderKind: kind,
+        popup: scheduler?.popup,
+        alarm: scheduler?.alarm,
+      );
       if (!mounted) return;
+      if (!scheduled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('定时测试注册失败，请检查通知和精确闹钟权限。'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        await _refreshStatus();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('已注册 1 分钟后的定时通知测试'),
+        SnackBar(
+          content: Text('已注册 1 分钟后的${_kindLabel(kind)}定时测试'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -763,6 +866,16 @@ class _NotificationSettingsScreenState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  ReminderKind _scheduledTestReminderKind(BuildContext context) {
+    final prefs = context.read<PreferencesProvider?>();
+    final slots = prefs?.dailyReminderSlots ?? const <DailyReminderSlot>[];
+    for (final slot in slots) {
+      final kind = DailyReminderSlot.normalizeKind(slot.kind);
+      if (slot.enabled && kind != ReminderKind.off) return kind;
+    }
+    return ReminderKind.push;
   }
 
   Future<void> _sendStrongTest() async {
@@ -1070,6 +1183,19 @@ class _NotificationSettingsScreenState
                             onTap: _busy ? null : _sendStrongTest,
                           ),
                           AppSettingsTile(
+                            icon: Icons.fact_check_outlined,
+                            color: Colors.blue,
+                            title: '注册通知',
+                            subtitle: _registeredNotificationsSummary(),
+                            trailing: TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : _showRegisteredNotifications,
+                              child: const Text('查看'),
+                            ),
+                            onTap: _busy ? null : _showRegisteredNotifications,
+                          ),
+                          AppSettingsTile(
                             icon: Icons.schedule,
                             color: Colors.teal,
                             title: '已调度普通提醒',
@@ -1183,7 +1309,7 @@ class _NotificationSettingsScreenState
                                 MaterialPageRoute(
                                   builder: (_) =>
                                       const NotificationHistoryScreen(
-                                        markReadOnOpen: true,
+                                        markReadOnOpen: false,
                                       ),
                                 ),
                               ),

@@ -28,6 +28,11 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _customTemplates.clear();
+    notifyListeners();
+  }
+
   Future<void> saveTemplate(QuickCaptureTemplate template) async {
     final custom = template.copyWith(builtIn: false);
     final index = _customTemplates.indexWhere((item) => item.id == custom.id);

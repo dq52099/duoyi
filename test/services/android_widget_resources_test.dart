@@ -114,6 +114,9 @@ void main() {
           '@+id/widget_calendar_nav_focus',
           '@+id/widget_calendar_grid',
           '@+id/widget_calendar_summary',
+          '@+id/widget_calendar_actions',
+          '@+id/widget_calendar_today_button',
+          '@+id/widget_calendar_schedule_button',
         ],
         compact: true,
       ),
@@ -460,8 +463,33 @@ void main() {
       expect(legacyProvider, contains('R.id.widget_quick_open'));
       expect(todoProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
       expect(todoProvider, contains('R.id.widget_todo_quick_add'));
+      final todoLayout = File(
+        'android/app/src/main/res/layout/duoyi_todo_widget.xml',
+      ).readAsStringSync();
+      expect(todoLayout, contains('android:id="@+id/widget_todo_done_1"'));
+      expect(todoLayout, contains('android:text="o"'));
+      expect(todoLayout, isNot(contains('android:text="✓"')));
       expect(focusProvider, contains('DuoyiWidgetTheme.applyButtonSurfaces('));
       expect(focusProvider, contains('R.id.widget_focus_quick_start'));
+      final calendarProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiCalendarWidgetProvider.kt',
+      ).readAsStringSync();
+      final calendarLayout = File(
+        'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
+      ).readAsStringSync();
+      expect(calendarProvider, contains('R.id.widget_calendar_today_button'));
+      expect(
+        calendarProvider,
+        contains('R.id.widget_calendar_schedule_button'),
+      );
+      expect(
+        calendarProvider,
+        contains('buildMonthGrid(now, visibleWeekRows)'),
+      );
+      expect(calendarProvider, isNot(contains('takeLast(2)')));
+      expect(calendarLayout, contains('@+id/widget_calendar_actions'));
+      expect(calendarLayout, contains('@+id/widget_calendar_today_button'));
+      expect(calendarLayout, contains('@+id/widget_calendar_schedule_button'));
     });
 
     test('历史兼容主小组件保留注册用于升级前旧实例刷新', () {
@@ -636,7 +664,7 @@ void main() {
       expect(widgetScreen, contains('WidgetPreviewCard.goal'));
       expect(focusLayout, isNot(contains('专注与习惯')));
       expect(focusLayout, isNot(contains('习惯完成')));
-      expect(calendarLayout, isNot(contains('widget_calendar_today_')));
+      expect(calendarLayout, isNot(contains('widget_calendar_today_summary')));
       expect(calendarProvider, isNot(contains('calendar_day_summary_')));
       expect(manager, contains('DuoyiWidgetKind.focus'));
       expect(manager, contains('DuoyiWidgetKind.habit'));
@@ -1003,13 +1031,28 @@ void main() {
         widgetScreen,
         contains('for (final line in lines.take(maxLines))'),
       );
-      expect(widgetScreen, contains('final rows = switch (maxLines)'));
+      expect(widgetScreen, contains('final calendarWeekRows = switch (mode)'));
+      expect(widgetScreen, contains('WidgetDisplayMode.compact => 1'));
+      expect(widgetScreen, contains('WidgetDisplayMode.standard => 3'));
+      expect(widgetScreen, contains('WidgetDisplayMode.detailed => 6'));
+      expect(widgetScreen, contains('calendarWeekRowsOf'));
+      expect(widgetScreen, contains('final rows = switch (calendarWeekRows)'));
+      expect(widgetScreen, contains("'本月日期 · 今日已标记'"));
       expect(
         widgetScreen,
         contains('displayMode != WidgetDisplayMode.compact'),
       );
-      expect(widgetScreen, contains('if (maxLines >= 2)'));
+      expect(widgetScreen, contains('if (calendarWeekRows >= 3)'));
       expect(widgetScreen, contains('if (maxLines >= 3)'));
+      expect(
+        widgetScreen,
+        contains("const _WidgetPreviewQuickAdd(label: '+ 添加')"),
+      );
+      expect(widgetScreen, contains("'· \$text'"));
+      expect(widgetScreen, contains("'o'"));
+      expect(widgetScreen, contains('width: 28'));
+      expect(widgetScreen, contains('height: 24'));
+      expect(widgetScreen, contains('height: 28'));
       expect(helper, contains('PER_WIDGET_KEY_PREFIX'));
       expect(helper, contains('saveForWidget'));
       expect(helper, contains('saveForWidgetIfMissing'));
@@ -1489,7 +1532,7 @@ void main() {
           'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt',
         ).readAsStringSync(),
         contains(
-          'updateAppWidgetOptions(widgetId, normalizedStyle.toDisplayModeOptions())',
+          'updateAppWidgetOptions(widgetId, normalizedStyle.toOptions())',
         ),
       );
       expect(
@@ -2633,8 +2676,8 @@ void main() {
       expect(widgetScreen, contains("'待办', '习惯', '日历', '专注'"));
       expect(widgetScreen, contains('展示进行中目标和进度'));
       expect(widgetScreen, contains('发版准备 · 68%'));
-      expect(widgetScreen, contains('今日优先处理'));
-      expect(widgetScreen, contains('+ 添加待办'));
+      expect(widgetScreen, contains('今日待办 · 3 项'));
+      expect(widgetScreen, contains('+ 添加'));
       expect(widgetScreen, contains('开始 25 分钟专注'));
     });
 

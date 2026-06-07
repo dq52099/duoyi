@@ -157,6 +157,32 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  void resetLocalState() {
+    _cancelTimer();
+    _timerTicks.value = 0;
+    _config = PomodoroConfig();
+    _sessions = [];
+    _penalties = [];
+    _sessionCountToday = 0;
+    _lastDate = null;
+    _persistedRevision++;
+    _initState();
+    // ignore: discarded_futures
+    _sound.stop();
+    // ignore: discarded_futures
+    _restoreFocusDndIfNeeded(notify: false);
+    _dndStatus = const FocusDndStatus.unavailable();
+    _dndActive = false;
+    _dndEnableInFlight = false;
+    _distractionTimer?.cancel();
+    _distractionTimer = null;
+    _distractionStatus = const FocusDistractionStatus.unavailable();
+    _lastDistractingPackage = null;
+    // ignore: discarded_futures
+    _distraction.setFocusBlocker(enabled: false, packages: const []);
+    notifyListeners();
+  }
+
   void _initState() {
     _state = PomodoroState(
       remainingSeconds: _config.focusDuration,

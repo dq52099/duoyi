@@ -283,6 +283,18 @@ class AndroidWidgetManager {
     }
   }
 
+  static Future<int?> clearDisplayModeOverrides() async {
+    if (!_isAndroid) return 0;
+    try {
+      return await _channel.invokeMethod<int>('clearWidgetDisplayModes') ?? 0;
+    } catch (e, st) {
+      debugPrint(
+        '[AndroidWidgetManager] clearDisplayModeOverrides failed: $e\n$st',
+      );
+      return null;
+    }
+  }
+
   static Future<int?> refreshAllWidgets() async {
     if (!_isAndroid) return 0;
     try {

@@ -50,6 +50,10 @@ import 'profile_screen.dart';
 import 'more_apps_screen.dart';
 import 'notification_history_screen.dart';
 
+const double _mineHeaderCompactHeight = 76;
+const double _mineHeaderRegularHeight = 80;
+const double _mineHeaderMetadataHeight = 44;
+
 class MineScreen extends StatelessWidget {
   final List<int>? visibleBottomNavTabs;
   final bool useShellBackground;
@@ -135,6 +139,8 @@ class MineScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
+        key: const PageStorageKey<String>('mine_screen_list'),
+        restorationId: 'mine_screen_list',
         children: [
           AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
@@ -144,6 +150,9 @@ class MineScreen extends StatelessWidget {
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 360;
                 final avatarSize = compact ? 50.0 : 56.0;
+                final headerHeight = compact
+                    ? _mineHeaderCompactHeight
+                    : _mineHeaderRegularHeight;
                 final avatar = SizedBox(
                   width: avatarSize + 6,
                   height: avatarSize + 6,
@@ -196,6 +205,11 @@ class MineScreen extends StatelessWidget {
                                     avatar: avatarValue,
                                     displayName: displayName,
                                     radius: compact ? 26 : 30,
+                                    cacheKey: _avatarCacheKey(
+                                      avatarValue,
+                                      p.updatedAt,
+                                      auth.state.userId,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -313,60 +327,81 @@ class MineScreen extends StatelessWidget {
                   if (auth.state.isLoggedIn && auth.state.isAdmin)
                     _MineUserLineChip(label: '管理员', color: cs.primary),
                 ];
-                return Row(
-                  key: const ValueKey('mine_user_info_row'),
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Center(
-                      key: const ValueKey('mine_avatar_row'),
-                      child: avatar,
-                    ),
-                    SizedBox(width: compact ? 10 : 12),
-                    Expanded(
-                      child: Semantics(
-                        button: true,
-                        label: '查看个人资料',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(
-                            DesignTokens.radiusCard,
-                          ),
-                          onTap: () => _openProfileEditor(context),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                              horizontal: 2,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  nameText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(
-                                        fontSize: 15,
-                                        color: cs.onSurface,
-                                        height: 1.18,
+                return SizedBox(
+                  key: const ValueKey('mine_header_stable_box'),
+                  height: headerHeight,
+                  child: Row(
+                    key: const ValueKey('mine_user_info_row'),
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Center(
+                        key: const ValueKey('mine_avatar_row'),
+                        child: avatar,
+                      ),
+                      SizedBox(width: compact ? 10 : 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: headerHeight,
+                          child: Semantics(
+                            button: true,
+                            label: '查看个人资料',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.radiusCard,
+                              ),
+                              onTap: () => _openProfileEditor(context),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                  horizontal: 2,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      nameText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontSize: 15,
+                                            color: cs.onSurface,
+                                            height: 1.18,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    SizedBox(
+                                      height: _mineHeaderMetadataHeight,
+                                      child: ClipRect(
+                                        child: Align(
+                                          alignment: Alignment.topLeft,
+                                          child: Wrap(
+                                            spacing: compact ? 8 : 10,
+                                            runSpacing: 4,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: metadata,
+                                          ),
+                                        ),
                                       ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 5),
-                                Wrap(
-                                  spacing: compact ? 8 : 10,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: metadata,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    accountAction,
-                  ],
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: headerHeight,
+                        child: Center(child: accountAction),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -994,6 +1029,11 @@ class MineScreen extends StatelessWidget {
         builder: (_) => _AvatarPreviewScreen(
           avatar: avatar,
           displayName: displayName,
+          cacheKey: _avatarCacheKey(
+            avatar,
+            profile.updatedAt,
+            auth.state.userId,
+          ),
           onEdit: () => _pickAndSaveAvatar(context),
         ),
       ),
@@ -1164,7 +1204,7 @@ class MineScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => const BrandRouteSurface(
-          child: NotificationHistoryScreen(markReadOnOpen: true),
+          child: NotificationHistoryScreen(markReadOnOpen: false),
         ),
       ),
     );
@@ -1220,11 +1260,13 @@ class _ProfileAvatar extends StatelessWidget {
   final String? avatar;
   final String displayName;
   final double radius;
+  final Object? cacheKey;
 
   const _ProfileAvatar({
     required this.avatar,
     required this.displayName,
     required this.radius,
+    this.cacheKey,
   });
 
   @override
@@ -1245,6 +1287,7 @@ class _ProfileAvatar extends StatelessWidget {
           ? ClipOval(
               child: CachedAvatarImage(
                 url: networkUrl,
+                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
                 width: radius * 2,
                 height: radius * 2,
                 fallbackBuilder: (_) => _ProfileAvatarLetter(
@@ -1332,11 +1375,13 @@ class _MineUserLineChip extends StatelessWidget {
 class _AvatarPreviewScreen extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
   final VoidCallback? onEdit;
 
   const _AvatarPreviewScreen({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
     this.onEdit,
   });
 
@@ -1370,6 +1415,7 @@ class _AvatarPreviewScreen extends StatelessWidget {
           child: _ProfileAvatarFullImage(
             avatar: avatar,
             displayName: displayName,
+            cacheKey: cacheKey,
           ),
         ),
       ),
@@ -1380,10 +1426,12 @@ class _AvatarPreviewScreen extends StatelessWidget {
 class _ProfileAvatarFullImage extends StatelessWidget {
   final String? avatar;
   final String displayName;
+  final Object? cacheKey;
 
   const _ProfileAvatarFullImage({
     required this.avatar,
     required this.displayName,
+    this.cacheKey,
   });
 
   @override
@@ -1394,6 +1442,7 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final image = networkUrl != null
         ? CachedAvatarImage(
             url: networkUrl,
+            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1493,6 +1542,11 @@ String? _networkAvatarUrl(String value) {
     return trimmed;
   }
   return null;
+}
+
+String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
+  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}|'
+      '${updatedAt?.millisecondsSinceEpoch ?? 0}';
 }
 
 Future<String> _copyLocalAvatarFile(XFile file) async {

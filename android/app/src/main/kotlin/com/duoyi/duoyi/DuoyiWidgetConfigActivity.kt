@@ -60,7 +60,7 @@ class DuoyiWidgetConfigActivity : Activity() {
             normalizedStyle.id,
         )
         val manager = AppWidgetManager.getInstance(applicationContext)
-        manager.updateAppWidgetOptions(widgetId, normalizedStyle.toDisplayModeOptions())
+        manager.updateAppWidgetOptions(widgetId, normalizedStyle.toOptions())
         // Ask the actual provider to render the initial state immediately.
         val providerClassName = manager.getAppWidgetInfo(widgetId)?.provider?.className
         val provider = manager.getAppWidgetInfo(widgetId)?.provider

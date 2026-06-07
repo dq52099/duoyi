@@ -930,6 +930,9 @@ class _SummaryYijiLine extends StatelessWidget {
         Expanded(
           child: Text(
             text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            softWrap: true,
             style: appSecondaryControlTextStyle(context).copyWith(
               color: cs.onSurface.withValues(alpha: 0.76),
               height: 1.35,
@@ -2294,12 +2297,7 @@ class _MonthNavButton extends StatelessWidget {
 }
 
 String _summaryTerms(String value) {
-  final terms = value
-      .split(RegExp(r'\s+'))
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .take(6)
-      .toList(growable: false);
+  final terms = _splitAlmanacTerms(value).take(5).toList(growable: false);
   return terms.isEmpty ? value : terms.join(' ');
 }
 

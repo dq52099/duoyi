@@ -52,6 +52,11 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
+  void resetLocalState() {
+    _profile = UserProfile();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_profile', json.encode(_profile.toJson()));

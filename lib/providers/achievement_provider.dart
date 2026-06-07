@@ -173,6 +173,25 @@ class AchievementProvider extends ChangeNotifier {
     });
   }
 
+  void resetLocalState() {
+    _storageLoadFuture = null;
+    _storageLoaded = false;
+    _unlockedAt.clear();
+    _pendingUnlockedFeedback.clear();
+    _notifiedAchievementIds.clear();
+    _rewardGrantIds.clear();
+    _rewardLedger.clear();
+    _snapshots = const <AchievementSnapshot>[];
+    _lastEventAt = null;
+    _coinBalance = 0;
+    _lifetimeCoins = 0;
+    _persistedRevision++;
+    _rewardsUpdatedAt = '';
+    _serverConfirmedRewardsChangePending = false;
+    _context = null;
+    notifyListeners();
+  }
+
   Future<void> _loadFromStorageNow() async {
     final prefs = await SharedPreferences.getInstance();
     final beforeUnlocked = jsonEncode(

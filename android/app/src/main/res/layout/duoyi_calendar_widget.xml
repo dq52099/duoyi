@@ -85,6 +85,46 @@
         android:textSize="10sp" />
 
     <LinearLayout
+        android:id="@+id/widget_calendar_actions"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:weightSum="2">
+
+        <TextView
+            android:id="@+id/widget_calendar_today_button"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginRight="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn_primary"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="今天"
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_calendar_schedule_button"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginLeft="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn_secondary"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="日程"
+            android:textColor="#1E88E5"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/widget_calendar_bottom_nav"
         android:layout_width="match_parent"
         android:layout_height="30dp"

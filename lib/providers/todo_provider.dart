@@ -167,6 +167,14 @@ class TodoProvider extends ChangeNotifier {
     _notify();
   }
 
+  void resetLocalState() {
+    _todos = [];
+    _lastReminderSyncIssue = null;
+    _lastReminderSyncAttemptAt = null;
+    _lastReminderSyncSucceededAt = null;
+    _notify();
+  }
+
   Future<void> _saveToStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final data = json.encode(_todos.map((e) => e.toJson()).toList());
