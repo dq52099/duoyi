@@ -246,7 +246,7 @@ const Map<String, String> _zh = <String, String>{
   'notification.status_bar.today_remaining.prefix': '今日还要完成 ',
   'notification.status_bar.today_remaining.suffix': ' 项',
   'notification.status_bar.daily_count': '日常 ',
-  'notification.status_bar.representative_count': '代表 ',
+  'notification.status_bar.todo_count': '待办 ',
   'notification.status_bar.goal_count': '目标 ',
   // 快速捕获
   'quick.todo.title': '快速待办',
@@ -1172,7 +1172,7 @@ const Map<String, String> _en = <String, String>{
   'notification.status_bar.today_remaining.prefix': '',
   'notification.status_bar.today_remaining.suffix': ' tasks left today',
   'notification.status_bar.daily_count': 'Daily ',
-  'notification.status_bar.representative_count': 'Key ',
+  'notification.status_bar.todo_count': 'Tasks ',
   'notification.status_bar.goal_count': 'Goals ',
   'quick.todo.title': 'Quick task',
   'quick.todo.hint': 'Describe it in one line, e.g. meeting tomorrow at 3 PM',

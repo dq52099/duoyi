@@ -774,11 +774,7 @@ class ReminderScheduler {
       }
       wanted[t.id] = {for (final rule in resolved) rule.ruleId: rule};
     }
-    final blocked = await _sweepRuleRegistry(
-      objectType: 'todo',
-      wanted: wanted,
-    );
-    wanted.removeWhere((objectId, _) => blocked.contains(objectId));
+    await _sweepRuleRegistry(objectType: 'todo', wanted: wanted);
     await _syncRuleObjects(
       objectType: 'todo',
       wanted: wanted,
@@ -1346,11 +1342,7 @@ class ReminderScheduler {
       }
       wanted[g.id] = {for (final rule in resolved) rule.ruleId: rule};
     }
-    final blocked = await _sweepRuleRegistry(
-      objectType: 'goal',
-      wanted: wanted,
-    );
-    wanted.removeWhere((objectId, _) => blocked.contains(objectId));
+    await _sweepRuleRegistry(objectType: 'goal', wanted: wanted);
     await _syncRuleObjects(
       objectType: 'goal',
       wanted: wanted,
@@ -1838,41 +1830,51 @@ class ReminderScheduler {
   // 内部：取消
   // -------------------------------------------------------------------------
 
-  Future<bool> _cancelTodo(String todoId) async {
+  Future<bool> _cancelTodo(String todoId, {bool blocking = true}) async {
     // 双通道清理：即便本地记录的是 push，用户从 alarm 切过来时也能扫到尾巴。
     var ok = true;
     ok =
         await _cancelSafely(
           'todo notification legacy:$todoId',
           () => notif.cancelTodoReminder(todoId),
+          blocking: blocking,
         ) &&
         ok;
     ok =
         await _cancelSafely(
           'todo alarm legacy:$todoId',
           () => alarm.cancel(_idFor('todo_$todoId')),
+          blocking: blocking,
         ) &&
         ok;
     return ok;
   }
 
-  Future<bool> _cancelGoal(String goalId) async {
+  Future<bool> _cancelGoal(String goalId, {bool blocking = true}) async {
     final id = _idFor('goal_$goalId');
     var ok = true;
     ok =
         await _cancelSafely(
           'goal notification:$goalId',
           () => notif.cancel(id),
+          blocking: blocking,
         ) &&
         ok;
     ok =
-        await _cancelSafely('goal alarm:$goalId', () => alarm.cancel(id)) && ok;
+        await _cancelSafely(
+          'goal alarm:$goalId',
+          () => alarm.cancel(id),
+          blocking: blocking,
+        ) &&
+        ok;
     return ok;
   }
 
-  Future<bool> _cancelTodoLegacy(String todoId) => _cancelTodo(todoId);
+  Future<bool> _cancelTodoLegacy(String todoId, {bool blocking = true}) =>
+      _cancelTodo(todoId, blocking: blocking);
 
-  Future<bool> _cancelGoalLegacy(String goalId) => _cancelGoal(goalId);
+  Future<bool> _cancelGoalLegacy(String goalId, {bool blocking = true}) =>
+      _cancelGoal(goalId, blocking: blocking);
 
   Future<bool> _cancelAnniversary(String annId) async {
     var ok = true;
@@ -1926,21 +1928,23 @@ class ReminderScheduler {
   Future<bool> _cancelRuleObjects(
     String objectType,
     String objectId,
-    Iterable<String> ruleIds,
-  ) async {
+    Iterable<String> ruleIds, {
+    bool blocking = true,
+  }) async {
     var ok = true;
     for (final ruleId in ruleIds) {
-      ok = await _cancelRule(objectType, objectId, ruleId) && ok;
+      ok =
+          await _cancelRule(objectType, objectId, ruleId, blocking: blocking) &&
+          ok;
     }
     return ok;
   }
 
-  Future<Set<String>> _sweepRuleRegistry({
+  Future<void> _sweepRuleRegistry({
     required String objectType,
     required Map<String, Map<String, _ResolvedRule>> wanted,
   }) async {
     final persisted = await registry.idsByObject(objectType);
-    final blocked = <String>{};
     for (final entry in persisted.entries) {
       final objectId = entry.key;
       final wantedRules = wanted[objectId] ?? const <String, _ResolvedRule>{};
@@ -1949,18 +1953,20 @@ class ReminderScheduler {
       };
       final staleIds = entry.value.difference(wantedIds);
       if (staleIds.isEmpty) continue;
-      final cancelled = await _cancelIds(objectType, objectId, staleIds);
+      final cancelled = await _cancelIds(
+        objectType,
+        objectId,
+        staleIds,
+        blocking: false,
+      );
       if (cancelled) {
         if (wantedIds.isEmpty) {
           await registry.removeObject(objectType, objectId);
         } else {
           await registry.replaceObject(objectType, objectId, wantedIds);
         }
-      } else {
-        blocked.add(objectId);
       }
     }
-    return blocked;
   }
 
   Future<Set<String>> _sweepSingleRegistry({
@@ -2027,29 +2033,39 @@ class ReminderScheduler {
   Future<bool> _cancelIds(
     String objectType,
     String objectId,
-    Iterable<int> ids,
-  ) async {
+    Iterable<int> ids, {
+    bool blocking = true,
+  }) async {
     var ok = true;
     for (final id in ids.where((id) => id != 0).toSet()) {
       ok =
           await _cancelSafely(
             '$objectType notification registry:$objectId ($id)',
             () => notif.cancel(id),
+            blocking: blocking,
           ) &&
           ok;
       ok =
           await _cancelSafely(
             '$objectType alarm registry:$objectId ($id)',
             () => alarm.cancel(id),
+            blocking: blocking,
           ) &&
           ok;
       ok =
           await _cancelSafely(
             '$objectType popup registry:$objectId ($id)',
             () => popup.cancel(id),
+            blocking: blocking,
           ) &&
           ok;
-      ok = await _cancelEmail(id, '$objectType:$objectId registry') && ok;
+      ok =
+          await _cancelEmail(
+            id,
+            '$objectType:$objectId registry',
+            blocking: blocking,
+          ) &&
+          ok;
     }
     return ok;
   }
@@ -2057,46 +2073,65 @@ class ReminderScheduler {
   Future<bool> _cancelRule(
     String objectType,
     String objectId,
-    String ruleId,
-  ) async {
+    String ruleId, {
+    bool blocking = true,
+  }) async {
     final intId = _idFor('$objectType:$objectId:$ruleId');
     var ok = true;
     ok =
         await _cancelSafely(
           '$objectType notification:$objectId:$ruleId',
           () => notif.cancel(intId),
+          blocking: blocking,
         ) &&
         ok;
     ok =
         await _cancelSafely(
           '$objectType alarm:$objectId:$ruleId',
           () => alarm.cancel(intId),
+          blocking: blocking,
         ) &&
         ok;
-    ok = await _cancelEmail(intId, '$objectType:$objectId:$ruleId') && ok;
+    ok =
+        await _cancelEmail(
+          intId,
+          '$objectType:$objectId:$ruleId',
+          blocking: blocking,
+        ) &&
+        ok;
     ok =
         await _cancelSafely(
           '$objectType popup:$objectId:$ruleId',
           () => popup.cancel(intId),
+          blocking: blocking,
         ) &&
         ok;
     return ok;
   }
 
-  Future<bool> _cancelEmail(int id, String label) async {
-    return _cancelSafely('email:$label ($id)', () => email.cancel(id));
+  Future<bool> _cancelEmail(
+    int id,
+    String label, {
+    bool blocking = true,
+  }) async {
+    return _cancelSafely(
+      'email:$label ($id)',
+      () => email.cancel(id),
+      blocking: blocking,
+    );
   }
 
   Future<bool> _cancelSafely(
     String label,
-    Future<void> Function() cancel,
-  ) async {
+    Future<void> Function() cancel, {
+    bool blocking = true,
+  }) async {
     try {
       await cancel();
       return true;
     } catch (e, st) {
       debugPrint('[ReminderScheduler] cancel failed for $label: $e\n$st');
-      _recordCancellationIssue(label: label, error: e);
+      _recordCancellationIssue(label: label, error: e, blocking: blocking);
       return false;
     }
   }
@@ -2104,6 +2139,7 @@ class ReminderScheduler {
   void _recordCancellationIssue({
     required String label,
     required Object error,
+    bool blocking = true,
   }) {
     final issueSink = notif is ReminderScheduleIssueSink
         ? notif as ReminderScheduleIssueSink
@@ -2111,9 +2147,11 @@ class ReminderScheduler {
     if (issueSink == null) return;
     issueSink.recordReminderScheduleIssue(
       title: '提醒交接失败',
-      message: '旧提醒清理失败，已保留原注册状态并暂缓新提醒以避免重复弹出；请重新保存提醒或检查系统提醒权限。($error)',
+      message: blocking
+          ? '旧提醒清理失败，已保留原注册状态并暂缓新提醒以避免重复弹出；请重新保存提醒或检查系统提醒权限。($error)'
+          : '旧提醒清理失败，已继续保存当前提醒；若系统仍保留旧队列，可能短时间重复提醒，请在通知设置中检查。($error)',
       relatedId: label,
-      blocking: true,
+      blocking: blocking,
     );
   }
 
@@ -2121,7 +2159,8 @@ class ReminderScheduler {
     required String objectType,
     required Map<String, Map<String, _ResolvedRule>> wanted,
     required Map<String, Map<String, _ScheduledRule>> scheduled,
-    required Future<bool> Function(String objectId) cancelLegacy,
+    required Future<bool> Function(String objectId, {bool blocking})
+    cancelLegacy,
   }) async {
     final nextScheduled = <String, Map<String, _ScheduledRule>>{};
 
@@ -2184,12 +2223,9 @@ class ReminderScheduler {
         }
       }
 
-      final legacyCancelled = await cancelLegacy(objectId);
+      await cancelLegacy(objectId, blocking: false);
       for (final nextRule in nextRules.values) {
         if (blockedRuleIds.contains(nextRule.ruleId)) continue;
-        if (!legacyCancelled && !priorRules.containsKey(nextRule.ruleId)) {
-          continue;
-        }
         final prior = priorRules[nextRule.ruleId];
         if (prior != null && _sameScheduledRule(prior, nextRule)) {
           if (await _scheduledRuleStillPending(nextRule)) {
@@ -2237,11 +2273,14 @@ class ReminderScheduler {
 
       final nextRules = entry.value;
       final kept = <String, _ScheduledRule>{};
-      final legacyCancelled = await cancelLegacy(objectId);
-      if (!legacyCancelled) continue;
+      await cancelLegacy(objectId, blocking: false);
       for (final nextRule in nextRules.values) {
-        final swept = await _cancelRule(objectType, objectId, nextRule.ruleId);
-        if (!swept) continue;
+        await _cancelRule(
+          objectType,
+          objectId,
+          nextRule.ruleId,
+          blocking: false,
+        );
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);

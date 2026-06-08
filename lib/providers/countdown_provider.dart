@@ -10,6 +10,7 @@ class CountdownProvider extends ChangeNotifier {
   static const Duration _reminderSyncTimeout = Duration(seconds: 5);
   List<CountdownItem> _items = [];
   ReminderScheduler? _scheduler;
+  int _storageGeneration = 0;
 
   List<CountdownItem> get items => List.unmodifiable(
     [..._items]..sort((a, b) {
@@ -25,7 +26,9 @@ class CountdownProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_key) ?? [];
     final loaded = <CountdownItem>[];
     for (final entry in data) {
@@ -49,6 +52,7 @@ class CountdownProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _items = [];
     notifyListeners();
   }

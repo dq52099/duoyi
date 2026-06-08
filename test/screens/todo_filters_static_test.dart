@@ -59,7 +59,7 @@ void main() {
     expect(source, contains('清空筛选'));
   });
 
-  test('任务页展示今日摘要和日常代表目标计数', () {
+  test('任务页展示今日摘要和日常待办目标计数', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
     expect(source, contains("import '../providers/habit_provider.dart';"));
@@ -72,18 +72,13 @@ void main() {
     expect(source, contains("'今日还要完成 \$remaining 项'"));
     expect(
       source,
-      contains(
-        "'日常 \$dailyCount / 代表 \$representativeCount / 目标 \$activeGoalCount'",
-      ),
+      contains("'日常 \$dailyCount / 待办 \$todoCount / 目标 \$activeGoalCount'"),
     );
     expect(source, isNot(contains('下一个')));
     expect(source, isNot(contains('upcomingToday')));
     expect(source, isNot(contains('nextDue')));
     expect(source, contains('habitProvider.habits'));
     expect(source, contains('goalProvider.activeGoals.length'));
-    expect(source, contains('TodoPriority.urgent'));
-    expect(source, contains('TodoPriority.high'));
-    expect(source, contains('EisenhowerQuadrant.urgentImportant'));
   });
 
   test('清单模板选中态使用浅色主题背景避免白字实心块', () {

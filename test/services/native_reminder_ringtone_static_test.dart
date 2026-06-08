@@ -371,9 +371,17 @@ void main() {
     expect(service, contains('putExtra("vibrate", vibrate)'));
     expect(receiver, contains('getBooleanExtra("vibrate", true)'));
     expect(scheduler, contains('.put("vibrate"'));
+    expect(service, contains('launchFullScreenReminder(id, payload)'));
     expect(
       service,
+      isNot(contains('setFullScreenIntent(fullScreenIntent, fullScreen)')),
+      reason:
+          '原生铃声状态通知不能再额外设置 full-screen intent；全屏只由 launchFullScreenReminder 显式启动一次，避免先闪一下再弹第二次。',
+    );
+    expect(
+      receiver,
       contains('setFullScreenIntent(fullScreenIntent, fullScreen)'),
+      reason: '只有前台铃声服务启动失败后的兜底通知保留系统 full-screen 能力。',
     );
     expect(service, contains('NotificationCompat.VISIBILITY_PUBLIC'));
     expect(service, contains('NotificationCompat.PRIORITY_HIGH'));
@@ -815,7 +823,14 @@ void main() {
       ),
       reason: '定时强提醒要在原生闹钟之外继续注册 Flutter 本地通知兜底。',
     );
-    expect(once, contains('Android 原生接收器到点后会取消同 id 的 Flutter 兜底'));
+    expect(once, contains('兜底延后触发'));
+    expect(once, contains('_androidFlutterFallbackWhen('));
+    expect(
+      once,
+      contains(
+        'final tzWhen = tz.TZDateTime.from(flutterFallbackWhen, tz.local);',
+      ),
+    );
     final onceFinishIndex = once.indexOf(
       '_finishScheduleIssue(',
       oncePluginScheduleIndex,
@@ -889,7 +904,8 @@ void main() {
       greaterThan(daily.indexOf('final details = _notificationDetails')),
       reason: '重复强提醒要在原生闹钟之外继续注册 Flutter 本地通知兜底。',
     );
-    expect(daily, contains('Android 原生重复闹钟触发时会取消同 id 的 Flutter 兜底'));
+    expect(daily, contains('兜底延后触发'));
+    expect(daily, contains('_androidFlutterFallbackWhen('));
     final dailyFinishIndex = daily.indexOf(
       '_finishScheduleIssue(',
       dailyPluginScheduleIndex,

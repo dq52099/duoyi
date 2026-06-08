@@ -29,6 +29,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<PomodoroSession> _sessions = [];
   List<PomodoroFocusPenalty> _penalties = [];
   int _persistedRevision = 0;
+  int _storageGeneration = 0;
   int _sessionCountToday = 0;
   String? _lastDate;
   NotificationService? _notifier;
@@ -116,7 +117,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
 
     final configData = prefs.getString('pomodoro_config');
     if (configData != null) {
@@ -158,6 +161,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _cancelTimer();
     _timerTicks.value = 0;
     _config = PomodoroConfig();

@@ -42,8 +42,7 @@ import 'models/calendar_event.dart'
     show CalendarEvent, CalendarEventType, CalendarEventTypeX;
 import 'models/note.dart' show NoteItem;
 import 'models/pomodoro.dart' show PomodoroType;
-import 'models/todo.dart'
-    show EisenhowerQuadrant, TodoItem, TodoPriority, TodoPriorityX;
+import 'models/todo.dart' show TodoItem, TodoPriorityX;
 import 'services/alarm_service.dart';
 import 'services/account_local_data_cleaner.dart';
 import 'services/calendar_sync_service.dart';
@@ -3240,25 +3239,11 @@ String _todayTaskProgressNotificationBody(
   required GoalProvider goals,
 }) {
   final now = DateTime.now();
-  final today = CompletionVisibilityPolicy.dateOnly(now);
   final visibleTodos = todos
-      .where((todo) {
-        final day = CompletionVisibilityPolicy.dateOnly(todo.date);
-        final isTodayTodo = day == today;
-        return isTodayTodo &&
-            !todo.isCompleted &&
-            !todo.isArchivedAfterRollover;
-      })
+      .where((todo) => CompletionVisibilityPolicy.shouldShowInToday(todo, now))
       .toList(growable: false);
   final remaining = visibleTodos.length;
-  final representativeCount = visibleTodos
-      .where(
-        (todo) =>
-            todo.priority == TodoPriority.urgent ||
-            todo.priority == TodoPriority.high ||
-            todo.quadrant == EisenhowerQuadrant.urgentImportant,
-      )
-      .length;
+  final todoCount = remaining;
   final dailyCount = habits.habits
       .where((habit) => habit.isActiveToday() && !habit.isCompletedToday())
       .length;
@@ -3266,7 +3251,7 @@ String _todayTaskProgressNotificationBody(
   return formatNotificationTodayProgressBody(
     remaining: remaining,
     dailyCount: dailyCount,
-    representativeCount: representativeCount,
+    todoCount: todoCount,
     goalCount: goalCount,
   );
 }

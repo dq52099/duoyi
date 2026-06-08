@@ -13,7 +13,11 @@ void main() {
       ).readAsStringSync();
 
       expect(today, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
-      expect(mine, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
+      expect(mine, contains('class _MineStatsGrid extends StatelessWidget'));
+      expect(mine, contains("ValueKey('mine_stats_stable_grid')"));
+      expect(mine, contains('height: compact ? 70 : 64'));
+      expect(mine, contains('RepaintBoundary('));
+      expect(mine, isNot(contains('GridView.count(')));
       expect(surface, contains('class AppMetricCard'));
       expect(surface, contains('activeCardSkin'));
       expect(surface, contains('defaultCardSkinId'));

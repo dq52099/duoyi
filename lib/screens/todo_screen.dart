@@ -865,14 +865,7 @@ class _TodoTodaySummaryCard extends StatelessWidget {
     final remaining = (todayTotal - todayDone).clamp(0, todayTotal);
     final overdueCount = todos.where((todo) => todo.isOverdue).length;
     final dailyCount = habits.where((habit) => habit.isActiveToday()).length;
-    final representativeCount = todos
-        .where(
-          (todo) =>
-              todo.priority == TodoPriority.urgent ||
-              todo.priority == TodoPriority.high ||
-              todo.quadrant == EisenhowerQuadrant.urgentImportant,
-        )
-        .length;
+    final todoCount = remaining;
     final urgentCount = todos
         .where(
           (todo) =>
@@ -937,7 +930,7 @@ class _TodoTodaySummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '日常 $dailyCount / 代表 $representativeCount / 目标 $activeGoalCount',
+                      '日常 $dailyCount / 待办 $todoCount / 目标 $activeGoalCount',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(

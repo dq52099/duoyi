@@ -10,6 +10,7 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
   static const _storageKey = 'duoyi_quick_capture_templates_v1';
 
   final List<QuickCaptureTemplate> _customTemplates = [];
+  int _storageGeneration = 0;
 
   List<QuickCaptureTemplate> get customTemplates =>
       List.unmodifiable(_customTemplates);
@@ -20,7 +21,9 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
   ]);
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getString(_storageKey);
     _customTemplates
       ..clear()
@@ -29,6 +32,7 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _customTemplates.clear();
     notifyListeners();
   }

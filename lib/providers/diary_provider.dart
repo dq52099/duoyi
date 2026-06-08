@@ -8,6 +8,7 @@ import 'cloud_sync_provider.dart';
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
   List<DiaryEntry> _entries = [];
+  int _storageGeneration = 0;
 
   List<DiaryEntry> get entries =>
       List.unmodifiable(_entries..sort((a, b) => b.date.compareTo(a.date)));
@@ -75,13 +76,16 @@ class DiaryProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_key) ?? [];
     _entries = data.map((e) => DiaryEntry.fromJson(jsonDecode(e))).toList();
     notifyListeners();
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _entries = [];
     notifyListeners();
   }

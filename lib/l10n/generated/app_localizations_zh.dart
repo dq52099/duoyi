@@ -582,7 +582,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationStatusBarDailyCount => '日常 ';
 
   @override
-  String get notificationStatusBarRepresentativeCount => '代表 ';
+  String get notificationStatusBarTodoCount => '待办 ';
 
   @override
   String get notificationStatusBarGoalCount => '目标 ';

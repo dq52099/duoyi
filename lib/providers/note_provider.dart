@@ -7,6 +7,7 @@ import 'cloud_sync_provider.dart';
 class NoteProvider extends ChangeNotifier {
   static const _key = 'duoyi_notes';
   List<NoteItem> _notes = [];
+  int _storageGeneration = 0;
 
   List<NoteItem> get notes => _sorted(_notes);
 
@@ -17,13 +18,16 @@ class NoteProvider extends ChangeNotifier {
       _sorted(_notes.where((note) => note.archived));
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_key) ?? [];
     _notes = data.map((e) => NoteItem.fromJson(jsonDecode(e))).toList();
     notifyListeners();
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _notes = [];
     notifyListeners();
   }

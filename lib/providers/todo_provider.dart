@@ -27,6 +27,7 @@ class TodoProvider extends ChangeNotifier {
   List<TodoItem> _todos = [];
   bool _storageLoaded = false;
   Future<void>? _storageLoadFuture;
+  int _storageGeneration = 0;
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
   ///
@@ -163,7 +164,8 @@ class TodoProvider extends ChangeNotifier {
     if (_storageLoaded) return;
     final running = _storageLoadFuture;
     if (running != null) return running;
-    final future = _loadFromStorage();
+    final generation = _storageGeneration;
+    final future = _loadFromStorage(generation);
     _storageLoadFuture = future;
     try {
       await future;
@@ -173,6 +175,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _todos = [];
     _storageLoaded = false;
     _storageLoadFuture = null;
@@ -182,8 +185,9 @@ class TodoProvider extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> _loadFromStorage() async {
+  Future<void> _loadFromStorage(int generation) async {
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getString('todos');
     if (data != null && data.isNotEmpty) {
       final parsed = <TodoItem>[];
@@ -219,13 +223,17 @@ class TodoProvider extends ChangeNotifier {
         debugPrint('[TodoProvider] todos storage decode failed: $e\n$st');
       }
       if (shouldRewrite) {
+        if (generation != _storageGeneration) return;
         await prefs.setString(
           'todos_corrupt_backup_${DateTime.now().millisecondsSinceEpoch}',
           data,
         );
+        if (generation != _storageGeneration) return;
         await _writeToStorage();
+        if (generation != _storageGeneration) return;
       }
     }
+    if (generation != _storageGeneration) return;
     _storageLoaded = true;
     _notify();
   }

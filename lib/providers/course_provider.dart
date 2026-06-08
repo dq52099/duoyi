@@ -11,6 +11,7 @@ class CourseProvider extends ChangeNotifier {
   List<CourseItem> _courses = [];
   ScheduleSettings _settings = ScheduleSettings();
   int _viewingWeek = 1;
+  int _storageGeneration = 0;
 
   List<CourseItem> get courses => List.unmodifiable(_courses);
   ScheduleSettings get settings => _settings;
@@ -22,7 +23,9 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
 
     final rawSettings = prefs.getString(_settingsKey);
     if (rawSettings != null) {
@@ -37,6 +40,7 @@ class CourseProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _courses = [];
     _settings = ScheduleSettings();
     _viewingWeek = currentWeek;

@@ -1214,11 +1214,11 @@ abstract class AppLocalizations {
   /// **'日常 '**
   String get notificationStatusBarDailyCount;
 
-  /// No description provided for @notificationStatusBarRepresentativeCount.
+  /// No description provided for @notificationStatusBarTodoCount.
   ///
   /// In zh, this message translates to:
-  /// **'代表 '**
-  String get notificationStatusBarRepresentativeCount;
+  /// **'待办 '**
+  String get notificationStatusBarTodoCount;
 
   /// No description provided for @notificationStatusBarGoalCount.
   ///

@@ -14,6 +14,7 @@ class GoalProvider extends ChangeNotifier {
   List<GoalItem> _goals = [];
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
+  int _storageGeneration = 0;
 
   Future<void> Function()? _reminderResyncRequester;
 
@@ -53,13 +54,16 @@ class GoalProvider extends ChangeNotifier {
       _goals.where((g) => g.status == GoalStatus.active).toList();
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getStringList(_key) ?? [];
     _goals = raw.map((e) => GoalItem.fromJson(jsonDecode(e))).toList();
     notifyListeners();
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _goals = [];
     notifyListeners();
   }

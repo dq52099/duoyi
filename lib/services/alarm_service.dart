@@ -435,6 +435,14 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           cancelNotification: true,
         ),
       ];
+  static const Duration _androidNativeFallbackDelay = Duration(minutes: 1);
+
+  DateTime _androidFlutterFallbackWhen(DateTime when, bool nativeRingtoneOk) {
+    if (_isAndroid && nativeRingtoneOk) {
+      return when.add(_androidNativeFallbackDelay);
+    }
+    return when;
+  }
 
   /// 初始化插件与通道；幂等。
   Future<void> init() async {
@@ -671,8 +679,12 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
     }
 
-    // Android 原生接收器到点后会取消同 id 的 Flutter 兜底；若原生定时被系统拦截，
-    // 这条系统通知仍可兜住 1 分钟闹钟测试和实际提醒。
+    // Android 原生接收器到点后会取消同 id 的 Flutter 兜底。原生队列成功时
+    // 兜底延后触发，避免和原生全屏 Activity 同一秒抢启动造成闪屏双弹。
+    final flutterFallbackWhen = _androidFlutterFallbackWhen(
+      when,
+      nativeRingtoneOk,
+    );
     final androidDetails = AndroidNotificationDetails(
       channelId,
       _channelName,
@@ -706,7 +718,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       macOS: iosDetails,
       linux: linuxDetails,
     );
-    final tzWhen = tz.TZDateTime.from(when, tz.local);
+    final tzWhen = tz.TZDateTime.from(flutterFallbackWhen, tz.local);
 
     try {
       await _plugin.zonedSchedule(
@@ -725,7 +737,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       await _verifyPluginPendingIds(
         <int>{id},
         operation: 'scheduleFullScreen',
-        scheduledTime: when,
+        scheduledTime: flutterFallbackWhen,
       );
       if (!_isAndroid) {
         await NativeReminderRingtone.scheduleOnce(
@@ -786,7 +798,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           await _verifyPluginPendingIds(
             <int>{id},
             operation: 'scheduleFullScreenFallback',
-            scheduledTime: when,
+            scheduledTime: flutterFallbackWhen,
           );
           if (!_isAndroid) {
             await NativeReminderRingtone.scheduleOnce(
@@ -1034,8 +1046,8 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
     }
 
-    // Android 原生重复闹钟触发时会取消同 id 的 Flutter 兜底；原生调度失效时，
-    // Flutter 本地通知仍保留为备用提醒。
+    // Android 原生重复闹钟触发时会取消同 id 的 Flutter 兜底。原生队列成功时
+    // 兜底延后触发，避免和原生全屏 Activity 同一秒抢启动造成闪屏双弹。
     final details = _notificationDetails(
       fullScreen: fullScreen,
       payload: payload,
@@ -1054,13 +1066,18 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       final when = weekday == null
           ? _nextInstanceOfTime(hour, minute)
           : _nextInstanceOfWeekdayTime(weekday, hour, minute);
+      final flutterFallbackWhen = _androidFlutterFallbackWhen(
+        when,
+        nativeRingtoneOk,
+      );
+      final tzWhen = tz.TZDateTime.from(flutterFallbackWhen, tz.local);
 
       try {
         await _plugin.zonedSchedule(
           scheduleId,
           title,
           body,
-          when,
+          tzWhen,
           details,
           androidScheduleMode: requireExactAlarm
               ? AndroidScheduleMode.exactAllowWhileIdle
@@ -1113,7 +1130,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
               scheduleId,
               title,
               body,
-              when,
+              tzWhen,
               details,
               androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
               matchDateTimeComponents: weekday == null

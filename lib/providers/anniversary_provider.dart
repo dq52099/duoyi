@@ -10,6 +10,7 @@ class AnniversaryProvider extends ChangeNotifier {
   static const Duration _reminderSyncTimeout = Duration(seconds: 5);
   List<Anniversary> _items = [];
   ReminderScheduler? _scheduler;
+  int _storageGeneration = 0;
 
   List<Anniversary> get items {
     final sorted = [..._items];
@@ -47,7 +48,9 @@ class AnniversaryProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_key) ?? [];
     _items = data.map((e) => Anniversary.fromJson(jsonDecode(e))).toList();
 
@@ -55,6 +58,7 @@ class AnniversaryProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _items = [];
     notifyListeners();
   }

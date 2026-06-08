@@ -189,7 +189,7 @@
   "notificationStatusBarTodayRemainingPrefix": "今日还要完成 ",
   "notificationStatusBarTodayRemainingSuffix": " 项",
   "notificationStatusBarDailyCount": "日常 ",
-  "notificationStatusBarRepresentativeCount": "代表 ",
+  "notificationStatusBarTodoCount": "待办 ",
   "notificationStatusBarGoalCount": "目标 ",
   "quickTodoTitle": "快速待办",
   "quickTodoHint": "一句话描述（如：明天下午3点开会）",

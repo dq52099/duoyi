@@ -25,6 +25,7 @@ class CalendarProvider extends ChangeNotifier {
   List<CalendarEvent> _externalEvents = const <CalendarEvent>[];
   Object? _lastRebuildSignature;
   int _sourceRevision = 0;
+  int _storageGeneration = 0;
   VoidCallback? onLocalEventsChanged;
   Future<void> Function(String id)? localEventReminderCanceller;
 
@@ -33,7 +34,9 @@ class CalendarProvider extends ChangeNotifier {
   int get sourceRevision => _sourceRevision;
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_localEventsKey) ?? const <String>[];
     _localEvents
       ..clear()
@@ -51,6 +54,7 @@ class CalendarProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _events.clear();
     _localEvents.clear();
     _externalEvents = const <CalendarEvent>[];

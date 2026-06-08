@@ -53,6 +53,55 @@ void main() {
       expect(card, contains("label: const Text('展开完整回顾')"));
     });
 
+    test('我的页保留固定顶部栏，资料统计和菜单作为内容整体滚动', () {
+      final source = File('lib/screens/mine_screen.dart').readAsStringSync();
+      final body = _sourceBlock(
+        source,
+        'body: ListView(',
+        'int _todoRate(TodoProvider t)',
+      );
+
+      expect(body, contains("restorationId: 'mine_screen_list'"));
+      expect(body, contains('mineHeader'));
+      expect(body, contains('mineStats'));
+      expect(body, contains('aiAssistant'));
+      expect(body.indexOf('mineHeader'), lessThan(body.indexOf('mineStats')));
+      expect(source, contains('appBar: AppBar('));
+      expect(source, contains('title: Text(s.mineTitle)'));
+      expect(source, contains('backgroundColor: toolbarBackground'));
+      expect(source, isNot(contains('final mineToolbar = Padding(')));
+      expect(source, isNot(contains('fixedOverview')));
+      expect(source, isNot(contains("ValueKey('mine_fixed_overview_panel')")));
+      expect(
+        source,
+        isNot(contains("ValueKey('mine_desktop_fixed_overview_layout')")),
+      );
+    });
+
+    test('我的页统计卡片使用稳定布局，避免滚动时重绘闪烁', () {
+      final source = File('lib/screens/mine_screen.dart').readAsStringSync();
+      final stats = _sourceBlock(
+        source,
+        'final mineStats = Padding(',
+        'final aiAssistant = Padding(',
+      );
+      final stableGrid = _sourceBlock(
+        source,
+        'class _MineStatsGrid extends StatelessWidget',
+        'class _AiWeeklyReviewCard extends StatefulWidget',
+      );
+
+      expect(stats, contains('_MineStatsGrid('));
+      expect(stats, isNot(contains('GridView.count(')));
+      expect(stableGrid, contains('RepaintBoundary('));
+      expect(stableGrid, contains("ValueKey('mine_stats_stable_grid')"));
+      expect(stableGrid, contains('SizedBox('));
+      expect(stableGrid, contains('height: compact ? 70 : 64'));
+      expect(stableGrid, contains('Row('));
+      expect(stableGrid, isNot(contains('shrinkWrap: true')));
+      expect(stableGrid, isNot(contains('NeverScrollableScrollPhysics')));
+    });
+
     test('纪念日和生日列表沿用倒数日式摘要与最近日期提示', () {
       final source = File(
         'lib/screens/anniversary_screen.dart',

@@ -91,6 +91,11 @@ Widget _wrap(
   );
 }
 
+double? _topOrScrolledAway(WidgetTester tester, Finder finder) {
+  if (finder.evaluate().isEmpty) return null;
+  return tester.getTopLeft(finder).dy;
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -171,7 +176,11 @@ void main() {
     ).readAsStringSync();
 
     expect(today, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
-    expect(mine, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
+    expect(mine, contains('class _MineStatsGrid extends StatelessWidget'));
+    expect(mine, contains("ValueKey('mine_stats_stable_grid')"));
+    expect(mine, contains('height: compact ? 70 : 64'));
+    expect(mine, contains('RepaintBoundary('));
+    expect(mine, isNot(contains('GridView.count(')));
     expect(surface, contains('fontSize: 12'));
     expect(surface, contains('fontSize: 11'));
     expect(surface, contains('fontSize: DesignTokens.fontSizeMd'));
@@ -276,6 +285,70 @@ void main() {
     expect(find.text('功能建议'), findsNothing);
     expect(find.text('问题反馈'), findsNothing);
     expect(find.text('许愿池'), findsNothing);
+  });
+
+  testWidgets('Mine keeps top bar fixed while content scrolls on desktop', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(960, 720);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_wrap(const MineScreen()));
+    await tester.pumpAndSettle();
+
+    final title = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text('我的'),
+    );
+    final header = find.byKey(const ValueKey('mine_header_stable_box'));
+    final scrollableFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.restorationId == 'mine_screen_list',
+    );
+
+    expect(
+      find.byKey(const ValueKey('mine_desktop_fixed_overview_layout')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('mine_fixed_overview_panel')),
+      findsNothing,
+    );
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(title, findsOneWidget);
+    expect(scrollableFinder, findsOneWidget);
+
+    final scrollable = tester.state<ScrollableState>(scrollableFinder);
+    final targetOffset = scrollable.position.maxScrollExtent < 260
+        ? scrollable.position.maxScrollExtent
+        : 260.0;
+    expect(targetOffset, greaterThan(0));
+
+    final stats = find.text('待办完成');
+    final aiAssistant = find.text('AI 助手');
+    final beforeTitleTop = tester.getTopLeft(title).dy;
+    final beforeHeaderTop = tester.getTopLeft(header).dy;
+    final beforeStatsTop = tester.getTopLeft(stats).dy;
+    final beforeAiAssistantTop = tester.getTopLeft(aiAssistant).dy;
+
+    scrollable.position.jumpTo(targetOffset);
+    await tester.pump();
+
+    expect(scrollable.position.pixels, closeTo(targetOffset, 0.1));
+    expect(tester.getTopLeft(title).dy, closeTo(beforeTitleTop, 0.1));
+    expect(
+      _topOrScrolledAway(tester, header),
+      anyOf(isNull, lessThan(beforeHeaderTop)),
+    );
+    expect(
+      _topOrScrolledAway(tester, stats),
+      anyOf(isNull, lessThan(beforeStatsTop)),
+    );
+    expect(
+      _topOrScrolledAway(tester, aiAssistant),
+      anyOf(isNull, lessThan(beforeAiAssistantTop)),
+    );
   });
 
   testWidgets('Mine avatar preview and profile info navigation are distinct', (

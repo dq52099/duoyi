@@ -24,6 +24,7 @@ class AiService extends ChangeNotifier {
   bool _enabled = false;
   String _model = '';
   List<AiReviewEntry> _reviewHistory = [];
+  int _storageGeneration = 0;
 
   bool get enabled => _enabled;
   bool get isConfigured => _enabled;
@@ -44,7 +45,9 @@ class AiService extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final p = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = p.getStringList(_kReviewHistory) ?? [];
     _reviewHistory = raw
         .map((e) {
@@ -60,6 +63,7 @@ class AiService extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _reviewHistory = [];
     notifyListeners();
   }

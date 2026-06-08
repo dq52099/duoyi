@@ -45,6 +45,7 @@ class CustomFocusSoundProvider extends ChangeNotifier {
   static const idPrefix = 'custom:';
 
   final List<CustomFocusSound> _sounds = [];
+  int _storageGeneration = 0;
 
   List<CustomFocusSound> get sounds =>
       List<CustomFocusSound>.unmodifiable(_sounds);
@@ -59,7 +60,9 @@ class CustomFocusSoundProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getStringList(storageKey) ?? const <String>[];
     _sounds
       ..clear()
@@ -82,6 +85,7 @@ class CustomFocusSoundProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _sounds.clear();
     _registerWithPlaybackService();
     notifyListeners();

@@ -192,11 +192,11 @@
   <main>
     <header>
       <h1>多仪发布验证用例</h1>
-      <p>本页记录 v1.1.35 发布后，当前已经用外网地址验证过的访问、下载和更新接口用例。</p>
+      <p>本页记录 v1.1.36 发布后的访问、下载和更新接口验证项；Android 正式包以 GitHub Release 构建结果为准。</p>
       <div class="meta">
         <div>
           <div class="label">版本</div>
-          <div class="value">1.1.35 + 140001</div>
+          <div class="value">1.1.36 + 140002</div>
         </div>
         <div>
           <div class="label">外网 IP</div>
@@ -241,26 +241,26 @@
         <article class="case">
           <div class="case-head">
             <div class="case-title">外网 IP 下载 APK</div>
-            <div class="status">通过</div>
+            <div class="status">待 Release 产物</div>
           </div>
           <dl>
             <dt>地址</dt>
-            <dd><a href="http://132.226.88.44/duoyi-v1.1.35.apk">http://132.226.88.44/duoyi-v1.1.35.apk</a></dd>
+            <dd><a href="https://github.com/dq52099/duoyi/releases/tag/v1.1.36">https://github.com/dq52099/duoyi/releases/tag/v1.1.36</a></dd>
             <dt>结果</dt>
-            <dd>HTTP 200 OK，Content-Length 为 134919122 bytes，支持 Accept-Ranges。</dd>
+            <dd>GitHub Actions 完成后，从 Release 资产下载正式签名 APK。</dd>
           </dl>
         </article>
 
         <article class="case">
           <div class="case-head">
             <div class="case-title">域名下载 APK</div>
-            <div class="status">通过</div>
+            <div class="status">待 Release 产物</div>
           </div>
           <dl>
             <dt>地址</dt>
-            <dd><a href="http://6688667.xyz/duoyi-v1.1.35.apk">http://6688667.xyz/duoyi-v1.1.35.apk</a></dd>
+            <dd><a href="https://github.com/dq52099/duoyi/releases/tag/v1.1.36">https://github.com/dq52099/duoyi/releases/tag/v1.1.36</a></dd>
             <dt>结果</dt>
-            <dd>HTTP 200 OK，Content-Length 为 134919122 bytes，支持 Accept-Ranges。</dd>
+            <dd>服务器本地不重签 APK，域名下载位需要 Release 产物同步后再验证。</dd>
           </dl>
         </article>
 
@@ -273,7 +273,7 @@
             <dt>请求</dt>
             <dd><code>GET /api/mobile/apps/duoyi/update?current_version=1.1.34&amp;current_version_code=140000</code></dd>
             <dt>结果</dt>
-            <dd>返回 latest_version_name=1.1.35，latest_version_code=140001，available=true，download_url 指向 GitHub Release APK。</dd>
+            <dd>返回 latest_version_name=1.1.36，latest_version_code=140002，available=true，download_url 指向 GitHub Release APK。</dd>
           </dl>
         </article>
 
@@ -284,11 +284,11 @@
           </div>
           <dl>
             <dt>文件</dt>
-            <dd><code>/opt/1panel/apps/openresty/openresty/root/duoyi-v1.1.35.apk</code></dd>
+            <dd><code>GitHub Release v1.1.36 资产</code></dd>
             <dt>SHA256</dt>
-            <dd><code>126515f38e3771d99285b341aab70597fa102d4c229696c3e165f41b534bf092</code></dd>
+            <dd><code>待 GitHub Actions 上传后校验</code></dd>
             <dt>签名证书</dt>
-            <dd><code>05c75ad9f9acd88a6d8bdfb3efc7af0f8af4a6f9f56fcacac421216b09c146f8</code></dd>
+            <dd><code>待正式签名 APK 生成后校验</code></dd>
           </dl>
         </article>
       </div>

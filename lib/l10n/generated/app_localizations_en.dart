@@ -621,7 +621,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationStatusBarDailyCount => 'Daily ';
 
   @override
-  String get notificationStatusBarRepresentativeCount => 'Key ';
+  String get notificationStatusBarTodoCount => 'Tasks ';
 
   @override
   String get notificationStatusBarGoalCount => 'Goals ';

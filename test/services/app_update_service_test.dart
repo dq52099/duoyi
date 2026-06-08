@@ -509,8 +509,8 @@ void main() {
             utf8.encode(
               json.encode(
                 _mobileUpdatePayload(
-                  latestVersion: '1.1.35',
-                  latestVersionCode: 140001,
+                  latestVersion: '1.1.36',
+                  latestVersionCode: 140002,
                   minimumSupportedVersion: '1.1.34',
                   minimumSupportedVersionCode: 140000,
                   downloadUrl: 'https://cdn.duoyi.test/duoyi-v1.1.20.apk',
@@ -525,13 +525,13 @@ void main() {
           return http.Response.bytes(
             utf8.encode(
               json.encode({
-                'tag_name': 'v1.1.35',
+                'tag_name': 'v1.1.36',
                 'body': '## 更新内容\n- 修复强制更新安装包地址',
                 'assets': [
                   {
-                    'name': 'duoyi-v1.1.35.apk',
+                    'name': 'duoyi-v1.1.36.apk',
                     'browser_download_url':
-                        'https://github.com/dq52099/duoyi/releases/download/v1.1.35/duoyi-v1.1.35.apk',
+                        'https://github.com/dq52099/duoyi/releases/download/v1.1.36/duoyi-v1.1.36.apk',
                   },
                 ],
               }),
@@ -550,8 +550,8 @@ void main() {
       '/api/mobile/apps/duoyi/update',
       '/repos/dq52099/duoyi/releases/latest',
     ]);
-    expect(service.latestVersion, '1.1.35');
-    expect(service.latestUrl, contains('duoyi-v1.1.35.apk'));
+    expect(service.latestVersion, '1.1.36');
+    expect(service.latestUrl, contains('duoyi-v1.1.36.apk'));
     expect(service.latestUrl, isNot(contains('1.1.20')));
     expect(service.mustUpdate, isTrue);
   });
@@ -570,7 +570,7 @@ void main() {
                 _mobileUpdatePayload(
                   available: true,
                   latestVersion: '1.1.34',
-                  latestVersionCode: 140001,
+                  latestVersionCode: 140002,
                   forceUpdate: true,
                   forceUpdateRequired: true,
                   minimumSupportedVersion: '1.1.34',
@@ -603,7 +603,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'duoyi_update_downloaded_apk_path': apk.path,
       'duoyi_update_downloaded_apk_version': '1.1.34',
-      'duoyi_update_downloaded_apk_version_code': 140001,
+      'duoyi_update_downloaded_apk_version_code': 140002,
       'duoyi_update_downloaded_apk_url':
           'https://cdn.duoyi.test/duoyi-v1.1.34.apk',
       'duoyi_update_downloaded_apk_asset_name': 'duoyi-v1.1.34.apk',
@@ -623,7 +623,7 @@ void main() {
     expect(service.hasDownloadedInstaller, isTrue);
     expect(service.downloadedFilePath, apk.path);
     expect(service.latestVersion, '1.1.34');
-    expect(service.latestVersionCode, 140001);
+    expect(service.latestVersionCode, 140002);
     expect(service.latestUrl, 'https://cdn.duoyi.test/duoyi-v1.1.34.apk');
     expect(service.hasUpdate, isTrue);
   });
@@ -637,8 +637,8 @@ void main() {
     await apk.writeAsBytes(const [1, 2, 3]);
     SharedPreferences.setMockInitialValues({
       'duoyi_update_downloaded_apk_path': apk.path,
-      'duoyi_update_downloaded_apk_version': '1.1.35',
-      'duoyi_update_downloaded_apk_version_code': 140001,
+      'duoyi_update_downloaded_apk_version': '1.1.36',
+      'duoyi_update_downloaded_apk_version_code': 140002,
       'duoyi_update_downloaded_apk_url':
           'https://cdn.duoyi.test/duoyi-v1.1.20.apk',
       'duoyi_update_downloaded_apk_asset_name': 'duoyi-v1.1.20.apk',

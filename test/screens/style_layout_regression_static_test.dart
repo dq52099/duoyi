@@ -537,8 +537,11 @@ void main() {
     expect(mine, contains('final routeBackground'));
     expect(mine, contains('final scaffoldBackground = useShellBackground'));
     expect(mine, contains('backgroundColor: scaffoldBackground'));
-    expect(mine, contains('backgroundColor: appBarBackground'));
-    expect(mine, contains('surfaceTintColor: Colors.transparent'));
+    expect(mine, contains('final toolbarBackground = useShellBackground'));
+    expect(mine, contains('appBar: AppBar('));
+    expect(mine, contains('backgroundColor: toolbarBackground'));
+    expect(mine, contains('title: Text(s.mineTitle)'));
+    expect(mine, isNot(contains('final mineToolbar = Padding(')));
     expect(mine, contains('void _openBrandedRoute'));
     expect(mine, contains('BrandRouteSurface(child: child)'));
     for (final rawRoute in [

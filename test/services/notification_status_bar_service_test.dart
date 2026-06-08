@@ -26,12 +26,12 @@ void main() {
       final plan = buildNotificationStatusBarPlan(
         notificationQuickAdd: false,
         notificationTodayProgress: true,
-        todayProgressBody: '今日还要完成 2 项\n日常 1 / 代表 0 / 目标 1',
+        todayProgressBody: '今日还要完成 2 项\n日常 1 / 待办 2 / 目标 1',
       );
 
       expect(plan.shouldShow, isTrue);
       expect(plan.title, '今日任务进展');
-      expect(plan.body, '今日还要完成 2 项\n日常 1 / 代表 0 / 目标 1');
+      expect(plan.body, '今日还要完成 2 项\n日常 1 / 待办 2 / 目标 1');
       expect(plan.enableQuickActions, isFalse);
     });
 
@@ -39,12 +39,12 @@ void main() {
       final plan = buildNotificationStatusBarPlan(
         notificationQuickAdd: true,
         notificationTodayProgress: true,
-        todayProgressBody: '今日还要完成 1 项\n日常 1 / 代表 0 / 目标 0',
+        todayProgressBody: '今日还要完成 1 项\n日常 1 / 待办 1 / 目标 0',
       );
 
       expect(plan.shouldShow, isTrue);
       expect(plan.title, '今日任务进展');
-      expect(plan.body, '今日还要完成 1 项\n日常 1 / 代表 0 / 目标 0\n下拉可快速添加待办');
+      expect(plan.body, '今日还要完成 1 项\n日常 1 / 待办 1 / 目标 0\n下拉可快速添加待办');
       expect(plan.enableQuickActions, isTrue);
     });
 
@@ -65,7 +65,7 @@ void main() {
       final previousProgress = buildNotificationStatusBarPlan(
         notificationQuickAdd: true,
         notificationTodayProgress: true,
-        todayProgressBody: '今日还要完成 5 项\n日常 2 / 代表 1 / 目标 2',
+        todayProgressBody: '今日还要完成 5 项\n日常 2 / 待办 5 / 目标 2',
       );
       final disabledProgress = buildNotificationStatusBarPlan(
         notificationQuickAdd: true,
@@ -85,7 +85,7 @@ void main() {
       final body = formatNotificationTodayProgressBody(
         remaining: 3,
         dailyCount: 1,
-        representativeCount: 2,
+        todoCount: 3,
         goalCount: 4,
       );
       final plan = buildNotificationStatusBarPlan(
@@ -94,7 +94,7 @@ void main() {
         todayProgressBody: body,
       );
 
-      expect(body, '3 tasks left today\nDaily 1 / Key 2 / Goals 4');
+      expect(body, '3 tasks left today\nDaily 1 / Tasks 3 / Goals 4');
       expect(plan.title, 'Today progress');
       expect(plan.body, '$body\nPull down to quickly add a task');
       expect(plan.enableQuickActions, isTrue);

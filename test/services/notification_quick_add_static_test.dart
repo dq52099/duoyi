@@ -233,15 +233,10 @@ void main() {
       reason: 'App 回到前台刷新今日进展时复用同一入口，并强制修正可能不一致的常驻通知状态。',
     );
     expect(main, contains("_durationUntilNextLocalDay"));
-    expect(main, contains('final isTodayTodo = day == today;'));
     expect(
       main,
-      matches(
-        RegExp(
-          r'return\s+isTodayTodo\s*&&\s*!todo\.isCompleted\s*&&\s*!todo\.isArchivedAfterRollover;',
-        ),
-      ),
-      reason: '通知栏今日任务进展不能把已完成或已归档的待办计入未完成数量。',
+      contains('CompletionVisibilityPolicy.shouldShowInToday(todo, now)'),
+      reason: '通知栏今日任务进展必须复用今日待办可见规则，避免漏掉今日实例或归档状态口径不一致。',
     );
     expect(
       main,

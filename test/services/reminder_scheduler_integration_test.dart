@@ -3551,6 +3551,49 @@ void main() {
       expect(notif.scheduled.map((entry) => entry['id']), [expectedId]);
     });
 
+    test('syncTodos 冷启动旧队列清理失败时仍注册当前提醒', () async {
+      final due = DateTime.now().add(const Duration(days: 1));
+      final todo = TodoItem(
+        id: 'todo-cold-start-cleanup-failure',
+        title: '旧清理失败仍保存',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r-push',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final staleId = _idFor('todo:${todo.id}:old-rule');
+      final expectedId = _idFor('todo:${todo.id}:r-push');
+
+      await registry.replaceObject('todo', todo.id, {staleId});
+      notif.failCancel = true;
+      final coldScheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        popup: popup,
+        email: email,
+        registry: registry,
+      );
+      await coldScheduler.syncTodos([todo]);
+
+      expect(notif.scheduled.map((entry) => entry['id']), [expectedId]);
+      expect(notif.pending, contains(expectedId));
+      expect(notif.issues, isNotEmpty);
+      expect(notif.issues.every((issue) => issue['blocking'] == false), isTrue);
+      expect(
+        notif.issues.map((issue) => issue['message']).join('\n'),
+        contains('已继续保存当前提醒'),
+      );
+    });
+
     test('syncTodos 冷启动会清理已持久化的旧 rule id', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       final original = TodoItem(

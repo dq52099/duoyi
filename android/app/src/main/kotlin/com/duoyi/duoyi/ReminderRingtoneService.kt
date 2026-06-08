@@ -346,12 +346,6 @@ class ReminderRingtoneService : Service() {
             openAppIntent(payload, stopRingtone = true),
             flags,
         )
-        val fullScreenIntent = PendingIntent.getActivity(
-            this,
-            id + 3_000_000,
-            openAppIntent(payload, stopRingtone = false),
-            flags,
-        )
         val stopIntent = PendingIntent.getService(
             this,
             id + 1_000_000,
@@ -393,7 +387,6 @@ class ReminderRingtoneService : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentIntent)
             .setDeleteIntent(stopIntent)
-            .setFullScreenIntent(fullScreenIntent, fullScreen)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(0, "停止响铃", stopIntent)
         if (snoozeIntent != null) {

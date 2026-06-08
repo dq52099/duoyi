@@ -112,13 +112,16 @@ class LocationReminderProvider extends ChangeNotifier {
   final List<LocationReminder> _reminders = [];
   final Map<String, bool> _inRange = {};
   bool _loaded = false;
+  int _storageGeneration = 0;
 
   List<LocationReminder> get reminders =>
       List<LocationReminder>.unmodifiable(_reminders);
   bool get isLoaded => _loaded;
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getString(_key);
     if (raw == null || raw.isEmpty) {
       _loaded = true;
@@ -141,8 +144,10 @@ class LocationReminderProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _reminders.clear();
     _inRange.clear();
+    _loaded = false;
     notifyListeners();
   }
 

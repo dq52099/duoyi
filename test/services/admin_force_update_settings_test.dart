@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('force update defaults use current 1.1.35 version floor', () {
+  test('force update defaults use current 1.1.36 version floor', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final appVersion = File('lib/core/app_version.dart').readAsStringSync();
     final backend = File('backend/main.py').readAsStringSync();
@@ -11,10 +11,10 @@ void main() {
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.1.35+140001'));
-    expect(appVersion, contains("static const name = '1.1.35';"));
-    expect(appVersion, contains('static const build = 140001;'));
-    expect(backend, contains('return "1.1.35", 140001'));
+    expect(pubspec, contains('version: 1.1.36+140002'));
+    expect(appVersion, contains("static const name = '1.1.36';"));
+    expect(appVersion, contains('static const build = 140002;'));
+    expect(backend, contains('return "1.1.36", 140002'));
     expect(backend, contains('def _normalize_update_version_floor'));
     expect(
       backend,

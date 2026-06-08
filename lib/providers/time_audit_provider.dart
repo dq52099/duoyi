@@ -24,6 +24,7 @@ class TimeAuditProvider extends ChangeNotifier {
   static const storageKey = 'duoyi_time_entries';
 
   List<TimeEntry> _entries = [];
+  int _storageGeneration = 0;
 
   List<TimeEntry> get entries {
     final sorted = [..._entries]
@@ -32,7 +33,9 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getStringList(storageKey) ?? const <String>[];
     _entries = raw
         .map((e) {
@@ -48,6 +51,7 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _entries = [];
     notifyListeners();
   }

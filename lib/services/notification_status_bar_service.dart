@@ -46,14 +46,14 @@ NotificationStatusBarPlan buildNotificationStatusBarPlan({
 String formatNotificationTodayProgressBody({
   required int remaining,
   required int dailyCount,
-  required int representativeCount,
+  required int todoCount,
   required int goalCount,
 }) {
   return '${I18n.tr('notification.status_bar.today_remaining.prefix')}'
       '$remaining'
       '${I18n.tr('notification.status_bar.today_remaining.suffix')}\n'
       '${I18n.tr('notification.status_bar.daily_count')}$dailyCount / '
-      '${I18n.tr('notification.status_bar.representative_count')}'
-      '$representativeCount / '
+      '${I18n.tr('notification.status_bar.todo_count')}'
+      '$todoCount / '
       '${I18n.tr('notification.status_bar.goal_count')}$goalCount';
 }

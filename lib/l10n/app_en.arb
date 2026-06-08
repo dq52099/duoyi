@@ -186,7 +186,7 @@
   "notificationStatusBarTodayRemainingPrefix": "",
   "notificationStatusBarTodayRemainingSuffix": " tasks left today",
   "notificationStatusBarDailyCount": "Daily ",
-  "notificationStatusBarRepresentativeCount": "Key ",
+  "notificationStatusBarTodoCount": "Tasks ",
   "notificationStatusBarGoalCount": "Goals ",
   "quickTodoTitle": "Quick task",
   "quickTodoHint": "Describe it in one line, e.g. meeting tomorrow at 3 PM",

@@ -107,7 +107,7 @@ class MineScreen extends StatelessWidget {
     final scaffoldBackground = useShellBackground
         ? Colors.transparent
         : routeBackground;
-    final appBarBackground = useShellBackground
+    final toolbarBackground = useShellBackground
         ? Colors.transparent
         : routeBackground.withValues(alpha: 0.96);
 
@@ -124,11 +124,327 @@ class MineScreen extends StatelessWidget {
     final avatarValue = auth.state.isLoggedIn
         ? _firstNonEmpty([auth.state.avatar, p.avatarUrl, p.avatarInitials])
         : _firstNonEmpty([p.avatarUrl, p.avatarInitials]);
+    final mineHeader = AppSurfaceCard(
+      margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      padding: const EdgeInsets.all(14),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 360;
+          final avatarSize = compact ? 50.0 : 56.0;
+          final headerHeight = compact
+              ? _mineHeaderCompactHeight
+              : _mineHeaderRegularHeight;
+          final avatar = SizedBox(
+            width: avatarSize + 6,
+            height: avatarSize + 6,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: Tooltip(
+                    message: '查看头像',
+                    child: Semantics(
+                      button: true,
+                      label: '查看头像',
+                      child: InkWell(
+                        key: const ValueKey('mine_avatar_preview_button'),
+                        customBorder: const CircleBorder(),
+                        onTap: () => _showAvatarPreview(context),
+                        child: Container(
+                          width: avatarSize,
+                          height: avatarSize,
+                          padding:
+                              avatarFrame.id ==
+                                  ThemeProvider.defaultAvatarFrameId
+                              ? EdgeInsets.zero
+                              : const EdgeInsets.all(3),
+                          decoration:
+                              avatarFrame.id ==
+                                  ThemeProvider.defaultAvatarFrameId
+                              ? null
+                              : BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: avatarFrame.colors,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: avatarFrame.colors.first
+                                          .withValues(alpha: 0.12),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                          child: Hero(
+                            tag: 'mine-avatar-preview',
+                            child: _ProfileAvatar(
+                              avatar: avatarValue,
+                              displayName: displayName,
+                              radius: compact ? 26 : 30,
+                              cacheKey: _avatarCacheKey(
+                                avatarValue,
+                                p.updatedAt,
+                                auth.state.userId,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: -12,
+                  bottom: -12,
+                  child: SizedBox.square(
+                    key: const ValueKey('mine_avatar_edit_button'),
+                    dimension: 44,
+                    child: Tooltip(
+                      message: '修改头像',
+                      child: Semantics(
+                        button: true,
+                        label: '修改头像',
+                        child: Material(
+                          color: Colors.transparent,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => _pickAndSaveAvatar(context),
+                            child: Center(
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Color.alphaBlend(
+                                    cs.primary.withValues(alpha: 0.90),
+                                    cs.surface,
+                                  ),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: cs.surface.withValues(alpha: 0.92),
+                                    width: 0.45,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 10,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+          final username = auth.state.isLoggedIn
+              ? _firstNonEmpty([auth.state.username, p.username])
+              : p.username;
+          final coins = auth.state.isLoggedIn
+              ? auth.state.coinBalance
+              : coinBalance;
+          final accountAction = SizedBox(
+            width: auth.state.isLoggedIn ? 38 : 54,
+            height: 30,
+            child: auth.state.isLoggedIn
+                ? Tooltip(
+                    message: '退出登录',
+                    child: IconButton.filledTonal(
+                      key: const ValueKey('mine_top_logout_button'),
+                      onPressed: () => _confirmLogout(context),
+                      icon: const Icon(Icons.logout, size: 16),
+                      style: IconButton.styleFrom(
+                        backgroundColor: cs.errorContainer.withValues(
+                          alpha: 0.58,
+                        ),
+                        foregroundColor: cs.onErrorContainer,
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  )
+                : FilledButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
+                    style: appSecondaryFilledButtonStyle(context),
+                    child: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('登录', maxLines: 1),
+                    ),
+                  ),
+          );
+          final nameText = displayName.trim().isEmpty
+              ? '用户'
+              : displayName.trim();
+          final usernameText = username.trim();
+          final metadata = <Widget>[
+            if (usernameText.isNotEmpty)
+              _MineUserLineChip(
+                label: '@$usernameText',
+                icon: Icons.badge_outlined,
+                color: cs.primary,
+              ),
+            _MineUserLineChip(
+              label: '时光币 $coins',
+              icon: Icons.savings_outlined,
+              color: cs.secondary,
+            ),
+            if (auth.state.isLoggedIn && auth.state.isAdmin)
+              _MineUserLineChip(label: '管理员', color: cs.primary),
+          ];
+          return SizedBox(
+            key: const ValueKey('mine_header_stable_box'),
+            height: headerHeight,
+            child: Row(
+              key: const ValueKey('mine_user_info_row'),
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Center(key: const ValueKey('mine_avatar_row'), child: avatar),
+                SizedBox(width: compact ? 10 : 12),
+                Expanded(
+                  child: SizedBox(
+                    height: headerHeight,
+                    child: Semantics(
+                      button: true,
+                      label: '查看个人资料',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.radiusCard,
+                        ),
+                        onTap: () => _openProfileEditor(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 2,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                nameText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      fontSize: 15,
+                                      color: cs.onSurface,
+                                      height: 1.18,
+                                    ),
+                              ),
+                              const SizedBox(height: 5),
+                              SizedBox(
+                                height: _mineHeaderMetadataHeight,
+                                child: ClipRect(
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Wrap(
+                                      spacing: compact ? 8 : 10,
+                                      runSpacing: 4,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: metadata,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: headerHeight,
+                  child: Center(child: accountAction),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    final mineStats = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: _MineStatsGrid(
+        cards: [
+          StatsOverviewCard(
+            title: '待办完成',
+            value: '$todoCompletionRate',
+            unit: '%',
+            icon: Icons.check_circle_outline,
+            color: cs.primary,
+          ),
+          StatsOverviewCard(
+            title: '连续打卡',
+            value: '${p.currentStreak}',
+            unit: '天',
+            icon: Icons.repeat,
+            color: cs.tertiary,
+          ),
+          StatsOverviewCard(
+            title: '本周专注',
+            value: '$weeklyFocus',
+            unit: '分钟',
+            icon: Icons.timer,
+            color: DesignTokens.defaultError,
+          ),
+          StatsOverviewCard(
+            title: '效率评分',
+            value: '${p.productivityScore}',
+            icon: Icons.auto_awesome,
+            color: DesignTokens.defaultWarning,
+          ),
+        ],
+      ),
+    );
+
+    final aiAssistant = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: aiEnabled
+          ? _AiWeeklyReviewCard(
+              todoProvider: todoProvider,
+              pomodoroProvider: pomodoroProvider,
+              habitProvider: habitProvider,
+            )
+          : AppInfoBanner(
+              icon: Icons.auto_awesome,
+              title: 'AI 助手',
+              message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
+              color: Colors.purple,
+              onTap: auth.state.isAdmin
+                  ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const BrandRouteSurface(child: AdminScreen()),
+                      ),
+                    )
+                  : null,
+            ),
+    );
+
     return Scaffold(
       backgroundColor: scaffoldBackground,
       appBar: AppBar(
         title: Text(s.mineTitle),
-        backgroundColor: appBarBackground,
+        backgroundColor: toolbarBackground,
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
@@ -142,343 +458,9 @@ class MineScreen extends StatelessWidget {
         key: const PageStorageKey<String>('mine_screen_list'),
         restorationId: 'mine_screen_list',
         children: [
-          AppSurfaceCard(
-            margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-            padding: const EdgeInsets.all(14),
-            borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 360;
-                final avatarSize = compact ? 50.0 : 56.0;
-                final headerHeight = compact
-                    ? _mineHeaderCompactHeight
-                    : _mineHeaderRegularHeight;
-                final avatar = SizedBox(
-                  width: avatarSize + 6,
-                  height: avatarSize + 6,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        child: Tooltip(
-                          message: '查看头像',
-                          child: Semantics(
-                            button: true,
-                            label: '查看头像',
-                            child: InkWell(
-                              key: const ValueKey('mine_avatar_preview_button'),
-                              customBorder: const CircleBorder(),
-                              onTap: () => _showAvatarPreview(context),
-                              child: Container(
-                                width: avatarSize,
-                                height: avatarSize,
-                                padding:
-                                    avatarFrame.id ==
-                                        ThemeProvider.defaultAvatarFrameId
-                                    ? EdgeInsets.zero
-                                    : const EdgeInsets.all(3),
-                                decoration:
-                                    avatarFrame.id ==
-                                        ThemeProvider.defaultAvatarFrameId
-                                    ? null
-                                    : BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: LinearGradient(
-                                          colors: avatarFrame.colors,
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: avatarFrame.colors.first
-                                                .withValues(alpha: 0.12),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                child: Hero(
-                                  tag: 'mine-avatar-preview',
-                                  child: _ProfileAvatar(
-                                    avatar: avatarValue,
-                                    displayName: displayName,
-                                    radius: compact ? 26 : 30,
-                                    cacheKey: _avatarCacheKey(
-                                      avatarValue,
-                                      p.updatedAt,
-                                      auth.state.userId,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: -12,
-                        bottom: -12,
-                        child: SizedBox.square(
-                          key: const ValueKey('mine_avatar_edit_button'),
-                          dimension: 44,
-                          child: Tooltip(
-                            message: '修改头像',
-                            child: Semantics(
-                              button: true,
-                              label: '修改头像',
-                              child: Material(
-                                color: Colors.transparent,
-                                shape: const CircleBorder(),
-                                child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: () => _pickAndSaveAvatar(context),
-                                  child: Center(
-                                    child: Container(
-                                      width: 20,
-                                      height: 20,
-                                      decoration: BoxDecoration(
-                                        color: Color.alphaBlend(
-                                          cs.primary.withValues(alpha: 0.90),
-                                          cs.surface,
-                                        ),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: cs.surface.withValues(
-                                            alpha: 0.92,
-                                          ),
-                                          width: 0.45,
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.edit_outlined,
-                                        size: 10,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-                final username = auth.state.isLoggedIn
-                    ? _firstNonEmpty([auth.state.username, p.username])
-                    : p.username;
-                final coins = auth.state.isLoggedIn
-                    ? auth.state.coinBalance
-                    : coinBalance;
-                final accountAction = SizedBox(
-                  width: auth.state.isLoggedIn ? 38 : 54,
-                  height: 30,
-                  child: auth.state.isLoggedIn
-                      ? Tooltip(
-                          message: '退出登录',
-                          child: IconButton.filledTonal(
-                            key: const ValueKey('mine_top_logout_button'),
-                            onPressed: () => _confirmLogout(context),
-                            icon: const Icon(Icons.logout, size: 16),
-                            style: IconButton.styleFrom(
-                              backgroundColor: cs.errorContainer.withValues(
-                                alpha: 0.58,
-                              ),
-                              foregroundColor: cs.onErrorContainer,
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        )
-                      : FilledButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          ),
-                          style: appSecondaryFilledButtonStyle(context),
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('登录', maxLines: 1),
-                          ),
-                        ),
-                );
-                final nameText = displayName.trim().isEmpty
-                    ? '用户'
-                    : displayName.trim();
-                final usernameText = username.trim();
-                final metadata = <Widget>[
-                  if (usernameText.isNotEmpty)
-                    _MineUserLineChip(
-                      label: '@$usernameText',
-                      icon: Icons.badge_outlined,
-                      color: cs.primary,
-                    ),
-                  _MineUserLineChip(
-                    label: '时光币 $coins',
-                    icon: Icons.savings_outlined,
-                    color: cs.secondary,
-                  ),
-                  if (auth.state.isLoggedIn && auth.state.isAdmin)
-                    _MineUserLineChip(label: '管理员', color: cs.primary),
-                ];
-                return SizedBox(
-                  key: const ValueKey('mine_header_stable_box'),
-                  height: headerHeight,
-                  child: Row(
-                    key: const ValueKey('mine_user_info_row'),
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Center(
-                        key: const ValueKey('mine_avatar_row'),
-                        child: avatar,
-                      ),
-                      SizedBox(width: compact ? 10 : 12),
-                      Expanded(
-                        child: SizedBox(
-                          height: headerHeight,
-                          child: Semantics(
-                            button: true,
-                            label: '查看个人资料',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(
-                                DesignTokens.radiusCard,
-                              ),
-                              onTap: () => _openProfileEditor(context),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 4,
-                                  horizontal: 2,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      nameText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontSize: 15,
-                                            color: cs.onSurface,
-                                            height: 1.18,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 5),
-                                    SizedBox(
-                                      height: _mineHeaderMetadataHeight,
-                                      child: ClipRect(
-                                        child: Align(
-                                          alignment: Alignment.topLeft,
-                                          child: Wrap(
-                                            spacing: compact ? 8 : 10,
-                                            runSpacing: 4,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: metadata,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        height: headerHeight,
-                        child: Center(child: accountAction),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth < 520 ? 2 : 4;
-                final aspectRatio = constraints.maxWidth < 520 ? 2.55 : 3.65;
-                return GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: aspectRatio,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  children: [
-                    StatsOverviewCard(
-                      title: '待办完成',
-                      value: '$todoCompletionRate',
-                      unit: '%',
-                      icon: Icons.check_circle_outline,
-                      color: cs.primary,
-                    ),
-                    StatsOverviewCard(
-                      title: '连续打卡',
-                      value: '${p.currentStreak}',
-                      unit: '天',
-                      icon: Icons.repeat,
-                      color: cs.tertiary,
-                    ),
-                    StatsOverviewCard(
-                      title: '本周专注',
-                      value: '$weeklyFocus',
-                      unit: '分钟',
-                      icon: Icons.timer,
-                      color: DesignTokens.defaultError,
-                    ),
-                    StatsOverviewCard(
-                      title: '效率评分',
-                      value: '${p.productivityScore}',
-                      icon: Icons.auto_awesome,
-                      color: DesignTokens.defaultWarning,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: aiEnabled
-                ? _AiWeeklyReviewCard(
-                    todoProvider: todoProvider,
-                    pomodoroProvider: pomodoroProvider,
-                    habitProvider: habitProvider,
-                  )
-                : AppInfoBanner(
-                    icon: Icons.auto_awesome,
-                    title: 'AI 助手',
-                    message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
-                    color: Colors.purple,
-                    onTap: auth.state.isAdmin
-                        ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const BrandRouteSurface(child: AdminScreen()),
-                            ),
-                          )
-                        : null,
-                  ),
-          ),
-
+          mineHeader,
+          mineStats,
+          aiAssistant,
           const SizedBox(height: 12),
           _TileGroup(
             title: '行动计划',
@@ -1592,6 +1574,57 @@ String _avatarErrorMessage(Object error) {
   return message.startsWith('Exception: ')
       ? message.substring('Exception: '.length)
       : message;
+}
+
+class _MineStatsGrid extends StatelessWidget {
+  final List<Widget> cards;
+
+  const _MineStatsGrid({required this.cards});
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          final columns = compact ? 2 : 4;
+          final rows = <Widget>[];
+
+          for (var index = 0; index < cards.length; index += columns) {
+            final rowCards = cards.skip(index).take(columns).toList();
+            rows.add(
+              SizedBox(
+                height: compact ? 70 : 64,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < rowCards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(child: RepaintBoundary(child: rowCards[i])),
+                    ],
+                    for (var i = rowCards.length; i < columns; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      const Expanded(child: SizedBox.shrink()),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return Column(
+            key: const ValueKey('mine_stats_stable_grid'),
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                rows[i],
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _AiWeeklyReviewCard extends StatefulWidget {
