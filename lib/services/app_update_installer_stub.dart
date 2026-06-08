@@ -15,6 +15,8 @@ class AppUpdateInstaller {
 
   static Future<void> openInstallPermissionSettings() async {}
 
+  static Future<bool> downloadedFileExists(String path) async => false;
+
   static Future<void> installApk(String path) {
     throw UnsupportedError('当前平台不支持应用内安装 APK');
   }

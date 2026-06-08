@@ -1,11 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:duoyi/core/app_update_policy.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:duoyi/services/app_update_service.dart';
-import 'dart:io';
-import 'package:test/test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:test/test.dart';
 
 void main() {
   test('release notes display hides GitHub generated full changelog link', () {
@@ -450,8 +452,8 @@ void main() {
     () async {
       final service = AppUpdateService(
         repo: 'dq52099/duoyi',
-        currentVersion: '1.1.32',
-        currentVersionCode: 130104,
+        currentVersion: '1.1.33',
+        currentVersionCode: 130105,
         backendBaseUrl: 'https://duoyi.test',
         httpClient: MockClient((request) async {
           if (request.url.path == '/api/mobile/apps/duoyi/update') {
@@ -482,16 +484,88 @@ void main() {
       await service.checkNow();
 
       expect(service.error, isNull);
-      expect(service.latestVersion, '1.1.32');
-      expect(service.latestVersionCode, 130104);
-      expect(service.minimumSupportedVersion, '1.1.32');
-      expect(service.minimumSupportedVersionCode, 130104);
+      expect(service.latestVersion, '1.1.33');
+      expect(service.latestVersionCode, 130105);
+      expect(service.minimumSupportedVersion, '1.1.33');
+      expect(service.minimumSupportedVersionCode, 130105);
       expect(service.hasUpdate, isFalse);
       expect(service.mustUpdate, isFalse);
-      expect(service.forceUpdateRequired, isTrue);
+      expect(service.forceUpdateRequired, isFalse);
       expect(service.latestNotesForDisplay, contains('旧强更配置应按当前版本展示'));
     },
   );
+
+  test('mobile force_update response is honored directly', () async {
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.33',
+      currentVersionCode: 130105,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/mobile/apps/duoyi/update') {
+          return http.Response.bytes(
+            utf8.encode(
+              json.encode(
+                _mobileUpdatePayload(
+                  available: true,
+                  latestVersion: '1.1.33',
+                  latestVersionCode: 130106,
+                  forceUpdate: true,
+                  forceUpdateRequired: true,
+                  minimumSupportedVersion: '1.1.33',
+                  minimumSupportedVersionCode: 130105,
+                ),
+              ),
+            ),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('{"detail":"Not Found"}', 404);
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(service.forceUpdateRequired, isTrue);
+    expect(service.hasUpdate, isTrue);
+    expect(service.mustUpdate, isTrue);
+  });
+
+  test('check update restores downloaded installer without network', () async {
+    final tmp = await Directory.systemTemp.createTemp('duoyi_update_test_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+    final apk = File('${tmp.path}/duoyi-v1.1.34.apk');
+    await apk.writeAsBytes(const [1, 2, 3]);
+    SharedPreferences.setMockInitialValues({
+      'duoyi_update_downloaded_apk_path': apk.path,
+      'duoyi_update_downloaded_apk_version': '1.1.34',
+      'duoyi_update_downloaded_apk_version_code': 130106,
+      'duoyi_update_downloaded_apk_url':
+          'https://cdn.duoyi.test/duoyi-v1.1.34.apk',
+      'duoyi_update_downloaded_apk_asset_name': 'duoyi-v1.1.34.apk',
+    });
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.33',
+      currentVersionCode: 130105,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        throw const SocketException('offline');
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(service.hasDownloadedInstaller, isTrue);
+    expect(service.downloadedFilePath, apk.path);
+    expect(service.latestVersion, '1.1.34');
+    expect(service.latestVersionCode, 130106);
+    expect(service.latestUrl, 'https://cdn.duoyi.test/duoyi-v1.1.34.apk');
+    expect(service.hasUpdate, isTrue);
+  });
 
   test(
     'mobile update 200 with route hash mismatch still falls back to GitHub',
@@ -546,12 +620,12 @@ void main() {
       final mobileUpdate = source.substring(mobileStart, mobileEnd);
 
       expect(mobileUpdate, contains("data['force_update'] == true ||"));
+      expect(mobileUpdate, contains('final forceUpdate ='));
       expect(
         mobileUpdate,
         contains('policyEnabled && (available || belowMinimum)'),
-        reason:
-            '移动更新强更需要同时兼容新 force_update_required 和旧 force_app_update_enabled，并让最低支持版本参与判断。',
       );
+      expect(mobileUpdate, contains('_forceUpdateRequired = forceUpdate;'));
     },
   );
 
@@ -570,10 +644,11 @@ void main() {
 
     expect(
       config,
-      contains("_forceUpdateRequired = data['force_update_required'] == true"),
+      contains('final policyEnabled ='),
       reason:
           '/api/config fallback must honor the admin force-update switch; the gate itself explains when no install URL is configured.',
     );
+    expect(config, contains('_forceUpdateRequired = policyEnabled;'));
   });
 
   test('backend update checks normalize trailing slash base urls', () {
@@ -630,6 +705,10 @@ void main() {
     );
     expect(mineScreen, contains('updater.forceUpdateBlockedReason'));
     expect(mineScreen, contains('安装包不可用'));
+    expect(source, contains('hasDownloadedInstaller'));
+    expect(source, contains('_restoreDownloadedInstaller'));
+    expect(source, contains('_rememberDownloadedInstaller'));
+    expect(source, contains('downloadedFileExists'));
   });
 }
 

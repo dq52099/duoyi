@@ -73,6 +73,11 @@ class AppUpdateInstaller {
     await _channel.invokeMethod<void>('openInstallPermissionSettings');
   }
 
+  static Future<bool> downloadedFileExists(String path) async {
+    if (path.trim().isEmpty) return false;
+    return File(path).exists();
+  }
+
   static Future<void> installApk(String path) async {
     if (!supportsInstall) {
       throw UnsupportedError('当前平台不支持应用内安装 APK');

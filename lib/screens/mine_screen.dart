@@ -943,9 +943,7 @@ class MineScreen extends StatelessWidget {
       cleanupFailed = true;
     }
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(cleanupFailed ? '已退出登录，本机数据将在下次登录前重试清理' : '已退出登录'),
       ),
@@ -1127,7 +1125,8 @@ class MineScreen extends StatelessWidget {
                     ),
                   ],
                   if ((updater.mustUpdate || updater.hasUpdate) &&
-                      updater.latestUrl == null) ...[
+                      updater.latestUrl == null &&
+                      !updater.hasDownloadedInstaller) ...[
                     const SizedBox(height: 12),
                     AppInfoBanner(
                       icon: Icons.link_off_outlined,
@@ -1164,7 +1163,8 @@ class MineScreen extends StatelessWidget {
                     child: const Text('关闭'),
                   ),
                 if (updater.hasUpdate &&
-                    updater.latestUrl != null &&
+                    (updater.latestUrl != null ||
+                        updater.hasDownloadedInstaller) &&
                     AppUpdateInstaller.supportsInstall)
                   FilledButton.icon(
                     onPressed: updater.busy
@@ -1180,7 +1180,7 @@ class MineScreen extends StatelessWidget {
                           },
                     icon: const Icon(Icons.download_for_offline_outlined),
                     label: Text(
-                      updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
+                      updater.hasDownloadedInstaller ? '安装已下载包' : '下载并安装',
                     ),
                   ),
               ],

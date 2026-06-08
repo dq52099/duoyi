@@ -3165,7 +3165,7 @@ String _todayTaskProgressNotificationBody(
         final day = CompletionVisibilityPolicy.dateOnly(todo.date);
         final isTodayTodo = day == today;
         return isTodayTodo &&
-        !todo.isCompleted &&
+            !todo.isCompleted &&
             !todo.isArchivedAfterRollover;
       })
       .toList(growable: false);
@@ -3843,7 +3843,8 @@ class _ForceUpdateGate extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final notes = updater.latestNotesForDisplay;
     final canInstall =
-        updater.latestUrl != null && AppUpdateInstaller.supportsInstall;
+        (updater.latestUrl != null || updater.hasDownloadedInstaller) &&
+        AppUpdateInstaller.supportsInstall;
 
     return Positioned.fill(
       child: PopScope(
@@ -3945,7 +3946,8 @@ class _ForceUpdateGate extends StatelessWidget {
                           style: TextStyle(color: colorScheme.error),
                         ),
                       ],
-                      if (updater.latestUrl == null) ...[
+                      if (updater.latestUrl == null &&
+                          !updater.hasDownloadedInstaller) ...[
                         const SizedBox(height: 12),
                         AppInfoBanner(
                           icon: Icons.link_off_outlined,
@@ -3996,7 +3998,7 @@ class _ForceUpdateGate extends StatelessWidget {
                             : null,
                         icon: const Icon(Icons.download_for_offline_outlined),
                         label: Text(
-                          updater.downloadedFilePath == null ? '下载并安装' : '重新安装',
+                          updater.hasDownloadedInstaller ? '安装已下载包' : '下载并安装',
                         ),
                       ),
                     ],
@@ -4190,7 +4192,10 @@ class MainShellState extends State<MainShell> {
         .select<NotificationService, ({bool hasUnreadHistory})>(
           (notification) => (hasUnreadHistory: notification.hasUnreadHistory),
         );
-    final showMineBadge = notification.hasUnreadHistory;
+    final updateHasUpdate = context.select<AppUpdateService, bool>(
+      (updater) => updater.hasUpdate,
+    );
+    final showMineBadge = notification.hasUnreadHistory || updateHasUpdate;
     final navDestinations = safeVisibleTabs
         .map((tab) {
           final destination = allDestinations[tab];

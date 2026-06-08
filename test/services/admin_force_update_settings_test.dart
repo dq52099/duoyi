@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('force update defaults use current 1.1.32 version floor', () {
+  test('force update defaults use current 1.1.33 version floor', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final appVersion = File('lib/core/app_version.dart').readAsStringSync();
     final backend = File('backend/main.py').readAsStringSync();
@@ -11,10 +11,10 @@ void main() {
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.1.32+130104'));
-    expect(appVersion, contains("static const name = '1.1.32';"));
-    expect(appVersion, contains('static const build = 130104;'));
-    expect(backend, contains('return "1.1.32", 130104'));
+    expect(pubspec, contains('version: 1.1.33+130105'));
+    expect(appVersion, contains("static const name = '1.1.33';"));
+    expect(appVersion, contains('static const build = 130105;'));
+    expect(backend, contains('return "1.1.33", 130105'));
     expect(backend, contains('def _normalize_update_version_floor'));
     expect(
       backend,
@@ -138,10 +138,8 @@ void main() {
     expect(updateService, contains('final hasRaisedMinimum'));
     expect(updateService, contains('bool get forceUpdateRequired'));
     expect(updateService, contains('bool get mustUpdate'));
-    expect(
-      updateService,
-      contains("_forceUpdateRequired = data['force_update_required'] == true"),
-    );
+    expect(updateService, contains('final policyEnabled ='));
+    expect(updateService, contains('_forceUpdateRequired = policyEnabled;'));
     expect(updateService, contains('formatUpdateNotesForDisplay'));
     expect(updatePolicy, contains('本次更新摘要'));
     expect(updatePolicy, contains('full changelog'));
@@ -180,10 +178,15 @@ void main() {
     expect(mainApp, contains('管理员未配置下载地址'));
     expect(mainApp, contains('当前平台不支持应用内安装'));
     expect(mainApp, contains('downloadAndInstallLatest()'));
+    expect(mainApp, contains('updater.hasDownloadedInstaller'));
     expect(
       mainApp,
-      contains('final showMineBadge = notification.hasUnreadHistory'),
+      contains(
+        'final showMineBadge = notification.hasUnreadHistory || updateHasUpdate',
+      ),
     );
+    expect(mainApp, contains('context.select<AppUpdateService, bool>'));
+    expect(mainApp, contains('(updater) => updater.hasUpdate'));
     expect(
       mainApp,
       contains('class _BottomNavBadgeIcon extends StatelessWidget'),
