@@ -3719,12 +3719,11 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final quadrant = widget.quadrant;
     final baseTodos = context.watch<TodoProvider>().visibleListTodos;
     final effectiveFilter =
-        widget.filter?.copyWith(quadrant: widget.quadrant) ??
-        TodoFilterState<EisenhowerQuadrant, TodoPriority>(
-          quadrant: widget.quadrant,
-        );
+        widget.filter?.copyWith(quadrant: quadrant) ??
+        TodoFilterState<EisenhowerQuadrant, TodoPriority>(quadrant: quadrant);
     final todos = filterTodos(
       baseTodos,
       effectiveFilter,
@@ -3740,7 +3739,7 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title(widget.quadrant)),
+        title: Text(_title(quadrant)),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
       ),
       body: todos.isEmpty

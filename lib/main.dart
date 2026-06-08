@@ -332,11 +332,9 @@ void main() async {
       }());
     }
 
-    await guarded(
-      'cloud sync state',
-      cloudSyncProvider.resetForAccountChange,
-      critical: true,
-    );
+    await guarded('cloud sync state', () async {
+      await cloudSyncProvider.resetForAccountChange();
+    }, critical: true);
 
     var localFilesCleaned = true;
     Future<void> clearLocalFiles() async {
