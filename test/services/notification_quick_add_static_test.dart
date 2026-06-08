@@ -234,7 +234,15 @@ void main() {
     );
     expect(main, contains("_durationUntilNextLocalDay"));
     expect(main, contains('final isTodayTodo = day == today;'));
-    expect(main, contains('isTodayTodo &&\n        !todo.isCompleted'));
+    expect(
+      main,
+      matches(
+        RegExp(
+          r'return\s+isTodayTodo\s*&&\s*!todo\.isCompleted\s*&&\s*!todo\.isArchivedAfterRollover;',
+        ),
+      ),
+      reason: '通知栏今日任务进展不能把已完成或已归档的待办计入未完成数量。',
+    );
     expect(
       main,
       contains(
