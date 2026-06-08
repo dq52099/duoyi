@@ -71,12 +71,17 @@ void main() {
 
   test('更新入口按平台能力显示安装动作', () {
     final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
-    final main = File('lib/main.dart').readAsStringSync();
+    final forceUpdateGate = File(
+      'lib/widgets/force_update_gate.dart',
+    ).readAsStringSync();
 
     expect(mine, contains("import '../services/app_update_installer.dart';"));
     expect(mine, contains('AppUpdateInstaller.supportsInstall'));
-    expect(main, contains("import 'services/app_update_installer.dart';"));
-    expect(main, contains('AppUpdateInstaller.supportsInstall'));
-    expect(main, contains('当前平台不支持应用内安装'));
+    expect(
+      forceUpdateGate,
+      contains("import '../services/app_update_installer.dart';"),
+    );
+    expect(forceUpdateGate, contains('AppUpdateInstaller.supportsInstall'));
+    expect(forceUpdateGate, contains('当前平台不支持应用内安装'));
   });
 }
