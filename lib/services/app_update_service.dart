@@ -187,6 +187,10 @@ class AppUpdateService extends ChangeNotifier {
         _serverPolicyLoaded = false;
       }
       if (configLoaded == true) {
+        if ((_latestUrl == null || _latestUrl!.trim().isEmpty) &&
+            (mustUpdate || hasUpdate)) {
+          await _fillMissingDisplayDataFromGitHub();
+        }
         _latestNotes ??= _fallbackUpdateNotes(_latestVersion);
       }
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: false);
@@ -247,7 +251,7 @@ class AppUpdateService extends ChangeNotifier {
         rawLatest,
         _intValue(data['latest_version_code']),
       );
-      final downloadUrl = _resolveBackendUrl(
+      final rawDownloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['update_download_url']),
       );
@@ -257,6 +261,10 @@ class AppUpdateService extends ChangeNotifier {
       final minimumCode = _versionCodeAtLeastCurrent(
         rawMinimum,
         _intValue(data['minimum_supported_version_code']),
+      );
+      final downloadUrl = _sanitizeDownloadUrlForVersion(
+        rawDownloadUrl,
+        latest.isEmpty ? minimum : latest,
       );
       final hasNewerLatest =
           _hasNewerVersionCode(latestCode) ||
@@ -334,7 +342,7 @@ class AppUpdateService extends ChangeNotifier {
         rawLatest,
         _intValue(data['latest_version_code']),
       );
-      final downloadUrl = _resolveBackendUrl(
+      final rawDownloadUrl = _resolveBackendUrl(
         base,
         _stringValue(data['download_url']),
       );
@@ -344,6 +352,10 @@ class AppUpdateService extends ChangeNotifier {
       final minimumCode = _versionCodeAtLeastCurrent(
         rawMinimum,
         _intValue(data['minimum_supported_version_code']),
+      );
+      final downloadUrl = _sanitizeDownloadUrlForVersion(
+        rawDownloadUrl,
+        latest.isEmpty ? minimum : latest,
       );
       final blockedReason = _stringValue(data['force_update_blocked_reason']);
       final available =
@@ -421,6 +433,37 @@ class AppUpdateService extends ChangeNotifier {
     final baseUri = _backendUri(base, '/');
     return baseUri.resolve(raw).toString();
   }
+
+  String _sanitizeDownloadUrlForVersion(String url, String targetVersion) {
+    if (_downloadUrlLooksStaleForVersion(url, targetVersion)) return '';
+    return url;
+  }
+
+  bool _downloadUrlLooksStaleForVersion(String url, String targetVersion) {
+    final clean = Uri.decodeFull(url.trim()).toLowerCase();
+    final target = _normalizeVersionToken(targetVersion);
+    if (clean.isEmpty || target.isEmpty) return false;
+    if (clean.contains(target)) return false;
+
+    final matches = RegExp(
+      r'(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?:[^0-9]|$)',
+    ).allMatches(clean);
+    for (final match in matches) {
+      final found = _normalizeVersionToken(match.group(1) ?? '');
+      if (found.isEmpty) continue;
+      if (compareAppVersions(found, target) < 0) return true;
+    }
+    return false;
+  }
+
+  String _normalizeVersionToken(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceFirst(RegExp(r'^v'), '')
+      .split('-')
+      .first
+      .split('+')
+      .first;
 
   Uri _backendUri(
     String base,
@@ -709,6 +752,11 @@ class AppUpdateService extends ChangeNotifier {
 
     final cachedVersion = (prefs.getString(_downloadedVersionKey) ?? '').trim();
     final cachedVersionCode = prefs.getInt(_downloadedVersionCodeKey);
+    final cachedUrl = (prefs.getString(_downloadedUrlKey) ?? '').trim();
+    if (_downloadUrlLooksStaleForVersion(cachedUrl, cachedVersion)) {
+      await _clearDownloadedInstaller(prefs);
+      return;
+    }
     if (!_isNewerThanCurrent(cachedVersion, cachedVersionCode)) {
       await _clearDownloadedInstaller(prefs);
       return;
@@ -716,7 +764,7 @@ class AppUpdateService extends ChangeNotifier {
     if (!_cachedInstallerMatchesLoadedUpdate(
       version: cachedVersion,
       versionCode: cachedVersionCode,
-      url: (prefs.getString(_downloadedUrlKey) ?? '').trim(),
+      url: cachedUrl,
       allowPopulateUpdateInfo: allowPopulateUpdateInfo,
     )) {
       _downloadedFilePath = null;
@@ -727,7 +775,6 @@ class AppUpdateService extends ChangeNotifier {
     if (allowPopulateUpdateInfo) {
       _latestVersion ??= cachedVersion.isEmpty ? null : cachedVersion;
       _latestVersionCode ??= cachedVersionCode;
-      final cachedUrl = (prefs.getString(_downloadedUrlKey) ?? '').trim();
       if ((_latestUrl == null || _latestUrl!.trim().isEmpty) &&
           cachedUrl.isNotEmpty) {
         _latestUrl = cachedUrl;

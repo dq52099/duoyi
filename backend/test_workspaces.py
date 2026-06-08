@@ -3040,20 +3040,20 @@ class WorkspaceApiTest(unittest.TestCase):
                 force_update_required=True,
                 latest_version="2.5.0",
                 minimum_supported_version="2.1.0",
-                update_notes="继续使用已有安装包地址",
+                update_notes="新版本需要重新配置安装包地址",
             ),
             actor=admin_id,
         )
         self.assertNotIn("update_download_url", retained_url["changed"])
         retained_settings = api.admin_get_settings(admin_id)
-        self.assertEqual(
-            retained_settings["update_download_url"],
-            "https://example.test/duoyi-2.4.0.apk",
-        )
-        self.assertEqual(
-            retained_settings["download_url"],
-            "https://example.test/duoyi-2.4.0.apk",
-        )
+        self.assertEqual(retained_settings["latest_version"], "2.5.0")
+        self.assertEqual(retained_settings["latest_version_name"], "2.5.0")
+        self.assertEqual(retained_settings["update_download_url"], "")
+        self.assertEqual(retained_settings["download_url"], "")
+        retained_config = api.public_config()["app_update"]
+        self.assertEqual(retained_config["latest_version"], "2.5.0")
+        self.assertEqual(retained_config["update_download_url"], "")
+        self.assertEqual(retained_config["download_url"], "")
 
     def test_admin_settings_post_alias_updates_force_update_contract(self):
         admin_id = self._make_admin("force-update-post-alias", ["settings"])
@@ -3300,8 +3300,8 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_stale_force_update_versions_are_floored_to_current_version(self):
         admin_id = self._make_admin("force-update-stale-version", ["settings"])
-        self.assertEqual(api.APP_CURRENT_VERSION, "1.1.33")
-        self.assertEqual(api.APP_CURRENT_VERSION_CODE, 130105)
+        self.assertEqual(api.APP_CURRENT_VERSION, "1.1.34")
+        self.assertEqual(api.APP_CURRENT_VERSION_CODE, 140000)
         old_repository = api.APP_UPDATE_REPOSITORY
         old_mobile_apk_dir = api.MOBILE_APK_DIR
         api.APP_UPDATE_REPOSITORY = ""
@@ -3322,39 +3322,39 @@ class WorkspaceApiTest(unittest.TestCase):
                 db.close()
 
             settings = api.admin_get_settings(admin_id)
-            self.assertEqual(settings["current_version"], "1.1.33")
-            self.assertEqual(settings["current_version_code"], 130105)
-            self.assertEqual(settings["latest_version"], "1.1.33")
-            self.assertEqual(settings["latest_version_name"], "1.1.33")
-            self.assertEqual(settings["latest_version_code"], 130105)
-            self.assertEqual(settings["minimum_supported_version"], "1.1.33")
+            self.assertEqual(settings["current_version"], "1.1.34")
+            self.assertEqual(settings["current_version_code"], 140000)
+            self.assertEqual(settings["latest_version"], "1.1.34")
+            self.assertEqual(settings["latest_version_name"], "1.1.34")
+            self.assertEqual(settings["latest_version_code"], 140000)
+            self.assertEqual(settings["minimum_supported_version"], "1.1.34")
             self.assertNotIn(
                 "1.1.20",
                 json.dumps(settings["version_options"], ensure_ascii=False),
             )
 
             config = api.public_config()["app_update"]
-            self.assertEqual(config["latest_version"], "1.1.33")
-            self.assertEqual(config["latest_version_name"], "1.1.33")
-            self.assertEqual(config["latest_version_code"], 130105)
-            self.assertEqual(config["minimum_supported_version"], "1.1.33")
+            self.assertEqual(config["latest_version"], "1.1.34")
+            self.assertEqual(config["latest_version_name"], "1.1.34")
+            self.assertEqual(config["latest_version_code"], 140000)
+            self.assertEqual(config["minimum_supported_version"], "1.1.34")
 
             with TestClient(api.app) as client:
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version": "1.1.33",
-                        "current_version_code": "130105",
+                        "current_version": "1.1.34",
+                        "current_version_code": "140000",
                     },
                 )
             self.assertEqual(response.status_code, 200)
             mobile = response.json()
             self.assertFalse(mobile["available"])
             self.assertFalse(mobile["force_update"])
-            self.assertEqual(mobile["latest_version_name"], "1.1.33")
-            self.assertEqual(mobile["latest_version_code"], 130105)
-            self.assertEqual(mobile["minimum_supported_version"], "1.1.33")
-            self.assertEqual(mobile["minimum_supported_version_code"], 130105)
+            self.assertEqual(mobile["latest_version_name"], "1.1.34")
+            self.assertEqual(mobile["latest_version_code"], 140000)
+            self.assertEqual(mobile["minimum_supported_version"], "1.1.34")
+            self.assertEqual(mobile["minimum_supported_version_code"], 140000)
 
             updated = api.admin_update_settings(
                 api.SettingsUpdate(
@@ -3363,11 +3363,11 @@ class WorkspaceApiTest(unittest.TestCase):
                 ),
                 actor=admin_id,
             )
-            self.assertEqual(updated["changed"]["latest_version"], "1.1.33")
-            self.assertEqual(updated["changed"]["latest_version_name"], "1.1.33")
+            self.assertEqual(updated["changed"]["latest_version"], "1.1.34")
+            self.assertEqual(updated["changed"]["latest_version_name"], "1.1.34")
             self.assertEqual(
                 updated["changed"]["minimum_supported_version"],
-                "1.1.33",
+                "1.1.34",
             )
         finally:
             api.APP_UPDATE_REPOSITORY = old_repository
@@ -3485,6 +3485,62 @@ class WorkspaceApiTest(unittest.TestCase):
                 api.APP_CURRENT_VERSION_CODE,
             )
             self.assertEqual(current_mobile["download_url"], "")
+        finally:
+            api._github_latest_mobile_release = old_github_latest
+            api.MOBILE_APK_DIR = old_mobile_apk_dir
+
+    def test_configured_stale_download_url_is_replaced_by_release_channel(self):
+        old_github_latest = api._github_latest_mobile_release
+        old_mobile_apk_dir = api.MOBILE_APK_DIR
+        api.MOBILE_APK_DIR = os.path.join(self._tmp.name, "empty_mobile_apps")
+        next_version = api._next_patch_version(api.APP_CURRENT_VERSION)
+
+        def latest_release():
+            return {
+                "latest_version_name": next_version,
+                "latest_version_code": api._app_version_code(next_version),
+                "download_url": f"https://example.test/duoyi-v{next_version}.apk",
+                "release_notes": "发布通道提供正确安装包",
+            }
+
+        api._github_latest_mobile_release = latest_release
+        try:
+            db = api.get_db()
+            try:
+                api._setting_set(db, "force_update_required", True)
+                api._setting_set(db, "force_app_update_enabled", True)
+                api._setting_set(db, "latest_version", next_version)
+                api._setting_set(db, "latest_version_name", next_version)
+                api._setting_set(db, "minimum_supported_version", api.APP_CURRENT_VERSION)
+                api._setting_set(
+                    db,
+                    "download_url",
+                    "https://example.test/duoyi-v1.1.20.apk",
+                )
+                api._setting_set(
+                    db,
+                    "update_download_url",
+                    "https://example.test/duoyi-v1.1.20.apk",
+                )
+                db.commit()
+            finally:
+                db.close()
+
+            with TestClient(api.app) as client:
+                response = client.get(
+                    "/api/mobile/apps/duoyi/update",
+                    params={
+                        "current_version": api.APP_CURRENT_VERSION,
+                        "current_version_code": str(api.APP_CURRENT_VERSION_CODE),
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            mobile = response.json()
+            self.assertTrue(mobile["available"])
+            self.assertTrue(mobile["force_update"])
+            self.assertEqual(mobile["latest_version_name"], next_version)
+            self.assertIn(f"duoyi-v{next_version}.apk", mobile["download_url"])
+            self.assertNotIn("1.1.20", mobile["download_url"])
         finally:
             api._github_latest_mobile_release = old_github_latest
             api.MOBILE_APK_DIR = old_mobile_apk_dir

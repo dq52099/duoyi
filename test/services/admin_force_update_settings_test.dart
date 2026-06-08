@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('force update defaults use current 1.1.33 version floor', () {
+  test('force update defaults use current 1.1.34 version floor', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final appVersion = File('lib/core/app_version.dart').readAsStringSync();
     final backend = File('backend/main.py').readAsStringSync();
@@ -11,10 +11,10 @@ void main() {
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.1.33+130105'));
-    expect(appVersion, contains("static const name = '1.1.33';"));
-    expect(appVersion, contains('static const build = 130105;'));
-    expect(backend, contains('return "1.1.33", 130105'));
+    expect(pubspec, contains('version: 1.1.34+140000'));
+    expect(appVersion, contains("static const name = '1.1.34';"));
+    expect(appVersion, contains('static const build = 140000;'));
+    expect(backend, contains('return "1.1.34", 140000'));
     expect(backend, contains('def _normalize_update_version_floor'));
     expect(
       backend,
@@ -44,6 +44,9 @@ void main() {
       'lib/core/app_update_policy.dart',
     ).readAsStringSync();
     final mainApp = File('lib/main.dart').readAsStringSync();
+    final forceUpdateGate = File(
+      'lib/widgets/force_update_gate.dart',
+    ).readAsStringSync();
 
     for (final key in [
       'force_update_required',
@@ -147,17 +150,17 @@ void main() {
     expect(updatePolicy, contains("split('+').first"));
 
     expect(mainApp, contains('void _checkUpdatePolicy({bool force = false})'));
-    expect(mainApp, isNot(contains('_checkUpdatePolicy(force: true)')));
-    expect(mainApp, contains('_checkUpdatePolicy();'));
+    expect(mainApp, contains('_checkUpdatePolicy(force: true)'));
     expect(mainApp, contains("'startup app update policy'"));
     expect(mainApp, contains('() => appUpdate.checkServerPolicyNow()'));
     expect(
       mainApp,
       contains('Future<void> _runStartupIdleQueue('),
-      reason: '启动更新策略检查应进入首帧后的 idle 队列，避免冷启动阻塞到无法滑动。',
+      reason: '启动后仍保留其它 idle 任务队列，但强更策略应首帧后立即检查。',
     );
     expect(mainApp, contains('initialDelay: const Duration(seconds: 75)'));
     expect(mainApp, contains('gap: const Duration(seconds: 12)'));
+    expect(mainApp, contains('timeout: const Duration(seconds: 6)'));
     expect(
       mainApp,
       isNot(contains('Future<void>.delayed(const Duration(seconds: 6), ()')),
@@ -166,19 +169,29 @@ void main() {
     expect(mainApp, contains('home: updater.mustUpdate'));
     expect(
       mainApp,
-      contains('? const Stack(children: [_ForceUpdateGate()])'),
+      contains('? const Stack(children: [ForceUpdateGate()])'),
       reason: '强制更新首帧不能先构建 MainShell，再用弹层覆盖。',
     );
-    expect(mainApp, contains('const _ForceUpdateGate()'));
-    expect(mainApp, contains('class _ForceUpdateGate extends StatelessWidget'));
-    expect(mainApp, contains('PopScope('));
-    expect(mainApp, contains('canPop: false'));
-    expect(mainApp, contains('AppUpdateInstaller.supportsInstall'));
-    expect(mainApp, contains('必须更新后才能继续使用'));
-    expect(mainApp, contains('管理员未配置下载地址'));
-    expect(mainApp, contains('当前平台不支持应用内安装'));
-    expect(mainApp, contains('downloadAndInstallLatest()'));
-    expect(mainApp, contains('updater.hasDownloadedInstaller'));
+    expect(mainApp, contains('const ForceUpdateGate()'));
+    expect(mainApp, contains("import 'widgets/force_update_gate.dart';"));
+    expect(
+      forceUpdateGate,
+      contains('class ForceUpdateGate extends StatefulWidget'),
+    );
+    expect(
+      forceUpdateGate,
+      contains('final ScrollController _notesScrollController'),
+    );
+    expect(forceUpdateGate, contains('PopScope('));
+    expect(forceUpdateGate, contains('canPop: false'));
+    expect(forceUpdateGate, contains('AppUpdateInstaller.supportsInstall'));
+    expect(forceUpdateGate, contains('需要更新后才能继续使用'));
+    expect(forceUpdateGate, contains('BrandBackground('));
+    expect(forceUpdateGate, contains('管理员已开启强制更新策略'));
+    expect(forceUpdateGate, contains('管理员未配置下载地址'));
+    expect(forceUpdateGate, contains('当前平台不支持应用内安装'));
+    expect(forceUpdateGate, contains('downloadAndInstallLatest()'));
+    expect(forceUpdateGate, contains('updater.hasDownloadedInstaller'));
     expect(
       mainApp,
       contains(
@@ -193,7 +206,7 @@ void main() {
     );
     expect(mainApp, contains('width: 8'));
     expect(mainApp, contains("label: I18n.tr('nav.mine')"));
-    expect(mainApp, contains("'更新内容'"));
+    expect(forceUpdateGate, contains("'更新内容'"));
     expect(backend, contains('APP_CURRENT_VERSION'));
     expect(backend, contains('APP_UPDATE_DEFAULT_NOTES'));
     expect(backend, contains('def _update_release_defaults'));

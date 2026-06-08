@@ -452,8 +452,8 @@ void main() {
     () async {
       final service = AppUpdateService(
         repo: 'dq52099/duoyi',
-        currentVersion: '1.1.33',
-        currentVersionCode: 130105,
+        currentVersion: '1.1.34',
+        currentVersionCode: 140000,
         backendBaseUrl: 'https://duoyi.test',
         httpClient: MockClient((request) async {
           if (request.url.path == '/api/mobile/apps/duoyi/update') {
@@ -484,10 +484,10 @@ void main() {
       await service.checkNow();
 
       expect(service.error, isNull);
-      expect(service.latestVersion, '1.1.33');
-      expect(service.latestVersionCode, 130105);
-      expect(service.minimumSupportedVersion, '1.1.33');
-      expect(service.minimumSupportedVersionCode, 130105);
+      expect(service.latestVersion, '1.1.34');
+      expect(service.latestVersionCode, 140000);
+      expect(service.minimumSupportedVersion, '1.1.34');
+      expect(service.minimumSupportedVersionCode, 140000);
       expect(service.hasUpdate, isFalse);
       expect(service.mustUpdate, isFalse);
       expect(service.forceUpdateRequired, isFalse);
@@ -495,11 +495,72 @@ void main() {
     },
   );
 
+  test('backend stale apk url is replaced by release channel apk', () async {
+    final seen = <String>[];
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.34',
+      currentVersionCode: 140000,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        seen.add(request.url.path);
+        if (request.url.path == '/api/mobile/apps/duoyi/update') {
+          return http.Response.bytes(
+            utf8.encode(
+              json.encode(
+                _mobileUpdatePayload(
+                  latestVersion: '1.1.35',
+                  latestVersionCode: 140001,
+                  minimumSupportedVersion: '1.1.34',
+                  minimumSupportedVersionCode: 140000,
+                  downloadUrl: 'https://cdn.duoyi.test/duoyi-v1.1.20.apk',
+                ),
+              ),
+            ),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        if (request.url.path == '/repos/dq52099/duoyi/releases/latest') {
+          return http.Response.bytes(
+            utf8.encode(
+              json.encode({
+                'tag_name': 'v1.1.35',
+                'body': '## 更新内容\n- 修复强制更新安装包地址',
+                'assets': [
+                  {
+                    'name': 'duoyi-v1.1.35.apk',
+                    'browser_download_url':
+                        'https://github.com/dq52099/duoyi/releases/download/v1.1.35/duoyi-v1.1.35.apk',
+                  },
+                ],
+              }),
+            ),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('{"detail":"Not Found"}', 404);
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(seen, [
+      '/api/mobile/apps/duoyi/update',
+      '/repos/dq52099/duoyi/releases/latest',
+    ]);
+    expect(service.latestVersion, '1.1.35');
+    expect(service.latestUrl, contains('duoyi-v1.1.35.apk'));
+    expect(service.latestUrl, isNot(contains('1.1.20')));
+    expect(service.mustUpdate, isTrue);
+  });
+
   test('mobile force_update response is honored directly', () async {
     final service = AppUpdateService(
       repo: 'dq52099/duoyi',
-      currentVersion: '1.1.33',
-      currentVersionCode: 130105,
+      currentVersion: '1.1.34',
+      currentVersionCode: 140000,
       backendBaseUrl: 'https://duoyi.test',
       httpClient: MockClient((request) async {
         if (request.url.path == '/api/mobile/apps/duoyi/update') {
@@ -508,12 +569,12 @@ void main() {
               json.encode(
                 _mobileUpdatePayload(
                   available: true,
-                  latestVersion: '1.1.33',
-                  latestVersionCode: 130106,
+                  latestVersion: '1.1.34',
+                  latestVersionCode: 140001,
                   forceUpdate: true,
                   forceUpdateRequired: true,
-                  minimumSupportedVersion: '1.1.33',
-                  minimumSupportedVersionCode: 130105,
+                  minimumSupportedVersion: '1.1.34',
+                  minimumSupportedVersionCode: 140000,
                 ),
               ),
             ),
@@ -542,15 +603,15 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'duoyi_update_downloaded_apk_path': apk.path,
       'duoyi_update_downloaded_apk_version': '1.1.34',
-      'duoyi_update_downloaded_apk_version_code': 130106,
+      'duoyi_update_downloaded_apk_version_code': 140001,
       'duoyi_update_downloaded_apk_url':
           'https://cdn.duoyi.test/duoyi-v1.1.34.apk',
       'duoyi_update_downloaded_apk_asset_name': 'duoyi-v1.1.34.apk',
     });
     final service = AppUpdateService(
       repo: 'dq52099/duoyi',
-      currentVersion: '1.1.33',
-      currentVersionCode: 130105,
+      currentVersion: '1.1.34',
+      currentVersionCode: 140000,
       backendBaseUrl: 'https://duoyi.test',
       httpClient: MockClient((request) async {
         throw const SocketException('offline');
@@ -562,9 +623,41 @@ void main() {
     expect(service.hasDownloadedInstaller, isTrue);
     expect(service.downloadedFilePath, apk.path);
     expect(service.latestVersion, '1.1.34');
-    expect(service.latestVersionCode, 130106);
+    expect(service.latestVersionCode, 140001);
     expect(service.latestUrl, 'https://cdn.duoyi.test/duoyi-v1.1.34.apk');
     expect(service.hasUpdate, isTrue);
+  });
+
+  test('stale downloaded installer url is not reused offline', () async {
+    final tmp = await Directory.systemTemp.createTemp('duoyi_update_test_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+    final apk = File('${tmp.path}/duoyi-v1.1.20.apk');
+    await apk.writeAsBytes(const [1, 2, 3]);
+    SharedPreferences.setMockInitialValues({
+      'duoyi_update_downloaded_apk_path': apk.path,
+      'duoyi_update_downloaded_apk_version': '1.1.35',
+      'duoyi_update_downloaded_apk_version_code': 140001,
+      'duoyi_update_downloaded_apk_url':
+          'https://cdn.duoyi.test/duoyi-v1.1.20.apk',
+      'duoyi_update_downloaded_apk_asset_name': 'duoyi-v1.1.20.apk',
+    });
+    final service = AppUpdateService(
+      repo: 'dq52099/duoyi',
+      currentVersion: '1.1.34',
+      currentVersionCode: 140000,
+      backendBaseUrl: 'https://duoyi.test',
+      httpClient: MockClient((request) async {
+        throw const SocketException('offline');
+      }),
+    );
+
+    await service.checkNow();
+
+    expect(service.hasDownloadedInstaller, isFalse);
+    expect(service.downloadedFilePath, isNull);
+    expect(service.latestUrl, isNull);
   });
 
   test(
@@ -699,10 +792,12 @@ void main() {
     );
     expect(
       source,
-      contains('final downloadUrl = _resolveBackendUrl('),
+      contains('final rawDownloadUrl = _resolveBackendUrl('),
       reason:
           'Both backend update endpoints should normalize relative APK URLs.',
     );
+    expect(source, contains('_sanitizeDownloadUrlForVersion('));
+    expect(source, contains('_downloadUrlLooksStaleForVersion'));
     expect(mineScreen, contains('updater.forceUpdateBlockedReason'));
     expect(mineScreen, contains('安装包不可用'));
     expect(source, contains('hasDownloadedInstaller'));

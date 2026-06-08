@@ -253,7 +253,7 @@ def _pubspec_app_version() -> tuple[str, int]:
             return match.group(1), int(match.group(2) or "0")
     except (OSError, ValueError):
         pass
-    return "1.1.33", 130105
+    return "1.1.34", 140000
 
 
 _DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()
@@ -630,6 +630,8 @@ def _update_release_defaults(db) -> dict:
         _normalize_update_version_floor(minimum_supported_version)
         or APP_CURRENT_VERSION
     )
+    if _download_url_looks_stale_for_version(update_download_url, latest_version):
+        update_download_url = ""
     if force_update_required:
         if not update_notes:
             update_notes = APP_UPDATE_DEFAULT_NOTES
@@ -962,6 +964,27 @@ def _download_url_matches_version(value: str, version: str) -> bool:
     return normalized_version in urllib.parse.unquote(clean)
 
 
+def _download_url_has_version(value: str) -> bool:
+    clean = urllib.parse.unquote(str(value or "").strip().lower())
+    pattern = r"(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?:[^0-9]|$)"
+    return bool(re.search(pattern, clean))
+
+
+def _download_url_looks_stale_for_version(value: str, version: str) -> bool:
+    clean = urllib.parse.unquote(str(value or "").strip().lower())
+    normalized_version = str(version or "").strip().lower().removeprefix("v")
+    if not clean or not normalized_version:
+        return False
+    if normalized_version in clean:
+        return False
+    pattern = r"(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?:[^0-9]|$)"
+    for match in re.finditer(pattern, clean):
+        found = str(match.group(1) or "").strip()
+        if found and _version_gt(normalized_version, found):
+            return True
+    return False
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -1038,16 +1061,33 @@ def _mobile_update_response(
         latest_version_code = minimum_supported_version_code
     configured_download_url = str(settings_payload["download_url"] or "").strip()
     release_download_url = str(release.get("download_url") or "").strip()
+    configured_download_is_local = _is_local_mobile_download_url(
+        configured_download_url,
+        normalized_app_id,
+    )
+    release_download_is_local = _is_local_mobile_download_url(
+        release_download_url,
+        normalized_app_id,
+    )
     configured_download_matches_version = _download_url_matches_version(
         configured_download_url,
         latest_version_name,
     )
+    configured_download_has_version = _download_url_has_version(configured_download_url)
     configured_download_allowed = bool(
         configured_download_url
         and (
-            configured_version_is_newer
-            or _version_gt(minimum_supported_version, APP_CURRENT_VERSION)
+            (
+                configured_download_is_local
+                and release_download_url
+                and release_download_is_local
+            )
             or configured_download_matches_version
+            or (
+                configured_version_is_newer
+                and not release_download_url
+                and not configured_download_has_version
+            )
         )
     )
     download_url = (

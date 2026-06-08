@@ -51,7 +51,6 @@ import 'services/deep_link_service.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/ai_service.dart';
-import 'services/app_update_installer.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
 import 'services/foreground_reminder_popup_sink.dart';
@@ -84,6 +83,7 @@ import 'screens/statistics_screen.dart';
 import 'screens/time_audit_screen.dart';
 import 'screens/today_detail_router.dart';
 import 'widgets/brand_background.dart';
+import 'widgets/force_update_gate.dart';
 import 'widgets/quick_capture_fab.dart';
 import 'widgets/todo_completion_flow.dart';
 import 'widgets/surface_components.dart';
@@ -1736,11 +1736,6 @@ void main() async {
             runQueuedHomeWidgetPush,
           ),
           runDailyRolloverAfterFirstFrame,
-          () => _startupGuard(
-            'startup app update policy',
-            () => appUpdate.checkServerPolicyNow(),
-            timeout: const Duration(seconds: 5),
-          ),
         ],
         initialDelay: const Duration(seconds: 75),
         gap: const Duration(seconds: 12),
@@ -1790,6 +1785,13 @@ void main() async {
   );
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(
+      _startupGuard(
+        'startup app update policy',
+        () => appUpdate.checkServerPolicyNow(),
+        timeout: const Duration(seconds: 6),
+      ),
+    );
     unawaited(runPostFrameStartupTasks());
   });
 }
@@ -3563,7 +3565,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
     _lastLifecycleDay = DateTime(now.year, now.month, now.day);
     _lastIana = LocalTimezoneResolver.currentIana;
     _lastExactAlarmGranted = _initialExactAlarmGranted;
-    _lastUpdatePolicyCheckAt = now;
+    _lastUpdatePolicyCheckAt = null;
     _lastAccountProfileRefreshAt = now;
   }
 
@@ -3623,7 +3625,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       lock.onAppLifecycleInactive();
     } else if (state == AppLifecycleState.resumed) {
       lock.onAppLifecycleResume();
-      _checkUpdatePolicy();
+      _checkUpdatePolicy(force: true);
       _refreshAccountProfileOnResume();
       // 先处理时区变更（可能影响调度），再做跨日 rollover。
       _maybeResyncOnTimezoneChange();
@@ -3662,23 +3664,26 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
 
   void _checkUpdatePolicy({bool force = false}) {
     if (!force && _updatePolicyCheckTimer?.isActive == true) return;
-    // 延迟检查更新，避免阻塞UI；同一轮生命周期只保留一个待执行任务。
+    // 首帧之后尽快刷新强更策略；同一轮生命周期只保留一个待执行任务。
     _updatePolicyCheckTimer?.cancel();
-    _updatePolicyCheckTimer = Timer(const Duration(seconds: 45), () {
-      final now = DateTime.now();
-      final previous = _lastUpdatePolicyCheckAt;
-      if (!force &&
-          previous != null &&
-          now.difference(previous) < const Duration(minutes: 30)) {
-        return;
-      }
-      _lastUpdatePolicyCheckAt = now;
-      final updater = _appUpdateService;
-      if (updater == null) return;
-      if (updater.checking) return;
-      // ignore: discarded_futures
-      updater.checkNow();
-    });
+    _updatePolicyCheckTimer = Timer(
+      force ? Duration.zero : const Duration(seconds: 2),
+      () {
+        final now = DateTime.now();
+        final previous = _lastUpdatePolicyCheckAt;
+        if (!force &&
+            previous != null &&
+            now.difference(previous) < const Duration(minutes: 30)) {
+          return;
+        }
+        _lastUpdatePolicyCheckAt = now;
+        final updater = _appUpdateService;
+        if (updater == null) return;
+        if (updater.checking) return;
+        // ignore: discarded_futures
+        updater.checkServerPolicyNow();
+      },
+    );
   }
 
   /// 检测系统时区在后台是否被修改；若有变化则刷新 `tz.local` 并排队
@@ -3818,234 +3823,15 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: brand.theme,
       home: mustUpdate
-          ? const Stack(children: [_ForceUpdateGate()])
+          ? const Stack(children: [ForceUpdateGate()])
           : Stack(
               children: [
                 MainShell(key: mainShellKey),
                 if (lock.isLocked)
                   const Positioned.fill(child: Material(child: LockScreen())),
-                const _ForceUpdateGate(),
+                const ForceUpdateGate(),
               ],
             ),
-    );
-  }
-}
-
-class _ForceUpdateGate extends StatelessWidget {
-  const _ForceUpdateGate();
-
-  @override
-  Widget build(BuildContext context) {
-    final updater = context.watch<AppUpdateService>();
-    if (!updater.mustUpdate) return const SizedBox.shrink();
-
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final notes = updater.latestNotesForDisplay;
-    final canInstall =
-        (updater.latestUrl != null || updater.hasDownloadedInstaller) &&
-        AppUpdateInstaller.supportsInstall;
-
-    return Positioned.fill(
-      child: PopScope(
-        canPop: false,
-        child: Material(
-          color: colorScheme.surface,
-          child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Icon(
-                        Icons.system_update_alt_outlined,
-                        size: 48,
-                        color: colorScheme.error,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '必须更新后才能继续使用',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '管理员已要求当前版本升级。更新完成前，应用功能会暂时锁定。',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      AppSurfaceCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _ForceUpdateInfoRow(
-                              label: '当前版本',
-                              value: updater.currentVersion,
-                            ),
-                            _ForceUpdateInfoRow(
-                              label: '最新版本',
-                              value: updater.latestVersion ?? '未配置',
-                            ),
-                            if (updater.minimumSupportedVersion != null)
-                              _ForceUpdateInfoRow(
-                                label: '最低支持版本',
-                                value: updater.minimumSupportedVersion!,
-                              ),
-                            if (updater.latestAssetName != null)
-                              _ForceUpdateInfoRow(
-                                label: '安装包',
-                                value: updater.latestAssetName!,
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (notes.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          '更新内容',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 180),
-                          child: AppSurfaceCard(
-                            padding: const EdgeInsets.all(14),
-                            child: Scrollbar(
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                child: SelectableText(
-                                  notes,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    height: 1.45,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (updater.error != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          updater.error!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: colorScheme.error),
-                        ),
-                      ],
-                      if (updater.latestUrl == null &&
-                          !updater.hasDownloadedInstaller) ...[
-                        const SizedBox(height: 12),
-                        AppInfoBanner(
-                          icon: Icons.link_off_outlined,
-                          title: '安装包暂不可用',
-                          message: '管理员未配置下载地址，或发布通道还没有提供可安装的新版本。请等待发布包同步完成。',
-                          color: colorScheme.error,
-                          margin: EdgeInsets.zero,
-                        ),
-                      ] else if (!AppUpdateInstaller.supportsInstall) ...[
-                        const SizedBox(height: 12),
-                        AppInfoBanner(
-                          icon: Icons.install_mobile_outlined,
-                          title: '当前平台不支持应用内安装',
-                          message: '请在 Android 手机上安装更新包；桌面或 Web 端仅展示更新说明。',
-                          color: colorScheme.primary,
-                          margin: EdgeInsets.zero,
-                        ),
-                      ],
-                      if (updater.downloading) ...[
-                        const SizedBox(height: 16),
-                        LinearProgressIndicator(
-                          value: updater.downloadProgress,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          updater.downloadProgress == null
-                              ? '正在下载更新包'
-                              : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ] else if (updater.installing) ...[
-                        const SizedBox(height: 16),
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 6),
-                        Text(
-                          '正在打开安装器',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      FilledButton.icon(
-                        onPressed: canInstall && !updater.busy
-                            ? () async {
-                                await updater.downloadAndInstallLatest();
-                              }
-                            : null,
-                        icon: const Icon(Icons.download_for_offline_outlined),
-                        label: Text(
-                          updater.hasDownloadedInstaller ? '安装已下载包' : '下载并安装',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ForceUpdateInfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ForceUpdateInfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

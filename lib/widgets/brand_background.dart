@@ -8,7 +8,9 @@ import 'surface_components.dart';
 /// scaffold's normal background.
 class BrandBackground extends StatelessWidget {
   final Widget child;
-  const BrandBackground({super.key, required this.child});
+  final double? overlayOpacity;
+
+  const BrandBackground({super.key, required this.child, this.overlayOpacity});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +47,8 @@ class BrandBackground extends StatelessWidget {
             RepaintBoundary(
               child: Container(
                 color: brand.backgroundOverlay.withValues(
-                  alpha: brand.backgroundOverlayOpacity,
+                  alpha: (overlayOpacity ?? brand.backgroundOverlayOpacity)
+                      .clamp(0.0, 1.0),
                 ),
               ),
             ),

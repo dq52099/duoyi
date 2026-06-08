@@ -65,3 +65,6 @@ tmp/
 .mindfs/
 backend/backups/
 backend/uploads/
+
+# Local UI verification captures
+.playwright-mcp/
