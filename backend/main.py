@@ -253,7 +253,7 @@ def _pubspec_app_version() -> tuple[str, int]:
             return match.group(1), int(match.group(2) or "0")
     except (OSError, ValueError):
         pass
-    return "1.1.34", 140000
+    return "1.1.35", 140001
 
 
 _DEFAULT_APP_VERSION, _DEFAULT_APP_VERSION_CODE = _pubspec_app_version()

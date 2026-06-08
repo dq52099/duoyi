@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
@@ -46,6 +45,7 @@ class _TodoScreenState extends State<TodoScreen> {
       const TodoFilterState<EisenhowerQuadrant, TodoPriority>();
   TodoKanbanBoardConfig _kanbanConfig = TodoKanbanBoardConfig.defaults();
   bool _batchMode = false;
+  int _swipeDismissSerial = 0;
   final Set<String> _selectedTodoIds = <String>{};
 
   @override
@@ -120,6 +120,13 @@ class _TodoScreenState extends State<TodoScreen> {
 
   void _clearFilter() {
     _setFilter(const TodoFilterState<EisenhowerQuadrant, TodoPriority>());
+  }
+
+  bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      setState(() => _swipeDismissSerial++);
+    }
+    return false;
   }
 
   Future<void> _completeSelected() async {
@@ -693,24 +700,27 @@ class _TodoScreenState extends State<TodoScreen> {
                               },
                             ),
                           ),
-                          _TodoViewMode.list => ListView.builder(
-                            scrollCacheExtent: const ScrollCacheExtent.pixels(
-                              640,
+                          _TodoViewMode.list =>
+                            NotificationListener<ScrollNotification>(
+                              onNotification: _dismissSwipeActionsOnScroll,
+                              child: ListView.builder(
+                                cacheExtent: 640,
+                                itemCount: listGroupEntries.length,
+                                itemBuilder: (context, index) {
+                                  final entry = listGroupEntries[index];
+                                  return _ListGroupTile(
+                                    groupName: entry.key,
+                                    todos: entry.value,
+                                    batchMode: _batchMode,
+                                    selectedTodoIds: _selectedTodoIds,
+                                    onToggleSelection: _toggleSelection,
+                                    onEnterBatchMode: (id) =>
+                                        _enterBatchMode(todoId: id),
+                                    swipeDismissSerial: _swipeDismissSerial,
+                                  );
+                                },
+                              ),
                             ),
-                            itemCount: listGroupEntries.length,
-                            itemBuilder: (context, index) {
-                              final entry = listGroupEntries[index];
-                              return _ListGroupTile(
-                                groupName: entry.key,
-                                todos: entry.value,
-                                batchMode: _batchMode,
-                                selectedTodoIds: _selectedTodoIds,
-                                onToggleSelection: _toggleSelection,
-                                onEnterBatchMode: (id) =>
-                                    _enterBatchMode(todoId: id),
-                              );
-                            },
-                          ),
                           _TodoViewMode.kanban => _TodoKanbanView(
                             config: _kanbanConfig,
                             kanbanGroups: kanbanGroups,
@@ -719,6 +729,8 @@ class _TodoScreenState extends State<TodoScreen> {
                             onToggleSelection: _toggleSelection,
                             onEnterBatchMode: (id) =>
                                 _enterBatchMode(todoId: id),
+                            swipeDismissSerial: _swipeDismissSerial,
+                            onScrollStart: _dismissSwipeActionsOnScroll,
                           ),
                         },
                 ),
@@ -1609,6 +1621,8 @@ class _TodoKanbanView extends StatelessWidget {
   final Set<String> selectedTodoIds;
   final ValueChanged<String> onToggleSelection;
   final ValueChanged<String> onEnterBatchMode;
+  final int swipeDismissSerial;
+  final ValueChanged<ScrollNotification> onScrollStart;
 
   const _TodoKanbanView({
     required this.config,
@@ -1617,6 +1631,8 @@ class _TodoKanbanView extends StatelessWidget {
     required this.selectedTodoIds,
     required this.onToggleSelection,
     required this.onEnterBatchMode,
+    required this.swipeDismissSerial,
+    required this.onScrollStart,
   });
 
   @override
@@ -1643,24 +1659,32 @@ class _TodoKanbanView extends StatelessWidget {
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            scrollCacheExtent: const ScrollCacheExtent.pixels(560),
-            itemCount: columns.length,
-            itemBuilder: (context, index) {
-              final column = columns[index];
-              return _KanbanColumn(
-                column: column,
-                columns: columns,
-                groupMode: config.groupMode,
-                todos: kanbanGroups[column.id] ?? const <TodoItem>[],
-                batchMode: batchMode,
-                selectedTodoIds: selectedTodoIds,
-                onToggleSelection: onToggleSelection,
-                onEnterBatchMode: onEnterBatchMode,
-              );
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              onScrollStart(notification);
+              return false;
             },
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              cacheExtent: 560,
+              itemCount: columns.length,
+              itemBuilder: (context, index) {
+                final column = columns[index];
+                return _KanbanColumn(
+                  column: column,
+                  columns: columns,
+                  groupMode: config.groupMode,
+                  todos: kanbanGroups[column.id] ?? const <TodoItem>[],
+                  batchMode: batchMode,
+                  selectedTodoIds: selectedTodoIds,
+                  onToggleSelection: onToggleSelection,
+                  onEnterBatchMode: onEnterBatchMode,
+                  swipeDismissSerial: swipeDismissSerial,
+                  onScrollStart: onScrollStart,
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -1826,6 +1850,8 @@ class _KanbanColumn extends StatelessWidget {
   final Set<String> selectedTodoIds;
   final ValueChanged<String> onToggleSelection;
   final ValueChanged<String> onEnterBatchMode;
+  final int swipeDismissSerial;
+  final ValueChanged<ScrollNotification> onScrollStart;
 
   const _KanbanColumn({
     required this.column,
@@ -1836,6 +1862,8 @@ class _KanbanColumn extends StatelessWidget {
     required this.selectedTodoIds,
     required this.onToggleSelection,
     required this.onEnterBatchMode,
+    required this.swipeDismissSerial,
+    required this.onScrollStart,
   });
 
   @override
@@ -1910,63 +1938,68 @@ class _KanbanColumn extends StatelessWidget {
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          scrollCacheExtent: const ScrollCacheExtent.pixels(
-                            560,
-                          ),
-                          itemCount: listEntries.length,
-                          itemBuilder: (context, index) {
-                            final entry = listEntries[index];
-                            final header = entry.header;
-                            if (header != null) {
-                              return Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 2,
-                                  bottom: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        header.label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.62,
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            onScrollStart(notification);
+                            return false;
+                          },
+                          child: ListView.builder(
+                            cacheExtent: 560,
+                            itemCount: listEntries.length,
+                            itemBuilder: (context, index) {
+                              final entry = listEntries[index];
+                              final header = entry.header;
+                              if (header != null) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 2,
+                                    bottom: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          header.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.62,
+                                            ),
+                                            fontWeight: FontWeight.normal,
                                           ),
-                                          fontWeight: FontWeight.normal,
                                         ),
                                       ),
-                                    ),
-                                    AppStatusBadge(
-                                      label: '${header.todos.length}',
-                                      color: color,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 7,
-                                        vertical: 2,
+                                      AppStatusBadge(
+                                        label: '${header.todos.length}',
+                                        color: color,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              final todo = entry.todo!;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _KanbanTodoCard(
+                                  todo: todo,
+                                  columns: columns,
+                                  color: color,
+                                  batchMode: batchMode,
+                                  selected: selectedTodoIds.contains(todo.id),
+                                  onToggleSelection: onToggleSelection,
+                                  onEnterBatchMode: onEnterBatchMode,
+                                  swipeDismissSerial: swipeDismissSerial,
                                 ),
                               );
-                            }
-
-                            final todo = entry.todo!;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _KanbanTodoCard(
-                                todo: todo,
-                                columns: columns,
-                                color: color,
-                                batchMode: batchMode,
-                                selected: selectedTodoIds.contains(todo.id),
-                                onToggleSelection: onToggleSelection,
-                                onEnterBatchMode: onEnterBatchMode,
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
                 ),
               ],
@@ -1986,6 +2019,7 @@ class _KanbanTodoCard extends StatefulWidget {
   final bool selected;
   final ValueChanged<String> onToggleSelection;
   final ValueChanged<String> onEnterBatchMode;
+  final int swipeDismissSerial;
 
   const _KanbanTodoCard({
     required this.todo,
@@ -1995,6 +2029,7 @@ class _KanbanTodoCard extends StatefulWidget {
     required this.selected,
     required this.onToggleSelection,
     required this.onEnterBatchMode,
+    required this.swipeDismissSerial,
   });
 
   @override
@@ -2014,7 +2049,9 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
   @override
   void didUpdateWidget(covariant _KanbanTodoCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.batchMode || widget.todo.id != oldWidget.todo.id) {
+    if (widget.batchMode ||
+        widget.todo.id != oldWidget.todo.id ||
+        widget.swipeDismissSerial != oldWidget.swipeDismissSerial) {
       _swipeOffset = 0;
       _dragging = false;
     }
@@ -2565,6 +2602,7 @@ class _ListGroupTile extends StatefulWidget {
   final Set<String> selectedTodoIds;
   final ValueChanged<String> onToggleSelection;
   final ValueChanged<String> onEnterBatchMode;
+  final int swipeDismissSerial;
 
   const _ListGroupTile({
     required this.groupName,
@@ -2573,6 +2611,7 @@ class _ListGroupTile extends StatefulWidget {
     required this.selectedTodoIds,
     required this.onToggleSelection,
     required this.onEnterBatchMode,
+    required this.swipeDismissSerial,
   });
 
   @override
@@ -2677,7 +2716,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: widget.todos.length,
-      onReorderItem: _reorderTodos,
+      onReorder: _reorderTodos,
       proxyDecorator: (child, index, animation) => Material(
         type: MaterialType.transparency,
         child: ScaleTransition(
@@ -2722,6 +2761,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       onToggleSelection: widget.onToggleSelection,
       onEnterBatchMode: widget.onEnterBatchMode,
       trailing: trailing,
+      swipeDismissSerial: widget.swipeDismissSerial,
     );
   }
 
@@ -2808,6 +2848,7 @@ class _TodoTile extends StatefulWidget {
   final ValueChanged<String> onToggleSelection;
   final ValueChanged<String> onEnterBatchMode;
   final Widget? trailing;
+  final int swipeDismissSerial;
 
   const _TodoTile({
     super.key,
@@ -2817,6 +2858,7 @@ class _TodoTile extends StatefulWidget {
     required this.onToggleSelection,
     required this.onEnterBatchMode,
     this.trailing,
+    this.swipeDismissSerial = 0,
   });
 
   @override
@@ -2836,7 +2878,9 @@ class _TodoTileState extends State<_TodoTile> {
   @override
   void didUpdateWidget(covariant _TodoTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.batchMode || widget.todo.id != oldWidget.todo.id) {
+    if (widget.batchMode ||
+        widget.todo.id != oldWidget.todo.id ||
+        widget.swipeDismissSerial != oldWidget.swipeDismissSerial) {
       _swipeOffset = 0;
       _dragging = false;
     }
@@ -3636,11 +3680,25 @@ class _MetaPill extends StatelessWidget {
   }
 }
 
-class QuadrantListScreen extends StatelessWidget {
+class QuadrantListScreen extends StatefulWidget {
   final EisenhowerQuadrant quadrant;
   final TodoFilterState<EisenhowerQuadrant, TodoPriority>? filter;
 
   const QuadrantListScreen({super.key, required this.quadrant, this.filter});
+
+  @override
+  State<QuadrantListScreen> createState() => _QuadrantListScreenState();
+}
+
+class _QuadrantListScreenState extends State<QuadrantListScreen> {
+  int _swipeDismissSerial = 0;
+
+  bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      setState(() => _swipeDismissSerial++);
+    }
+    return false;
+  }
 
   String _title(EisenhowerQuadrant q) {
     switch (q) {
@@ -3659,8 +3717,10 @@ class QuadrantListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseTodos = context.watch<TodoProvider>().visibleListTodos;
     final effectiveFilter =
-        filter?.copyWith(quadrant: quadrant) ??
-        TodoFilterState<EisenhowerQuadrant, TodoPriority>(quadrant: quadrant);
+        widget.filter?.copyWith(quadrant: widget.quadrant) ??
+        TodoFilterState<EisenhowerQuadrant, TodoPriority>(
+          quadrant: widget.quadrant,
+        );
     final todos = filterTodos(
       baseTodos,
       effectiveFilter,
@@ -3676,24 +3736,28 @@ class QuadrantListScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title(quadrant)),
+        title: Text(_title(widget.quadrant)),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
       ),
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
-          : ListView.builder(
-              scrollCacheExtent: const ScrollCacheExtent.pixels(640),
-              itemCount: todos.length,
-              itemBuilder: (context, index) {
-                final todo = todos[index];
-                return _TodoTile(
-                  todo: todo,
-                  batchMode: false,
-                  selected: false,
-                  onToggleSelection: (_) {},
-                  onEnterBatchMode: (_) {},
-                );
-              },
+          : NotificationListener<ScrollNotification>(
+              onNotification: _dismissSwipeActionsOnScroll,
+              child: ListView.builder(
+                cacheExtent: 640,
+                itemCount: todos.length,
+                itemBuilder: (context, index) {
+                  final todo = todos[index];
+                  return _TodoTile(
+                    todo: todo,
+                    batchMode: false,
+                    selected: false,
+                    onToggleSelection: (_) {},
+                    onEnterBatchMode: (_) {},
+                    swipeDismissSerial: _swipeDismissSerial,
+                  );
+                },
+              ),
             ),
     );
   }

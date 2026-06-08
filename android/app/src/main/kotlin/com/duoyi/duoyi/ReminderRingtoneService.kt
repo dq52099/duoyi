@@ -92,6 +92,9 @@ class ReminderRingtoneService : Service() {
                     rootId = rootId,
                 ),
             )
+            if (fullScreen) {
+                launchFullScreenReminder(id, payload)
+            }
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
             if (!playRingtone(id)) {
@@ -346,7 +349,7 @@ class ReminderRingtoneService : Service() {
         val fullScreenIntent = PendingIntent.getActivity(
             this,
             id + 3_000_000,
-            openAppIntent(payload, stopRingtone = true),
+            openAppIntent(payload, stopRingtone = false),
             flags,
         )
         val stopIntent = PendingIntent.getService(
@@ -397,6 +400,23 @@ class ReminderRingtoneService : Service() {
             builder.addAction(0, "稍后 $snoozeMinutes 分钟", snoozeIntent)
         }
         return builder.build()
+    }
+
+    private fun launchFullScreenReminder(id: Int, payload: String?) {
+        runCatching {
+            val intent = openAppIntent(payload, stopRingtone = false).apply {
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(intent)
+        }.onFailure { error ->
+            Log.w("ReminderRingtoneService", "full-screen reminder launch failed", error)
+            ReminderRingtoneScheduler.recordDeliveryIssue(
+                this,
+                id = id,
+                reason = "full_screen_launch_failed",
+                message = "系统拦截了全屏闹钟弹出，铃声会继续播放。请检查全屏提醒权限、锁屏弹窗权限和后台弹出限制。",
+            )
+        }
     }
 
     private fun scheduleAutoRepeat(

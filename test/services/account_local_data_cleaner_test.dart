@@ -206,30 +206,32 @@ void main() {
         'String firstNonEmptyProfileText',
       );
 
-      expect(block, contains('cloudSyncProvider.resetForAccountChange()'));
+      expect(block, contains('cloudSyncProvider.resetForAccountChange'));
       expect(block, contains('notificationService.cancelAll'));
       expect(block, contains('AlarmService.instance.cancelAll'));
       expect(block, contains('LocationGeofenceService.clearReminders()'));
-      expect(
-        block,
-        contains('AccountLocalDataCleaner.clearSharedPreferences()'),
-      );
-      expect(block, contains('AccountLocalDataCleaner.clearLocalFiles()'));
-      expect(
-        block,
-        isNot(
-          contains(
-            "guarded(\n        'account local files'",
-          ),
-        ),
-        reason: 'Account-scoped files must be fully cleared before switching accounts.',
-      );
-      expect(block, contains('calendarSyncProvider.resetLocalState()'));
+      expect(block, contains('AccountLocalDataCleaner.clearSharedPreferences'));
+      expect(block, contains('AccountLocalDataCleaner.clearLocalFiles'));
+      expect(block, contains("'account prefs first pass'"));
+      expect(block, contains("'account prefs second pass'"));
+      expect(block, contains('retryLocalFilesCleanup()'));
+      expect(block, contains("guardedSync('habits'"));
+      expect(block, contains("guardedSync('theme'"));
+      expect(block, contains("guardedSync('achievements'"));
+      expect(block, contains("guardedSync('calendar sync'"));
       expect(block, contains('userProvider.clearAccountProfileCache()'));
-      expect(block, contains('aiService.resetLocalState()'));
-      expect(block, contains('notificationService.resetLocalState()'));
+      expect(block, contains("guardedSync('ai service'"));
+      expect(block, contains("guardedSync('notification service'"));
       expect(block, contains('HomeWidgetService.resetAccountCache()'));
       expect(block, contains('await _pushHomeWidget('));
+      expect(
+        block.indexOf("'account prefs first pass'"),
+        lessThan(block.indexOf("guardedSync('habits'")),
+      );
+      expect(
+        block.indexOf("guardedSync('achievements'"),
+        lessThan(block.indexOf("'account prefs second pass'")),
+      );
       expect(
         block.indexOf('HomeWidgetService.resetAccountCache()'),
         lessThan(block.indexOf('await _pushHomeWidget(')),

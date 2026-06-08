@@ -289,13 +289,62 @@ void main() async {
   Future<void> clearAccountLocalData({required String reason}) async {
     debugPrint('[auth] clear local account data reason=$reason');
     cloudSyncStartSerial++;
-    await cloudSyncProvider.resetForAccountChange();
+    Object? criticalCleanupError;
+    StackTrace? criticalCleanupStackTrace;
 
-    Future<void> guarded(String label, Future<void> Function() task) async {
+    void rememberCriticalFailure(Object error, StackTrace stackTrace) {
+      criticalCleanupError ??= error;
+      criticalCleanupStackTrace ??= stackTrace;
+    }
+
+    Future<void> guarded(
+      String label,
+      Future<void> Function() task, {
+      bool critical = false,
+    }) async {
       try {
         await task();
       } catch (e, st) {
         debugPrint('[auth] account cleanup $label failed: $e\n$st');
+        if (critical) rememberCriticalFailure(e, st);
+      }
+    }
+
+    void guardedSync(String label, void Function() task) {
+      try {
+        task();
+      } catch (e, st) {
+        debugPrint('[auth] account cleanup $label failed: $e\n$st');
+        rememberCriticalFailure(e, st);
+      }
+    }
+
+    void retryLocalFilesCleanup() {
+      unawaited(() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        try {
+          await AccountLocalDataCleaner.clearLocalFiles();
+        } catch (e, st) {
+          debugPrint(
+            '[auth] account cleanup local files retry failed: $e\n$st',
+          );
+        }
+      }());
+    }
+
+    await guarded(
+      'cloud sync state',
+      cloudSyncProvider.resetForAccountChange,
+      critical: true,
+    );
+
+    var localFilesCleaned = true;
+    Future<void> clearLocalFiles() async {
+      try {
+        await AccountLocalDataCleaner.clearLocalFiles();
+      } catch (e, st) {
+        localFilesCleaned = false;
+        debugPrint('[auth] account cleanup local files failed: $e\n$st');
       }
     }
 
@@ -311,43 +360,69 @@ void main() async {
       await guarded('geofences', () async {
         await LocationGeofenceService.clearReminders();
       });
-      await AccountLocalDataCleaner.clearSharedPreferences();
-      await AccountLocalDataCleaner.clearLocalFiles();
+      await guarded(
+        'account prefs first pass',
+        AccountLocalDataCleaner.clearSharedPreferences,
+        critical: true,
+      );
+      await clearLocalFiles();
 
-      todoProvider.resetLocalState();
-      habitProvider.resetLocalState();
-      pomodoroProvider.resetLocalState();
-      countdownProvider.resetLocalState();
-      anniversaryProvider.resetLocalState();
-      diaryProvider.resetLocalState();
-      goalProvider.resetLocalState();
-      courseProvider.resetLocalState();
-      noteProvider.resetLocalState();
-      calendarProvider.resetLocalState();
-      timeAuditProvider.resetLocalState();
-      locationReminderProvider.resetLocalState();
-      userProvider.resetLocalState();
+      guardedSync('todos', todoProvider.resetLocalState);
+      guardedSync('habits', habitProvider.resetLocalState);
+      guardedSync('pomodoro', pomodoroProvider.resetLocalState);
+      guardedSync('countdowns', countdownProvider.resetLocalState);
+      guardedSync('anniversaries', anniversaryProvider.resetLocalState);
+      guardedSync('diary', diaryProvider.resetLocalState);
+      guardedSync('goals', goalProvider.resetLocalState);
+      guardedSync('courses', courseProvider.resetLocalState);
+      guardedSync('notes', noteProvider.resetLocalState);
+      guardedSync('calendar', calendarProvider.resetLocalState);
+      guardedSync('time audit', timeAuditProvider.resetLocalState);
+      guardedSync(
+        'location reminders',
+        locationReminderProvider.resetLocalState,
+      );
+      guardedSync('user', userProvider.resetLocalState);
       await guarded(
         'user profile cache',
         () => userProvider.clearAccountProfileCache(),
       );
-      themeProvider.resetLocalState();
-      achievementProvider.resetLocalState();
-      quickCaptureTemplateProvider.resetLocalState();
-      customFocusSoundProvider.resetLocalState();
-      focusRoomProvider.resetLocalState();
-      shareProvider.resetLocalState();
-      calendarSyncProvider.resetLocalState();
-      aiService.resetLocalState();
-      notificationService.resetLocalState();
-      await preferencesProvider.loadFromStorage();
-      await ReminderRingtoneSettings.applyPersistedSettingsToNative();
+      guardedSync('theme', themeProvider.resetLocalState);
+      guardedSync('achievements', achievementProvider.resetLocalState);
+      guardedSync(
+        'quick capture templates',
+        quickCaptureTemplateProvider.resetLocalState,
+      );
+      guardedSync(
+        'custom focus sounds',
+        customFocusSoundProvider.resetLocalState,
+      );
+      guardedSync('focus rooms', focusRoomProvider.resetLocalState);
+      guardedSync('shares', shareProvider.resetLocalState);
+      guardedSync('calendar sync', calendarSyncProvider.resetLocalState);
+      guardedSync('ai service', aiService.resetLocalState);
+      guardedSync('notification service', notificationService.resetLocalState);
+      await guarded(
+        'preferences reload',
+        preferencesProvider.loadFromStorage,
+        critical: true,
+      );
+      await guarded(
+        'reminder ringtone native settings',
+        ReminderRingtoneSettings.applyPersistedSettingsToNative,
+      );
 
       // Run a second pass after async platform cancellations so a stale sync
       // completion racing with cleanup cannot leave account data behind.
-      await AccountLocalDataCleaner.clearSharedPreferences();
-      await AccountLocalDataCleaner.clearLocalFiles();
+      await guarded(
+        'account prefs second pass',
+        AccountLocalDataCleaner.clearSharedPreferences,
+        critical: true,
+      );
+      await clearLocalFiles();
     });
+
+    if (!localFilesCleaned) retryLocalFilesCleanup();
 
     HomeWidgetService.resetAccountCache();
     await guarded('home widget refresh', () async {
@@ -367,6 +442,12 @@ void main() async {
         themeProvider,
       );
     });
+    if (criticalCleanupError != null) {
+      Error.throwWithStackTrace(
+        criticalCleanupError!,
+        criticalCleanupStackTrace!,
+      );
+    }
   }
 
   String firstNonEmptyProfileText(List<String?> values) {

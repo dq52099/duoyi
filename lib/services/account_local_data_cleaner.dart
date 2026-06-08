@@ -158,23 +158,53 @@ class AccountLocalDataCleaner {
 
   static Future<void> clearSharedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    Future<void> removeKey(String key) async {
+      try {
+        await prefs.remove(key);
+      } catch (e, st) {
+        firstError ??= e;
+        firstStackTrace ??= st;
+      }
+    }
+
     for (final key in accountScopedKeys) {
-      await prefs.remove(key);
+      await removeKey(key);
     }
     final dynamicKeys = prefs.getKeys().where(
       (key) => accountScopedPrefixes.any((prefix) => key.startsWith(prefix)),
     );
     for (final key in dynamicKeys.toList(growable: false)) {
-      await prefs.remove(key);
+      await removeKey(key);
+    }
+    final error = firstError;
+    final stackTrace = firstStackTrace;
+    if (error != null && stackTrace != null) {
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   static Future<void> clearLocalFiles({Directory? documentsDirectory}) async {
     final root = documentsDirectory ?? await getApplicationDocumentsDirectory();
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
     for (final name in accountScopedDocumentDirectories) {
-      final dir = Directory('${root.path}${Platform.pathSeparator}$name');
-      if (!await dir.exists()) continue;
-      await dir.delete(recursive: true);
+      try {
+        final dir = Directory('${root.path}${Platform.pathSeparator}$name');
+        if (!await dir.exists()) continue;
+        await dir.delete(recursive: true);
+      } catch (e, st) {
+        firstError ??= e;
+        firstStackTrace ??= st;
+      }
+    }
+    final error = firstError;
+    final stackTrace = firstStackTrace;
+    if (error != null && stackTrace != null) {
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 }

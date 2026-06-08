@@ -211,6 +211,66 @@ void main() {
     expect(find.text('左滑任务'), findsNothing);
   });
 
+  testWidgets('TodoScreen scrolling closes open swipe actions', (tester) async {
+    final previousSize = tester.view.physicalSize;
+    final previousDevicePixelRatio = tester.view.devicePixelRatio;
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.physicalSize = previousSize;
+      tester.view.devicePixelRatio = previousDevicePixelRatio;
+    });
+
+    final todoProvider = TodoProvider();
+    for (var i = 0; i < 18; i++) {
+      await todoProvider.addTodo(
+        TodoItem(title: '滑动$i', quadrant: EisenhowerQuadrant.urgentImportant),
+      );
+    }
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AiService()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: const MaterialApp(home: TodoScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('列表'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('滑动0'), const Offset(-160, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_swipe_complete_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_swipe_delete_button')),
+      findsOneWidget,
+    );
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -260));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_swipe_complete_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_swipe_delete_button')),
+      findsNothing,
+    );
+  });
+
   testWidgets('TodoScreen kanban card left swipe can delete task', (
     tester,
   ) async {

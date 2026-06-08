@@ -196,84 +196,109 @@ class _QuadrantCard extends StatelessWidget {
                         )
                       else
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ...items.take(3).map((t) {
-                                final visual =
-                                    CompletionVisibilityPolicy.visualState(t);
-                                final stateColor =
-                                    CompletionVisibilityPolicy.colorFor(visual);
-                                final isCompleted =
-                                    visual == TodoVisualState.completed;
-                                final isOverdue =
-                                    visual == TodoVisualState.overdue;
-                                final isDueSoon =
-                                    visual == TodoVisualState.dueSoon;
-                                final itemColor =
-                                    isCompleted || isOverdue || isDueSoon
-                                    ? stateColor
-                                    : bg.withValues(alpha: 0.8);
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 6,
-                                        height: 6,
-                                        decoration: BoxDecoration(
-                                          color: itemColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          t.title,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isCompleted
-                                                ? Colors.grey
-                                                : isOverdue
-                                                ? stateColor
-                                                : null,
-                                            decoration: isCompleted
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (isOverdue || isCompleted)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 6,
-                                          ),
-                                          child: Text(
-                                            isCompleted ? '已完成' : '逾期',
-                                            style: TextStyle(
-                                              fontSize: 10,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              const previewRowHeight = 24.0;
+                              const moreLabelHeight = 17.0;
+                              final reserveMoreLabel = items.length > 3;
+                              final availableForRows =
+                                  constraints.maxHeight -
+                                  (reserveMoreLabel ? moreLabelHeight : 0);
+                              var visibleCount =
+                                  (availableForRows / previewRowHeight).floor();
+                              if (visibleCount < 1) visibleCount = 1;
+                              if (visibleCount > 3) visibleCount = 3;
+
+                              final visibleItems = items
+                                  .take(visibleCount)
+                                  .toList(growable: false);
+                              final hiddenCount =
+                                  items.length - visibleItems.length;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ...visibleItems.map((t) {
+                                    final visual =
+                                        CompletionVisibilityPolicy.visualState(
+                                          t,
+                                        );
+                                    final stateColor =
+                                        CompletionVisibilityPolicy.colorFor(
+                                          visual,
+                                        );
+                                    final isCompleted =
+                                        visual == TodoVisualState.completed;
+                                    final isOverdue =
+                                        visual == TodoVisualState.overdue;
+                                    final isDueSoon =
+                                        visual == TodoVisualState.dueSoon;
+                                    final itemColor =
+                                        isCompleted || isOverdue || isDueSoon
+                                        ? stateColor
+                                        : bg.withValues(alpha: 0.8);
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 6,
+                                            height: 6,
+                                            decoration: BoxDecoration(
                                               color: itemColor,
+                                              shape: BoxShape.circle,
                                             ),
                                           ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              t.title,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isCompleted
+                                                    ? Colors.grey
+                                                    : isOverdue
+                                                    ? stateColor
+                                                    : null,
+                                                decoration: isCompleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isOverdue || isCompleted)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 6,
+                                              ),
+                                              child: Text(
+                                                isCompleted ? '已完成' : '逾期',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: itemColor,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                  if (hiddenCount > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        '+$hiddenCount 更多...',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade400,
                                         ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                              if (items.length > 3)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    '+${items.length - 3} 更多...',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade400,
+                                      ),
                                     ),
-                                  ),
-                                ),
-                            ],
+                                ],
+                              );
+                            },
                           ),
                         ),
                     ],

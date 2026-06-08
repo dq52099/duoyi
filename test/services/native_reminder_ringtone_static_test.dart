@@ -158,10 +158,7 @@ void main() {
     final actionReceiverStart = manifest.indexOf(
       'android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"',
     );
-    final actionReceiverEnd = manifest.indexOf(
-      '/>',
-      actionReceiverStart,
-    );
+    final actionReceiverEnd = manifest.indexOf('/>', actionReceiverStart);
     expect(actionReceiverStart, greaterThanOrEqualTo(0));
     expect(actionReceiverEnd, greaterThan(actionReceiverStart));
     final actionReceiverManifest = manifest.substring(
@@ -513,7 +510,7 @@ void main() {
     expect(service, contains('duoyi_builtin_ringtone_status_v2'));
     expect(service, contains('deleteNotificationChannel(it)'));
     expect(alarmService, contains('int snoozeMinutes = 5'));
-    expect(alarmService, contains('fullScreen: false'));
+    expect(alarmService, contains('fullScreen: true'));
     expect(scheduler, contains('ReminderRingtoneService.stopIfActive'));
     expect(scheduler, contains('ReminderRingtoneService.stopActive'));
     expect(alarmService, contains('Set<int> _pluginAlarmQueueIds(int id)'));
@@ -622,10 +619,9 @@ void main() {
     expect(mainActivity, contains('override fun onCreate'));
     expect(mainActivity, contains('override fun onNewIntent'));
     expect(service, contains('openAppIntent(payload, stopRingtone = true)'));
-    expect(
-      service,
-      isNot(contains('openAppIntent(payload, stopRingtone = false)')),
-    );
+    expect(service, contains('openAppIntent(payload, stopRingtone = false)'));
+    expect(service, contains('launchFullScreenReminder(id, payload)'));
+    expect(service, contains('reason = "full_screen_launch_failed"'));
     expect(service, contains('extraStopRingtone'));
     expect(mainActivity, contains('stopReminderRingtoneIfRequested(intent)'));
     expect(mainActivity, contains('ReminderRingtoneService.extraStopRingtone'));
@@ -811,22 +807,23 @@ void main() {
     );
     expect(oncePermissionHandler, contains('已保留内置闹钟铃声，提醒仍会响铃'));
     expect(oncePermissionHandler, contains('请开启通知权限以显示停止/稍后按钮'));
-    final onceNativeReturnIndex = once.indexOf(
-      '_finishScheduleIssue(',
-      once.indexOf("_ensureNotificationPermission('scheduleFullScreen')"),
-    );
+    final oncePluginScheduleIndex = once.indexOf('_plugin.zonedSchedule(');
     expect(
-      onceNativeReturnIndex,
+      oncePluginScheduleIndex,
       greaterThan(
-        once.indexOf("_ensureNotificationPermission('scheduleFullScreen')"),
-      ),
-      reason: 'Android 原生铃声注册成功后不应再注册第二条 Flutter 通知。',
-    );
-    expect(
-      onceNativeReturnIndex,
-      lessThan(
         once.indexOf('final androidDetails = AndroidNotificationDetails'),
       ),
+      reason: '定时强提醒要在原生闹钟之外继续注册 Flutter 本地通知兜底。',
+    );
+    expect(once, contains('Android 原生接收器到点后会取消同 id 的 Flutter 兜底'));
+    final onceFinishIndex = once.indexOf(
+      '_finishScheduleIssue(',
+      oncePluginScheduleIndex,
+    );
+    expect(
+      onceFinishIndex,
+      greaterThan(oncePluginScheduleIndex),
+      reason: '定时强提醒原生注册成功后不能早退，必须先注册 Flutter 兜底。',
     );
 
     final showTest = alarmService.substring(testStart, dailyStart);
@@ -886,22 +883,21 @@ void main() {
     );
     expect(dailyPermissionHandler, contains('已保留内置重复闹钟铃声，提醒仍会响铃'));
     expect(dailyPermissionHandler, contains('请开启通知权限以显示停止/稍后按钮'));
-    final dailyNativeReturnIndex = daily.indexOf(
+    final dailyPluginScheduleIndex = daily.indexOf('_plugin.zonedSchedule(');
+    expect(
+      dailyPluginScheduleIndex,
+      greaterThan(daily.indexOf('final details = _notificationDetails')),
+      reason: '重复强提醒要在原生闹钟之外继续注册 Flutter 本地通知兜底。',
+    );
+    expect(daily, contains('Android 原生重复闹钟触发时会取消同 id 的 Flutter 兜底'));
+    final dailyFinishIndex = daily.indexOf(
       '_finishScheduleIssue(',
-      daily.indexOf("_ensureNotificationPermission('scheduleDailyFullScreen')"),
+      dailyPluginScheduleIndex,
     );
     expect(
-      dailyNativeReturnIndex,
-      greaterThan(
-        daily.indexOf(
-          "_ensureNotificationPermission('scheduleDailyFullScreen')",
-        ),
-      ),
-      reason: '重复强提醒已有原生铃声队列时不能再注册第二条 Flutter 通知。',
-    );
-    expect(
-      dailyNativeReturnIndex,
-      lessThan(daily.indexOf('final details = _notificationDetails')),
+      dailyFinishIndex,
+      greaterThan(dailyPluginScheduleIndex),
+      reason: '重复强提醒原生注册成功后不能早退，必须先注册 Flutter 兜底。',
     );
 
     final testPermissionIndex = alarmService.indexOf(

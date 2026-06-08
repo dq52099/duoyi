@@ -664,26 +664,15 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       if (_isAndroid && nativeRingtoneOk) return;
       rethrow;
     }
-    if (_isAndroid && nativeRingtoneOk) {
-      _finishScheduleIssue(
-        nativeRingtoneOk: nativeRingtoneOk,
-        exactAlarmMissing: exactAlarmMissing,
-        exactFallbackUsed: false,
-        fullScreenIntentMissing: fullScreenIntentMissing,
-        channelIssueMessage: channelIssueMessage,
-        scheduledTime: when,
-        id: id,
-      );
-      return;
-    }
-
-    if (_isAndroid) {
+    if (_isAndroid && !nativeRingtoneOk) {
       await _cancelNativeAlarmQueue(
         id,
         operation: 'scheduleFullScreen flutter fallback handoff',
       );
     }
 
+    // Android 原生接收器到点后会取消同 id 的 Flutter 兜底；若原生定时被系统拦截，
+    // 这条系统通知仍可兜住 1 分钟闹钟测试和实际提醒。
     final androidDetails = AndroidNotificationDetails(
       channelId,
       _channelName,
@@ -762,6 +751,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) {
+        if (_isAndroid && nativeRingtoneOk) {
+          _recordScheduleIssue(
+            title: '闹钟兜底通知注册失败',
+            message: '内置闹钟已注册，但系统通知兜底注册失败。若到点未弹出，请检查后台限制或重新保存提醒。($e)',
+            scheduledTime: when,
+            id: id,
+          );
+          debugPrint(
+            '[AlarmService] scheduleFullScreen plugin fallback failed; '
+            'keeping native alarm: $e',
+          );
+          return;
+        }
         await _cancelPartialScheduleAfterFailure(id);
         rethrow;
       }
@@ -817,6 +819,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           // 回退也失败时下方一并抛出业务异常让调用方处理。
         }
       }
+      if (_isAndroid && nativeRingtoneOk) {
+        final inexactFallbackDetail = inexactFallbackError == null
+            ? ''
+            : ' 非精准回退错误：$inexactFallbackError';
+        _recordScheduleIssue(
+          title: '闹钟兜底通知注册失败',
+          message:
+              '内置闹钟已注册，但系统通知兜底未注册成功。请开启精准闹钟权限或检查后台限制后重新保存提醒。$inexactFallbackDetail',
+          scheduledTime: when,
+          id: id,
+        );
+        return;
+      }
       await _cancelPartialScheduleAfterFailure(id);
       final inexactFallbackDetail = inexactFallbackError == null
           ? ''
@@ -829,10 +844,36 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
       throw const AlarmPermissionDeniedException();
     } on StateError catch (e, st) {
+      if (_isAndroid && nativeRingtoneOk) {
+        _recordScheduleIssue(
+          title: '闹钟兜底通知待触发队列需确认',
+          message: '内置闹钟已注册，但系统通知兜底队列未确认。若到点未弹出，请重新保存提醒。($e)',
+          scheduledTime: when,
+          id: id,
+        );
+        debugPrint(
+          '[AlarmService] scheduleFullScreen plugin fallback not confirmed; '
+          'keeping native alarm: $e\n$st',
+        );
+        return;
+      }
       await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
       debugPrint('[AlarmService] scheduleFullScreen not confirmed: $e\n$st');
       rethrow;
     } catch (e, st) {
+      if (_isAndroid && nativeRingtoneOk) {
+        _recordScheduleIssue(
+          title: '闹钟兜底通知注册失败',
+          message: '内置闹钟已注册，但系统通知兜底注册失败。若到点未弹出，请检查后台限制或重新保存提醒。($e)',
+          scheduledTime: when,
+          id: id,
+        );
+        debugPrint(
+          '[AlarmService] scheduleFullScreen plugin fallback failed; '
+          'keeping native alarm: $e\n$st',
+        );
+        return;
+      }
       await _cancelPartialScheduleAfterFailure(id, pluginIds: <int>{id});
       _recordScheduleIssue(
         title: '闹钟提醒注册失败',
@@ -872,7 +913,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           title: title,
           body: body,
           payload: payload,
-          fullScreen: false,
+          fullScreen: true,
           snoozeMinutes: 5,
         ),
       );
@@ -986,25 +1027,15 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       if (_isAndroid && nativeRingtoneOk) return;
       rethrow;
     }
-    if (_isAndroid && nativeRingtoneOk) {
-      _finishScheduleIssue(
-        nativeRingtoneOk: nativeRingtoneOk,
-        exactAlarmMissing: exactAlarmMissing,
-        exactFallbackUsed: false,
-        fullScreenIntentMissing: fullScreenIntentMissing,
-        channelIssueMessage: channelIssueMessage,
-        id: id,
-      );
-      return;
-    }
-
-    if (_isAndroid) {
+    if (_isAndroid && !nativeRingtoneOk) {
       await _cancelNativeAlarmQueue(
         id,
         operation: 'scheduleDailyFullScreen flutter fallback handoff',
       );
     }
 
+    // Android 原生重复闹钟触发时会取消同 id 的 Flutter 兜底；原生调度失效时，
+    // Flutter 本地通知仍保留为备用提醒。
     final details = _notificationDetails(
       fullScreen: fullScreen,
       payload: payload,
@@ -1016,6 +1047,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
 
     final targets = normalized.isEmpty ? <int?>[null] : normalized.cast<int?>();
     var exactFallbackUsed = false;
+    var pluginFallbackIssueRecorded = false;
     final scheduledIds = <int>{};
     for (final weekday in targets) {
       final scheduleId = weekday == null ? id : _subId(id, weekday);
@@ -1058,6 +1090,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         }
       } on PlatformException catch (e) {
         if (!_isExactAlarmDenied(e)) {
+          if (_isAndroid && nativeRingtoneOk) {
+            pluginFallbackIssueRecorded = true;
+            _recordScheduleIssue(
+              title: '重复闹钟兜底通知注册失败',
+              message: '内置重复闹钟已注册，但系统通知兜底注册失败。若到点未弹出，请检查后台限制或重新保存提醒。($e)',
+              id: scheduleId,
+            );
+            debugPrint(
+              '[AlarmService] scheduleDailyFullScreen plugin fallback failed; '
+              'keeping native alarm: $e',
+            );
+            continue;
+          }
           await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
           rethrow;
         }
@@ -1104,6 +1149,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             // 回退也失败时下方一并抛出业务异常让调用方处理。
           }
         }
+        if (_isAndroid && nativeRingtoneOk) {
+          pluginFallbackIssueRecorded = true;
+          final inexactFallbackDetail = inexactFallbackError == null
+              ? ''
+              : ' 非精准回退错误：$inexactFallbackError';
+          _recordScheduleIssue(
+            title: '重复闹钟兜底通知注册失败',
+            message:
+                '内置重复闹钟已注册，但系统通知兜底未注册成功。请开启精准闹钟权限或检查后台限制后重新保存提醒。$inexactFallbackDetail',
+            id: scheduleId,
+          );
+          continue;
+        }
         await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
         final inexactFallbackDetail = inexactFallbackError == null
             ? ''
@@ -1116,6 +1174,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         );
         throw const AlarmPermissionDeniedException();
       } catch (e, st) {
+        if (_isAndroid && nativeRingtoneOk) {
+          pluginFallbackIssueRecorded = true;
+          _recordScheduleIssue(
+            title: '重复闹钟兜底通知注册失败',
+            message: '内置重复闹钟已注册，但系统通知兜底注册失败。若到点未弹出，请检查后台限制或重新保存提醒。($e)',
+            id: scheduleId,
+          );
+          debugPrint(
+            '[AlarmService] scheduleDailyFullScreen plugin fallback failed; '
+            'keeping native alarm: $e\n$st',
+          );
+          continue;
+        }
         await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
         _recordScheduleIssue(
           title: '重复闹钟注册失败',
@@ -1133,9 +1204,19 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         id: id,
       );
     } on StateError {
-      await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
-      rethrow;
+      if (_isAndroid && nativeRingtoneOk) {
+        pluginFallbackIssueRecorded = true;
+        _recordScheduleIssue(
+          title: '重复闹钟兜底通知待触发队列需确认',
+          message: '内置重复闹钟已注册，但系统通知兜底队列未确认。若到点未弹出，请重新保存提醒。',
+          id: id,
+        );
+      } else {
+        await _cancelPartialScheduleAfterFailure(id, pluginIds: scheduledIds);
+        rethrow;
+      }
     }
+    if (pluginFallbackIssueRecorded) return;
     _finishScheduleIssue(
       nativeRingtoneOk: nativeRingtoneOk,
       exactAlarmMissing: exactAlarmMissing,

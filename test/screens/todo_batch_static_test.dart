@@ -119,16 +119,33 @@ void main() {
   test('任务列表减少滑动卡顿和重绘面积', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
-    expect(source, contains('_TodoViewMode.list => ListView.builder'));
     expect(
       source,
-      contains('scrollCacheExtent: const ScrollCacheExtent.pixels'),
+      contains(
+        '_TodoViewMode.list =>\n                            NotificationListener<ScrollNotification>',
+      ),
     );
-    expect(source, contains('640'));
+    expect(source, contains('cacheExtent: 640'));
+    expect(source, contains('cacheExtent: 560'));
     expect(source, contains('RepaintBoundary(child: content)'));
     expect(source, contains('RepaintBoundary(child: card)'));
     expect(source, contains('clipBehavior: Clip.hardEdge'));
     expect(source, isNot(contains('IntrinsicHeight(')));
+  });
+
+  test('任务滚动时自动收起横滑完成删除区', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+
+    expect(source, contains('int _swipeDismissSerial = 0'));
+    expect(source, contains('_dismissSwipeActionsOnScroll'));
+    expect(source, contains('if (notification is ScrollStartNotification)'));
+    expect(source, contains('setState(() => _swipeDismissSerial++)'));
+    expect(source, contains('NotificationListener<ScrollNotification>'));
+    expect(source, contains('swipeDismissSerial: _swipeDismissSerial'));
+    expect(
+      source,
+      contains('widget.swipeDismissSerial != oldWidget.swipeDismissSerial'),
+    );
   });
 
   test('任务卡片按逾期完成临期状态和正常任务做视觉区分', () {

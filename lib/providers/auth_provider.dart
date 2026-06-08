@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_config.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
 
 class AuthState {
@@ -423,6 +424,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (e, st) {
       cleanupError = e;
       cleanupStackTrace = st;
+      await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
     }
     _state = const AuthState();
     _markAccountMutation('logout');
@@ -432,6 +434,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     if (cleanupError != null) {
       Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+    }
+  }
+
+  Future<void> _clearAccountScopedPreferencesAfterLogoutCleanupFailure() async {
+    try {
+      await AccountLocalDataCleaner.clearSharedPreferences();
+    } catch (e, st) {
+      debugPrint('[auth] fallback account prefs cleanup failed: $e\n$st');
     }
   }
 
