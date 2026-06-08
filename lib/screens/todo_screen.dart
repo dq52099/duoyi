@@ -704,6 +704,7 @@ class _TodoScreenState extends State<TodoScreen> {
                             NotificationListener<ScrollNotification>(
                               onNotification: _dismissSwipeActionsOnScroll,
                               child: ListView.builder(
+                                // ignore: deprecated_member_use
                                 cacheExtent: 640,
                                 itemCount: listGroupEntries.length,
                                 itemBuilder: (context, index) {
@@ -1667,6 +1668,7 @@ class _TodoKanbanView extends StatelessWidget {
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              // ignore: deprecated_member_use
               cacheExtent: 560,
               itemCount: columns.length,
               itemBuilder: (context, index) {
@@ -1944,6 +1946,7 @@ class _KanbanColumn extends StatelessWidget {
                             return false;
                           },
                           child: ListView.builder(
+                            // ignore: deprecated_member_use
                             cacheExtent: 560,
                             itemCount: listEntries.length,
                             itemBuilder: (context, index) {
@@ -2716,6 +2719,7 @@ class _ListGroupTileState extends State<_ListGroupTile> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: widget.todos.length,
+      // ignore: deprecated_member_use
       onReorder: _reorderTodos,
       proxyDecorator: (child, index, animation) => Material(
         type: MaterialType.transparency,
@@ -3744,6 +3748,7 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
           : NotificationListener<ScrollNotification>(
               onNotification: _dismissSwipeActionsOnScroll,
               child: ListView.builder(
+                // ignore: deprecated_member_use
                 cacheExtent: 640,
                 itemCount: todos.length,
                 itemBuilder: (context, index) {

@@ -950,6 +950,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             ReorderableListView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              // ignore: deprecated_member_use
               onReorder: (oldI, newI) {
                 if (!canEdit) return;
                 if (newI > oldI) newI -= 1;
