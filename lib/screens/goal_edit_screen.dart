@@ -1817,50 +1817,55 @@ class _SectionCard extends StatelessWidget {
         ),
         boxShadow: DesignTokens.shadowXs,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding: const EdgeInsets.symmetric(
-            horizontal: DesignTokens.spaceLg,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: DesignTokens.borderRadiusLg,
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
           ),
-          childrenPadding: const EdgeInsets.fromLTRB(
-            DesignTokens.spaceLg,
-            DesignTokens.spaceSm,
-            DesignTokens.spaceLg,
-            DesignTokens.spaceLg,
-          ),
-          leading: Icon(icon, color: cs.primary),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontSize: DesignTokens.fontSizeMd,
-              fontWeight: FontWeight.normal,
+          child: ExpansionTile(
+            initiallyExpanded: initiallyExpanded,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.spaceLg,
             ),
-          ),
-          subtitle: subtitle == null
-              ? null
-              : Text(
-                  subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: DesignTokens.fontSizeSm,
-                    color: cs.onSurface.withValues(alpha: 0.65),
-                  ),
-                ),
-          children: [
-            AppSecondaryControlTheme(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
+            childrenPadding: const EdgeInsets.fromLTRB(
+              DesignTokens.spaceLg,
+              DesignTokens.spaceSm,
+              DesignTokens.spaceLg,
+              DesignTokens.spaceLg,
+            ),
+            leading: Icon(icon, color: cs.primary),
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontSize: DesignTokens.fontSizeMd,
+                fontWeight: FontWeight.normal,
               ),
             ),
-          ],
+            subtitle: subtitle == null
+                ? null
+                : Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: DesignTokens.fontSizeSm,
+                      color: cs.onSurface.withValues(alpha: 0.65),
+                    ),
+                  ),
+            children: [
+              AppSecondaryControlTheme(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

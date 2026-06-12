@@ -1123,14 +1123,21 @@ class AppListTileCard extends StatelessWidget {
       onTap: onTap,
       border: border,
       elevation: elevation,
-      child: ListTile(
-        dense: dense,
-        isThreeLine: isThreeLine,
-        contentPadding: contentPadding,
-        leading: leading,
-        title: title,
-        subtitle: subtitle,
-        trailing: trailing,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: const BorderRadius.all(
+          Radius.circular(DesignTokens.radiusCard),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          dense: dense,
+          isThreeLine: isThreeLine,
+          contentPadding: contentPadding,
+          leading: leading,
+          title: title,
+          subtitle: subtitle,
+          trailing: trailing,
+        ),
       ),
     );
   }

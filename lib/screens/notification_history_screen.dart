@@ -2041,131 +2041,141 @@ class _NotificationReminderSlotTileState
           width: 0.4,
         ),
       ),
-      child: ExpansionTile(
-        initiallyExpanded: index == 0,
-        tilePadding: EdgeInsets.zero,
-        showTrailingIcon: false,
-        title: _SettingsExpansionHeader(
-          key: ValueKey('daily_reminder_slot_${index}_header'),
-          iconKey: ValueKey('daily_reminder_slot_${index}_header_icon'),
-          titleKey: ValueKey('daily_reminder_slot_${index}_header_title'),
-          subtitleKey: ValueKey('daily_reminder_slot_${index}_header_subtitle'),
-          icon: Icons.notifications_active_outlined,
-          color: cs.primary,
-          title: _title,
-          subtitle: slot.enabled
-              ? '${_kindLabel(slot.kind)} · $_time · ${_repeatDaysLabel(slot.repeatDays)} · ${_taskScopeText(slot)}'
-              : '${I18n.tr('preferences.daily_reminder.disabled')} · $_time',
-          trailing: _CompactSettingsSwitch(
-            key: ValueKey('daily_reminder_slot_${index}_enabled_switch'),
-            value: slot.enabled,
-            onChanged: _saving
-                ? null
-                : (value) => _save(context, slot.copyWith(enabled: value)),
-          ),
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-        children: [
-          _ReminderKindSettingsTile(
-            value: slot.kind,
-            subtitle: _kindDescription(slot.kind),
-            enabled: !_saving,
-            onChanged: (kind) => _save(
-              context,
-              slot.copyWith(enabled: kind != ReminderKind.off, kind: kind),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          initiallyExpanded: index == 0,
+          tilePadding: EdgeInsets.zero,
+          showTrailingIcon: false,
+          title: _SettingsExpansionHeader(
+            key: ValueKey('daily_reminder_slot_${index}_header'),
+            iconKey: ValueKey('daily_reminder_slot_${index}_header_icon'),
+            titleKey: ValueKey('daily_reminder_slot_${index}_header_title'),
+            subtitleKey: ValueKey(
+              'daily_reminder_slot_${index}_header_subtitle',
             ),
-          ),
-          const SizedBox(height: 6),
-          AppSettingsTile(
-            key: ValueKey('daily_reminder_slot_${index}_time_tile'),
-            icon: Icons.schedule,
-            color: Colors.deepOrange,
-            title: I18n.tr('preferences.daily_reminder.time'),
-            subtitle: I18n.tr('preferences.daily_reminder.time.subtitle'),
-            trailing: TextButton(
-              key: ValueKey('daily_reminder_slot_${index}_time_button'),
-              onPressed: _saving
+            icon: Icons.notifications_active_outlined,
+            color: cs.primary,
+            title: _title,
+            subtitle: slot.enabled
+                ? '${_kindLabel(slot.kind)} · $_time · ${_repeatDaysLabel(slot.repeatDays)} · ${_taskScopeText(slot)}'
+                : '${I18n.tr('preferences.daily_reminder.disabled')} · $_time',
+            trailing: _CompactSettingsSwitch(
+              key: ValueKey('daily_reminder_slot_${index}_enabled_switch'),
+              value: slot.enabled,
+              onChanged: _saving
                   ? null
-                  : () async {
-                      final picked = await AppTimePicker.show(
-                        context,
-                        initialTime: TimeOfDay(
-                          hour: slot.hour,
-                          minute: slot.minute,
-                        ),
-                        title:
-                            '$_title${I18n.tr('preferences.daily_reminder.time_suffix')}',
-                        subtitle: I18n.tr(
-                          'preferences.daily_reminder.time_picker.subtitle',
-                        ),
-                      );
-                      if (picked == null || !context.mounted) return;
-                      await _save(
-                        context,
-                        slot.copyWith(hour: picked.hour, minute: picked.minute),
-                      );
-                    },
-              child: Text(_time),
+                  : (value) => _save(context, slot.copyWith(enabled: value)),
             ),
           ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _scopeChip(
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+          children: [
+            _ReminderKindSettingsTile(
+              value: slot.kind,
+              subtitle: _kindDescription(slot.kind),
+              enabled: !_saving,
+              onChanged: (kind) => _save(
                 context,
-                I18n.tr('preferences.daily_reminder.chip.today_tasks'),
-                slot.includeTodayTasks,
-                slot.copyWith(includeTodayTasks: !slot.includeTodayTasks),
+                slot.copyWith(enabled: kind != ReminderKind.off, kind: kind),
               ),
-              _scopeChip(
-                context,
-                I18n.tr('preferences.daily_reminder.chip.tomorrow_plan'),
-                slot.includeTomorrowPlan,
-                slot.copyWith(includeTomorrowPlan: !slot.includeTomorrowPlan),
+            ),
+            const SizedBox(height: 6),
+            AppSettingsTile(
+              key: ValueKey('daily_reminder_slot_${index}_time_tile'),
+              icon: Icons.schedule,
+              color: Colors.deepOrange,
+              title: I18n.tr('preferences.daily_reminder.time'),
+              subtitle: I18n.tr('preferences.daily_reminder.time.subtitle'),
+              trailing: TextButton(
+                key: ValueKey('daily_reminder_slot_${index}_time_button'),
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        final picked = await AppTimePicker.show(
+                          context,
+                          initialTime: TimeOfDay(
+                            hour: slot.hour,
+                            minute: slot.minute,
+                          ),
+                          title:
+                              '$_title${I18n.tr('preferences.daily_reminder.time_suffix')}',
+                          subtitle: I18n.tr(
+                            'preferences.daily_reminder.time_picker.subtitle',
+                          ),
+                        );
+                        if (picked == null || !context.mounted) return;
+                        await _save(
+                          context,
+                          slot.copyWith(
+                            hour: picked.hour,
+                            minute: picked.minute,
+                          ),
+                        );
+                      },
+                child: Text(_time),
               ),
-              _scopeChip(
-                context,
-                I18n.tr('preferences.daily_reminder.chip.overdue_tasks'),
-                slot.includeOverdue,
-                slot.copyWith(includeOverdue: !slot.includeOverdue),
-              ),
-              _scopeChip(
-                context,
-                I18n.tr('preferences.daily_reminder.chip.pause_holidays'),
-                slot.pauseHolidays,
-                slot.copyWith(pauseHolidays: !slot.pauseHolidays),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (var day = 1; day <= 7; day++)
-                _compactFilterChip(
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _scopeChip(
                   context,
-                  key: ValueKey('daily_reminder_slot_${index}_weekday_$day'),
-                  label: _weekdayLabel(day),
-                  selected: slot.repeatDays.contains(day),
-                  onSelected: _saving
-                      ? null
-                      : (_) {
-                          final nextDays =
-                              slot.repeatDays.contains(day)
-                                    ? slot.repeatDays
-                                          .where((d) => d != day)
-                                          .toList()
-                                    : [...slot.repeatDays, day]
-                                ..sort();
-                          _save(context, slot.copyWith(repeatDays: nextDays));
-                        },
+                  I18n.tr('preferences.daily_reminder.chip.today_tasks'),
+                  slot.includeTodayTasks,
+                  slot.copyWith(includeTodayTasks: !slot.includeTodayTasks),
                 ),
-            ],
-          ),
-        ],
+                _scopeChip(
+                  context,
+                  I18n.tr('preferences.daily_reminder.chip.tomorrow_plan'),
+                  slot.includeTomorrowPlan,
+                  slot.copyWith(includeTomorrowPlan: !slot.includeTomorrowPlan),
+                ),
+                _scopeChip(
+                  context,
+                  I18n.tr('preferences.daily_reminder.chip.overdue_tasks'),
+                  slot.includeOverdue,
+                  slot.copyWith(includeOverdue: !slot.includeOverdue),
+                ),
+                _scopeChip(
+                  context,
+                  I18n.tr('preferences.daily_reminder.chip.pause_holidays'),
+                  slot.pauseHolidays,
+                  slot.copyWith(pauseHolidays: !slot.pauseHolidays),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (var day = 1; day <= 7; day++)
+                  _compactFilterChip(
+                    context,
+                    key: ValueKey('daily_reminder_slot_${index}_weekday_$day'),
+                    label: _weekdayLabel(day),
+                    selected: slot.repeatDays.contains(day),
+                    onSelected: _saving
+                        ? null
+                        : (_) {
+                            final nextDays =
+                                slot.repeatDays.contains(day)
+                                      ? slot.repeatDays
+                                            .where((d) => d != day)
+                                            .toList()
+                                      : [...slot.repeatDays, day]
+                                  ..sort();
+                            _save(context, slot.copyWith(repeatDays: nextDays));
+                          },
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2211,27 +2221,30 @@ class _ReminderKindSelector extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width - 64;
         final gap = maxWidth < 340 ? 4.0 : 6.0;
-        return Row(
-          key: const ValueKey('daily_reminder_kind_selector_row'),
-          children: [
-            for (var i = 0; i < _options.length; i++) ...[
-              if (i > 0) SizedBox(width: gap),
-              Expanded(
-                child: SizedBox(
-                  height: 32,
-                  child: _ReminderKindOptionButton(
-                    key: ValueKey(
-                      'daily_reminder_kind_${_options[i].value.name}',
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 42),
+          child: Row(
+            key: const ValueKey('daily_reminder_kind_selector_row'),
+            children: [
+              for (var i = 0; i < _options.length; i++) ...[
+                if (i > 0) SizedBox(width: gap),
+                Expanded(
+                  child: SizedBox(
+                    height: 32,
+                    child: _ReminderKindOptionButton(
+                      key: ValueKey(
+                        'daily_reminder_kind_${_options[i].value.name}',
+                      ),
+                      label: _kindLabel(_options[i].value),
+                      selected: selected == _options[i].value,
+                      enabled: enabled,
+                      onTap: () => onChanged(_options[i].value),
                     ),
-                    label: _kindLabel(_options[i].value),
-                    selected: selected == _options[i].value,
-                    enabled: enabled,
-                    onTap: () => onChanged(_options[i].value),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
@@ -3069,70 +3082,75 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
           width: 0.45,
         ),
       ),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        showTrailingIcon: false,
-        title: _SettingsExpansionHeader(
-          key: ValueKey('report_reminder_${cadence.name}_header'),
-          iconKey: ValueKey('report_reminder_${cadence.name}_header_icon'),
-          titleKey: ValueKey('report_reminder_${cadence.name}_header_title'),
-          subtitleKey: ValueKey(
-            'report_reminder_${cadence.name}_header_subtitle',
-          ),
-          icon: icon,
-          color: color,
-          title: title,
-          subtitle: _subtitle,
-          trailing: _CompactSettingsSwitch(
-            key: ValueKey('report_reminder_${cadence.name}_enabled_switch'),
-            value: config.enabled,
-            onChanged: _saving
-                ? null
-                : (v) => _save(context, config.copyWith(enabled: v)),
-          ),
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        children: [
-          AppSettingsTile(
-            icon: Icons.schedule,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          showTrailingIcon: false,
+          title: _SettingsExpansionHeader(
+            key: ValueKey('report_reminder_${cadence.name}_header'),
+            iconKey: ValueKey('report_reminder_${cadence.name}_header_icon'),
+            titleKey: ValueKey('report_reminder_${cadence.name}_header_title'),
+            subtitleKey: ValueKey(
+              'report_reminder_${cadence.name}_header_subtitle',
+            ),
+            icon: icon,
             color: color,
-            title: '推送时间',
-            subtitle: _timeSubtitle,
-            trailing: TextButton(
-              key: ValueKey('report_reminder_time_button_${cadence.name}'),
-              onPressed: _saving
+            title: title,
+            subtitle: _subtitle,
+            trailing: _CompactSettingsSwitch(
+              key: ValueKey('report_reminder_${cadence.name}_enabled_switch'),
+              value: config.enabled,
+              onChanged: _saving
                   ? null
-                  : () async {
-                      final picked = await AppTimePicker.show(
-                        context,
-                        initialTime: TimeOfDay(
-                          hour: config.hour,
-                          minute: config.minute,
-                        ),
-                        title: '$title推送时间',
-                        subtitle: '修改后会重排下一次报告通知',
-                      );
-                      if (picked == null || !context.mounted) return;
-                      await _save(
-                        context,
-                        config.copyWith(
-                          hour: picked.hour,
-                          minute: picked.minute,
-                        ),
-                      );
-                    },
-              child: Text(_time),
+                  : (v) => _save(context, config.copyWith(enabled: v)),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _cadenceChips(context),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          children: [
+            AppSettingsTile(
+              icon: Icons.schedule,
+              color: color,
+              title: '推送时间',
+              subtitle: _timeSubtitle,
+              trailing: TextButton(
+                key: ValueKey('report_reminder_time_button_${cadence.name}'),
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        final picked = await AppTimePicker.show(
+                          context,
+                          initialTime: TimeOfDay(
+                            hour: config.hour,
+                            minute: config.minute,
+                          ),
+                          title: '$title推送时间',
+                          subtitle: '修改后会重排下一次报告通知',
+                        );
+                        if (picked == null || !context.mounted) return;
+                        await _save(
+                          context,
+                          config.copyWith(
+                            hour: picked.hour,
+                            minute: picked.minute,
+                          ),
+                        );
+                      },
+                child: Text(_time),
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _cadenceChips(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
