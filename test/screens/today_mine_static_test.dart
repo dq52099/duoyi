@@ -186,7 +186,7 @@ void main() {
       expect(mine, contains('Expanded('));
       expect(mine, contains('Wrap('));
       expect(mine, contains('ConstrainedBox('));
-      expect(mine, contains('runSpacing: 2'));
+      expect(mine, contains('runSpacing: 4'));
       expect(mine, contains('class _MineUserLineChip extends StatelessWidget'));
       expect(
         mine,
