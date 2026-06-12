@@ -304,10 +304,10 @@ class ThemeProvider extends ChangeNotifier {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
+    if (generation != _storageGeneration) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
       return;
     }
     final shopState = _readShopState(prefs);

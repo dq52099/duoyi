@@ -1458,7 +1458,7 @@ class _MineHeaderMetadata extends StatelessWidget {
         ];
         final rewards = Wrap(
           spacing: spacing,
-          runSpacing: 2,
+          runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: rewardChips,
         );
@@ -1481,7 +1481,7 @@ class _MineHeaderMetadata extends StatelessWidget {
         return Wrap(
           key: const ValueKey('mine_header_metadata_regular'),
           spacing: spacing,
-          runSpacing: 2,
+          runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: metadata,
         );
