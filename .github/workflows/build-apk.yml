@@ -281,6 +281,10 @@ jobs:
             SUFFIX="$(date +%Y%m%d)-${GITHUB_SHA::7}"
           fi
           tar -czf "web-artifacts/duoyi-web-$SUFFIX.tar.gz" -C build/web .
+          # Flutter Web is responsive; publish desktop/mobile-labeled bundles
+          # so download pages can offer clear choices without diverging code.
+          tar -czf "web-artifacts/duoyi-web-desktop-$SUFFIX.tar.gz" -C build/web .
+          tar -czf "web-artifacts/duoyi-web-mobile-$SUFFIX.tar.gz" -C build/web .
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4

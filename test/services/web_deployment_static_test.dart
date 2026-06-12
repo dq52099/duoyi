@@ -23,6 +23,8 @@ void main() {
         'flutter build web --release --base-href "\$DUOYI_WEB_BASE_HREF" \$DART_DEFINES',
       ),
     );
+    expect(webJob, contains('web-artifacts/duoyi-web-desktop-\$SUFFIX.tar.gz'));
+    expect(webJob, contains('web-artifacts/duoyi-web-mobile-\$SUFFIX.tar.gz'));
     expect(
       workflow,
       isNot(contains('flutter build web --release --base-href "/"')),
@@ -33,6 +35,10 @@ void main() {
     final downloadPage = File('deploy/duoyi.html').readAsStringSync();
     expect(downloadPage, contains('href="/duoyi/"'));
     expect(downloadPage, contains('http://6688667.xyz/duoyi/'));
+    expect(downloadPage, contains('duoyi-web-desktop-v1.1.38.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-mobile-v1.1.38.tar.gz'));
+    expect(downloadPage, isNot(contains('v1.1.37')));
+    expect(downloadPage, isNot(contains('duoyi-v1.1.35.apk')));
 
     final builtIndex = File('build/web/index.html');
     if (builtIndex.existsSync()) {
