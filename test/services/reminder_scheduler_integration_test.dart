@@ -4237,6 +4237,36 @@ void main() {
       expect(email.cancelled, contains(expectedId));
     });
 
+    test('syncGoals 无目标日期时不把开始日期当相对截止日提醒', () async {
+      final start = DateTime.now().add(const Duration(days: 1));
+      final goal = GoalItem(
+        id: 'goal-no-deadline-relative',
+        title: '无期限目标',
+        startDate: start,
+        targetDate: null,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'relative',
+              type: ReminderRuleType.relativeToDue,
+              kind: ReminderKind.push,
+              hour: start.hour,
+              minute: start.minute,
+              offsetMinutes: 0,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncGoals([goal]);
+
+      expect(notif.scheduled, isEmpty);
+      expect(alarm.scheduled, isEmpty);
+      expect(popup.scheduled, isEmpty);
+      expect(email.scheduled, isEmpty);
+    });
+
     test('syncGoals 通知权限异常但闹钟已入队时不降级普通通知避免双弹', () async {
       alarm
         ..failFullScreenWithNotificationPermission = true

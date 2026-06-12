@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../core/app_brand.dart';
+import '../services/account_local_data_cleaner.dart';
 
 class FocusBackdropReward {
   final String id;
@@ -301,8 +302,14 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final shopState = _readShopState(prefs);
     if (shopState != null && _isIncomingShopStateOlder(shopState)) {
       debugPrint(
@@ -323,7 +330,15 @@ class ThemeProvider extends ChangeNotifier {
     Map<dynamic, dynamic> state, {
     bool trusted = false,
   }) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final incoming = Map<String, dynamic>.from(state);
     if (!trusted && _isIncomingShopStateOlder(incoming)) {
       debugPrint(
@@ -464,8 +479,16 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> unlockBrand(String id) async {
     if (isBrandUnlocked(id)) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _unlockedBrandIds.add(id);
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setStringList(
       _unlockedBrandsKey,
       _unlockedBrandIds.toList(growable: false),
@@ -476,8 +499,16 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> unlockFocusBackdrop(String id) async {
     if (isFocusBackdropUnlocked(id)) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _unlockedFocusBackdropIds.add(id);
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await _saveShopState(prefs);
     notifyListeners();
   }
@@ -486,8 +517,16 @@ class ThemeProvider extends ChangeNotifier {
     if (!isFocusBackdropUnlocked(id)) return false;
     final nextId = focusBackdropById(id).id;
     if (_activeFocusBackdropId == nextId) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _activeFocusBackdropId = nextId;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await _saveShopState(prefs);
     notifyListeners();
     return true;
@@ -495,8 +534,16 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> unlockAvatarFrame(String id) async {
     if (isAvatarFrameUnlocked(id)) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _unlockedAvatarFrameIds.add(id);
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await _saveShopState(prefs);
     notifyListeners();
   }
@@ -505,8 +552,16 @@ class ThemeProvider extends ChangeNotifier {
     if (!isAvatarFrameUnlocked(id)) return false;
     final nextId = avatarFrameById(id).id;
     if (_activeAvatarFrameId == nextId) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _activeAvatarFrameId = nextId;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await _saveShopState(prefs);
     notifyListeners();
     return true;
@@ -514,8 +569,16 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> unlockCardSkin(String id) async {
     if (isCardSkinUnlocked(id)) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _unlockedCardSkinIds.add(id);
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await _saveShopState(prefs);
     notifyListeners();
   }
@@ -524,8 +587,16 @@ class ThemeProvider extends ChangeNotifier {
     if (!isCardSkinUnlocked(id)) return false;
     final nextId = cardSkinById(id).id;
     if (_activeCardSkinId == nextId) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _activeCardSkinId = nextId;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await _saveShopState(prefs);
     notifyListeners();
     return true;
@@ -537,8 +608,16 @@ class ThemeProvider extends ChangeNotifier {
     }
     final nextId = _normalizeWidgetBackgroundId(id);
     if (_activeWidgetBackgroundId == nextId) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _activeWidgetBackgroundId = nextId;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await _saveShopState(prefs);
     notifyListeners();
     return true;
@@ -550,8 +629,16 @@ class ThemeProvider extends ChangeNotifier {
     }
     final nextId = _normalizeWidgetCardSkinId(id);
     if (_activeWidgetCardSkinId == nextId) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _activeWidgetCardSkinId = nextId;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await _saveShopState(prefs);
     notifyListeners();
     return true;
@@ -562,7 +649,15 @@ class ThemeProvider extends ChangeNotifier {
     final prev = _brand.id;
     _brand = AppBrands.byId(id);
     if (prev == _brand.id) return true;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     await prefs.setString(_storageKey, _brand.id);
     _switchCount++;
     await prefs.setInt(_switchCountKey, _switchCount);

@@ -399,6 +399,7 @@ void main() async {
       guardedSync('calendar sync', calendarSyncProvider.resetLocalState);
       guardedSync('ai service', aiService.resetLocalState);
       guardedSync('notification service', notificationService.resetLocalState);
+      guardedSync('preferences', preferencesProvider.resetLocalState);
       await guarded(
         'preferences reload',
         preferencesProvider.loadFromStorage,

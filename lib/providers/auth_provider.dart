@@ -156,12 +156,20 @@ class AuthProvider extends ChangeNotifier {
     _baseUrl = AppConfig.bakedServerUrl;
 
     final raw = prefs.getString('auth_state');
+    var loadedState = const AuthState();
     if (raw != null && raw.isNotEmpty) {
       try {
-        _state = AuthState.fromJson(json.decode(raw));
+        loadedState = AuthState.fromJson(json.decode(raw));
       } catch (_) {}
     }
+    if (loadedState.isLoggedIn) {
+      await _clearStoredAccountDataIfOwnerMismatched(prefs, loadedState);
+    } else {
+      await _clearResidualAccountDataIfSignedOut(prefs);
+    }
+    _state = loadedState;
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
+    await _persistAccountDataOwner(prefs, _state);
     notifyListeners();
     if (refreshServerConfig) {
       await refreshServerConfigFromServer();
@@ -206,6 +214,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _persistState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_state', json.encode(_state.toJson()));
+    await _persistAccountDataOwner(prefs, _state);
   }
 
   void _markAccountMutation(String reason) {
@@ -431,6 +440,7 @@ class AuthProvider extends ChangeNotifier {
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_state');
+    await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
     notifyListeners();
     if (cleanupError != null) {
       Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
@@ -442,6 +452,142 @@ class AuthProvider extends ChangeNotifier {
       await AccountLocalDataCleaner.clearSharedPreferences();
     } catch (e, st) {
       debugPrint('[auth] fallback account prefs cleanup failed: $e\n$st');
+    }
+  }
+
+  Future<void> _clearStoredAccountDataIfOwnerMismatched(
+    SharedPreferences prefs,
+    AuthState loadedState,
+  ) async {
+    final currentOwner = _stableAccountIdentity(loadedState);
+    if (currentOwner == null) return;
+    final storedOwner = prefs
+        .getString(AccountLocalDataCleaner.accountDataOwnerKey)
+        ?.trim();
+    if (storedOwner == null || storedOwner.isEmpty) {
+      if (!_unownedStoredAccountDataLooksMismatched(prefs, loadedState)) return;
+      debugPrint('[auth] clearing unowned local account data after mismatch');
+      if (onAccountIdentityChanging == null) {
+        await AccountLocalDataCleaner.clearSharedPreferences();
+        return;
+      }
+      await _notifyAccountIdentityChanging(const AuthState(), loadedState);
+      return;
+    }
+    if (storedOwner == currentOwner) return;
+    debugPrint(
+      '[auth] stored account data owner mismatch: $storedOwner -> $currentOwner',
+    );
+    if (onAccountIdentityChanging == null) {
+      await AccountLocalDataCleaner.clearSharedPreferences();
+      return;
+    }
+    await _notifyAccountIdentityChanging(const AuthState(), loadedState);
+  }
+
+  Future<void> _clearResidualAccountDataIfSignedOut(
+    SharedPreferences prefs,
+  ) async {
+    if (!_hasStoredAccountScopedData(prefs)) return;
+    debugPrint('[auth] clearing residual account data while signed out');
+    if (onAccountLoggedOut == null) {
+      await AccountLocalDataCleaner.clearSharedPreferences();
+      return;
+    }
+    try {
+      await _notifyAccountLoggedOut();
+    } catch (_) {
+      await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
+      rethrow;
+    }
+  }
+
+  bool _hasStoredAccountScopedData(SharedPreferences prefs) {
+    final keys = prefs.getKeys();
+    return keys.any(
+      (key) =>
+          AccountLocalDataCleaner.accountScopedKeys.contains(key) ||
+          AccountLocalDataCleaner.accountScopedPrefixes.any(key.startsWith),
+    );
+  }
+
+  bool _unownedStoredAccountDataLooksMismatched(
+    SharedPreferences prefs,
+    AuthState state,
+  ) {
+    return _storedProfileLooksDifferent(prefs, state) ||
+        _storedRewardsLookDifferent(prefs, state);
+  }
+
+  bool _storedProfileLooksDifferent(SharedPreferences prefs, AuthState state) {
+    final raw = prefs.getString('user_profile');
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return false;
+      final storedEmail = decoded['email']?.toString().trim().toLowerCase();
+      final currentEmail = state.email?.trim().toLowerCase();
+      if (storedEmail != null &&
+          storedEmail.isNotEmpty &&
+          currentEmail != null &&
+          currentEmail.isNotEmpty &&
+          storedEmail != currentEmail) {
+        return true;
+      }
+      final storedName = decoded['username']?.toString().trim().toLowerCase();
+      final currentNameSource = state.displayName?.trim().isNotEmpty == true
+          ? state.displayName
+          : state.username;
+      final currentName = currentNameSource?.trim().toLowerCase();
+      if (storedName != null &&
+          storedName.isNotEmpty &&
+          storedName != '用户' &&
+          currentName != null &&
+          currentName.isNotEmpty &&
+          storedName != currentName) {
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+    return false;
+  }
+
+  bool _storedRewardsLookDifferent(SharedPreferences prefs, AuthState state) {
+    final raw = prefs.getString('duoyi_virtual_rewards');
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return false;
+      final balance = _intFromJson(
+        decoded['balance'] ?? decoded['coin_balance'],
+      );
+      final lifetime = _intFromJson(
+        decoded['lifetime'] ?? decoded['lifetime_coins'],
+      );
+      if (balance != state.coinBalance &&
+          (balance != 0 || state.coinBalance != 0)) {
+        return true;
+      }
+      if (lifetime != state.lifetimeCoins &&
+          (lifetime != 0 || state.lifetimeCoins != 0)) {
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+    return false;
+  }
+
+  Future<void> _persistAccountDataOwner(
+    SharedPreferences prefs,
+    AuthState state,
+  ) async {
+    final owner = _stableAccountIdentity(state);
+    if (state.isLoggedIn && owner != null) {
+      await prefs.setString(AccountLocalDataCleaner.accountDataOwnerKey, owner);
+    } else {
+      await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
     }
   }
 
@@ -754,6 +900,11 @@ class AuthProvider extends ChangeNotifier {
         : source is Map
         ? Map<String, dynamic>.from(source)
         : data;
+    final rootToken = _stringField(
+      data,
+      'token',
+      _stringField(data, 'access_token', fallback.token),
+    );
     final rewardsPayload = _mapField(data, const [
       'virtual_rewards',
       'virtualRewards',
@@ -845,7 +996,11 @@ class AuthProvider extends ChangeNotifier {
       ),
       token: keepToken
           ? fallback.token
-          : _stringField(payload, 'token', fallback.token),
+          : _stringField(
+              payload,
+              'token',
+              _stringField(payload, 'access_token', rootToken),
+            ),
       isAdmin: _boolField(
         payload,
         'is_admin',
@@ -1085,9 +1240,16 @@ class AuthProvider extends ChangeNotifier {
   ) async {
     if (!_shouldClearLocalAccountDataBeforeApplying(previous, next)) return;
     final callback = onAccountIdentityChanging;
-    if (callback == null) return;
     try {
-      await callback(previous, next);
+      if (callback == null) {
+        await AccountLocalDataCleaner.clearSharedPreferences();
+      } else {
+        await callback(previous, next);
+        // The app-level callback resets provider memory and native schedulers.
+        // Run a final prefs pass here as a hard account boundary in case an
+        // in-flight account-scoped write raced with that cleanup.
+        await AccountLocalDataCleaner.clearSharedPreferences();
+      }
     } catch (e, st) {
       debugPrint('[auth] account switch cleanup failed: $e\n$st');
       rethrow;
@@ -1096,9 +1258,13 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _notifyAccountLoggedOut() async {
     final callback = onAccountLoggedOut;
-    if (callback == null) return;
     try {
-      await callback();
+      if (callback == null) {
+        await AccountLocalDataCleaner.clearSharedPreferences();
+      } else {
+        await callback();
+        await AccountLocalDataCleaner.clearSharedPreferences();
+      }
     } catch (e, st) {
       debugPrint('[auth] account logout cleanup failed: $e\n$st');
       rethrow;
@@ -1111,6 +1277,7 @@ class AuthProvider extends ChangeNotifier {
   ) {
     if (!next.isLoggedIn) return false;
     if (!previous.isLoggedIn) return true;
+    if (previous.token != next.token) return true;
     final previousIdentity = _stableAccountIdentity(previous);
     final nextIdentity = _stableAccountIdentity(next);
     if (previousIdentity != null && nextIdentity != null) {

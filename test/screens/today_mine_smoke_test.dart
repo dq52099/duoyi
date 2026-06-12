@@ -168,6 +168,68 @@ void main() {
     expect(find.text('已完成任务'), findsNothing);
   });
 
+  testWidgets(
+    'Today homepage layout fits audited widths and scrolls as content',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      final widths = <double>[320, 390, 430, 1440];
+
+      for (final width in widths) {
+        tester.view.physicalSize = Size(width, width >= 900 ? 900 : 820);
+        tester.view.devicePixelRatio = 1.0;
+
+        final todoProvider = TodoProvider();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        await todoProvider.addTodo(
+          TodoItem(
+            title: '今日待办长标题需要省略但不能遮挡完成按钮和右侧内容',
+            date: today,
+            dueDate: now.add(const Duration(hours: 4)),
+            priority: TodoPriority.high,
+            quadrant: EisenhowerQuadrant.notUrgentImportant,
+            listGroupName: '工作',
+          ),
+        );
+        await todoProvider.addTodo(
+          TodoItem(title: '无截止布局任务', date: today.add(const Duration(days: 3))),
+        );
+
+        await tester.pumpWidget(
+          _wrap(const TodayScreen(), todoProvider: todoProvider),
+        );
+        await _pumpTodayLayoutFrame(tester);
+
+        final list = find.byKey(const ValueKey('today_screen_list'));
+        final appBar = find.byType(AppBar);
+        final scrollable = tester.state<ScrollableState>(
+          find.byType(Scrollable).first,
+        );
+        expect(list, findsOneWidget);
+        expect(appBar, findsOneWidget);
+        expect(find.text('今日待办'), findsOneWidget);
+        expect(find.text('今日待办长标题需要省略但不能遮挡完成按钮和右侧内容'), findsWidgets);
+        expect(find.text('无截止日期'), findsWidgets);
+        expect(tester.takeException(), isNull);
+
+        if (scrollable.position.maxScrollExtent > 0) {
+          scrollable.position.jumpTo(0);
+          await _pumpTodayLayoutFrame(tester);
+          final appBarTop = tester.getTopLeft(appBar).dy;
+          final beforePixels = scrollable.position.pixels;
+          await tester.drag(list, const Offset(0, -280));
+          await _pumpTodayLayoutFrame(tester);
+
+          expect(tester.getTopLeft(appBar).dy, closeTo(appBarTop, 0.1));
+          expect(scrollable.position.pixels, greaterThan(beforePixels));
+        }
+        expect(tester.takeException(), isNull);
+      }
+
+      tester.view.reset();
+    },
+  );
+
   test('今日和我的概览/入口样式保持独立且不过度放大', () {
     final today = File('lib/screens/today_screen.dart').readAsStringSync();
     final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
@@ -441,7 +503,8 @@ void main() {
 
     expect(requests, ['POST /api/auth/logout']);
     expect(auth.state.isLoggedIn, isFalse);
-    expect(find.text('已退出登录'), findsOneWidget);
+    expect(find.textContaining('已退出登录'), findsOneWidget);
+    expect(find.textContaining('本机账号数据已清理'), findsOneWidget);
   });
 
   testWidgets('Today todo left swipe exposes detail and delete actions', (
@@ -717,6 +780,62 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Today suggestions keep add button inside narrow tiles', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final todoProvider = TodoProvider();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final later = today.add(const Duration(days: 2));
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '非常非常长的今日建议任务标题需要省略但按钮不能遮挡',
+        date: later,
+        priority: TodoPriority.urgent,
+        quadrant: EisenhowerQuadrant.urgentImportant,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _wrap(const TodayScreen(), todoProvider: todoProvider),
+    );
+    await tester.pumpAndSettle();
+
+    final reminderToggle = find.byKey(
+      const ValueKey('today_reminder_header_toggle'),
+    );
+    await tester.scrollUntilVisible(
+      reminderToggle,
+      360,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(reminderToggle, findsOneWidget);
+
+    await tester.tap(reminderToggle);
+    await tester.pumpAndSettle();
+    final suggestionsHeader = find.text(I18n.tr('today.suggestions'));
+    await tester.scrollUntilVisible(
+      suggestionsHeader,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(suggestionsHeader);
+    await tester.pumpAndSettle();
+
+    final addButton = find.byKey(
+      ValueKey('today_suggestion_add_${todoProvider.todos.single.id}'),
+    );
+    expect(addButton, findsOneWidget);
+    expect(tester.getRect(addButton).right, lessThanOrEqualTo(320));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('AnniversaryScreen can open a specific tab directly', (
     tester,
@@ -1075,4 +1194,9 @@ void main() {
     expect(userProvider.profile.bio, '新的账号简介');
     expect(find.text('资料已更新'), findsWidgets);
   });
+}
+
+Future<void> _pumpTodayLayoutFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 250));
 }

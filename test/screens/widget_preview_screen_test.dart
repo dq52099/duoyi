@@ -7,9 +7,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('小组件预览覆盖待办 o 和月历今天按钮', (tester) async {
+  testWidgets('小组件预览覆盖待办 o、月历和目标三档尺寸', (tester) async {
     final screenshotKey = GlobalKey();
-    await tester.binding.setSurfaceSize(const Size(390, 2200));
+    await tester.binding.setSurfaceSize(const Size(390, 3000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
@@ -45,6 +45,18 @@ void main() {
                     WidgetPreviewCard.calendar(
                       displayMode: WidgetDisplayMode.detailed,
                     ),
+                    SizedBox(height: 16),
+                    WidgetPreviewCard.goal(
+                      displayMode: WidgetDisplayMode.compact,
+                    ),
+                    SizedBox(height: 12),
+                    WidgetPreviewCard.goal(
+                      displayMode: WidgetDisplayMode.standard,
+                    ),
+                    SizedBox(height: 12),
+                    WidgetPreviewCard.goal(
+                      displayMode: WidgetDisplayMode.detailed,
+                    ),
                   ],
                 ),
               ),
@@ -59,19 +71,84 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('o'), findsWidgets);
     expect(find.text('今天'), findsWidgets);
+    expect(find.textContaining('发版准备'), findsWidgets);
+    expect(find.textContaining('4x3'), findsWidgets);
 
     if (Platform.environment['DUOYI_CAPTURE_WIDGET_SCREENSHOT'] == '1') {
       final boundary =
           screenshotKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2);
+      final image = await boundary.toImage();
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       final bytes = data!.buffer.asUint8List();
+      image.dispose();
       final file = File(
         '.playwright-mcp/ui-regression/widget_preview_todo_calendar.png',
       );
       file.parent.createSync(recursive: true);
       file.writeAsBytesSync(bytes);
     }
+  });
+
+  testWidgets('小组件预览窄屏 2x2、3x2、4x3 不溢出', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  WidgetPreviewCard.todo(
+                    displayMode: WidgetDisplayMode.compact,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.todo(
+                    displayMode: WidgetDisplayMode.standard,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.todo(
+                    displayMode: WidgetDisplayMode.detailed,
+                  ),
+                  SizedBox(height: 14),
+                  WidgetPreviewCard.calendar(
+                    displayMode: WidgetDisplayMode.compact,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.calendar(
+                    displayMode: WidgetDisplayMode.standard,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.calendar(
+                    displayMode: WidgetDisplayMode.detailed,
+                  ),
+                  SizedBox(height: 14),
+                  WidgetPreviewCard.goal(
+                    displayMode: WidgetDisplayMode.compact,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.goal(
+                    displayMode: WidgetDisplayMode.standard,
+                  ),
+                  SizedBox(height: 10),
+                  WidgetPreviewCard.goal(
+                    displayMode: WidgetDisplayMode.detailed,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('o'), findsWidgets);
+    expect(find.text('今天'), findsWidgets);
+    expect(find.textContaining('发版准备'), findsWidgets);
   });
 }

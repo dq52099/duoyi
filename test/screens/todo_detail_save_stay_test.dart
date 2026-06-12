@@ -135,12 +135,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final reminderSwitch = find.ancestor(
-        of: find.text('提醒'),
-        matching: find.byType(SwitchListTile),
-      );
-      expect(reminderSwitch, findsOneWidget);
-      await tester.tap(reminderSwitch);
+      expect(find.text('提醒'), findsOneWidget);
+      await tester.tap(find.text('提醒'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('提醒 ·'), findsOneWidget);

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:duoyi/providers/auth_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart'
+    as account_cleaner;
 import 'package:duoyi/services/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -246,6 +248,57 @@ void main() {
   );
 
   test(
+    'login parses root token with nested user and clears previous account first',
+    () async {
+      const adminState = AuthState(
+        userId: 'admin-id',
+        username: 'admin',
+        token: 'admin-token',
+        coinBalance: 999,
+        lifetimeCoins: 1999,
+      );
+      final cleanupCalls = <String>[];
+      final auth = AuthProvider(
+        initialState: adminState,
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'token': 'test-token',
+                'user': {
+                  'user_id': 'test-id',
+                  'username': 'test',
+                  'coin_balance': 12,
+                  'lifetime_coins': 15,
+                },
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.userId}->${next.userId}');
+        expect(next.isLoggedIn, isTrue);
+        expect(next.token, 'test-token');
+      };
+
+      await auth.login(username: 'test', password: 'pw');
+
+      expect(cleanupCalls, ['admin-id->test-id']);
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.token, 'test-token');
+      expect(auth.state.coinBalance, 12);
+      expect(auth.state.lifetimeCoins, 15);
+    },
+  );
+
+  test(
     'login from signed-out state clears residual local account data first',
     () async {
       AuthState? previousDuringCleanup;
@@ -283,6 +336,285 @@ void main() {
       expect(auth.state.userId, 'test-id');
     },
   );
+
+  test(
+    'login clears residual account data even without app cleanup callback',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'habits': json.encode(<Map<String, Object>>[
+          {'id': 'admin-habit', 'name': 'admin habit'},
+        ]),
+        'active_brand': 'admin-theme',
+        'theme_shop_state': json.encode(<String, Object>{
+          'activeBrand': 'admin-theme',
+          'updatedAt': '2026-06-08T00:00:00.000Z',
+        }),
+        'duoyi_virtual_rewards': json.encode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+        account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey:
+            'id:admin-id',
+      });
+      final auth = AuthProvider(
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'user_id': 'test-id',
+                'username': 'test',
+                'token': 'test-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+
+      await auth.login(username: 'test', password: 'pw');
+
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          json.decode(prefs.getString('auth_state')!) as Map<String, dynamic>;
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.coinBalance, 0);
+      expect(persisted['user_id'], 'test-id');
+      expect(prefs.getString('habits'), isNull);
+      expect(prefs.getString('active_brand'), isNull);
+      expect(prefs.getString('theme_shop_state'), isNull);
+      expect(prefs.getString('duoyi_virtual_rewards'), isNull);
+      expect(
+        prefs.getString(
+          account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey,
+        ),
+        'id:test-id',
+      );
+    },
+  );
+
+  test(
+    'new login token clears account-scoped data before applying session',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_state': json.encode(
+          const AuthState(
+            userId: 'same-id',
+            username: 'same-user',
+            token: 'old-token',
+            coinBalance: 999,
+            lifetimeCoins: 1999,
+          ).toJson(),
+        ),
+        'habits': json.encode(<Map<String, Object>>[
+          {'id': 'old-habit', 'name': 'old habit'},
+        ]),
+        'active_brand': 'old-theme',
+        'duoyi_virtual_rewards': json.encode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+      });
+      final cleanupCalls = <String>[];
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'same-id',
+          username: 'same-user',
+          token: 'old-token',
+          coinBalance: 999,
+          lifetimeCoins: 1999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'old-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/login');
+            return http.Response(
+              json.encode({
+                'user_id': 'same-id',
+                'username': 'same-user',
+                'token': 'new-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (previous, next) async {
+        cleanupCalls.add('${previous.token}->${next.token}');
+        await account_cleaner.AccountLocalDataCleaner.clearSharedPreferences();
+      };
+
+      await auth.login(username: 'same-user', password: 'pw');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(cleanupCalls, ['old-token->new-token']);
+      expect(auth.state.userId, 'same-id');
+      expect(auth.state.token, 'new-token');
+      expect(auth.state.coinBalance, 0);
+      expect(prefs.getString('habits'), isNull);
+      expect(prefs.getString('active_brand'), isNull);
+      expect(prefs.getString('duoyi_virtual_rewards'), isNull);
+    },
+  );
+
+  test(
+    'logout clears account data even without app cleanup callback',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_state': json.encode(
+          const AuthState(
+            userId: 'admin-id',
+            username: 'admin',
+            token: 'admin-token',
+            coinBalance: 999,
+            lifetimeCoins: 1999,
+          ).toJson(),
+        ),
+        'habits': json.encode(<Map<String, Object>>[
+          {'id': 'admin-habit', 'name': 'admin habit'},
+        ]),
+        'active_brand': 'admin-theme',
+        'duoyi_virtual_rewards': json.encode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+        account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey:
+            'id:admin-id',
+      });
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-id',
+          username: 'admin',
+          token: 'admin-token',
+          coinBalance: 999,
+          lifetimeCoins: 1999,
+        ),
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/logout');
+            return http.Response(
+              json.encode({'ok': true}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+
+      await auth.logout();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(auth.state.isLoggedIn, isFalse);
+      expect(prefs.getString('auth_state'), isNull);
+      expect(prefs.getString('habits'), isNull);
+      expect(prefs.getString('active_brand'), isNull);
+      expect(prefs.getString('duoyi_virtual_rewards'), isNull);
+      expect(
+        prefs.getString(
+          account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey,
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test(
+    'loadFromStorage clears unowned residual account data before signed-in user',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_state': json.encode(
+          const AuthState(
+            userId: 'test-id',
+            username: 'test',
+            token: 'test-token',
+            coinBalance: 0,
+            lifetimeCoins: 0,
+          ).toJson(),
+        ),
+        'user_profile': json.encode(<String, Object>{
+          'username': 'admin',
+          'email': 'admin@example.com',
+        }),
+        'habits': json.encode(<Map<String, Object>>[
+          {'id': 'admin-habit', 'name': 'admin habit'},
+        ]),
+        'active_brand': 'admin-theme',
+        'duoyi_virtual_rewards': json.encode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+      });
+      var cleanupCalled = false;
+      final auth = AuthProvider(
+        client: ApiClient(
+          baseUrl: 'http://127.0.0.1:1',
+          token: 'test-token',
+          httpClient: MockClient((_) async {
+            return http.Response('{}', 200);
+          }),
+        ),
+      );
+      auth.onAccountIdentityChanging = (_, _) async {
+        cleanupCalled = true;
+        await account_cleaner.AccountLocalDataCleaner.clearSharedPreferences();
+      };
+
+      await auth.loadFromStorage(refreshServerConfig: false);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(cleanupCalled, isTrue);
+      expect(auth.state.userId, 'test-id');
+      expect(auth.state.token, 'test-token');
+      expect(prefs.getString('habits'), isNull);
+      expect(prefs.getString('active_brand'), isNull);
+      expect(prefs.getString('duoyi_virtual_rewards'), isNull);
+      expect(
+        prefs.getString(
+          account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey,
+        ),
+        'id:test-id',
+      );
+    },
+  );
+
+  test('loadFromStorage clears account data when signed out', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'habits': json.encode(<Map<String, Object>>[
+        {'id': 'admin-habit', 'name': 'admin habit'},
+      ]),
+      'active_brand': 'admin-theme',
+      'duoyi_virtual_rewards': json.encode(<String, Object>{
+        'balance': 999,
+        'lifetime': 1999,
+      }),
+      account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey:
+          'id:admin-id',
+    });
+    final auth = AuthProvider();
+
+    await auth.loadFromStorage(refreshServerConfig: false);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(auth.state.isLoggedIn, isFalse);
+    expect(prefs.getString('habits'), isNull);
+    expect(prefs.getString('active_brand'), isNull);
+    expect(prefs.getString('duoyi_virtual_rewards'), isNull);
+    expect(
+      prefs.getString(
+        account_cleaner.AccountLocalDataCleaner.accountDataOwnerKey,
+      ),
+      isNull,
+    );
+  });
 
   test('login is blocked when account cleanup fails', () async {
     final auth = AuthProvider(

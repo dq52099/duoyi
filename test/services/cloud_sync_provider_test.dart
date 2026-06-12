@@ -100,6 +100,29 @@ void main() {
     provider.dispose();
   });
 
+  test('resetForAccountChange 后旧账号本地同步元数据不会重新载入内存', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'sync_last_time': '2026-06-07T12:00:00.000Z',
+      'sync_auto': false,
+      'sync_pending_local_changes': true,
+      'sync_server_updated_at': '2026-06-07T12:00:00.000Z',
+      'sync_server_version': 9,
+    });
+    final provider = CloudSyncProvider();
+
+    final loadFuture = provider.loadFromStorage();
+    await provider.resetForAccountChange();
+    await loadFuture.timeout(const Duration(seconds: 1));
+
+    expect(provider.config.autoSync, isTrue);
+    expect(provider.config.lastSync.millisecondsSinceEpoch, 0);
+    expect(provider.hasPendingChanges, isFalse);
+    expect(provider.lastServerUpdatedAt, isEmpty);
+    expect(provider.lastServerVersion, isNull);
+
+    provider.dispose();
+  });
+
   test('resetForAccountChange 会等待进行中的同步回调退出', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final onSyncedStarted = Completer<void>();

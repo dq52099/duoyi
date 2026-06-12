@@ -274,9 +274,23 @@ class _HealthCheckTile extends StatelessWidget {
     if (action == null) {
       return Icon(_statusTrailingIcon(check.status), color: color);
     }
-    return TextButton(
-      onPressed: action,
-      child: Text(check.actionLabel ?? '处理'),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 112),
+      child: TextButton(
+        key: const ValueKey('notification_health_action_button'),
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: action,
+        child: Text(
+          check.actionLabel ?? '处理',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

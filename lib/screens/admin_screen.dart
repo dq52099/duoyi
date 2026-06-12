@@ -2231,25 +2231,53 @@ class _GroupsTabState extends State<_GroupsTab> {
                   title: '用户组管理',
                   subtitle: '默认普通用户 100 时光币；管理员可调整各组额度和启用状态',
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppInfoBanner(
-                            icon: Icons.toll_outlined,
-                            title: '默认额度',
-                            message: '新用户注册后按所属用户组发放时光币，默认组为 100。',
-                            color: cs.primary,
-                            margin: EdgeInsets.zero,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        if (canManageGroups)
-                          FilledButton.icon(
-                            onPressed: () => _editGroup(),
-                            icon: const Icon(Icons.add),
-                            label: const Text('新增用户组'),
-                          ),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final banner = AppInfoBanner(
+                          icon: Icons.toll_outlined,
+                          title: '默认额度',
+                          message: '新用户注册后按所属用户组发放时光币，默认组为 100。',
+                          color: cs.primary,
+                          margin: EdgeInsets.zero,
+                        );
+                        final addButton = FilledButton.icon(
+                          onPressed: () => _editGroup(),
+                          icon: const Icon(Icons.add),
+                          label: const Text('新增用户组'),
+                        );
+                        if (constraints.maxWidth < 420) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              banner,
+                              if (canManageGroups) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: addButton,
+                                ),
+                              ],
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: banner),
+                            if (canManageGroups) ...[
+                              const SizedBox(width: 10),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 150,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: addButton,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -3013,30 +3041,55 @@ class _SettingsTabState extends State<_SettingsTab> {
       title: '用户组与角色',
       subtitle: '管理默认时光币、成员分组和管理员权限模板',
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '用户组 ${_groups.length} 个 · 角色 ${_roles.length} 个',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.62),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final summary = Text(
+              '用户组 ${_groups.length} 个 · 角色 ${_roles.length} 个',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+              ),
+            );
+            final actions = <Widget>[
+              if (canManageGroups)
+                TextButton.icon(
+                  onPressed: () => _editGroup(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('用户组'),
                 ),
-              ),
-            ),
-            if (canManageGroups)
-              TextButton.icon(
-                onPressed: () => _editGroup(),
-                icon: const Icon(Icons.add),
-                label: const Text('用户组'),
-              ),
-            if (canManageGroups && canManageRoles) const SizedBox(width: 6),
-            if (canManageRoles)
-              TextButton.icon(
-                onPressed: () => _editRole(),
-                icon: const Icon(Icons.add),
-                label: const Text('角色'),
-              ),
-          ],
+              if (canManageRoles)
+                TextButton.icon(
+                  onPressed: () => _editRole(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('角色'),
+                ),
+            ];
+            final actionWrap = Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            );
+            if (constraints.maxWidth < 420) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  summary,
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    actionWrap,
+                  ],
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: summary),
+                if (actions.isNotEmpty) actionWrap,
+              ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         if (_groupsRolesError != null) ...[
@@ -6538,6 +6591,38 @@ class _UsersTabState extends State<_UsersTab> {
         final emailText = email.isEmpty
             ? '未绑定邮箱'
             : '$email${emailVerified ? ' · 已验证' : ' · 未验证'}';
+        final mobileStatusBadges = <Widget>[
+          AppStatusBadge(
+            label: online ? '在线' : '离线',
+            color: online ? Colors.green : Colors.grey,
+            icon: online ? Icons.circle : Icons.radio_button_unchecked,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          ),
+          if (disabled)
+            AppStatusBadge(
+              label: '已禁用',
+              color: cs.error,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            ),
+        ];
+        final identityBadges = <Widget>[
+          AppStatusBadge(
+            label: roleName,
+            color: roleBadgeColor,
+            icon: Icons.badge_outlined,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          ),
+          AppStatusBadge(
+            label: groupName,
+            color: cs.primary,
+            icon: Icons.groups_2_outlined,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          ),
+          if (admin)
+            const AppStatusBadge(label: '管理员', color: Colors.deepOrange),
+          if (admin && !permissions.contains(_adminAllPermission))
+            const AppStatusBadge(label: '细分权限', color: Colors.indigo),
+        ];
         return AppSurfaceCard(
           key: ValueKey('admin_user_mobile_card_$userId'),
           padding: const EdgeInsets.fromLTRB(10, 9, 4, 10),
@@ -6593,45 +6678,22 @@ class _UsersTabState extends State<_UsersTab> {
                         ),
                         const SizedBox(width: 6),
                         ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 150),
+                          constraints: const BoxConstraints(maxWidth: 92),
                           child: Wrap(
                             alignment: WrapAlignment.end,
                             spacing: 4,
                             runSpacing: 4,
-                            children: [
-                              AppStatusBadge(
-                                label: online ? '在线' : '离线',
-                                color: online ? Colors.green : Colors.grey,
-                                icon: online
-                                    ? Icons.circle
-                                    : Icons.radio_button_unchecked,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                              ),
-                              AppStatusBadge(
-                                label: roleName,
-                                color: roleBadgeColor,
-                                icon: Icons.badge_outlined,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                              ),
-                              if (disabled)
-                                AppStatusBadge(
-                                  label: '已禁用',
-                                  color: cs.error,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 3,
-                                  ),
-                                ),
-                            ],
+                            children: mobileStatusBadges,
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      key: ValueKey('admin_user_identity_badges_$userId'),
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: identityBadges,
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -6641,10 +6703,6 @@ class _UsersTabState extends State<_UsersTab> {
                         _AdminMobileMetaItem(
                           icon: Icons.alternate_email_outlined,
                           text: emailText,
-                        ),
-                        _AdminMobileMetaItem(
-                          icon: Icons.groups_2_outlined,
-                          text: groupName,
                         ),
                       ],
                     ),
@@ -6762,64 +6820,95 @@ class _UsersTabState extends State<_UsersTab> {
               ),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchCtrl,
-                          decoration: InputDecoration(
-                            hintText: '搜索用户名、邮箱、昵称或用户 ID',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _query.isEmpty
-                                ? null
-                                : IconButton(
-                                    tooltip: '清空搜索',
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () {
-                                      _searchCtrl.clear();
-                                      _load(query: '', offset: 0);
-                                    },
-                                  ),
-                            isDense: true,
-                          ),
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _applySearch(),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '搜索用户',
-                        onPressed: _applySearch,
-                        icon: const Icon(Icons.manage_search),
-                      ),
-                      if (_canManageUsers)
-                        IconButton(
-                          key: const ValueKey('admin_create_user_button'),
-                          tooltip: '新增用户',
-                          onPressed: _loading ? null : _createUser,
-                          icon: const Icon(Icons.person_add_alt_1_outlined),
-                        ),
-                      if (_canManageUsers)
-                        IconButton(
-                          tooltip: '导出用户筛选结果',
-                          onPressed: _loading ? null : _exportUsersCsv,
-                          icon: const Icon(Icons.download_outlined),
-                        ),
-                      IconButton(
-                        tooltip: '刷新用户列表',
-                        onPressed: _loading
-                            ? null
-                            : () => _load(offset: _offset),
-                        icon: _loading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                  LayoutBuilder(
+                    builder: (context, toolbarConstraints) {
+                      Widget searchField() => TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: '搜索用户名、邮箱、昵称或用户 ID',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: '清空搜索',
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    _load(query: '', offset: 0);
+                                  },
                                 ),
-                              )
-                            : const Icon(Icons.refresh),
-                      ),
-                    ],
+                          isDense: true,
+                        ),
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _applySearch(),
+                      );
+
+                      List<Widget> toolbarButtons() => [
+                        IconButton(
+                          tooltip: '搜索用户',
+                          onPressed: _applySearch,
+                          icon: const Icon(Icons.manage_search),
+                        ),
+                        if (_canManageUsers)
+                          IconButton(
+                            key: const ValueKey('admin_create_user_button'),
+                            tooltip: '新增用户',
+                            onPressed: _loading ? null : _createUser,
+                            icon: const Icon(Icons.person_add_alt_1_outlined),
+                          ),
+                        if (_canManageUsers)
+                          IconButton(
+                            tooltip: '导出用户筛选结果',
+                            onPressed: _loading ? null : _exportUsersCsv,
+                            icon: const Icon(Icons.download_outlined),
+                          ),
+                        IconButton(
+                          tooltip: '刷新用户列表',
+                          onPressed: _loading
+                              ? null
+                              : () => _load(offset: _offset),
+                          icon: _loading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh),
+                        ),
+                      ];
+
+                      final buttons = toolbarButtons();
+                      final actionWrap = Wrap(
+                        key: const ValueKey('admin_users_toolbar_actions'),
+                        spacing: 2,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: buttons,
+                      );
+                      if (compactAdminFilters ||
+                          toolbarConstraints.maxWidth < 380) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            searchField(),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: actionWrap,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: searchField()),
+                          const SizedBox(width: 4),
+                          actionWrap,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   compactAdminFilters

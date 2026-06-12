@@ -184,28 +184,25 @@ class _CountdownScreenState extends State<CountdownScreen> {
                                     ),
                               ),
                               const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  _SummaryStat(
-                                    key: const ValueKey(
-                                      'countdown_summary_total',
-                                    ),
-                                    label: I18n.tr('countdown.summary.total'),
-                                    value: '${items.length}',
-                                    color: cs.primary,
+                              _CountdownSummaryStats(
+                                total: _SummaryStat(
+                                  key: const ValueKey(
+                                    'countdown_summary_total',
                                   ),
-                                  const SizedBox(width: 14),
-                                  _SummaryStat(
-                                    key: const ValueKey(
-                                      'countdown_summary_within_7_days',
-                                    ),
-                                    label: I18n.tr(
-                                      'countdown.summary.within_7_days',
-                                    ),
-                                    value: '$soonCount',
-                                    color: cs.tertiary,
+                                  label: I18n.tr('countdown.summary.total'),
+                                  value: '${items.length}',
+                                  color: cs.primary,
+                                ),
+                                soon: _SummaryStat(
+                                  key: const ValueKey(
+                                    'countdown_summary_within_7_days',
                                   ),
-                                ],
+                                  label: I18n.tr(
+                                    'countdown.summary.within_7_days',
+                                  ),
+                                  value: '$soonCount',
+                                  color: cs.tertiary,
+                                ),
                               ),
                             ],
                           ),
@@ -597,37 +594,41 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
             onChanged: (v) => setState(() => _remind = v),
           ),
           if (_remind) ...[
-            AppSecondaryControlTheme(
-              child: SegmentedButton<ReminderKind>(
-                segments: [
-                  ButtonSegment(
-                    value: ReminderKind.push,
-                    icon: const Icon(Icons.notifications_outlined),
-                    label: Text(I18n.tr('reminder.kind.push')),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.popup,
-                    icon: const Icon(Icons.open_in_new_outlined),
-                    label: Text(I18n.tr('reminder.kind.popup')),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.alarm,
-                    icon: const Icon(Icons.alarm_outlined),
-                    label: Text(I18n.tr('reminder.kind.alarm')),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.off,
-                    icon: const Icon(Icons.notifications_off_outlined),
-                    label: Text(I18n.tr('reminder.kind.off')),
-                  ),
-                ],
-                selected: {_reminderKind},
-                onSelectionChanged: (selected) => setState(() {
-                  _reminderKind = selected.first;
-                  if (_reminderKind == ReminderKind.off) {
-                    _remind = false;
-                  }
-                }),
+            SingleChildScrollView(
+              key: const ValueKey('countdown_reminder_kind_scroll'),
+              scrollDirection: Axis.horizontal,
+              child: AppSecondaryControlTheme(
+                child: SegmentedButton<ReminderKind>(
+                  segments: [
+                    ButtonSegment(
+                      value: ReminderKind.push,
+                      icon: const Icon(Icons.notifications_outlined),
+                      label: Text(I18n.tr('reminder.kind.push')),
+                    ),
+                    ButtonSegment(
+                      value: ReminderKind.popup,
+                      icon: const Icon(Icons.open_in_new_outlined),
+                      label: Text(I18n.tr('reminder.kind.popup')),
+                    ),
+                    ButtonSegment(
+                      value: ReminderKind.alarm,
+                      icon: const Icon(Icons.alarm_outlined),
+                      label: Text(I18n.tr('reminder.kind.alarm')),
+                    ),
+                    ButtonSegment(
+                      value: ReminderKind.off,
+                      icon: const Icon(Icons.notifications_off_outlined),
+                      label: Text(I18n.tr('reminder.kind.off')),
+                    ),
+                  ],
+                  selected: {_reminderKind},
+                  onSelectionChanged: (selected) => setState(() {
+                    _reminderKind = selected.first;
+                    if (_reminderKind == ReminderKind.off) {
+                      _remind = false;
+                    }
+                  }),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -693,6 +694,33 @@ class _ReminderPreflightResult {
     : this._(disableReminder: true, message: message);
 }
 
+class _CountdownSummaryStats extends StatelessWidget {
+  final _SummaryStat total;
+  final _SummaryStat soon;
+
+  const _CountdownSummaryStats({required this.total, required this.soon});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 220.0;
+        final statWidth = width >= 176 ? ((width - 14) / 2) : width;
+        return Wrap(
+          spacing: 14,
+          runSpacing: 10,
+          children: [
+            SizedBox(width: statWidth, child: total),
+            SizedBox(width: statWidth, child: soon),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _SummaryStat extends StatelessWidget {
   final String label;
   final String value;
@@ -724,6 +752,8 @@ class _SummaryStat extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: appSecondaryRouteTitleTextStyle(
             context,
           ).copyWith(fontWeight: FontWeight.normal, color: cs.onSurface),
@@ -731,6 +761,8 @@ class _SummaryStat extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.62),
             fontWeight: FontWeight.normal,
@@ -914,6 +946,8 @@ class _CountdownCardState extends State<_CountdownCard> {
                         Text(
                           '${I18n.tr('countdown.target.prefix')}'
                           '${I18nDateFormat.date(item.targetDate)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: metaStyle,
                         ),
                       ],
@@ -921,7 +955,10 @@ class _CountdownCardState extends State<_CountdownCard> {
                   ),
                   const SizedBox(width: 12),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 54),
+                    constraints: const BoxConstraints(
+                      minWidth: 54,
+                      maxWidth: 108,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -1110,29 +1147,39 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.10), width: 0.45),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: color,
-              fontWeight: FontWeight.normal,
+    final maxWidth = (MediaQuery.sizeOf(context).width - 120)
+        .clamp(96.0, 180.0)
+        .toDouble();
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.10), width: 0.45),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 12, color: color),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: color,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

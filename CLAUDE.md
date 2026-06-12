@@ -6,70 +6,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 多仪 (Duoyi) is a cross-platform productivity app built with Flutter + FastAPI backend. It integrates todo management (Eisenhower matrix), habit tracking (GitHub-style heatmap), Pomodoro focus sessions, calendar, and personal profile into a single app. Supports 8 theme variations with custom backgrounds, AI assistant integration, cloud sync, and Android home screen widgets.
 
-- **Frontend**: Flutter 3.41.9+ (Dart SDK ^3.11.5)
-- **Backend**: Python FastAPI with SQLite
+- **Frontend**: Flutter (Dart SDK ^3.11.5). CI pins Flutter **3.44.1**; the local install may be older (currently 3.41.9) — analyzer behavior differs between versions, and code must stay clean on the CI version.
+- **Backend**: Python FastAPI single-file monolith with SQLite
 - **State Management**: Provider pattern
-- **Platforms**: Android, Linux desktop, Web
+- **Platforms**: Android, Linux desktop, Web (iOS scaffolding exists but is not a CI target)
+
+**On this machine** `flutter` is not on PATH. Use `/home/ubuntu/flutter/bin/flutter`; repo scripts default to this via the `FLUTTER_BIN` env var. Android SDK lives at `/home/ubuntu/android-sdk`.
 
 ## Development Commands
 
 ### Flutter Client
 
 ```bash
-# Install dependencies
 flutter pub get
+flutter run -d linux              # Linux desktop
+flutter analyze
+dart format .
 
-# Run on Linux desktop
-flutter run -d linux
-
-# Build Android APK (release)
-flutter build apk --release
-
-# Build with custom server URL (compile-time constant)
-flutter build apk --release --dart-define=DUOYI_SERVER_URL=https://your-server.com
-
-# Run tests
+# Run all tests
 flutter test
 
-# Analyze code
-flutter analyze
+# Run a single test file
+flutter test test/screens/countdown_screen_test.dart
 
-# Format code
-dart format .
+# Build Android APK (release) with custom server URL (compile-time constant)
+flutter build apk --release --dart-define=DUOYI_SERVER_URL=https://your-server.com
 ```
 
 ### Backend
 
 ```bash
 cd backend
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Start development server (creates fingertip_time.db on first run)
+# Start development server (creates duoyi.db on first run)
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# Production deployment (on VPS)
-./scripts/deploy_backend_prod.sh  # Restarts systemd service and validates routes
+# Run all backend tests (unittest-style; pytest also works)
+python -m unittest test_workspaces -v
+
+# Run a single backend test
+python -m unittest test_workspaces.WorkspaceApiTest.test_admin_current_management_routes_do_not_404
 ```
 
-**Environment variables for backend** (first-run bootstrap only; managed via admin panel afterwards):
-- `ADMIN_BOOTSTRAP_USER` (default: admin)
-- `ADMIN_BOOTSTRAP_PASSWORD` (default: admin123)
-- `INVITE_CODE_REQUIRED` (default: false)
-- `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`
-- `CORS_ORIGINS`
+Despite its name, `backend/test_workspaces.py` (~150 tests in `WorkspaceApiTest`) is the **entire backend test suite**: route contracts, auth, admin, sync, feedback, coins — not just workspaces.
 
-### Testing
+**Backend environment variables** (first-run bootstrap only; managed via admin panel afterwards): `ADMIN_BOOTSTRAP_USER` / `ADMIN_BOOTSTRAP_PASSWORD` (default admin/admin123), `INVITE_CODE_REQUIRED`, `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`, `CORS_ORIGINS`, `DUOYI_DB_PATH`. Many more exist for email/SMTP, OpenList/WebDAV backup, and server backup — grep `os.getenv` in `backend/main.py`.
+
+### Full Regression Gate
 
 ```bash
-# Run widget/unit tests
-flutter test
-
-# Run backend tests
-cd backend
-python -m pytest test_workspaces.py -v
+scripts/alignment_regression_gate.sh
 ```
+
+The release gate. Runs 8 groups: batched Flutter tests (static guards, screens, notifications, widget contracts), backend route-contract tests via unittest, `flutter analyze`, a debug APK build, and a device/emulator regression (`scripts/device_regression_check.sh` — needs Android SDK + KVM). Report written to `build/alignment-regression/latest/`.
+
+## Critical Conventions
+
+### Static guard tests enforce project rules
+
+Roughly 95 of ~240 Flutter test files match `*_static_test.dart`. These regex-scan `lib/` source and **fail when banned patterns appear anywhere in the codebase** — e.g., `test/services/no_global_bold_static_test.dart` bans `FontWeight.bold` / `FontWeight.w500+` in all of `lib/`. When your change trips one, read the test's `reason` message (it states the convention in Chinese) and fix the code to comply — do not weaken the guard. Release commits routinely have to "satisfy release static guards"; expect any UI change to be checked against them.
+
+### Version bump touches two files
+
+The app version lives in **both** `pubspec.yaml` (`version: 1.1.37+140003`) and `lib/core/app_version.dart` (`name` / `build`). Bump them together or version checks will disagree.
+
+### Backend routes are contract-pinned
+
+`test_workspaces.py` pins every client-facing route against 404s (many tests are named `..._do_not_404`). When adding or renaming a backend route the client calls, add/update the matching contract test. `API_CONTRACT_VERSION` and `API_CONTRACT_FEATURES` in `backend/main.py` track client compatibility.
+
+### Screenshots and evidence (from AGENTS.md)
+
+- Store UI verification screenshots in `evidence/screenshots/`; larger batches in a named directory under `evidence/`.
+- Never leave generated screenshots in the repository root.
+- Real app image assets belong in their existing asset directories (`assets/`, `android/app/src/main/res/`, `ios/Runner/Assets.xcassets/`, `linux/`, `web/`).
+
+### Documentation layout
+
+Canonical requirement/design/task docs live in `docs/` (`requirement-v2.md`, `design-v2.md`, `cloud-sync-v2-contract.md`, etc.). The many `*_REPORT.md` / `*_SUMMARY.md` files in the repo root are historical working-session notes — don't treat them as current guidance and don't add new ones there.
 
 ## Architecture
 
@@ -77,12 +91,13 @@ python -m pytest test_workspaces.py -v
 
 ```
 lib/
-├── core/              # Theme system (AppBrand, BrandStrings), utilities, business logic
+├── core/              # Theme system, design tokens, business logic (no Flutter UI deps for most)
 │   ├── app_brand.dart         # 8 theme definitions (defaultBrand, re0, genshin, starRail, wuthering, zzz, yanyun, botw)
 │   ├── brand_strings.dart     # Theme-specific UI text (e.g., "待办" → "咒文" in RE0 theme)
-│   ├── achievements.dart      # Achievement/badge system
-│   ├── report_engine.dart     # Weekly AI report generation
-│   └── smart_todo_draft.dart  # AI task breakdown logic
+│   ├── app_config.dart        # Compile-time server URL (defaultServerUrl + --dart-define override)
+│   ├── app_version.dart       # App version constants (keep in sync with pubspec.yaml)
+│   ├── design_tokens.dart     # Spacing/typography tokens (enforced by static guard tests)
+│   └── ...                    # achievements, report_engine, recurrence, insights, validation, etc.
 ├── models/            # Data models (Todo, Habit, Pomodoro, CalendarEvent, UserProfile, Goal, etc.)
 ├── providers/         # Provider state management (TodoProvider, HabitProvider, CloudSyncProvider, etc.)
 ├── services/          # API clients, platform integrations (ApiClient, AiService, SystemTray, DeepLinkService)
@@ -92,12 +107,11 @@ lib/
 
 ### Backend Structure
 
-**Single-file monolith**: `backend/main.py` (~434KB, 10,000+ lines)
+**Single-file monolith**: `backend/main.py` (~12,400 lines)
 
-- FastAPI app with SQLite (`fingertip_time.db`)
-- Routes: `/api/auth/*`, `/api/sync/*`, `/api/admin/*`, `/api/ai/chat`, `/api/focus-rooms/*`, `/ws/*`
+- FastAPI app with SQLite at `backend/duoyi.db` (auto-created; a legacy `fingertip_time.db` is auto-detected and preferred only if it holds more data; override path via `DUOYI_DB_PATH`)
+- Routes: `/api/auth/*`, `/api/sync/*`, `/api/admin/*`, `/api/ai/chat`, `/api/focus-rooms/*`, `/api/theme-shop/*`, `/ws/*`
 - Admin panel settings stored in database, read via API (AI config, cloud backup settings, announcements, user management)
-- Contract version tracking: `API_CONTRACT_VERSION` and `API_CONTRACT_FEATURES` for client compatibility
 
 ### Theme System
 
@@ -106,7 +120,7 @@ The app uses a **brand/theme system** that switches not just colors but also:
 - UI terminology (e.g., "待办" becomes "咒文" in RE0 theme, "委托" in Genshin theme)
 - Greeting messages and notification text
 
-Theme switching is managed by `AppBrand` (in `lib/core/app_brand.dart`) and `BrandStrings` (in `lib/core/brand_strings.dart`).
+Theme switching is managed by `AppBrand` (`lib/core/app_brand.dart`) and `BrandStrings` (`lib/core/brand_strings.dart`).
 
 ### Cloud Sync
 
@@ -115,29 +129,31 @@ Theme switching is managed by `AppBrand` (in `lib/core/app_brand.dart`) and `Bra
 - Sync payloads: todos, habits, calendar events, pomodoro sessions, notes, diaries, goals, courses, etc.
 - Conflict resolution: last-write-wins based on `updatedAt` timestamps
 - Configurable via admin panel: max payload size, minimum sync interval, retention days
+- Contract doc: `docs/cloud-sync-v2-contract.md`
 
 ### Android Widgets
 
 - **Location**: `android/app/src/main/kotlin/com/.../`
 - **Type**: MIUI/generic home screen widgets with 3 columns (todo, habit, pomodoro)
 - **Deep links**: `duoyi://` scheme for widget tap actions
+- Widget resource contracts are guarded by `test/services/android_widget_resources_test.dart` (and an iOS counterpart)
 
 ## Build & Release
 
 ### CI/CD (GitHub Actions)
 
-Workflow file: `.github/workflows/build-apk.yml`
+Workflow file: `.github/workflows/build-apk.yml` (pins `FLUTTER_VERSION: 3.44.1`)
 
 | Trigger | Job | Output |
 |---------|-----|--------|
-| Every push/PR | `analyze` | Runs `flutter analyze`, `dart format`, and `flutter test` |
+| Every push/PR | `analyze` | `flutter analyze`, `dart format`, `flutter test`, and backend tests |
 | Every push/PR | `android` | Generic APK + per-ABI APKs (armeabi-v7a, arm64-v8a, x86_64) |
 | Tag push or manual trigger | `web` | `duoyi-web-*.tar.gz` for nginx deployment |
 | Tag `v*` push | `release` | Auto-creates GitHub Release with APKs, AAB, and web tarball |
 
 ### Required Repository Secrets
 
-- `DUOYI_KEYSTORE_BASE64`: Base64-encoded Android keystore (build fails without this)
+- `DUOYI_KEYSTORE_BASE64`: Base64-encoded Android keystore (release build fails without it — no debug-signing fallback)
 - `DUOYI_KEYSTORE_PASSWORD`, `DUOYI_KEY_ALIAS`, `DUOYI_KEY_PASSWORD`
 
 ### Optional Repository Variables
@@ -146,27 +162,26 @@ Workflow file: `.github/workflows/build-apk.yml`
 
 ### Creating a Release
 
+1. Bump the version in **both** `pubspec.yaml` and `lib/core/app_version.dart`
+2. Tag and push:
+
 ```bash
-git tag v1.0.3
-git push origin v1.0.3
+git tag v1.1.38
+git push origin v1.1.38
 ```
 
-GitHub Actions will build and attach:
-- `duoyi-v1.0.3.apk` (universal)
-- `duoyi-v1.0.3-arm64-v8a.apk`, `-armeabi-v7a.apk`, `-x86_64.apk`
-- `duoyi-v1.0.3.aab` (for Play Store)
-- `duoyi-web-v1.0.3.tar.gz`
+GitHub Actions attaches the universal APK, per-ABI APKs, AAB, and web tarball to the Release. The app checks for updates via "我的 → 检查更新" by querying the GitHub Releases API.
 
-App checks for updates via "我的 → 检查更新" by querying GitHub Releases API.
+Download pages in `deploy/duoyi.html` and `deploy/duoyi-test-cases.html` are updated and published alongside releases (see `docs: publish ... download pages` commits).
 
 ## Server URL Configuration
 
 **Important**: Server URL is a compile-time constant, not runtime configurable.
 
-- Default defined in `lib/core/app_config.dart` as `defaultServerUrl`
+- Default defined in `lib/core/app_config.dart` as `defaultServerUrl` (currently `http://6688667.xyz`)
 - Override via `--dart-define=DUOYI_SERVER_URL=<url>` during build
-- GitHub Actions uses `DUOYI_SERVER_URL` repository variable (or manual input)
-- For same-domain deployment: leave empty to use relative paths (`/api/`, `/ws/`)
+- GitHub Actions uses the `DUOYI_SERVER_URL` repository variable (or manual input)
+- For same-domain deployment: pass an empty value to use relative paths (`/api/`, `/ws/`)
 
 ## Key Features
 
@@ -180,34 +195,25 @@ App checks for updates via "我的 → 检查更新" by querying GitHub Releases
 
 ### Admin Panel
 
-Accessible in-app via "我的 → 管理员后台" (only for admin users). Tabs:
-- Overview: KPIs, 7-day registration trend
-- Site Settings: Allow registration, invite code requirement, maintenance mode
-- AI Config: Enable/disable AI, configure provider, test connection
-- Cloud Backup: Enable/disable sync, set limits, view per-user backup size
-- Users: Search, promote, disable, reset password, delete
-- Announcements: Publish, draft, archive
-- Feedback: Filter, reply, delete
-- Invite Codes: Generate, copy, delete unused
-
-### Multi-Workspace (Note: In Development)
-
-Backend has experimental multi-workspace support. See `backend/test_workspaces.py` for tests.
+Accessible in-app via "我的 → 管理员后台" (admin users only). Tabs cover: overview KPIs, site settings (registration/invite code/maintenance mode), AI config, cloud backup, user management, announcements, feedback, and invite codes.
 
 ## Testing Strategy
 
-- Widget tests in `test/widgets/`
-- Backend API tests in `backend/test_workspaces.py`
-- CI runs both Flutter and Python tests automatically
+- Flutter tests live under `test/{core,models,providers,screens,services,widgets}/` (~240 files); shared helpers in `test/test_support/`
+- `*_static_test.dart` files are source-scanning convention guards (see Critical Conventions above)
+- Integration smoke test: `integration_test/app_alignment_smoke_test.dart`
+- Backend API tests: `backend/test_workspaces.py` (the full backend suite, unittest-style)
+- CI runs Flutter and Python tests on every push/PR; `scripts/alignment_regression_gate.sh` is the heavier pre-release gate
 
 ## Deployment Notes
 
 ### Production Backend
 
-- Runs as systemd service `duoyi-backend` on port `127.0.0.1:18015`
-- Proxied via OpenResty/nginx from public domain
-- Deploy script: `./scripts/deploy_backend_prod.sh` (restarts service and validates critical routes)
-- SQLite database: `backend/fingertip_time.db` (auto-created on first run)
+- Runs as systemd service `duoyi-backend` on `127.0.0.1:18015`
+- Proxied via OpenResty/nginx from the public domain (`http://6688667.xyz`)
+- Deploy script: `./scripts/deploy_backend_prod.sh` — restarts the service, then validates `/api/config` locally and publicly and probes auth-protected routes (expects 401, proving routes are registered)
+- **Backend code changes do not take effect until the service is restarted** — GitHub Releases only ship client artifacts
+- SQLite database: `backend/duoyi.db`; periodic backups in `backend/backups/`
 
 ### Web Client
 
@@ -226,10 +232,10 @@ location / { try_files $uri $uri/ /index.html; }
 
 ## Localization
 
-- Uses Flutter's built-in l10n (`flutter_localizations`)
-- Custom I18n wrapper: `lib/core/i18n.dart` with `I18n.tr()` helper
-- L10n config: `l10n.yaml`
+- Uses Flutter's built-in l10n (`flutter_localizations`); config in `l10n.yaml`
+- Template ARB is **Chinese** (`lib/l10n/app_zh.arb`); supported locales: zh (primary), en
 - Generated files: `lib/l10n/generated/`
+- Custom wrapper: `lib/core/i18n.dart` with `I18n.tr()` helper; several static guard tests enforce i18n usage in screens
 
 ## Platform-Specific Features
 

@@ -154,9 +154,20 @@ void main() {
       expect(mine, contains('final headerHeight = compact'));
       expect(mine, contains("key: const ValueKey('mine_header_stable_box')"));
       expect(mine, contains('height: headerHeight'));
-      expect(mine, contains('height: _mineHeaderMetadataHeight'));
-      expect(mine, contains('ClipRect('));
-      expect(mine, contains('final metadata = <Widget>['));
+      expect(
+        mine,
+        contains('class _MineHeaderMetadata extends StatelessWidget'),
+      );
+      expect(
+        mine,
+        contains("key: const ValueKey('mine_header_metadata_compact')"),
+      );
+      expect(
+        mine,
+        contains("key: const ValueKey('mine_header_metadata_regular')"),
+      );
+      expect(mine, contains('final identityChip = usernameText.isEmpty'));
+      expect(mine, contains('final rewardChips = <Widget>['));
       expect(mine, contains('return SizedBox('));
       expect(mine, contains('child: Row('));
       expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
@@ -174,8 +185,15 @@ void main() {
       );
       expect(mine, contains('Expanded('));
       expect(mine, contains('Wrap('));
-      expect(mine, contains('runSpacing: 4'));
+      expect(mine, contains('ConstrainedBox('));
+      expect(mine, contains('runSpacing: 2'));
       expect(mine, contains('class _MineUserLineChip extends StatelessWidget'));
+      expect(
+        mine,
+        contains(
+          'constraints: const BoxConstraints(minHeight: 20, maxWidth: 160)',
+        ),
+      );
       expect(mine, isNot(contains('maxWidth: compact ? 116 : 150')));
       expect(
         mine,
@@ -311,6 +329,8 @@ void main() {
       expect(mine, contains('_UpdateAvailableBadge('));
       expect(mine, contains('version: updateLatestVersion'));
       expect(mine, contains('width: 8'));
+      expect(mine, contains('constraints: const BoxConstraints(maxWidth: 96)'));
+      expect(mine, contains('overflow: TextOverflow.ellipsis'));
       expect(mine, contains("'有更新'"));
       expect(mine, contains("'新版 \$version'"));
       expect(mine, contains("title: '未配置安装包地址'"));

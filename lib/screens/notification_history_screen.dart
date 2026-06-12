@@ -144,10 +144,11 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
         surfaceTintColor: Colors.transparent,
         actions: [
           if (service.unreadCount > 0)
-            TextButton.icon(
+            IconButton(
+              key: const ValueKey('notification_history_mark_all_read_button'),
+              tooltip: '全部标为已读',
               onPressed: () => service.markAllHistoryRead(),
               icon: const Icon(Icons.mark_email_read_outlined),
-              label: const Text('全部已读'),
             ),
           IconButton(
             tooltip: '清空通知记录',
@@ -324,23 +325,28 @@ class _NotificationHistoryFilters extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          SegmentedButton<_NotificationReadFilter>(
-            segments: const [
-              ButtonSegment(
-                value: _NotificationReadFilter.all,
-                label: Text('全部'),
-              ),
-              ButtonSegment(
-                value: _NotificationReadFilter.unread,
-                label: Text('未读'),
-              ),
-              ButtonSegment(
-                value: _NotificationReadFilter.read,
-                label: Text('已读'),
-              ),
-            ],
-            selected: {readFilter},
-            onSelectionChanged: (values) => onReadFilterChanged(values.single),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<_NotificationReadFilter>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: _NotificationReadFilter.all,
+                  label: Text('全部'),
+                ),
+                ButtonSegment(
+                  value: _NotificationReadFilter.unread,
+                  label: Text('未读'),
+                ),
+                ButtonSegment(
+                  value: _NotificationReadFilter.read,
+                  label: Text('已读'),
+                ),
+              ],
+              selected: {readFilter},
+              onSelectionChanged: (values) =>
+                  onReadFilterChanged(values.single),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -983,6 +989,7 @@ class _NotificationSettingsScreenState
 
   Widget _channelStatusTrailing(String channelId, ColorScheme cs) {
     return Row(
+      key: ValueKey('notification_channel_status_$channelId'),
       mainAxisSize: MainAxisSize.min,
       children: [
         AppStatusBadge(
@@ -1000,6 +1007,99 @@ class _NotificationSettingsScreenState
     );
   }
 
+  ButtonStyle _settingsTextActionStyle(
+    BuildContext context, {
+    Color? color,
+    bool plain = false,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tone = color ?? cs.primary;
+    return TextButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(0, 30),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      foregroundColor: tone,
+      disabledForegroundColor: cs.onSurfaceVariant.withValues(alpha: 0.44),
+      backgroundColor: plain
+          ? Colors.transparent
+          : tone.withValues(alpha: 0.08),
+      disabledBackgroundColor: plain
+          ? Colors.transparent
+          : cs.surfaceContainerHighest.withValues(alpha: 0.18),
+      shape: const StadiumBorder(),
+      textStyle: appSecondaryMenuItemTextStyle(
+        context,
+      ).copyWith(color: tone, fontSize: DesignTokens.fontSizeSm),
+    );
+  }
+
+  Widget _settingsIconAction(
+    BuildContext context, {
+    required Key key,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    IconData icon = Icons.refresh,
+    bool busy = false,
+    bool embedded = false,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final button = IconButton(
+      key: key,
+      tooltip: tooltip,
+      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      onPressed: onPressed,
+      icon: busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 17),
+    );
+    if (embedded) return button;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusPill),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.22),
+          width: 0.45,
+        ),
+      ),
+      child: button,
+    );
+  }
+
+  Widget _settingsActionGroup(BuildContext context, List<Widget> children) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusPill),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.24),
+          width: 0.45,
+        ),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+
+  Widget _settingsActionDivider(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 0.6,
+      height: 16,
+      color: cs.outlineVariant.withValues(alpha: 0.45),
+    );
+  }
+
   String _registeredReminderSummary() {
     if (_registeredReminders.isEmpty) {
       return _busy ? '正在读取提醒注册表' : '暂无通过提醒调度器注册的提醒';
@@ -1010,6 +1110,39 @@ class _NotificationSettingsScreenState
       (sum, entry) => sum + entry.idCount,
     );
     return '$objectCount 个提醒对象 · $idCount 个系统队列 ID';
+  }
+
+  Future<void> _showRegisteredReminderDetails() {
+    final entries = List<ReminderScheduleSnapshotEntry>.of(
+      _registeredReminders,
+    );
+    return showAppModalSheet<void>(
+      context: context,
+      builder: (sheetContext) => AppModalSheet(
+        key: const ValueKey('notification_registered_reminders_sheet'),
+        title: '已注册提醒明细',
+        subtitle: entries.isEmpty
+            ? '当前没有通过提醒调度器注册的提醒'
+            : '${entries.length} 个提醒对象，${entries.fold<int>(0, (sum, entry) => sum + entry.idCount)} 个系统队列 ID',
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+        child: entries.isEmpty
+            ? const EmptyState(
+                icon: Icons.fact_check_outlined,
+                message: '暂无已注册提醒',
+              )
+            : Column(
+                children: [
+                  for (final entry in entries)
+                    _RegisteredReminderDetailRow(entry: entry),
+                ],
+              ),
+      ),
+    );
   }
 
   @override
@@ -1058,6 +1191,7 @@ class _NotificationSettingsScreenState
                             Container(
                               width: 42,
                               height: 42,
+                              alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: cs.primary.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(10),
@@ -1074,6 +1208,8 @@ class _NotificationSettingsScreenState
                                 children: [
                                   Text(
                                     '通知设置',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
@@ -1087,6 +1223,8 @@ class _NotificationSettingsScreenState
                                   const SizedBox(height: 3),
                                   Text(
                                     '系统权限、提醒时间、铃声和通知记录保留',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: cs.onSurface.withValues(
@@ -1108,6 +1246,7 @@ class _NotificationSettingsScreenState
                             : '通知权限未开启',
                         children: [
                           AppSettingsTile(
+                            key: const ValueKey('notification_permission_tile'),
                             icon: service.permissionGranted
                                 ? Icons.check_circle_outline
                                 : Icons.notifications_off_outlined,
@@ -1119,6 +1258,12 @@ class _NotificationSettingsScreenState
                                 ? '系统允许多仪发送提醒'
                                 : '开启后才能收到普通通知和提醒',
                             trailing: TextButton(
+                              style: _settingsTextActionStyle(
+                                context,
+                                color: service.permissionGranted
+                                    ? cs.primary
+                                    : cs.error,
+                              ),
                               onPressed: _busy ? null : _requestPermission,
                               child: Text(
                                 service.permissionGranted ? '重新检查' : '开启',
@@ -1240,27 +1385,29 @@ class _NotificationSettingsScreenState
                             onTap: _busy ? null : _sendStrongTest,
                           ),
                           AppSettingsTile(
+                            key: const ValueKey(
+                              'notification_pending_push_tile',
+                            ),
                             icon: Icons.schedule,
                             color: Colors.teal,
                             title: '已调度普通提醒',
                             subtitle: _pendingPushCount == null
                                 ? '正在读取待触发队列'
                                 : '$_pendingPushCount 条待触发',
-                            trailing: IconButton(
+                            trailing: _settingsIconAction(
+                              context,
+                              key: const ValueKey(
+                                'notification_pending_push_refresh_button',
+                              ),
                               tooltip: '刷新',
                               onPressed: _busy ? null : _refreshStatus,
-                              icon: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.refresh),
+                              busy: _busy,
                             ),
                           ),
                           AppSettingsTile(
+                            key: const ValueKey(
+                              'notification_pending_alarm_tile',
+                            ),
                             icon: Icons.alarm_on_outlined,
                             color: Colors.deepPurple,
                             title: '已调度闹钟提醒',
@@ -1268,6 +1415,13 @@ class _NotificationSettingsScreenState
                                 ? '正在读取强提醒队列'
                                 : '$_pendingAlarmCount 条待触发 · ${_exactAlarmGranted == true ? '精准闹钟已开启' : '精准闹钟未开启'}',
                             trailing: TextButton(
+                              key: const ValueKey(
+                                'notification_pending_alarm_exact_button',
+                              ),
+                              style: _settingsTextActionStyle(
+                                context,
+                                color: Colors.deepPurple,
+                              ),
                               onPressed: _busy
                                   ? null
                                   : _requestExactAlarmPermission,
@@ -1275,14 +1429,40 @@ class _NotificationSettingsScreenState
                             ),
                           ),
                           AppSettingsTile(
+                            key: const ValueKey(
+                              'notification_registered_reminders_tile',
+                            ),
                             icon: Icons.fact_check_outlined,
                             color: Colors.indigo,
                             title: '已注册提醒明细',
                             subtitle: _registeredReminderSummary(),
-                            trailing: IconButton(
-                              tooltip: '刷新',
-                              onPressed: _busy ? null : _refreshStatus,
-                              icon: const Icon(Icons.refresh),
+                            trailing: KeyedSubtree(
+                              key: const ValueKey(
+                                'notification_registered_reminders_actions',
+                              ),
+                              child: _settingsActionGroup(context, [
+                                TextButton(
+                                  key: const ValueKey(
+                                    'notification_registered_reminders_view_button',
+                                  ),
+                                  style: _settingsTextActionStyle(
+                                    context,
+                                    plain: true,
+                                  ),
+                                  onPressed: _showRegisteredReminderDetails,
+                                  child: const Text('查看'),
+                                ),
+                                _settingsActionDivider(context),
+                                _settingsIconAction(
+                                  context,
+                                  key: const ValueKey(
+                                    'notification_registered_reminders_refresh_button',
+                                  ),
+                                  tooltip: '刷新',
+                                  onPressed: _busy ? null : _refreshStatus,
+                                  embedded: true,
+                                ),
+                              ]),
                             ),
                           ),
                           if (_registeredReminders.isNotEmpty) ...[
@@ -1311,53 +1491,69 @@ class _NotificationSettingsScreenState
                         subtitle: '控制由通知触发的快捷记录和历史保留',
                         children: [
                           if (PlatformInfo.isAndroid) ...[
-                            SwitchListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 4,
+                            AppSettingsTile(
+                              key: const ValueKey(
+                                'notification_quick_add_tile',
                               ),
-                              secondary: const Icon(Icons.add_alert_outlined),
-                              title: Text(
-                                I18n.tr(
-                                  'preferences.notification_quick_add.title',
+                              icon: Icons.add_alert_outlined,
+                              color: Colors.orange,
+                              title: I18n.tr(
+                                'preferences.notification_quick_add.title',
+                              ),
+                              subtitle: I18n.tr(
+                                'preferences.notification_quick_add.subtitle',
+                              ),
+                              trailing: _CompactSettingsSwitch(
+                                key: const ValueKey(
+                                  'notification_quick_add_switch',
                                 ),
+                                value: prefs.notificationQuickAdd,
+                                onChanged: _busy
+                                    ? null
+                                    : (value) =>
+                                          _setNotificationStatusBarPreference(
+                                            quickAdd: true,
+                                            value: value,
+                                          ),
                               ),
-                              subtitle: Text(
-                                I18n.tr(
-                                  'preferences.notification_quick_add.subtitle',
-                                ),
-                              ),
-                              value: prefs.notificationQuickAdd,
-                              onChanged: _busy
+                              onTap: _busy
                                   ? null
-                                  : (value) =>
-                                        _setNotificationStatusBarPreference(
-                                          quickAdd: true,
-                                          value: value,
-                                        ),
+                                  : () => _setNotificationStatusBarPreference(
+                                      quickAdd: true,
+                                      value: !prefs.notificationQuickAdd,
+                                    ),
                             ),
-                            SwitchListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 4,
+                            AppSettingsTile(
+                              key: const ValueKey(
+                                'notification_today_progress_tile',
                               ),
-                              secondary: const Icon(Icons.today_outlined),
-                              title: Text(
-                                I18n.tr(
-                                  'preferences.notification_today_progress.title',
+                              icon: Icons.today_outlined,
+                              color: Colors.teal,
+                              title: I18n.tr(
+                                'preferences.notification_today_progress.title',
+                              ),
+                              subtitle: I18n.tr(
+                                'preferences.notification_today_progress.subtitle',
+                              ),
+                              trailing: _CompactSettingsSwitch(
+                                key: const ValueKey(
+                                  'notification_today_progress_switch',
                                 ),
+                                value: prefs.notificationTodayProgress,
+                                onChanged: _busy
+                                    ? null
+                                    : (value) =>
+                                          _setNotificationStatusBarPreference(
+                                            quickAdd: false,
+                                            value: value,
+                                          ),
                               ),
-                              subtitle: Text(
-                                I18n.tr(
-                                  'preferences.notification_today_progress.subtitle',
-                                ),
-                              ),
-                              value: prefs.notificationTodayProgress,
-                              onChanged: _busy
+                              onTap: _busy
                                   ? null
-                                  : (value) =>
-                                        _setNotificationStatusBarPreference(
-                                          quickAdd: false,
-                                          value: value,
-                                        ),
+                                  : () => _setNotificationStatusBarPreference(
+                                      quickAdd: false,
+                                      value: !prefs.notificationTodayProgress,
+                                    ),
                             ),
                           ] else
                             AppSettingsTile(
@@ -1370,32 +1566,31 @@ class _NotificationSettingsScreenState
                                 'preferences.notification_status_bar.unsupported',
                               ),
                             ),
-                          AppSettingsTile(
-                            icon: Icons.history_outlined,
-                            color: Colors.blueGrey,
-                            title: '通知记录',
-                            subtitle:
-                                '共 ${service.historyCount} 条，未读 ${service.unreadCount} 条',
-                            trailing: TextButton(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const NotificationHistoryScreen(
-                                        markReadOnOpen: false,
-                                      ),
+                          _NotificationHistoryEntryTile(
+                            historyCount: service.historyCount,
+                            unreadCount: service.unreadCount,
+                            onOpen: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationHistoryScreen(
+                                  markReadOnOpen: false,
                                 ),
                               ),
-                              child: const Text('查看'),
                             ),
                           ),
                           AppSettingsTile(
+                            key: const ValueKey(
+                              'notification_history_limit_tile',
+                            ),
                             icon: Icons.inventory_2_outlined,
                             color: Colors.indigo,
                             title: '通知记录保留',
                             subtitle:
                                 '最多保留 ${prefs.notificationHistoryLimit} 条历史，调低后会裁剪旧记录',
                             trailing: AppCompactDropdown<int>(
+                              key: const ValueKey(
+                                'notification_history_limit_dropdown',
+                              ),
                               value: prefs.notificationHistoryLimit,
                               width: 116,
                               items: [
@@ -1521,6 +1716,244 @@ class _RegisteredReminderSnapshotRow extends StatelessWidget {
   }
 }
 
+class _RegisteredReminderDetailRow extends StatelessWidget {
+  final ReminderScheduleSnapshotEntry entry;
+
+  const _RegisteredReminderDetailRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final typeLabel = _registeredReminderTypeLabel(entry.objectType);
+    final idsText = entry.ids.isEmpty ? '无系统队列 ID' : entry.ids.join(', ');
+    return Container(
+      key: ValueKey('registered_reminder_detail_${entry.objectKey}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.22),
+          width: 0.4,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppStatusBadge(
+            label: typeLabel,
+            color: _registeredReminderTypeColor(entry.objectType, cs),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.objectId,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.normal,
+                    height: 1.16,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  entry.objectKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.52),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '队列 ID：$idsText',
+                  softWrap: true,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.66),
+                    height: 1.22,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationHistoryEntryTile extends StatelessWidget {
+  final int historyCount;
+  final int unreadCount;
+  final VoidCallback onOpen;
+
+  const _NotificationHistoryEntryTile({
+    required this.historyCount,
+    required this.unreadCount,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle = appSecondaryMenuItemTextStyle(
+      context,
+    ).copyWith(color: cs.onSurface, fontWeight: DesignTokens.fontWeightRegular);
+    final subtitleStyle = appSecondaryControlLabelStyle(
+      context,
+    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62));
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const ValueKey('notification_history_entry_tile'),
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.history_outlined,
+                  color: Colors.blueGrey,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '通知记录',
+                      key: const ValueKey('notification_history_entry_title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '共 $historyCount 条，未读 $unreadCount 条',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: subtitleStyle,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                key: const ValueKey('notification_history_entry_view_button'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  textStyle: appSecondaryMenuItemTextStyle(context),
+                ),
+                onPressed: onOpen,
+                child: const Text('查看'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsExpansionHeader extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final Widget trailing;
+  final Key? iconKey;
+  final Key? titleKey;
+  final Key? subtitleKey;
+
+  const _SettingsExpansionHeader({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    this.iconKey,
+    this.titleKey,
+    this.subtitleKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            key: iconKey,
+            width: 34,
+            height: 34,
+            child: Center(child: Icon(icon, color: color, size: 22)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  key: titleKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appSecondaryMenuItemTextStyle(context).copyWith(
+                    color: cs.onSurface,
+                    fontWeight: DesignTokens.fontWeightRegular,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  key: subtitleKey,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: appSecondaryControlLabelStyle(
+                    context,
+                  ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
 class _NotificationReminderSlotTile extends StatefulWidget {
   final int index;
   final DailyReminderSlot slot;
@@ -1610,27 +2043,26 @@ class _NotificationReminderSlotTileState
       ),
       child: ExpansionTile(
         initiallyExpanded: index == 0,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        leading: Icon(Icons.notifications_active_outlined, color: cs.primary),
-        title: Text(
-          _title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: cs.onSurface,
-            fontWeight: FontWeight.normal,
-          ),
-        ),
-        subtitle: Text(
-          slot.enabled
+        tilePadding: EdgeInsets.zero,
+        showTrailingIcon: false,
+        title: _SettingsExpansionHeader(
+          key: ValueKey('daily_reminder_slot_${index}_header'),
+          iconKey: ValueKey('daily_reminder_slot_${index}_header_icon'),
+          titleKey: ValueKey('daily_reminder_slot_${index}_header_title'),
+          subtitleKey: ValueKey('daily_reminder_slot_${index}_header_subtitle'),
+          icon: Icons.notifications_active_outlined,
+          color: cs.primary,
+          title: _title,
+          subtitle: slot.enabled
               ? '${_kindLabel(slot.kind)} · $_time · ${_repeatDaysLabel(slot.repeatDays)} · ${_taskScopeText(slot)}'
               : '${I18n.tr('preferences.daily_reminder.disabled')} · $_time',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Switch(
-          value: slot.enabled,
-          onChanged: _saving
-              ? null
-              : (value) => _save(context, slot.copyWith(enabled: value)),
+          trailing: _CompactSettingsSwitch(
+            key: ValueKey('daily_reminder_slot_${index}_enabled_switch'),
+            value: slot.enabled,
+            onChanged: _saving
+                ? null
+                : (value) => _save(context, slot.copyWith(enabled: value)),
+          ),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
         children: [
@@ -1645,11 +2077,13 @@ class _NotificationReminderSlotTileState
           ),
           const SizedBox(height: 6),
           AppSettingsTile(
+            key: ValueKey('daily_reminder_slot_${index}_time_tile'),
             icon: Icons.schedule,
             color: Colors.deepOrange,
             title: I18n.tr('preferences.daily_reminder.time'),
             subtitle: I18n.tr('preferences.daily_reminder.time.subtitle'),
             trailing: TextButton(
+              key: ValueKey('daily_reminder_slot_${index}_time_button'),
               onPressed: _saving
                   ? null
                   : () async {
@@ -1711,8 +2145,10 @@ class _NotificationReminderSlotTileState
             runSpacing: 6,
             children: [
               for (var day = 1; day <= 7; day++)
-                FilterChip(
-                  label: Text(_weekdayLabel(day)),
+                _compactFilterChip(
+                  context,
+                  key: ValueKey('daily_reminder_slot_${index}_weekday_$day'),
+                  label: _weekdayLabel(day),
                   selected: slot.repeatDays.contains(day),
                   onSelected: _saving
                       ? null
@@ -1740,8 +2176,9 @@ class _NotificationReminderSlotTileState
     bool selected,
     DailyReminderSlot next,
   ) {
-    return FilterChip(
-      label: Text(label),
+    return _compactFilterChip(
+      context,
+      label: label,
       selected: selected,
       onSelected: _saving ? null : (_) => _save(context, next),
     );
@@ -1773,25 +2210,27 @@ class _ReminderKindSelector extends StatelessWidget {
         final maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width - 64;
-        final gap = maxWidth < 340 ? 6.0 : 8.0;
-        final itemWidth = ((maxWidth - gap) / 2).toDouble();
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
+        final gap = maxWidth < 340 ? 4.0 : 6.0;
+        return Row(
+          key: const ValueKey('daily_reminder_kind_selector_row'),
           children: [
-            for (final option in _options)
-              SizedBox(
-                width: itemWidth,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 42),
+            for (var i = 0; i < _options.length; i++) ...[
+              if (i > 0) SizedBox(width: gap),
+              Expanded(
+                child: SizedBox(
+                  height: 32,
                   child: _ReminderKindOptionButton(
-                    label: _kindLabel(option.value),
-                    selected: selected == option.value,
+                    key: ValueKey(
+                      'daily_reminder_kind_${_options[i].value.name}',
+                    ),
+                    label: _kindLabel(_options[i].value),
+                    selected: selected == _options[i].value,
                     enabled: enabled,
-                    onTap: () => onChanged(option.value),
+                    onTap: () => onChanged(_options[i].value),
                   ),
                 ),
               ),
+            ],
           ],
         );
       },
@@ -1827,11 +2266,12 @@ class _ReminderKindSettingsTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 34,
                 height: 34,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.teal.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
@@ -1845,10 +2285,13 @@ class _ReminderKindSettingsTile extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       I18n.tr('preferences.daily_reminder.kind.title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: appSecondaryMenuItemTextStyle(context).copyWith(
                         color: cs.onSurface,
                         fontWeight: DesignTokens.fontWeightRegular,
@@ -1887,6 +2330,7 @@ class _ReminderKindOptionButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ReminderKindOptionButton({
+    super.key,
     required this.label,
     required this.selected,
     required this.enabled,
@@ -1906,14 +2350,14 @@ class _ReminderKindOptionButton extends StatelessWidget {
       child: Material(
         color: selected ? cs.primary.withValues(alpha: 0.12) : cs.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(10),
           side: BorderSide(color: borderColor, width: 0.45),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: enabled ? onTap : null,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
             child: Center(
               child: Text(
                 label,
@@ -2017,6 +2461,62 @@ DateTime? _nextSlotTrigger(DailyReminderSlot slot) {
     }
   }
   return null;
+}
+
+class _CompactSettingsSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  const _CompactSettingsSwitch({
+    super.key,
+    required this.value,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 46,
+      height: 30,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: Switch(value: value, onChanged: onChanged),
+      ),
+    );
+  }
+}
+
+Widget _compactFilterChip(
+  BuildContext context, {
+  Key? key,
+  required String label,
+  required bool selected,
+  required ValueChanged<bool>? onSelected,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  return FilterChip(
+    key: key,
+    label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    selected: selected,
+    showCheckmark: false,
+    visualDensity: VisualDensity.compact,
+    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+    labelStyle: appSecondaryControlLabelStyle(context).copyWith(
+      color: selected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.72),
+      height: 1.0,
+    ),
+    selectedColor: cs.primary.withValues(alpha: 0.12),
+    backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.18),
+    side: BorderSide(
+      color: selected
+          ? cs.primary.withValues(alpha: 0.36)
+          : cs.outlineVariant.withValues(alpha: 0.36),
+      width: 0.45,
+    ),
+    onSelected: onSelected,
+  );
 }
 
 class _NotificationRingtoneSection extends StatefulWidget {
@@ -2172,20 +2672,165 @@ class _NotificationRingtoneSectionState
       title: I18n.tr('preferences.ringtone.section'),
       subtitle: I18n.tr(_policy.sectionSubtitleKey),
       children: [
-        AppSettingsTile(
+        _RingtoneControlTile(
           icon: Icons.notifications_active_outlined,
           color: Colors.orange,
           title: I18n.tr('preferences.ringtone.sound'),
           subtitle: ReminderRingtoneSettings.sounds
               .firstWhere((sound) => sound.id == _sound)
               .label,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+          control: _RingtoneSoundControl(
+            sound: _sound,
+            previewing: _previewing,
+            onPreview: _previewCurrentSound,
+            onChanged: _setSound,
+          ),
+        ),
+        if (_policy.supportsVolumePresets)
+          _RingtoneControlTile(
+            icon: Icons.volume_up_outlined,
+            color: Colors.deepOrange,
+            title: I18n.tr('preferences.ringtone.volume'),
+            subtitle: '${I18n.tr('preferences.ringtone.current')} $_volume%',
+            control: _RingtoneVolumeControl(
+              volume: _volume,
+              onChanged: _setVolume,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RingtoneControlTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final Widget control;
+
+  const _RingtoneControlTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.control,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth;
+          final targetControlWidth = availableWidth < 360
+              ? 116.0
+              : (availableWidth * 0.44).clamp(150.0, 220.0).toDouble();
+          final maxControlWidth = (availableWidth - 96).clamp(
+            0.0,
+            availableWidth,
+          );
+          final controlWidth = targetControlWidth
+              .clamp(0.0, maxControlWidth)
+              .toDouble();
+          final controlBox = SizedBox(
+            width: controlWidth,
+            child: Align(alignment: Alignment.centerRight, child: control),
+          );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              IconButton(
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: appSecondaryMenuItemTextStyle(context).copyWith(
+                        color: cs.onSurface,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: appSecondaryControlLabelStyle(
+                        context,
+                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              controlBox,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RingtoneSoundControl extends StatelessWidget {
+  final String sound;
+  final bool previewing;
+  final VoidCallback onPreview;
+  final ValueChanged<String> onChanged;
+
+  const _RingtoneSoundControl({
+    required this.sound,
+    required this.previewing,
+    required this.onPreview,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 122.0;
+        final previewSize = maxWidth < 144 ? 32.0 : 36.0;
+        final dropdownWidth = (maxWidth - previewSize - 4)
+            .clamp(76.0, 132.0)
+            .toDouble();
+        return Row(
+          key: const ValueKey('notification_ringtone_sound_control'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: previewSize,
+              height: 32,
+              child: IconButton(
                 tooltip: '试听当前铃声',
-                onPressed: _previewing ? null : _previewCurrentSound,
-                icon: _previewing
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                onPressed: previewing ? null : onPreview,
+                icon: previewing
                     ? const SizedBox(
                         width: 18,
                         height: 18,
@@ -2193,38 +2838,99 @@ class _NotificationRingtoneSectionState
                       )
                     : const Icon(Icons.volume_up_outlined),
               ),
-              const SizedBox(width: 4),
-              AppCompactDropdown<String>(
-                value: _sound,
-                width: 112,
-                items: [
-                  for (final sound in ReminderRingtoneSettings.sounds)
-                    DropdownMenuItem(value: sound.id, child: Text(sound.label)),
-                ],
-                onChanged: (value) => value == null ? null : _setSound(value),
+            ),
+            const SizedBox(width: 4),
+            AppCompactDropdown<String>(
+              value: sound,
+              width: dropdownWidth,
+              items: [
+                for (final sound in ReminderRingtoneSettings.sounds)
+                  DropdownMenuItem(value: sound.id, child: Text(sound.label)),
+              ],
+              onChanged: (value) => value == null ? null : onChanged(value),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RingtoneVolumeControl extends StatelessWidget {
+  final int volume;
+  final ValueChanged<int> onChanged;
+
+  const _RingtoneVolumeControl({required this.volume, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('notification_ringtone_volume_control'),
+      height: 32,
+      child: Row(
+        children: [
+          for (var i = 0; i < ReminderRingtoneSettings.presets.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: _RingtoneVolumeButton(
+                value: ReminderRingtoneSettings.presets[i],
+                selected: volume == ReminderRingtoneSettings.presets[i],
+                onTap: () => onChanged(ReminderRingtoneSettings.presets[i]),
               ),
-            ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RingtoneVolumeButton extends StatelessWidget {
+  final int value;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RingtoneVolumeButton({
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final foreground = selected
+        ? cs.onSurface
+        : cs.onSurface.withValues(alpha: 0.72);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? cs.primary.withValues(alpha: 0.12) : cs.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: selected
+                ? cs.primary.withValues(alpha: 0.36)
+                : cs.outlineVariant.withValues(alpha: 0.38),
+            width: 0.45,
           ),
         ),
-        if (_policy.supportsVolumePresets)
-          AppSettingsTile(
-            icon: Icons.volume_up_outlined,
-            color: Colors.deepOrange,
-            title: I18n.tr('preferences.ringtone.volume'),
-            subtitle: '${I18n.tr('preferences.ringtone.current')} $_volume%',
-            trailing: Wrap(
-              spacing: 6,
-              children: [
-                for (final value in ReminderRingtoneSettings.presets)
-                  ChoiceChip(
-                    label: Text('$value%'),
-                    selected: _volume == value,
-                    onSelected: (_) => _setVolume(value),
-                  ),
-              ],
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Center(
+            child: Text(
+              '$value%',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: appSecondaryControlLabelStyle(
+                context,
+              ).copyWith(color: foreground, height: 1.0),
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
@@ -2364,14 +3070,26 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
         ),
       ),
       child: ExpansionTile(
-        leading: Icon(icon, color: color),
-        title: Text(title),
-        subtitle: Text(_subtitle),
-        trailing: Switch(
-          value: config.enabled,
-          onChanged: _saving
-              ? null
-              : (v) => _save(context, config.copyWith(enabled: v)),
+        tilePadding: EdgeInsets.zero,
+        showTrailingIcon: false,
+        title: _SettingsExpansionHeader(
+          key: ValueKey('report_reminder_${cadence.name}_header'),
+          iconKey: ValueKey('report_reminder_${cadence.name}_header_icon'),
+          titleKey: ValueKey('report_reminder_${cadence.name}_header_title'),
+          subtitleKey: ValueKey(
+            'report_reminder_${cadence.name}_header_subtitle',
+          ),
+          icon: icon,
+          color: color,
+          title: title,
+          subtitle: _subtitle,
+          trailing: _CompactSettingsSwitch(
+            key: ValueKey('report_reminder_${cadence.name}_enabled_switch'),
+            value: config.enabled,
+            onChanged: _saving
+                ? null
+                : (v) => _save(context, config.copyWith(enabled: v)),
+          ),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
@@ -2381,6 +3099,7 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
             title: '推送时间',
             subtitle: _timeSubtitle,
             trailing: TextButton(
+              key: ValueKey('report_reminder_time_button_${cadence.name}'),
               onPressed: _saving
                   ? null
                   : () async {
@@ -2423,10 +3142,11 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
       _ReportReminderCadence.daily => const <Widget>[],
       _ReportReminderCadence.weekly => [
         for (var day = 1; day <= 7; day++)
-          FilterChip(
-            label: Text(_weekdayLabel(day)),
+          _compactFilterChip(
+            context,
+            key: ValueKey('report_reminder_${cadence.name}_weekday_$day'),
+            label: _weekdayLabel(day),
             selected: config.weekday == day,
-            showCheckmark: false,
             onSelected: _saving
                 ? null
                 : (_) => _save(context, config.copyWith(weekday: day)),
@@ -2435,19 +3155,21 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
       _ReportReminderCadence.monthly => _monthDayChips(context),
       _ReportReminderCadence.yearly => [
         for (var month = 1; month <= 12; month++)
-          FilterChip(
-            label: Text('$month 月'),
+          _compactFilterChip(
+            context,
+            key: ValueKey('report_reminder_${cadence.name}_month_$month'),
+            label: '$month 月',
             selected: config.month == month,
-            showCheckmark: false,
             onSelected: _saving
                 ? null
                 : (_) => _save(context, config.copyWith(month: month)),
           ),
         for (final day in const [1, 5, 10, 15, 20, 25, 28, 31])
-          FilterChip(
-            label: Text('$day 日'),
+          _compactFilterChip(
+            context,
+            key: ValueKey('report_reminder_${cadence.name}_day_$day'),
+            label: '$day 日',
             selected: config.monthDay == day,
-            showCheckmark: false,
             onSelected: _saving
                 ? null
                 : (_) => _save(context, config.copyWith(monthDay: day)),
@@ -2459,10 +3181,11 @@ class _ReportReminderTileState extends State<_ReportReminderTile> {
   List<Widget> _monthDayChips(BuildContext context) {
     return [
       for (final day in const [1, 5, 10, 15, 20, 25, 28, 31])
-        FilterChip(
-          label: Text('$day 日'),
+        _compactFilterChip(
+          context,
+          key: ValueKey('report_reminder_${cadence.name}_day_$day'),
+          label: '$day 日',
           selected: config.monthDay == day,
-          showCheckmark: false,
           onSelected: _saving
               ? null
               : (_) => _save(context, config.copyWith(monthDay: day)),

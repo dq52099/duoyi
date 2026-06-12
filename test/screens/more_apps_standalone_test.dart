@@ -29,4 +29,38 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('MoreApplicationsScreen hidden app grid fits 200-320px widths', (
+    tester,
+  ) async {
+    await _pumpMoreApps(tester, width: 200);
+
+    var grid = tester.widget<GridView>(find.byType(GridView));
+    var delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 1);
+    expect(find.text('日历'), findsOneWidget);
+    expect(find.text('小组件'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await _pumpMoreApps(tester, width: 320);
+
+    grid = tester.widget<GridView>(find.byType(GridView));
+    delegate = grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 2);
+    expect(find.text('日历'), findsOneWidget);
+    expect(find.text('小组件'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> _pumpMoreApps(WidgetTester tester, {required double width}) async {
+  await tester.binding.setSurfaceSize(Size(width, 640));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    const MaterialApp(
+      home: MoreApplicationsScreen(visibleBottomNavTabs: [0, 1, 2, 6]),
+    ),
+  );
+  await tester.pumpAndSettle();
 }

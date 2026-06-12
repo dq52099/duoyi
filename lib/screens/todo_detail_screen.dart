@@ -991,6 +991,8 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     ),
                     title: Text(
                       s.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: DesignTokens.fontSizeBase,
                         decoration: s.isCompleted
@@ -1104,24 +1106,40 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('触发方向'),
-                    const Spacer(),
-                    ChoiceChip(
-                      label: const Text('到达'),
-                      selected: trigger == LocationTrigger.enter,
-                      onSelected: (_) =>
-                          setSt(() => trigger = LocationTrigger.enter),
-                    ),
-                    const SizedBox(width: 4),
-                    ChoiceChip(
-                      label: const Text('离开'),
-                      selected: trigger == LocationTrigger.leave,
-                      onSelected: (_) =>
-                          setSt(() => trigger = LocationTrigger.leave),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final chipWrap = Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('到达'),
+                          selected: trigger == LocationTrigger.enter,
+                          onSelected: (_) =>
+                              setSt(() => trigger = LocationTrigger.enter),
+                        ),
+                        ChoiceChip(
+                          label: const Text('离开'),
+                          selected: trigger == LocationTrigger.leave,
+                          onSelected: (_) =>
+                              setSt(() => trigger = LocationTrigger.leave),
+                        ),
+                      ],
+                    );
+                    if (constraints.maxWidth < 260) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('触发方向'),
+                          const SizedBox(height: 4),
+                          chipWrap,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [const Text('触发方向'), const Spacer(), chipWrap],
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1909,7 +1927,11 @@ class _AssignmentEditor extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.person_outline),
         title: const Text('负责人'),
-        subtitle: const Text('私有任务无需指派；共享清单任务可选择成员'),
+        subtitle: const Text(
+          '私有任务无需指派；共享清单任务可选择成员',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       );
     }
     final members = workspace.members;
@@ -1921,6 +1943,7 @@ class _AssignmentEditor extends StatelessWidget {
       decoration: InputDecoration(
         labelText: '负责人',
         helperText: '共享空间：${workspace.name}',
+        helperMaxLines: 2,
         prefixIcon: const Icon(Icons.assignment_ind_outlined),
       ),
       items: [
@@ -2034,6 +2057,8 @@ class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
                     ),
                     subtitle: Text(
                       '${comment.authorName.isEmpty ? comment.authorUserId : comment.authorName} · ${_formatCommentTime(comment.createdAt)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -2353,7 +2378,13 @@ class _TagsEditor extends StatelessWidget {
       runSpacing: DesignTokens.spaceXs,
       children: [
         ...tags.map(
-          (t) => Chip(label: Text('#$t'), onDeleted: () => onRemove(t)),
+          (t) => ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Chip(
+              label: Text('#$t', maxLines: 1, overflow: TextOverflow.ellipsis),
+              onDeleted: () => onRemove(t),
+            ),
+          ),
         ),
         SizedBox(
           width: 140,

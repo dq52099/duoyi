@@ -80,55 +80,61 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
             entries: entries,
           ),
           const SizedBox(height: 10),
-          SegmentedButton<_AuditRange>(
-            segments: [
-              ButtonSegment(
-                value: _AuditRange.today,
-                label: Text(I18n.tr('time_audit.segment.today')),
-              ),
-              ButtonSegment(
-                value: _AuditRange.week,
-                label: Text(I18n.tr('time_audit.range.week')),
-              ),
-              ButtonSegment(
-                value: _AuditRange.month,
-                label: Text(I18n.tr('time_audit.range.month')),
-              ),
-              ButtonSegment(
-                value: _AuditRange.all,
-                label: Text(I18n.tr('time_audit.range.all')),
-              ),
-            ],
-            selected: {_range},
-            onSelectionChanged: (value) => setState(() => _range = value.first),
+          _HorizontalSegmentStrip(
+            child: SegmentedButton<_AuditRange>(
+              segments: [
+                ButtonSegment(
+                  value: _AuditRange.today,
+                  label: Text(I18n.tr('time_audit.segment.today')),
+                ),
+                ButtonSegment(
+                  value: _AuditRange.week,
+                  label: Text(I18n.tr('time_audit.range.week')),
+                ),
+                ButtonSegment(
+                  value: _AuditRange.month,
+                  label: Text(I18n.tr('time_audit.range.month')),
+                ),
+                ButtonSegment(
+                  value: _AuditRange.all,
+                  label: Text(I18n.tr('time_audit.range.all')),
+                ),
+              ],
+              selected: {_range},
+              onSelectionChanged: (value) =>
+                  setState(() => _range = value.first),
+            ),
           ),
           const SizedBox(height: 10),
-          SegmentedButton<_AuditView>(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: _AuditView.timeline,
-                icon: const Icon(Icons.view_agenda_outlined),
-                label: Text(I18n.tr('time_audit.view.timeline')),
-              ),
-              ButtonSegment(
-                value: _AuditView.category,
-                icon: const Icon(Icons.donut_small_outlined),
-                label: Text(I18n.tr('time_audit.view.category')),
-              ),
-              ButtonSegment(
-                value: _AuditView.calendar,
-                icon: const Icon(Icons.calendar_month_outlined),
-                label: Text(I18n.tr('time_audit.view.calendar')),
-              ),
-              ButtonSegment(
-                value: _AuditView.trend,
-                icon: const Icon(Icons.bar_chart_outlined),
-                label: Text(I18n.tr('time_audit.view.trend')),
-              ),
-            ],
-            selected: {_view},
-            onSelectionChanged: (value) => setState(() => _view = value.first),
+          _HorizontalSegmentStrip(
+            child: SegmentedButton<_AuditView>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: _AuditView.timeline,
+                  icon: const Icon(Icons.view_agenda_outlined),
+                  label: Text(I18n.tr('time_audit.view.timeline')),
+                ),
+                ButtonSegment(
+                  value: _AuditView.category,
+                  icon: const Icon(Icons.donut_small_outlined),
+                  label: Text(I18n.tr('time_audit.view.category')),
+                ),
+                ButtonSegment(
+                  value: _AuditView.calendar,
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: Text(I18n.tr('time_audit.view.calendar')),
+                ),
+                ButtonSegment(
+                  value: _AuditView.trend,
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  label: Text(I18n.tr('time_audit.view.trend')),
+                ),
+              ],
+              selected: {_view},
+              onSelectionChanged: (value) =>
+                  setState(() => _view = value.first),
+            ),
           ),
           const SizedBox(height: 12),
           if (entries.isEmpty)
@@ -421,8 +427,18 @@ class _CategoryBreakdownTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(child: Text(category.label)),
-                      Text(_formatDuration(seconds)),
+                      Expanded(
+                        child: Text(
+                          category.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        _formatDuration(seconds),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -464,7 +480,15 @@ class _SourceBreakdownRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          SizedBox(width: 54, child: Text(source.label)),
+          SizedBox(
+            width: 54,
+            child: Text(
+              source.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -481,7 +505,9 @@ class _SourceBreakdownRow extends StatelessWidget {
             width: 60,
             child: Text(
               _formatDuration(seconds),
+              maxLines: 1,
               textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -634,7 +660,9 @@ class _TrendDayRow extends StatelessWidget {
             width: 74,
             child: Text(
               _formatDuration(totalSeconds),
+              maxLines: 1,
               textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -737,6 +765,8 @@ class _CompactEntryRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${_clock(entry.startAt)}-${_clock(entry.endAt)} · ${entry.category.label}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(
@@ -747,13 +777,40 @@ class _CompactEntryRow extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              _formatDuration(entry.durationSeconds),
-              style: const TextStyle(fontSize: 12),
+            SizedBox(
+              width: 64,
+              child: Text(
+                _formatDuration(entry.durationSeconds),
+                maxLines: 1,
+                textAlign: TextAlign.end,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HorizontalSegmentStrip extends StatelessWidget {
+  final Widget child;
+
+  const _HorizontalSegmentStrip({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
@@ -933,6 +990,8 @@ class _CategoryShareRow extends StatelessWidget {
             child: Text(
               _formatDuration(seconds),
               textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11),
             ),
           ),
@@ -973,6 +1032,8 @@ class _TimeEntryCard extends StatelessWidget {
               children: [
                 Text(
                   entry.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.normal,
                     fontSize: 14,
@@ -981,6 +1042,8 @@ class _TimeEntryCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '${_formatDateTime(entry.startAt)} - ${_formatDateTime(entry.endAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(
@@ -1093,27 +1156,37 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
             },
           ),
           const SizedBox(height: DesignTokens.spaceMd),
-          Row(
-            children: [
-              Expanded(
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.play_arrow),
-                  title: Text(I18n.tr('time_audit.field.start')),
-                  subtitle: Text(_formatDateTime(_startAt)),
-                  onTap: _pickStart,
-                ),
-              ),
-              Expanded(
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.stop),
-                  title: Text(I18n.tr('time_audit.field.end')),
-                  subtitle: Text(_formatDateTime(_endAt)),
-                  onTap: _pickEnd,
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final startTile = _TimeEndpointTile(
+                icon: Icons.play_arrow,
+                title: I18n.tr('time_audit.field.start'),
+                subtitle: _formatDateTime(_startAt),
+                onTap: _pickStart,
+              );
+              final endTile = _TimeEndpointTile(
+                icon: Icons.stop,
+                title: I18n.tr('time_audit.field.end'),
+                subtitle: _formatDateTime(_endAt),
+                onTap: _pickEnd,
+              );
+              if (constraints.maxWidth < 360) {
+                return Column(
+                  children: [
+                    startTile,
+                    const SizedBox(height: DesignTokens.spaceXs),
+                    endTile,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: startTile),
+                  const SizedBox(width: DesignTokens.spaceSm),
+                  Expanded(child: endTile),
+                ],
+              );
+            },
           ),
           const SizedBox(height: DesignTokens.spaceSm),
           TextField(
@@ -1222,6 +1295,31 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
     }
     if (!mounted) return;
     Navigator.pop(context);
+  }
+}
+
+class _TimeEndpointTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _TimeEndpointTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: onTap,
+    );
   }
 }
 

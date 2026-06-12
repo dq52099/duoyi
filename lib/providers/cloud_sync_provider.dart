@@ -907,7 +907,9 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final accountGenerationAtStart = _accountGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
     final lastSyncStr = prefs.getString('sync_last_time');
     final lastSync = lastSyncStr != null
         ? DateTime.parse(lastSyncStr)
@@ -942,6 +944,7 @@ class CloudSyncProvider extends ChangeNotifier {
             })
             .whereType<SyncMergeDecision>()
             .toList();
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
     _notifySyncStateChanged();
   }
 

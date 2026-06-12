@@ -129,9 +129,11 @@ class RecurrenceEngine {
     for (final g in goals) {
       if (g.status != GoalStatus.active) continue;
       if (g.recurrence.frequency == RecurrenceFrequency.none) continue;
-      final anchor = g.startDate == null
-          ? todayDay.subtract(const Duration(days: 1))
-          : _dateOnly(g.startDate!);
+      final effectiveStart = _dateOnly(g.startDate ?? g.createdAt);
+      final searchFrom = effectiveStart.isAfter(todayDay)
+          ? effectiveStart
+          : todayDay;
+      final anchor = searchFrom.subtract(const Duration(days: 1));
       final nxt = nextOccurrence(
         rule: g.recurrence,
         scheduling: g.scheduling,

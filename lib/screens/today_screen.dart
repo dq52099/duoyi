@@ -137,6 +137,8 @@ class TodayScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
       ),
       body: ListView(
+        key: const ValueKey('today_screen_list'),
+        restorationId: 'today_screen_list',
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
           // 日期卡
@@ -1796,12 +1798,13 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
     final effectiveTitleColor = todo.isCompleted
         ? widget.completedTextColor ?? cs.onSurface.withValues(alpha: 0.52)
         : widget.titleColor ?? (isOverdue ? cs.error : null);
+    final compact = MediaQuery.sizeOf(context).width < 360;
     Widget tile = Material(
       color: Colors.transparent,
       child: ListTile(
         dense: true,
         visualDensity: VisualDensity.compact,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        contentPadding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
         horizontalTitleGap: 4,
         minLeadingWidth: widget.leading == null ? _TodayTodoLeading.width : 30,
         leading:
@@ -1823,7 +1826,12 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
           iconKeyPrefix: widget.iconKeyPrefix,
         ),
         subtitle: widget.subtitle ?? _TodoTodaySubtitle(todo: todo),
-        trailing: widget.trailing,
+        trailing: widget.trailing == null
+            ? null
+            : ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: compact ? 72 : 96),
+                child: widget.trailing!,
+              ),
         onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
       ),
     );
@@ -2667,14 +2675,14 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
                 _sameDay(t.date, widget.todayKey) || t.isArchivedAfterRollover
                 ? null
                 : SizedBox(
-                    width: 88,
+                    width: MediaQuery.sizeOf(context).width < 360 ? 72 : 88,
                     height: 40,
                     child: TextButton(
                       key: ValueKey('today_suggestion_add_${t.id}'),
                       onPressed: adding ? null : () => _addToday(t),
                       style: TextButton.styleFrom(
-                        minimumSize: const Size(64, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(56, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         visualDensity: VisualDensity.compact,
                         tapTargetSize: MaterialTapTargetSize.padded,
                       ),

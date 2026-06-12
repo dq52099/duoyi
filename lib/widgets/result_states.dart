@@ -7,6 +7,8 @@
 /// - [ErrorState] 接收 `Object error, VoidCallback? onRetry`，统一错误展示。
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
@@ -47,34 +49,53 @@ class _LoadingStateState extends State<LoadingState>
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(DesignTokens.spaceXxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < widget.lines; i++) ...[
-              _ShimmerBar(
-                controller: _controller,
-                width: i == 0 ? 220 : 180 - (i * 20).toDouble(),
-              ),
-              const SizedBox(height: DesignTokens.spaceSm),
-            ],
-            if (widget.message != null) ...[
-              const SizedBox(height: DesignTokens.spaceLg),
-              Text(
-                widget.message!,
-                style: TextStyle(
-                  fontSize: DesignTokens.fontSizeSm,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 320;
+        final padding = narrow ? DesignTokens.spaceMd : DesignTokens.spaceXxl;
+        final availableWidth = constraints.maxWidth.isFinite
+            ? math.max(0.0, constraints.maxWidth - padding * 2)
+            : 260.0;
+
+        double barWidth(int index) {
+          final desired = index == 0 ? 220.0 : 180.0 - index * 20.0;
+          return math.max(0.0, math.min(desired, availableWidth));
+        }
+
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.all(padding),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < widget.lines; i++) ...[
+                  _ShimmerBar(controller: _controller, width: barWidth(i)),
+                  const SizedBox(height: DesignTokens.spaceSm),
+                ],
+                if (widget.message != null) ...[
+                  const SizedBox(height: DesignTokens.spaceLg),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: availableWidth),
+                    child: Text(
+                      widget.message!,
+                      textAlign: TextAlign.center,
+                      maxLines: narrow ? 3 : null,
+                      overflow: narrow ? TextOverflow.ellipsis : null,
+                      style: TextStyle(
+                        fontSize: DesignTokens.fontSizeSm,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -137,49 +158,68 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(DesignTokens.space3xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 56,
-              color: DesignTokens.resultError,
-            ),
-            const SizedBox(height: DesignTokens.spaceMd),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: DesignTokens.fontSizeMd,
-                fontWeight: DesignTokens.fontWeightRegular,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 320;
+        final padding = narrow ? DesignTokens.spaceMd : DesignTokens.space3xl;
+        final availableWidth = constraints.maxWidth.isFinite
+            ? math.max(0.0, constraints.maxWidth - padding * 2)
+            : 420.0;
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.all(padding),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: availableWidth),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: narrow ? 44 : 56,
+                    color: DesignTokens.resultError,
+                  ),
+                  const SizedBox(height: DesignTokens.spaceMd),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: narrow ? 2 : null,
+                    overflow: narrow ? TextOverflow.ellipsis : null,
+                    style: const TextStyle(
+                      fontSize: DesignTokens.fontSizeMd,
+                      fontWeight: DesignTokens.fontWeightRegular,
+                    ),
+                  ),
+                  const SizedBox(height: DesignTokens.spaceXs),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: DesignTokens.fontSizeSm,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  if (onRetry != null) ...[
+                    const SizedBox(height: DesignTokens.spaceLg),
+                    SizedBox(
+                      width: narrow ? double.infinity : null,
+                      child: FilledButton.tonalIcon(
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('重试'),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: DesignTokens.spaceXs),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: DesignTokens.fontSizeSm,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: DesignTokens.spaceLg),
-              FilledButton.tonalIcon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('重试'),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

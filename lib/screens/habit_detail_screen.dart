@@ -668,19 +668,19 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       _StatChip(
                         label: I18n.tr('habit.stat.current_streak'),
                         value: '${habit.currentStreak}$streakUnit',
                       ),
-                      const SizedBox(width: 16),
                       _StatChip(
                         label: I18n.tr('habit.stat.best_streak'),
                         value: '${habit.bestStreak}$streakUnit',
                       ),
-                      const SizedBox(width: 16),
                       _StatChip(
                         label: I18n.tr('habit.stat.today'),
                         value: todayLabel,
@@ -1034,51 +1034,64 @@ class _HabitTrendBucketRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 76,
-            child: Text(bucket.label, style: const TextStyle(fontSize: 11)),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Stack(
-                    children: [
-                      Container(
-                        height: 8,
-                        color: color.withValues(alpha: 0.10),
-                      ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        height: 8,
-                        width: constraints.maxWidth * rate,
-                        color: rowColor,
-                      ),
-                    ],
-                  );
-                },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 330;
+          final labelWidth = compact ? 58.0 : 76.0;
+          final valueWidth = compact ? 86.0 : 100.0;
+          return Row(
+            children: [
+              SizedBox(
+                width: labelWidth,
+                child: Text(
+                  bucket.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 100,
-            child: Text(
-              '${bucket.completedDays}/${bucket.activeDays} · ${bucket.totalCount} $unit',
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: bucket.completedDays > 0
-                    ? rowColor
-                    : cs.onSurfaceVariant,
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Stack(
+                        children: [
+                          Container(
+                            height: 8,
+                            color: color.withValues(alpha: 0.10),
+                          ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            height: 8,
+                            width: constraints.maxWidth * rate,
+                            color: rowColor,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+              const SizedBox(width: 8),
+              SizedBox(
+                width: valueWidth,
+                child: Text(
+                  '${bucket.completedDays}/${bucket.activeDays} · ${bucket.totalCount} $unit',
+                  maxLines: 1,
+                  textAlign: TextAlign.end,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: bucket.completedDays > 0
+                        ? rowColor
+                        : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1239,17 +1252,24 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 16),
-        ),
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-        ),
-      ],
+    return SizedBox(
+      width: 78,
+      child: Column(
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 16),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

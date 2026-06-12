@@ -711,10 +711,10 @@ void main() {
     final nameTextIndex = mine.indexOf('nameText,');
     expect(nameTextIndex, greaterThanOrEqualTo(0));
     final nameTextStart = mine.lastIndexOf('Text(', nameTextIndex);
-    final mineProfileHeader = mine.substring(
-      nameTextStart,
-      mine.indexOf('const SizedBox(height: 5)', nameTextIndex),
-    );
+    expect(nameTextStart, greaterThanOrEqualTo(0));
+    final metadataIndex = mine.indexOf('_MineHeaderMetadata(', nameTextIndex);
+    expect(metadataIndex, greaterThan(nameTextIndex));
+    final mineProfileHeader = mine.substring(nameTextStart, metadataIndex);
     final mainRegularSize = _requiredFontSize(mineProfileHeader);
     expect(mainRegularSize, equals(15));
 

@@ -50,6 +50,7 @@ class FocusRoomProvider extends ChangeNotifier {
   Timer? _realtimeNotifyDebounce;
   bool _fallbackToLocal = false;
   int _realtimeFailureCount = 0;
+  int _storageGeneration = 0;
 
   ApiClient? Function()? apiClientGetter;
   VoidCallback? onLocalChanged;
@@ -299,7 +300,9 @@ class FocusRoomProvider extends ChangeNotifier {
   ];
 
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     final raw = prefs.getString(storageKey);
     if (raw == null || raw.isEmpty) {
       notifyListeners();
@@ -329,11 +332,14 @@ class FocusRoomProvider extends ChangeNotifier {
           ? active
           : _joinedRoomIds.first;
     } finally {
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        notifyListeners();
+      }
     }
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _cancelAllRealtimeRankings(notify: false);
     _realtimeNotifyDebounce?.cancel();
     _realtimeNotifyDebounce = null;
@@ -462,6 +468,7 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<List<FocusRoomInvite>> loadInvitesForRoom(String roomId) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       throw const ApiException('请先登录后再管理自习室邀请码');
@@ -474,6 +481,7 @@ class FocusRoomProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final invites = await FocusRoomApi(client).listInvites(roomId);
+      if (generation != _storageGeneration) return const <FocusRoomInvite>[];
       _inviteCache[roomId] = invites;
       return invites;
     } catch (e) {
@@ -483,8 +491,10 @@ class FocusRoomProvider extends ChangeNotifier {
       );
       rethrow;
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -803,6 +813,7 @@ class FocusRoomProvider extends ChangeNotifier {
     String currentUserName = '我',
     bool force = false,
   }) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     final room = roomById(roomId);
     if (client == null ||
@@ -818,6 +829,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
     try {
       final remote = await FocusRoomApi(client).ranking(roomId);
+      if (generation != _storageGeneration) return;
       _remoteRankings[roomId] = _rankingFromRemote(
         remote,
         room,
@@ -828,12 +840,15 @@ class FocusRoomProvider extends ChangeNotifier {
     } catch (e) {
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> loadFocusFriendsAndRanking({bool force = false}) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
@@ -852,16 +867,20 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await _refreshFocusFriendsAndRanking(api);
+      if (generation != _storageGeneration) return;
       _markRemoteRankingSuccess();
     } catch (e) {
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> loadGlobalRanking({bool force = false}) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
@@ -880,12 +899,15 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await _refreshGlobalRanking(api);
+      if (generation != _storageGeneration) return;
       _markRemoteRankingSuccess();
     } catch (e) {
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
-      _globalLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _globalLoading = false;
+        notifyListeners();
+      }
     }
   }
 

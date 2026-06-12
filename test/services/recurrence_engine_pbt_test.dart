@@ -186,4 +186,29 @@ void main() {
       expect(nxt, isNull);
     });
   });
+
+  group('目标空开始日期语义', () {
+    test('materializeTodayFromRecurring 用创建日期作为有效开始日期并包含当天', () {
+      final hits = <DateTime>[];
+      final today = DateTime(2026, 6, 8);
+      final goal = GoalItem(
+        id: 'created-start-goal',
+        title: '创建即开启目标',
+        startDate: null,
+        createdAt: today,
+        recurrence: const RecurrenceRule(
+          frequency: RecurrenceFrequency.weekly,
+          byWeekdays: [0],
+        ),
+      );
+
+      RecurrenceEngine.materializeTodayFromRecurring(
+        goals: [goal],
+        today: today,
+        onHit: (_, when) => hits.add(when),
+      );
+
+      expect(hits, [DateTime(2026, 6, 8)]);
+    });
+  });
 }

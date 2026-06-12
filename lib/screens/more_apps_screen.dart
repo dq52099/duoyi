@@ -177,20 +177,34 @@ class _MoreApplicationsBody extends StatelessWidget {
                     ),
                   )
                 else
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: MediaQuery.sizeOf(context).width < 520
-                        ? 2
-                        : 3,
-                    childAspectRatio: MediaQuery.sizeOf(context).width < 520
-                        ? 2.55
-                        : 3.3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    children: [
-                      for (final app in apps) MoreApplicationButton(app: app),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth.isFinite
+                          ? constraints.maxWidth
+                          : MediaQuery.sizeOf(context).width;
+                      final veryNarrow = width < 280;
+                      final compact = width < 520;
+                      return GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: veryNarrow
+                            ? 1
+                            : compact
+                            ? 2
+                            : 3,
+                        childAspectRatio: veryNarrow
+                            ? 3.0
+                            : compact
+                            ? 2.55
+                            : 3.3,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        children: [
+                          for (final app in apps)
+                            MoreApplicationButton(app: app),
+                        ],
+                      );
+                    },
                   ),
               ],
             ),

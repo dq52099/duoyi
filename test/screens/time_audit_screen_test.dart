@@ -214,4 +214,34 @@ void main() {
     expect(find.text('Note'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
   });
+
+  testWidgets('TimeAuditScreen keeps controls readable on narrow screens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final provider = TimeAuditProvider();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TimeAuditProvider>.value(
+        value: provider,
+        child: const MaterialApp(home: TimeAuditScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('时间足迹'), findsOneWidget);
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('时间线'), findsWidgets);
+    expect(find.text('分类'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('补记'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('补记时间'), findsOneWidget);
+    expect(find.text('开始'), findsOneWidget);
+    expect(find.text('结束'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

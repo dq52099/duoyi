@@ -68,6 +68,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     final settings = provider.settings;
     final week = provider.viewingWeek;
     final courses = provider.coursesOfWeek(week);
+    final compactToolbar = MediaQuery.sizeOf(context).width < 360;
 
     return Scaffold(
       appBar: AppBar(
@@ -77,7 +78,13 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_courseWeekLabel(week)),
+              Flexible(
+                child: Text(
+                  _courseWeekLabel(week),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const SizedBox(width: 4),
               const Icon(Icons.arrow_drop_down, size: 18),
             ],
@@ -86,19 +93,35 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
+            constraints: compactToolbar
+                ? const BoxConstraints.tightFor(width: 40, height: 40)
+                : null,
+            padding: compactToolbar ? EdgeInsets.zero : null,
             onPressed: () => provider.setViewingWeek(week - 1),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
+            constraints: compactToolbar
+                ? const BoxConstraints.tightFor(width: 40, height: 40)
+                : null,
+            padding: compactToolbar ? EdgeInsets.zero : null,
             onPressed: () => provider.setViewingWeek(week + 1),
           ),
           IconButton(
             icon: const Icon(Icons.today),
             tooltip: I18n.tr('course.week.current_tooltip'),
+            constraints: compactToolbar
+                ? const BoxConstraints.tightFor(width: 40, height: 40)
+                : null,
+            padding: compactToolbar ? EdgeInsets.zero : null,
             onPressed: () => provider.setViewingWeek(provider.currentWeek),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
+            constraints: compactToolbar
+                ? const BoxConstraints.tightFor(width: 40, height: 40)
+                : null,
+            padding: compactToolbar ? EdgeInsets.zero : null,
             onPressed: () => _editSettings(context, provider),
           ),
         ],
@@ -124,44 +147,59 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       builder: (_) => AppModalSheet(
         title: I18n.tr('course.week_picker.title'),
         subtitle: I18n.tr('course.week_picker.subtitle'),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 5,
-            childAspectRatio: 2,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: p.settings.totalWeeks,
-          itemBuilder: (context, i) {
-            final w = i + 1;
-            final cs = Theme.of(context).colorScheme;
-            final current = w == p.currentWeek;
-            final selected = w == p.viewingWeek;
-            final selectedBackground = Color.alphaBlend(
-              cs.primary.withValues(alpha: 0.09),
-              cs.surface,
-            );
-            return OutlinedButton(
-              onPressed: () {
-                p.setViewingWeek(w);
-                Navigator.pop(context);
-              },
-              style: OutlinedButton.styleFrom(
-                backgroundColor: selected
-                    ? selectedBackground
-                    : (current ? cs.primary.withValues(alpha: 0.1) : null),
-                foregroundColor: selected ? cs.onSurface : null,
-                side: BorderSide(
-                  color: selected
-                      ? cs.primary.withValues(alpha: 0.32)
-                      : cs.outlineVariant.withValues(alpha: 0.24),
-                  width: 0.45,
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final crossAxisCount = width < 300
+                ? 3
+                : width < 420
+                ? 4
+                : 5;
+            return GridView.builder(
+              key: const ValueKey('course_week_picker_adaptive_grid'),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: width < 340 ? 1.75 : 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
               ),
-              child: Text(_courseWeekLabel(w)),
+              itemCount: p.settings.totalWeeks,
+              itemBuilder: (context, i) {
+                final w = i + 1;
+                final cs = Theme.of(context).colorScheme;
+                final current = w == p.currentWeek;
+                final selected = w == p.viewingWeek;
+                final selectedBackground = Color.alphaBlend(
+                  cs.primary.withValues(alpha: 0.09),
+                  cs.surface,
+                );
+                return OutlinedButton(
+                  onPressed: () {
+                    p.setViewingWeek(w);
+                    Navigator.pop(context);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: selected
+                        ? selectedBackground
+                        : (current ? cs.primary.withValues(alpha: 0.1) : null),
+                    foregroundColor: selected ? cs.onSurface : null,
+                    side: BorderSide(
+                      color: selected
+                          ? cs.primary.withValues(alpha: 0.32)
+                          : cs.outlineVariant.withValues(alpha: 0.24),
+                      width: 0.45,
+                    ),
+                  ),
+                  child: Text(
+                    _courseWeekLabel(w),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              },
             );
           },
         ),
@@ -197,135 +235,160 @@ class _ScheduleGrid extends StatelessWidget {
 
     const sectionH = 56.0;
     const timeW = 34.0;
-    final bodyW = MediaQuery.of(context).size.width - timeW;
-    final cellW = bodyW / 7;
+    const minDayW = 64.0;
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // 顶栏：周几 + 日期
-          Row(
-            children: [
-              SizedBox(width: timeW),
-              ...List.generate(7, (i) {
-                final d = monday.add(Duration(days: i));
-                final isToday =
-                    d.year == today.year &&
-                    d.month == today.month &&
-                    d.day == today.day;
-                final cs = Theme.of(context).colorScheme;
-                return Expanded(
-                  child: Container(
-                    height: 48,
-                    alignment: Alignment.center,
-                    color: isToday ? cs.primary.withValues(alpha: 0.08) : null,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _weekdayLabel(i + 1),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isToday ? cs.primary : null,
-                            fontWeight: isToday
-                                ? FontWeight.normal
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        Text(
-                          '${d.month}/${d.day}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isToday ? cs.primary : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-          const Divider(height: 1),
-          // 主体：节数 × 星期
-          SizedBox(
-            height: sectionH * settings.sessionsPerDay,
-            child: Stack(
-              children: [
-                // 背景：节次+格线
-                Row(
-                  children: [
-                    // 节次列
-                    SizedBox(
-                      width: timeW,
-                      child: Column(
-                        children: List.generate(
-                          settings.sessionsPerDay,
-                          (i) => Container(
-                            height: sectionH,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        const minGridW = timeW + minDayW * 7;
+        final gridW = availableW > minGridW ? availableW : minGridW;
+        final bodyW = gridW - timeW;
+        final cellW = bodyW / 7;
+
+        return SingleChildScrollView(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              key: const ValueKey('course_schedule_adaptive_grid'),
+              width: gridW,
+              child: Column(
+                children: [
+                  // 顶栏：周几 + 日期
+                  Row(
+                    children: [
+                      const SizedBox(width: timeW),
+                      ...List.generate(7, (i) {
+                        final d = monday.add(Duration(days: i));
+                        final isToday =
+                            d.year == today.year &&
+                            d.month == today.month &&
+                            d.day == today.day;
+                        final cs = Theme.of(context).colorScheme;
+                        return Expanded(
+                          child: Container(
+                            height: 48,
                             alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Colors.grey.shade200),
-                              ),
-                            ),
-                            child: Text(
-                              '${i + 1}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
-                                fontWeight: FontWeight.normal,
-                              ),
+                            color: isToday
+                                ? cs.primary.withValues(alpha: 0.08)
+                                : null,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _weekdayLabel(i + 1),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isToday ? cs.primary : null,
+                                    fontWeight: FontWeight.normal,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${d.month}/${d.day}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isToday
+                                        ? cs.primary
+                                        : Colors.grey.shade600,
+                                  ),
+                                  maxLines: 1,
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                    // 日格
-                    ...List.generate(7, (col) {
-                      return Expanded(
-                        child: Column(
-                          children: List.generate(
-                            settings.sessionsPerDay,
-                            (row) => Container(
-                              height: sectionH,
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  right: BorderSide(
-                                    color: Colors.grey.shade200,
-                                  ),
-                                  bottom: BorderSide(
-                                    color: Colors.grey.shade200,
+                        );
+                      }),
+                    ],
+                  ),
+                  const Divider(height: 1),
+                  // 主体：节数 × 星期
+                  SizedBox(
+                    height: sectionH * settings.sessionsPerDay,
+                    child: Stack(
+                      children: [
+                        // 背景：节次+格线
+                        Row(
+                          children: [
+                            // 节次列
+                            SizedBox(
+                              width: timeW,
+                              child: Column(
+                                children: List.generate(
+                                  settings.sessionsPerDay,
+                                  (i) => Container(
+                                    height: sectionH,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: Colors.grey.shade200,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade500,
+                                        fontWeight: FontWeight.normal,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
+                            // 日格
+                            ...List.generate(7, (col) {
+                              return Expanded(
+                                child: Column(
+                                  children: List.generate(
+                                    settings.sessionsPerDay,
+                                    (row) => Container(
+                                      height: sectionH,
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          right: BorderSide(
+                                            color: Colors.grey.shade200,
+                                          ),
+                                          bottom: BorderSide(
+                                            color: Colors.grey.shade200,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
                         ),
-                      );
-                    }),
-                  ],
-                ),
-                // 课程块
-                ...courses.map((c) {
-                  final col = c.weekday - 1;
-                  final row = c.startSection - 1;
-                  if (row < 0 || row >= settings.sessionsPerDay) {
-                    return const SizedBox.shrink();
-                  }
-                  return Positioned(
-                    left: timeW + col * cellW + 2,
-                    top: row * sectionH + 2,
-                    width: cellW - 4,
-                    height: sectionH * c.sectionCount - 4,
-                    child: _CourseBlock(course: c),
-                  );
-                }),
-              ],
+                        // 课程块
+                        ...courses.map((c) {
+                          final col = c.weekday - 1;
+                          final row = c.startSection - 1;
+                          if (row < 0 || row >= settings.sessionsPerDay) {
+                            return const SizedBox.shrink();
+                          }
+                          return Positioned(
+                            left: timeW + col * cellW + 2,
+                            top: row * sectionH + 2,
+                            width: cellW - 4,
+                            height: sectionH * c.sectionCount - 4,
+                            child: _CourseBlock(course: c),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -341,65 +404,109 @@ class _CourseBlock extends StatelessWidget {
     final weekPattern = _weekPatternLabel(course.weeks, settings.totalWeeks);
     return GestureDetector(
       onTap: () => showCourseEditor(context, course: course),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              settings.sectionTimeRangeLabel(
-                course.startSection,
-                course.sectionCount,
-              ),
-              style: const TextStyle(fontSize: 9, color: Colors.white70),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compactWidth = constraints.maxWidth < 76;
+          final compactHeight = constraints.maxHeight < 72;
+          final padding = compactWidth
+              ? const EdgeInsets.symmetric(horizontal: 4, vertical: 4)
+              : const EdgeInsets.all(6);
+          final showTime = constraints.maxHeight >= 42;
+          final showDetails =
+              !compactWidth && constraints.maxHeight >= 96 && !compactHeight;
+          final showTeacher =
+              showDetails &&
+              constraints.maxHeight >= 112 &&
+              course.teacher.isNotEmpty;
+          final showWeek =
+              showDetails &&
+              constraints.maxHeight >= 128 &&
+              weekPattern != null;
+          final titleMaxLines = constraints.maxHeight >= 82 && !compactWidth
+              ? 2
+              : 1;
+
+          return Container(
+            clipBehavior: Clip.antiAlias,
+            padding: padding,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(6),
             ),
-            const SizedBox(height: 2),
-            Text(
-              course.name,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-                color: Colors.white,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (course.location.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '@${course.location}',
-                  style: const TextStyle(fontSize: 10, color: Colors.white70),
-                  maxLines: 1,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showTime) ...[
+                  Text(
+                    settings.sectionTimeRangeLabel(
+                      course.startSection,
+                      course.sectionCount,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 9,
+                      height: 1.05,
+                      color: Colors.white70,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                Text(
+                  course.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.08,
+                    fontWeight: FontWeight.normal,
+                    color: Colors.white,
+                  ),
+                  maxLines: titleMaxLines,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            if (course.teacher.isNotEmpty)
-              Text(
-                course.teacher,
-                style: const TextStyle(fontSize: 10, color: Colors.white70),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            if (weekPattern != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  weekPattern,
-                  style: const TextStyle(fontSize: 9, color: Colors.white70),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-        ),
+                if (showDetails && course.location.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '@${course.location}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        height: 1.05,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (showTeacher)
+                  Text(
+                    course.teacher,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      height: 1.05,
+                      color: Colors.white70,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (showWeek)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      weekPattern,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        height: 1.05,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -609,24 +716,52 @@ class _ScheduleSettingsSheetState extends State<_ScheduleSettingsSheet> {
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 13)),
-          ),
-          Expanded(
-            child: Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: ((max - min) / step).round(),
-              label: value.toInt().toString(),
-              onChanged: onChange,
-            ),
-          ),
-          SizedBox(width: 36, child: Text(value.toInt().toString())),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final valueText = Text(
+            value.toInt().toString(),
+            textAlign: TextAlign.right,
+            maxLines: 1,
+          );
+          final slider = Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: ((max - min) / step).round(),
+            label: value.toInt().toString(),
+            onChanged: onChange,
+          );
+          final title = Text(
+            label,
+            style: const TextStyle(fontSize: 13),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          );
+
+          if (constraints.maxWidth < 360) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 42, child: valueText),
+                  ],
+                ),
+                slider,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              SizedBox(width: 104, child: title),
+              Expanded(child: slider),
+              SizedBox(width: 42, child: valueText),
+            ],
+          );
+        },
       ),
     );
   }
@@ -815,44 +950,7 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                I18n.tr('course.field.class_weeks'),
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              TextButton(
-                onPressed: () => setState(
-                  () =>
-                      _weeks = List.generate(settings.totalWeeks, (i) => i + 1),
-                ),
-                child: Text(I18n.tr('course.weeks.select_all')),
-              ),
-              TextButton(
-                onPressed: () => setState(
-                  () => _weeks = List.generate(
-                    settings.totalWeeks,
-                    (i) => i + 1,
-                  ).where((w) => w.isOdd).toList(),
-                ),
-                child: Text(I18n.tr('course.weeks.odd')),
-              ),
-              TextButton(
-                onPressed: () => setState(
-                  () => _weeks = List.generate(
-                    settings.totalWeeks,
-                    (i) => i + 1,
-                  ).where((w) => w.isEven).toList(),
-                ),
-                child: Text(I18n.tr('course.weeks.even')),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _weeks = []),
-                child: Text(I18n.tr('action.clear')),
-              ),
-            ],
-          ),
+          _classWeeksHeader(settings),
           Wrap(
             spacing: 4,
             runSpacing: 4,
@@ -908,6 +1006,85 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
     );
   }
 
+  Widget _classWeeksHeader(ScheduleSettings settings) {
+    Widget action(String label, VoidCallback onPressed) {
+      return TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      );
+    }
+
+    final label = Text(
+      I18n.tr('course.field.class_weeks'),
+      style: const TextStyle(fontSize: 13, color: Colors.grey),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final actions = Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        action(
+          I18n.tr('course.weeks.select_all'),
+          () => setState(
+            () => _weeks = List.generate(settings.totalWeeks, (i) => i + 1),
+          ),
+        ),
+        action(
+          I18n.tr('course.weeks.odd'),
+          () => setState(
+            () => _weeks = List.generate(
+              settings.totalWeeks,
+              (i) => i + 1,
+            ).where((w) => w.isOdd).toList(),
+          ),
+        ),
+        action(
+          I18n.tr('course.weeks.even'),
+          () => setState(
+            () => _weeks = List.generate(
+              settings.totalWeeks,
+              (i) => i + 1,
+            ).where((w) => w.isEven).toList(),
+          ),
+        ),
+        action(I18n.tr('action.clear'), () => setState(() => _weeks = [])),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 360) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              label,
+              const SizedBox(height: 6),
+              Align(alignment: Alignment.centerLeft, child: actions),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: label),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 2,
+              child: Align(alignment: Alignment.centerRight, child: actions),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _numberPick({
     required String label,
     String? helper,
@@ -916,6 +1093,24 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
     required int max,
     required ValueChanged<int> onChange,
   }) {
+    Widget stepButton(IconData icon, VoidCallback? onPressed) {
+      return SizedBox.square(
+        dimension: 28,
+        child: IconButton(
+          iconSize: 18,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+          visualDensity: VisualDensity.compact,
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: const Size(28, 28),
+          ),
+          icon: Icon(icon),
+          onPressed: onPressed,
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -925,7 +1120,12 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           if (helper != null) ...[
             const SizedBox(height: 2),
             Text(
@@ -937,28 +1137,23 @@ class _CourseEditSheetState extends State<_CourseEditSheet> {
           ],
           Row(
             children: [
-              IconButton(
-                iconSize: 18,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.remove),
-                onPressed: value > min ? () => onChange(value - 1) : null,
+              stepButton(
+                Icons.remove,
+                value > min ? () => onChange(value - 1) : null,
               ),
-              const SizedBox(width: 8),
-              Text(
-                '$value',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
+              Expanded(
+                child: Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                iconSize: 18,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.add),
-                onPressed: value < max ? () => onChange(value + 1) : null,
+              stepButton(
+                Icons.add,
+                value < max ? () => onChange(value + 1) : null,
               ),
             ],
           ),

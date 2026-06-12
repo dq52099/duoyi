@@ -52,14 +52,13 @@ void main() {
       expect(source, contains("'$key'"), reason: key);
     }
 
-    expect(
-      source,
-      contains(
-        'final selectedBackground = Color.alphaBlend(\n'
-        '              cs.primary.withValues(alpha: 0.09),',
-      ),
-    );
+    expect(source, contains('final selectedBackground = Color.alphaBlend('));
+    expect(source, contains('cs.primary.withValues(alpha: 0.09),'));
+    expect(source, contains('cs.surface,'));
     expect(source, contains('foregroundColor: selected ? cs.onSurface : null'));
+    expect(source, contains("ValueKey('course_week_picker_adaptive_grid')"));
+    expect(source, contains("ValueKey('course_schedule_adaptive_grid')"));
+    expect(source, contains('constraints.maxWidth < 360'));
     expect(
       source,
       isNot(

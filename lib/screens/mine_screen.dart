@@ -50,9 +50,8 @@ import 'profile_screen.dart';
 import 'more_apps_screen.dart';
 import 'notification_history_screen.dart';
 
-const double _mineHeaderCompactHeight = 76;
-const double _mineHeaderRegularHeight = 80;
-const double _mineHeaderMetadataHeight = 44;
+const double _mineHeaderCompactHeight = 96;
+const double _mineHeaderRegularHeight = 84;
 
 class MineScreen extends StatelessWidget {
   final List<int>? visibleBottomNavTabs;
@@ -290,13 +289,14 @@ class MineScreen extends StatelessWidget {
               ? '用户'
               : displayName.trim();
           final usernameText = username.trim();
-          final metadata = <Widget>[
-            if (usernameText.isNotEmpty)
-              _MineUserLineChip(
-                label: '@$usernameText',
-                icon: Icons.badge_outlined,
-                color: cs.primary,
-              ),
+          final identityChip = usernameText.isEmpty
+              ? null
+              : _MineUserLineChip(
+                  label: '@$usernameText',
+                  icon: Icons.badge_outlined,
+                  color: cs.primary,
+                );
+          final rewardChips = <Widget>[
             _MineUserLineChip(
               label: '时光币 $coins',
               icon: Icons.savings_outlined,
@@ -345,21 +345,11 @@ class MineScreen extends StatelessWidget {
                                       height: 1.18,
                                     ),
                               ),
-                              const SizedBox(height: 5),
-                              SizedBox(
-                                height: _mineHeaderMetadataHeight,
-                                child: ClipRect(
-                                  child: Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Wrap(
-                                      spacing: compact ? 8 : 10,
-                                      runSpacing: 4,
-                                      crossAxisAlignment:
-                                          WrapCrossAlignment.center,
-                                      children: metadata,
-                                    ),
-                                  ),
-                                ),
+                              const SizedBox(height: 4),
+                              _MineHeaderMetadata(
+                                compact: compact,
+                                identityChip: identityChip,
+                                rewardChips: rewardChips,
                               ),
                             ],
                           ),
@@ -903,7 +893,7 @@ class MineScreen extends StatelessWidget {
       builder: (ctx) => AppDialog(
         icon: const Icon(Icons.logout),
         title: const Text('退出登录？'),
-        content: const Text('退出后可重新登录继续同步账号资料。'),
+        content: const Text('退出后会清空本机账号数据（时光币、主题、习惯、待办等本地缓存），重新登录后再从当前账号同步。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -927,7 +917,9 @@ class MineScreen extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(cleanupFailed ? '已退出登录，本机数据将在下次登录前重试清理' : '已退出登录'),
+        content: Text(
+          cleanupFailed ? '已退出登录，本机数据清理失败，将在下次登录前重试' : '已退出登录，本机账号数据已清理',
+        ),
       ),
     );
   }
@@ -1101,10 +1093,7 @@ class MineScreen extends StatelessWidget {
                   ],
                   if (updater.hasUpdate && updater.latestAssetName != null) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      '安装包：${updater.latestAssetName}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    _UpdatePackageInfo(assetName: updater.latestAssetName!),
                   ],
                   if ((updater.mustUpdate || updater.hasUpdate) &&
                       updater.latestUrl == null &&
@@ -1247,6 +1236,84 @@ class MineScreen extends StatelessWidget {
   }
 }
 
+class _UpdatePackageInfo extends StatelessWidget {
+  final String assetName;
+
+  const _UpdatePackageInfo({required this.assetName});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: cs.onSurfaceVariant,
+      fontWeight: FontWeight.normal,
+    );
+    final valueStyle = theme.textTheme.bodySmall?.copyWith(
+      color: cs.onSurface,
+      height: 1.35,
+    );
+
+    return AppSurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final label = Text('安装包', style: labelStyle);
+          final value = Text(
+            _breakableUpdateAssetName(assetName),
+            softWrap: true,
+            style: valueStyle,
+          );
+          if (constraints.maxWidth < 260) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [label, const SizedBox(height: 3), value],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 52, child: label),
+              const SizedBox(width: 8),
+              Expanded(child: value),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+String _breakableUpdateAssetName(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length <= 24) return trimmed;
+  final buffer = StringBuffer();
+  var runLength = 0;
+  for (final codePoint in trimmed.runes) {
+    final char = String.fromCharCode(codePoint);
+    buffer.write(char);
+    runLength += 1;
+    if (_isUpdateAssetBreakPoint(char) || runLength >= 16) {
+      buffer.write('\u{200B}');
+      runLength = 0;
+    }
+  }
+  return buffer.toString();
+}
+
+bool _isUpdateAssetBreakPoint(String char) {
+  return switch (char) {
+    '-' || '_' || '.' || '/' || '+' => true,
+    _ => false,
+  };
+}
+
 class _ProfileAvatar extends StatelessWidget {
   final String? avatar;
   final String displayName;
@@ -1329,7 +1396,7 @@ class _MineUserLineChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      constraints: const BoxConstraints(minHeight: 20),
+      constraints: const BoxConstraints(minHeight: 20, maxWidth: 160),
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: Colors.transparent,
@@ -1359,6 +1426,66 @@ class _MineUserLineChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MineHeaderMetadata extends StatelessWidget {
+  final bool compact;
+  final Widget? identityChip;
+  final List<Widget> rewardChips;
+
+  const _MineHeaderMetadata({
+    required this.compact,
+    required this.identityChip,
+    required this.rewardChips,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = compact ? 8.0 : 10.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final identityMaxWidth = maxWidth.clamp(0.0, compact ? 112.0 : 170.0);
+        final metadata = <Widget>[
+          if (identityChip != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: identityMaxWidth),
+              child: identityChip!,
+            ),
+          ...rewardChips,
+        ];
+        final rewards = Wrap(
+          spacing: spacing,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: rewardChips,
+        );
+
+        if (compact) {
+          return Column(
+            key: const ValueKey('mine_header_metadata_compact'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (identityChip != null) ...[
+                metadata.first,
+                const SizedBox(height: 2),
+              ],
+              rewards,
+            ],
+          );
+        }
+
+        return Wrap(
+          key: const ValueKey('mine_header_metadata_regular'),
+          spacing: spacing,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: metadata,
+        );
+      },
     );
   }
 }
@@ -1907,33 +2034,35 @@ class _UpdateAvailableBadge extends StatelessWidget {
     final text = version == null || version!.trim().isEmpty
         ? '有更新'
         : '新版 $version';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.error,
-            shape: BoxShape.circle,
+    final cs = Theme.of(context).colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 96),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
           ),
-        ),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.error,
+          const SizedBox(width: 6),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: cs.error.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: cs.error),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -2025,12 +2154,16 @@ class _Tile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              trailing ??
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: cs.onSurface.withValues(alpha: 0.34),
-                  ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 112),
+                child:
+                    trailing ??
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: cs.onSurface.withValues(alpha: 0.34),
+                    ),
+              ),
             ],
           ),
         ),

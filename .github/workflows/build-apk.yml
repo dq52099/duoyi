@@ -240,6 +240,7 @@ jobs:
     timeout-minutes: 25
     env:
       DUOYI_SERVER_URL: ${{ github.event.inputs.server_url || vars.DUOYI_SERVER_URL || '' }}
+      DUOYI_WEB_BASE_HREF: ${{ vars.DUOYI_WEB_BASE_HREF || '/duoyi/' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -269,7 +270,7 @@ jobs:
           if [ -n "$DUOYI_SERVER_URL" ]; then
             DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
           fi
-          flutter build web --release --base-href "/" $DART_DEFINES
+          flutter build web --release --base-href "$DUOYI_WEB_BASE_HREF" $DART_DEFINES
 
       - name: Package web
         run: |

@@ -7,6 +7,7 @@ import '../core/domain_event_bus.dart';
 import '../core/todo_kanban.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/reminder_scheduler.dart';
 import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
@@ -186,8 +187,14 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _loadFromStorage(int generation) async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = prefs.getString('todos');
     if (data != null && data.isNotEmpty) {
       final parsed = <TodoItem>[];
@@ -250,8 +257,16 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _writeToStorage() async {
-    final prefs = await SharedPreferences.getInstance();
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final data = json.encode(_todos.map((e) => e.toJson()).toList());
+    final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setString('todos', data);
   }
 

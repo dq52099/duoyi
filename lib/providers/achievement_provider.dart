@@ -10,6 +10,7 @@ import '../core/domain_event_bus.dart';
 import '../core/growth_levels.dart';
 import '../core/productivity_challenges.dart';
 import '../core/virtual_rewards.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'notification_service.dart';
 
 class RewardLedgerEntry {
@@ -141,7 +142,17 @@ class AchievementProvider extends ChangeNotifier {
   }
 
   Future<void> applyRewardsSnapshot(Map<dynamic, dynamic> rewards) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final incoming = Map<String, dynamic>.from(rewards);
     if (_isIncomingRewardsOlder(incoming)) {
       debugPrint(
@@ -196,8 +207,16 @@ class AchievementProvider extends ChangeNotifier {
   }
 
   Future<void> _loadFromStorageNow(int generation) async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final beforeUnlocked = jsonEncode(
       _unlockedAt.map(
         (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
@@ -368,11 +387,29 @@ class AchievementProvider extends ChangeNotifier {
     required List<String> achievementIdsToMarkNotified,
     required List<Achievement> achievementsToNotify,
   }) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (saveAchievements) {
       await _save();
     }
+    if (generation != _storageGeneration) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     if (saveRewards) {
       await _saveRewards();
+    }
+    if (generation != _storageGeneration) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
     }
     if (saveAchievements || saveRewards) {
       _persistedRevision++;
@@ -460,38 +497,59 @@ class AchievementProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _storageKey,
-      jsonEncode(
-        _unlockedAt.map(
-          (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
-        ),
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final data = jsonEncode(
+      _unlockedAt.map(
+        (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
       ),
     );
+    final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
+    await prefs.setString(_storageKey, data);
   }
 
   Future<void> _saveRewards() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final updatedAt = DateTime.now().toUtc().toIso8601String();
+    final data = jsonEncode({
+      'balance': _coinBalance,
+      'lifetime': _lifetimeCoins,
+      'grantIds': _rewardGrantIds.toList(growable: false),
+      'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
+      'updatedAt': updatedAt,
+    });
     final prefs = await SharedPreferences.getInstance();
-    _rewardsUpdatedAt = DateTime.now().toUtc().toIso8601String();
-    await prefs.setString(
-      _rewardStorageKey,
-      jsonEncode({
-        'balance': _coinBalance,
-        'lifetime': _lifetimeCoins,
-        'grantIds': _rewardGrantIds.toList(growable: false),
-        'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
-        'updatedAt': _rewardsUpdatedAt,
-      }),
-    );
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+    _rewardsUpdatedAt = updatedAt;
+    await prefs.setString(_rewardStorageKey, data);
   }
 
   Future<void> _saveNotifiedAchievements() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final ids = _notifiedAchievementIds.toList(growable: false)..sort();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _notifiedStorageKey,
-      _notifiedAchievementIds.toList(growable: false)..sort(),
-    );
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+    await prefs.setStringList(_notifiedStorageKey, ids);
   }
 
   bool _isIncomingRewardsOlder(Map<dynamic, dynamic> incoming) {

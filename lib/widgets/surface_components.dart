@@ -457,56 +457,90 @@ class AppSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style:
+              titleStyle ??
+              appSecondaryMenuItemTextStyle(context).copyWith(
+                color: cs.onSurface,
+                fontSize: DesignTokens.fontSizeSection,
+              ),
+        ),
+        if (subtitle != null && subtitle!.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: appSecondaryControlLabelStyle(
+              context,
+            ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+          ),
+        ],
+      ],
+    );
+    final action = onAction == null || actionLabel == null
+        ? null
+        : TextButton.icon(
+            onPressed: onAction,
+            icon: Icon(actionIcon ?? Icons.chevron_right, size: 16),
+            label: Text(
+              actionLabel!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: cs.primary,
+              textStyle:
+                  actionTextStyle ??
+                  theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.normal,
+                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            ),
+          );
     return Padding(
       padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (action == null) return titleColumn;
+          if (constraints.maxWidth < 340) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  title,
-                  style:
-                      titleStyle ??
-                      appSecondaryMenuItemTextStyle(context).copyWith(
-                        color: cs.onSurface,
-                        fontSize: DesignTokens.fontSizeSection,
-                      ),
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: appSecondaryControlLabelStyle(
-                      context,
-                    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                titleColumn,
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: action,
                   ),
-                ],
-              ],
-            ),
-          ),
-          if (onAction != null && actionLabel != null)
-            TextButton.icon(
-              onPressed: onAction,
-              icon: Icon(actionIcon ?? Icons.chevron_right, size: 16),
-              label: Text(actionLabel!),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                foregroundColor: cs.primary,
-                textStyle:
-                    actionTextStyle ??
-                    theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.normal,
-                    ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
                 ),
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: titleColumn),
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: (constraints.maxWidth * 0.42).clamp(96.0, 180.0),
+                ),
+                child: action,
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -518,6 +552,7 @@ class AppStatusBadge extends StatelessWidget {
   final IconData? icon;
   final bool filled;
   final EdgeInsetsGeometry padding;
+  final double maxWidth;
 
   const AppStatusBadge({
     super.key,
@@ -526,6 +561,7 @@ class AppStatusBadge extends StatelessWidget {
     this.icon,
     this.filled = false,
     this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    this.maxWidth = 180,
   });
 
   @override
@@ -534,6 +570,7 @@ class AppStatusBadge extends StatelessWidget {
     final bg = filled ? color : color.withValues(alpha: 0.12);
     final fg = _appReadableForeground(bg, filled ? Colors.white : color);
     return Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
       padding: padding,
       decoration: BoxDecoration(
         color: bg,
@@ -549,14 +586,16 @@ class AppStatusBadge extends StatelessWidget {
             Icon(icon, size: 13, color: fg),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.normal,
-              height: 1.1,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.normal,
+                height: 1.1,
+              ),
             ),
           ),
         ],
@@ -925,13 +964,32 @@ class AppSettingsTile extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
-    this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+    this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    Widget trailingWidget(double maxWidth) {
+      final fallback = Icon(
+        Icons.chevron_right,
+        size: 18,
+        color: cs.onSurface.withValues(alpha: 0.38),
+      );
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: 32),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: trailing ?? fallback,
+          ),
+        ),
+      );
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -939,52 +997,86 @@ class AppSettingsTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: padding,
-          child: Row(
-            children: [
-              Container(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final contentWidth = (constraints.maxWidth - 44).clamp(
+                0.0,
+                constraints.maxWidth,
+              );
+              final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
+              final leading = Container(
                 width: 34,
                 height: 34,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              );
+              final titleText = Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: appSecondaryMenuItemTextStyle(context).copyWith(
+                  color: cs.onSurface,
+                  fontWeight: DesignTokens.fontWeightRegular,
+                ),
+              );
+              final subtitleStyle = appSecondaryControlLabelStyle(
+                context,
+              ).copyWith(color: cs.onSurface.withValues(alpha: 0.62));
+              final subtitleText = Text(
+                subtitle ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: subtitleStyle,
+              );
+              final trailingMaxWidth = hasSubtitle
+                  ? (contentWidth * 0.40).clamp(48.0, 124.0)
+                  : (contentWidth * 0.50).clamp(56.0, 150.0);
+              final action = trailingWidget(trailingMaxWidth);
+              if (hasSubtitle) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: appSecondaryMenuItemTextStyle(context).copyWith(
-                        color: cs.onSurface,
-                        fontWeight: DesignTokens.fontWeightRegular,
+                    leading,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          titleText,
+                          const SizedBox(height: 2),
+                          subtitleText,
+                        ],
                       ),
                     ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: appSecondaryControlLabelStyle(
-                          context,
-                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
-                      ),
-                    ],
+                    const SizedBox(width: 8),
+                    action,
                   ],
-                ),
-              ),
-              trailing ??
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: cs.onSurface.withValues(alpha: 0.38),
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  leading,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: titleText),
+                        const SizedBox(width: 8),
+                        action,
+                      ],
+                    ),
                   ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1076,10 +1168,12 @@ class AppSwitchTile extends StatelessWidget {
         child: Padding(
           padding: padding,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 34,
                 height: 34,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
@@ -1089,6 +1183,7 @@ class AppSwitchTile extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(

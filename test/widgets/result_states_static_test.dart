@@ -1,6 +1,9 @@
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:duoyi/widgets/empty_state.dart';
+import 'package:duoyi/widgets/result_states.dart' show ErrorState, LoadingState;
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('result_states.dart 统一导出 EmptyState/LoadingState/ErrorState', () {
@@ -79,4 +82,66 @@ void main() {
           'docs/empty-surface-audit.md should not list unfinished table rows before patch release.',
     );
   });
+
+  testWidgets('EmptyState fits inside a 200px container', (tester) async {
+    await _pumpConstrained(
+      tester,
+      width: 200,
+      child: EmptyState(
+        icon: Icons.inbox_outlined,
+        message: '这里是一段很长的空状态说明文字，需要在极窄容器中保持可读且不撑破边框',
+        actionLabel: '创建一个新的长期目标',
+        onAction: () {},
+      ),
+    );
+
+    expect(find.byType(EmptyState), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('LoadingState and ErrorState fit inside 200-320px containers', (
+    tester,
+  ) async {
+    await _pumpConstrained(
+      tester,
+      width: 200,
+      child: const LoadingState(message: '正在加载一段比较长的结果状态说明', lines: 4),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.byType(LoadingState), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await _pumpConstrained(
+      tester,
+      width: 320,
+      child: ErrorState(
+        title: '同步结果加载失败',
+        error: '这是一段很长的错误信息，用于验证结果状态在窄屏下不会横向溢出',
+        onRetry: () {},
+      ),
+    );
+
+    expect(find.byType(ErrorState), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> _pumpConstrained(
+  WidgetTester tester, {
+  required double width,
+  required Widget child,
+}) async {
+  await tester.binding.setSurfaceSize(Size(width, 520));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(width: width, child: child),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
 }

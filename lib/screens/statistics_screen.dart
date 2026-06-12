@@ -286,45 +286,61 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 2.5,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            children: [
-              _Kpi(
-                icon: Icons.check_circle,
-                color: cs.primary,
-                title: '待办完成',
-                value: '${completedTodos.length}',
-              ),
-              _Kpi(
-                icon: Icons.timer,
-                color: Colors.redAccent,
-                title: '深度专注',
-                value: '$focusMinutes 分',
-              ),
-              _Kpi(
-                icon: Icons.repeat,
-                color: const Color(0xFF66BB6A),
-                title: '习惯打卡',
-                value: '$habitDoneInRange 次',
-              ),
-              _Kpi(
-                icon: Icons.book_outlined,
-                color: const Color(0xFF26A69A),
-                title: '日记',
-                value: '$diaryInRange 篇',
-              ),
-              _Kpi(
-                icon: Icons.timelapse_outlined,
-                color: const Color(0xFF78909C),
-                title: '时间足迹',
-                value: '$auditTotalMinutes 分',
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 720
+                  ? 3
+                  : width < 360
+                  ? 1
+                  : 2;
+              final childAspectRatio = crossAxisCount == 1
+                  ? 4.2
+                  : width >= 720
+                  ? 2.8
+                  : 2.5;
+              return GridView.count(
+                key: const ValueKey('statistics_kpi_grid'),
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: childAspectRatio,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                children: [
+                  _Kpi(
+                    icon: Icons.check_circle,
+                    color: cs.primary,
+                    title: '待办完成',
+                    value: '${completedTodos.length}',
+                  ),
+                  _Kpi(
+                    icon: Icons.timer,
+                    color: Colors.redAccent,
+                    title: '深度专注',
+                    value: '$focusMinutes 分',
+                  ),
+                  _Kpi(
+                    icon: Icons.repeat,
+                    color: const Color(0xFF66BB6A),
+                    title: '习惯打卡',
+                    value: '$habitDoneInRange 次',
+                  ),
+                  _Kpi(
+                    icon: Icons.book_outlined,
+                    color: const Color(0xFF26A69A),
+                    title: '日记',
+                    value: '$diaryInRange 篇',
+                  ),
+                  _Kpi(
+                    icon: Icons.timelapse_outlined,
+                    color: const Color(0xFF78909C),
+                    title: '时间足迹',
+                    value: '$auditTotalMinutes 分',
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 14),
           _PeriodReportDigestCard(
@@ -2237,34 +2253,78 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         fontSize: 11,
       ),
     );
-    return Row(
+    final chart = PieChart(
+      PieChartData(
+        centerSpaceRadius: 32,
+        sectionsSpace: 2,
+        sections: [
+          for (final entry in values)
+            sec(entry.value, _auditColor(entry.key, cs)),
+        ],
+      ),
+    );
+    final legend = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: PieChart(
-            PieChartData(
-              centerSpaceRadius: 32,
-              sectionsSpace: 2,
-              sections: [
-                for (final entry in values)
-                  sec(entry.value, _auditColor(entry.key, cs)),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 100,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final entry in values.take(5))
-                _legend(_auditColor(entry.key, cs), entry.key.label),
-            ],
-          ),
-        ),
+        for (final entry in values.take(5))
+          _legend(_auditColor(entry.key, cs), entry.key.label),
       ],
     );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 320) {
+          return Column(
+            children: [
+              SizedBox(height: 150, child: chart),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final entry in values.take(5))
+                    _legend(_auditColor(entry.key, cs), entry.key.label),
+                ],
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: chart),
+            SizedBox(width: 104, child: legend),
+          ],
+        );
+      },
+    );
   }
+
+  Widget _legend(Color c, String label) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 140),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _buildAuditTimeline(List<TimeEntry> entries, ColorScheme cs) {
     if (entries.isEmpty) {
@@ -2540,21 +2600,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   String _formatDate(DateTime d) => I18nDateFormat.date(d);
-
-  Widget _legend(Color c, String label) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
-    ),
-  );
 
   Widget _buildFocusSeries({
     required List<PomodoroSession> sessions,
@@ -3980,6 +4025,8 @@ class _Kpi extends StatelessWidget {
               children: [
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey.shade600,
@@ -3988,6 +4035,8 @@ class _Kpi extends StatelessWidget {
                 ),
                 Text(
                   value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.normal,

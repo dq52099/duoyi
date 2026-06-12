@@ -248,30 +248,62 @@ class _ForceUpdateInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final labelStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.normal,
+    );
+    final labelText = Text(label, style: labelStyle);
+    final valueText = Text(
+      _breakableUpdateValue(value),
+      softWrap: true,
+      style: valueStyle,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 300) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [labelText, const SizedBox(height: 2), valueText],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 96, child: labelText),
+              Expanded(child: valueText),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+String _breakableUpdateValue(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length <= 24) return trimmed;
+  final buffer = StringBuffer();
+  var runLength = 0;
+  for (final codePoint in trimmed.runes) {
+    final char = String.fromCharCode(codePoint);
+    buffer.write(char);
+    runLength += 1;
+    if (_isUpdateValueBreakPoint(char) || runLength >= 16) {
+      buffer.write('\u{200B}');
+      runLength = 0;
+    }
+  }
+  return buffer.toString();
+}
+
+bool _isUpdateValueBreakPoint(String char) {
+  return switch (char) {
+    '-' || '_' || '.' || '/' || '+' => true,
+    _ => false,
+  };
 }

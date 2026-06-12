@@ -3071,7 +3071,7 @@ class ReminderScheduler {
           when: when,
         );
       case ReminderRuleType.relativeToDue:
-        final anchor = g.targetDate ?? g.startDate;
+        final anchor = g.targetDate;
         if (anchor == null) return null;
         final hour = rule.hour ?? anchor.hour;
         final minute = rule.minute ?? anchor.minute;
@@ -3528,15 +3528,12 @@ class ReminderScheduler {
     return uri.replace(queryParameters: query).toString();
   }
 
-  /// 目标锚定日：优先用今日；若 `startDate` 在未来，用 `startDate`。
+  /// 目标锚定日：未设置开始日期时按创建日开启；提醒只从今天或未来开始注册。
   DateTime _goalAnchorDate(GoalItem g, DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
-    final start = g.startDate;
-    if (start != null) {
-      final startDay = DateTime(start.year, start.month, start.day);
-      if (startDay.isAfter(today)) return startDay;
-    }
-    return today;
+    final start = g.startDate ?? g.createdAt;
+    final startDay = DateTime(start.year, start.month, start.day);
+    return startDay.isAfter(today) ? startDay : today;
   }
 
   // -------------------------------------------------------------------------

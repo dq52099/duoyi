@@ -55,4 +55,42 @@ void main() {
     expect(stored.name, '晨练');
     expect(stored.targetCount, 3);
   });
+
+  testWidgets('HabitDetailScreen 顶部统计在 320/390/430 下不溢出', (tester) async {
+    addTearDown(tester.view.reset);
+    final todayKey = Habit(id: 'key-helper', name: 'helper').todayKey();
+
+    for (final width in const [320.0, 390.0, 430.0]) {
+      tester.view.physicalSize = Size(width, 760);
+      tester.view.devicePixelRatio = 1;
+      final provider = HabitProvider();
+      await provider.addHabit(
+        Habit(
+          id: 'habit-long-unit',
+          name: '超长习惯名称用于验证详情顶部不会挤压遮挡',
+          kind: HabitKind.negative,
+          unit: '杯超长单位名称',
+          completions: {todayKey: 12},
+        ),
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<HabitProvider>.value(
+          value: provider,
+          child: const MaterialApp(
+            home: HabitDetailScreen(habitId: 'habit-long-unit'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('习惯趋势'), findsOneWidget);
+      expect(
+        find.textContaining('杯超长单位名称'),
+        findsWidgets,
+        reason: 'width=$width',
+      );
+      expect(tester.takeException(), isNull, reason: 'width=$width');
+    }
+  });
 }

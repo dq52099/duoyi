@@ -10,6 +10,7 @@ void main() {
         'lib/providers/user_provider.dart',
         'lib/providers/achievement_provider.dart',
         'lib/providers/theme_provider.dart',
+        'lib/providers/preferences_provider.dart',
         'lib/providers/habit_provider.dart',
       ]) {
         final source = File(path).readAsStringSync();

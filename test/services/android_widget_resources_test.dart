@@ -1105,7 +1105,18 @@ void main() {
         widgetScreen,
         contains('for (final line in lines.take(maxLines))'),
       );
+      expect(widgetScreen, contains('class _WidgetPreviewContentFrame'));
+      expect(widgetScreen, contains('FittedBox('));
+      expect(widgetScreen, contains('BoxFit.scaleDown'));
+      expect(
+        widgetScreen,
+        isNot(contains('NeverScrollableScrollPhysics')),
+        reason:
+            'Preview cards should scale their fixed widget content instead of hiding overflow in a disabled scroll view.',
+      );
       expect(widgetScreen, contains('final visibleWeeks = switch (maxLines)'));
+      expect(widgetScreen, contains('currentWeekIndex - 1'));
+      expect(widgetScreen, contains('_ => [0, 1, 2, 3, 4, 5]'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
       expect(
@@ -1398,8 +1409,10 @@ void main() {
       );
       expect(
         widgetScreen,
-        contains('disabledByPlatform\n            ? () => _showPinWidgetHelp'),
+        contains('? () => _showPinWidgetHelp(context, support)'),
       );
+      expect(widgetScreen, contains('BoxConstraints(maxWidth: maxWidth)'));
+      expect(widgetScreen, contains('softWrap: false'));
       expect(widgetScreen, contains('Icons.help_outline'));
       expect(widgetScreen, contains('if (_requesting) return'));
       expect(widgetScreen, contains('CircularProgressIndicator'));

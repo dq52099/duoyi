@@ -245,4 +245,77 @@ void main() {
 
     expect(opened, ['duoyi_alarm_fullscreen_v18']);
   });
+
+  testWidgets('通知健康卡 320px 下长动作按钮不挤出布局', (tester) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    var fullScreenRequestCount = 0;
+    const actionLabel = '打开全屏提醒权限设置入口';
+    final report = NotificationHealthReport(
+      notificationGranted: true,
+      exactAlarmGranted: true,
+      fullScreenIntentGranted: false,
+      channelIds: const <String>{},
+      androidDevice: const AndroidDeviceInfoLite(
+        manufacturer: 'Xiaomi',
+        brand: 'xiaomi',
+        model: '2210132C',
+        sdkInt: 34,
+      ),
+      isAndroid: true,
+      isIOS: false,
+      checkedAt: DateTime(2026, 5, 10, 10, 20),
+      checks: const [
+        PermissionHealthCheck(
+          id: 'fullscreen_intent_permission',
+          title: '全屏闹钟提醒权限',
+          subtitle: '允许多仪在锁屏和后台通过全屏页面展示强提醒，避免只响铃不弹出',
+          status: PermissionHealthStatus.warning,
+          action: PermissionHealthAction.requestFullScreenIntentPermission,
+          actionLabel: actionLabel,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: NotificationHealthCard(
+                report: report,
+                pendingCount: 12,
+                onRefresh: () {},
+                onOpenSystemSettings: () {},
+                onOpenNotificationChannelSettings: (_) {},
+                onSendTest: () {},
+                onSendStrongTest: () {},
+                onClearPending: () {},
+                onRequestNotificationPermission: () {},
+                onRequestExactAlarmPermission: () {},
+                onRequestFullScreenIntentPermission: () {
+                  fullScreenRequestCount++;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey('notification_health_action_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text(actionLabel));
+    await tester.pump();
+
+    expect(fullScreenRequestCount, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

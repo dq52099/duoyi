@@ -993,34 +993,40 @@ class _TodoSummaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      constraints: const BoxConstraints(minWidth: 86),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: data.color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: data.color.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(data.icon, size: 15, color: data.color),
-          const SizedBox(width: 6),
-          Text(
-            data.label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.68),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 86, maxWidth: 118),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: data.color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: data.color.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(data.icon, size: 15, color: data.color),
+            const SizedBox(width: 6),
+            Text(
+              data.label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.68),
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            data.value,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.normal,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                data.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2649,6 +2655,8 @@ class _ListGroupTileState extends State<_ListGroupTile> {
             ),
             title: Text(
               widget.groupName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.normal),
             ),
             subtitle: workspace == null
@@ -3451,6 +3459,8 @@ class _MetaRow extends StatelessWidget {
             color: Theme.of(context).colorScheme.primary,
             child: Text(
               '#$t',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: DesignTokens.fontSizeXs,
                 color: Theme.of(context).colorScheme.primary,
@@ -3601,11 +3611,15 @@ class _MetaRow extends StatelessWidget {
                 color: Colors.deepPurple,
               ),
               const SizedBox(width: 2),
-              Text(
-                '@$assigneeName',
-                style: const TextStyle(
-                  fontSize: DesignTokens.fontSizeXs,
-                  color: Colors.deepPurple,
+              Flexible(
+                child: Text(
+                  '@$assigneeName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: DesignTokens.fontSizeXs,
+                    color: Colors.deepPurple,
+                  ),
                 ),
               ),
             ],
@@ -3663,16 +3677,19 @@ class _MetaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: DesignTokens.spaceXs,
-        vertical: 1,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 160),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spaceXs,
+          vertical: 1,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: DesignTokens.borderRadiusSm,
+        ),
+        child: child,
       ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: DesignTokens.borderRadiusSm,
-      ),
-      child: child,
     );
   }
 }

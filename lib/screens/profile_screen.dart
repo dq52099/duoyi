@@ -136,16 +136,26 @@ class _ProfileActionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stacked = MediaQuery.sizeOf(context).width < 360;
+    final actionBox = SizedBox(
+      width: stacked ? double.infinity : _profileInlineActionWidth(context),
+      height: _profileActionButtonHeight,
+      child: action,
+    );
+    if (stacked) {
+      return Column(
+        key: const ValueKey('profile_action_field_stacked'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [field, const SizedBox(height: 8), actionBox],
+      );
+    }
     return Row(
+      key: const ValueKey('profile_action_field_inline'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: field),
         const SizedBox(width: 8),
-        SizedBox(
-          width: _profileInlineActionWidth(context),
-          height: _profileActionButtonHeight,
-          child: action,
-        ),
+        actionBox,
       ],
     );
   }
@@ -1668,11 +1678,12 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         children: [
           AppSurfaceCard(
             padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _ProfileAvatarWithEdit(
-                  size: 76,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 330;
+                final avatarSize = compact ? 68.0 : 76.0;
+                final avatar = _ProfileAvatarWithEdit(
+                  size: avatarSize,
                   busy: _avatarBusy,
                   onPreview: _showAvatarPreview,
                   onEdit: _pickLocalAvatar,
@@ -1681,16 +1692,51 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     child: _ProfileAvatarPreview(
                       avatar: previewAvatar,
                       displayName: displayName,
-                      radius: 36,
+                      radius: avatarSize / 2 - 2,
                       cacheKey: avatarCacheKey,
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                );
+                final loginButton = SizedBox(
+                  width: compact ? 82 : _profileInlineActionWidth(context),
+                  height: _profileActionButtonHeight,
+                  child: TextButton(
+                    key: const ValueKey('profile_local_login_button'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: appSecondaryControlTextStyle(context),
+                    ),
+                    onPressed: () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        I18n.tr('profile.login_account'),
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                );
+                final textColumn = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (compact) ...[
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryRouteTitleTextStyle(context),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: loginButton,
+                      ),
+                    ] else
                       Row(
                         children: [
                           Expanded(
@@ -1702,51 +1748,31 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          SizedBox(
-                            width: _profileInlineActionWidth(context),
-                            height: _profileActionButtonHeight,
-                            child: TextButton(
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                textStyle: appSecondaryControlTextStyle(
-                                  context,
-                                ),
-                              ),
-                              onPressed: () => Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const LoginScreen(),
-                                ),
-                              ),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  I18n.tr('profile.login_account'),
-                                  maxLines: 1,
-                                ),
-                              ),
-                            ),
-                          ),
+                          loginButton,
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          height: 1.25,
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                        height: 1.25,
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  ],
+                );
+                return Row(
+                  key: const ValueKey('profile_local_header_row'),
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    avatar,
+                    SizedBox(width: compact ? 10 : 14),
+                    Expanded(child: textColumn),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),

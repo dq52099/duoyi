@@ -161,6 +161,75 @@ void main() {
     );
   });
 
+  testWidgets(
+    'countdown page keeps summary reminder controls and long pills readable at 320px',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+      });
+
+      final today = DateTime.now();
+      const longCategory = '特别特别特别长的分类名称用于验证窄屏标签不会溢出';
+      SharedPreferences.setMockInitialValues({
+        'duoyi_countdowns': [
+          jsonEncode(
+            CountdownItem(
+              id: 'narrow-countdown',
+              title: '窄屏测试事项',
+              targetDate: DateTime(
+                today.year,
+                today.month,
+                today.day,
+              ).add(const Duration(days: 2)),
+              category: longCategory,
+              remind: true,
+              remindDaysBefore: 1,
+              remindHour: 9,
+              remindMinute: 30,
+            ).toJson(),
+          ),
+        ],
+      });
+
+      final provider = CountdownProvider();
+      await provider.loadFromStorage();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: provider,
+          child: const MaterialApp(home: CountdownScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('countdown_summary_total')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('countdown_summary_within_7_days')),
+        findsOneWidget,
+      );
+      expect(find.text('窄屏测试事项'), findsOneWidget);
+      expect(find.text(longCategory), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('窄屏测试事项'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('countdown_reminder_kind_scroll')),
+        findsOneWidget,
+      );
+      expect(find.text('通知'), findsOneWidget);
+      expect(find.text('弹出框'), findsOneWidget);
+      expect(find.text('闹钟'), findsOneWidget);
+      expect(find.text('关闭'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'birthday memorial and countdown cards keep a consistent surface style',
     () {
@@ -196,10 +265,9 @@ void main() {
           contains('padding: const EdgeInsets.fromLTRB(14, 12, 12, 12)'),
         );
         expect(card, contains('Wrap('));
-        expect(
-          card,
-          contains('constraints: const BoxConstraints(minWidth: 54)'),
-        );
+        expect(card, contains('constraints: const BoxConstraints('));
+        expect(card, contains('minWidth: 54'));
+        expect(card, contains('maxWidth: 108'));
         expect(card, contains('TextBaseline.alphabetic'));
         expect(
           card,
@@ -236,6 +304,63 @@ void main() {
           "AnniversaryType.memorial => '💞 \${I18n.tr('anniversary.title')}'",
         ),
       );
+    },
+  );
+
+  testWidgets(
+    'countdown list handles 320 390 430 and desktop widths without overflow',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final today = DateTime.now();
+      const longCategory = '特别特别特别长的分类名称用于验证宽度变化时标签仍然省略';
+      const longTitle = '这是一个非常长的倒数日标题用于验证列表卡片不会遮挡右侧天数';
+      SharedPreferences.setMockInitialValues({
+        'duoyi_countdowns': [
+          jsonEncode(
+            CountdownItem(
+              id: 'responsive-countdown',
+              title: longTitle,
+              targetDate: DateTime(
+                today.year,
+                today.month,
+                today.day,
+              ).add(const Duration(days: 12000)),
+              category: longCategory,
+              remind: true,
+              remindDaysBefore: 30,
+              remindHour: 23,
+              remindMinute: 55,
+            ).toJson(),
+          ),
+        ],
+      });
+      final provider = CountdownProvider();
+      await provider.loadFromStorage();
+
+      for (final size in const [
+        Size(320, 720),
+        Size(390, 720),
+        Size(430, 720),
+        Size(1024, 768),
+      ]) {
+        await tester.binding.setSurfaceSize(size);
+        await tester.pumpWidget(
+          ChangeNotifierProvider.value(
+            value: provider,
+            child: const MaterialApp(home: CountdownScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text(longTitle), findsOneWidget);
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('countdown_summary_total')))
+              .right,
+          lessThanOrEqualTo(size.width),
+        );
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 

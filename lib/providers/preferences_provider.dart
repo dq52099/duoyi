@@ -241,6 +241,7 @@ class PreferencesProvider extends ChangeNotifier {
   Set<int> _bottomNavVisible = defaultBottomNavTabs;
   String _appTimeZone = LocalTimezoneResolver.defaultIana;
   bool _followSystemTimeZone = true;
+  int _storageGeneration = 0;
 
   int get firstDayOfWeek => _firstDayOfWeek;
   String get dateFormat => _dateFormat;
@@ -376,8 +377,65 @@ class PreferencesProvider extends ChangeNotifier {
     }
   }
 
+  void resetLocalState() {
+    _storageGeneration++;
+    _applyDefaults();
+    notifyListeners();
+  }
+
+  void _applyDefaults() {
+    _firstDayOfWeek = 1;
+    _dateFormat = 'yyyy-MM-dd';
+    _defaultTab = 0;
+    _haptic = true;
+    _showLunar = true;
+    _showCompletedTodos = false;
+    _defaultPomodoroMinutes = 25;
+    _quickCaptureFab = true;
+    _notificationQuickAdd = false;
+    _notificationTodayProgress = false;
+    _notificationHistoryLimit = NotificationHistoryPolicy.defaultLimit;
+    _autoArchiveCompletedDays = 0;
+    _dailyReminderEnabled = false;
+    _dailyReminderKind = ReminderKind.push;
+    _dailyReminderHour = 20;
+    _dailyReminderMinute = 0;
+    _dailyReminderIncludeTodayTasks = true;
+    _dailyReminderIncludeTomorrowPlan = true;
+    _dailyReminderIncludeOverdue = true;
+    _dailyReminderRepeatDays = const [1, 2, 3, 4, 5, 6, 7];
+    _dailyReminderPauseHolidays = false;
+    _dailyReminderSlots = const [
+      DailyReminderSlot(),
+      DailyReminderSlot(hour: 8, enabled: false),
+      DailyReminderSlot(hour: 22, enabled: false),
+    ];
+    _dailyReportReminder = false;
+    _dailyReportReminderHour = 21;
+    _dailyReportReminderMinute = 30;
+    _weeklyReportReminder = false;
+    _weeklyReportReminderWeekday = DateTime.monday;
+    _weeklyReportReminderHour = 9;
+    _weeklyReportReminderMinute = 0;
+    _monthlyReportReminder = false;
+    _monthlyReportReminderDay = 1;
+    _monthlyReportReminderHour = 9;
+    _monthlyReportReminderMinute = 0;
+    _yearlyReportReminder = false;
+    _yearlyReportReminderMonth = 1;
+    _yearlyReportReminderDay = 1;
+    _yearlyReportReminderHour = 9;
+    _yearlyReportReminderMinute = 0;
+    _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
+    _bottomNavVisible = defaultBottomNavTabs;
+    _followSystemTimeZone = true;
+    _appTimeZone = LocalTimezoneResolver.currentIana;
+  }
+
   Future<void> loadFromStorage() async {
+    final generation = _storageGeneration;
     final p = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     _firstDayOfWeek = p.getInt(_kFirstDayOfWeek) ?? 1;
     _dateFormat = p.getString(_kDateFormat) ?? 'yyyy-MM-dd';
     _followSystemTimeZone =
@@ -389,6 +447,7 @@ class PreferencesProvider extends ChangeNotifier {
           ? LocalTimezoneResolver.followSystemValue
           : (p.getString(_kAppTimeZone) ?? LocalTimezoneResolver.defaultIana),
     );
+    if (generation != _storageGeneration) return;
     _appTimeZone = LocalTimezoneResolver.currentIana;
     final storedOrder = p.getStringList(_kBottomNavOrder);
     final storedVisible = p.getStringList(_kBottomNavVisible);
@@ -516,6 +575,7 @@ class PreferencesProvider extends ChangeNotifier {
       storedVisible?.map(int.tryParse).whereType<int>(),
       order: _bottomNavOrder,
     );
+    if (generation != _storageGeneration) return;
     notifyListeners();
   }
 

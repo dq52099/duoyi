@@ -694,10 +694,60 @@ class _NavConfigTile extends StatelessWidget {
           : visible
           ? I18n.tr('preferences.nav.visible')
           : I18n.tr('preferences.nav.hidden'),
-      trailing: Row(
+      trailing: _NavConfigActions(
+        tab: tab,
+        visible: visible,
+        lockedVisible: lockedVisible,
+        reachedLimit: reachedLimit,
+        canMoveUp: canMoveUp,
+        canMoveDown: canMoveDown,
+      ),
+    );
+  }
+}
+
+class _NavConfigActions extends StatelessWidget {
+  final int tab;
+  final bool visible;
+  final bool lockedVisible;
+  final bool reachedLimit;
+  final bool canMoveUp;
+  final bool canMoveDown;
+
+  const _NavConfigActions({
+    required this.tab,
+    required this.visible,
+    required this.lockedVisible,
+    required this.reachedLimit,
+    required this.canMoveUp,
+    required this.canMoveDown,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget compactIconButton({
+      required String tooltip,
+      required VoidCallback? onPressed,
+      required IconData icon,
+    }) {
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+      );
+    }
+
+    return SizedBox(
+      key: ValueKey('bottom_nav_actions_$tab'),
+      width: 138,
+      child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          IconButton(
+          compactIconButton(
             tooltip: I18n.tr('action.move_up'),
             onPressed: canMoveUp
                 ? () => context.read<PreferencesProvider>().moveBottomNavTab(
@@ -705,9 +755,9 @@ class _NavConfigTile extends StatelessWidget {
                     -1,
                   )
                 : null,
-            icon: const Icon(Icons.keyboard_arrow_up_rounded),
+            icon: Icons.keyboard_arrow_up_rounded,
           ),
-          IconButton(
+          compactIconButton(
             tooltip: I18n.tr('action.move_down'),
             onPressed: canMoveDown
                 ? () => context.read<PreferencesProvider>().moveBottomNavTab(
@@ -715,15 +765,21 @@ class _NavConfigTile extends StatelessWidget {
                     1,
                   )
                 : null,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            icon: Icons.keyboard_arrow_down_rounded,
           ),
-          Switch(
-            value: visible,
-            onChanged: lockedVisible || reachedLimit
-                ? null
-                : (v) => context
-                      .read<PreferencesProvider>()
-                      .setBottomNavVisible(tab, v),
+          SizedBox(
+            width: 56,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Switch(
+                value: visible,
+                onChanged: lockedVisible || reachedLimit
+                    ? null
+                    : (v) => context
+                          .read<PreferencesProvider>()
+                          .setBottomNavVisible(tab, v),
+              ),
+            ),
           ),
         ],
       ),

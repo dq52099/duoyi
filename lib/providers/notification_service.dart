@@ -152,6 +152,7 @@ class NotificationService extends ChangeNotifier
   String? _lastScheduleIssueSignature;
   DateTime? _lastScheduleIssueRecordedAt;
   BrandStrings _strings = BrandStrings.defaultBrand;
+  int _storageGeneration = 0;
 
   int get pendingCount => _pendingNotifications;
   int get historyCount => _history.length;
@@ -197,6 +198,7 @@ class NotificationService extends ChangeNotifier
   }
 
   void resetLocalState() {
+    _storageGeneration++;
     _pomodoroNotificationTimer?.cancel();
     _pendingNotifications = 0;
     _historyLimit = NotificationHistoryPolicy.defaultLimit;
@@ -266,7 +268,9 @@ class NotificationService extends ChangeNotifier
   }
 
   Future<void> _loadHistory() async {
+    final generation = _storageGeneration;
     final p = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     _historyLimit = NotificationHistoryPolicy.normalize(
       p.getInt(NotificationHistoryPolicy.preferenceKey),
     );
@@ -295,6 +299,7 @@ class NotificationService extends ChangeNotifier
           }
         }).whereType<NotificationItem>(),
       );
+    if (generation != _storageGeneration) return;
     if (_history.length > _historyLimit) {
       _history.removeRange(_historyLimit, _history.length);
       await _saveHistory();

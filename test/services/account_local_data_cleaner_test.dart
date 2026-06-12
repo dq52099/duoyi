@@ -218,6 +218,7 @@ void main() {
       expect(block, contains("guardedSync('habits'"));
       expect(block, contains("guardedSync('theme'"));
       expect(block, contains("guardedSync('achievements'"));
+      expect(block, contains("guardedSync('preferences'"));
       expect(block, contains("guardedSync('calendar sync'"));
       expect(block, contains('userProvider.clearAccountProfileCache()'));
       expect(block, contains("guardedSync('ai service'"));

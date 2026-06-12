@@ -100,6 +100,17 @@ class _GoalCard extends StatelessWidget {
     final color = Color(goal.colorValue);
     final progress = goal.computedProgress;
     final days = goal.daysRemaining;
+    final hasDeadline = goal.targetDate != null;
+    final deadlineLabel = hasDeadline
+        ? (days >= 0
+              ? '${I18n.tr('goal.days_remaining.prefix')}$days'
+                    '${I18n.tr('goal.days_remaining.suffix')}'
+              : '${I18n.tr('goal.overdue.prefix')}${-days}'
+                    '${I18n.tr('goal.overdue.suffix')}')
+        : '无期限';
+    final deadlineColor = !hasDeadline || days >= 0
+        ? Colors.grey.shade600
+        : Colors.red;
     final shareProvider = context.watch<ShareProvider?>();
     final isShared =
         goal.workspaceId.trim().isNotEmpty &&
@@ -208,36 +219,24 @@ class _GoalCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                Icons.check_circle_outline,
-                size: 12,
+              _GoalMetaChip(
+                icon: Icons.check_circle_outline,
+                label:
+                    '${I18n.tr('goal.milestone.prefix')}'
+                    '${goal.milestones.where((m) => m.isCompleted).length}/'
+                    '${goal.milestones.length}',
                 color: Colors.grey.shade600,
               ),
-              const SizedBox(width: 4),
-              Text(
-                '${I18n.tr('goal.milestone.prefix')}'
-                '${goal.milestones.where((m) => m.isCompleted).length}/'
-                '${goal.milestones.length}',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              _GoalMetaChip(
+                icon: hasDeadline ? Icons.schedule : Icons.all_inclusive,
+                label: deadlineLabel,
+                color: deadlineColor,
               ),
-              if (goal.targetDate != null) ...[
-                const SizedBox(width: 10),
-                Icon(Icons.schedule, size: 12, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Text(
-                  days >= 0
-                      ? '${I18n.tr('goal.days_remaining.prefix')}$days'
-                            '${I18n.tr('goal.days_remaining.suffix')}'
-                      : '${I18n.tr('goal.overdue.prefix')}${-days}'
-                            '${I18n.tr('goal.overdue.suffix')}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: days >= 0 ? Colors.grey.shade600 : Colors.red,
-                  ),
-                ),
-              ],
             ],
           ),
         ],
@@ -250,6 +249,40 @@ class _GoalCard extends StatelessWidget {
       if (workspace.id == workspaceId) return workspace.name;
     }
     return '共享';
+  }
+}
+
+class _GoalMetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _GoalMetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 180),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

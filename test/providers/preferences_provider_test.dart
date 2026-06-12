@@ -85,10 +85,37 @@ void main() {
       contains('PreferencesProvider.fixedBottomNavTabs.contains(tab)'),
     );
     expect(source, contains("I18n.tr('preferences.nav.fixed')"));
-    expect(source, contains('onChanged: lockedVisible'));
+    expect(source, contains('class _NavConfigActions'));
+    expect(source, contains(r"ValueKey('bottom_nav_actions_$tab')"));
+    expect(source, contains('width: 138'));
+    expect(source, contains('BoxConstraints.tightFor(width: 36, height: 36)'));
     expect(source, contains('PreferencesProvider.maxBottomNavTabs'));
     expect(source, contains('reachedLimit'));
     expect(source, contains('? null'));
+  });
+
+  test('底部导航设置 320px trailing 操作组使用固定紧凑宽度', () {
+    final source = File(
+      'lib/screens/preferences_screen.dart',
+    ).readAsStringSync();
+    final navTileSource = source.substring(
+      source.indexOf('class _NavConfigTile'),
+      source.indexOf('class _NavConfigActions'),
+    );
+    final actionsSource = source.substring(
+      source.indexOf('class _NavConfigActions'),
+      source.indexOf('class _SliderSetting'),
+    );
+
+    expect(navTileSource, contains('trailing: _NavConfigActions('));
+    expect(actionsSource, contains(r"ValueKey('bottom_nav_actions_$tab')"));
+    expect(actionsSource, contains('width: 138'));
+    expect(
+      actionsSource,
+      contains('BoxConstraints.tightFor(width: 36, height: 36)'),
+    );
+    expect(actionsSource, contains('width: 56'));
+    expect(actionsSource, isNot(contains('mainAxisSize: MainAxisSize.max')));
   });
 
   test('主导航兜底也限制最多 5 个入口', () {

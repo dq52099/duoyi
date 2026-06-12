@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Widget _wrapMineHeaderTest({
   required AuthProvider auth,
   required UserProvider userProvider,
+  AppUpdateService? appUpdateService,
 }) {
   return MultiProvider(
     providers: [
@@ -38,12 +39,16 @@ Widget _wrapMineHeaderTest({
       ChangeNotifierProvider<AuthProvider>.value(value: auth),
       ChangeNotifierProvider(create: (_) => AiService()),
       ChangeNotifierProvider(create: (_) => AchievementProvider()),
-      ChangeNotifierProvider(
-        create: (_) => AppUpdateService(
-          repo: 'dq52099/duoyi',
-          currentVersion: AppVersion.name,
-        ),
-      ),
+      appUpdateService == null
+          ? ChangeNotifierProvider(
+              create: (_) => AppUpdateService(
+                repo: 'dq52099/duoyi',
+                currentVersion: AppVersion.name,
+              ),
+            )
+          : ChangeNotifierProvider<AppUpdateService>.value(
+              value: appUpdateService,
+            ),
     ],
     child: const MaterialApp(home: MineScreen()),
   );
@@ -379,6 +384,19 @@ void main() {
     expect(source, contains('const double _profileActionButtonWidth = 68'));
     expect(source, contains('const double _profileLongActionButtonWidth = 96'));
     expect(source, contains('double _profileInlineActionWidth'));
+    expect(
+      source,
+      contains("key: const ValueKey('profile_action_field_stacked')"),
+    );
+    expect(
+      source,
+      contains("key: const ValueKey('profile_action_field_inline')"),
+    );
+    expect(source, contains("key: const ValueKey('profile_local_header_row')"));
+    expect(
+      source,
+      contains("key: const ValueKey('profile_local_login_button')"),
+    );
     expect(source, contains('width: _profileActionButtonWidth'));
     expect(source, contains('width: _profileLongActionButtonWidth'));
     expect(source, contains('height: _profileActionButtonHeight'));
@@ -402,6 +420,170 @@ void main() {
     expect(auth, contains("'/api/auth/profile'"));
     expect(auth, contains("'/api/me/password'"));
     expect(auth, contains("'/api/auth/change-password'"));
+  });
+
+  testWidgets(
+    'mine narrow header keeps long admin metadata and update badge visible',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final auth = AuthProvider(
+        initialState: const AuthState(
+          userId: 'admin-long',
+          username: 'admin-account-with-a-very-long-login-name',
+          displayName: '后台管理员名字非常非常长需要省略显示',
+          token: 'token-1',
+          isAdmin: true,
+          coinBalance: 123456789,
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((_) async => http.Response('not found', 404)),
+        ),
+      );
+      final userProvider = UserProvider();
+      await userProvider.applyAccountSnapshot(
+        username: 'admin-account-with-a-very-long-login-name',
+        displayName: '后台管理员名字非常非常长需要省略显示',
+        avatarInitials: '管',
+      );
+      final appUpdateService =
+          AppUpdateService(
+            repo: 'dq52099/duoyi',
+            currentVersion: AppVersion.name,
+          )..debugSetUpdatePolicyForTest(
+            latestVersion: '123.456.789-beta-build-extra-long',
+          );
+
+      await tester.pumpWidget(
+        _wrapMineHeaderTest(
+          auth: auth,
+          userProvider: userProvider,
+          appUpdateService: appUpdateService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mine_header_metadata_compact')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('时光币'), findsOneWidget);
+      expect(find.text('管理员'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(
+        find.text('检查更新'),
+        700,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('检查更新'), findsOneWidget);
+      expect(find.textContaining('新版'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('local profile narrow header keeps login button inside card', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final userProvider = UserProvider();
+    await userProvider.updateProfile(
+      username: 'local-user-with-a-very-long-name',
+      displayName: '本地用户显示名非常非常长需要省略',
+      email: 'local-user-with-a-long-email@example.com',
+      bio: '本地资料简介也比较长',
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AchievementProvider()),
+          ChangeNotifierProvider<UserProvider>.value(value: userProvider),
+        ],
+        child: const MaterialApp(home: ProfileScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('profile_local_header_row'));
+    final login = find.byKey(const ValueKey('profile_local_login_button'));
+    expect(header, findsOneWidget);
+    expect(login, findsOneWidget);
+    expect(
+      tester.getRect(login).right,
+      lessThanOrEqualTo(tester.getRect(header).right),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('email binding dialog stacks code field action on narrow width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final auth = AuthProvider(
+      initialState: const AuthState(
+        userId: 'u-1',
+        username: 'old-user',
+        email: 'old@example.com',
+        emailVerified: false,
+        displayName: '旧昵称',
+        token: 'token-1',
+      ),
+      client: ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'token-1',
+        httpClient: MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path == '/api/me/email-code') {
+            return http.Response(
+              json.encode({'message': '验证码已发送，请查收邮箱'}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      ),
+    );
+    final userProvider = UserProvider();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AchievementProvider()),
+          ChangeNotifierProvider<UserProvider>.value(value: userProvider),
+        ],
+        child: const MaterialApp(home: ProfileScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, '邮箱绑定'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('profile_action_field_stacked')),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextField, '邮箱验证码'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '发送'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('account profile long email labels are single-line ellipsized', () {

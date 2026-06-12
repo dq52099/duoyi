@@ -12,7 +12,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AccountLocalDataCleaner {
   AccountLocalDataCleaner._();
 
+  static const accountDataOwnerKey = 'duoyi_account_data_owner_v1';
+  static int _accountDataGeneration = 0;
+
+  static int get accountDataGeneration => _accountDataGeneration;
+
+  static bool isCurrentAccountDataGeneration(int generation) {
+    return generation == _accountDataGeneration;
+  }
+
+  static void invalidateInFlightAccountWrites() {
+    _accountDataGeneration++;
+  }
+
   static const accountScopedKeys = <String>{
+    accountDataOwnerKey,
     'todos',
     'habits',
     'pomodoro_sessions',
@@ -157,6 +171,7 @@ class AccountLocalDataCleaner {
   };
 
   static Future<void> clearSharedPreferences() async {
+    invalidateInFlightAccountWrites();
     final prefs = await SharedPreferences.getInstance();
     Object? firstError;
     StackTrace? firstStackTrace;

@@ -44,19 +44,17 @@ class ReminderPlanEditor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showHeader) ...[
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
+          _ReminderSwitchTile(
             value: plan.enabled,
-            title: Text(title),
-            subtitle: Text(subtitle ?? reminderPlanSummary(plan)),
+            title: title,
+            subtitle: subtitle ?? reminderPlanSummary(plan),
             onChanged: _toggleEnabled,
           ),
         ] else
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
+          _ReminderSwitchTile(
             value: plan.enabled,
-            title: const Text('开启提醒'),
-            subtitle: Text(reminderPlanSummary(plan)),
+            title: '开启提醒',
+            subtitle: reminderPlanSummary(plan),
             onChanged: _toggleEnabled,
           ),
         if (plan.enabled) ...[
@@ -160,6 +158,66 @@ String reminderPlanSummary(ReminderPlan plan) {
   if (enabledRules.isEmpty) return '无启用规则';
   if (enabledRules.length == 1) return _ruleSummary(enabledRules.single);
   return '${enabledRules.length} 条提醒';
+}
+
+class _ReminderSwitchTile extends StatelessWidget {
+  final bool value;
+  final String title;
+  final String subtitle;
+  final ValueChanged<bool> onChanged;
+
+  const _ReminderSwitchTile({
+    required this.value,
+    required this.title,
+    required this.subtitle,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: DesignTokens.borderRadiusSm,
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: DesignTokens.spaceXs),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: DesignTokens.fontWeightRegular,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                        fontSize: DesignTokens.fontSizeSm,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spaceSm),
+              Switch(value: value, onChanged: onChanged),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ReminderRuleTile extends StatelessWidget {
@@ -346,14 +404,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             },
           ),
           const SizedBox(height: DesignTokens.spaceMd),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.schedule),
-            title: const Text('提醒时间'),
-            subtitle: Text(_formatTimeOfDay(_time)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _pickTime,
-          ),
+          _ReminderTimeField(time: _time, onTap: _pickTime),
           if (_type == ReminderRuleType.relativeToDue) ...[
             const SizedBox(height: DesignTokens.spaceSm),
             Text('提前时间', style: _labelStyle(context)),
@@ -410,35 +461,38 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
           if (widget.allowAlarm) ...[
             Text('提醒方式', style: _labelStyle(context)),
             const SizedBox(height: DesignTokens.spaceXs),
-            SegmentedButton<ReminderKind>(
-              style: _selectedSegmentStyle(context),
-              segments: const [
-                ButtonSegment(
-                  value: ReminderKind.push,
-                  label: Text('通知'),
-                  icon: Icon(Icons.notifications_outlined),
-                ),
-                ButtonSegment(
-                  value: ReminderKind.popup,
-                  label: Text('弹出框'),
-                  icon: Icon(Icons.open_in_new_outlined),
-                ),
-                ButtonSegment(
-                  value: ReminderKind.alarm,
-                  label: Text('闹钟'),
-                  icon: Icon(Icons.alarm_outlined),
-                ),
-                ButtonSegment(
-                  value: ReminderKind.off,
-                  label: Text('关闭'),
-                  icon: Icon(Icons.notifications_off_outlined),
-                ),
-              ],
-              selected: {_kind},
-              onSelectionChanged: (s) => setState(() {
-                _kind = s.first;
-                _enabled = _kind != ReminderKind.off;
-              }),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<ReminderKind>(
+                style: _selectedSegmentStyle(context),
+                segments: const [
+                  ButtonSegment(
+                    value: ReminderKind.push,
+                    label: Text('通知'),
+                    icon: Icon(Icons.notifications_outlined),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.popup,
+                    label: Text('弹出框'),
+                    icon: Icon(Icons.open_in_new_outlined),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.alarm,
+                    label: Text('闹钟'),
+                    icon: Icon(Icons.alarm_outlined),
+                  ),
+                  ButtonSegment(
+                    value: ReminderKind.off,
+                    label: Text('关闭'),
+                    icon: Icon(Icons.notifications_off_outlined),
+                  ),
+                ],
+                selected: {_kind},
+                onSelectionChanged: (s) => setState(() {
+                  _kind = s.first;
+                  _enabled = _kind != ReminderKind.off;
+                }),
+              ),
             ),
           ],
           SwitchListTile(
@@ -537,6 +591,80 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       repeatCount: _repeatCount,
     );
     Navigator.pop(context, rule);
+  }
+}
+
+class _ReminderTimeField extends StatelessWidget {
+  final TimeOfDay time;
+  final VoidCallback onTap;
+
+  const _ReminderTimeField({required this.time, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final borderColor = cs.outlineVariant.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.16 : 0.22,
+    );
+
+    return Semantics(
+      key: const ValueKey('reminder_time_compact_field'),
+      button: true,
+      label: '提醒时间 ${_formatTimeOfDay(time)}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+              border: Border.all(color: borderColor, width: 0.45),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule, size: 20, color: cs.onSurfaceVariant),
+                  const SizedBox(width: DesignTokens.spaceSm),
+                  Expanded(
+                    child: Text(
+                      '提醒时间',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(width: DesignTokens.spaceXs),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 96),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _formatTimeOfDay(time),
+                        maxLines: 1,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

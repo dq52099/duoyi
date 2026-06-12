@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/models/goal.dart';
@@ -271,6 +275,114 @@ void main() {
     }
   });
 
+  testWidgets('ReminderPlanEditor narrow hidden header keeps enable visible', (
+    tester,
+  ) async {
+    var plan = const ReminderPlan.disabled();
+
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(12),
+              child: ReminderPlanEditor(
+                plan: plan,
+                showHeader: false,
+                allowAlarm: true,
+                allowRelativeToDue: false,
+                hasAnchorDate: false,
+                onChanged: (next) => setState(() => plan = next),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('开启提醒'), findsOneWidget);
+    expect(find.text('已关闭'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('开启提醒'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('每日提醒'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SingleChildScrollView), findsWidgets);
+    expect(find.byType(SegmentedButton<ReminderKind>), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'ReminderPlanEditor narrow sheet keeps reminder time on one row',
+    (tester) async {
+      final screenshotKey = GlobalKey();
+      var plan = ReminderPlan(
+        enabled: true,
+        rules: [
+          ReminderRule(
+            id: 'daily-9',
+            type: ReminderRuleType.dailyTime,
+            kind: ReminderKind.push,
+            hour: 9,
+            minute: 0,
+          ),
+        ],
+      );
+
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: screenshotKey,
+          child: MaterialApp(
+            home: StatefulBuilder(
+              builder: (context, setState) => Scaffold(
+                body: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: ReminderPlanEditor(
+                    plan: plan,
+                    maxRules: 1,
+                    allowAlarm: true,
+                    allowRelativeToDue: false,
+                    hasAnchorDate: false,
+                    onChanged: (next) => setState(() => plan = next),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('每日提醒 · 通知'));
+      await tester.pumpAndSettle();
+
+      final timeField = find.byKey(
+        const ValueKey('reminder_time_compact_field'),
+      );
+      final label = find.descendant(of: timeField, matching: find.text('提醒时间'));
+      final value = find.descendant(
+        of: timeField,
+        matching: find.text('09:00'),
+      );
+      final labelRect = tester.getRect(label);
+      final valueRect = tester.getRect(value);
+
+      expect(timeField, findsOneWidget);
+      expect((labelRect.center.dy - valueRect.center.dy).abs(), lessThan(8));
+      expect(valueRect.left, greaterThan(labelRect.right));
+      expect(tester.takeException(), isNull);
+      await _captureReminderEditorScreenshot(screenshotKey);
+    },
+  );
+
   test('nextHalfHourTimeOfDay 使用向后最近半小时点', () {
     expect(
       nextHalfHourTimeOfDay(DateTime(2026, 5, 13, 17, 28)),
@@ -300,3 +412,20 @@ double _contrastRatio(Color a, Color b) {
   final l2 = b.computeLuminance() + 0.05;
   return l1 > l2 ? l1 / l2 : l2 / l1;
 }
+
+Future<void> _captureReminderEditorScreenshot(GlobalKey key) async {
+  if (!_shouldCaptureReminderEditorScreenshot) return;
+  final boundary =
+      key.currentContext!.findRenderObject() as RenderRepaintBoundary;
+  final image = await boundary.toImage();
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  final file = File(
+    'evidence/full-style-audit-20260609/reminder_editor_time_compact_320.png',
+  );
+  file.parent.createSync(recursive: true);
+  file.writeAsBytesSync(data!.buffer.asUint8List());
+  image.dispose();
+}
+
+bool get _shouldCaptureReminderEditorScreenshot =>
+    Platform.environment['DUOYI_CAPTURE_REMINDER_EDITOR_SCREENSHOT'] == '1';

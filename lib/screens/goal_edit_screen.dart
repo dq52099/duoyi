@@ -566,9 +566,13 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     if (_recurrence.frequency == RecurrenceFrequency.none) return '不重复';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final anchor = (_startDate != null && _startDate!.isAfter(today))
-        ? _startDate!
-        : today;
+    final effectiveStart = _goalEffectiveStartDay(
+      startDate: _startDate,
+      createdAt: _createdAt,
+      fallback: now,
+    );
+    final searchFrom = effectiveStart.isAfter(today) ? effectiveStart : today;
+    final anchor = searchFrom.subtract(const Duration(days: 1));
     final next = RecurrenceEngine.nextOccurrence(
       rule: _recurrence,
       scheduling: _scheduling,
@@ -641,24 +645,11 @@ class _BasicSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: DesignTokens.spaceLg),
-        Row(
-          children: [
-            Expanded(
-              child: _DateField(
-                label: '开始',
-                date: startDate,
-                onPick: onPickStart,
-              ),
-            ),
-            const SizedBox(width: DesignTokens.spaceSm),
-            Expanded(
-              child: _DateField(
-                label: '目标',
-                date: targetDate,
-                onPick: onPickTarget,
-              ),
-            ),
-          ],
+        _GoalDateFields(
+          startDate: startDate,
+          targetDate: targetDate,
+          onPickStart: onPickStart,
+          onPickTarget: onPickTarget,
         ),
         const SizedBox(height: DesignTokens.spaceLg),
         Text('颜色', style: _subtleLabel(context)),
@@ -754,7 +745,12 @@ class _WorkspaceSection extends StatelessWidget {
         AppSecondaryControlTheme(
           child: AppDropdownField<String>(
             initialValue: current,
-            decoration: const InputDecoration(labelText: '保存到'),
+            decoration: const InputDecoration(
+              labelText: '保存到',
+              floatingLabelBehavior: FloatingLabelBehavior.always,
+              isDense: true,
+              contentPadding: EdgeInsets.fromLTRB(12, 16, 8, 10),
+            ),
             items: options.map((option) {
               final optionRole = option.id == 'private'
                   ? WorkspaceRole.owner
@@ -764,36 +760,7 @@ class _WorkspaceSection extends StatelessWidget {
               return DropdownMenuItem<String>(
                 value: option.id,
                 enabled: enabled,
-                child: Row(
-                  children: [
-                    Icon(
-                      option.id == 'private'
-                          ? Icons.person_outline
-                          : Icons.groups_2_outlined,
-                      size: 18,
-                    ),
-                    const SizedBox(width: DesignTokens.spaceSm),
-                    Expanded(
-                      child: Text(
-                        option.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (option.id != 'private') ...[
-                      const SizedBox(width: DesignTokens.spaceSm),
-                      Text(
-                        optionRole.label,
-                        style: TextStyle(
-                          fontSize: DesignTokens.fontSizeXs,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.56),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                child: _WorkspaceOptionLabel(option: option, role: optionRole),
               );
             }).toList(),
             enabled: canEdit,
@@ -827,6 +794,52 @@ class _WorkspaceChoice {
   final String name;
 
   const _WorkspaceChoice({required this.id, required this.name});
+}
+
+class _WorkspaceOptionLabel extends StatelessWidget {
+  final _WorkspaceChoice option;
+  final WorkspaceRole role;
+
+  const _WorkspaceOptionLabel({required this.option, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isPrivate = option.id == 'private';
+    return Row(
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        Icon(
+          isPrivate ? Icons.person_outline : Icons.groups_2_outlined,
+          size: 18,
+        ),
+        const SizedBox(width: DesignTokens.spaceXs),
+        Expanded(
+          child: Text(
+            option.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (!isPrivate) ...[
+          const SizedBox(width: DesignTokens.spaceXs),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 48),
+            child: Text(
+              role.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeXs,
+                color: cs.onSurface.withValues(alpha: 0.56),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _GoalIconField extends StatelessWidget {
@@ -910,6 +923,54 @@ class _GoalIconField extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GoalDateFields extends StatelessWidget {
+  final DateTime? startDate;
+  final DateTime? targetDate;
+  final ValueChanged<DateTime?> onPickStart;
+  final ValueChanged<DateTime?> onPickTarget;
+
+  const _GoalDateFields({
+    required this.startDate,
+    required this.targetDate,
+    required this.onPickStart,
+    required this.onPickTarget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 460;
+        return Row(
+          children: [
+            Expanded(
+              child: _DateField(
+                key: const ValueKey('goal_start_date_field'),
+                label: '开始日期',
+                date: startDate,
+                emptyText: '创建即开启',
+                compact: compact,
+                onPick: onPickStart,
+              ),
+            ),
+            SizedBox(width: compact ? 6 : DesignTokens.spaceSm),
+            Expanded(
+              child: _DateField(
+                key: const ValueKey('goal_target_date_field'),
+                label: '目标日期',
+                date: targetDate,
+                emptyText: '无期限',
+                compact: compact,
+                onPick: onPickTarget,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1769,7 +1830,7 @@ class _SectionCard extends StatelessWidget {
           ),
           childrenPadding: const EdgeInsets.fromLTRB(
             DesignTokens.spaceLg,
-            0,
+            DesignTokens.spaceSm,
             DesignTokens.spaceLg,
             DesignTokens.spaceLg,
           ),
@@ -1785,13 +1846,20 @@ class _SectionCard extends StatelessWidget {
               ? null
               : Text(
                   subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: DesignTokens.fontSizeSm,
                     color: cs.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
           children: [
-            AppSecondaryControlTheme(child: Column(children: children)),
+            AppSecondaryControlTheme(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
+            ),
           ],
         ),
       ),
@@ -1802,17 +1870,28 @@ class _SectionCard extends StatelessWidget {
 class _DateField extends StatelessWidget {
   final String label;
   final DateTime? date;
+  final String emptyText;
+  final bool compact;
   final ValueChanged<DateTime?> onPick;
 
   const _DateField({
+    super.key,
     required this.label,
     required this.date,
+    required this.emptyText,
+    this.compact = false,
     required this.onPick,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final hasDate = date != null;
+    final labelText = compact ? _compactDateFieldLabel(label) : label;
+    final valueText = date == null
+        ? emptyText
+        : _formatGoalDateFieldValue(date!);
+    final leadingIconSize = compact ? (hasDate ? 14.0 : 12.0) : 18.0;
     return GestureDetector(
       onTap: () async {
         final picked = await AppDatePicker.pickSolar(
@@ -1826,8 +1905,10 @@ class _DateField extends StatelessWidget {
         if (picked != null) onPick(picked);
       },
       child: Container(
-        constraints: const BoxConstraints(minHeight: 52),
-        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        constraints: BoxConstraints(minHeight: compact ? 42 : 52),
+        padding: compact
+            ? const EdgeInsets.fromLTRB(6, 7, 4, 7)
+            : const EdgeInsets.fromLTRB(10, 8, 8, 8),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
           borderRadius: DesignTokens.borderRadiusMd,
@@ -1838,36 +1919,65 @@ class _DateField extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.calendar_today_outlined, size: 18, color: cs.primary),
-            const SizedBox(width: DesignTokens.spaceXs),
+            if (compact && hasDate)
+              Tooltip(
+                message: '清除日期',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onPick(null),
+                  child: SizedBox.square(
+                    dimension: leadingIconSize,
+                    child: Icon(
+                      Icons.close,
+                      size: leadingIconSize,
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Icon(
+                Icons.calendar_today_outlined,
+                size: leadingIconSize,
+                color: cs.primary,
+              ),
+            SizedBox(width: compact ? 3 : DesignTokens.spaceXs),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
                   Text(
-                    label,
+                    labelText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: DesignTokens.fontSizeXs,
+                      fontSize: compact ? 11 : DesignTokens.fontSizeXs,
                       color: cs.onSurface.withValues(alpha: 0.55),
                     ),
                   ),
-                  Text(
-                    date == null ? '未设置' : _formatDate(date!),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: DesignTokens.fontSizeSm,
-                      fontWeight: FontWeight.normal,
+                  SizedBox(width: compact ? 2 : DesignTokens.spaceXs),
+                  Expanded(
+                    child: Text(
+                      valueText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: compact ? 11 : DesignTokens.fontSizeSm,
+                        fontWeight: FontWeight.normal,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            if (date != null)
+            if (date != null && !compact)
               IconButton(
-                iconSize: 14,
+                iconSize: compact ? 12 : 14,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                constraints: BoxConstraints.tightFor(
+                  width: compact ? 18 : 24,
+                  height: compact ? 18 : 24,
+                ),
                 icon: const Icon(Icons.close),
                 onPressed: () => onPick(null),
               ),
@@ -1888,6 +1998,23 @@ TextStyle _subtleLabel(BuildContext context) => TextStyle(
 );
 
 String _formatDate(DateTime d) => I18nDateFormat.date(d);
+
+String _formatGoalDateFieldValue(DateTime d) => '${d.year}/${d.month}/${d.day}';
+
+String _compactDateFieldLabel(String label) {
+  if (label.startsWith('开始')) return '开始';
+  if (label.startsWith('目标')) return '目标';
+  return label;
+}
+
+DateTime _goalEffectiveStartDay({
+  required DateTime? startDate,
+  required DateTime? createdAt,
+  required DateTime fallback,
+}) {
+  final raw = startDate ?? createdAt ?? fallback;
+  return DateTime(raw.year, raw.month, raw.day);
+}
 
 String _normalizeWorkspaceId(String? raw) {
   final value = raw?.trim();

@@ -93,6 +93,10 @@ void main() {
     final source = File('lib/screens/admin_screen.dart').readAsStringSync();
 
     expect(source, contains("ValueKey('admin_user_mobile_card_"));
+    expect(source, contains("ValueKey('admin_user_identity_badges_"));
+    expect(source, contains("ValueKey('admin_users_toolbar_actions')"));
+    expect(source, contains('toolbarConstraints.maxWidth < 380'));
+    expect(source, contains('constraints.maxWidth < 420'));
     expect(source, contains("label: const Text('更多详情')"));
     expect(source, contains('width: 40,'));
     expect(source, contains("title: '基础功能'"));
@@ -1152,6 +1156,201 @@ void main() {
       ),
     );
   });
+
+  testWidgets('Admin groups header keeps add action inside 320px viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final client = ApiClient(
+      baseUrl: 'https://duoyi.test',
+      token: 'admin-token',
+      httpClient: MockClient((request) async {
+        if (request.method == 'GET' &&
+            request.url.path == '/api/admin/groups') {
+          return http.Response(
+            json.encode({
+              'items': [
+                {
+                  'id': 'group_default',
+                  'name': '默认用户组',
+                  'description': '默认普通用户使用的用户组',
+                  'default_time_coins': 100,
+                  'is_active': true,
+                  'user_count': 3,
+                },
+              ],
+              'total': 1,
+              'limit': 20,
+              'offset': 0,
+              'has_more': false,
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>.value(
+        value: _FakeAuthProvider(
+          state: const AuthState(
+            userId: 'admin',
+            username: 'admin',
+            token: 'admin-token',
+            isAdmin: true,
+          ),
+          client: client,
+        ),
+        child: const MaterialApp(home: AdminScreen(initialTabIndex: 5)),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('用户组管理'), findsOneWidget);
+    expect(find.text('新增用户组'), findsOneWidget);
+    final addButtonRect = tester.getRect(find.text('新增用户组'));
+    expect(addButtonRect.left, greaterThanOrEqualTo(0));
+    expect(addButtonRect.right, lessThanOrEqualTo(320));
+  });
+
+  testWidgets(
+    'Admin users search toolbar and long identity badges fit 320px viewport',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const longGroupId = 'group_long';
+      const longRoleId = 'role_long';
+      const longGroupName = '超长用户组名称用于验证窄屏不会撑出卡片边界';
+      const longRoleName = '超长角色名称用于验证窄屏不会撑出卡片边界';
+      final client = ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'admin-token',
+        httpClient: MockClient((request) async {
+          if (request.method == 'GET' &&
+              request.url.path == '/api/admin/users') {
+            return http.Response(
+              json.encode({
+                'items': [
+                  {
+                    'user_id': 'user-a',
+                    'username': 'layout-user-with-long-name',
+                    'email':
+                        'very-long-layout-user-email-address@example.invalid',
+                    'email_verified': false,
+                    'display_name': '窄屏布局测试用户',
+                    'is_admin': true,
+                    'admin_permissions': ['users'],
+                    'is_disabled': false,
+                    'created_at': '2026-05-20 00:00:00',
+                    'last_login_at': '2026-05-20 00:00:00',
+                    'last_active_at': '2026-05-20 00:00:00',
+                    'feedback_count': 0,
+                    'online': true,
+                    'group_id': longGroupId,
+                    'role_id': longRoleId,
+                    'coin_balance': 123,
+                    'lifetime_coins': 456,
+                  },
+                ],
+                'total': 1,
+                'limit': 20,
+                'offset': 0,
+                'has_more': false,
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          if (request.method == 'GET' &&
+              request.url.path == '/api/admin/groups') {
+            return http.Response(
+              json.encode({
+                'items': [
+                  {
+                    'id': longGroupId,
+                    'name': longGroupName,
+                    'description': '',
+                    'default_time_coins': 100,
+                    'is_active': true,
+                    'user_count': 1,
+                  },
+                ],
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          if (request.method == 'GET' &&
+              request.url.path == '/api/admin/roles') {
+            return http.Response(
+              json.encode([
+                {
+                  'id': longRoleId,
+                  'name': longRoleName,
+                  'description': '',
+                  'permission_codes': ['users'],
+                  'is_active': true,
+                  'user_count': 1,
+                },
+              ]),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AuthProvider>.value(
+          value: _FakeAuthProvider(
+            state: const AuthState(
+              userId: 'admin',
+              username: 'admin',
+              token: 'admin-token',
+              isAdmin: true,
+            ),
+            client: client,
+          ),
+          child: const MaterialApp(home: AdminScreen(initialTabIndex: 4)),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('admin_users_toolbar_actions')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('admin_user_identity_badges_user-a')),
+        findsOneWidget,
+      );
+      expect(find.text(longRoleName), findsOneWidget);
+      expect(find.text(longGroupName), findsOneWidget);
+
+      final toolbarRect = tester.getRect(
+        find.byKey(const ValueKey('admin_users_toolbar_actions')),
+      );
+      final badgesRect = tester.getRect(
+        find.byKey(const ValueKey('admin_user_identity_badges_user-a')),
+      );
+      expect(toolbarRect.left, greaterThanOrEqualTo(0));
+      expect(toolbarRect.right, lessThanOrEqualTo(320));
+      expect(badgesRect.left, greaterThanOrEqualTo(0));
+      expect(badgesRect.right, lessThanOrEqualTo(320));
+    },
+  );
 
   testWidgets('Admin users tab bulk-disables selected users', (tester) async {
     final requests = <String>[];

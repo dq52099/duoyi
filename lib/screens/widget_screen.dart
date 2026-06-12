@@ -552,17 +552,35 @@ class _WidgetDisplayModePanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          SegmentedButton<WidgetDisplayMode>(
-            segments: [
-              for (final mode in WidgetDisplayMode.values)
-                ButtonSegment(
-                  value: mode,
-                  label: Text('${mode.label} ${mode.launcherRequestLabel}'),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final segmented = SegmentedButton<WidgetDisplayMode>(
+                segments: [
+                  for (final mode in WidgetDisplayMode.values)
+                    ButtonSegment(
+                      value: mode,
+                      label: Text(
+                        '${mode.label} ${mode.launcherRequestLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                selected: {value},
+                showSelectedIcon: false,
+                onSelectionChanged: (next) => onChanged(next.single),
+              );
+              if (constraints.maxWidth >= 340) {
+                return segmented;
+              }
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: segmented,
                 ),
-            ],
-            selected: {value},
-            showSelectedIcon: false,
-            onSelectionChanged: (next) => onChanged(next.single),
+              );
+            },
           ),
           const SizedBox(height: 8),
           Text(
@@ -618,27 +636,42 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
         : _requesting
         ? '正在请求添加'
         : '添加${widget.displayMode.label} ${widget.displayMode.launcherRequestLabel}';
-    return Align(
-      alignment: Alignment.centerRight,
-      child: FilledButton.icon(
-        onPressed: _requesting || widget.checkingPinSupport
-            ? null
-            : disabledByPlatform
-            ? () => _showPinWidgetHelp(context, support)
-            : () => _request(context),
-        style: appSecondaryFilledButtonStyle(context),
-        icon: _requesting
-            ? const SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(
-                disabledByPlatform
-                    ? Icons.help_outline
-                    : Icons.add_to_home_screen_outlined,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 280.0;
+        return Align(
+          alignment: Alignment.centerRight,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: FilledButton.icon(
+              onPressed: _requesting || widget.checkingPinSupport
+                  ? null
+                  : disabledByPlatform
+                  ? () => _showPinWidgetHelp(context, support)
+                  : () => _request(context),
+              style: appSecondaryFilledButtonStyle(context),
+              icon: _requesting
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      disabledByPlatform
+                          ? Icons.help_outline
+                          : Icons.add_to_home_screen_outlined,
+                    ),
+              label: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
               ),
-        label: Text(label),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1054,33 +1087,30 @@ class WidgetPreviewCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const NeverScrollableScrollPhysics(),
-                                child: _WidgetPreviewDensity(
-                                  mode: displayMode,
-                                  child: switch (kind) {
-                                    WidgetPreviewKind.todo =>
-                                      const _WidgetPreviewTodoBody(),
-                                    WidgetPreviewKind.focus =>
-                                      const _WidgetPreviewFocusBody(),
-                                    WidgetPreviewKind.habit =>
-                                      const _WidgetPreviewHabitBody(),
-                                    WidgetPreviewKind.calendar =>
-                                      const _WidgetPreviewCalendarBody(),
-                                    WidgetPreviewKind.schedule =>
-                                      const _WidgetPreviewScheduleBody(),
-                                    WidgetPreviewKind.goal =>
-                                      const _WidgetPreviewGoalBody(),
-                                    WidgetPreviewKind.course =>
-                                      const _WidgetPreviewCourseBody(),
-                                    WidgetPreviewKind.note =>
-                                      const _WidgetPreviewNoteBody(),
-                                    WidgetPreviewKind.anniversary =>
-                                      const _WidgetPreviewAnniversaryBody(),
-                                    WidgetPreviewKind.diary =>
-                                      const _WidgetPreviewDiaryBody(),
-                                  },
-                                ),
+                              child: _WidgetPreviewContentFrame(
+                                mode: displayMode,
+                                child: switch (kind) {
+                                  WidgetPreviewKind.todo =>
+                                    const _WidgetPreviewTodoBody(),
+                                  WidgetPreviewKind.focus =>
+                                    const _WidgetPreviewFocusBody(),
+                                  WidgetPreviewKind.habit =>
+                                    const _WidgetPreviewHabitBody(),
+                                  WidgetPreviewKind.calendar =>
+                                    const _WidgetPreviewCalendarBody(),
+                                  WidgetPreviewKind.schedule =>
+                                    const _WidgetPreviewScheduleBody(),
+                                  WidgetPreviewKind.goal =>
+                                    const _WidgetPreviewGoalBody(),
+                                  WidgetPreviewKind.course =>
+                                    const _WidgetPreviewCourseBody(),
+                                  WidgetPreviewKind.note =>
+                                    const _WidgetPreviewNoteBody(),
+                                  WidgetPreviewKind.anniversary =>
+                                    const _WidgetPreviewAnniversaryBody(),
+                                  WidgetPreviewKind.diary =>
+                                    const _WidgetPreviewDiaryBody(),
+                                },
                               ),
                             ),
                             if (displayMode != WidgetDisplayMode.compact) ...[
@@ -1143,6 +1173,43 @@ class _WidgetPreviewDensity extends StatelessWidget {
       WidgetDisplayMode.detailed => 3,
     };
     return _WidgetPreviewDensityScope(maxLines: maxLines, child: child);
+  }
+}
+
+class _WidgetPreviewContentFrame extends StatelessWidget {
+  final WidgetDisplayMode mode;
+  final Widget child;
+
+  const _WidgetPreviewContentFrame({required this.mode, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final designHeight = switch (mode) {
+      WidgetDisplayMode.compact => 92.0,
+      WidgetDisplayMode.standard => 150.0,
+      WidgetDisplayMode.detailed => 200.0,
+    };
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : mode.previewMaxWidth;
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: width,
+                height: designHeight,
+                child: _WidgetPreviewDensity(mode: mode, child: child),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -1339,10 +1406,16 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
+    const currentWeekIndex = 2;
     final visibleWeeks = switch (maxLines) {
-      1 => [2],
-      2 => [0, 1, 2, 3],
-      _ => [0, 1, 2, 3, 4],
+      1 => [currentWeekIndex],
+      2 => [
+        currentWeekIndex - 1,
+        currentWeekIndex,
+        currentWeekIndex + 1,
+        currentWeekIndex + 2,
+      ],
+      _ => [0, 1, 2, 3, 4, 5],
     };
     const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
     const monthWeeks = <List<int?>>[
@@ -1351,6 +1424,7 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
       [11, 12, 13, 14, 15, 16, 17],
       [18, 19, 20, 21, 22, 23, 24],
       [25, 26, 27, 28, 29, 30, 31],
+      [null, null, null, null, null, null, null],
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
