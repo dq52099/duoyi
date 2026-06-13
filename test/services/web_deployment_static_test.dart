@@ -19,12 +19,26 @@ void main() {
     );
     expect(
       webJob,
+      contains('BUILD_ARGS=(--release --base-href "\$DUOYI_WEB_BASE_HREF")'),
+    );
+    expect(webJob, contains('--dart-define=DUOYI_WEB_TARGET=desktop'));
+    expect(webJob, contains('--dart-define=DUOYI_WEB_TARGET=mobile'));
+    expect(webJob, contains('mv build/web build/web-desktop'));
+    expect(webJob, contains('mv build/web build/web-mobile'));
+    expect(
+      webJob,
       contains(
-        'flutter build web --release --base-href "\$DUOYI_WEB_BASE_HREF" \$DART_DEFINES',
+        'web-artifacts/duoyi-web-\$SUFFIX.tar.gz" -C build/web-desktop .',
       ),
     );
     expect(webJob, contains('web-artifacts/duoyi-web-desktop-\$SUFFIX.tar.gz'));
     expect(webJob, contains('web-artifacts/duoyi-web-mobile-\$SUFFIX.tar.gz'));
+    expect(
+      webJob,
+      contains(
+        'web-artifacts/duoyi-web-mobile-\$SUFFIX.tar.gz" -C build/web-mobile .',
+      ),
+    );
     expect(
       workflow,
       isNot(contains('flutter build web --release --base-href "/"')),
@@ -35,10 +49,54 @@ void main() {
     final downloadPage = File('deploy/duoyi.html').readAsStringSync();
     expect(downloadPage, contains('href="/duoyi/"'));
     expect(downloadPage, contains('http://6688667.xyz/duoyi/'));
-    expect(downloadPage, contains('duoyi-web-desktop-v1.1.38.tar.gz'));
-    expect(downloadPage, contains('duoyi-web-mobile-v1.1.38.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-desktop-v1.1.39.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-mobile-v1.1.39.tar.gz'));
+    expect(downloadPage, isNot(contains('v1.1.38')));
     expect(downloadPage, isNot(contains('v1.1.37')));
     expect(downloadPage, isNot(contains('duoyi-v1.1.35.apk')));
+
+    final webTarget = File('lib/core/web_target.dart').readAsStringSync();
+    expect(webTarget, contains("String.fromEnvironment("));
+    expect(webTarget, contains("'DUOYI_WEB_TARGET'"));
+    expect(webTarget, contains("raw == 'desktop'"));
+    expect(webTarget, contains("raw == 'mobile'"));
+
+    final preferencesProvider = File(
+      'lib/providers/preferences_provider.dart',
+    ).readAsStringSync();
+    expect(preferencesProvider, contains('desktopWebDefaultBottomNavTabs'));
+    expect(preferencesProvider, contains('{0, 1, 2, 3, 6}'));
+    expect(preferencesProvider, contains('isBottomNavTabSupported'));
+    expect(preferencesProvider, contains('normalizeDefaultTab'));
+    expect(preferencesProvider, contains('tab == 5'));
+
+    final main = File('lib/main.dart').readAsStringSync();
+    expect(main, contains('WebTarget.isDesktopWebBuild'));
+    expect(main, contains('_desktopWebVisibleBottomNavTabs'));
+    expect(main, contains('if (tab == 5) continue;'));
+
+    final moreApps = File(
+      'lib/screens/more_apps_screen.dart',
+    ).readAsStringSync();
+    expect(moreApps, contains('WebTarget.isDesktopWebBuild'));
+    expect(moreApps, contains('app.tab == 5'));
+
+    final preferencesScreen = File(
+      'lib/screens/preferences_screen.dart',
+    ).readAsStringSync();
+    expect(preferencesScreen, contains('WebTarget.isDesktopWebBuild'));
+    expect(preferencesScreen, contains('isBottomNavTabSupported(tab)'));
+    expect(
+      preferencesScreen,
+      contains('where(PreferencesProvider.isBottomNavTabSupported)'),
+    );
+
+    final widgetScreen = File(
+      'lib/screens/widget_screen.dart',
+    ).readAsStringSync();
+    expect(widgetScreen, contains('desktop_web_widget_fallback'));
+    expect(widgetScreen, contains('WidgetPreviewCard.calendar'));
+    expect(widgetScreen, contains('const CalendarScreen()'));
 
     final builtIndex = File('build/web/index.html');
     if (builtIndex.existsSync()) {

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/web_target.dart';
 import '../providers/theme_provider.dart';
 import '../services/android_widget_manager.dart';
 import '../services/home_widget_service.dart';
 import '../widgets/surface_components.dart';
+import 'calendar_screen.dart';
 
 class WidgetScreen extends StatefulWidget {
   const WidgetScreen({super.key});
@@ -116,236 +118,282 @@ class _WidgetScreenState extends State<WidgetScreen>
         surfaceTintColor: Colors.transparent,
       ),
       body: AppSecondaryControlTheme(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-          children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              color: cs.surface.withValues(alpha: 0.84),
-              borderRadius: BorderRadius.circular(8),
-              child: Row(
+        child: WebTarget.isDesktopWebBuild
+            ? const _DesktopWebWidgetFallback()
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
                 children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.teal.withValues(alpha: 0.14),
-                    child: const Icon(
-                      Icons.widgets_outlined,
-                      color: Colors.teal,
+                  AppSurfaceCard(
+                    padding: const EdgeInsets.all(16),
+                    color: cs.surface.withValues(alpha: 0.84),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.teal.withValues(alpha: 0.14),
+                          child: const Icon(
+                            Icons.widgets_outlined,
+                            color: Colors.teal,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '桌面小组件预览',
+                            style: appSecondaryMenuItemTextStyle(context),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '桌面小组件预览',
-                      style: appSecondaryMenuItemTextStyle(context),
-                    ),
+                  const SizedBox(height: 12),
+                  _WidgetDisplayModePanel(
+                    value: _displayMode,
+                    onChanged: _setDisplayMode,
+                  ),
+                  const SizedBox(height: 12),
+                  _WidgetPinSupportBanner(
+                    result: _pinSupport,
+                    checking: _checkingPinSupport,
+                    canOpenSettings: _canOpenWidgetSettings,
+                    onRefresh: _loadPinSupport,
+                    onOpenSettings: _openWidgetSettings,
+                  ),
+                  const SizedBox(height: 12),
+                  const _WidgetCatalogTile(
+                    icon: Icons.checklist_rtl_outlined,
+                    title: '今日待办',
+                    subtitle: '展示前三个今日任务，可打开完成流程或快速添加',
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.todo(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.todo,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.timer_outlined,
+                    title: '专注',
+                    subtitle: '今日专注次数、专注时长和快速开始',
+                    color: Colors.redAccent,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.focus(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.focus,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.self_improvement_outlined,
+                    title: '习惯',
+                    subtitle: '今日习惯进度、待打卡习惯和连续记录',
+                    color: Colors.green,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.habit(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.habit,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.calendar_month_outlined,
+                    title: '月历',
+                    subtitle: '显示本月日期和今日标记',
+                    color: Colors.indigo,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.calendar(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.calendar,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.event_note_outlined,
+                    title: '今日日程',
+                    subtitle: '展示今天的日程和提醒时间',
+                    color: Colors.cyan,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.schedule(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.schedule,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.flag_outlined,
+                    title: '目标',
+                    subtitle: '展示进行中目标和进度',
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.goal(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.goal,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.school_outlined,
+                    title: '课程表',
+                    subtitle: '展示今日课程和下一节课',
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.course(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.course,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.edit_note_outlined,
+                    title: '随手记',
+                    subtitle: '展示最近更新的三条笔记，点击进入随手记',
+                    color: Colors.purple,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.note(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.note,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.event_available_outlined,
+                    title: '纪念日',
+                    subtitle: '展示最近的纪念日，点击进入纪念日列表',
+                    color: Colors.pink,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.anniversary(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.anniversary,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 16),
+                  const _WidgetCatalogTile(
+                    icon: Icons.book_outlined,
+                    title: '日记',
+                    subtitle: '展示最近三篇日记，点击进入日记',
+                    color: Colors.teal,
+                  ),
+                  const SizedBox(height: 10),
+                  WidgetPreviewCard.diary(displayMode: _displayMode),
+                  const SizedBox(height: 8),
+                  _AddWidgetButton(
+                    pinSupport: _pinSupport,
+                    checkingPinSupport: _checkingPinSupport,
+                    kind: DuoyiWidgetKind.diary,
+                    displayMode: _displayMode,
+                    canOpenWidgetSettings: _canOpenWidgetSettings,
+                    onPinSupportChanged: _setPinSupport,
+                  ),
+                  const SizedBox(height: 12),
+                  AppInfoBanner(
+                    icon: Icons.touch_app_outlined,
+                    color: Colors.teal,
+                    title: '添加桌面无权限时的处理',
+                    message:
+                        '这里选择的是新添加小组件的默认样式/请求尺寸；已添加到桌面的实例不会被修改。系统小组件列表也提供紧凑 2×2、标准 3×2 和详细 4×3 入口。',
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            _WidgetDisplayModePanel(
-              value: _displayMode,
-              onChanged: _setDisplayMode,
-            ),
-            const SizedBox(height: 12),
-            _WidgetPinSupportBanner(
-              result: _pinSupport,
-              checking: _checkingPinSupport,
-              canOpenSettings: _canOpenWidgetSettings,
-              onRefresh: _loadPinSupport,
-              onOpenSettings: _openWidgetSettings,
-            ),
-            const SizedBox(height: 12),
-            const _WidgetCatalogTile(
-              icon: Icons.checklist_rtl_outlined,
-              title: '今日待办',
-              subtitle: '展示前三个今日任务，可打开完成流程或快速添加',
-              color: Colors.blue,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.todo(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.todo,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.timer_outlined,
-              title: '专注',
-              subtitle: '今日专注次数、专注时长和快速开始',
-              color: Colors.redAccent,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.focus(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.focus,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.self_improvement_outlined,
-              title: '习惯',
-              subtitle: '今日习惯进度、待打卡习惯和连续记录',
-              color: Colors.green,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.habit(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.habit,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.calendar_month_outlined,
-              title: '月历',
-              subtitle: '显示本月日期和今日标记',
-              color: Colors.indigo,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.calendar(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.calendar,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.event_note_outlined,
-              title: '今日日程',
-              subtitle: '展示今天的日程和提醒时间',
-              color: Colors.cyan,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.schedule(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.schedule,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.flag_outlined,
-              title: '目标',
-              subtitle: '展示进行中目标和进度',
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.goal(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.goal,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.school_outlined,
-              title: '课程表',
-              subtitle: '展示今日课程和下一节课',
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.course(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.course,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.edit_note_outlined,
-              title: '随手记',
-              subtitle: '展示最近更新的三条笔记，点击进入随手记',
-              color: Colors.purple,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.note(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.note,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.event_available_outlined,
-              title: '纪念日',
-              subtitle: '展示最近的纪念日，点击进入纪念日列表',
-              color: Colors.pink,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.anniversary(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.anniversary,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 16),
-            const _WidgetCatalogTile(
-              icon: Icons.book_outlined,
-              title: '日记',
-              subtitle: '展示最近三篇日记，点击进入日记',
-              color: Colors.teal,
-            ),
-            const SizedBox(height: 10),
-            WidgetPreviewCard.diary(displayMode: _displayMode),
-            const SizedBox(height: 8),
-            _AddWidgetButton(
-              pinSupport: _pinSupport,
-              checkingPinSupport: _checkingPinSupport,
-              kind: DuoyiWidgetKind.diary,
-              displayMode: _displayMode,
-              canOpenWidgetSettings: _canOpenWidgetSettings,
-              onPinSupportChanged: _setPinSupport,
-            ),
-            const SizedBox(height: 12),
-            AppInfoBanner(
-              icon: Icons.touch_app_outlined,
-              color: Colors.teal,
-              title: '添加桌面无权限时的处理',
-              message:
-                  '这里选择的是新添加小组件的默认样式/请求尺寸；已添加到桌面的实例不会被修改。系统小组件列表也提供紧凑 2×2、标准 3×2 和详细 4×3 入口。',
-            ),
-          ],
-        ),
       ),
+    );
+  }
+}
+
+class _DesktopWebWidgetFallback extends StatelessWidget {
+  const _DesktopWebWidgetFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      key: const ValueKey('desktop_web_widget_fallback'),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+      children: [
+        AppInfoBanner(
+          icon: Icons.desktop_windows_outlined,
+          color: cs.primary,
+          title: '电脑网页版显示日历',
+          message: '桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。',
+        ),
+        const SizedBox(height: 12),
+        const _WidgetCatalogTile(
+          icon: Icons.calendar_month_outlined,
+          title: '月历',
+          subtitle: '电脑网页版默认展示日历，不显示添加桌面小组件按钮',
+          color: Colors.indigo,
+        ),
+        const SizedBox(height: 10),
+        const WidgetPreviewCard.calendar(
+          displayMode: WidgetDisplayMode.detailed,
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const CalendarScreen())),
+            style: appSecondaryFilledButtonStyle(context),
+            icon: const Icon(Icons.calendar_month_outlined, size: 18),
+            label: const Text('打开日历'),
+          ),
+        ),
+      ],
     );
   }
 }

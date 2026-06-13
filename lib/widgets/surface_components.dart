@@ -978,13 +978,16 @@ class AppSettingsTile extends StatelessWidget {
         color: cs.onSurface.withValues(alpha: 0.38),
       );
       return ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: 32),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: SizedBox(
+          height: 40,
+          child: Align(
             alignment: Alignment.centerRight,
-            child: trailing ?? fallback,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: trailing ?? fallback,
+            ),
           ),
         ),
       );
@@ -1004,6 +1007,7 @@ class AppSettingsTile extends StatelessWidget {
                 constraints.maxWidth,
               );
               final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
+              final rowMinHeight = hasSubtitle ? 54.0 : 42.0;
               final leading = Container(
                 width: 34,
                 height: 34,
@@ -1036,45 +1040,37 @@ class AppSettingsTile extends StatelessWidget {
                   ? (contentWidth * 0.40).clamp(48.0, 124.0)
                   : (contentWidth * 0.50).clamp(56.0, 150.0);
               final action = trailingWidget(trailingMaxWidth);
-              if (hasSubtitle) {
-                return Row(
+              return ConstrainedBox(
+                constraints: BoxConstraints(minHeight: rowMinHeight),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    leading,
+                    SizedBox(width: 34, height: 34, child: leading),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          titleText,
-                          const SizedBox(height: 2),
-                          subtitleText,
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: titleText,
+                          ),
+                          if (hasSubtitle) ...[
+                            const SizedBox(height: 2),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: subtitleText,
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
                     action,
                   ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  leading,
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(child: titleText),
-                        const SizedBox(width: 8),
-                        action,
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               );
             },
           ),

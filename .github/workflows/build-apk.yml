@@ -266,11 +266,15 @@ jobs:
 
       - name: Build web (release)
         run: |
-          DART_DEFINES=""
+          BUILD_ARGS=(--release --base-href "$DUOYI_WEB_BASE_HREF")
           if [ -n "$DUOYI_SERVER_URL" ]; then
-            DART_DEFINES="--dart-define=DUOYI_SERVER_URL=$DUOYI_SERVER_URL"
+            BUILD_ARGS+=(--dart-define=DUOYI_SERVER_URL="$DUOYI_SERVER_URL")
           fi
-          flutter build web --release --base-href "$DUOYI_WEB_BASE_HREF" $DART_DEFINES
+          rm -rf build/web build/web-desktop build/web-mobile
+          flutter build web "${BUILD_ARGS[@]}" --dart-define=DUOYI_WEB_TARGET=desktop
+          mv build/web build/web-desktop
+          flutter build web "${BUILD_ARGS[@]}" --dart-define=DUOYI_WEB_TARGET=mobile
+          mv build/web build/web-mobile
 
       - name: Package web
         run: |
@@ -280,11 +284,9 @@ jobs:
           else
             SUFFIX="$(date +%Y%m%d)-${GITHUB_SHA::7}"
           fi
-          tar -czf "web-artifacts/duoyi-web-$SUFFIX.tar.gz" -C build/web .
-          # Flutter Web is responsive; publish desktop/mobile-labeled bundles
-          # so download pages can offer clear choices without diverging code.
-          tar -czf "web-artifacts/duoyi-web-desktop-$SUFFIX.tar.gz" -C build/web .
-          tar -czf "web-artifacts/duoyi-web-mobile-$SUFFIX.tar.gz" -C build/web .
+          tar -czf "web-artifacts/duoyi-web-$SUFFIX.tar.gz" -C build/web-desktop .
+          tar -czf "web-artifacts/duoyi-web-desktop-$SUFFIX.tar.gz" -C build/web-desktop .
+          tar -czf "web-artifacts/duoyi-web-mobile-$SUFFIX.tar.gz" -C build/web-mobile .
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4

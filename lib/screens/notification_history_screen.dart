@@ -1908,47 +1908,54 @@ class _SettingsExpansionHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            key: iconKey,
-            width: 34,
-            height: 34,
-            child: Center(child: Icon(icon, color: color, size: 22)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  key: titleKey,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: appSecondaryMenuItemTextStyle(context).copyWith(
-                    color: cs.onSurface,
-                    fontWeight: DesignTokens.fontWeightRegular,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  key: subtitleKey,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: appSecondaryControlLabelStyle(
-                    context,
-                  ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
-                ),
-              ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 54),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              key: iconKey,
+              width: 34,
+              height: 34,
+              child: Center(child: Icon(icon, color: color, size: 22)),
             ),
-          ),
-          const SizedBox(width: 8),
-          trailing,
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    key: titleKey,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: appSecondaryMenuItemTextStyle(context).copyWith(
+                      color: cs.onSurface,
+                      fontWeight: DesignTokens.fontWeightRegular,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    key: subtitleKey,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: appSecondaryControlLabelStyle(
+                      context,
+                    ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 40,
+              child: Align(alignment: Alignment.centerRight, child: trailing),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2750,52 +2757,64 @@ class _RingtoneControlTile extends StatelessWidget {
               .toDouble();
           final controlBox = SizedBox(
             width: controlWidth,
-            child: Align(alignment: Alignment.centerRight, child: control),
+            height: 40,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: control,
+              ),
+            ),
           );
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+          return ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 54),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
                 ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: appSecondaryMenuItemTextStyle(context).copyWith(
-                        color: cs.onSurface,
-                        fontWeight: DesignTokens.fontWeightRegular,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryMenuItemTextStyle(context).copyWith(
+                          color: cs.onSurface,
+                          fontWeight: DesignTokens.fontWeightRegular,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: appSecondaryControlLabelStyle(
-                        context,
-                      ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: appSecondaryControlLabelStyle(
+                          context,
+                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              controlBox,
-            ],
+                const SizedBox(width: 8),
+                controlBox,
+              ],
+            ),
           );
         },
       ),

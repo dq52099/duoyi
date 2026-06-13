@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/local_timezone_resolver.dart';
 import '../core/notification_history_policy.dart';
 import '../core/report_reminder_config.dart';
+import '../core/web_target.dart';
 import '../models/goal.dart' show ReminderKind;
 
 class DailyReminderSlot {
@@ -136,7 +137,17 @@ List<DailyReminderScheduleSlot> effectiveDailyReminderScheduleSlots(
 class PreferencesProvider extends ChangeNotifier {
   static const maxBottomNavTabs = 5;
   static const fixedBottomNavTabs = <int>{6};
-  static const defaultBottomNavTabs = <int>{0, 1, 2, 5, 6};
+  static const mobileDefaultBottomNavTabs = <int>{0, 1, 2, 5, 6};
+  static const desktopWebDefaultBottomNavTabs = <int>{0, 1, 2, 3, 6};
+  static Set<int> get defaultBottomNavTabs => WebTarget.isDesktopWebBuild
+      ? desktopWebDefaultBottomNavTabs
+      : mobileDefaultBottomNavTabs;
+  static bool isBottomNavTabSupported(int tab) =>
+      !(WebTarget.isDesktopWebBuild && tab == 5);
+  static int normalizeDefaultTab(int tab) {
+    final normalized = tab.clamp(0, 6).toInt();
+    return isBottomNavTabSupported(normalized) ? normalized : 3;
+  }
 
   static const _kFirstDayOfWeek = 'pref_first_day_of_week';
   static const _kDateFormat = 'pref_date_format';
@@ -455,9 +466,9 @@ class PreferencesProvider extends ChangeNotifier {
         (storedOrder == null || !storedOrder.contains('6')) &&
         (storedVisible == null || !storedVisible.contains('6'));
     final storedDefaultTab = p.getInt(_kDefaultTab) ?? 0;
-    _defaultTab = isOldBottomNavConfig && storedDefaultTab == 5
-        ? 6
-        : storedDefaultTab.clamp(0, 6);
+    _defaultTab = normalizeDefaultTab(
+      isOldBottomNavConfig && storedDefaultTab == 5 ? 6 : storedDefaultTab,
+    );
     _haptic = p.getBool(_kHapticFeedback) ?? true;
     _showLunar = p.getBool(_kShowLunar) ?? true;
     _showCompletedTodos = p.getBool(_kShowCompletedTodos) ?? false;
@@ -858,6 +869,7 @@ class PreferencesProvider extends ChangeNotifier {
 
   Future<void> setBottomNavVisible(int tab, bool visible) async {
     if (tab < 0 || tab > 6) return;
+    if (!isBottomNavTabSupported(tab)) return;
     if (fixedBottomNavTabs.contains(tab) && !visible) return;
     if (visible &&
         !_bottomNavVisible.contains(tab) &&
@@ -899,10 +911,15 @@ class PreferencesProvider extends ChangeNotifier {
   static List<int> _normalizeNavOrder(Iterable<int>? source) {
     final result = <int>[];
     for (final tab in source ?? const <int>[]) {
-      if (tab >= 0 && tab <= 6 && !result.contains(tab)) result.add(tab);
+      if (tab >= 0 &&
+          tab <= 6 &&
+          isBottomNavTabSupported(tab) &&
+          !result.contains(tab)) {
+        result.add(tab);
+      }
     }
     for (var i = 0; i < 7; i++) {
-      if (!result.contains(i)) result.add(i);
+      if (isBottomNavTabSupported(i) && !result.contains(i)) result.add(i);
     }
     return List.unmodifiable(result);
   }
@@ -914,7 +931,9 @@ class PreferencesProvider extends ChangeNotifier {
     final orderList = _normalizeNavOrder(order);
     final result = <int>{};
     for (final tab in source ?? const <int>[]) {
-      if (tab >= 0 && tab <= 6) result.add(tab);
+      if (tab >= 0 && tab <= 6 && isBottomNavTabSupported(tab)) {
+        result.add(tab);
+      }
     }
     if (source == null) {
       result.addAll(defaultBottomNavTabs);
@@ -943,9 +962,10 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setDefaultTab(int tab) async {
-    _defaultTab = tab;
+    final normalized = normalizeDefaultTab(tab);
+    _defaultTab = normalized;
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_kDefaultTab, tab);
+    await p.setInt(_kDefaultTab, normalized);
     _notifyPreferenceKeys(const [_kDefaultTab]);
   }
 

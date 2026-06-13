@@ -108,6 +108,30 @@ void main() {
     expect(subtitleRect.top, greaterThan(titleRect.bottom));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('AppSettingsTile aligns daily reminder time row', (tester) async {
+    await _pumpNarrow(
+      tester,
+      width: 320,
+      child: AppSettingsTile(
+        icon: Icons.schedule,
+        title: '提醒时间',
+        subtitle: '到点发送带声音和震动的提醒',
+        color: Colors.deepOrange,
+        trailing: TextButton(onPressed: () {}, child: const Text('08:30')),
+      ),
+    );
+
+    final iconRect = tester.getRect(find.byIcon(Icons.schedule));
+    final titleRect = tester.getRect(find.text('提醒时间'));
+    final subtitleRect = tester.getRect(find.text('到点发送带声音和震动的提醒'));
+    final actionRect = tester.getRect(find.text('08:30'));
+    final textCenterDy = _textBlockCenterDy(titleRect, subtitleRect);
+    expect((iconRect.center.dy - textCenterDy).abs(), lessThan(4));
+    expect((actionRect.center.dy - textCenterDy).abs(), lessThan(4));
+    expect(subtitleRect.top, greaterThan(titleRect.bottom));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _textBlockCenterDy(Rect titleRect, Rect subtitleRect) {

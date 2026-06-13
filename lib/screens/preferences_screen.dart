@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/i18n.dart';
+import '../core/web_target.dart';
 import '../providers/preferences_provider.dart';
 import '../widgets/surface_components.dart';
 
@@ -369,13 +370,14 @@ class _PersonalizationSettingsScreenState
                       value: p.defaultTab,
                       items: [
                         for (var tab = 0; tab <= 6; tab++)
-                          DropdownMenuItem(
-                            value: tab,
-                            child: Text(
-                              _tabLabel(tab),
-                              style: appSecondaryControlTextStyle(context),
+                          if (PreferencesProvider.isBottomNavTabSupported(tab))
+                            DropdownMenuItem(
+                              value: tab,
+                              child: Text(
+                                _tabLabel(tab),
+                                style: appSecondaryControlTextStyle(context),
+                              ),
                             ),
-                          ),
                       ],
                       onChanged: (v) => v == null
                           ? null
@@ -541,11 +543,16 @@ class _BottomNavSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.watch<PreferencesProvider>();
+    final tabs = WebTarget.isDesktopWebBuild
+        ? p.bottomNavOrder
+              .where(PreferencesProvider.isBottomNavTabSupported)
+              .toList(growable: false)
+        : p.bottomNavOrder;
     return AppSettingsSection(
       title: I18n.tr('preferences.section.bottom_nav'),
       subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
       children: [
-        for (final tab in p.bottomNavOrder)
+        for (final tab in tabs)
           _NavConfigTile(
             tab: tab,
             label: _tabLabel(tab),

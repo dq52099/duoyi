@@ -11,6 +11,7 @@ import 'core/local_timezone_resolver.dart';
 import 'core/report_engine.dart';
 import 'core/smart_date_parser.dart';
 import 'core/smart_todo_draft.dart';
+import 'core/web_target.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'providers/todo_provider.dart';
 import 'providers/habit_provider.dart';
@@ -3929,7 +3930,28 @@ class MainShellState extends State<MainShell> {
     final result = prefs.visibleBottomNavTabs
         .where((tab) => tab >= 0 && tab < _tabCount)
         .toList(growable: false);
-    return result.length < 2 ? _fallbackVisibleTabs : List.unmodifiable(result);
+    final visible = result.length < 2 ? _fallbackVisibleTabs : result;
+    return WebTarget.isDesktopWebBuild
+        ? _desktopWebVisibleBottomNavTabs(visible)
+        : List.unmodifiable(visible);
+  }
+
+  List<int> _desktopWebVisibleBottomNavTabs(List<int> tabs) {
+    final next = <int>[];
+    for (final tab in tabs) {
+      if (tab == 5) continue;
+      if (!next.contains(tab)) next.add(tab);
+    }
+    if (!next.contains(3)) {
+      final mineIndex = next.indexOf(6);
+      next.insert(mineIndex >= 0 ? mineIndex : next.length, 3);
+    }
+    while (next.length > PreferencesProvider.maxBottomNavTabs) {
+      final removeAt = next.lastIndexWhere((tab) => tab != 3 && tab != 6);
+      if (removeAt < 0) break;
+      next.removeAt(removeAt);
+    }
+    return List.unmodifiable(next);
   }
 
   int _coerceTabIndex(int index) {
