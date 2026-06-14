@@ -2146,12 +2146,12 @@ class ReminderScheduler {
         : null;
     if (issueSink == null) return;
     issueSink.recordReminderScheduleIssue(
-      title: '提醒交接失败',
+      title: '提醒更新提示',
       message: blocking
-          ? '旧提醒清理失败，已保留原注册状态并暂缓新提醒以避免重复弹出；请重新保存提醒或检查系统提醒权限。($error)'
-          : '旧提醒清理失败，已继续保存当前提醒；若系统仍保留旧队列，可能短时间重复提醒，请在通知设置中检查。($error)',
+          ? '旧提醒清理失败，新提醒已保存。若提醒重复弹出，请前往"我的 → 通知设置"查看已注册提醒。($error)'
+          : '旧提醒清理失败，新提醒已保存。若提醒重复弹出，请前往"我的 → 通知设置"查看已注册提醒。($error)',
       relatedId: label,
-      blocking: blocking,
+      blocking: false,
     );
   }
 
