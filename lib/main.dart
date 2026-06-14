@@ -4081,6 +4081,50 @@ class MainShellState extends State<MainShell> {
         })
         .toList(growable: false);
 
+    if (WebTarget.isDesktopWebBuild) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 900) {
+            return _buildDesktopWebShell(
+              context: context,
+              prefs: prefs,
+              safeIndex: safeIndex,
+              safeVisibleTabs: safeVisibleTabs,
+              selectedNavIndex: selectedNavIndex,
+              showingHiddenTab: showingHiddenTab,
+              destinations: navDestinations,
+            );
+          }
+          return _buildMobileShell(
+            prefs: prefs,
+            safeIndex: safeIndex,
+            safeVisibleTabs: safeVisibleTabs,
+            selectedNavIndex: selectedNavIndex,
+            showingHiddenTab: showingHiddenTab,
+            destinations: navDestinations,
+          );
+        },
+      );
+    }
+
+    return _buildMobileShell(
+      prefs: prefs,
+      safeIndex: safeIndex,
+      safeVisibleTabs: safeVisibleTabs,
+      selectedNavIndex: selectedNavIndex,
+      showingHiddenTab: showingHiddenTab,
+      destinations: navDestinations,
+    );
+  }
+
+  Widget _buildMobileShell({
+    required PreferencesProvider prefs,
+    required int safeIndex,
+    required List<int> safeVisibleTabs,
+    required int selectedNavIndex,
+    required bool showingHiddenTab,
+    required List<NavigationDestination> destinations,
+  }) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BrandBackground(
@@ -4116,9 +4160,115 @@ class MainShellState extends State<MainShell> {
                 _allowHiddenCurrentIndex = false;
                 _hasExplicitNavigation = true;
               }),
-              destinations: navDestinations,
+              destinations: destinations,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             ),
+    );
+  }
+
+  Widget _buildDesktopWebShell({
+    required BuildContext context,
+    required PreferencesProvider prefs,
+    required int safeIndex,
+    required List<int> safeVisibleTabs,
+    required int selectedNavIndex,
+    required bool showingHiddenTab,
+    required List<NavigationDestination> destinations,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final appTitle = AppLocalizations.of(context).appTitle;
+    final content = IndexedStack(
+      index: safeIndex,
+      children: List.generate(
+        _tabCount,
+        (tab) => _builtTabs.contains(tab)
+            ? _buildTab(tab, safeVisibleTabs)
+            : _LazyTabPlaceholder(tab: tab),
+      ),
+    );
+    final body = showingHiddenTab
+        ? Column(
+            children: [
+              _HiddenTabReturnBar(
+                onClose: () => setState(() {
+                  _currentIndex = safeVisibleTabs.contains(6)
+                      ? 6
+                      : safeVisibleTabs.first;
+                  _builtTabs.add(_currentIndex);
+                  _allowHiddenCurrentIndex = false;
+                  _hasExplicitNavigation = true;
+                }),
+              ),
+              Expanded(child: content),
+            ],
+          )
+        : content;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: BrandBackground(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final extended = constraints.maxWidth >= 1120;
+            return Row(
+              children: [
+                Material(
+                  color: cs.surface.withValues(alpha: 0.88),
+                  child: SafeArea(
+                    right: false,
+                    child: NavigationRail(
+                      selectedIndex: selectedNavIndex < 0
+                          ? null
+                          : selectedNavIndex,
+                      onDestinationSelected: (i) => setState(() {
+                        _currentIndex = safeVisibleTabs[i];
+                        _builtTabs.add(_currentIndex);
+                        _allowHiddenCurrentIndex = false;
+                        _hasExplicitNavigation = true;
+                      }),
+                      extended: extended,
+                      minExtendedWidth: 196,
+                      backgroundColor: Colors.transparent,
+                      leading: _DesktopRailHeader(
+                        appTitle: appTitle,
+                        extended: extended,
+                      ),
+                      destinations: destinations
+                          .map(
+                            (destination) => NavigationRailDestination(
+                              icon: Tooltip(
+                                message: destination.label,
+                                child: destination.icon,
+                              ),
+                              selectedIcon: Tooltip(
+                                message: destination.label,
+                                child: destination.selectedIcon,
+                              ),
+                              label: Text(
+                                destination.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
+                ),
+                VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.52),
+                ),
+                Expanded(child: body),
+              ],
+            );
+          },
+        ),
+      ),
+      floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
+          ? const QuickCaptureFab()
+          : null,
     );
   }
 
@@ -4137,6 +4287,45 @@ class MainShellState extends State<MainShell> {
       ),
       _ => const SizedBox.shrink(),
     };
+  }
+}
+
+class _DesktopRailHeader extends StatelessWidget {
+  final String appTitle;
+  final bool extended;
+
+  const _DesktopRailHeader({required this.appTitle, required this.extended});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(color: cs.onSurface);
+    final icon = Icon(Icons.dashboard_customize_rounded, color: cs.primary);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 14, 12, extended ? 18 : 10),
+      child: extended
+          ? SizedBox(
+              width: 172,
+              child: Row(
+                children: [
+                  icon,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      appTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Tooltip(message: appTitle, child: icon),
+    );
   }
 }
 

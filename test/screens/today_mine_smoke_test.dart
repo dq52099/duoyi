@@ -202,11 +202,17 @@ void main() {
 
         final list = find.byKey(const ValueKey('today_screen_list'));
         final appBar = find.byType(AppBar);
+        final isDesktopLayout = width >= 1100;
         final scrollable = tester.state<ScrollableState>(
           find.byType(Scrollable).first,
         );
         expect(list, findsOneWidget);
-        expect(appBar, findsOneWidget);
+        if (isDesktopLayout) {
+          expect(appBar, findsNothing);
+          expect(find.text('今日'), findsWidgets);
+        } else {
+          expect(appBar, findsOneWidget);
+        }
         expect(find.text('今日待办'), findsOneWidget);
         expect(find.text('今日待办长标题需要省略但不能遮挡完成按钮和右侧内容'), findsWidgets);
         expect(find.text('无截止日期'), findsWidgets);
@@ -215,12 +221,16 @@ void main() {
         if (scrollable.position.maxScrollExtent > 0) {
           scrollable.position.jumpTo(0);
           await _pumpTodayLayoutFrame(tester);
-          final appBarTop = tester.getTopLeft(appBar).dy;
+          final appBarTop = isDesktopLayout
+              ? null
+              : tester.getTopLeft(appBar).dy;
           final beforePixels = scrollable.position.pixels;
           await tester.drag(list, const Offset(0, -280));
           await _pumpTodayLayoutFrame(tester);
 
-          expect(tester.getTopLeft(appBar).dy, closeTo(appBarTop, 0.1));
+          if (!isDesktopLayout) {
+            expect(tester.getTopLeft(appBar).dy, closeTo(appBarTop!, 0.1));
+          }
           expect(scrollable.position.pixels, greaterThan(beforePixels));
         }
         expect(tester.takeException(), isNull);
@@ -237,7 +247,9 @@ void main() {
       'lib/widgets/surface_components.dart',
     ).readAsStringSync();
 
-    expect(today, contains('constraints.maxWidth < 520 ? 2.55 : 3.65'));
+    expect(today, contains('constraints.maxWidth < (desktop ? 640 : 520)'));
+    expect(today, contains('? (useTwoColumns ? 2.75 : 2.85)'));
+    expect(today, contains(': (useTwoColumns ? 2.55 : 3.65)'));
     expect(mine, contains('class _MineStatsGrid extends StatelessWidget'));
     expect(mine, contains("ValueKey('mine_stats_stable_grid')"));
     expect(mine, contains('height: compact ? 70 : 64'));

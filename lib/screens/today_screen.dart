@@ -130,10 +130,309 @@ class TodayScreen extends StatelessWidget {
     final showReminderSection =
         !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
+    final greeting = '${user.profile.greeting}，${user.profile.username}';
+    final almanacCard = _TodayAlmanacCard(
+      now: now,
+      lunarText: lunar.chineseText,
+      suitable: suitable,
+      avoid: avoid,
+      term: term,
+      festival: festival,
+      onTap: () => _go(context, AlmanacScreen(initialDate: now)),
+    );
+    final productivityCard = _TodayProductivitySection(
+      onTap: () => _go(context, const StatisticsScreen()),
+    );
+
+    Widget metricsGrid({required bool desktop}) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final useTwoColumns = constraints.maxWidth < (desktop ? 640 : 520);
+          final crossAxisCount = useTwoColumns ? 2 : 4;
+          final aspectRatio = desktop
+              ? (useTwoColumns ? 2.75 : 2.85)
+              : (useTwoColumns ? 2.55 : 3.65);
+          return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: aspectRatio,
+            mainAxisSpacing: desktop ? 10 : 8,
+            crossAxisSpacing: desktop ? 10 : 8,
+            children: [
+              AppMetricCard(
+                title: s.navTodo,
+                value: '${todayTodos.length}',
+                unit: I18n.tr('today.unit.item'),
+                icon: Icons.check_circle_outline,
+                color: cs.primary,
+                onTap: () => _go(context, const TodoScreen()),
+              ),
+              AppMetricCard(
+                title: s.navHabit,
+                value: '${(todayHabitProgress * 100).round()}',
+                unit: '%',
+                icon: Icons.repeat,
+                color: cs.tertiary,
+                onTap: () => _go(context, const HabitScreen()),
+              ),
+              AppMetricCard(
+                title: s.navFocus,
+                value: '$todayFocusCount',
+                unit: I18n.tr('today.unit.times'),
+                icon: Icons.timer,
+                color: Colors.redAccent,
+                onTap: () => _go(
+                  context,
+                  const PomodoroScreen(useShellBackground: true),
+                ),
+              ),
+              AppMetricCard(
+                title: I18n.tr('today.diary'),
+                value: diaryP.entryForDate(now) == null
+                    ? I18n.tr('today.diary.unwritten')
+                    : I18n.tr('today.diary.written'),
+                icon: Icons.book_outlined,
+                color: const Color(0xFF26A69A),
+                onTap: () => _go(context, const DiaryScreen()),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    Widget todosSection({int maxItems = 6}) {
+      return _section(
+        I18n.tr('today.todos'),
+        subtitle:
+            '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · 无截止 ${noDueTodayTodos.length}',
+        onMore: () => TodayDetailRouter.open(context, TodaySectionKind.todos),
+        child: todayTodos.isEmpty
+            ? _TodayTodoEmptyState(
+                onTap: () =>
+                    TodayDetailRouter.open(context, TodaySectionKind.todos),
+              )
+            : Column(
+                children: todayTodos.take(maxItems).map((t) {
+                  return _TodayTodoSwipeTile(
+                    todo: t,
+                    onToggle: () =>
+                        completeTodoWithOptionalTimeRecord(context, t),
+                    onOpen: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.todos,
+                      id: t.id,
+                    ),
+                  );
+                }).toList(),
+              ),
+      );
+    }
+
+    Widget? reminderSection() {
+      if (!showReminderSection) return null;
+      return _TodayReminderSection(
+        groups: reminderGroups,
+        suggestions: suggestions,
+        todayKey: todayKey,
+        now: now,
+        onOpenTodo: (id) =>
+            TodayDetailRouter.open(context, TodaySectionKind.todos, id: id),
+        onToggleTodo: (todo) =>
+            completeTodoWithOptionalTimeRecord(context, todo),
+        onOpenCourses: () =>
+            TodayDetailRouter.open(context, TodaySectionKind.courses),
+        onAddToday: (todo) async {
+          final actionNow = DateTime.now();
+          final changed = await context
+              .read<TodoProvider>()
+              .scheduleTodoForToday(
+                todo.id,
+                now: actionNow,
+                waitForReminderSync: false,
+              );
+          if (!context.mounted || !changed) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${I18n.tr('today.added_prefix')}${todo.title}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+      );
+    }
+
+    Widget? coursesSection() {
+      if (todayCourses.isEmpty) return null;
+      return _section(
+        I18n.tr('today.courses'),
+        subtitle:
+            '${todayCourses.length} ${I18n.tr('today.unit.course_section')}',
+        onMore: () => TodayDetailRouter.open(context, TodaySectionKind.courses),
+        child: Column(
+          children: todayCourses.map((c) {
+            return ListTile(
+              dense: true,
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: Color(c.colorValue).withValues(alpha: 0.2),
+                child: Text(
+                  '${c.startSection}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(c.colorValue),
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+              title: Text(c.name),
+              subtitle: Text(
+                '${I18n.tr('today.course.period_prefix')}${c.startSection}-${c.endSection}${I18n.tr('today.course.period_suffix')}${c.location.isEmpty ? '' : ' · ${c.location}'}${c.teacher.isEmpty ? '' : ' · ${c.teacher}'}',
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () =>
+                  TodayDetailRouter.open(context, TodaySectionKind.courses),
+            );
+          }).toList(),
+        ),
+      );
+    }
+
+    Widget? anniversariesSection() {
+      if (soon.isEmpty) return null;
+      return _section(
+        I18n.tr('today.upcoming_anniversaries'),
+        onMore: () =>
+            TodayDetailRouter.open(context, TodaySectionKind.anniversaries),
+        child: Column(
+          children: soon.map((a) {
+            final d = a.daysRemaining;
+            return ListTile(
+              dense: true,
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: Color(a.colorValue).withValues(alpha: 0.15),
+                child: Text(
+                  '$d',
+                  style: TextStyle(
+                    color: Color(a.colorValue),
+                    fontWeight: FontWeight.normal,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              title: Text(a.title),
+              subtitle: Text(
+                d == 0
+                    ? I18n.tr('today.anniversary.today')
+                    : '${I18n.tr('today.anniversary.days_prefix')}$d ${I18n.tr('unit.day')}',
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () => TodayDetailRouter.open(
+                context,
+                TodaySectionKind.anniversaries,
+                id: a.id,
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    }
+
+    Widget goalsSection() {
+      return _section(
+        activeGoals.isEmpty
+            ? I18n.tr('goal.title')
+            : I18n.tr('today.active_goals'),
+        actionLabel: activeGoals.isEmpty
+            ? I18n.tr('goal.new')
+            : I18n.tr('today.view'),
+        onMore: () => activeGoals.isEmpty
+            ? Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GoalEditScreen()),
+              )
+            : TodayDetailRouter.open(context, TodaySectionKind.goals),
+        child: activeGoals.isEmpty
+            ? ListTile(
+                leading: const Icon(Icons.flag_circle_outlined),
+                title: Text(I18n.tr('goal.new')),
+                subtitle: Text(I18n.tr('today.goal.create.subtitle')),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const GoalEditScreen()),
+                ),
+              )
+            : Column(
+                children: activeGoals.map((g) {
+                  final p = g.computedProgress;
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      goalIconFromName(g.icon),
+                      color: Color(g.colorValue),
+                      size: 18,
+                    ),
+                    title: Text(g.title),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: p,
+                            minHeight: 5,
+                            color: Color(g.colorValue),
+                            backgroundColor: Color(
+                              g.colorValue,
+                            ).withValues(alpha: 0.15),
+                          ),
+                        ),
+                        Text(
+                          '${(p * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                    onTap: () => TodayDetailRouter.open(
+                      context,
+                      TodaySectionKind.goals,
+                      id: g.id,
+                    ),
+                  );
+                }).toList(),
+              ),
+      );
+    }
+
+    final isDesktopLayout = MediaQuery.sizeOf(context).width >= 1100;
+    final reminder = reminderSection();
+    final courses = coursesSection();
+    final anniversaries = anniversariesSection();
+    final goals = goalsSection();
+    if (isDesktopLayout) {
+      return _TodayDesktopDashboard(
+        greeting: greeting,
+        dateText:
+            '${I18nDateFormat.monthDayWithWeekday(now)} · ${lunar.chineseText}',
+        almanacCard: almanacCard,
+        productivityCard: productivityCard,
+        metricsGrid: metricsGrid(desktop: true),
+        todosSection: todosSection(maxItems: 8),
+        reminderSection: reminder,
+        quoteCard: _QuoteCard(),
+        goalsSection: goals,
+        coursesSection: courses,
+        anniversariesSection: anniversaries,
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('${user.profile.greeting}，${user.profile.username}'),
+        title: Text(greeting),
         backgroundColor: Colors.transparent,
       ),
       body: ListView(
@@ -141,297 +440,25 @@ class TodayScreen extends StatelessWidget {
         restorationId: 'today_screen_list',
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
         children: [
-          // 日期卡
-          _TodayAlmanacCard(
-            now: now,
-            lunarText: lunar.chineseText,
-            suitable: suitable,
-            avoid: avoid,
-            term: term,
-            festival: festival,
-            onTap: () => _go(context, AlmanacScreen(initialDate: now)),
-          ),
+          almanacCard,
           const SizedBox(height: 12),
 
-          _TodayProductivitySection(
-            onTap: () => _go(context, const StatisticsScreen()),
-          ),
+          productivityCard,
 
           const SizedBox(height: 12),
 
-          // 今日一言
           _QuoteCard(),
 
           const SizedBox(height: 10),
-          // 四个小指标
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth < 520 ? 2 : 4;
-              final aspectRatio = constraints.maxWidth < 520 ? 2.55 : 3.65;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: aspectRatio,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                children: [
-                  AppMetricCard(
-                    title: s.navTodo,
-                    value: '${todayTodos.length}',
-                    unit: I18n.tr('today.unit.item'),
-                    icon: Icons.check_circle_outline,
-                    color: cs.primary,
-                    onTap: () => _go(context, const TodoScreen()),
-                  ),
-                  AppMetricCard(
-                    title: s.navHabit,
-                    value: '${(todayHabitProgress * 100).round()}',
-                    unit: '%',
-                    icon: Icons.repeat,
-                    color: cs.tertiary,
-                    onTap: () => _go(context, const HabitScreen()),
-                  ),
-                  AppMetricCard(
-                    title: s.navFocus,
-                    value: '$todayFocusCount',
-                    unit: I18n.tr('today.unit.times'),
-                    icon: Icons.timer,
-                    color: Colors.redAccent,
-                    onTap: () => _go(
-                      context,
-                      const PomodoroScreen(useShellBackground: true),
-                    ),
-                  ),
-                  AppMetricCard(
-                    title: I18n.tr('today.diary'),
-                    value: diaryP.entryForDate(now) == null
-                        ? I18n.tr('today.diary.unwritten')
-                        : I18n.tr('today.diary.written'),
-                    icon: Icons.book_outlined,
-                    color: const Color(0xFF26A69A),
-                    onTap: () => _go(context, const DiaryScreen()),
-                  ),
-                ],
-              );
-            },
-          ),
+          metricsGrid(desktop: false),
 
           const SizedBox(height: 14),
 
-          // 今日待办
-          _section(
-            I18n.tr('today.todos'),
-            subtitle:
-                '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · 无截止 ${noDueTodayTodos.length}',
-            onMore: () =>
-                TodayDetailRouter.open(context, TodaySectionKind.todos),
-            child: todayTodos.isEmpty
-                ? _TodayTodoEmptyState(
-                    onTap: () =>
-                        TodayDetailRouter.open(context, TodaySectionKind.todos),
-                  )
-                : Column(
-                    children: todayTodos.take(6).map((t) {
-                      return _TodayTodoSwipeTile(
-                        todo: t,
-                        onToggle: () =>
-                            completeTodoWithOptionalTimeRecord(context, t),
-                        onOpen: () => TodayDetailRouter.open(
-                          context,
-                          TodaySectionKind.todos,
-                          id: t.id,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-          ),
-
-          if (showReminderSection)
-            _TodayReminderSection(
-              groups: reminderGroups,
-              suggestions: suggestions,
-              todayKey: todayKey,
-              now: now,
-              onOpenTodo: (id) => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.todos,
-                id: id,
-              ),
-              onToggleTodo: (todo) =>
-                  completeTodoWithOptionalTimeRecord(context, todo),
-              onOpenCourses: () =>
-                  TodayDetailRouter.open(context, TodaySectionKind.courses),
-              onAddToday: (todo) async {
-                final actionNow = DateTime.now();
-                final changed = await context
-                    .read<TodoProvider>()
-                    .scheduleTodoForToday(
-                      todo.id,
-                      now: actionNow,
-                      waitForReminderSync: false,
-                    );
-                if (!context.mounted || !changed) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${I18n.tr('today.added_prefix')}${todo.title}',
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-            ),
-
-          // 今日课程
-          if (todayCourses.isNotEmpty)
-            _section(
-              I18n.tr('today.courses'),
-              subtitle:
-                  '${todayCourses.length} ${I18n.tr('today.unit.course_section')}',
-              onMore: () =>
-                  TodayDetailRouter.open(context, TodaySectionKind.courses),
-              child: Column(
-                children: todayCourses.map((c) {
-                  return ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Color(
-                        c.colorValue,
-                      ).withValues(alpha: 0.2),
-                      child: Text(
-                        '${c.startSection}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(c.colorValue),
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                    title: Text(c.name),
-                    subtitle: Text(
-                      '${I18n.tr('today.course.period_prefix')}${c.startSection}-${c.endSection}${I18n.tr('today.course.period_suffix')}${c.location.isEmpty ? '' : ' · ${c.location}'}${c.teacher.isEmpty ? '' : ' · ${c.teacher}'}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    onTap: () => TodayDetailRouter.open(
-                      context,
-                      TodaySectionKind.courses,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-          // 近期纪念日
-          if (soon.isNotEmpty)
-            _section(
-              I18n.tr('today.upcoming_anniversaries'),
-              onMore: () => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.anniversaries,
-              ),
-              child: Column(
-                children: soon.map((a) {
-                  final d = a.daysRemaining;
-                  return ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Color(
-                        a.colorValue,
-                      ).withValues(alpha: 0.15),
-                      child: Text(
-                        '$d',
-                        style: TextStyle(
-                          color: Color(a.colorValue),
-                          fontWeight: FontWeight.normal,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    title: Text(a.title),
-                    subtitle: Text(
-                      d == 0
-                          ? I18n.tr('today.anniversary.today')
-                          : '${I18n.tr('today.anniversary.days_prefix')}$d ${I18n.tr('unit.day')}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    onTap: () => TodayDetailRouter.open(
-                      context,
-                      TodaySectionKind.anniversaries,
-                      id: a.id,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-          // 目标进度
-          _section(
-            activeGoals.isEmpty
-                ? I18n.tr('goal.title')
-                : I18n.tr('today.active_goals'),
-            actionLabel: activeGoals.isEmpty
-                ? I18n.tr('goal.new')
-                : I18n.tr('today.view'),
-            onMore: () => activeGoals.isEmpty
-                ? Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const GoalEditScreen()),
-                  )
-                : TodayDetailRouter.open(context, TodaySectionKind.goals),
-            child: activeGoals.isEmpty
-                ? ListTile(
-                    leading: const Icon(Icons.flag_circle_outlined),
-                    title: Text(I18n.tr('goal.new')),
-                    subtitle: Text(I18n.tr('today.goal.create.subtitle')),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const GoalEditScreen()),
-                    ),
-                  )
-                : Column(
-                    children: activeGoals.map((g) {
-                      final p = g.computedProgress;
-                      return ListTile(
-                        dense: true,
-                        leading: Icon(
-                          goalIconFromName(g.icon),
-                          color: Color(g.colorValue),
-                          size: 18,
-                        ),
-                        title: Text(g.title),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
-                                value: p,
-                                minHeight: 5,
-                                color: Color(g.colorValue),
-                                backgroundColor: Color(
-                                  g.colorValue,
-                                ).withValues(alpha: 0.15),
-                              ),
-                            ),
-                            Text(
-                              '${(p * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                          ],
-                        ),
-                        onTap: () => TodayDetailRouter.open(
-                          context,
-                          TodaySectionKind.goals,
-                          id: g.id,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-          ),
+          todosSection(),
+          ?reminder,
+          ?courses,
+          ?anniversaries,
+          goals,
         ],
       ),
     );
@@ -489,6 +516,194 @@ class TodayScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => BrandRouteSurface(child: screen)),
+    );
+  }
+}
+
+class _TodayDesktopDashboard extends StatelessWidget {
+  final String greeting;
+  final String dateText;
+  final Widget almanacCard;
+  final Widget productivityCard;
+  final Widget metricsGrid;
+  final Widget todosSection;
+  final Widget? reminderSection;
+  final Widget quoteCard;
+  final Widget goalsSection;
+  final Widget? coursesSection;
+  final Widget? anniversariesSection;
+
+  const _TodayDesktopDashboard({
+    required this.greeting,
+    required this.dateText,
+    required this.almanacCard,
+    required this.productivityCard,
+    required this.metricsGrid,
+    required this.todosSection,
+    required this.reminderSection,
+    required this.quoteCard,
+    required this.goalsSection,
+    required this.coursesSection,
+    required this.anniversariesSection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final sidebarChildren = <Widget>[
+      quoteCard,
+      const SizedBox(height: 10),
+      goalsSection,
+      ?coursesSection,
+      ?anniversariesSection,
+    ];
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        bottom: false,
+        child: Scrollbar(
+          child: SingleChildScrollView(
+            key: const ValueKey('today_screen_list'),
+            primary: true,
+            padding: const EdgeInsets.fromLTRB(28, 22, 28, 32),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TodayDesktopHeader(greeting: greeting, dateText: dateText),
+                    const SizedBox(height: 18),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  if (constraints.maxWidth < 720) {
+                                    return Column(
+                                      children: [
+                                        almanacCard,
+                                        const SizedBox(height: 12),
+                                        productivityCard,
+                                      ],
+                                    );
+                                  }
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(child: almanacCard),
+                                      const SizedBox(width: 14),
+                                      SizedBox(
+                                        width: 320,
+                                        child: productivityCard,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              metricsGrid,
+                              const SizedBox(height: 14),
+                              todosSection,
+                              ?reminderSection,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        SizedBox(
+                          width: 340,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: sidebarChildren,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Divider(
+                      height: 1,
+                      color: cs.outlineVariant.withValues(alpha: 0.20),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayDesktopHeader extends StatelessWidget {
+  final String greeting;
+  final String dateText;
+
+  const _TodayDesktopHeader({required this.greeting, required this.dateText});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                greeting,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontSize: 22,
+                  height: 1.18,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                dateText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cs.surface.withValues(alpha: 0.74),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.36),
+              width: 0.55,
+            ),
+          ),
+          child: Text(
+            I18n.tr('nav.today'),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.normal,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

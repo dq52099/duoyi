@@ -3,14 +3,19 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('web release artifact keeps the public /duoyi/ deployment base href', () {
+  test('web release and pages deploy keep the public /duoyi/ deployment', () {
     final workflow = File('.github/workflows/build-apk.yml').readAsStringSync();
     final webJobStart = workflow.indexOf('\n  web:\n');
+    final deployPagesJobStart = workflow.indexOf(
+      '\n  deploy-pages:\n',
+      webJobStart,
+    );
     final releaseJobStart = workflow.indexOf('\n  release:\n', webJobStart);
     expect(webJobStart, greaterThanOrEqualTo(0));
+    expect(deployPagesJobStart, greaterThan(webJobStart));
     expect(releaseJobStart, greaterThan(webJobStart));
 
-    final webJob = workflow.substring(webJobStart, releaseJobStart);
+    final webJob = workflow.substring(webJobStart, deployPagesJobStart);
     expect(
       webJob,
       contains(
@@ -25,6 +30,9 @@ void main() {
     expect(webJob, contains('--dart-define=DUOYI_WEB_TARGET=mobile'));
     expect(webJob, contains('mv build/web build/web-desktop'));
     expect(webJob, contains('mv build/web build/web-mobile'));
+    expect(webJob, contains("github.ref == 'refs/heads/main'"));
+    expect(webJob, contains('actions/upload-pages-artifact@v4'));
+    expect(webJob, contains('path: build/web-desktop'));
     expect(
       webJob,
       contains(
@@ -39,6 +47,21 @@ void main() {
         'web-artifacts/duoyi-web-mobile-\$SUFFIX.tar.gz" -C build/web-mobile .',
       ),
     );
+
+    final deployPagesJob = workflow.substring(
+      deployPagesJobStart,
+      releaseJobStart,
+    );
+    expect(deployPagesJob, contains("needs: web"));
+    expect(
+      deployPagesJob,
+      contains("if: github.ref == 'refs/heads/main'"),
+    );
+    expect(deployPagesJob, contains('pages: write'));
+    expect(deployPagesJob, contains('id-token: write'));
+    expect(deployPagesJob, contains('name: github-pages'));
+    expect(deployPagesJob, contains('actions/deploy-pages@v4'));
+
     expect(
       workflow,
       isNot(contains('flutter build web --release --base-href "/"')),

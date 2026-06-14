@@ -71,12 +71,31 @@ void main() {
         'final showReminderSection =\n        !reminderGroups.isEmpty || suggestions.isNotEmpty;',
       ),
     );
-    final reminderIndex = today.indexOf('if (showReminderSection)');
-    final todoIndex = today.indexOf('// 今日待办');
-    final goalIndex = today.indexOf('// 目标进度');
-    expect(reminderIndex, greaterThanOrEqualTo(0));
-    expect(reminderIndex, greaterThan(todoIndex));
-    expect(goalIndex, greaterThan(reminderIndex));
+    final reminderFactoryIndex = today.indexOf('Widget? reminderSection()');
+    final reminderValueIndex = today.indexOf(
+      'final reminder = reminderSection();',
+    );
+    final desktopReminderIndex = today.indexOf('reminderSection: reminder,');
+    final mobileReminderIndex = today.indexOf('?reminder,');
+    final todoIndex = today.indexOf('Widget todosSection({int maxItems = 6})');
+    final goalIndex = today.indexOf('Widget goalsSection()');
+    final desktopTodoIndex = today.indexOf(
+      'todosSection: todosSection(maxItems: 8),',
+    );
+    final mobileTodoIndex = today.indexOf('todosSection(),');
+    expect(reminderFactoryIndex, greaterThanOrEqualTo(0));
+    expect(reminderValueIndex, greaterThanOrEqualTo(0));
+    expect(desktopReminderIndex, greaterThanOrEqualTo(0));
+    expect(mobileReminderIndex, greaterThanOrEqualTo(0));
+    expect(todoIndex, greaterThanOrEqualTo(0));
+    expect(goalIndex, greaterThanOrEqualTo(0));
+    expect(desktopTodoIndex, greaterThanOrEqualTo(0));
+    expect(mobileTodoIndex, greaterThanOrEqualTo(0));
+    expect(reminderValueIndex, greaterThan(reminderFactoryIndex));
+    expect(reminderFactoryIndex, greaterThan(todoIndex));
+    expect(goalIndex, greaterThan(reminderFactoryIndex));
+    expect(desktopReminderIndex, greaterThan(desktopTodoIndex));
+    expect(mobileReminderIndex, greaterThan(mobileTodoIndex));
 
     final sectionStart = today.indexOf('class _TodayReminderSection');
     final sectionEnd = today.indexOf('class _ReminderGroupBlock');
