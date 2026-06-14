@@ -113,118 +113,127 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
     context: context,
     builder: (sheetCtx) => StatefulBuilder(
       builder: (sheetCtx, setSt) {
+        var saving = false;
         Future<void> save() async {
-          final messenger = ScaffoldMessenger.of(context);
-          final navigator = Navigator.of(sheetCtx);
-          final habitProvider = context.read<HabitProvider>();
-          final name = nameCtrl.text.trim();
-          if (name.isEmpty) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(I18n.tr('habit.error.name_required'))),
-            );
-            return;
-          }
-
-          final target = int.tryParse(targetCtrl.text.trim()) ?? 1;
-          if (target < 1) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(I18n.tr('habit.error.daily_target'))),
-            );
-            return;
-          }
-          final shouldUseFlex =
-              flexRuleEnabled && selectedKind == HabitKind.positive;
-          final flexTarget = int.tryParse(flexTargetCtrl.text.trim()) ?? 0;
-          if (shouldUseFlex && flexTarget < 1) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(I18n.tr('habit.error.flex_target'))),
-            );
-            return;
-          }
-          if (!habitDateRangeIsValid(startDate, endDate)) {
-            messenger.showSnackBar(
-              SnackBar(content: Text(I18n.tr('habit.error.date_range'))),
-            );
-            return;
-          }
-
-          final reminderRule = _habitPrimaryReminder(reminderPlan);
-          final hasReminder =
-              reminderPlan.enabled &&
-              reminderRule != null &&
-              reminderRule.enabled &&
-              reminderRule.hour != null &&
-              reminderRule.minute != null;
-          final nextActiveWeekdays =
-              hasReminder &&
-                  reminderRule.type == ReminderRuleType.weeklyTime &&
-                  reminderRule.weekdays.isNotEmpty
-              ? reminderRule.weekdays
-                    .where((d) => d >= 1 && d <= 7)
-                    .map((d) => d - 1)
-                    .toList()
-              : habit.activeWeekdays;
-          if (hasReminder) {
-            final notificationService = context.read<NotificationService?>();
-            final granted =
-                notificationService == null ||
-                await notificationService.ensureReadyForReminder(
-                  scheduledTime: _nextHabitReminderTrigger(reminderRule),
-                  issueTitle: I18n.tr('habit.error.reminder_register_failed'),
-                  relatedId: habit.id,
-                );
-            if (!granted) {
-              final issue = notificationService.lastScheduleIssue;
+          if (saving) return;
+          setSt(() => saving = true);
+          try {
+            final messenger = ScaffoldMessenger.of(context);
+            final navigator = Navigator.of(sheetCtx);
+            final habitProvider = context.read<HabitProvider>();
+            final name = nameCtrl.text.trim();
+            if (name.isEmpty) {
               messenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    issue?.message ??
-                        I18n.tr('habit.error.notification_permission'),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                ),
+                SnackBar(content: Text(I18n.tr('habit.error.name_required'))),
               );
               return;
             }
+
+            final target = int.tryParse(targetCtrl.text.trim()) ?? 1;
+            if (target < 1) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(I18n.tr('habit.error.daily_target'))),
+              );
+              return;
+            }
+            final shouldUseFlex =
+                flexRuleEnabled && selectedKind == HabitKind.positive;
+            final flexTarget = int.tryParse(flexTargetCtrl.text.trim()) ?? 0;
+            if (shouldUseFlex && flexTarget < 1) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(I18n.tr('habit.error.flex_target'))),
+              );
+              return;
+            }
+            if (!habitDateRangeIsValid(startDate, endDate)) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(I18n.tr('habit.error.date_range'))),
+              );
+              return;
+            }
+
+            final reminderRule = _habitPrimaryReminder(reminderPlan);
+            final hasReminder =
+                reminderPlan.enabled &&
+                reminderRule != null &&
+                reminderRule.enabled &&
+                reminderRule.hour != null &&
+                reminderRule.minute != null;
+            final nextActiveWeekdays =
+                hasReminder &&
+                    reminderRule.type == ReminderRuleType.weeklyTime &&
+                    reminderRule.weekdays.isNotEmpty
+                ? reminderRule.weekdays
+                      .where((d) => d >= 1 && d <= 7)
+                      .map((d) => d - 1)
+                      .toList()
+                : habit.activeWeekdays;
+            if (hasReminder) {
+              final notificationService = context.read<NotificationService?>();
+              final granted =
+                  notificationService == null ||
+                  await notificationService.ensureReadyForReminder(
+                    scheduledTime: _nextHabitReminderTrigger(reminderRule),
+                    issueTitle: I18n.tr('habit.error.reminder_register_failed'),
+                    relatedId: habit.id,
+                  );
+              if (!granted) {
+                final issue = notificationService.lastScheduleIssue;
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      issue?.message ??
+                          I18n.tr('habit.error.notification_permission'),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+            }
+
+            final updated = habit.copyWith(
+              name: name,
+              targetCount: target,
+              unit: unitCtrl.text.trim().isEmpty ? null : unitCtrl.text.trim(),
+              clearUnit: unitCtrl.text.trim().isEmpty,
+              category: habitCategoryOrNull(categoryCtrl.text),
+              clearCategory:
+                  normalizeHabitCategory(categoryCtrl.text) ==
+                  defaultHabitCategoryName,
+              colorValue: selectedColor,
+              kind: selectedKind,
+              flexTarget: shouldUseFlex ? flexTarget : null,
+              flexPeriod: shouldUseFlex ? selectedFlexPeriod : null,
+              clearFlexRule: !shouldUseFlex,
+              startDate: startDate,
+              endDate: endDate,
+              clearStartDate: startDate == null,
+              clearEndDate: endDate == null,
+              activeWeekdays: nextActiveWeekdays,
+              remind: hasReminder,
+              remindHour: hasReminder ? reminderRule.hour : null,
+              remindMinute: hasReminder ? reminderRule.minute : null,
+              reminderPlan: hasReminder
+                  ? reminderPlan
+                  : const ReminderPlan.disabled(),
+            );
+
+            await habitProvider.updateHabit(habit.id, updated);
+            if (!context.mounted || !sheetCtx.mounted) return;
+            navigator.pop();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(I18n.tr('habit.saved')),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(milliseconds: 1200),
+              ),
+            );
+          } finally {
+            if (sheetCtx.mounted) {
+              setSt(() => saving = false);
+            }
           }
-
-          final updated = habit.copyWith(
-            name: name,
-            targetCount: target,
-            unit: unitCtrl.text.trim().isEmpty ? null : unitCtrl.text.trim(),
-            clearUnit: unitCtrl.text.trim().isEmpty,
-            category: habitCategoryOrNull(categoryCtrl.text),
-            clearCategory:
-                normalizeHabitCategory(categoryCtrl.text) ==
-                defaultHabitCategoryName,
-            colorValue: selectedColor,
-            kind: selectedKind,
-            flexTarget: shouldUseFlex ? flexTarget : null,
-            flexPeriod: shouldUseFlex ? selectedFlexPeriod : null,
-            clearFlexRule: !shouldUseFlex,
-            startDate: startDate,
-            endDate: endDate,
-            clearStartDate: startDate == null,
-            clearEndDate: endDate == null,
-            activeWeekdays: nextActiveWeekdays,
-            remind: hasReminder,
-            remindHour: hasReminder ? reminderRule.hour : null,
-            remindMinute: hasReminder ? reminderRule.minute : null,
-            reminderPlan: hasReminder
-                ? reminderPlan
-                : const ReminderPlan.disabled(),
-          );
-
-          await habitProvider.updateHabit(habit.id, updated);
-          if (!context.mounted || !sheetCtx.mounted) return;
-          navigator.pop();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(I18n.tr('habit.saved')),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(milliseconds: 1200),
-            ),
-          );
         }
 
         return AppModalSheet(
@@ -235,7 +244,16 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
               onPressed: () => Navigator.of(sheetCtx).pop(),
               child: Text(I18n.tr('action.cancel')),
             ),
-            FilledButton(onPressed: save, child: Text(I18n.tr('action.save'))),
+            FilledButton(
+              onPressed: saving ? null : save,
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(I18n.tr('action.save')),
+            ),
           ],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -96,6 +96,8 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   DateTime? _createdAt;
   String _workspaceId = 'private';
 
+  bool _persisting = false;
+
   bool get _isExisting => _editingId != null;
 
   @override
@@ -199,38 +201,46 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   }
 
   Future<bool> _persist({required bool pop}) async {
-    if (_titleCtrl.text.trim().isEmpty) {
-      _showError('请填写目标标题');
-      return false;
-    }
-    final item = _composeItem();
-    final issues = validateGoal(item);
-    if (issues.isNotEmpty) {
-      _showError(issues.first.message);
-      return false;
-    }
-    if (!_canEditWorkspace(_workspaceId)) {
-      _showError('你在这个共享空间中只有查看权限');
-      return false;
-    }
-    final provider = context.read<GoalProvider>();
-    if (!_isExisting) {
-      await provider.add(item);
+    if (_persisting) return false;
+    setState(() => _persisting = true);
+    try {
+      if (_titleCtrl.text.trim().isEmpty) {
+        _showError('请填写目标标题');
+        return false;
+      }
+      final item = _composeItem();
+      final issues = validateGoal(item);
+      if (issues.isNotEmpty) {
+        _showError(issues.first.message);
+        return false;
+      }
+      if (!_canEditWorkspace(_workspaceId)) {
+        _showError('你在这个共享空间中只有查看权限');
+        return false;
+      }
+      final provider = context.read<GoalProvider>();
+      if (!_isExisting) {
+        await provider.add(item);
+        if (!mounted) return true;
+        setState(() {
+          _editingId = item.id;
+          _createdAt = item.createdAt;
+        });
+      } else {
+        await provider.update(item);
+      }
       if (!mounted) return true;
-      setState(() {
-        _editingId = item.id;
-        _createdAt = item.createdAt;
-      });
-    } else {
-      await provider.update(item);
+      if (pop) {
+        Navigator.pop(context);
+      } else {
+        _showSaved();
+      }
+      return true;
+    } finally {
+      if (mounted) {
+        setState(() => _persisting = false);
+      }
     }
-    if (!mounted) return true;
-    if (pop) {
-      Navigator.pop(context);
-    } else {
-      _showSaved();
-    }
-    return true;
   }
 
   Future<void> _pickFocusNoise(String id) async {
@@ -314,8 +324,14 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             ),
           IconButton(
             tooltip: '保存并返回',
-            icon: const Icon(Icons.check),
-            onPressed: canEditCurrentWorkspace
+            icon: _persisting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+            onPressed: canEditCurrentWorkspace && !_persisting
                 ? () => _persist(pop: true)
                 : null,
           ),

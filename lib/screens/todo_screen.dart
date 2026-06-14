@@ -221,6 +221,7 @@ class _TodoScreenState extends State<TodoScreen> {
     var priority = TodoPriority.none;
     String groupName = '';
     bool aiBusy = false;
+    bool submitting = false;
     List<String> aiSubtasks = [];
     String? aiError;
 
@@ -447,67 +448,85 @@ class _TodoScreenState extends State<TodoScreen> {
                     width: double.infinity,
                     height: 42,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        if (titleCtrl.text.trim().isNotEmpty) {
-                          final notificationService = context
-                              .read<NotificationService?>();
-                          final todoProvider = context.read<TodoProvider>();
-                          final shareProvider = context.read<ShareProvider>();
-                          final authState = context.read<AuthProvider>().state;
-                          final messenger = ScaffoldMessenger.of(context);
-                          final sub = aiSubtasks
-                              .map((t) => Subtask(title: t))
-                              .toList();
-                          final draft = SmartTodoDraftBuilder.fromText(
-                            titleCtrl.text.trim(),
-                            defaultReminderKind: ReminderKind.push,
-                          );
-                          final workspaceId = groupName.isEmpty
-                              ? 'private'
-                              : todoProvider.workspaceForListGroup(groupName) ??
-                                    'private';
-                          if (!shareProvider.canEdit(workspaceId)) {
-                            messenger.showSnackBar(
-                              const SnackBar(content: Text('你在这个共享空间中只有查看权限')),
-                            );
-                            return;
-                          }
-                          final todo = draft.toTodo(
-                            quadrant: quadrant,
-                            priority: priority,
-                            listGroupName: groupName.isEmpty ? null : groupName,
-                            workspaceId: workspaceId,
-                            createdBy: authState.userId,
-                            updatedBy: authState.userId,
-                            subtasks: sub,
-                          );
-                          if (draft.hasReminder) {
-                            final ready = await preflightTodoReminderSave(
-                              ctx,
-                              todo: todo,
-                              notificationService: notificationService,
-                              issueTitle: '待办提醒注册失败',
-                            );
-                            if (!ctx.mounted) return;
-                            if (!ready) return;
-                          }
-                          await todoProvider.addTodo(todo);
-                          await Future<void>.delayed(Duration.zero);
-                          final issue = notificationService?.lastScheduleIssue;
-                          if (issue != null && ctx.mounted) {
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '${issue.title}：${issue.message}',
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                                duration: const Duration(seconds: 4),
-                              ),
-                            );
-                          }
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        }
-                      },
+                      onPressed: submitting
+                          ? null
+                          : () async {
+                              if (titleCtrl.text.trim().isEmpty) return;
+                              setSt(() => submitting = true);
+                              try {
+                                final notificationService =
+                                    context.read<NotificationService?>();
+                                final todoProvider = context.read<TodoProvider>();
+                                final shareProvider =
+                                    context.read<ShareProvider>();
+                                final authState =
+                                    context.read<AuthProvider>().state;
+                                final messenger = ScaffoldMessenger.of(context);
+                                final sub = aiSubtasks
+                                    .map((t) => Subtask(title: t))
+                                    .toList();
+                                final draft = SmartTodoDraftBuilder.fromText(
+                                  titleCtrl.text.trim(),
+                                  defaultReminderKind: ReminderKind.push,
+                                );
+                                final workspaceId = groupName.isEmpty
+                                    ? 'private'
+                                    : todoProvider
+                                            .workspaceForListGroup(groupName) ??
+                                        'private';
+                                if (!shareProvider.canEdit(workspaceId)) {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text('你在这个共享空间中只有查看权限'),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                final todo = draft.toTodo(
+                                  quadrant: quadrant,
+                                  priority: priority,
+                                  listGroupName:
+                                      groupName.isEmpty ? null : groupName,
+                                  workspaceId: workspaceId,
+                                  createdBy: authState.userId,
+                                  updatedBy: authState.userId,
+                                  subtasks: sub,
+                                );
+                                if (draft.hasReminder) {
+                                  final ready = await preflightTodoReminderSave(
+                                    ctx,
+                                    todo: todo,
+                                    notificationService: notificationService,
+                                    issueTitle: '待办提醒注册失败',
+                                  );
+                                  if (!ctx.mounted) return;
+                                  if (!ready) {
+                                    setSt(() => submitting = false);
+                                    return;
+                                  }
+                                }
+                                await todoProvider.addTodo(todo);
+                                await Future<void>.delayed(Duration.zero);
+                                final issue =
+                                    notificationService?.lastScheduleIssue;
+                                if (issue != null && ctx.mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${issue.title}：${issue.message}',
+                                      ),
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
+                                if (ctx.mounted) Navigator.pop(ctx);
+                              } finally {
+                                if (ctx.mounted) {
+                                  setSt(() => submitting = false);
+                                }
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -515,7 +534,13 @@ class _TodoScreenState extends State<TodoScreen> {
                         elevation: 0,
                         textStyle: appSecondaryMenuItemTextStyle(ctx),
                       ),
-                      child: const Text('添加任务'),
+                      child: submitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('添加任务'),
                     ),
                   ),
                 ],
