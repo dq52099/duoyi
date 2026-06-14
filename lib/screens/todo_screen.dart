@@ -862,10 +862,13 @@ class _TodoTodaySummaryCard extends StatelessWidget {
       todayTotal++;
       if (todo.isCompleted) todayDone++;
     }
-    final remaining = (todayTotal - todayDone).clamp(0, todayTotal);
+    final todoCount = (todayTotal - todayDone).clamp(0, todayTotal);
     final overdueCount = todos.where((todo) => todo.isOverdue).length;
-    final dailyCount = habits.where((habit) => habit.isActiveToday()).length;
-    final todoCount = remaining;
+    final activeDailyHabits = habits.where((habit) => habit.isActiveToday());
+    final dailyCount = activeDailyHabits.length;
+    final dailyDone = activeDailyHabits.where((habit) => habit.isCompletedToday()).length;
+    final dailyRemaining = dailyCount - dailyDone;
+    final remaining = dailyRemaining + todoCount + activeGoalCount;
     final urgentCount = todos
         .where(
           (todo) =>
