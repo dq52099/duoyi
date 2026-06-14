@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>多仪网页预览版</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f4;
+      --panel: #ffffff;
+      --text: #20231f;
+      --muted: #697063;
+      --line: #dde2d7;
+      --primary: #456b4b;
+      --primary-press: #36563b;
+      --soft: #edf3ea;
+      --warn: #8a5a1f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(920px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0;
+    }
+
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 12px 30px rgba(25, 35, 24, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      color: #fff;
+      background: var(--primary);
+      text-decoration: none;
+      font-size: 15px;
+    }
+
+    a.button:active {
+      background: var(--primary-press);
+    }
+
+    a.button.secondary {
+      color: var(--primary);
+      background: var(--soft);
+      border: 1px solid #d4dfcf;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .label {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .value {
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 6px;
+      background: #eef0ea;
+      color: #2c332a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .note {
+      margin-top: 14px;
+      color: var(--warn);
+      font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+      main {
+        width: min(100% - 24px, 920px);
+        padding: 20px 0;
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      a.button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>多仪 v1.1.39 网页发布版</h1>
+      <p>当前 Web 版本基于 1.1.39+140005 发布构建。电脑 Web 包使用独立桌面样式，默认隐藏不支持的小组件入口并展示日历；手机 Web 包保留移动端布局。</p>
+      <div class="actions">
+        <a class="button" href="/duoyi/">打开网页版</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.39/duoyi-web-desktop-v1.1.39.tar.gz">下载电脑 Web 包</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.39/duoyi-web-mobile-v1.1.39.tar.gz">下载手机 Web 包</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.39/duoyi-v1.1.39.apk">下载 Android APK</a>
+      </div>
+      <p class="note">GitHub Release 已发布；Android 签名证书未更改，Web 包仍部署在 <code>/duoyi/</code> 子路径。</p>
+    </section>
+
+    <section class="grid" aria-label="下载信息">
+      <div class="item">
+        <div class="label">发布状态</div>
+        <div class="value"><code>GitHub Release v1.1.39 已发布</code></div>
+      </div>
+      <div class="item">
+        <div class="label">下载页</div>
+        <div class="value"><code>http://6688667.xyz/duoyi.html</code></div>
+      </div>
+      <div class="item">
+        <div class="label">域名 Web 入口</div>
+        <div class="value"><code>http://6688667.xyz/duoyi/</code></div>
+      </div>
+      <div class="item">
+        <div class="label">GitHub Release</div>
+        <div class="value"><code>https://github.com/dq52099/duoyi/releases/tag/v1.1.39</code></div>
+      </div>
+      <div class="item">
+        <div class="label">电脑 Web 包</div>
+        <div class="value"><code>duoyi-web-desktop-v1.1.39.tar.gz</code></div>
+      </div>
+      <div class="item">
+        <div class="label">手机 Web 包</div>
+        <div class="value"><code>duoyi-web-mobile-v1.1.39.tar.gz</code></div>
+      </div>
+      <div class="item">
+        <div class="label">签名证书 SHA-256</div>
+        <div class="value"><code>05c75ad9f9acd88a6d8bdfb3efc7af0f8af4a6f9f56fcacac421216b09c146f8</code></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

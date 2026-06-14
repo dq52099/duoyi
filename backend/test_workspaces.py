@@ -3322,39 +3322,39 @@ class WorkspaceApiTest(unittest.TestCase):
                 db.close()
 
             settings = api.admin_get_settings(admin_id)
-            self.assertEqual(settings["current_version"], "1.1.39")
-            self.assertEqual(settings["current_version_code"], 140005)
-            self.assertEqual(settings["latest_version"], "1.1.39")
-            self.assertEqual(settings["latest_version_name"], "1.1.39")
-            self.assertEqual(settings["latest_version_code"], 140005)
-            self.assertEqual(settings["minimum_supported_version"], "1.1.39")
+            self.assertEqual(settings["current_version"], "1.1.40")
+            self.assertEqual(settings["current_version_code"], 140006)
+            self.assertEqual(settings["latest_version"], "1.1.40")
+            self.assertEqual(settings["latest_version_name"], "1.1.40")
+            self.assertEqual(settings["latest_version_code"], 140006)
+            self.assertEqual(settings["minimum_supported_version"], "1.1.40")
             self.assertNotIn(
                 "1.1.20",
                 json.dumps(settings["version_options"], ensure_ascii=False),
             )
 
             config = api.public_config()["app_update"]
-            self.assertEqual(config["latest_version"], "1.1.39")
-            self.assertEqual(config["latest_version_name"], "1.1.39")
-            self.assertEqual(config["latest_version_code"], 140005)
-            self.assertEqual(config["minimum_supported_version"], "1.1.39")
+            self.assertEqual(config["latest_version"], "1.1.40")
+            self.assertEqual(config["latest_version_name"], "1.1.40")
+            self.assertEqual(config["latest_version_code"], 140006)
+            self.assertEqual(config["minimum_supported_version"], "1.1.40")
 
             with TestClient(api.app) as client:
                 response = client.get(
                     "/api/mobile/apps/duoyi/update",
                     params={
-                        "current_version": "1.1.39",
-                        "current_version_code": "140005",
+                        "current_version": "1.1.40",
+                        "current_version_code": "140006",
                     },
                 )
             self.assertEqual(response.status_code, 200)
             mobile = response.json()
             self.assertFalse(mobile["available"])
             self.assertFalse(mobile["force_update"])
-            self.assertEqual(mobile["latest_version_name"], "1.1.39")
-            self.assertEqual(mobile["latest_version_code"], 140005)
-            self.assertEqual(mobile["minimum_supported_version"], "1.1.39")
-            self.assertEqual(mobile["minimum_supported_version_code"], 140005)
+            self.assertEqual(mobile["latest_version_name"], "1.1.40")
+            self.assertEqual(mobile["latest_version_code"], 140006)
+            self.assertEqual(mobile["minimum_supported_version"], "1.1.40")
+            self.assertEqual(mobile["minimum_supported_version_code"], 140006)
 
             updated = api.admin_update_settings(
                 api.SettingsUpdate(
@@ -3363,11 +3363,11 @@ class WorkspaceApiTest(unittest.TestCase):
                 ),
                 actor=admin_id,
             )
-            self.assertEqual(updated["changed"]["latest_version"], "1.1.39")
-            self.assertEqual(updated["changed"]["latest_version_name"], "1.1.39")
+            self.assertEqual(updated["changed"]["latest_version"], "1.1.40")
+            self.assertEqual(updated["changed"]["latest_version_name"], "1.1.40")
             self.assertEqual(
                 updated["changed"]["minimum_supported_version"],
-                "1.1.39",
+                "1.1.40",
             )
         finally:
             api.APP_UPDATE_REPOSITORY = old_repository

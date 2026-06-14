@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    "Only traceable real-world recordings are allowed.",
+    "Generated brown/pink/white noise assets and local generation scripts are not allowed.",
+    "Files are normalized, faded, and encoded as roughly 60 second MP3 loops."
+  ],
+  "processing": {
+    "durationSeconds": 60.029388,
+    "bitRate": 112054,
+    "sampleRate": 44100,
+    "channels": 2,
+    "format": "mp3"
+  },
+  "tracks": [
+    {
+      "id": "rain",
+      "file": "rain.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rain_against_the_window.ogg",
+      "author": "cori / PDSounds",
+      "license": "Public domain",
+      "sha256": "bf9944f80acaef9ada919fc98fc620b8111a36258c371128ba61bfd6937c0792"
+    },
+    {
+      "id": "forest",
+      "file": "forest.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Walk_in_the_rainforest.ogg",
+      "author": "ezwa / PDSounds",
+      "license": "Public domain",
+      "sha256": "c74fde5d213b4be6d7ec9d7816cb5b6ed31c3d8165652721879ced463f0804b4"
+    },
+    {
+      "id": "cafe",
+      "file": "cafe.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cafe_ambiance.ogg",
+      "author": "Marble Toast",
+      "license": "CC0",
+      "sha256": "afcdbfb2d427bab83e0f1ecf5f0d5d990eec3746a8bf381f60847e7c3663ced9"
+    },
+    {
+      "id": "waves",
+      "file": "waves.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Oceanwavescrushing.ogg",
+      "author": "Luftrum",
+      "license": "CC BY 3.0",
+      "sha256": "1484b8cc9347088b3c125e61bac9d0c112f88c322c67d0e26293a839d480aee2"
+    },
+    {
+      "id": "night_rain",
+      "file": "night_rain.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:2013-07-24_00-19-04hrs_Chiang_Mai_Chang_Khien_rain_animal_sounds_night_time.ogg",
+      "author": "Takeaway",
+      "license": "CC BY-SA 3.0",
+      "sha256": "ac60c4f72fd7294132e99a9f41ee072006750344f0052937fb6a5ee5bf19e397"
+    },
+    {
+      "id": "fan",
+      "file": "fan.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Table_ventilator.ogg",
+      "author": "stephan / PDSounds",
+      "license": "Public domain",
+      "sha256": "8a146446359a120a0b1c3cb31caffcb986f283e614caaac93e13834475ed03bc"
+    },
+    {
+      "id": "deep_stream",
+      "file": "deep_stream.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Forest_lawn_creek.ogg",
+      "author": "Dsw4",
+      "license": "Public domain",
+      "sha256": "b52385a1932bce6d5b686aeddef6b37c5d5a584a3840629afa05188da7c82ca2"
+    },
+    {
+      "id": "thunderstorm",
+      "file": "thunderstorm.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rain_and_thunder.ogg",
+      "author": "David Ohlin",
+      "license": "Wikimedia Commons file license",
+      "sha256": "861cfe8914642cab03944b77d1a66c52cb05d75be4d65b5ca3b41d522c6e41ab"
+    },
+    {
+      "id": "storm_rain",
+      "file": "storm_rain.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Heavy_rain_in_Glenshaw,_PA.ogg",
+      "author": "Sage Ross",
+      "license": "CC BY-SA 3.0 / GFDL",
+      "sha256": "61b41188f706a0278526950321198d41e6a0f91b6f50087a64736412c95ba97f"
+    },
+    {
+      "id": "campfire",
+      "file": "campfire.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Campfire_sound_ambience.ogg",
+      "author": "Internet Archive contributor",
+      "license": "CC BY 3.0",
+      "sha256": "a3dcd2b085aec8822feccaf13573743e3a9ea80c1bc9961725f62e34741dda74"
+    },
+    {
+      "id": "dawn_birds",
+      "file": "dawn_birds.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dawnchorus-uk.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "Public domain",
+      "sha256": "d9149611d73327647d497edf9b04d73902ad19b1d8c08d5ee0d34b10e883e9b7"
+    },
+    {
+      "id": "waterfall",
+      "file": "waterfall.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water_fall.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "Wikimedia Commons file license",
+      "sha256": "3d3361c1107f50137f9134e6652ea96d9cdb9101098b2b92f17e76ece353ec04"
+    },
+    {
+      "id": "brook",
+      "file": "brook.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Brook.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "Wikimedia Commons file license",
+      "sha256": "d3cb5342ebf4490653214c48b435cf1b454cab06d9b2647f14fe1eee35646899"
+    },
+    {
+      "id": "river",
+      "file": "river.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rivernoise.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "Wikimedia Commons file license",
+      "sha256": "50e15ad32244345f9ffab6e31b8c121e09fb376abe0150569bd88cf3107f6f41"
+    },
+    {
+      "id": "crickets",
+      "file": "crickets.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Field_cricket_Gryllus_pennsylvanicus.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "Public domain / Wikimedia Commons file license",
+      "sha256": "9b2b353009819496a114e49467be7ec89544365c2adb3b0cc12a0d108d75fbf5"
+    },
+    {
+      "id": "clock",
+      "file": "clock.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grandfather_Clock_Ticking.ogg",
+      "author": "Jud McCranie",
+      "license": "CC BY-SA 4.0",
+      "sha256": "8b3649b7a7b333f8c0cebbb49e0433915540cbd80765c940238b3480f773727e"
+    },
+    {
+      "id": "keyboard",
+      "file": "keyboard.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Computer_keyboard.ogg",
+      "author": "russiandoll / PDSounds",
+      "license": "Public domain",
+      "sha256": "33ba41b1cee6a413b5aa8cd604e2744072b1710be10b0df8861c4957eaf8f321"
+    },
+    {
+      "id": "wind",
+      "file": "wind.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Howling%20wind.ogg",
+      "author": "Wikimedia Commons contributor",
+      "license": "CC0",
+      "sha256": "9d278ddccb2dacdfc2202ec324102bbe2e87a15ecea93adcb0fa30b2a7f4a72a"
+    },
+    {
+      "id": "train_station",
+      "file": "train_station.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trains_through_a_railwa.ogg",
+      "author": "ezwa / PDSounds",
+      "license": "Public domain",
+      "sha256": "0fa739abace242f8fa9b4ecd246b7dbb3744c97a0007e2a138bce680a372c065"
+    },
+    {
+      "id": "classroom",
+      "file": "classroom.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ambient_classroom_mono.ogg",
+      "author": "rcrossley / PDSounds",
+      "license": "Public domain",
+      "sha256": "ab75225ca36d2c57636c4361e3f382514c1a57824803ed214779d986bef0a66a"
+    },
+    {
+      "id": "pebble_beach",
+      "file": "pebble_beach.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:On_a_pebble_beach.ogg",
+      "author": "earthcalling / PDSounds",
+      "license": "Public domain",
+      "sha256": "a7d05c813afedda044000ae4eacacff24c527af1ac4eff8ed52b736858d59b3f"
+    },
+    {
+      "id": "mall",
+      "file": "mall.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:1_minute_at_the_alexa_mall_in_berlin.ogg",
+      "author": "thore / PDSounds",
+      "license": "Public domain",
+      "sha256": "dc46b2659134068cb3ccf663c21f7dfe420ea97daa440330ce6fa1b51ea8a908"
+    },
+    {
+      "id": "restaurant",
+      "file": "restaurant.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Restaurant_ambience.ogg",
+      "author": "stephan / PDSounds",
+      "license": "Public domain",
+      "sha256": "0a850e5e820e010a7c1b661f0dde7d7446884e02b38fd861fe8cafad19d8e6fe"
+    },
+    {
+      "id": "garden_birds",
+      "file": "garden_birds.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Birds_singing_in_garden.ogg",
+      "author": "ezwa / PDSounds",
+      "license": "Public domain",
+      "sha256": "9453b26f3a79bac23feabef94f712ea40ee72df1aa750004306d72fafd3d0388"
+    },
+    {
+      "id": "country_night",
+      "file": "country_night.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Country_night_noise.ogg",
+      "author": "hc / PDSounds",
+      "license": "Public domain",
+      "sha256": "10f17a65d129df279bdbac453750bd8542f2ca69e5b91880b5a09892ecfa71d9"
+    },
+    {
+      "id": "shallow_river",
+      "file": "shallow_river.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Shallow_small_river_with_stony_riverbed.ogg",
+      "author": "stephan / PDSounds",
+      "license": "Public domain",
+      "sha256": "41f5af6a240c772ae1e61cffc3929d71f81a0e1cdcc2507c2ee0e1d91e5df4a0"
+    },
+    {
+      "id": "veranda_rain",
+      "file": "veranda_rain.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rain_on_a_veranda_and_t.ogg",
+      "author": "ezwa / PDSounds",
+      "license": "Public domain",
+      "sha256": "8bc8e68d9083efd017b8d42168a18551fd3876688b1833e23abe7e19f4c38925"
+    },
+    {
+      "id": "breeze_birds",
+      "file": "breeze_birds.mp3",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gentle_breeze_and_birds_singing.ogg",
+      "author": "ezwa / PDSounds",
+      "license": "Public domain",
+      "sha256": "9b178eb64913746127108b720ea419d56300f25bd04d1cfd0c25bd6e8ac3ca84"
+    }
+  ]
+}
