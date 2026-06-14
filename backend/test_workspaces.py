@@ -3300,8 +3300,8 @@ class WorkspaceApiTest(unittest.TestCase):
 
     def test_stale_force_update_versions_are_floored_to_current_version(self):
         admin_id = self._make_admin("force-update-stale-version", ["settings"])
-        self.assertEqual(api.APP_CURRENT_VERSION, "1.1.39")
-        self.assertEqual(api.APP_CURRENT_VERSION_CODE, 140005)
+        self.assertEqual(api.APP_CURRENT_VERSION, "1.1.40")
+        self.assertEqual(api.APP_CURRENT_VERSION_CODE, 140006)
         old_repository = api.APP_UPDATE_REPOSITORY
         old_mobile_apk_dir = api.MOBILE_APK_DIR
         api.APP_UPDATE_REPOSITORY = ""
