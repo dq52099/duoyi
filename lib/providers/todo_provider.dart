@@ -298,7 +298,8 @@ class TodoProvider extends ChangeNotifier {
     );
     await _saveToStorage();
     _notify();
-    await _syncTodoRemindersNow();
+    // 异步同步提醒，不阻塞 UI
+    unawaited(_syncTodoRemindersNow());
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
