@@ -1,10 +1,110 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# Duoyi Web Production Deployment Script
+#
+# 环境变量配置：
+#   WEB_ROOT       - Web 部署根目录 (默认: /opt/1panel/apps/openresty/openresty/root/duoyi)
+#   BACKUP_ROOT    - 备份存储目录 (默认: /home/ubuntu/duoyi_web_backups)
+#   FLUTTER_BIN    - Flutter 可执行文件路径 (默认: /opt/migrate/flutter/bin/flutter)
+#
+# 使用示例：
+#   ./scripts/deploy_web_prod.sh
+#   WEB_ROOT=/var/www/duoyi ./scripts/deploy_web_prod.sh
+#
+# 功能：
+#   1. 检查版本号一致性
+#   2. 构建 Web 发布版本
+#   3. 验证构建产物 (版本号、base href、无陈旧版本字符串)
+#   4. 备份旧版本
+#   5. 部署新版本
+#   6. 验证部署
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-WEB_ROOT="/var/www/duoyi"
-FLUTTER_BIN="${FLUTTER_BIN:-/home/ubuntu/flutter/bin/flutter}"
+BUILD_WEB_DIR="$PROJECT_ROOT/build/web"
+WEB_ROOT="${WEB_ROOT:-/opt/1panel/apps/openresty/openresty/root/duoyi}"
+BACKUP_ROOT="${BACKUP_ROOT:-/home/ubuntu/duoyi_web_backups}"
+FLUTTER_BIN="${FLUTTER_BIN:-/opt/migrate/flutter/bin/flutter}"
+BASE_HREF="/duoyi/"
+
+verify_web_build() {
+    local dir="$1"
+    local label="$2"
+
+    echo "✅ Verifying $label..."
+
+    if [ ! -d "$dir" ]; then
+        echo "   ❌ Web build directory missing: $dir"
+        exit 1
+    fi
+
+    local version_file="$dir/version.json"
+    if [ ! -f "$version_file" ]; then
+        echo "   ❌ version.json missing"
+        exit 1
+    fi
+
+    local artifact_version
+    local artifact_build
+    artifact_version=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$version_file" | sed -E 's/.*"([^"]+)".*/\1/')
+    artifact_build=$(grep -o '"build_number"[[:space:]]*:[[:space:]]*"[^"]*"' "$version_file" | sed -E 's/.*"([^"]+)".*/\1/')
+
+    if [ "$artifact_version" != "$VERSION_NAME" ]; then
+        echo "   ❌ version.json stale: expected $VERSION_NAME, got $artifact_version"
+        exit 1
+    fi
+    if [ "$artifact_build" != "$VERSION_CODE" ]; then
+        echo "   ❌ version.json build stale: expected $VERSION_CODE, got $artifact_build"
+        exit 1
+    fi
+    echo "   ✓ version.json matches v$artifact_version (build $artifact_build)"
+
+    if [ -f "$dir/index.html" ]; then
+        echo "   ✓ index.html exists"
+        if grep -q "<base href=\"$BASE_HREF\">" "$dir/index.html"; then
+            echo "   ✓ base href is $BASE_HREF"
+        else
+            echo "   ❌ base href is not $BASE_HREF"
+            exit 1
+        fi
+    else
+        echo "   ❌ index.html missing"
+        exit 1
+    fi
+
+    if [ -f "$dir/main.dart.js" ]; then
+        local size
+        size=$(du -h "$dir/main.dart.js" | cut -f1)
+        echo "   ✓ main.dart.js exists ($size)"
+        if grep -Fq "$VERSION_NAME" "$dir/main.dart.js"; then
+            echo "   ✓ main.dart.js contains v$VERSION_NAME"
+        else
+            echo "   ❌ main.dart.js does not contain v$VERSION_NAME"
+            exit 1
+        fi
+    else
+        echo "   ❌ main.dart.js missing"
+        exit 1
+    fi
+
+    local stale_versions
+    local version_family
+    version_family="${VERSION_NAME%.*}"
+    stale_versions=$(
+        grep -HnIroE "${version_family//./\\.}\\.[0-9]+" \
+            "$version_file" "$dir/index.html" "$dir/main.dart.js" 2>/dev/null \
+            | awk -F: -v current="$VERSION_NAME" '$3 != current { print }' \
+            | sort -u \
+            || true
+    )
+    if [ -n "$stale_versions" ]; then
+        echo "   ❌ Stale version string(s) found in $label:"
+        echo "$stale_versions" | head -20
+        exit 1
+    fi
+    echo "   ✓ no stale version strings found in critical web artifacts"
+}
 
 echo "=================================================="
 echo "Duoyi Web Production Deployment"
@@ -12,6 +112,7 @@ echo "=================================================="
 echo ""
 echo "Project root: $PROJECT_ROOT"
 echo "Web root: $WEB_ROOT"
+echo "Backup root: $BACKUP_ROOT"
 echo "Flutter: $FLUTTER_BIN"
 echo ""
 
@@ -22,11 +123,18 @@ echo "📋 Checking version..."
 VERSION_NAME=$(grep "static const name = " lib/core/app_version.dart | sed -E "s/.*'([^']+)'.*/\1/")
 VERSION_CODE=$(grep "static const build = " lib/core/app_version.dart | sed -E "s/.*= ([0-9]+);/\1/")
 PUBSPEC_VERSION=$(grep "^version: " pubspec.yaml | sed -E "s/version: ([0-9.]+)\+.*/\1/")
+PUBSPEC_BUILD=$(grep "^version: " pubspec.yaml | sed -E "s/version: [0-9.]+\+([0-9]+).*/\1/")
 
 if [ "$VERSION_NAME" != "$PUBSPEC_VERSION" ]; then
     echo "❌ Version mismatch:"
     echo "   app_version.dart: $VERSION_NAME"
     echo "   pubspec.yaml: $PUBSPEC_VERSION"
+    exit 1
+fi
+if [ "$VERSION_CODE" != "$PUBSPEC_BUILD" ]; then
+    echo "❌ Build number mismatch:"
+    echo "   app_version.dart: $VERSION_CODE"
+    echo "   pubspec.yaml: $PUBSPEC_BUILD"
     exit 1
 fi
 
@@ -35,13 +143,16 @@ echo ""
 
 # 2. 构建 Web
 echo "🔨 Building web (release)..."
-$FLUTTER_BIN build web --release --dart-define=DUOYI_SERVER_URL=
+rm -rf "$BUILD_WEB_DIR"
+$FLUTTER_BIN build web --release --base-href=/duoyi/ --dart-define=DUOYI_SERVER_URL=
+verify_web_build "$BUILD_WEB_DIR" "fresh build output"
 echo ""
 
 # 3. 备份旧版本
-if [ -d "$WEB_ROOT" ] && [ "$(ls -A $WEB_ROOT 2>/dev/null)" ]; then
-    BACKUP_DIR="$WEB_ROOT.backup.$(date +%Y%m%d_%H%M%S)"
+if [ -d "$WEB_ROOT" ] && [ "$(ls -A "$WEB_ROOT" 2>/dev/null)" ]; then
+    BACKUP_DIR="$BACKUP_ROOT/duoyi.backup.$(date +%Y%m%d_%H%M%S)"
     echo "💾 Backing up old version to $BACKUP_DIR..."
+    mkdir -p "$BACKUP_ROOT"
     sudo cp -r "$WEB_ROOT" "$BACKUP_DIR"
     echo "   Old version backed up"
     echo ""
@@ -49,39 +160,14 @@ fi
 
 # 4. 部署新版本
 echo "🚀 Deploying to $WEB_ROOT..."
-sudo rm -rf "$WEB_ROOT"/*
-sudo cp -r "$PROJECT_ROOT/build/web/"* "$WEB_ROOT/"
+sudo mkdir -p "$WEB_ROOT"
+sudo find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+sudo cp -r "$BUILD_WEB_DIR"/. "$WEB_ROOT/"
 echo "   Files copied"
 echo ""
 
 # 5. 验证部署
-echo "✅ Verifying deployment..."
-if [ -f "$WEB_ROOT/version.json" ]; then
-    DEPLOYED_VERSION=$(cat "$WEB_ROOT/version.json" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
-    echo "   Deployed version: $DEPLOYED_VERSION"
-    if [ "$DEPLOYED_VERSION" = "$VERSION_NAME" ]; then
-        echo "   ✓ Version match"
-    else
-        echo "   ⚠ Version mismatch: expected $VERSION_NAME, got $DEPLOYED_VERSION"
-    fi
-else
-    echo "   ⚠ version.json not found"
-fi
-
-if [ -f "$WEB_ROOT/index.html" ]; then
-    echo "   ✓ index.html exists"
-else
-    echo "   ❌ index.html missing"
-    exit 1
-fi
-
-if [ -f "$WEB_ROOT/main.dart.js" ]; then
-    SIZE=$(du -h "$WEB_ROOT/main.dart.js" | cut -f1)
-    echo "   ✓ main.dart.js exists ($SIZE)"
-else
-    echo "   ❌ main.dart.js missing"
-    exit 1
-fi
+verify_web_build "$WEB_ROOT" "deployed web root"
 
 echo ""
 echo "=================================================="
@@ -90,7 +176,7 @@ echo "=================================================="
 echo ""
 echo "Deployed: v$VERSION_NAME (build $VERSION_CODE)"
 echo "Location: $WEB_ROOT"
-echo "Access: http://127.0.0.1/duoyi/"
+echo "Access: http://6688667.xyz/duoyi/"
 echo ""
 echo "Note: Users may need to hard refresh (Ctrl+Shift+R) to see the new version."
 echo ""

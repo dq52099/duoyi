@@ -59,7 +59,7 @@ void main() {
     expect(source, contains('清空筛选'));
   });
 
-  test('任务页展示今日摘要和日常待办目标计数', () {
+  test('任务页展示今日摘要且目标不计入剩余项', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
     expect(source, contains("import '../providers/habit_provider.dart';"));
@@ -72,7 +72,22 @@ void main() {
     expect(source, contains("'今日还要完成 \$remaining 项'"));
     expect(
       source,
-      contains("'日常 \$dailyCount / 待办 \$todoCount / 目标 \$activeGoalCount'"),
+      contains(
+        'final remaining = dailyRemaining + todoCount;',
+      ),
+    );
+    expect(
+      source,
+      isNot(contains('final remaining = dailyRemaining + todoCount + activeGoalCount;')),
+    );
+    expect(source, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
+    expect(
+      source,
+      contains("'日常 \$dailyRemaining / 待办 \$todoCount / 目标 \$activeGoalCount'"),
+    );
+    expect(
+      source,
+      contains('CompletionVisibilityPolicy.shouldShowInToday(todo, now)'),
     );
     expect(source, isNot(contains('下一个')));
     expect(source, isNot(contains('upcomingToday')));

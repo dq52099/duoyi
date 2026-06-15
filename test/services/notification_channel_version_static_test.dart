@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 void main() {
   const notificationChannelId = 'duoyi_general_alerts_v18';
   const alarmChannelId = 'duoyi_alarm_fullscreen_v18';
-  const nativeStatusChannelId = 'duoyi_builtin_ringtone_status_v4';
+  const nativeStatusChannelId = 'duoyi_builtin_ringtone_status_v5';
   const nativeFallbackChannelId = 'duoyi_alarm_fallback_v9';
 
   group('Android 通知 channel 版本护栏', () {
@@ -103,6 +103,7 @@ void main() {
         'duoyi_builtin_ringtone_status_v1',
         'duoyi_builtin_ringtone_status_v2',
         'duoyi_builtin_ringtone_status_v3',
+        'duoyi_builtin_ringtone_status_v4',
         'duoyi_alarm_fallback_v1',
         'duoyi_alarm_fallback_v2',
         'duoyi_alarm_fallback_v3',

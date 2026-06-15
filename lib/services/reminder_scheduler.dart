@@ -55,15 +55,30 @@ class ReminderScheduleSnapshotEntry {
   final String objectType;
   final String objectId;
   final List<int> ids;
+  final String title;
+  final String subtitle;
 
   const ReminderScheduleSnapshotEntry({
     required this.objectType,
     required this.objectId,
     required this.ids,
+    required this.title,
+    required this.subtitle,
   });
 
   int get idCount => ids.length;
   String get objectKey => '$objectType:$objectId';
+}
+
+@immutable
+class ReminderScheduleDisplayInfo {
+  final String title;
+  final String subtitle;
+
+  const ReminderScheduleDisplayInfo({
+    required this.title,
+    required this.subtitle,
+  });
 }
 
 TodoReminderPreflightResult preflightTodoReminderPlan(
@@ -323,12 +338,16 @@ class _ScheduledRule {
   final _DispatchMode mode;
   final String scope;
   final String fingerprint;
+  final String title;
+  final String body;
 
   const _ScheduledRule({
     required this.kind,
     required this.mode,
     required this.scope,
     required this.fingerprint,
+    required this.title,
+    required this.body,
   });
 }
 
@@ -339,7 +358,16 @@ abstract class ReminderScheduleRegistry {
 
   Future<Map<String, Set<int>>> idsByObject(String objectType);
 
-  Future<void> replaceObject(String objectType, String objectId, Set<int> ids);
+  Future<Map<String, ReminderScheduleDisplayInfo>> displayByObject(
+    String objectType,
+  );
+
+  Future<void> replaceObject(
+    String objectType,
+    String objectId,
+    Set<int> ids, {
+    ReminderScheduleDisplayInfo? display,
+  });
 
   Future<void> removeObject(String objectType, String objectId);
 }
@@ -347,6 +375,7 @@ abstract class ReminderScheduleRegistry {
 class SharedPreferencesReminderScheduleRegistry
     implements ReminderScheduleRegistry {
   static const _storageKey = 'reminder_scheduler_registry_v1';
+  static const _displayStorageKey = 'reminder_scheduler_display_registry_v1';
 
   const SharedPreferencesReminderScheduleRegistry();
 
@@ -361,11 +390,25 @@ class SharedPreferencesReminderScheduleRegistry
   }
 
   @override
+  Future<Map<String, ReminderScheduleDisplayInfo>> displayByObject(
+    String objectType,
+  ) async {
+    final all = await _readDisplayAll();
+    return {
+      for (final entry
+          in (all[objectType] ?? const <String, ReminderScheduleDisplayInfo>{})
+              .entries)
+        entry.key: entry.value,
+    };
+  }
+
+  @override
   Future<void> replaceObject(
     String objectType,
     String objectId,
-    Set<int> ids,
-  ) async {
+    Set<int> ids, {
+    ReminderScheduleDisplayInfo? display,
+  }) async {
     final normalized = ids.where((id) => id != 0).toSet();
     if (normalized.isEmpty) {
       await removeObject(objectType, objectId);
@@ -375,6 +418,9 @@ class SharedPreferencesReminderScheduleRegistry
     final typeMap = all.putIfAbsent(objectType, () => <String, Set<int>>{});
     typeMap[objectId] = normalized;
     await _writeAll(all);
+    if (display != null) {
+      await _replaceDisplayObject(objectType, objectId, display);
+    }
   }
 
   @override
@@ -385,6 +431,7 @@ class SharedPreferencesReminderScheduleRegistry
     typeMap.remove(objectId);
     if (typeMap.isEmpty) all.remove(objectType);
     await _writeAll(all);
+    await _removeDisplayObject(objectType, objectId);
   }
 
   Future<SharedPreferences?> _prefsOrNull() async {
@@ -440,6 +487,49 @@ class SharedPreferencesReminderScheduleRegistry
     }
   }
 
+  Future<Map<String, Map<String, ReminderScheduleDisplayInfo>>>
+  _readDisplayAll() async {
+    final prefs = await _prefsOrNull();
+    if (prefs == null) {
+      return <String, Map<String, ReminderScheduleDisplayInfo>>{};
+    }
+    final raw = prefs.getString(_displayStorageKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, Map<String, ReminderScheduleDisplayInfo>>{};
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, Map<String, ReminderScheduleDisplayInfo>>{};
+      }
+      final result = <String, Map<String, ReminderScheduleDisplayInfo>>{};
+      decoded.forEach((type, rawObjects) {
+        if (type is! String || rawObjects is! Map) return;
+        final objects = <String, ReminderScheduleDisplayInfo>{};
+        rawObjects.forEach((objectId, rawDisplay) {
+          if (objectId is! String || rawDisplay is! Map) return;
+          final title = rawDisplay['title'];
+          final subtitle = rawDisplay['subtitle'];
+          if (title is! String || subtitle is! String) return;
+          final cleanTitle = title.trim();
+          final cleanSubtitle = subtitle.trim();
+          if (cleanTitle.isEmpty && cleanSubtitle.isEmpty) return;
+          objects[objectId] = ReminderScheduleDisplayInfo(
+            title: cleanTitle,
+            subtitle: cleanSubtitle,
+          );
+        });
+        if (objects.isNotEmpty) result[type] = objects;
+      });
+      return result;
+    } catch (e, st) {
+      debugPrint(
+        '[ReminderScheduler] reminder display registry decode failed: $e\n$st',
+      );
+      return <String, Map<String, ReminderScheduleDisplayInfo>>{};
+    }
+  }
+
   Future<void> _writeAll(Map<String, Map<String, Set<int>>> all) async {
     final prefs = await _prefsOrNull();
     if (prefs == null) return;
@@ -458,11 +548,59 @@ class SharedPreferencesReminderScheduleRegistry
       await prefs.setString(_storageKey, jsonEncode(encoded));
     }
   }
+
+  Future<void> _replaceDisplayObject(
+    String objectType,
+    String objectId,
+    ReminderScheduleDisplayInfo display,
+  ) async {
+    final all = await _readDisplayAll();
+    final typeMap = all.putIfAbsent(
+      objectType,
+      () => <String, ReminderScheduleDisplayInfo>{},
+    );
+    typeMap[objectId] = display;
+    await _writeDisplayAll(all);
+  }
+
+  Future<void> _removeDisplayObject(String objectType, String objectId) async {
+    final all = await _readDisplayAll();
+    final typeMap = all[objectType];
+    if (typeMap == null) return;
+    typeMap.remove(objectId);
+    if (typeMap.isEmpty) all.remove(objectType);
+    await _writeDisplayAll(all);
+  }
+
+  Future<void> _writeDisplayAll(
+    Map<String, Map<String, ReminderScheduleDisplayInfo>> all,
+  ) async {
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return;
+    final encoded = <String, Map<String, Map<String, String>>>{};
+    for (final typeEntry in all.entries) {
+      final objects = <String, Map<String, String>>{};
+      for (final objectEntry in typeEntry.value.entries) {
+        objects[objectEntry.key] = {
+          'title': objectEntry.value.title,
+          'subtitle': objectEntry.value.subtitle,
+        };
+      }
+      if (objects.isNotEmpty) encoded[typeEntry.key] = objects;
+    }
+    if (encoded.isEmpty) {
+      await prefs.remove(_displayStorageKey);
+    } else {
+      await prefs.setString(_displayStorageKey, jsonEncode(encoded));
+    }
+  }
 }
 
 @visibleForTesting
 class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
   final Map<String, Map<String, Set<int>>> _store = {};
+  final Map<String, Map<String, ReminderScheduleDisplayInfo>> _displayStore =
+      {};
 
   @override
   Future<Map<String, Set<int>>> idsByObject(String objectType) async {
@@ -474,11 +612,25 @@ class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
   }
 
   @override
+  Future<Map<String, ReminderScheduleDisplayInfo>> displayByObject(
+    String objectType,
+  ) async {
+    return {
+      for (final entry
+          in (_displayStore[objectType] ??
+                  const <String, ReminderScheduleDisplayInfo>{})
+              .entries)
+        entry.key: entry.value,
+    };
+  }
+
+  @override
   Future<void> replaceObject(
     String objectType,
     String objectId,
-    Set<int> ids,
-  ) async {
+    Set<int> ids, {
+    ReminderScheduleDisplayInfo? display,
+  }) async {
     final normalized = ids.where((id) => id != 0).toSet();
     if (normalized.isEmpty) {
       await removeObject(objectType, objectId);
@@ -486,6 +638,12 @@ class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
     }
     _store.putIfAbsent(objectType, () => <String, Set<int>>{})[objectId] =
         normalized;
+    if (display != null) {
+      _displayStore.putIfAbsent(
+        objectType,
+        () => <String, ReminderScheduleDisplayInfo>{},
+      )[objectId] = display;
+    }
   }
 
   @override
@@ -494,6 +652,10 @@ class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
     if (typeMap == null) return;
     typeMap.remove(objectId);
     if (typeMap.isEmpty) _store.remove(objectType);
+    final displayTypeMap = _displayStore[objectType];
+    if (displayTypeMap == null) return;
+    displayTypeMap.remove(objectId);
+    if (displayTypeMap.isEmpty) _displayStore.remove(objectType);
   }
 }
 
@@ -637,6 +799,8 @@ class ReminderScheduler {
   final Map<String, String> _scheduledHabitScopes = {};
   final Map<String, String> _scheduledAnniversaryScopes = {};
   final Map<String, String> _scheduledCountdownScopes = {};
+  final Map<String, ReminderScheduleDisplayInfo> _registeredReminderDisplay =
+      {};
   Future<void> _syncQueue = Future<void>.value();
 
   /// [notif] 必传；[alarm] 默认取 `AlarmService.instance` 单例，便于测试时
@@ -668,14 +832,22 @@ class ReminderScheduler {
     final result = <ReminderScheduleSnapshotEntry>[];
     for (final objectType in _registryObjectTypes) {
       final byObject = await registry.idsByObject(objectType);
+      final persistedDisplays = await registry.displayByObject(objectType);
       for (final entry in byObject.entries) {
         final ids = entry.value.where((id) => id != 0).toList()..sort();
         if (ids.isEmpty) continue;
+        final display = _snapshotDisplayFor(
+          objectType,
+          entry.key,
+          persisted: persistedDisplays[entry.key],
+        );
         result.add(
           ReminderScheduleSnapshotEntry(
             objectType: objectType,
             objectId: entry.key,
             ids: List<int>.unmodifiable(ids),
+            title: display.title,
+            subtitle: display.subtitle,
           ),
         );
       }
@@ -688,6 +860,218 @@ class ReminderScheduler {
       return a.objectId.compareTo(b.objectId);
     });
     return List<ReminderScheduleSnapshotEntry>.unmodifiable(result);
+  }
+
+  ReminderScheduleDisplayInfo _snapshotDisplayFor(
+    String objectType,
+    String objectId, {
+    ReminderScheduleDisplayInfo? persisted,
+  }) {
+    final stored = _registeredReminderDisplay['$objectType:$objectId'];
+    if (stored != null) return stored;
+    if (persisted != null) return persisted;
+    final scheduledRules = switch (objectType) {
+      'todo' => _scheduledTodoRules[objectId],
+      'goal' => _scheduledGoalRules[objectId],
+      _ => null,
+    };
+    if (scheduledRules != null && scheduledRules.isNotEmpty) {
+      return _displayFromScheduledRules(objectType, scheduledRules.values);
+    }
+    final typeLabel = _objectTypeLabel(objectType);
+    return ReminderScheduleDisplayInfo(
+      title: '$typeLabel提醒',
+      subtitle: '$typeLabel · 已登记到系统提醒队列',
+    );
+  }
+
+  ReminderScheduleDisplayInfo _displayFromScheduledRules(
+    String objectType,
+    Iterable<_ScheduledRule> rules,
+  ) {
+    final list = rules.toList(growable: false);
+    final typeLabel = _objectTypeLabel(objectType);
+    final title = list
+        .map((rule) => rule.body.trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
+    final kinds = list.map((rule) => _kindLabel(rule.kind)).toSet().join('、');
+    final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
+    final cadence = repeating ? '重复提醒' : '一次提醒';
+    return ReminderScheduleDisplayInfo(
+      title: title,
+      subtitle:
+          '$typeLabel · $cadence · ${kinds.isEmpty ? '系统提醒' : kinds} · ${list.length} 条规则',
+    );
+  }
+
+  void _rememberReminderDisplay(
+    String objectType,
+    String objectId, {
+    required String title,
+    required String subtitle,
+  }) {
+    final trimmedTitle = title.trim();
+    _registeredReminderDisplay['$objectType:$objectId'] =
+        ReminderScheduleDisplayInfo(
+          title: trimmedTitle.isEmpty
+              ? '${_objectTypeLabel(objectType)}提醒'
+              : trimmedTitle,
+          subtitle: subtitle.trim().isEmpty
+              ? '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列'
+              : subtitle.trim(),
+        );
+  }
+
+  void _forgetReminderDisplay(String objectType, String objectId) {
+    _registeredReminderDisplay.remove('$objectType:$objectId');
+  }
+
+  ReminderScheduleDisplayInfo? _registryDisplayFor(
+    String objectType,
+    String objectId, {
+    Iterable<_ScheduledRule>? scheduledRules,
+    Iterable<_ResolvedRule>? resolvedRules,
+  }) {
+    final stored = _registeredReminderDisplay['$objectType:$objectId'];
+    if (stored != null) return stored;
+    final scheduledList = scheduledRules?.toList(growable: false);
+    if (scheduledList != null && scheduledList.isNotEmpty) {
+      return _displayFromScheduledRules(objectType, scheduledList);
+    }
+    final resolvedList = resolvedRules?.toList(growable: false);
+    if (resolvedList != null && resolvedList.isNotEmpty) {
+      return _displayFromResolvedRules(objectType, resolvedList);
+    }
+    return null;
+  }
+
+  ReminderScheduleDisplayInfo _displayFromResolvedRules(
+    String objectType,
+    Iterable<_ResolvedRule> rules,
+  ) {
+    final list = rules.toList(growable: false);
+    final typeLabel = _objectTypeLabel(objectType);
+    final title = list
+        .map((rule) => rule.body.trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
+    final kinds = list.map((rule) => _kindLabel(rule.kind)).toSet().join('、');
+    final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
+    final cadence = repeating ? '重复提醒' : '一次提醒';
+    return ReminderScheduleDisplayInfo(
+      title: title,
+      subtitle:
+          '$typeLabel · $cadence · ${kinds.isEmpty ? '系统提醒' : kinds} · ${list.length} 条规则',
+    );
+  }
+
+  Future<void> _replaceRegistryObject(
+    String objectType,
+    String objectId,
+    Set<int> ids, {
+    Iterable<_ScheduledRule>? scheduledRules,
+    Iterable<_ResolvedRule>? resolvedRules,
+  }) {
+    return registry.replaceObject(
+      objectType,
+      objectId,
+      ids,
+      display: _registryDisplayFor(
+        objectType,
+        objectId,
+        scheduledRules: scheduledRules,
+        resolvedRules: resolvedRules,
+      ),
+    );
+  }
+
+  String _objectTypeLabel(String objectType) {
+    return switch (objectType) {
+      'todo' => '待办',
+      'goal' => '目标',
+      'habit' => '日常',
+      'anniversary' => '纪念日',
+      'countdown' => '倒数日',
+      _ => '事项',
+    };
+  }
+
+  String _kindLabel(ReminderKind kind) {
+    return switch (kind) {
+      ReminderKind.push => '普通通知',
+      ReminderKind.popup => '弹出提醒',
+      ReminderKind.alarm => '闹钟提醒',
+      ReminderKind.email => '邮件提醒',
+      ReminderKind.off => '关闭',
+    };
+  }
+
+  String _timeLabel(int? hour, int? minute) {
+    if (!_validTime(hour, minute)) return '时间未设置';
+    return '${hour!.toString().padLeft(2, '0')}:${minute!.toString().padLeft(2, '0')}';
+  }
+
+  String _weekdaysLabel(List<int> weekdays) {
+    if (weekdays.isEmpty || weekdays.length == 7) return '每天';
+    const labels = <int, String>{
+      1: '周一',
+      2: '周二',
+      3: '周三',
+      4: '周四',
+      5: '周五',
+      6: '周六',
+      7: '周日',
+    };
+    return weekdays
+        .map((day) => labels[day] ?? '')
+        .where((v) => v.isNotEmpty)
+        .join('、');
+  }
+
+  String _dateTimeLabel(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$month-$day $hour:$minute';
+  }
+
+  void _rememberHabitReminderDisplay(Habit habit) {
+    final rule = _effectiveHabitPlan(habit).primaryRule;
+    if (rule == null) return;
+    final weekdays = _habitWeekdays(habit, rule);
+    _rememberReminderDisplay(
+      'habit',
+      habit.id,
+      title: habit.name,
+      subtitle:
+          '日常 · ${_kindLabel(rule.kind)} · ${_weekdaysLabel(weekdays)} ${_timeLabel(rule.hour, rule.minute)}',
+    );
+  }
+
+  void _rememberAnniversaryReminderDisplay(
+    Anniversary item,
+    DateTime remindAt,
+  ) {
+    _rememberReminderDisplay(
+      'anniversary',
+      item.id,
+      title: item.title,
+      subtitle:
+          '纪念日 · ${_kindLabel(item.reminderKind)} · ${_dateTimeLabel(remindAt)}',
+    );
+  }
+
+  void _rememberCountdownReminderDisplay(
+    CountdownItem item,
+    DateTime remindAt,
+  ) {
+    _rememberReminderDisplay(
+      'countdown',
+      item.id,
+      title: item.title,
+      subtitle:
+          '倒数日 · ${_kindLabel(item.reminderKind)} · ${_dateTimeLabel(remindAt)}',
+    );
   }
 
   /// Clears scheduler-owned in-memory state during account cleanup.
@@ -733,6 +1117,7 @@ class ReminderScheduler {
       await registry.removeObject('countdown', id);
     }
     _scheduledCountdownScopes.clear();
+    _registeredReminderDisplay.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -774,12 +1159,16 @@ class ReminderScheduler {
       }
       wanted[t.id] = {for (final rule in resolved) rule.ruleId: rule};
     }
-    await _sweepRuleRegistry(objectType: 'todo', wanted: wanted);
+    final blockedRegistryIds = await _sweepRuleRegistry(
+      objectType: 'todo',
+      wanted: wanted,
+    );
     await _syncRuleObjects(
       objectType: 'todo',
       wanted: wanted,
       scheduled: _scheduledTodoRules,
       cancelLegacy: _cancelTodoLegacy,
+      blockedRegistryIdsByObject: blockedRegistryIds,
     );
   }
 
@@ -852,6 +1241,7 @@ class ReminderScheduler {
         final cancelled = await _cancelHabit(h.id);
         if (cancelled) {
           _scheduledHabitScopes.remove(h.id);
+          _forgetReminderDisplay('habit', h.id);
           await registry.removeObject('habit', h.id);
         }
         continue;
@@ -861,6 +1251,7 @@ class ReminderScheduler {
     final scopes = <String, String>{};
     for (final h in wanted.values) {
       scopes[h.id] = _habitScope(h);
+      _rememberHabitReminderDisplay(h);
     }
     final blockedHabitIdsFromRegistry = await _sweepSingleRegistry(
       objectType: 'habit',
@@ -868,8 +1259,6 @@ class ReminderScheduler {
         for (final h in wanted.values) h.id: _habitRegistryIds(h),
       },
     );
-    wanted.removeWhere((id, _) => blockedHabitIdsFromRegistry.contains(id));
-    scopes.removeWhere((id, _) => blockedHabitIdsFromRegistry.contains(id));
 
     final blockedHabitIds = <String>{};
     for (final id in _scheduledHabitScopes.keys.toList()) {
@@ -879,6 +1268,7 @@ class ReminderScheduler {
         final cancelled = await _cancelHabit(id);
         if (cancelled) {
           _scheduledHabitScopes.remove(id);
+          _forgetReminderDisplay('habit', id);
           await registry.removeObject('habit', id);
         } else {
           blockedHabitIds.add(id);
@@ -892,20 +1282,31 @@ class ReminderScheduler {
         if (!swept) continue;
       }
       final scope = scopes[h.id]!;
+      final blockedRegistryIds =
+          blockedHabitIdsFromRegistry[h.id] ?? const <int>{};
       if (_scheduledHabitScopes[h.id] == scope) {
         if (await _habitStillPending(h)) {
-          await registry.replaceObject('habit', h.id, _habitRegistryIds(h));
+          _rememberHabitReminderDisplay(h);
+          await _replaceRegistryObject('habit', h.id, {
+            ...blockedRegistryIds,
+            ..._habitRegistryIds(h),
+          });
           continue;
         }
         final cancelled = await _cancelHabit(h.id);
         if (!cancelled) continue;
         _scheduledHabitScopes.remove(h.id);
+        _forgetReminderDisplay('habit', h.id);
         await registry.removeObject('habit', h.id);
       }
       final scheduled = await _scheduleHabit(h);
       if (scheduled) {
+        _rememberHabitReminderDisplay(h);
         _scheduledHabitScopes[h.id] = scope;
-        await registry.replaceObject('habit', h.id, _habitRegistryIds(h));
+        await _replaceRegistryObject('habit', h.id, {
+          ...blockedRegistryIds,
+          ..._habitRegistryIds(h),
+        });
       }
     }
   }
@@ -1142,17 +1543,20 @@ class ReminderScheduler {
     for (final a in items) {
       if (!a.remind) {
         await _cancelAnniversary(a.id);
+        _forgetReminderDisplay('anniversary', a.id);
         await registry.removeObject('anniversary', a.id);
         continue;
       }
       final nextDate = a.nextOccurrence;
       if (nextDate.isBefore(DateTime.now().subtract(const Duration(days: 1)))) {
         await _cancelAnniversary(a.id);
+        _forgetReminderDisplay('anniversary', a.id);
         await registry.removeObject('anniversary', a.id);
         continue;
       }
       if (a.reminderKind == ReminderKind.off) {
         await _cancelAnniversary(a.id);
+        _forgetReminderDisplay('anniversary', a.id);
         await registry.removeObject('anniversary', a.id);
         continue;
       }
@@ -1163,18 +1567,13 @@ class ReminderScheduler {
       final remindAt = _anniversaryReminderAt(a);
       if (!remindAt.isAfter(DateTime.now())) continue;
       scopes[a.id] = _anniversaryScope(a, remindAt);
+      _rememberAnniversaryReminderDisplay(a, remindAt);
     }
     final blockedAnniversaryIdsFromRegistry = await _sweepSingleRegistry(
       objectType: 'anniversary',
       wantedIdsByObject: {
         for (final a in wanted.values) a.id: _anniversaryRegistryIds(a),
       },
-    );
-    wanted.removeWhere(
-      (id, _) => blockedAnniversaryIdsFromRegistry.contains(id),
-    );
-    scopes.removeWhere(
-      (id, _) => blockedAnniversaryIdsFromRegistry.contains(id),
     );
 
     final blockedAnniversaryIds = <String>{};
@@ -1184,6 +1583,7 @@ class ReminderScheduler {
         final cancelled = await _cancelAnniversary(id);
         if (cancelled) {
           _scheduledAnniversaryScopes.remove(id);
+          _forgetReminderDisplay('anniversary', id);
           await registry.removeObject('anniversary', id);
         } else {
           blockedAnniversaryIds.add(id);
@@ -1202,29 +1602,32 @@ class ReminderScheduler {
         continue;
       }
       final scope = scopes[a.id]!;
+      final blockedRegistryIds =
+          blockedAnniversaryIdsFromRegistry[a.id] ?? const <int>{};
       if (_scheduledAnniversaryScopes[a.id] == scope) {
         if (await _anniversaryStillPending(a)) {
-          await registry.replaceObject(
-            'anniversary',
-            a.id,
-            _anniversaryRegistryIds(a),
-          );
+          _rememberAnniversaryReminderDisplay(a, remindAt);
+          await _replaceRegistryObject('anniversary', a.id, {
+            ...blockedRegistryIds,
+            ..._anniversaryRegistryIds(a),
+          });
           continue;
         }
         final cancelled = await _cancelAnniversary(a.id);
         if (!cancelled) continue;
         _scheduledAnniversaryScopes.remove(a.id);
+        _forgetReminderDisplay('anniversary', a.id);
         await registry.removeObject('anniversary', a.id);
       }
 
       final scheduled = await _dispatchAnniversary(a, remindAt);
       if (scheduled) {
+        _rememberAnniversaryReminderDisplay(a, remindAt);
         _scheduledAnniversaryScopes[a.id] = scope;
-        await registry.replaceObject(
-          'anniversary',
-          a.id,
-          _anniversaryRegistryIds(a),
-        );
+        await _replaceRegistryObject('anniversary', a.id, {
+          ...blockedRegistryIds,
+          ..._anniversaryRegistryIds(a),
+        });
       }
     }
   }
@@ -1242,17 +1645,20 @@ class ReminderScheduler {
     for (final item in items) {
       if (!item.remind || item.reminderKind == ReminderKind.off) {
         await _cancelCountdown(item.id);
+        _forgetReminderDisplay('countdown', item.id);
         await registry.removeObject('countdown', item.id);
         continue;
       }
       final when = _countdownReminderAt(item);
       if (!when.isAfter(now)) {
         await _cancelCountdown(item.id);
+        _forgetReminderDisplay('countdown', item.id);
         await registry.removeObject('countdown', item.id);
         continue;
       }
       wanted[item.id] = item;
       scopes[item.id] = _countdownScope(item, when);
+      _rememberCountdownReminderDisplay(item, when);
     }
     final blockedCountdownIdsFromRegistry = await _sweepSingleRegistry(
       objectType: 'countdown',
@@ -1260,8 +1666,6 @@ class ReminderScheduler {
         for (final item in wanted.values) item.id: _countdownRegistryIds(item),
       },
     );
-    wanted.removeWhere((id, _) => blockedCountdownIdsFromRegistry.contains(id));
-    scopes.removeWhere((id, _) => blockedCountdownIdsFromRegistry.contains(id));
 
     final blockedCountdownIds = <String>{};
     for (final id in _scheduledCountdownScopes.keys.toList()) {
@@ -1270,6 +1674,7 @@ class ReminderScheduler {
         final cancelled = await _cancelCountdown(id);
         if (cancelled) {
           _scheduledCountdownScopes.remove(id);
+          _forgetReminderDisplay('countdown', id);
           await registry.removeObject('countdown', id);
         } else {
           blockedCountdownIds.add(id);
@@ -1284,18 +1689,21 @@ class ReminderScheduler {
         if (!swept) continue;
       }
       final scope = scopes[item.id]!;
+      final blockedRegistryIds =
+          blockedCountdownIdsFromRegistry[item.id] ?? const <int>{};
       if (_scheduledCountdownScopes[item.id] == scope) {
         if (await _countdownStillPending(item)) {
-          await registry.replaceObject(
-            'countdown',
-            item.id,
-            _countdownRegistryIds(item),
-          );
+          _rememberCountdownReminderDisplay(item, _countdownReminderAt(item));
+          await _replaceRegistryObject('countdown', item.id, {
+            ...blockedRegistryIds,
+            ..._countdownRegistryIds(item),
+          });
           continue;
         }
         final cancelled = await _cancelCountdown(item.id);
         if (!cancelled) continue;
         _scheduledCountdownScopes.remove(item.id);
+        _forgetReminderDisplay('countdown', item.id);
         await registry.removeObject('countdown', item.id);
       }
       final when = _countdownReminderAt(item);
@@ -1312,12 +1720,12 @@ class ReminderScheduler {
         ),
       );
       if (scheduled) {
+        _rememberCountdownReminderDisplay(item, when);
         _scheduledCountdownScopes[item.id] = scope;
-        await registry.replaceObject(
-          'countdown',
-          item.id,
-          _countdownRegistryIds(item),
-        );
+        await _replaceRegistryObject('countdown', item.id, {
+          ...blockedRegistryIds,
+          ..._countdownRegistryIds(item),
+        });
       }
     }
   }
@@ -1342,12 +1750,16 @@ class ReminderScheduler {
       }
       wanted[g.id] = {for (final rule in resolved) rule.ruleId: rule};
     }
-    await _sweepRuleRegistry(objectType: 'goal', wanted: wanted);
+    final blockedRegistryIds = await _sweepRuleRegistry(
+      objectType: 'goal',
+      wanted: wanted,
+    );
     await _syncRuleObjects(
       objectType: 'goal',
       wanted: wanted,
       scheduled: _scheduledGoalRules,
       cancelLegacy: _cancelGoalLegacy,
+      blockedRegistryIdsByObject: blockedRegistryIds,
     );
   }
 
@@ -1940,11 +2352,12 @@ class ReminderScheduler {
     return ok;
   }
 
-  Future<void> _sweepRuleRegistry({
+  Future<Map<String, Set<int>>> _sweepRuleRegistry({
     required String objectType,
     required Map<String, Map<String, _ResolvedRule>> wanted,
   }) async {
     final persisted = await registry.idsByObject(objectType);
+    final blocked = <String, Set<int>>{};
     for (final entry in persisted.entries) {
       final objectId = entry.key;
       final wantedRules = wanted[objectId] ?? const <String, _ResolvedRule>{};
@@ -1963,32 +2376,45 @@ class ReminderScheduler {
         if (wantedIds.isEmpty) {
           await registry.removeObject(objectType, objectId);
         } else {
-          await registry.replaceObject(objectType, objectId, wantedIds);
+          await _replaceRegistryObject(
+            objectType,
+            objectId,
+            wantedIds,
+            resolvedRules: wantedRules.values,
+          );
         }
+      } else {
+        blocked[objectId] = staleIds;
       }
     }
+    return blocked;
   }
 
-  Future<Set<String>> _sweepSingleRegistry({
+  Future<Map<String, Set<int>>> _sweepSingleRegistry({
     required String objectType,
     required Map<String, Set<int>> wantedIdsByObject,
   }) async {
     final persisted = await registry.idsByObject(objectType);
-    final blocked = <String>{};
+    final blocked = <String, Set<int>>{};
     for (final entry in persisted.entries) {
       final objectId = entry.key;
       final wantedIds = wantedIdsByObject[objectId] ?? const <int>{};
       final staleIds = entry.value.difference(wantedIds);
       if (staleIds.isEmpty) continue;
-      final cancelled = await _cancelIds(objectType, objectId, staleIds);
+      final cancelled = await _cancelIds(
+        objectType,
+        objectId,
+        staleIds,
+        blocking: false,
+      );
       if (cancelled) {
         if (wantedIds.isEmpty) {
           await registry.removeObject(objectType, objectId);
         } else {
-          await registry.replaceObject(objectType, objectId, wantedIds);
+          await _replaceRegistryObject(objectType, objectId, wantedIds);
         }
       } else {
-        blocked.add(objectId);
+        blocked[objectId] = staleIds;
       }
     }
     return blocked;
@@ -2141,7 +2567,9 @@ class ReminderScheduler {
     required Object error,
     bool blocking = true,
   }) {
-    debugPrint('[ReminderScheduler] Old reminder cleanup failed for $label: $error');
+    debugPrint(
+      '[ReminderScheduler] Old reminder cleanup failed for $label: $error',
+    );
     // 旧提醒清理失败时不阻塞新提醒注册，允许覆盖旧规则
     // 系统通知队列通常允许相同 ID 覆盖，重复注册会自动替换
     final issueSink = notif is ReminderScheduleIssueSink
@@ -2162,12 +2590,16 @@ class ReminderScheduler {
     required Map<String, Map<String, _ScheduledRule>> scheduled,
     required Future<bool> Function(String objectId, {bool blocking})
     cancelLegacy,
+    required Map<String, Set<int>> blockedRegistryIdsByObject,
   }) async {
     final nextScheduled = <String, Map<String, _ScheduledRule>>{};
+    final persistedRegistryIdsByObject = await registry.idsByObject(objectType);
 
     for (final objectId in scheduled.keys.toList()) {
       final priorRules = scheduled[objectId] ?? const {};
       final nextRules = wanted[objectId];
+      final blockedRegistryIds =
+          blockedRegistryIdsByObject[objectId] ?? const <int>{};
       if (nextRules == null) {
         final rulesCancelled = await _cancelRuleObjects(
           objectType,
@@ -2179,11 +2611,10 @@ class ReminderScheduler {
           nextScheduled[objectId] = Map<String, _ScheduledRule>.from(
             priorRules,
           );
-          await registry.replaceObject(
-            objectType,
-            objectId,
-            _registryIdsForScheduledRules(objectType, objectId, priorRules),
-          );
+          await _replaceRegistryObject(objectType, objectId, {
+            ...blockedRegistryIds,
+            ..._registryIdsForScheduledRules(objectType, objectId, priorRules),
+          }, scheduledRules: priorRules.values);
         } else {
           await registry.removeObject(objectType, objectId);
         }
@@ -2260,10 +2691,16 @@ class ReminderScheduler {
 
       if (kept.isNotEmpty) {
         nextScheduled[objectId] = kept;
-        await registry.replaceObject(
+        await _replaceRegistryObject(objectType, objectId, {
+          ...blockedRegistryIds,
+          ..._registryIdsForScheduledRules(objectType, objectId, kept),
+        }, scheduledRules: kept.values);
+      } else if (blockedRegistryIds.isNotEmpty) {
+        await _replaceRegistryObject(
           objectType,
           objectId,
-          _registryIdsForScheduledRules(objectType, objectId, kept),
+          blockedRegistryIds,
+          resolvedRules: nextRules.values,
         );
       } else {
         await registry.removeObject(objectType, objectId);
@@ -2276,14 +2713,27 @@ class ReminderScheduler {
 
       final nextRules = entry.value;
       final kept = <String, _ScheduledRule>{};
+      final blockedRegistryIds = <int>{
+        ...?blockedRegistryIdsByObject[objectId],
+      };
+      final persistedRegistryIds =
+          persistedRegistryIdsByObject[objectId] ?? const <int>{};
       await cancelLegacy(objectId, blocking: false);
       for (final nextRule in nextRules.values) {
-        await _cancelRule(
+        final nextRuleRegistryIds = _registryIdsForRule(nextRule);
+        final cancelled = await _cancelRule(
           objectType,
           objectId,
           nextRule.ruleId,
           blocking: false,
         );
+        final hadPersistedRuleIds = persistedRegistryIds.any(
+          nextRuleRegistryIds.contains,
+        );
+        if (!cancelled && hadPersistedRuleIds) {
+          blockedRegistryIds.addAll(nextRuleRegistryIds);
+          continue;
+        }
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
@@ -2291,10 +2741,16 @@ class ReminderScheduler {
       }
       if (kept.isNotEmpty) {
         nextScheduled[objectId] = kept;
-        await registry.replaceObject(
+        await _replaceRegistryObject(objectType, objectId, {
+          ...blockedRegistryIds,
+          ..._registryIdsForScheduledRules(objectType, objectId, kept),
+        }, scheduledRules: kept.values);
+      } else if (blockedRegistryIds.isNotEmpty) {
+        await _replaceRegistryObject(
           objectType,
           objectId,
-          _registryIdsForScheduledRules(objectType, objectId, kept),
+          blockedRegistryIds,
+          resolvedRules: nextRules.values,
         );
       } else {
         await registry.removeObject(objectType, objectId);
@@ -2526,7 +2982,7 @@ class ReminderScheduler {
     if (issueSink == null) return;
     issueSink.recordReminderScheduleIssue(
       title: title,
-      message: '$message($error)',
+      message: message,
       relatedId: label,
       blocking: false,
     );
@@ -2748,6 +3204,8 @@ class ReminderScheduler {
       mode: rule.mode,
       scope: rule.scope,
       fingerprint: rule.fingerprint,
+      title: rule.title,
+      body: rule.body,
     );
   }
 

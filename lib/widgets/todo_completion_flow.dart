@@ -49,7 +49,10 @@ Future<void> completeTodoWithOptionalTimeRecord(
     initialMinutes: _initialMinutes(currentTodo),
   );
 
-  await todoProvider.toggleTodo(todo.id, recordCompletionTime: false);
+  final changed = await todoProvider.completeTodos([
+    todo.id,
+  ], recordCompletionTime: false);
+  if (changed == 0) return;
   if (!context.mounted) return;
 
   if (recordMinutes != null && recordMinutes > 0 && timeAuditProvider != null) {

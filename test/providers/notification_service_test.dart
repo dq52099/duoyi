@@ -711,7 +711,12 @@ void main() {
     expect(notificationScreen, contains("title: '1 分钟后默认方式'"));
     expect(notificationScreen, contains("title: '已注册提醒明细'"));
     expect(notificationScreen, contains('registeredRemindersSnapshot()'));
-    expect(notificationScreen, contains('_RegisteredReminderSnapshotRow'));
+    expect(notificationScreen, contains('_RegisteredReminderDetailRow'));
+    expect(
+      notificationScreen,
+      isNot(contains('_RegisteredReminderSnapshotRow')),
+    );
+    expect(notificationScreen, isNot(contains('队列 ID')));
     expect(
       notificationScreen,
       contains('NativeReminderRingtone.statusChannelId'),
@@ -968,7 +973,8 @@ void main() {
       expect(
         channelGuard,
         contains('channel setup failed; continuing'),
-        reason: 'Channel recreation failures should be diagnostic-only; the '
+        reason:
+            'Channel recreation failures should be diagnostic-only; the '
             'registration attempt still gets a chance to run.',
       );
       expect(channelGuard, isNot(contains('rethrow')));
@@ -1205,11 +1211,13 @@ void main() {
       expect(scheduler, contains("..remove('confirm')"));
       expect(
         todoDetail,
-        contains("context.read<NotificationService?>()?.lastScheduleIssue"),
+        isNot(
+          contains("context.read<NotificationService?>()?.lastScheduleIssue"),
+        ),
       );
       expect(
         todoDetail,
-        contains("content: Text('\${issue.title}：\${issue.message}')"),
+        isNot(contains("content: Text('\${issue.title}：\${issue.message}')")),
       );
     },
   );

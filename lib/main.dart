@@ -3246,10 +3246,12 @@ String _todayTaskProgressNotificationBody(
       .toList(growable: false);
   final todoCount = visibleTodos.length;
   final dailyCount = habits.habits
-      .where((habit) => habit.isActiveToday() && !habit.isCompletedToday())
+      .where(
+        (habit) => habit.activeForDate(now) && !habit.isCompletedForDate(now),
+      )
       .length;
   final goalCount = goals.activeGoals.length;
-  final remaining = dailyCount + todoCount + goalCount;
+  final remaining = dailyCount + todoCount;
   return formatNotificationTodayProgressBody(
     remaining: remaining,
     dailyCount: dailyCount,

@@ -371,17 +371,33 @@ void main() {
     expect(service, contains('putExtra("vibrate", vibrate)'));
     expect(receiver, contains('getBooleanExtra("vibrate", true)'));
     expect(scheduler, contains('.put("vibrate"'));
-    expect(service, contains('launchFullScreenReminder(id, payload)'));
+    expect(manifest, contains('android:name=".ReminderFullScreenActivity"'));
+    final fullScreenActivityStart = manifest.indexOf(
+      'android:name=".ReminderFullScreenActivity"',
+    );
+    final fullScreenActivityEnd = manifest.indexOf('/>', fullScreenActivityStart);
+    expect(fullScreenActivityStart, greaterThanOrEqualTo(0));
+    expect(fullScreenActivityEnd, greaterThan(fullScreenActivityStart));
+    final fullScreenActivityManifest = manifest.substring(
+      fullScreenActivityStart,
+      fullScreenActivityEnd,
+    );
+    expect(fullScreenActivityManifest, contains('android:exported="false"'));
+    expect(fullScreenActivityManifest, contains('android:showWhenLocked="true"'));
+    expect(fullScreenActivityManifest, contains('android:turnScreenOn="true"'));
+    expect(service, contains('launchFullScreenReminder(id, title, body, payload, rootId)'));
+    expect(service, contains('ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)'));
+    expect(receiver, contains('ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload)'));
     expect(
       service,
-      isNot(contains('setFullScreenIntent(fullScreenIntent, fullScreen)')),
+      contains('setFullScreenIntent(fullScreenIntent, fullScreen)'),
       reason:
-          '原生铃声状态通知不能再额外设置 full-screen intent；全屏只由 launchFullScreenReminder 显式启动一次，避免先闪一下再弹第二次。',
+          '原生铃声服务从后台触发时不能只依赖 startActivity；通知本身也要携带系统 full-screen intent，避免软件外全屏闹钟不弹出。',
     );
     expect(
       receiver,
       contains('setFullScreenIntent(fullScreenIntent, fullScreen)'),
-      reason: '只有前台铃声服务启动失败后的兜底通知保留系统 full-screen 能力。',
+      reason: '前台铃声服务启动失败后的兜底通知也要保留系统 full-screen 能力。',
     );
     expect(service, contains('NotificationCompat.VISIBILITY_PUBLIC'));
     expect(service, contains('NotificationCompat.PRIORITY_HIGH'));
@@ -509,11 +525,12 @@ void main() {
     expect(alarmService, contains('deleteNotificationChannel(legacyId)'));
     expect(
       native,
-      contains("statusChannelId = 'duoyi_builtin_ringtone_status_v4'"),
+      contains("statusChannelId = 'duoyi_builtin_ringtone_status_v5'"),
     );
     expect(native, contains("fallbackChannelId = 'duoyi_alarm_fallback_v9'"));
     expect(native, contains("'duoyi_alarm_fallback_v7'"));
     expect(native, contains('legacyChannelIds'));
+    expect(service, contains('duoyi_builtin_ringtone_status_v5'));
     expect(service, contains('duoyi_builtin_ringtone_status_v4'));
     expect(service, contains('duoyi_builtin_ringtone_status_v2'));
     expect(service, contains('deleteNotificationChannel(it)'));
@@ -622,13 +639,20 @@ void main() {
     final mainActivity = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
     ).readAsStringSync();
+    final fullScreenActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderFullScreenActivity.kt',
+    ).readAsStringSync();
 
     expect(service, contains('setContentIntent(contentIntent)'));
     expect(mainActivity, contains('override fun onCreate'));
     expect(mainActivity, contains('override fun onNewIntent'));
     expect(service, contains('openAppIntent(payload, stopRingtone = true)'));
-    expect(service, contains('openAppIntent(payload, stopRingtone = false)'));
-    expect(service, contains('launchFullScreenReminder(id, payload)'));
+    expect(service, contains('ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)'));
+    expect(service, contains('launchFullScreenReminder(id, title, body, payload, rootId)'));
+    expect(fullScreenActivity, contains('setShowWhenLocked(true)'));
+    expect(fullScreenActivity, contains('setTurnScreenOn(true)'));
+    expect(fullScreenActivity, contains('ReminderRingtoneService.stopServiceIntent'));
+    expect(fullScreenActivity, contains('mainActivityIntent(this, payload, stopRingtone = true)'));
     expect(service, contains('reason = "full_screen_launch_failed"'));
     expect(service, contains('extraStopRingtone'));
     expect(mainActivity, contains('stopReminderRingtoneIfRequested(intent)'));
@@ -955,6 +979,7 @@ void main() {
     );
     expect(alarmService, contains('NativeReminderRingtone.statusChannelId'));
     expect(alarmService, contains('NativeReminderRingtone.fallbackChannelId'));
+    expect(alarmService, contains('statusChannel.isLowImportance'));
     expect(alarmService, contains('statusChannel.isBlocked'));
     expect(alarmService, contains('fallbackStatus.isSilent'));
     expect(alarmService, contains('void _finishScheduleIssue'));

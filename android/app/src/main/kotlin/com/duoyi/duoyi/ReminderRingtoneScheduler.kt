@@ -855,6 +855,7 @@ object ReminderRingtoneScheduler {
                         body,
                         payload,
                         fullScreen,
+                        rootId,
                     )
                 }
             }

@@ -489,10 +489,23 @@ void main() {
       final provider = LocaleProvider();
       await provider.loadFromStorage();
       expect(provider.locale, AppLocale.zh);
+      expect(provider.flutterLocale, const Locale('zh'));
 
       await provider.setLocale(AppLocale.en);
       expect(provider.locale, AppLocale.en);
       expect(I18n.tr('settings.language'), 'Display language');
+    });
+
+    test('兼容并迁移历史区域格式语言偏好', () async {
+      SharedPreferences.setMockInitialValues({'duoyi_locale_v1': 'zh_CN'});
+
+      final provider = LocaleProvider();
+      await provider.loadFromStorage();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(provider.locale, AppLocale.zh);
+      expect(provider.flutterLocale, const Locale('zh'));
+      expect(prefs.getString('duoyi_locale_v1'), 'zh');
     });
   });
 }

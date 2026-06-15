@@ -1,8 +1,76 @@
 import 'dart:io';
+import 'dart:convert';
 
+import 'package:duoyi/models/todo.dart';
+import 'package:duoyi/providers/todo_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('TodoProvider skips duplicate in-flight creates', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = TodoProvider();
+    final date = DateTime(2026, 6, 15);
+    final first = TodoItem(id: 'todo-a', title: '重复提交', date: date);
+    final second = TodoItem(id: 'todo-b', title: '  重复提交  ', date: date);
+
+    final results = await Future.wait([
+      provider.addTodo(first).then((_) => 'success').catchError((e) => 'error'),
+      provider.addTodo(second).then((_) => 'success').catchError((e) => 'error'),
+    ]);
+
+    // 至少一个成功，至少一个因重复而失败
+    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
+
+    expect(provider.todos, hasLength(1));
+    expect(provider.todos.single.id, 'todo-a');
+    final prefs = await SharedPreferences.getInstance();
+    final stored = jsonDecode(prefs.getString('todos')!) as List<Object?>;
+    expect(stored, hasLength(1));
+  });
+
+  test('TodoProvider skips duplicate in-flight subtask creates', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = TodoProvider();
+    final todo = TodoItem(id: 'todo-subtask', title: '父任务');
+    await provider.addTodo(todo);
+
+    final results = await Future.wait([
+      provider.addSubtask(todo.id, '复核材料').then((_) => 'success').catchError((e) => 'error'),
+      provider.addSubtask(todo.id, '  复核材料  ').then((_) => 'success').catchError((e) => 'error'),
+    ]);
+
+    // 至少一个成功，至少一个因重复而失败
+    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
+
+    final updated = provider.todos.singleWhere((item) => item.id == todo.id);
+    expect(updated.subtasks, hasLength(1));
+    expect(updated.subtasks.single.title, '复核材料');
+  });
+
+  test('TodoProvider skips duplicate in-flight deletes', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = TodoProvider();
+    final todo = TodoItem(id: 'todo-delete', title: '删除一次');
+    await provider.addTodo(todo);
+
+    final results = await Future.wait([
+      provider.deleteTodo(todo.id).then((_) => 'success').catchError((e) => 'error'),
+      provider.deleteTodo(todo.id).then((_) => 'success').catchError((e) => 'error'),
+    ]);
+
+    // 至少一个成功，至少一个因重复而失败
+    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
+
+    expect(provider.todos, isEmpty);
+    final prefs = await SharedPreferences.getInstance();
+    final stored = jsonDecode(prefs.getString('todos')!) as List<Object?>;
+    expect(stored, isEmpty);
+  });
+
   test('TodoProvider exposes batch completion and recurrence preservation', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
 
@@ -39,6 +107,9 @@ void main() {
       expect(source, contains('String? get lastReminderSyncIssue'));
       expect(source, contains('DateTime? get lastReminderSyncAttemptAt'));
       expect(source, contains('DateTime? get lastReminderSyncSucceededAt'));
+      expect(source, contains('Future<void> _storageWriteQueue'));
+      expect(source, contains('final Set<String> _inFlightCreateKeys'));
+      expect(source, contains('_createInFlightDuplicateKey(todo)'));
       expect(
         source,
         contains("_lastReminderSyncIssue = 'reminder_scheduler_missing'"),
@@ -59,7 +130,10 @@ void main() {
           'Future<void> addTodo(TodoItem todo)',
           'Future<TodoImportSummary> importTodos(',
         ),
-        contains('await _syncTodoRemindersNow();'),
+        allOf(
+          contains('// 异步同步提醒，不阻塞 UI'),
+          contains('unawaited(_syncTodoRemindersNow());'),
+        ),
       );
       expect(
         method(
@@ -93,11 +167,11 @@ void main() {
           'Future<void> deleteTodo(String id)',
           'Future<int> deleteTodos(Iterable<String> ids)',
         ),
-        contains('await _syncTodoRemindersNow();'),
+        contains('await deleteTodos([id]);'),
       );
       expect(
         method(
-          'Future<int> deleteTodos(Iterable<String> ids)',
+          'Future<int> _deleteTodosLocked(Set<String> selected)',
           'Future<int> updateTodosQuadrant(',
         ),
         contains('await _syncTodoRemindersNow();'),

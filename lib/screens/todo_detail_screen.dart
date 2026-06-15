@@ -68,6 +68,8 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   late TodoItem _todo;
   bool _missingTodo = false;
   bool _notesPreview = false;
+  bool _subtaskAdding = false;
+  final Set<String> _busySubtaskIds = <String>{};
   String? _commentsLoadedForWorkspaceId;
 
   /// "保存不返回"状态机当前状态。
@@ -253,17 +255,6 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       _baseline = _snapshot(_todo);
       setState(() => _state = _EditState.clean);
 
-      final issue = context.read<NotificationService?>()?.lastScheduleIssue;
-      if (issue != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('${issue.title}：${issue.message}'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-
       Navigator.of(context).maybePop(true);
     } catch (e) {
       if (!mounted) return;
@@ -327,23 +318,68 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return false;
   }
 
-  void _addSubtask() {
+  Future<void> _addSubtask() async {
+    if (_subtaskAdding) return;
     if (!(context.read<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true)) {
       return;
     }
-    if (_subtaskCtrl.text.trim().isEmpty) return;
-    context.read<TodoProvider>().addSubtask(
-      widget.todoId,
-      _subtaskCtrl.text.trim(),
-    );
-    _subtaskCtrl.clear();
+    final title = _subtaskCtrl.text.trim();
+    if (title.isEmpty) return;
+    setState(() => _subtaskAdding = true);
+    try {
+      await context.read<TodoProvider>().addSubtask(widget.todoId, title);
+      if (!mounted) return;
+      _subtaskCtrl.clear();
+      _refreshTodoBaseline();
+    } finally {
+      if (mounted) {
+        setState(() => _subtaskAdding = false);
+      }
+    }
+  }
+
+  void _refreshTodoBaseline() {
     setState(() {
       _todo = context.read<TodoProvider>().todos.firstWhere(
         (t) => t.id == widget.todoId,
+        orElse: () => _todo,
       );
+      _baseline = _snapshot(_todo);
     });
-    // 子任务列表由 provider 直接维护，基线也需跟着刷新，避免它们被误判为脏。
-    _baseline = _snapshot(_todo);
+  }
+
+  Future<void> _toggleSubtask(String subtaskId) async {
+    if (!_busySubtaskIds.add(subtaskId)) return;
+    setState(() {});
+    try {
+      await context.read<TodoProvider>().toggleSubtask(
+        widget.todoId,
+        subtaskId,
+      );
+      if (!mounted) return;
+      _refreshTodoBaseline();
+    } finally {
+      if (mounted) {
+        setState(() => _busySubtaskIds.remove(subtaskId));
+      }
+    }
+  }
+
+  Future<void> _deleteSubtask(String subtaskId) async {
+    if (!_busySubtaskIds.add(subtaskId)) return;
+    setState(() {});
+    try {
+      await context.read<TodoProvider>().deleteSubtask(
+        widget.todoId,
+        subtaskId,
+      );
+      if (!mounted) return;
+      _refreshTodoBaseline();
+    } finally {
+      if (mounted) {
+        setState(() => _busySubtaskIds.remove(subtaskId));
+      }
+    }
   }
 
   void _addTag(String v) {
@@ -933,17 +969,27 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _subtaskCtrl,
-                    enabled: canEdit,
+                    enabled: canEdit && !_subtaskAdding,
                     decoration: const InputDecoration(
                       labelText: '新增子任务',
                       isDense: true,
                     ),
-                    onSubmitted: (_) => _addSubtask(),
+                    onSubmitted: (_) {
+                      _addSubtask();
+                    },
                   ),
                 ),
                 IconButton(
-                  onPressed: canEdit ? _addSubtask : null,
-                  icon: Icon(Icons.add_circle, color: cs.primary),
+                  onPressed: canEdit && !_subtaskAdding ? _addSubtask : null,
+                  icon: _subtaskAdding
+                      ? SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.primary,
+                          ),
+                        )
+                      : Icon(Icons.add_circle, color: cs.primary),
                 ),
               ],
             ),
@@ -964,64 +1010,48 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               },
               children: [
                 for (final s in _todo.subtasks)
-                  ListTile(
-                    key: ValueKey(s.id),
-                    dense: true,
-                    leading: Checkbox(
-                      value: s.isCompleted,
-                      onChanged: canEdit
-                          ? (_) {
-                              provider.toggleSubtask(widget.todoId, s.id).then((
-                                _,
-                              ) {
-                                if (!mounted) return;
-                                setState(() {
-                                  _todo = context
-                                      .read<TodoProvider>()
-                                      .todos
-                                      .firstWhere(
-                                        (t) => t.id == widget.todoId,
-                                        orElse: () => _todo,
-                                      );
-                                  _baseline = _snapshot(_todo);
-                                });
-                              });
-                            }
-                          : null,
-                    ),
-                    title: Text(
-                      s.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: DesignTokens.fontSizeBase,
-                        decoration: s.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 16),
-                      onPressed: canEdit
-                          ? () {
-                              provider.deleteSubtask(widget.todoId, s.id).then((
-                                _,
-                              ) {
-                                if (!mounted) return;
-                                setState(() {
-                                  _todo = context
-                                      .read<TodoProvider>()
-                                      .todos
-                                      .firstWhere(
-                                        (t) => t.id == widget.todoId,
-                                        orElse: () => _todo,
-                                      );
-                                  _baseline = _snapshot(_todo);
-                                });
-                              });
-                            }
-                          : null,
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final busy = _busySubtaskIds.contains(s.id);
+                      return ListTile(
+                        key: ValueKey(s.id),
+                        dense: true,
+                        leading: Checkbox(
+                          value: s.isCompleted,
+                          onChanged: canEdit && !busy
+                              ? (_) {
+                                  _toggleSubtask(s.id);
+                                }
+                              : null,
+                        ),
+                        title: Text(
+                          s.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: DesignTokens.fontSizeBase,
+                            decoration: s.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        trailing: IconButton(
+                          icon: busy
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.close, size: 16),
+                          onPressed: canEdit && !busy
+                              ? () {
+                                  _deleteSubtask(s.id);
+                                }
+                              : null,
+                        ),
+                      );
+                    },
                   ),
               ],
             ),

@@ -18,7 +18,7 @@ enum AppLocale { zh, en }
 
 extension AppLocaleX on AppLocale {
   Locale get flutterLocale => switch (this) {
-    AppLocale.zh => const Locale('zh', 'CN'),
+    AppLocale.zh => const Locale('zh'),
     AppLocale.en => const Locale('en'),
   };
 
@@ -32,7 +32,9 @@ extension AppLocaleX on AppLocale {
   }
 
   static AppLocale? fromStorageValue(String? raw) {
-    return switch (raw) {
+    final normalized = raw?.trim().replaceAll('-', '_').toLowerCase();
+    final language = normalized?.split('_').first;
+    return switch (language) {
       'zh' => AppLocale.zh,
       'en' => AppLocale.en,
       _ => null,
@@ -1926,9 +1928,11 @@ class LocaleProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    _locale =
-        AppLocaleX.fromStorageValue(prefs.getString(_key)) ??
-        defaultLocaleForPlatform();
+    final raw = prefs.getString(_key);
+    _locale = AppLocaleX.fromStorageValue(raw) ?? defaultLocaleForPlatform();
+    if (raw != null && raw != _locale.storageValue) {
+      await prefs.setString(_key, _locale.storageValue);
+    }
     I18n.setLocale(_locale);
   }
 

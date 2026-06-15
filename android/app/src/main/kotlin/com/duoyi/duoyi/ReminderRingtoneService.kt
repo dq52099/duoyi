@@ -93,7 +93,7 @@ class ReminderRingtoneService : Service() {
                 ),
             )
             if (fullScreen) {
-                launchFullScreenReminder(id, payload)
+                launchFullScreenReminder(id, title, body, payload, rootId)
             }
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
@@ -116,7 +116,7 @@ class ReminderRingtoneService : Service() {
                 cancelFlutterPluginNotification(this, rootId)
             }
             activeReminderId = null
-            ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, fullScreen)
+            ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, fullScreen, rootId)
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
             stopSelf()
@@ -346,13 +346,16 @@ class ReminderRingtoneService : Service() {
             openAppIntent(payload, stopRingtone = true),
             flags,
         )
+        val fullScreenIntent = PendingIntent.getActivity(
+            this,
+            id + 3_000_000,
+            ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload),
+            flags,
+        )
         val stopIntent = PendingIntent.getService(
             this,
             id + 1_000_000,
-            Intent(this, ReminderRingtoneService::class.java)
-                .setAction(actionStop)
-                .putExtra("id", id)
-                .putExtra("rootId", rootId),
+            stopServiceIntent(this, id, rootId),
             flags,
         )
         val snoozeIntent = if (snoozeMinutes > 0) {
@@ -386,6 +389,7 @@ class ReminderRingtoneService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentIntent)
+            .setFullScreenIntent(fullScreenIntent, fullScreen)
             .setDeleteIntent(stopIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(0, "停止响铃", stopIntent)
@@ -395,12 +399,15 @@ class ReminderRingtoneService : Service() {
         return builder.build()
     }
 
-    private fun launchFullScreenReminder(id: Int, payload: String?) {
+    private fun launchFullScreenReminder(
+        id: Int,
+        title: String,
+        body: String,
+        payload: String?,
+        rootId: Int,
+    ) {
         runCatching {
-            val intent = openAppIntent(payload, stopRingtone = false).apply {
-                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            startActivity(intent)
+            startActivity(ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload))
         }.onFailure { error ->
             Log.w("ReminderRingtoneService", "full-screen reminder launch failed", error)
             ReminderRingtoneScheduler.recordDeliveryIssue(
@@ -479,11 +486,12 @@ class ReminderRingtoneService : Service() {
     }
 
     companion object {
-        private const val channelId = "duoyi_builtin_ringtone_status_v4"
+        private const val channelId = "duoyi_builtin_ringtone_status_v5"
         private val legacyChannelIds = arrayOf(
             "duoyi_builtin_ringtone_status_v1",
             "duoyi_builtin_ringtone_status_v2",
             "duoyi_builtin_ringtone_status_v3",
+            "duoyi_builtin_ringtone_status_v4",
         )
         private const val actionStop = "com.duoyi.duoyi.REMINDER_RING_STOP"
         private const val actionSnooze = "com.duoyi.duoyi.REMINDER_RING_SNOOZE"
@@ -504,6 +512,13 @@ class ReminderRingtoneService : Service() {
 
         fun notificationIdForReminder(id: Int): Int {
             return id or Int.MIN_VALUE
+        }
+
+        fun stopServiceIntent(context: Context, id: Int, rootId: Int = id): Intent {
+            return Intent(context, ReminderRingtoneService::class.java)
+                .setAction(actionStop)
+                .putExtra("id", id)
+                .putExtra("rootId", rootId)
         }
 
         fun cancelNotification(context: Context, id: Int) {

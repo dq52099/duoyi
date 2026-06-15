@@ -5,6 +5,7 @@ import 'package:test/test.dart';
 void main() {
   test('web release and pages deploy keep the public /duoyi/ deployment', () {
     final workflow = File('.github/workflows/build-apk.yml').readAsStringSync();
+    final deployScript = File('scripts/deploy_web_prod.sh').readAsStringSync();
     final webJobStart = workflow.indexOf('\n  web:\n');
     final deployPagesJobStart = workflow.indexOf(
       '\n  deploy-pages:\n',
@@ -53,10 +54,7 @@ void main() {
       releaseJobStart,
     );
     expect(deployPagesJob, contains("needs: web"));
-    expect(
-      deployPagesJob,
-      contains("if: github.ref == 'refs/heads/main'"),
-    );
+    expect(deployPagesJob, contains("if: github.ref == 'refs/heads/main'"));
     expect(deployPagesJob, contains('pages: write'));
     expect(deployPagesJob, contains('id-token: write'));
     expect(deployPagesJob, contains('name: github-pages'));
@@ -68,12 +66,16 @@ void main() {
       reason:
           'The public download page links to /duoyi/, so CI must not build a root-based web artifact by default.',
     );
+    expect(deployScript, contains('version_family="\${VERSION_NAME%.*}"'));
+    expect(deployScript, contains('\${version_family//./\\\\.}\\\\.[0-9]+'));
+    expect(deployScript, isNot(contains("'[0-9]+\\\\.[0-9]+\\\\.[0-9]+'")));
 
     final downloadPage = File('deploy/duoyi.html').readAsStringSync();
     expect(downloadPage, contains('href="/duoyi/"'));
     expect(downloadPage, contains('http://6688667.xyz/duoyi/'));
-    expect(downloadPage, contains('duoyi-web-desktop-v1.1.39.tar.gz'));
-    expect(downloadPage, contains('duoyi-web-mobile-v1.1.39.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-desktop-v1.1.41.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-mobile-v1.1.41.tar.gz'));
+    expect(downloadPage, isNot(contains('v1.1.39')));
     expect(downloadPage, isNot(contains('v1.1.38')));
     expect(downloadPage, isNot(contains('v1.1.37')));
     expect(downloadPage, isNot(contains('duoyi-v1.1.35.apk')));
@@ -121,9 +123,9 @@ void main() {
     expect(widgetScreen, contains('WidgetPreviewCard.calendar'));
     expect(widgetScreen, contains('const CalendarScreen()'));
 
-    final builtIndex = File('build/web/index.html');
-    if (builtIndex.existsSync()) {
-      expect(builtIndex.readAsStringSync(), contains('<base href="/duoyi/">'));
-    }
+    final sourceIndex = File('web/index.html').readAsStringSync();
+    expect(sourceIndex, contains('<base href="\$FLUTTER_BASE_HREF">'));
+    expect(sourceIndex, contains('the `--base-href` argument'));
+    expect(sourceIndex, isNot(contains('<base href="/">')));
   });
 }

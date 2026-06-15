@@ -45,6 +45,7 @@ class _TodoScreenState extends State<TodoScreen> {
       const TodoFilterState<EisenhowerQuadrant, TodoPriority>();
   TodoKanbanBoardConfig _kanbanConfig = TodoKanbanBoardConfig.defaults();
   bool _batchMode = false;
+  bool _batchSubmitting = false;
   int _swipeDismissSerial = 0;
   final Set<String> _selectedTodoIds = <String>{};
 
@@ -71,6 +72,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _enterBatchMode({String? todoId, bool switchToList = false}) {
+    if (_batchSubmitting) return;
     setState(() {
       _batchMode = true;
       if (switchToList) _viewMode = _TodoViewMode.list;
@@ -86,6 +88,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _toggleSelection(String todoId) {
+    if (_batchSubmitting) return;
     setState(() {
       if (_selectedTodoIds.contains(todoId)) {
         _selectedTodoIds.remove(todoId);
@@ -98,6 +101,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _selectAllVisible(Iterable<String> editableIds) {
+    if (_batchSubmitting) return;
     final ids = editableIds.toSet();
     setState(() {
       _batchMode = true;
@@ -130,41 +134,31 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   Future<void> _completeSelected() async {
-    final count = await context.read<TodoProvider>().completeTodos(
-      _selectedTodoIds,
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().completeTodos(ids),
+      (count) => '已完成 $count 个任务',
     );
-    if (!mounted) return;
-    _exitBatchMode();
-    _showBatchSnack('已完成 $count 个任务');
   }
 
   Future<void> _reopenSelected() async {
-    final count = await context.read<TodoProvider>().reopenTodos(
-      _selectedTodoIds,
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().reopenTodos(ids),
+      (count) => '已恢复 $count 个任务为未完成',
     );
-    if (!mounted) return;
-    _exitBatchMode();
-    _showBatchSnack('已恢复 $count 个任务为未完成');
   }
 
   Future<void> _moveSelected(EisenhowerQuadrant quadrant) async {
-    final count = await context.read<TodoProvider>().updateTodosQuadrant(
-      _selectedTodoIds,
-      quadrant,
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().updateTodosQuadrant(ids, quadrant),
+      (count) => '已移动 $count 个任务到${_quadrantLabel(quadrant)}',
     );
-    if (!mounted) return;
-    _exitBatchMode();
-    _showBatchSnack('已移动 $count 个任务到${_quadrantLabel(quadrant)}');
   }
 
   Future<void> _setSelectedPriority(TodoPriority priority) async {
-    final count = await context.read<TodoProvider>().updateTodosPriority(
-      _selectedTodoIds,
-      priority,
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().updateTodosPriority(ids, priority),
+      (count) => '已更新 $count 个任务优先级',
     );
-    if (!mounted) return;
-    _exitBatchMode();
-    _showBatchSnack('已更新 $count 个任务优先级');
   }
 
   Future<void> _showKanbanSettings() async {
@@ -177,6 +171,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   Future<void> _deleteSelected() async {
+    if (_batchSubmitting) return;
     final selectedCount = _selectedTodoIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -198,12 +193,30 @@ class _TodoScreenState extends State<TodoScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    final count = await context.read<TodoProvider>().deleteTodos(
-      _selectedTodoIds,
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().deleteTodos(ids),
+      (count) => '已删除 $count 个任务',
     );
-    if (!mounted) return;
-    _exitBatchMode();
-    _showBatchSnack('已删除 $count 个任务');
+  }
+
+  Future<void> _runBatchAction(
+    Future<int> Function(Set<String> ids) action,
+    String Function(int count) message,
+  ) async {
+    if (_batchSubmitting) return;
+    final ids = Set<String>.from(_selectedTodoIds);
+    if (ids.isEmpty) return;
+    setState(() => _batchSubmitting = true);
+    try {
+      final count = await action(ids);
+      if (!mounted) return;
+      _exitBatchMode();
+      _showBatchSnack(message(count));
+    } finally {
+      if (mounted) {
+        setState(() => _batchSubmitting = false);
+      }
+    }
   }
 
   void _showBatchSnack(String message) {
@@ -454,13 +467,15 @@ class _TodoScreenState extends State<TodoScreen> {
                               if (titleCtrl.text.trim().isEmpty) return;
                               setSt(() => submitting = true);
                               try {
-                                final notificationService =
-                                    context.read<NotificationService?>();
-                                final todoProvider = context.read<TodoProvider>();
-                                final shareProvider =
-                                    context.read<ShareProvider>();
-                                final authState =
-                                    context.read<AuthProvider>().state;
+                                final notificationService = context
+                                    .read<NotificationService?>();
+                                final todoProvider = context
+                                    .read<TodoProvider>();
+                                final shareProvider = context
+                                    .read<ShareProvider>();
+                                final authState = context
+                                    .read<AuthProvider>()
+                                    .state;
                                 final messenger = ScaffoldMessenger.of(context);
                                 final sub = aiSubtasks
                                     .map((t) => Subtask(title: t))
@@ -471,9 +486,10 @@ class _TodoScreenState extends State<TodoScreen> {
                                 );
                                 final workspaceId = groupName.isEmpty
                                     ? 'private'
-                                    : todoProvider
-                                            .workspaceForListGroup(groupName) ??
-                                        'private';
+                                    : todoProvider.workspaceForListGroup(
+                                            groupName,
+                                          ) ??
+                                          'private';
                                 if (!shareProvider.canEdit(workspaceId)) {
                                   messenger.showSnackBar(
                                     const SnackBar(
@@ -485,8 +501,9 @@ class _TodoScreenState extends State<TodoScreen> {
                                 final todo = draft.toTodo(
                                   quadrant: quadrant,
                                   priority: priority,
-                                  listGroupName:
-                                      groupName.isEmpty ? null : groupName,
+                                  listGroupName: groupName.isEmpty
+                                      ? null
+                                      : groupName,
                                   workspaceId: workspaceId,
                                   createdBy: authState.userId,
                                   updatedBy: authState.userId,
@@ -506,20 +523,6 @@ class _TodoScreenState extends State<TodoScreen> {
                                   }
                                 }
                                 await todoProvider.addTodo(todo);
-                                await Future<void>.delayed(Duration.zero);
-                                final issue =
-                                    notificationService?.lastScheduleIssue;
-                                if (issue != null && ctx.mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '${issue.title}：${issue.message}',
-                                      ),
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(seconds: 4),
-                                    ),
-                                  );
-                                }
                                 if (ctx.mounted) Navigator.pop(ctx);
                               } finally {
                                 if (ctx.mounted) {
@@ -765,13 +768,22 @@ class _TodoScreenState extends State<TodoScreen> {
       bottomNavigationBar: _batchMode
           ? _TodoBatchActionBar(
               selectedCount: _selectedTodoIds.length,
-              onComplete: _selectedTodoIds.isEmpty ? null : _completeSelected,
-              onReopen: _selectedTodoIds.isEmpty ? null : _reopenSelected,
-              onMove: _selectedTodoIds.isEmpty ? null : _moveSelected,
-              onPriority: _selectedTodoIds.isEmpty
+              submitting: _batchSubmitting,
+              onComplete: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _completeSelected,
+              onReopen: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _reopenSelected,
+              onMove: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _moveSelected,
+              onPriority: _selectedTodoIds.isEmpty || _batchSubmitting
                   ? null
                   : _setSelectedPriority,
-              onDelete: _selectedTodoIds.isEmpty ? null : _deleteSelected,
+              onDelete: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _deleteSelected,
             )
           : null,
       floatingActionButton: _batchMode
@@ -877,23 +889,27 @@ class _TodoTodaySummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final today = DateTime(now.year, now.month, now.day);
-    var todayTotal = 0;
-    var todayDone = 0;
-    for (final todo in todos) {
-      final due = todo.dueDate;
-      final date = due ?? todo.date;
-      final day = DateTime(date.year, date.month, date.day);
-      if (day != today) continue;
-      todayTotal++;
-      if (todo.isCompleted) todayDone++;
-    }
-    final todoCount = (todayTotal - todayDone).clamp(0, todayTotal);
+    final visibleTodos = todos
+        .where(
+          (todo) => CompletionVisibilityPolicy.shouldShowInToday(todo, now),
+        )
+        .toList(growable: false);
+    final todoCount = visibleTodos.length;
+    final todayDone = todos.where((todo) {
+      if (!todo.isCompleted) return false;
+      final completedAt = todo.completedAt;
+      if (completedAt == null) return false;
+      return CompletionVisibilityPolicy.dateOnly(completedAt) == today;
+    }).length;
+    final todayTotal = todayDone + todoCount;
     final overdueCount = todos.where((todo) => todo.isOverdue).length;
-    final activeDailyHabits = habits.where((habit) => habit.isActiveToday());
+    final activeDailyHabits = habits.where((habit) => habit.activeForDate(now));
     final dailyCount = activeDailyHabits.length;
-    final dailyDone = activeDailyHabits.where((habit) => habit.isCompletedToday()).length;
-    final dailyRemaining = dailyCount - dailyDone;
-    final remaining = dailyRemaining + todoCount + activeGoalCount;
+    final dailyDone = activeDailyHabits
+        .where((habit) => habit.isCompletedForDate(now))
+        .length;
+    final dailyRemaining = (dailyCount - dailyDone).clamp(0, dailyCount);
+    final remaining = dailyRemaining + todoCount;
     final urgentCount = todos
         .where(
           (todo) =>
@@ -958,7 +974,7 @@ class _TodoTodaySummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '日常 $dailyCount / 待办 $todoCount / 目标 $activeGoalCount',
+                      '日常 $dailyRemaining / 待办 $todoCount / 目标 $activeGoalCount',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1441,6 +1457,7 @@ class _TodoNoMatches extends StatelessWidget {
 
 class _TodoBatchActionBar extends StatelessWidget {
   final int selectedCount;
+  final bool submitting;
   final Future<void> Function()? onComplete;
   final Future<void> Function()? onReopen;
   final Future<void> Function(EisenhowerQuadrant quadrant)? onMove;
@@ -1449,6 +1466,7 @@ class _TodoBatchActionBar extends StatelessWidget {
 
   const _TodoBatchActionBar({
     required this.selectedCount,
+    required this.submitting,
     required this.onComplete,
     required this.onReopen,
     required this.onMove,
@@ -1459,7 +1477,7 @@ class _TodoBatchActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final enabled = selectedCount > 0;
+    final enabled = selectedCount > 0 && !submitting;
     return SafeArea(
       top: false,
       child: DecoratedBox(
@@ -1485,7 +1503,7 @@ class _TodoBatchActionBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    '已选 $selectedCount',
+                    submitting ? '处理中...' : '已选 $selectedCount',
                     style: TextStyle(
                       fontSize: 13,
                       color: cs.primary,
@@ -1495,13 +1513,13 @@ class _TodoBatchActionBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: onComplete,
+                  onPressed: enabled ? onComplete : null,
                   icon: const Icon(Icons.check_circle_outline, size: 18),
                   label: const Text('完成'),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: onReopen,
+                  onPressed: enabled ? onReopen : null,
                   icon: const Icon(Icons.undo_outlined, size: 18),
                   label: const Text('恢复'),
                 ),
@@ -1563,7 +1581,7 @@ class _TodoBatchActionBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: onDelete,
+                  onPressed: enabled ? onDelete : null,
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('删除'),
                   style: OutlinedButton.styleFrom(

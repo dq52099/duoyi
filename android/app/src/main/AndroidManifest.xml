@@ -64,6 +64,15 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ReminderFullScreenActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/ReminderFullScreenTheme"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

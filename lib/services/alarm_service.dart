@@ -291,10 +291,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       }
 
       final statusChannel = statuses?[NativeReminderRingtone.statusChannelId];
-      if (statusChannel != null &&
-          statusChannel.exists &&
-          statusChannel.isBlocked) {
-        return '内置铃声状态渠道已关闭，到点响铃时可能看不到停止按钮。请在系统通知设置里开启内置铃声状态渠道。';
+      if (statusChannel != null && statusChannel.exists) {
+        if (statusChannel.isBlocked) {
+          return '内置铃声状态渠道已关闭，到点响铃时可能看不到停止按钮。请在系统通知设置里开启内置铃声状态渠道。';
+        }
+        if (statusChannel.isLowImportance) {
+          return '内置铃声状态渠道提醒级别过低，到点响铃时可能无法弹出全屏闹钟。请在系统通知设置里打开内置铃声状态渠道的弹窗或高优先级提醒。';
+        }
       }
 
       final fallbackStatus =

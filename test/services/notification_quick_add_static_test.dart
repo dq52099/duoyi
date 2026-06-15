@@ -240,11 +240,10 @@ void main() {
     );
     expect(
       main,
-      contains(
-        '.where((habit) => habit.isActiveToday() && !habit.isCompletedToday())',
-      ),
+      contains('habit.activeForDate(now)'),
       reason: '通知栏今日任务进展中的“日常”只应统计今天还没完成的习惯，避免打卡后摘要不刷新。',
     );
+    expect(main, contains('!habit.isCompletedForDate(now)'));
     expect(main, contains('formatNotificationTodayProgressBody('));
     expect(main, contains("uri.queryParameters['text']"));
     expect(main, contains("SmartTodoDraftBuilder.fromText(text)"));

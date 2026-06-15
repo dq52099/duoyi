@@ -19,6 +19,20 @@
          │  → 改 AI key / 开关云备份 / 维护模式 …
 ```
 
+## Android 全屏提醒权限说明
+
+**Android 10+ (API 29+) 需要用户手动授权全屏 Intent 权限**，否则锁屏/后台时提醒只会响铃，不会弹出全屏界面。
+
+应用已在 `AndroidManifest.xml` 中声明：
+```xml
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+```
+
+用户首次使用提醒功能时，系统会提示授权。如果用户跳过，可在以下位置手动开启：
+- **设置 → 应用 → 多仪 → 通知 → 允许全屏通知**
+
+该权限仅影响锁屏/后台时的全屏弹窗，不影响通知栏提醒和响铃。
+
 ## 1. 后端
 
 ```bash
@@ -98,6 +112,7 @@ flutter build apk --release \
 
 ```bash
 flutter build web --release \
+  --base-href=/duoyi/ \
   --dart-define=DUOYI_SERVER_URL=https://duoyi-api.example.com
 ```
 
@@ -107,7 +122,7 @@ flutter build web --release \
 
 ```bash
 # 留空: 走相对路径
-flutter build web --release --dart-define=DUOYI_SERVER_URL=
+flutter build web --release --base-href=/duoyi/ --dart-define=DUOYI_SERVER_URL=
 ```
 
 nginx 配置：

@@ -28,7 +28,13 @@ class TodoProvider extends ChangeNotifier {
   List<TodoItem> _todos = [];
   bool _storageLoaded = false;
   Future<void>? _storageLoadFuture;
+  Future<void> _storageWriteQueue = Future<void>.value();
   int _storageGeneration = 0;
+  final Set<String> _inFlightCreateKeys = {};
+  final Set<String> _inFlightDeleteTodoIds = {};
+  final Set<String> _inFlightSubtaskCreateKeys = {};
+  final Set<String> _inFlightSubtaskToggleKeys = {};
+  final Set<String> _inFlightSubtaskDeleteKeys = {};
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
   ///
@@ -257,17 +263,23 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _writeToStorage() async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final data = json.encode(_todos.map((e) => e.toJson()).toList());
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await prefs.setString('todos', data);
+    final write = _storageWriteQueue.then((_) async {
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      final data = json.encode(_todos.map((e) => e.toJson()).toList());
+      final prefs = await SharedPreferences.getInstance();
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      await prefs.setString('todos', data);
+    });
+    _storageWriteQueue = write.catchError((Object e, StackTrace st) {
+      debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
+    });
+    await write;
   }
 
   // --- CRUD ---
@@ -292,14 +304,23 @@ class TodoProvider extends ChangeNotifier {
 
   Future<void> addTodo(TodoItem todo) async {
     await _ensureStorageLoaded();
-    _todos.add(todo);
-    DomainEventBus.instance.publish(
-      DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
-    );
-    await _saveToStorage();
-    _notify();
-    // 异步同步提醒，不阻塞 UI
-    unawaited(_syncTodoRemindersNow());
+    final createKey = _createInFlightDuplicateKey(todo);
+    if (!_inFlightCreateKeys.add(createKey)) {
+      debugPrint('[TodoProvider] duplicate in-flight todo create skipped');
+      throw StateError('待办正在创建中，请勿重复提交');
+    }
+    try {
+      _todos.add(todo);
+      DomainEventBus.instance.publish(
+        DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
+      );
+      _notify();
+      await _saveToStorage();
+      // 异步同步提醒，不阻塞 UI
+      unawaited(_syncTodoRemindersNow());
+    } finally {
+      _inFlightCreateKeys.remove(createKey);
+    }
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
@@ -523,23 +544,43 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTodo(String id) async {
-    await _ensureStorageLoaded();
-    final idx = _todos.indexWhere((t) => t.id == id);
-    if (idx == -1) return;
-
-    final removed = _todos[idx];
-    await CloudSyncProvider.recordDeletedItem('todos', removed.id);
-    await _timeAudit?.deleteBySource(TimeEntrySource.todo, removed.id);
-    _todos.removeAt(idx);
-    await _saveToStorage();
-    _notify();
-    await _syncTodoRemindersNow();
+    await deleteTodos([id]);
   }
 
   Future<int> deleteTodos(Iterable<String> ids) async {
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = <String>{};
+    final duplicates = <String>[];
+    for (final id in requested) {
+      if (_inFlightDeleteTodoIds.add(id)) {
+        selected.add(id);
+      } else {
+        duplicates.add(id);
+      }
+    }
+    if (selected.isEmpty) {
+      debugPrint(
+        '[TodoProvider] all ${requested.length} todo delete(s) already in-flight',
+      );
+      throw StateError('待办删除操作正在进行中，请勿重复提交');
+    }
+    if (duplicates.isNotEmpty) {
+      debugPrint(
+        '[TodoProvider] ${duplicates.length} duplicate delete(s) skipped, '
+        'proceeding with ${selected.length} new delete(s)',
+      );
+    }
+
+    try {
+      return await _deleteTodosLocked(selected);
+    } finally {
+      _inFlightDeleteTodoIds.removeAll(selected);
+    }
+  }
+
+  Future<int> _deleteTodosLocked(Set<String> selected) async {
     await _ensureStorageLoaded();
-    final selected = ids.toSet();
-    if (selected.isEmpty) return 0;
     final existing = _todos.where((t) => selected.contains(t.id)).toList();
     if (existing.isEmpty) return 0;
 
@@ -894,6 +935,21 @@ class TodoProvider extends ChangeNotifier {
   // --- Subtask operations ---
 
   Future<void> addSubtask(String todoId, String title) async {
+    final cleanTitle = title.trim();
+    if (cleanTitle.isEmpty) return;
+    final key = '$todoId:${cleanTitle.toLowerCase()}';
+    if (!_inFlightSubtaskCreateKeys.add(key)) {
+      debugPrint('[TodoProvider] duplicate in-flight subtask create skipped');
+      throw StateError('子任务正在创建中，请勿重复提交');
+    }
+    try {
+      await _addSubtaskLocked(todoId, cleanTitle);
+    } finally {
+      _inFlightSubtaskCreateKeys.remove(key);
+    }
+  }
+
+  Future<void> _addSubtaskLocked(String todoId, String title) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
@@ -906,6 +962,16 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> toggleSubtask(String todoId, String subtaskId) async {
+    final key = '$todoId:$subtaskId';
+    if (!_inFlightSubtaskToggleKeys.add(key)) return;
+    try {
+      await _toggleSubtaskLocked(todoId, subtaskId);
+    } finally {
+      _inFlightSubtaskToggleKeys.remove(key);
+    }
+  }
+
+  Future<void> _toggleSubtaskLocked(String todoId, String subtaskId) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
@@ -962,6 +1028,16 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
+    final key = '$todoId:$subtaskId';
+    if (!_inFlightSubtaskDeleteKeys.add(key)) return;
+    try {
+      await _deleteSubtaskLocked(todoId, subtaskId);
+    } finally {
+      _inFlightSubtaskDeleteKeys.remove(key);
+    }
+  }
+
+  Future<void> _deleteSubtaskLocked(String todoId, String subtaskId) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
@@ -1114,5 +1190,18 @@ class TodoProvider extends ChangeNotifier {
     );
     final list = (todo.listGroupName ?? '').trim().toLowerCase();
     return '$title|$dueKey|$list';
+  }
+
+  String _createInFlightDuplicateKey(TodoItem todo) {
+    final title = todo.title.trim().toLowerCase().replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
+    final dateKey = _dateKey(todo.date);
+    final dueKey = todo.dueDate == null
+        ? ''
+        : todo.dueDate!.millisecondsSinceEpoch.toString();
+    final list = (todo.listGroupName ?? '').trim().toLowerCase();
+    return [todo.workspaceId, list, title, dateKey, dueKey].join('|');
   }
 }

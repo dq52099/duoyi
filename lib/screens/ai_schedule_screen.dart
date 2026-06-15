@@ -165,7 +165,7 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
         await todoProvider.addTodo(todo);
         if (draft.reminderEnabled) {
           final issue = notificationService.lastScheduleIssue;
-          reminderStatus = issue == null
+          reminderStatus = issue == null || !issue.blocking
               ? '待办提醒已提交系统注册'
               : '${issue.title}：${issue.message}';
         }

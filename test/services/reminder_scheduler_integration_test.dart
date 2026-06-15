@@ -536,7 +536,15 @@ void main() {
       'registeredRemindersSnapshot exposes sorted registry details',
       () async {
         await registry.replaceObject('habit', 'habit-b', {301, 0, 300});
-        await registry.replaceObject('todo', 'todo-b', {102, 101});
+        await registry.replaceObject(
+          'todo',
+          'todo-b',
+          {102, 101},
+          display: const ReminderScheduleDisplayInfo(
+            title: '提交材料',
+            subtitle: '待办 · 一次提醒 · 通知 · 2 条规则',
+          ),
+        );
         await registry.replaceObject('countdown', 'countdown-a', {501});
         await registry.replaceObject('todo', 'todo-a', {201});
         await registry.replaceObject('memo', 'ignored', {900});
@@ -556,6 +564,9 @@ void main() {
           [501],
         ]);
         expect(snapshot[1].idCount, 2);
+        expect(snapshot[1].title, '提交材料');
+        expect(snapshot[1].subtitle, contains('待办'));
+        expect(snapshot[1].title, isNot(contains('todo-b')));
         expect(() => snapshot.add(snapshot.first), throwsUnsupportedError);
         expect(() => snapshot[1].ids.add(999), throwsUnsupportedError);
       },
@@ -1387,6 +1398,40 @@ void main() {
       expect(notif.scheduled.first['body'], '别忘了: 阅读');
     });
 
+    test('syncHabits 旧注册清理失败时仍注册当前提醒并保留债务', () async {
+      final habit = Habit(
+        id: 'h-stale-cleanup',
+        name: '阅读',
+        remind: true,
+        remindHour: 21,
+        remindMinute: 30,
+      );
+      final staleId = _idFor('habit_${habit.id}:old-rule');
+      final expectedId = _idFor('habit_${habit.id}');
+
+      await registry.replaceObject('habit', habit.id, {staleId});
+      notif.failCancel = true;
+
+      await scheduler.syncHabits([habit]);
+
+      expect(alarm.scheduled.map((entry) => entry['id']), [expectedId]);
+      expect(alarm.pending, contains(expectedId));
+      expect((await registry.idsByObject('habit'))[habit.id], {
+        staleId,
+        expectedId,
+      });
+      final snapshot = await scheduler.registeredRemindersSnapshot();
+      final entry = snapshot.singleWhere(
+        (entry) => entry.objectKey == 'habit:${habit.id}',
+      );
+      expect(entry.title, '阅读');
+      expect(entry.subtitle, contains('日常'));
+      expect(
+        notif.issues.map((issue) => issue['message']).join('\n'),
+        isNot(contains('forced notification cancel failure')),
+      );
+    });
+
     test('syncHabits 闹钟插件异常时也降级普通通知', () async {
       alarm.failDailyWithGenericError = true;
       final habit = Habit(
@@ -1682,7 +1727,7 @@ void main() {
       expect(notif.issues.single['message'], contains('普通通知兜底队列查询失败'));
       expect(
         notif.issues.single['message'],
-        contains('forced notification pending query failure'),
+        isNot(contains('forced notification pending query failure')),
       );
       expect(notif.issues.single['relatedId'], expectedKey);
       expect(notif.issues.single['blocking'], isFalse);
@@ -1760,7 +1805,7 @@ void main() {
       expect(notif.issues.single['message'], contains('系统待触发队列查询失败'));
       expect(
         notif.issues.single['message'],
-        contains('forced pending query failure'),
+        isNot(contains('forced pending query failure')),
       );
       expect(notif.issues.single['relatedId'], 'once:$expectedId');
       expect(notif.issues.single['blocking'], isFalse);
@@ -2144,7 +2189,7 @@ void main() {
       expect(notif.issues.single['message'], contains('系统待触发队列查询失败'));
       expect(
         notif.issues.single['message'],
-        contains('forced pending query failure'),
+        isNot(contains('forced pending query failure')),
       );
       expect(notif.issues.single['relatedId'], expectedKey);
       expect(notif.issues.single['blocking'], isFalse);
@@ -3508,7 +3553,7 @@ void main() {
       expect(notif.issues.single['message'], contains('系统待触发队列查询失败'));
       expect(
         notif.issues.single['message'],
-        contains('forced notification pending query failure'),
+        isNot(contains('forced notification pending query failure')),
       );
       expect(notif.issues.single['relatedId'], expectedKey);
       expect(notif.issues.single['blocking'], isFalse);
@@ -3589,9 +3634,15 @@ void main() {
       expect(notif.issues, isNotEmpty);
       expect(notif.issues.every((issue) => issue['blocking'] == false), isTrue);
       expect(
-        notif.issues.map((issue) => issue['message']).join('\n'),
-        contains('已继续保存当前提醒'),
+        notif.issues.map((issue) => issue['title']),
+        everyElement('提醒已更新'),
       );
+      final issueMessages = notif.issues
+          .map((issue) => issue['message'])
+          .join('\n');
+      expect(issueMessages, contains('提醒已保存'));
+      expect(issueMessages, contains('我的 → 通知设置 → 已注册提醒'));
+      expect(issueMessages, isNot(contains('提醒交接失败')));
     });
 
     test('syncTodos 冷启动会清理已持久化的旧 rule id', () async {
@@ -3652,6 +3703,84 @@ void main() {
       expect(notif.pending, contains(newId));
     });
 
+    test('syncTodos 冷启动旧 rule id 清理失败时保留 registry 债务并注册新提醒', () async {
+      final due = DateTime.now().add(const Duration(days: 1));
+      final todo = TodoItem(
+        id: 'todo-cold-start-stale-debt',
+        title: '旧规则清理债务',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'new-rule',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final staleId = _idFor('todo:${todo.id}:old-rule');
+      final newId = _idFor('todo:${todo.id}:new-rule');
+      await registry.replaceObject('todo', todo.id, {staleId});
+      notif.pending.add(staleId);
+      notif.failCancel = true;
+
+      final coldScheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        popup: popup,
+        email: email,
+        registry: registry,
+      );
+      await coldScheduler.syncTodos([todo]);
+
+      expect(notif.cancelled, isNot(contains(staleId)));
+      expect(notif.scheduled.map((entry) => entry['id']), contains(newId));
+      expect((await registry.idsByObject('todo'))[todo.id], {staleId, newId});
+    });
+
+    test('syncTodos 冷启动同 rule 跨通道取消失败时不注册新闹钟造成双响', () async {
+      final due = DateTime.now().add(const Duration(days: 1));
+      final todo = TodoItem(
+        id: 'todo-cold-start-same-rule-cancel-failure',
+        title: '跨通道清理失败',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r1',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.alarm,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final priorId = _idFor('todo:${todo.id}:r1');
+      await registry.replaceObject('todo', todo.id, {priorId});
+      notif.pending.add(priorId);
+      notif.failCancel = true;
+
+      final coldScheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        popup: popup,
+        email: email,
+        registry: registry,
+      );
+      await coldScheduler.syncTodos([todo]);
+
+      expect(alarm.scheduled, isEmpty);
+      expect((await registry.idsByObject('todo'))[todo.id], {priorId});
+      expect(notif.issues, isNotEmpty);
+      expect(notif.issues.last['blocking'], isFalse);
+    });
+
     test('syncTodos 改规则时取消失败不会注册新提醒造成双响', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       final todo = TodoItem(
@@ -3699,13 +3828,15 @@ void main() {
         hasLength(1),
       );
       expect(notif.issues, hasLength(1));
-      expect(notif.issues.single['title'], '提醒交接失败');
-      expect(notif.issues.single['message'], contains('旧提醒清理失败'));
+      expect(notif.issues.single['title'], '提醒已更新');
+      expect(notif.issues.single['message'], contains('提醒已保存'));
+      expect(notif.issues.single['message'], contains('我的 → 通知设置 → 已注册提醒'));
+      expect(notif.issues.single['message'], isNot(contains('提醒交接失败')));
       expect(
         notif.issues.single['relatedId'],
         'todo notification:${todo.id}:r-push',
       );
-      expect(notif.issues.single['blocking'], isTrue);
+      expect(notif.issues.single['blocking'], isFalse);
     });
 
     test('syncTodos 每周原生闹钟 base id pending 时不会重复重注册', () async {

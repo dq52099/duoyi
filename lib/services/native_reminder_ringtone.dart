@@ -9,12 +9,13 @@ import '../core/local_timezone_resolver.dart';
 class NativeReminderRingtone {
   NativeReminderRingtone._();
 
-  static const String statusChannelId = 'duoyi_builtin_ringtone_status_v4';
+  static const String statusChannelId = 'duoyi_builtin_ringtone_status_v5';
   static const String fallbackChannelId = 'duoyi_alarm_fallback_v9';
   static const Set<String> legacyChannelIds = <String>{
     'duoyi_builtin_ringtone_status_v1',
     'duoyi_builtin_ringtone_status_v2',
     'duoyi_builtin_ringtone_status_v3',
+    'duoyi_builtin_ringtone_status_v4',
     'duoyi_alarm_fallback_v1',
     'duoyi_alarm_fallback_v2',
     'duoyi_alarm_fallback_v3',

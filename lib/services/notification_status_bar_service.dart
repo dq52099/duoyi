@@ -54,6 +54,6 @@ String formatNotificationTodayProgressBody({
       '${I18n.tr('notification.status_bar.today_remaining.suffix')}\n'
       '${I18n.tr('notification.status_bar.daily_count')}$dailyCount / '
       '${I18n.tr('notification.status_bar.todo_count')}'
-      '$todoCount / '
+      '$todoCount\n'
       '${I18n.tr('notification.status_bar.goal_count')}$goalCount';
 }

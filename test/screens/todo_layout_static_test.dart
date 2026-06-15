@@ -25,7 +25,18 @@ void main() {
     expect(summary, contains("'今日还要完成 \$remaining 项'"));
     expect(
       summary,
-      contains("'日常 \$dailyCount / 待办 \$todoCount / 目标 \$activeGoalCount'"),
+      contains(
+        'final remaining = dailyRemaining + todoCount;',
+      ),
+    );
+    expect(
+      summary,
+      isNot(contains('final remaining = dailyRemaining + todoCount + activeGoalCount;')),
+    );
+    expect(summary, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
+    expect(
+      summary,
+      contains("'日常 \$dailyRemaining / 待办 \$todoCount / 目标 \$activeGoalCount'"),
     );
     expect(summary, isNot(contains('代表')));
 

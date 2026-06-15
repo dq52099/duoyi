@@ -73,7 +73,15 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 ReminderRingtoneService.cancelNotification(context, rootId)
                 ReminderRingtoneService.cancelFlutterPluginNotification(context, rootId)
             }
-            showFallbackNotification(context, id, title, body, payload, fullScreen)
+            showFallbackNotification(context, id, title, body, payload, fullScreen, rootId)
+            if (fullScreen && !ReminderFullScreenActivity.launch(context, id, rootId, title, body, payload)) {
+                ReminderRingtoneScheduler.recordDeliveryIssue(
+                    context,
+                    id,
+                    "full_screen_launch_failed",
+                    "系统拦截了兜底全屏闹钟弹出，已保留高优先级通知。",
+                )
+            }
             ReminderRingtoneService.cancelFlutterPluginNotificationSoon(context, id)
             if (rootId != id) {
                 ReminderRingtoneService.cancelFlutterPluginNotificationSoon(context, rootId)
@@ -111,6 +119,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             body: String,
             payload: String?,
             fullScreen: Boolean,
+            rootId: Int = id,
         ): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -151,13 +160,14 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 legacyFallbackChannelIds.forEach { manager.deleteNotificationChannel(it) }
             }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                data = payload?.let { android.net.Uri.parse(it) }
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
+            val openIntent = ReminderFullScreenActivity.mainActivityIntent(context, payload, stopRingtone = true)
             val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
-            val fullScreenIntent = PendingIntent.getActivity(context, id + 4_000_000, openIntent, flags)
+            val fullScreenIntent = PendingIntent.getActivity(
+                context,
+                id + 4_000_000,
+                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload),
+                flags,
+            )
             val notification = NotificationCompat.Builder(context, fallbackChannelId)
                 .setSmallIcon(R.drawable.ic_stat_duoyi)
                 .setContentTitle(title)

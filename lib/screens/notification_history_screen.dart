@@ -1107,11 +1107,7 @@ class _NotificationSettingsScreenState
       return _busy ? '正在读取提醒注册表' : '暂无通过提醒调度器注册的提醒';
     }
     final objectCount = _registeredReminders.length;
-    final idCount = _registeredReminders.fold<int>(
-      0,
-      (sum, entry) => sum + entry.idCount,
-    );
-    return '$objectCount 个提醒对象 · $idCount 个系统队列 ID';
+    return '$objectCount 个提醒对象，点查看核对任务详情';
   }
 
   Future<void> _showRegisteredReminderDetails() {
@@ -1125,7 +1121,7 @@ class _NotificationSettingsScreenState
         title: '已注册提醒明细',
         subtitle: entries.isEmpty
             ? '当前没有通过提醒调度器注册的提醒'
-            : '${entries.length} 个提醒对象，${entries.fold<int>(0, (sum, entry) => sum + entry.idCount)} 个系统队列 ID',
+            : '${entries.length} 个提醒对象，按任务整理展示',
         actions: [
           TextButton(
             onPressed: () => Navigator.of(sheetContext).pop(),
@@ -1479,33 +1475,6 @@ class _NotificationSettingsScreenState
                                   ]),
                                 ),
                               ),
-                              if (_registeredReminders.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                for (final entry in _registeredReminders.take(
-                                  6,
-                                ))
-                                  _RegisteredReminderSnapshotRow(entry: entry),
-                                if (_registeredReminders.length > 6)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      4,
-                                      8,
-                                      0,
-                                    ),
-                                    child: Text(
-                                      '还有 ${_registeredReminders.length - 6} 个注册提醒，刷新后会同步最新队列。',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: cs.onSurface.withValues(
-                                              alpha: 0.58,
-                                            ),
-                                          ),
-                                    ),
-                                  ),
-                              ],
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -1683,70 +1652,6 @@ class _NotificationSettingsScreenState
   }
 }
 
-class _RegisteredReminderSnapshotRow extends StatelessWidget {
-  final ReminderScheduleSnapshotEntry entry;
-
-  const _RegisteredReminderSnapshotRow({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final typeLabel = _registeredReminderTypeLabel(entry.objectType);
-    final previewIds = entry.ids.take(4).join(', ');
-    final overflowCount = entry.ids.length - entry.ids.take(4).length;
-    return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.22),
-          width: 0.4,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppStatusBadge(
-            label: typeLabel,
-            color: _registeredReminderTypeColor(entry.objectType, cs),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.objectId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  overflowCount > 0
-                      ? '$previewIds 等 ${entry.idCount} 个队列 ID'
-                      : '$previewIds · ${entry.idCount} 个队列 ID',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.58),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _RegisteredReminderDetailRow extends StatelessWidget {
   final ReminderScheduleSnapshotEntry entry;
 
@@ -1756,7 +1661,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final typeLabel = _registeredReminderTypeLabel(entry.objectType);
-    final idsText = entry.ids.isEmpty ? '无系统队列 ID' : entry.ids.join(', ');
+    final systemCount = entry.idCount;
     return Container(
       key: ValueKey('registered_reminder_detail_${entry.objectKey}'),
       margin: const EdgeInsets.only(bottom: 8),
@@ -1783,7 +1688,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  entry.objectId,
+                  entry.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1794,7 +1699,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  entry.objectKey,
+                  entry.subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1803,7 +1708,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '队列 ID：$idsText',
+                  '系统记录：$systemCount 条',
                   softWrap: true,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.66),

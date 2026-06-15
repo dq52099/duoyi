@@ -330,40 +330,58 @@ class _CalendarScreenState extends State<CalendarScreen>
   void _showQuickAddTodo() {
     final s = context.read<ThemeProvider>().brand.strings;
     final titleCtrl = TextEditingController();
+    var submitting = false;
     showDialog(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(
-          '${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AppDialog(
+          title: Text(
+            '${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日',
+          ),
+          content: AppSecondaryControlTheme(
+            child: TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(labelText: '任务名称'),
+              autofocus: true,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(ctx),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final title = titleCtrl.text.trim();
+                      if (title.isEmpty) return;
+                      setSt(() => submitting = true);
+                      try {
+                        await context.read<TodoProvider>().addTodo(
+                          TodoItem(
+                            title: title,
+                            date: _selectedDay,
+                            workspaceId: _activeWorkspaceId ?? 'private',
+                          ),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } finally {
+                        if (ctx.mounted) {
+                          setSt(() => submitting = false);
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(I18n.tr('action.add')),
+            ),
+          ],
         ),
-        content: AppSecondaryControlTheme(
-          child: TextField(
-            controller: titleCtrl,
-            decoration: const InputDecoration(labelText: '任务名称'),
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (titleCtrl.text.trim().isNotEmpty) {
-                context.read<TodoProvider>().addTodo(
-                  TodoItem(
-                    title: titleCtrl.text.trim(),
-                    date: _selectedDay,
-                    workspaceId: _activeWorkspaceId ?? 'private',
-                  ),
-                );
-                Navigator.pop(ctx);
-              }
-            },
-            child: Text(I18n.tr('action.add')),
-          ),
-        ],
       ),
     );
   }
