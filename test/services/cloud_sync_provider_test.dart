@@ -866,7 +866,7 @@ void main() {
       contains("CloudSyncProvider.recordDeletedItems('time_entries'"),
     );
     expect(habit, contains("CloudSyncProvider.recordDeletedItem('habits'"));
-    expect(todo, contains("CloudSyncProvider.recordDeletedItem('todos'"));
+    // TodoProvider 统一使用批量删除 recordDeletedItems
     expect(todo, contains('CloudSyncProvider.recordDeletedItems('));
     expect(todo, contains("'todos',"));
     expect(note, contains("CloudSyncProvider.recordDeletedItem('notes'"));
