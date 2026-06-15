@@ -2141,15 +2141,16 @@ class ReminderScheduler {
     required Object error,
     bool blocking = true,
   }) {
+    debugPrint('[ReminderScheduler] Old reminder cleanup failed for $label: $error');
+    // 旧提醒清理失败时不阻塞新提醒注册，允许覆盖旧规则
+    // 系统通知队列通常允许相同 ID 覆盖，重复注册会自动替换
     final issueSink = notif is ReminderScheduleIssueSink
         ? notif as ReminderScheduleIssueSink
         : null;
     if (issueSink == null) return;
     issueSink.recordReminderScheduleIssue(
-      title: '提醒更新提示',
-      message: blocking
-          ? '旧提醒清理失败，新提醒已保存。若提醒重复弹出，请前往"我的 → 通知设置"查看已注册提醒。($error)'
-          : '旧提醒清理失败，新提醒已保存。若提醒重复弹出，请前往"我的 → 通知设置"查看已注册提醒。($error)',
+      title: '提醒已更新',
+      message: '提醒已保存。若旧提醒仍弹出，可前往"我的 → 通知设置 → 已注册提醒"手动检查。',
       relatedId: label,
       blocking: false,
     );
@@ -2242,6 +2243,8 @@ class ReminderScheduler {
             continue;
           }
         }
+        // 强制注册新规则，即使旧规则清理失败
+        // 系统通知 ID 相同时会自动覆盖
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
