@@ -58,7 +58,6 @@ class TodayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final themeProvider = context.watch<ThemeProvider>();
     final s = themeProvider.brand.strings;
 
@@ -589,9 +588,6 @@ class _TodayDesktopLeftSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
