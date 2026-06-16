@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
+import '../core/desktop_tokens.dart';
 import '../core/goal_icons.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
@@ -147,18 +148,50 @@ class TodayScreen extends StatelessWidget {
     Widget metricsGrid({required bool desktop}) {
       return LayoutBuilder(
         builder: (context, constraints) {
+          final theme = Theme.of(context);
+          final cs = theme.colorScheme;
           final useTwoColumns = constraints.maxWidth < (desktop ? 640 : 520);
           final crossAxisCount = useTwoColumns ? 2 : 4;
           final aspectRatio = desktop
               ? (useTwoColumns ? 2.75 : 2.85)
               : (useTwoColumns ? 2.55 : 3.65);
+
+          // 桌面端使用更大的字体和图标
+          final titleStyle = desktop ? theme.textTheme.bodySmall?.copyWith(
+            fontSize: DesktopTokens.fontSizeCaption,
+            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextTertiary),
+            fontWeight: FontWeight.normal,
+            height: 1.1,
+          ) : null;
+
+          final valueStyle = desktop ? theme.textTheme.titleMedium?.copyWith(
+            fontSize: DesktopTokens.fontSizeBody,
+            fontWeight: FontWeight.w500,
+            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+            height: 1.08,
+          ) : null;
+
+          final unitStyle = desktop ? theme.textTheme.bodySmall?.copyWith(
+            fontSize: DesktopTokens.fontSizeCaption,
+            fontWeight: FontWeight.normal,
+            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextTertiary),
+            height: 1.08,
+          ) : null;
+
+          final padding = desktop
+            ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+            : const EdgeInsets.fromLTRB(12, 10, 12, 10);
+
+          final iconBoxSize = desktop ? 32.0 : 28.0;
+          final iconSize = desktop ? 17.0 : 15.0;
+
           return GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: crossAxisCount,
             childAspectRatio: aspectRatio,
-            mainAxisSpacing: desktop ? 10 : 8,
-            crossAxisSpacing: desktop ? 10 : 8,
+            mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
+            crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
             children: [
               AppMetricCard(
                 title: s.navTodo,
@@ -167,6 +200,12 @@ class TodayScreen extends StatelessWidget {
                 icon: Icons.check_circle_outline,
                 color: cs.primary,
                 onTap: () => _go(context, const TodoScreen()),
+                titleStyle: titleStyle,
+                valueStyle: valueStyle,
+                unitStyle: unitStyle,
+                padding: padding,
+                iconBoxSize: iconBoxSize,
+                iconSize: iconSize,
               ),
               AppMetricCard(
                 title: s.navHabit,
@@ -175,6 +214,12 @@ class TodayScreen extends StatelessWidget {
                 icon: Icons.repeat,
                 color: cs.tertiary,
                 onTap: () => _go(context, const HabitScreen()),
+                titleStyle: titleStyle,
+                valueStyle: valueStyle,
+                unitStyle: unitStyle,
+                padding: padding,
+                iconBoxSize: iconBoxSize,
+                iconSize: iconSize,
               ),
               AppMetricCard(
                 title: s.navFocus,
@@ -186,6 +231,12 @@ class TodayScreen extends StatelessWidget {
                   context,
                   const PomodoroScreen(useShellBackground: true),
                 ),
+                titleStyle: titleStyle,
+                valueStyle: valueStyle,
+                unitStyle: unitStyle,
+                padding: padding,
+                iconBoxSize: iconBoxSize,
+                iconSize: iconSize,
               ),
               AppMetricCard(
                 title: I18n.tr('today.diary'),
@@ -195,6 +246,12 @@ class TodayScreen extends StatelessWidget {
                 icon: Icons.book_outlined,
                 color: const Color(0xFF26A69A),
                 onTap: () => _go(context, const DiaryScreen()),
+                titleStyle: titleStyle,
+                valueStyle: valueStyle,
+                unitStyle: unitStyle,
+                padding: padding,
+                iconBoxSize: iconBoxSize,
+                iconSize: iconSize,
               ),
             ],
           );
@@ -520,6 +577,279 @@ class TodayScreen extends StatelessWidget {
   }
 }
 
+/// 桌面端左侧边栏 - 日历、一言、快捷入口
+class _TodayDesktopLeftSidebar extends StatelessWidget {
+  final DateTime now;
+  final Widget quoteCard;
+
+  const _TodayDesktopLeftSidebar({
+    required this.now,
+    required this.quoteCard,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 精简月历
+        _CompactMonthCalendar(currentDate: now),
+        const SizedBox(height: DesktopTokens.cardSpacing),
+
+        // 今日一言
+        quoteCard,
+        const SizedBox(height: DesktopTokens.cardSpacing),
+
+        // 快捷入口
+        _QuickAccessPanel(),
+      ],
+    );
+  }
+}
+
+/// 精简月历 - 当月日历，高亮今日
+class _CompactMonthCalendar extends StatelessWidget {
+  final DateTime currentDate;
+
+  const _CompactMonthCalendar({required this.currentDate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final now = currentDate;
+
+    // 当月第一天和最后一天
+    final firstDay = DateTime(now.year, now.month, 1);
+    final lastDay = DateTime(now.year, now.month + 1, 0);
+
+    // 第一天是星期几（0=周日）
+    final firstWeekday = firstDay.weekday % 7;
+
+    // 构建日历网格
+    final days = <Widget>[];
+
+    // 星期标题
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    for (final weekday in weekdays) {
+      days.add(
+        Center(
+          child: Text(
+            weekday,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              fontSize: 11,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 填充前面的空格
+    for (int i = 0; i < firstWeekday; i++) {
+      days.add(const SizedBox.shrink());
+    }
+
+    // 填充日期
+    for (int day = 1; day <= lastDay.day; day++) {
+      final isToday = day == now.day;
+      final date = DateTime(now.year, now.month, day);
+      final isWeekend = date.weekday == DateTime.saturday ||
+                       date.weekday == DateTime.sunday;
+
+      days.add(
+        Container(
+          alignment: Alignment.center,
+          decoration: isToday
+              ? BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                )
+              : null,
+          child: Text(
+            '$day',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 13,
+              color: isToday
+                  ? cs.onPrimary
+                  : isWeekend
+                      ? cs.onSurfaceVariant.withValues(alpha: 0.5)
+                      : cs.onSurface.withValues(alpha: 0.8),
+              fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(DesktopTokens.cardPadding),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          width: DesktopTokens.cardBorderWidth,
+        ),
+      ),
+      child: Column(
+        children: [
+          // 月份标题
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              '${now.year}年${now.month}月',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: DesktopTokens.fontSizeCardSubtitle,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+              ),
+            ),
+          ),
+
+          // 日历网格
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 7,
+            childAspectRatio: 1,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 4,
+            children: days,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 快捷入口面板
+class _QuickAccessPanel extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final quickActions = [
+      _QuickAction(
+        icon: Icons.repeat,
+        label: '习惯打卡',
+        color: cs.tertiary,
+        onTap: () => Navigator.pushNamed(context, '/habit'),
+      ),
+      _QuickAction(
+        icon: Icons.timer_outlined,
+        label: '番茄专注',
+        color: Colors.redAccent,
+        onTap: () => Navigator.pushNamed(context, '/pomodoro'),
+      ),
+      _QuickAction(
+        icon: Icons.edit_note_outlined,
+        label: '快速笔记',
+        color: cs.secondary,
+        onTap: () => Navigator.pushNamed(context, '/notes'),
+      ),
+      _QuickAction(
+        icon: Icons.calendar_today_outlined,
+        label: '日程安排',
+        color: cs.primary,
+        onTap: () => Navigator.pushNamed(context, '/calendar'),
+      ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(DesktopTokens.cardPadding),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          width: DesktopTokens.cardBorderWidth,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '快捷入口',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontSize: DesktopTokens.fontSizeCardSubtitle,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 1.4,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            children: quickActions,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: color.withValues(alpha: 0.25),
+            width: 0.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: DesktopTokens.iconSizeMedium,
+              color: color,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: DesktopTokens.fontSizeCaptionSmall,
+                color: cs.onSurface.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TodayDesktopDashboard extends StatelessWidget {
   final String greeting;
   final String dateText;
@@ -551,9 +881,9 @@ class _TodayDesktopDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final sidebarChildren = <Widget>[
-      quoteCard,
-      const SizedBox(height: 10),
+    final now = DateTime.now(); // 用于左侧边栏日历
+
+    final rightSidebarChildren = <Widget>[
       goalsSection,
       ?coursesSection,
       ?anniversariesSection,
@@ -567,65 +897,101 @@ class _TodayDesktopDashboard extends StatelessWidget {
           child: SingleChildScrollView(
             key: const ValueKey('today_screen_list'),
             primary: true,
-            padding: const EdgeInsets.fromLTRB(28, 22, 28, 32),
+            padding: EdgeInsets.fromLTRB(
+              DesktopTokens.pageHorizontalPadding,
+              DesktopTokens.pageTopPadding,
+              DesktopTokens.pageHorizontalPadding,
+              DesktopTokens.pageBottomPadding,
+            ),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1180),
+                constraints: const BoxConstraints(maxWidth: DesktopTokens.maxContentWidth),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _TodayDesktopHeader(greeting: greeting, dateText: dateText),
-                    const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  if (constraints.maxWidth < 720) {
-                                    return Column(
-                                      children: [
-                                        almanacCard,
-                                        const SizedBox(height: 12),
-                                        productivityCard,
-                                      ],
-                                    );
-                                  }
-                                  return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(child: almanacCard),
-                                      const SizedBox(width: 14),
-                                      SizedBox(
-                                        width: 320,
-                                        child: productivityCard,
-                                      ),
-                                    ],
-                                  );
-                                },
+                    const SizedBox(height: DesktopTokens.cardSpacing),
+
+                    // 响应式三栏/两栏布局
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final showLeftSidebar = DesktopTokens.isThreeColumnLayout(constraints.maxWidth);
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 左侧边栏（仅在宽度 >= 1400px 时显示）
+                            if (showLeftSidebar) ...[
+                              SizedBox(
+                                width: DesktopTokens.leftSidebarWidth,
+                                child: _TodayDesktopLeftSidebar(
+                                  now: now,
+                                  quoteCard: quoteCard,
+                                ),
                               ),
-                              const SizedBox(height: 12),
-                              metricsGrid,
-                              const SizedBox(height: 14),
-                              todosSection,
-                              ?reminderSection,
+                              const SizedBox(width: DesktopTokens.columnSpacing),
                             ],
-                          ),
-                        ),
-                        const SizedBox(width: 18),
-                        SizedBox(
-                          width: 340,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: sidebarChildren,
-                          ),
-                        ),
-                      ],
+
+                            // 主内容区
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      if (constraints.maxWidth < 720) {
+                                        return Column(
+                                          children: [
+                                            almanacCard,
+                                            const SizedBox(height: DesktopTokens.cardSpacingMedium),
+                                            productivityCard,
+                                          ],
+                                        );
+                                      }
+                                      return Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(child: almanacCard),
+                                          const SizedBox(width: DesktopTokens.cardSpacingMedium),
+                                          SizedBox(
+                                            width: 340,
+                                            child: productivityCard,
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: DesktopTokens.cardSpacingMedium),
+                                  metricsGrid,
+                                  const SizedBox(height: DesktopTokens.cardSpacing),
+
+                                  // 当左侧边栏隐藏时，今日一言显示在主内容区
+                                  if (!showLeftSidebar) ...[
+                                    quoteCard,
+                                    const SizedBox(height: DesktopTokens.cardSpacing),
+                                  ],
+
+                                  todosSection,
+                                  ?reminderSection,
+                                ],
+                              ),
+                            ),
+
+                            // 右侧边栏
+                            const SizedBox(width: DesktopTokens.columnSpacing),
+                            SizedBox(
+                              width: DesktopTokens.rightSidebarWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: rightSidebarChildren,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
+
                     const SizedBox(height: 4),
                     Divider(
                       height: 1,
@@ -652,58 +1018,74 @@ class _TodayDesktopHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontSize: 22,
-                  height: 1.18,
-                  fontWeight: FontWeight.normal,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                dateText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.2,
-                ),
-              ),
-            ],
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: DesktopTokens.cardPadding,
+        vertical: 16,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          width: DesktopTokens.cardBorderWidth,
         ),
-        Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: cs.surface.withValues(alpha: 0.74),
-            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.36),
-              width: 0.55,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: DesktopTokens.fontSizePageTitle,
+                    height: 1.15,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  dateText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: DesktopTokens.fontSizePageSubtitle,
+                    color: cs.onSurfaceVariant.withValues(alpha: DesktopTokens.opacityTextSecondary),
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
           ),
-          child: Text(
-            I18n.tr('nav.today'),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.normal,
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
+            child: Text(
+              I18n.tr('nav.today'),
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontSize: DesktopTokens.fontSizeBody,
+                color: cs.onSurfaceVariant.withValues(alpha: DesktopTokens.opacityTextSecondary),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -722,15 +722,15 @@ class AppMetricCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final fill = isDark
-        ? cs.surface.withValues(alpha: 0.62)
-        : cs.surface.withValues(alpha: 0.78);
+        ? cs.surface.withValues(alpha: 0.68)
+        : cs.surface.withValues(alpha: 0.85);
     final tile = Ink(
       decoration: BoxDecoration(
         color: fill,
         borderRadius: borderRadius,
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.10 : 0.12),
-          width: 0.45,
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.18),
+          width: 0.5,
         ),
         boxShadow: const [],
       ),

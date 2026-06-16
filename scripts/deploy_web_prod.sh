@@ -144,7 +144,7 @@ echo ""
 # 2. 构建 Web
 echo "🔨 Building web (release)..."
 rm -rf "$BUILD_WEB_DIR"
-$FLUTTER_BIN build web --release --base-href=/duoyi/ --dart-define=DUOYI_SERVER_URL=
+$FLUTTER_BIN build web --release --base-href=/duoyi/ --dart-define=DUOYI_SERVER_URL= --dart-define=DUOYI_WEB_TARGET=desktop
 verify_web_build "$BUILD_WEB_DIR" "fresh build output"
 echo ""
 
