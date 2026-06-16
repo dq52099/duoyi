@@ -165,7 +165,6 @@ class TodayScreen extends StatelessWidget {
 
           final valueStyle = desktop ? theme.textTheme.titleMedium?.copyWith(
             fontSize: DesktopTokens.fontSizeBody,
-            fontWeight: FontWeight.w500,
             color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
             height: 1.08,
           ) : null;
@@ -674,7 +673,6 @@ class _CompactMonthCalendar extends StatelessWidget {
                   : isWeekend
                       ? cs.onSurfaceVariant.withValues(alpha: 0.5)
                       : cs.onSurface.withValues(alpha: 0.8),
-              fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
         ),
@@ -700,7 +698,6 @@ class _CompactMonthCalendar extends StatelessWidget {
               '${now.year}年${now.month}月',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontSize: DesktopTokens.fontSizeCardSubtitle,
-                fontWeight: FontWeight.w500,
                 color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
               ),
             ),
@@ -773,7 +770,6 @@ class _QuickAccessPanel extends StatelessWidget {
             '快捷入口',
             style: theme.textTheme.titleSmall?.copyWith(
               fontSize: DesktopTokens.fontSizeCardSubtitle,
-              fontWeight: FontWeight.w500,
               color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
             ),
           ),
@@ -1041,7 +1037,6 @@ class _TodayDesktopHeader extends StatelessWidget {
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontSize: DesktopTokens.fontSizePageTitle,
                     height: 1.15,
-                    fontWeight: FontWeight.w600,
                     color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
                   ),
                 ),
@@ -1076,7 +1071,6 @@ class _TodayDesktopHeader extends StatelessWidget {
               style: theme.textTheme.labelMedium?.copyWith(
                 fontSize: DesktopTokens.fontSizeBody,
                 color: cs.onSurfaceVariant.withValues(alpha: DesktopTokens.opacityTextSecondary),
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),
