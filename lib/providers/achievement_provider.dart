@@ -73,6 +73,15 @@ class AchievementProvider extends ChangeNotifier {
   String _rewardsUpdatedAt = '';
   bool _serverConfirmedRewardsChangePending = false;
   bool _storageLoaded = false;
+  // 账号切换 / 登录后会先清空本地成就状态，再由云端 `achievement_states`
+  // 回填 `_unlockedAt`。在回填完成前，任何对刚同步数据的成就重算都会把早已
+  // 解锁（且用户已读）的成就误判为“新解锁”，从而重复弹出解锁提示。
+  // 该开关在切号期间抑制解锁反馈（Toast + 系统通知），待基线恢复后再放开。
+  bool _unlockFeedbackSuppressed = false;
+  // 每次切号 / 登录抑制都会自增，用于让上一轮的安全兜底定时器失效：
+  // 30s 兜底定时器捕获抑制时的代次，仅当代次未变时才放开，避免二次切号
+  // 仍在抑制窗口内时被旧定时器提前恢复。
+  int _unlockSuppressionGeneration = 0;
   Future<void>? _storageLoadFuture;
   int _storageGeneration = 0;
 
@@ -110,6 +119,37 @@ class AchievementProvider extends ChangeNotifier {
     _pendingUnlockedFeedback.clear();
     return next;
   }
+
+  /// 切号 / 登录开始时调用：在云端成就基线回填前抑制解锁反馈，
+  /// 避免把早已解锁的成就当成“新解锁”重复弹窗。
+  ///
+  /// 返回本轮抑制的代次，调用方可把它传给 [resumeUnlockFeedback] 作为兜底，
+  /// 确保只有“同一轮抑制”的延迟恢复才会生效。
+  int suppressUnlockFeedback() {
+    _unlockFeedbackSuppressed = true;
+    _unlockSuppressionGeneration++;
+    // 抑制窗口内已经误入队列的反馈先清掉，确保不会在恢复后补弹。
+    _pendingUnlockedFeedback.clear();
+    return _unlockSuppressionGeneration;
+  }
+
+  /// 云端基线回填完成（或切号流程结束）后调用，恢复正常解锁反馈。
+  ///
+  /// [generation] 非空时仅当它仍是最新一轮抑制才放开——这样上一轮切号的
+  /// 安全兜底定时器不会误恢复正处于抑制窗口的新一轮切号。云端基线回填的
+  /// 即时恢复不传 [generation]，无条件放开。
+  void resumeUnlockFeedback({int? generation}) {
+    if (generation != null && generation != _unlockSuppressionGeneration) {
+      return;
+    }
+    _unlockFeedbackSuppressed = false;
+  }
+
+  @visibleForTesting
+  bool get unlockFeedbackSuppressed => _unlockFeedbackSuppressed;
+
+  /// 当前抑制代次，供切号兜底定时器捕获后回传 [resumeUnlockFeedback]。
+  int get unlockSuppressionGeneration => _unlockSuppressionGeneration;
 
   void attachNotificationService(NotificationService service) {
     _notificationService = service;
@@ -329,9 +369,18 @@ class AchievementProvider extends ChangeNotifier {
     var shouldSaveRewards = rewardsChanged;
     shouldSaveRewards |= _awardCompletedChallenges(context);
 
+    // 切号 / 登录基线回填期间，强制走静默路径：仍记录解锁与发币，
+    // 但不弹 Toast、不发系统通知，避免早已解锁的成就被重复“庆祝”。
+    final silent = silentUnlockFeedback || _unlockFeedbackSuppressed;
+
     if (newlyUnlocked.isNotEmpty) {
-      if (!silentUnlockFeedback) {
-        _pendingUnlockedFeedback.addAll(newlyUnlocked);
+      if (!silent) {
+        // 与系统通知出口保持一致：已通知过的成就不再补弹应用内 Toast。
+        _pendingUnlockedFeedback.addAll(
+          newlyUnlocked.where(
+            (achievement) => !_notifiedAchievementIds.contains(achievement.id),
+          ),
+        );
       }
       for (final achievement in newlyUnlocked) {
         shouldSaveRewards |= _award(
@@ -345,13 +394,13 @@ class AchievementProvider extends ChangeNotifier {
       }
     }
 
-    final achievementIdsToMarkNotified = silentUnlockFeedback
+    final achievementIdsToMarkNotified = silent
         ? newlyUnlocked.map((achievement) => achievement.id).toList()
         : newlyUnlocked
               .map((achievement) => achievement.id)
               .where((id) => !_notifiedAchievementIds.contains(id))
               .toList(growable: false);
-    final achievementsToNotify = silentUnlockFeedback
+    final achievementsToNotify = silent
         ? const <Achievement>[]
         : newlyUnlocked
               .where(

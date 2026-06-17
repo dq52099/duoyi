@@ -387,6 +387,13 @@ void main() async {
       );
       guardedSync('theme', themeProvider.resetLocalState);
       guardedSync('achievements', achievementProvider.resetLocalState);
+      // 切号清空后，云端 `achievement_states` 尚未回填本地解锁基线。
+      // 在此期间抑制成就解锁反馈，等基线恢复（或安全超时）后再放开，
+      // 否则早已解锁且已读的成就会被重算成“新解锁”而重复弹窗。
+      guardedSync(
+        'achievements feedback suppression',
+        achievementProvider.suppressUnlockFeedback,
+      );
       guardedSync(
         'quick capture templates',
         quickCaptureTemplateProvider.resetLocalState,
@@ -447,6 +454,16 @@ void main() async {
         criticalCleanupStackTrace!,
       );
     }
+    // 安全兜底：即便云端基线回填未触发静默刷新（如退出登录、关闭自动同步），
+    // 也要在切号窗口后恢复解锁反馈，避免开关永久卡在抑制态。
+    // 捕获本轮抑制代次：若 30s 内又发生一次切号，旧定时器不会误恢复新一轮抑制。
+    final suppressionGeneration =
+        achievementProvider.unlockSuppressionGeneration;
+    Future<void>.delayed(const Duration(seconds: 30), () {
+      achievementProvider.resumeUnlockFeedback(
+        generation: suppressionGeneration,
+      );
+    });
   }
 
   String firstNonEmptyProfileText(List<String?> values) {
@@ -1461,6 +1478,9 @@ void main() async {
         achievementRefreshQueued = false;
         achievementRefreshQueuedSilent = false;
         await refreshAchievementsNow(silentUnlockFeedback: true);
+        // 云端成就基线已静默回填完毕，可恢复正常解锁反馈：
+        // 此后真正的新解锁才会弹窗 / 通知。
+        achievementProvider.resumeUnlockFeedback();
       }
 
       final accountCollectionsChanged =
@@ -3162,9 +3182,24 @@ Future<bool> _preflightQuickTodoReminder(
           );
           return false;
         });
-    if (granted) return true;
-    feedback('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
-    return false;
+    if (!granted) {
+      feedback('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
+      return false;
+    }
+    // 与待办详情保存保持一致：主动申请精准闹钟 / 全屏 intent 权限，
+    // 否则首条闹钟提醒会静默降级，必须先点一次“测试强提醒”才会被授权。
+    try {
+      final hasExact = await AlarmService.instance.hasExactAlarmPermission();
+      if (!hasExact) await AlarmService.instance.requestExactAlarmPermission();
+      final hasFullScreen = await AlarmService.instance
+          .hasFullScreenIntentPermission();
+      if (!hasFullScreen) {
+        await AlarmService.instance.requestFullScreenIntentPermission();
+      }
+    } catch (e, st) {
+      debugPrint('[QuickTodoAction] alarm exact/fullscreen request failed: $e\n$st');
+    }
+    return true;
   }
   return true;
 }

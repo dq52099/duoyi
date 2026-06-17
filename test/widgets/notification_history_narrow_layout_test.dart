@@ -508,7 +508,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('已注册提醒明细 320px 下可以打开明细弹窗', (tester) async {
+  testWidgets('已注册提醒明细 320px 下可以打开独立页面', (tester) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -537,15 +537,17 @@ void main() {
         const ValueKey('notification_registered_reminders_view_button'),
       ),
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    // 后台系统队列解析驱动到完成，避免遗留计时器影响断言。
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    });
+    await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('notification_registered_reminders_sheet')),
-      findsOneWidget,
-    );
-    expect(find.text('已注册提醒明细'), findsAtLeastNWidgets(1));
-    expect(find.text('暂无已注册提醒'), findsOneWidget);
+    expect(find.byType(RegisteredRemindersScreen), findsOneWidget);
+    expect(find.text('已注册提醒'), findsAtLeastNWidgets(1));
+    // 默认展示“生效中”过滤，且无注册提醒时给出空态。
+    expect(find.text('暂无生效中的提醒'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -371,6 +371,8 @@ class _FakePopupSink implements ReminderPopupSink {
   bool failOnce = false;
   bool failRepeating = false;
   bool failCancel = false;
+  // 仅让指定小时的重复弹窗调度失败，用于模拟“多提醒时间里有一条失败”的场景。
+  Set<int> failRepeatingHours = <int>{};
 
   @override
   Future<void> cancel(int id) async {
@@ -412,6 +414,9 @@ class _FakePopupSink implements ReminderPopupSink {
   }) async {
     if (failRepeating) {
       throw StateError('forced repeating popup fallback failure');
+    }
+    if (failRepeatingHours.contains(hour)) {
+      throw StateError('forced repeating popup failure for hour $hour');
     }
     scheduled.add({
       'kind': 'popup_repeating',
@@ -1588,6 +1593,147 @@ void main() {
         popup.scheduled.single['payload'],
         'duoyi://habit/${habit.id}?confirm=1',
       );
+    });
+
+    test('syncHabits 多提醒时间逐条注册到独立 id（每天 8 杯水场景）', () async {
+      final habit = Habit(
+        id: 'h-water',
+        name: '喝水',
+        targetCount: 8,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r-09',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.popup,
+              hour: 9,
+              minute: 0,
+            ),
+            ReminderRule(
+              id: 'r-12',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.popup,
+              hour: 12,
+              minute: 0,
+            ),
+            ReminderRule(
+              id: 'r-15',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.popup,
+              hour: 15,
+              minute: 30,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncHabits([habit]);
+
+      // 三条提醒都应注册，且时间各不相同。
+      expect(popup.scheduled.length, 3);
+      expect(
+        popup.scheduled.map((e) => '${e['hour']}:${e['minute']}').toSet(),
+        {'9:0', '12:0', '15:30'},
+      );
+      // 每条使用独立 id，互不覆盖。
+      final ids = popup.scheduled.map((e) => e['id']).toSet();
+      expect(ids.length, 3, reason: '多提醒时间应使用独立通知 id');
+      // 首条沿用历史 id，保证与旧单条提醒幂等。
+      expect(ids, contains(_idFor('habit_${habit.id}')));
+    });
+
+    test('syncHabits 删除其中一个提醒时间会取消对应通知', () async {
+      ReminderRule popupRule(String id, int hour) => ReminderRule(
+        id: id,
+        type: ReminderRuleType.dailyTime,
+        kind: ReminderKind.popup,
+        hour: hour,
+        minute: 0,
+      );
+      final threeTimes = Habit(
+        id: 'h-water',
+        name: '喝水',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [popupRule('r-09', 9), popupRule('r-12', 12), popupRule('r-15', 15)],
+        ),
+      );
+
+      await scheduler.syncHabits([threeTimes]);
+      expect(popup.scheduled.length, 3);
+      final secondId = popup.scheduled.firstWhere(
+        (e) => e['hour'] == 12,
+      )['id'] as int;
+
+      popup.scheduled.clear();
+      popup.cancelled.clear();
+
+      // 去掉 12 点这条提醒后重新同步。
+      final twoTimes = Habit(
+        id: 'h-water',
+        name: '喝水',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [popupRule('r-09', 9), popupRule('r-15', 15)],
+        ),
+      );
+      await scheduler.syncHabits([twoTimes]);
+
+      // 被删除的 12 点提醒应被取消。
+      expect(popup.cancelled, contains(secondId));
+      final remaining =
+          (await registry.idsByObject('habit'))['h-water'] ?? const <int>{};
+      expect(remaining, isNot(contains(secondId)));
+    });
+
+    test('多提醒时间部分调度失败时，已成功的派生 id 仍入册，禁用后能被清理', () async {
+      ReminderRule popupRule(String id, int hour) => ReminderRule(
+        id: id,
+        type: ReminderRuleType.dailyTime,
+        kind: ReminderKind.popup,
+        hour: hour,
+        minute: 0,
+      );
+      final habit = Habit(
+        id: 'h-water',
+        name: '喝水',
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [popupRule('r-09', 9), popupRule('r-12', 12)],
+        ),
+      );
+
+      // 12 点这条注册失败，9 点成功：整体 scheduled == false。
+      popup.failRepeatingHours = <int>{12};
+      await scheduler.syncHabits([habit]);
+
+      // 成功的 9 点派生 id（首条沿用历史 habit_<id>）仍应入册，
+      // 这样后续禁用时才能按 registry 清理掉它，不留孤儿。
+      final baseId = _idFor('habit_${habit.id}');
+      final afterPartial =
+          (await registry.idsByObject('habit'))['h-water'] ?? const <int>{};
+      expect(
+        afterPartial,
+        contains(baseId),
+        reason: '部分失败也要把已成功的派生 id 写入 registry',
+      );
+
+      // 恢复调度能力后禁用习惯。
+      popup.failRepeatingHours = const <int>{};
+      popup.cancelled.clear();
+      final disabled = Habit(
+        id: 'h-water',
+        name: '喝水',
+        reminderPlan: const ReminderPlan.disabled(),
+      );
+      await scheduler.syncHabits([disabled]);
+
+      // 之前成功注册的 9 点提醒应被取消，registry 中不再残留该习惯。
+      expect(popup.cancelled, contains(baseId));
+      final afterDisable =
+          (await registry.idsByObject('habit'))['h-water'] ?? const <int>{};
+      expect(afterDisable, isEmpty);
     });
 
     test('未注入 popup sink 时，习惯 popup 会注册系统通知兜底', () async {

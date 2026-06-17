@@ -8,6 +8,8 @@ import '../core/habit_icons.dart';
 import '../core/habit_insights.dart';
 import '../core/habit_templates.dart';
 import '../models/habit.dart';
+import '../models/goal.dart'
+    show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
@@ -87,7 +89,8 @@ class _HabitScreenState extends State<HabitScreen>
     DateTime? startDate;
     DateTime? endDate;
     var remindEnabled = false;
-    TimeOfDay? remindTime = nextHalfHourTimeOfDay();
+    // 习惯打卡默认弹出框提醒，支持多个时间（例如每天 8 杯水）。
+    final remindTimes = <TimeOfDay>[nextHalfHourTimeOfDay()];
     final templatesByCategory = HabitTemplates.byCategory;
 
     final colors = [
@@ -258,7 +261,7 @@ class _HabitScreenState extends State<HabitScreen>
                     children: [
                       const Icon(Icons.alarm, size: 18, color: Colors.grey),
                       const SizedBox(width: 8),
-                      const Text('每日提醒'),
+                      const Text('打卡提醒'),
                       const Spacer(),
                       Switch(
                         value: remindEnabled,
@@ -267,18 +270,6 @@ class _HabitScreenState extends State<HabitScreen>
                             setSt(() => remindEnabled = false);
                             return;
                           }
-                          if (remindTime == null) {
-                            final t = await AppTimePicker.show(
-                              ctx,
-                              initialTime:
-                                  remindTime ?? nextHalfHourTimeOfDay(),
-                              title: '每日提醒时间',
-                              minuteStep: 5,
-                            );
-                            if (t == null || !mounted || !ctx.mounted) return;
-                            setSt(() => remindTime = t);
-                          }
-                          if (remindTime == null) return;
                           final ready = await _ensureHabitReminderReady();
                           if (!mounted || !ctx.mounted) return;
                           setSt(() => remindEnabled = ready);
@@ -286,27 +277,65 @@ class _HabitScreenState extends State<HabitScreen>
                       ),
                     ],
                   ),
-                  if (remindEnabled)
-                    TextButton.icon(
-                      icon: const Icon(Icons.schedule, size: 16),
-                      label: Text(
-                        remindTime == null
-                            ? '选择时间'
-                            : AppTimePicker.format(remindTime!),
+                  if (remindEnabled) ...[
+                    const Padding(
+                      padding: EdgeInsets.only(left: 26, top: 2, bottom: 6),
+                      child: Text(
+                        '到点弹出打卡提醒，可添加多个时间（例如每天 8 杯水）',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
-                      onPressed: () async {
-                        final t = await AppTimePicker.show(
-                          ctx,
-                          initialTime:
-                              remindTime ??
-                              const TimeOfDay(hour: 20, minute: 0),
-                          title: '每日提醒时间',
-                          minuteStep: 5,
-                        );
-                        if (t == null || !mounted || !ctx.mounted) return;
-                        setSt(() => remindTime = t);
-                      },
                     ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var i = 0; i < remindTimes.length; i++)
+                            InputChip(
+                              avatar: const Icon(Icons.schedule, size: 16),
+                              label: Text(AppTimePicker.format(remindTimes[i])),
+                              onPressed: () async {
+                                final t = await AppTimePicker.show(
+                                  ctx,
+                                  initialTime: remindTimes[i],
+                                  title: '提醒时间',
+                                  minuteStep: 5,
+                                );
+                                if (t == null || !mounted || !ctx.mounted) {
+                                  return;
+                                }
+                                setSt(() => remindTimes[i] = t);
+                              },
+                              onDeleted: remindTimes.length <= 1
+                                  ? null
+                                  : () => setSt(() => remindTimes.removeAt(i)),
+                            ),
+                          ActionChip(
+                            avatar: const Icon(Icons.add, size: 16),
+                            label: const Text('添加时间'),
+                            onPressed: () async {
+                              final t = await AppTimePicker.show(
+                                ctx,
+                                initialTime: nextHalfHourTimeOfDay(),
+                                title: '提醒时间',
+                                minuteStep: 5,
+                              );
+                              if (t == null || !mounted || !ctx.mounted) return;
+                              setSt(() {
+                                if (!remindTimes.any(
+                                  (e) =>
+                                      e.hour == t.hour && e.minute == t.minute,
+                                )) {
+                                  remindTimes.add(t);
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 4),
 
                   // --- Manual Entry ---
@@ -514,7 +543,7 @@ class _HabitScreenState extends State<HabitScreen>
                           final habitProvider = context.read<HabitProvider>();
                           final navigator = Navigator.of(ctx);
                           final shouldRemind =
-                              remindEnabled && remindTime != null;
+                              remindEnabled && remindTimes.isNotEmpty;
                           final shouldUseFlex =
                               flexRuleEnabled &&
                               selectedKind == HabitKind.positive;
@@ -536,6 +565,14 @@ class _HabitScreenState extends State<HabitScreen>
                               ? await _ensureHabitReminderReady()
                               : false;
                           if (!mounted || !ctx.mounted) return;
+                          // legacy 字段与 reminderPlan 都从同一份排序后的时间派生，
+                          // 避免“录入顺序”与“最早时间”不一致。
+                          final sortedRemindTimes = remindTimes.toList()
+                            ..sort(
+                              (a, b) => a.hour != b.hour
+                                  ? a.hour - b.hour
+                                  : a.minute - b.minute,
+                            );
                           await habitProvider.addHabit(
                             Habit(
                               id: DateTime.now().millisecondsSinceEpoch
@@ -558,8 +595,27 @@ class _HabitScreenState extends State<HabitScreen>
                               startDate: startDate,
                               endDate: endDate,
                               remind: shouldRemind && reminderReady,
-                              remindHour: remindTime?.hour,
-                              remindMinute: remindTime?.minute,
+                              remindHour: sortedRemindTimes.isNotEmpty
+                                  ? sortedRemindTimes.first.hour
+                                  : null,
+                              remindMinute: sortedRemindTimes.isNotEmpty
+                                  ? sortedRemindTimes.first.minute
+                                  : null,
+                              // 习惯打卡默认弹出框提醒；多个时间各生成一条规则。
+                              reminderPlan: (shouldRemind && reminderReady)
+                                  ? ReminderPlan(
+                                      enabled: true,
+                                      rules: [
+                                        for (final t in sortedRemindTimes)
+                                          ReminderRule(
+                                            type: ReminderRuleType.dailyTime,
+                                            kind: ReminderKind.popup,
+                                            hour: t.hour,
+                                            minute: t.minute,
+                                          ),
+                                      ],
+                                    )
+                                  : null,
                             ),
                           );
                           navigator.pop();

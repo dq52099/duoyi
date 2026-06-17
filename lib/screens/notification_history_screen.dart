@@ -14,6 +14,7 @@ import '../models/goal.dart' show ReminderKind;
 import '../providers/notification_service.dart';
 import '../providers/preferences_provider.dart';
 import '../services/alarm_service.dart';
+import '../services/local_notifications.dart';
 import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
 import '../services/notification_status_bar_sync_bridge.dart';
@@ -1110,37 +1111,15 @@ class _NotificationSettingsScreenState
     return '$objectCount 个提醒对象，点查看核对任务详情';
   }
 
-  Future<void> _showRegisteredReminderDetails() {
-    final entries = List<ReminderScheduleSnapshotEntry>.of(
-      _registeredReminders,
-    );
-    return showAppModalSheet<void>(
-      context: context,
-      builder: (sheetContext) => AppModalSheet(
-        key: const ValueKey('notification_registered_reminders_sheet'),
-        title: '已注册提醒明细',
-        subtitle: entries.isEmpty
-            ? '当前没有通过提醒调度器注册的提醒'
-            : '${entries.length} 个提醒对象，按任务整理展示',
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(sheetContext).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-        child: entries.isEmpty
-            ? const EmptyState(
-                icon: Icons.fact_check_outlined,
-                message: '暂无已注册提醒',
-              )
-            : Column(
-                children: [
-                  for (final entry in entries)
-                    _RegisteredReminderDetailRow(entry: entry),
-                ],
-              ),
+  Future<void> _showRegisteredReminderDetails() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const RegisteredRemindersScreen(),
       ),
     );
+    if (!mounted) return;
+    // 返回后刷新通知设置页上的“已注册提醒”摘要计数。
+    await _refreshStatus();
   }
 
   @override
@@ -1655,7 +1634,10 @@ class _NotificationSettingsScreenState
 class _RegisteredReminderDetailRow extends StatelessWidget {
   final ReminderScheduleSnapshotEntry entry;
 
-  const _RegisteredReminderDetailRow({required this.entry});
+  /// 是否已进入系统提醒队列；null 表示不展示生效状态徽标。
+  final bool? active;
+
+  const _RegisteredReminderDetailRow({required this.entry, this.active});
 
   @override
   Widget build(BuildContext context) {
@@ -1687,15 +1669,32 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.normal,
-                    height: 1.16,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.normal,
+                          height: 1.16,
+                        ),
+                      ),
+                    ),
+                    if (active != null) ...[
+                      const SizedBox(width: 6),
+                      AppStatusBadge(
+                        label: active! ? '生效中' : '未生效',
+                        color: active! ? Colors.green : cs.error,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1717,6 +1716,314 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _RegisteredReminderStatus { active, inactive, all }
+
+/// 已注册提醒明细独立页：支持按生效状态过滤与分页浏览。
+///
+/// “生效中”表示该提醒的系统通知 id 仍在系统队列里、到点会触发；“未生效”表示
+/// 调度器登记了但系统队列里查不到（常见于权限被收回或被系统清理），可据此排查
+/// “到点没提醒”的问题。
+class RegisteredRemindersScreen extends StatefulWidget {
+  const RegisteredRemindersScreen({super.key});
+
+  @override
+  State<RegisteredRemindersScreen> createState() =>
+      _RegisteredRemindersScreenState();
+}
+
+class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
+  static const _pageSize = 20;
+
+  bool _loading = true;
+  List<ReminderScheduleSnapshotEntry> _entries =
+      const <ReminderScheduleSnapshotEntry>[];
+  Set<int> _systemQueueIds = <int>{};
+  // 系统队列是否成功读取；读取失败/超时时无法判定生效状态，按“生效中”处理，
+  // 避免把实际已注册的提醒误标成“未生效”。
+  bool _queueResolved = false;
+  _RegisteredReminderStatus _status = _RegisteredReminderStatus.active;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _queueResolved = false;
+    });
+    final scheduler = context.read<ReminderScheduler?>();
+    final entries =
+        await scheduler?.registeredRemindersSnapshot() ??
+        const <ReminderScheduleSnapshotEntry>[];
+    if (!mounted) return;
+    // 注册表来自内存，立即渲染；系统队列可能涉及较慢的平台调用，放到后台解析，
+    // 解析完成前所有已注册提醒先按“生效中”展示，避免页面长时间空转。
+    setState(() {
+      _entries = entries;
+      _loading = false;
+      _page = 0;
+    });
+    unawaited(_resolveSystemQueue());
+  }
+
+  Future<void> _resolveSystemQueue() async {
+    final queue = <int>{};
+    var queueResolved = true;
+    Future<List<int>> guarded(Future<List<int>> Function() read) async {
+      try {
+        return await read();
+      } catch (e, st) {
+        debugPrint('[RegisteredReminders] pending ids read failed: $e\n$st');
+        queueResolved = false;
+        return const <int>[];
+      }
+    }
+
+    queue.addAll(await guarded(() => LocalNotifications.instance.pendingIds()));
+    queue.addAll(await guarded(() => AlarmService.instance.pendingIds()));
+    if (!mounted) return;
+    setState(() {
+      _systemQueueIds = queue;
+      _queueResolved = queueResolved;
+    });
+  }
+
+  bool _isActive(ReminderScheduleSnapshotEntry entry) =>
+      !_queueResolved || entry.ids.any(_systemQueueIds.contains);
+
+  List<ReminderScheduleSnapshotEntry> get _filtered {
+    switch (_status) {
+      case _RegisteredReminderStatus.active:
+        return _entries.where(_isActive).toList(growable: false);
+      case _RegisteredReminderStatus.inactive:
+        return _entries
+            .where((entry) => !_isActive(entry))
+            .toList(growable: false);
+      case _RegisteredReminderStatus.all:
+        return _entries;
+    }
+  }
+
+  void _setStatus(_RegisteredReminderStatus status) {
+    if (_status == status) return;
+    setState(() {
+      _status = status;
+      _page = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final filtered = _filtered;
+    final activeCount = _entries.where(_isActive).length;
+    final inactiveCount = _entries.length - activeCount;
+
+    final totalPages = filtered.isEmpty
+        ? 1
+        : ((filtered.length - 1) ~/ _pageSize) + 1;
+    final currentPage = _page.clamp(0, totalPages - 1).toInt();
+    final pageStart = currentPage * _pageSize;
+    final pageEnd = (pageStart + _pageSize).clamp(0, filtered.length).toInt();
+    final visible = filtered.isEmpty
+        ? const <ReminderScheduleSnapshotEntry>[]
+        : filtered.sublist(pageStart, pageEnd);
+
+    return Scaffold(
+      backgroundColor: routeBackground,
+      appBar: AppBar(
+        title: const Text('已注册提醒'),
+        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: routeBackground,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 52,
+        actions: [
+          IconButton(
+            key: const ValueKey('registered_reminders_refresh'),
+            tooltip: '刷新',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _statusChip(
+                        '生效中',
+                        _RegisteredReminderStatus.active,
+                        activeCount,
+                      ),
+                      _statusChip(
+                        '未生效',
+                        _RegisteredReminderStatus.inactive,
+                        inactiveCount,
+                      ),
+                      _statusChip(
+                        '全部',
+                        _RegisteredReminderStatus.all,
+                        _entries.length,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _statusHint(),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? EmptyState(
+                          icon: Icons.fact_check_outlined,
+                          message: _emptyMessage(),
+                        )
+                      : ListView.builder(
+                          key: const ValueKey('registered_reminders_list'),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          itemCount: visible.length,
+                          itemBuilder: (context, index) {
+                            final entry = visible[index];
+                            return _RegisteredReminderDetailRow(
+                              entry: entry,
+                              active: _queueResolved ? _isActive(entry) : null,
+                            );
+                          },
+                        ),
+                ),
+                if (filtered.length > _pageSize)
+                  _Pager(
+                    currentPage: currentPage,
+                    totalPages: totalPages,
+                    rangeStart: pageStart + 1,
+                    rangeEnd: pageEnd,
+                    total: filtered.length,
+                    onPrev: currentPage <= 0
+                        ? null
+                        : () => setState(() => _page = currentPage - 1),
+                    onNext: currentPage >= totalPages - 1
+                        ? null
+                        : () => setState(() => _page = currentPage + 1),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _statusChip(
+    String label,
+    _RegisteredReminderStatus status,
+    int count,
+  ) {
+    return ChoiceChip(
+      key: ValueKey('registered_reminders_filter_${status.name}'),
+      label: Text('$label · $count'),
+      selected: _status == status,
+      onSelected: (_) => _setStatus(status),
+    );
+  }
+
+  String _statusHint() {
+    switch (_status) {
+      case _RegisteredReminderStatus.active:
+        return '已进入系统提醒队列、到点会触发的提醒';
+      case _RegisteredReminderStatus.inactive:
+        return '已登记但系统队列中查不到，可重新保存对应待办/习惯，或检查通知与精准闹钟权限';
+      case _RegisteredReminderStatus.all:
+        return '调度器登记的全部提醒对象';
+    }
+  }
+
+  String _emptyMessage() {
+    switch (_status) {
+      case _RegisteredReminderStatus.active:
+        return '暂无生效中的提醒';
+      case _RegisteredReminderStatus.inactive:
+        return '没有未生效的提醒，一切正常';
+      case _RegisteredReminderStatus.all:
+        return '暂无已注册提醒';
+    }
+  }
+}
+
+class _Pager extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final int rangeStart;
+  final int rangeEnd;
+  final int total;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+
+  const _Pager({
+    required this.currentPage,
+    required this.totalPages,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.total,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$rangeStart-$rangeEnd / $total · 第 ${currentPage + 1}/$totalPages 页',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+          Row(
+            children: [
+              IconButton(
+                key: const ValueKey('registered_reminders_prev'),
+                tooltip: '上一页',
+                onPressed: onPrev,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                key: const ValueKey('registered_reminders_next'),
+                tooltip: '下一页',
+                onPressed: onNext,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
           ),
         ],
       ),

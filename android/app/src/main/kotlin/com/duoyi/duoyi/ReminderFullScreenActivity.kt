@@ -10,6 +10,8 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.ViewGroup
@@ -17,8 +19,24 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ReminderFullScreenActivity : Activity() {
+    private var clockView: TextView? = null
+    private var dateView: TextView? = null
+    private val clockHandler = Handler(Looper.getMainLooper())
+    // 时钟每秒刷新一次，格式化器复用以避免每次 tick 重新分配。
+    private val clockFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("M月d日 EEEE", Locale.getDefault())
+    private val clockTicker = object : Runnable {
+        override fun run() {
+            updateClock()
+            clockHandler.postDelayed(this, 1000L)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureAlarmWindow()
@@ -35,6 +53,18 @@ class ReminderFullScreenActivity : Activity() {
     override fun onResume() {
         super.onResume()
         configureAlarmWindow()
+        clockHandler.removeCallbacks(clockTicker)
+        clockHandler.post(clockTicker)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        clockHandler.removeCallbacks(clockTicker)
+    }
+
+    override fun onDestroy() {
+        clockHandler.removeCallbacks(clockTicker)
+        super.onDestroy()
     }
 
     private fun configureAlarmWindow() {
@@ -53,6 +83,12 @@ class ReminderFullScreenActivity : Activity() {
         }
     }
 
+    private fun updateClock() {
+        val now = Date()
+        clockView?.text = clockFormat.format(now)
+        dateView?.text = dateFormat.format(now)
+    }
+
     private fun render() {
         val reminderTitle = intent.getStringExtra(extraTitle)
             ?.takeIf { it.isNotBlank() }
@@ -64,16 +100,39 @@ class ReminderFullScreenActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(28), dp(32), dp(28), dp(32))
+            setPadding(dp(28), dp(40), dp(28), dp(40))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(Color.rgb(26, 32, 44), Color.rgb(15, 23, 42)),
             )
         }
+        // 锁屏闹钟样式：顶部大号实时时钟 + 日期，强化“闹钟”语义与即时感。
+        val clock = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 64f
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            letterSpacing = 0.02f
+        }
+        clockView = clock
+        val date = TextView(this).apply {
+            setTextColor(Color.rgb(148, 163, 184))
+            textSize = 15f
+            gravity = Gravity.CENTER
+        }
+        dateView = date
+        updateClock()
+
+        val badge = TextView(this).apply {
+            text = "🔔  闹钟提醒"
+            setTextColor(Color.rgb(56, 189, 164))
+            textSize = 14f
+            gravity = Gravity.CENTER
+        }
         val title = TextView(this).apply {
             text = reminderTitle
             setTextColor(Color.WHITE)
-            textSize = 28f
+            textSize = 26f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             maxLines = 3
@@ -82,7 +141,7 @@ class ReminderFullScreenActivity : Activity() {
         val body = TextView(this).apply {
             text = reminderBody
             setTextColor(Color.rgb(226, 232, 240))
-            textSize = 18f
+            textSize = 17f
             gravity = Gravity.CENTER
             maxLines = 4
             ellipsize = TextUtils.TruncateAt.END
@@ -98,11 +157,14 @@ class ReminderFullScreenActivity : Activity() {
             setOnClickListener { openMainActivityAndFinish() }
         }
 
-        root.addView(title, matchWidth(height = ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(body, matchWidth(topMargin = dp(16), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(clock, matchWidth(height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(date, matchWidth(topMargin = dp(4), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(badge, matchWidth(topMargin = dp(28), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(title, matchWidth(topMargin = dp(12), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(body, matchWidth(topMargin = dp(12), height = ViewGroup.LayoutParams.WRAP_CONTENT))
         actions.addView(stopButton, weightedButton(endMargin = dp(10)))
         actions.addView(openButton, weightedButton(startMargin = dp(10)))
-        root.addView(actions, matchWidth(topMargin = dp(36), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(actions, matchWidth(topMargin = dp(40), height = ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
     }
 

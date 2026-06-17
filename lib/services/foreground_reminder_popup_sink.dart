@@ -217,6 +217,8 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
   }) {
     _timers.remove(id);
     final remaining = when.difference(DateTime.now());
+    // 若此时应用已后台/上下文失效，让兜底通知接管，不再尝试前台弹窗。
+    // 关键：**不取消**兜底通知，否则后台时用户什么都收不到。
     if (!isForegroundGetter()) {
       _runAfterDue(
         id: id,
@@ -234,6 +236,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       );
       return;
     }
+    // 仅当前台有效时才取消兜底，准备展示弹窗。
     if (cancelFallbackBeforeDialog) {
       unawaited(
         notificationFallback?.cancel(id).catchError((

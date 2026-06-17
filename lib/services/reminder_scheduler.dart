@@ -1238,8 +1238,17 @@ class ReminderScheduler {
           !rule.enabled ||
           rule.kind == ReminderKind.off) {
         handledInactiveHabitIds.add(h.id);
+        // 多提醒时间习惯被关闭时，主 id 之外的派生 id 不在 wanted 内、也不会
+        // 进入 sweep，需要在此显式清理，避免遗漏的提醒成为孤儿继续触发。
+        final baseId = _idFor('habit_${h.id}');
+        final storedIds = (await registry.idsByObject('habit'))[h.id] ??
+            const <int>{};
+        final extraIds = storedIds.where((id) => id != baseId).toSet();
         final cancelled = await _cancelHabit(h.id);
-        if (cancelled) {
+        final extraCancelled = extraIds.isEmpty
+            ? true
+            : await _cancelIds('habit', h.id, extraIds, blocking: false);
+        if (cancelled && extraCancelled) {
           _scheduledHabitScopes.remove(h.id);
           _forgetReminderDisplay('habit', h.id);
           await registry.removeObject('habit', h.id);
@@ -1303,6 +1312,11 @@ class ReminderScheduler {
       if (scheduled) {
         _rememberHabitReminderDisplay(h);
         _scheduledHabitScopes[h.id] = scope;
+      }
+      // 即便部分规则调度失败（scheduled == false，scope 不落库以便下次重排），
+      // 也要把这条习惯当前“应注册”的全部派生 id 写入 registry：否则已成功的
+      // 那几条派生通知会成为不在册的孤儿，禁用习惯时只按 registry 清理就漏掉它们。
+      if (scheduled || _habitRegistryIds(h).isNotEmpty) {
         await _replaceRegistryObject('habit', h.id, {
           ...blockedRegistryIds,
           ..._habitRegistryIds(h),
@@ -1311,24 +1325,74 @@ class ReminderScheduler {
     }
   }
 
-  Future<bool> _scheduleHabit(Habit habit) async {
+  /// 习惯当前生效（已启用、非 off）的全部提醒规则，支持多提醒时间。
+  List<ReminderRule> _enabledHabitRules(Habit habit) {
     final plan = _effectiveHabitPlan(habit);
-    final rule = plan.primaryRule;
-    if (rule == null || !rule.enabled || rule.kind == ReminderKind.off) {
-      return false;
+    if (!plan.enabled) return const <ReminderRule>[];
+    return [
+      for (final rule in plan.rules)
+        if (rule.enabled && rule.kind != ReminderKind.off) rule,
+    ];
+  }
+
+  /// 习惯某条提醒规则对应的系统通知基础 id。
+  ///
+  /// 第一条规则沿用历史 `habit_<id>`，保证既有单条提醒幂等；其余规则按规则
+  /// 自身 id 派生独立基础 id，从而支持“每天 8 杯水”这类多提醒时间习惯。
+  int _habitRuleId(String habitId, ReminderRule rule, int index) {
+    if (index == 0) return _idFor('habit_$habitId');
+    return _avoidReservedNotificationId(_idFor('habit_$habitId#${rule.id}'));
+  }
+
+  Future<bool> _scheduleHabit(Habit habit) async {
+    final rules = _enabledHabitRules(habit);
+    if (rules.isEmpty) return false;
+    // 单条提醒沿用历史路径，避免触动既有幂等 / 取消语义与测试基线。
+    if (rules.length == 1) {
+      return _scheduleHabitRule(
+        habit,
+        rules.single,
+        _idFor('habit_${habit.id}'),
+        isPrimary: true,
+      );
     }
+    // 多条提醒逐条注册到独立 id；任一失败都视为整体未完成，交由上层重排兜底。
+    var allOk = true;
+    for (var i = 0; i < rules.length; i++) {
+      final ok = await _scheduleHabitRule(
+        habit,
+        rules[i],
+        _habitRuleId(habit.id, rules[i], i),
+        isPrimary: i == 0,
+      );
+      allOk = allOk && ok;
+    }
+    return allOk;
+  }
+
+  Future<bool> _scheduleHabitRule(
+    Habit habit,
+    ReminderRule rule,
+    int id, {
+    required bool isPrimary,
+  }) async {
     final hour = rule.hour;
     final minute = rule.minute;
     if (hour == null || minute == null) return false;
     final weekdays = _habitWeekdays(habit, rule);
-    final id = _idFor('habit_${habit.id}');
     final payload = 'duoyi://habit/${habit.id}?confirm=1';
     final title = _habitTitle();
     final body = '${habit.name} 到时间了，点开确认打卡';
 
     switch (rule.kind) {
       case ReminderKind.push:
-        return _scheduleHabitPush(habit, hour, minute, weekdays);
+        return _scheduleHabitPush(
+          habit,
+          hour,
+          minute,
+          weekdays,
+          explicitId: isPrimary ? null : id,
+        );
       case ReminderKind.popup:
         try {
           await popup.scheduleRepeating(
@@ -1385,6 +1449,7 @@ class ReminderScheduler {
             hour,
             minute,
             weekdays,
+            explicitId: isPrimary ? null : id,
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
@@ -1412,6 +1477,7 @@ class ReminderScheduler {
             hour,
             minute,
             weekdays,
+            explicitId: isPrimary ? null : id,
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
@@ -1445,6 +1511,7 @@ class ReminderScheduler {
             hour,
             minute,
             weekdays,
+            explicitId: isPrimary ? null : id,
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
@@ -1462,16 +1529,30 @@ class ReminderScheduler {
     Habit habit,
     int hour,
     int minute,
-    List<int> weekdays,
-  ) async {
+    List<int> weekdays, {
+    int? explicitId,
+  }) async {
     try {
-      await notif.scheduleHabitReminder(
-        habitId: habit.id,
-        habitName: habit.name,
-        hour: hour,
-        minute: minute,
-        weekdays: weekdays.isEmpty ? null : weekdays,
-      );
+      if (explicitId == null) {
+        await notif.scheduleHabitReminder(
+          habitId: habit.id,
+          habitName: habit.name,
+          hour: hour,
+          minute: minute,
+          weekdays: weekdays.isEmpty ? null : weekdays,
+        );
+      } else {
+        // 多提醒时间的非首条规则走通用 push 出口，使用独立 id 以免互相覆盖。
+        await notif.scheduleDaily(
+          id: explicitId,
+          title: _habitTitle(),
+          body: '${habit.name} 到时间了，点开确认打卡',
+          hour: hour,
+          minute: minute,
+          weekdays: weekdays.isEmpty ? null : weekdays,
+          payload: 'duoyi://habit/${habit.id}?confirm=1',
+        );
+      }
       return true;
     } on NotificationPermissionDeniedException catch (fallbackError) {
       debugPrint(
@@ -2780,26 +2861,47 @@ class ReminderScheduler {
   }
 
   Future<bool> _habitStillPending(Habit habit) async {
-    final plan = _effectiveHabitPlan(habit);
-    final rule = plan.primaryRule;
-    if (rule == null || !rule.enabled || rule.kind == ReminderKind.off) {
-      return true;
-    }
-    final baseId = _idFor('habit_${habit.id}');
-    return _sinkStillPending(
-      label: 'habit:${habit.id}',
-      kind: rule.kind,
-      expected: _expectedRepeatingPendingIds(
-        baseId,
-        _habitWeekdays(habit, rule),
-      ),
-      acceptedExpectedSets: _acceptedRepeatingPendingIdSets(
+    final rules = _enabledHabitRules(habit);
+    if (rules.isEmpty) return true;
+    // 单条提醒沿用历史校验路径。
+    if (rules.length == 1) {
+      final rule = rules.single;
+      final baseId = _idFor('habit_${habit.id}');
+      return _sinkStillPending(
+        label: 'habit:${habit.id}',
         kind: rule.kind,
-        base: baseId,
-        weekdays: _habitWeekdays(habit, rule),
-      ),
-      stalePeerIds: _habitRegistryIds(habit),
-    );
+        expected: _expectedRepeatingPendingIds(
+          baseId,
+          _habitWeekdays(habit, rule),
+        ),
+        acceptedExpectedSets: _acceptedRepeatingPendingIdSets(
+          kind: rule.kind,
+          base: baseId,
+          weekdays: _habitWeekdays(habit, rule),
+        ),
+        stalePeerIds: _habitRegistryIds(habit),
+      );
+    }
+    // 多提醒时间：任一条不在系统队列即视为整体需要重排。
+    final peers = _habitRegistryIds(habit);
+    for (var i = 0; i < rules.length; i++) {
+      final rule = rules[i];
+      final baseId = _habitRuleId(habit.id, rule, i);
+      final weekdays = _habitWeekdays(habit, rule);
+      final stillPending = await _sinkStillPending(
+        label: 'habit:${habit.id}#${rule.id}',
+        kind: rule.kind,
+        expected: _expectedRepeatingPendingIds(baseId, weekdays),
+        acceptedExpectedSets: _acceptedRepeatingPendingIdSets(
+          kind: rule.kind,
+          base: baseId,
+          weekdays: weekdays,
+        ),
+        stalePeerIds: peers,
+      );
+      if (!stillPending) return false;
+    }
+    return true;
   }
 
   Future<bool> _anniversaryStillPending(Anniversary item) {
@@ -3175,19 +3277,19 @@ class ReminderScheduler {
   }
 
   Set<int> _habitRegistryIds(Habit habit) {
-    final plan = _effectiveHabitPlan(habit);
-    final rule = plan.primaryRule;
-    if (rule == null || !rule.enabled || rule.kind == ReminderKind.off) {
-      return const <int>{};
+    final rules = _enabledHabitRules(habit);
+    if (rules.isEmpty) return const <int>{};
+    final ids = <int>{};
+    for (var i = 0; i < rules.length; i++) {
+      final base = _habitRuleId(habit.id, rules[i], i);
+      ids.add(base);
+      final weekdays = _habitWeekdays(habit, rules[i]);
+      for (final weekday in weekdays) {
+        ids.add(_subId(base, weekday));
+        ids.add(_legacySubId(base, weekday));
+      }
     }
-    final base = _idFor('habit_${habit.id}');
-    final weekdays = _habitWeekdays(habit, rule);
-    if (weekdays.isEmpty) return <int>{base};
-    return <int>{
-      base,
-      for (final weekday in weekdays) _subId(base, weekday),
-      for (final weekday in weekdays) _legacySubId(base, weekday),
-    };
+    return ids;
   }
 
   Set<int> _anniversaryRegistryIds(Anniversary item) {
@@ -3698,22 +3800,32 @@ class ReminderScheduler {
   }
 
   String _habitScope(Habit habit) {
-    final plan = _effectiveHabitPlan(habit);
-    final rule = plan.primaryRule;
-    if (!plan.enabled || rule == null) return 'off';
-    final weekdays = _habitWeekdays(habit, rule);
+    final rules = _enabledHabitRules(habit);
+    if (rules.isEmpty) return 'off';
+    String fingerprint(ReminderRule rule) {
+      final weekdays = _habitWeekdays(habit, rule);
+      return [
+        rule.kind.name,
+        rule.type.name,
+        rule.hour,
+        rule.minute,
+        rule.fullScreen,
+        rule.vibrate,
+        rule.snoozeMinutes,
+        rule.repeatCount,
+        weekdays.join(','),
+      ].join('|');
+    }
+
+    // 单条提醒保持与历史完全一致的 scope，避免无谓重排与既有测试漂移。
+    if (rules.length == 1) {
+      return [habit.name, fingerprint(rules.single)].join('|');
+    }
+    // 多提醒时间：把每条规则的指纹（含 ruleId）一起编码，任一条变更都重排。
     return [
       habit.name,
-      rule.kind.name,
-      rule.type.name,
-      rule.hour,
-      rule.minute,
-      rule.fullScreen,
-      rule.vibrate,
-      rule.snoozeMinutes,
-      rule.repeatCount,
-      weekdays.join(','),
-    ].join('|');
+      for (final rule in rules) '${rule.id}~${fingerprint(rule)}',
+    ].join('||');
   }
 
   ReminderPlan _effectiveHabitPlan(Habit habit) {

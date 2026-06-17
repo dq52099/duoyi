@@ -1326,16 +1326,31 @@ Future<bool> preflightTodoReminderSave(
         !alarmChannelIds.contains(AlarmService.channelId)) {
       warnings.add('强提醒渠道未就绪，到点可能不会弹出闹钟通知');
     }
-    final exactGranted = await AlarmService.instance
-        .hasExactAlarmPermission()
-        .timeout(const Duration(seconds: 5), onTimeout: () => false);
+    // 主动申请精准闹钟 / 全屏 intent 权限，而不只是检查后给软提示。
+    // 否则首次保存的闹钟提醒会静默降级，用户必须先点一次“测试强提醒”
+    // 才会触发权限申请、之后的闹钟才正常——这正是“到点没提醒”的成因。
+    final exactGranted =
+        (await AlarmService.instance.hasExactAlarmPermission().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => false,
+        )) ||
+        (await AlarmService.instance.requestExactAlarmPermission().timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => false,
+        ));
     if (!context.mounted) return false;
     if (!exactGranted) {
       warnings.add('精准闹钟权限未开启，闹钟提醒可能延后或降级');
     }
-    final fullScreenGranted = await AlarmService.instance
-        .hasFullScreenIntentPermission()
-        .timeout(const Duration(seconds: 5), onTimeout: () => false);
+    final fullScreenGranted =
+        (await AlarmService.instance.hasFullScreenIntentPermission().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => false,
+        )) ||
+        (await AlarmService.instance.requestFullScreenIntentPermission().timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => false,
+        ));
     if (!context.mounted) return false;
     if (!fullScreenGranted) {
       warnings.add('全屏提醒权限未开启，锁屏弹窗可能不可用');

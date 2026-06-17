@@ -1662,9 +1662,15 @@ String? _networkAvatarUrl(String value) {
   return null;
 }
 
+/// 头像缓存键。
+///
+/// 仅由 `userId` 与头像值（服务端 URL / 本地带微秒时间戳的文件名）决定：
+/// 这两者都会在用户真正更换头像时变化，足以失效旧缓存。
+/// 注意**不要**混入 `profile.updatedAt` —— 它会随每次统计重算（待办完成数、
+/// 专注分钟、连续打卡）而刷新，登录后云同步回写数据时会频繁变动，导致头像被
+/// 反复重新解码/读盘，滑动“我的”页面时产生明显卡顿。
 String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
-  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}|'
-      '${updatedAt?.millisecondsSinceEpoch ?? 0}';
+  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}';
 }
 
 Future<String> _copyLocalAvatarFile(XFile file) async {
