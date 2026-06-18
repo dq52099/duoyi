@@ -273,11 +273,16 @@ void main() {
       main,
       contains('const minStartupSyncInterval = Duration(minutes: 30)'),
     );
+    final startupTasks = main.substring(
+      main.indexOf('Future<void> runPostFrameStartupTasks() async'),
+      main.indexOf('// 首屏关键配置已完成'),
+    );
     expect(
-      main,
-      isNot(contains('Future<void>.delayed(const Duration(seconds: 30)')),
+      startupTasks,
+      isNot(contains('Duration(seconds: 30)')),
       reason: '用户反馈进入 App 约 30 秒后持续卡顿，启动期重任务不能集中在 30 秒附近触发。',
     );
+    expect(main, contains('achievementProvider.resumeUnlockFeedback'));
     for (final delayed in const [65, 75, 90, 110, 120]) {
       expect(
         main,

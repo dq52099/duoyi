@@ -665,13 +665,14 @@ void main() {
     });
   });
 
-  group('P14 - Habit 默认走柔和强提醒', () {
-    test('syncHabits 优先下发闹钟提醒，并携带确认打卡 payload', () async {
+  group('P14 - Habit 默认走弹出框提醒', () {
+    test('syncHabits 默认下发弹出框提醒，并携带确认打卡 payload', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final popup = _RecordingPopupSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm, popup: popup);
       final habit = Habit(
-        id: 'habit-alarm',
+        id: 'habit-popup',
         name: '喝水',
         remind: true,
         remindHour: 8,
@@ -682,40 +683,46 @@ void main() {
       await scheduler.syncHabits([habit]);
 
       expect(notif.scheduleHabitReminderCalls, isEmpty);
-      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
-      final call = alarm.scheduleDailyFullScreenCalls.single;
+      expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
+      expect(popup.scheduleRepeatingCalls, hasLength(1));
+      final call = popup.scheduleRepeatingCalls.single;
       expect(call.id, _idFor('habit_${habit.id}'));
       expect(call.hour, 8);
       expect(call.minute, 30);
       expect(call.weekdays, const [1, 3, 5]);
       expect(call.payload, 'duoyi://habit/${habit.id}?confirm=1');
-      expect(call.fullScreen, isTrue);
-      expect(call.snoozeMinutes, 5);
     });
 
-    test('syncHabits 在闹钟权限失败时回退到普通通知', () async {
+    test('syncHabits 弹出框不可用时不会记为已调度', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final popup = _RecordingPopupSink()..failRepeating = true;
+      final scheduler = ReminderScheduler(notif, alarm: alarm, popup: popup);
       final habit = Habit(
-        id: 'habit-fallback',
+        id: 'habit-popup-fallback',
         name: '晨练',
         remind: true,
         remindHour: 7,
         remindMinute: 15,
       );
-      alarm.failDailyFullScreenIds.add(_idFor('habit_${habit.id}'));
 
       await scheduler.syncHabits([habit]);
 
       expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
-      expect(notif.scheduleHabitReminderCalls, [habit.id]);
+      expect(notif.scheduleHabitReminderCalls, isEmpty);
+      expect(popup.scheduleRepeatingCalls, isEmpty);
+
+      popup.failRepeating = false;
+      await scheduler.syncHabits([habit]);
+
+      expect(popup.scheduleRepeatingCalls, hasLength(1));
     });
 
     test('syncHabits 关闭提醒时同时清理旧版 alarm 遗留调度', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final popup = _RecordingPopupSink();
+      final scheduler = ReminderScheduler(notif, alarm: alarm, popup: popup);
       final habit = Habit(
         id: 'habit-fallback',
         name: '晨练',
@@ -727,11 +734,13 @@ void main() {
       await scheduler.syncHabits([habit]);
       notif.cancelHabitReminderCalls.clear();
       alarm.cancelCalls.clear();
+      popup.cancelCalls.clear();
       await scheduler.syncHabits([habit.copyWith(remind: false)]);
 
-      expect(alarm.scheduleDailyFullScreenCalls, hasLength(1));
+      expect(popup.scheduleRepeatingCalls, hasLength(1));
       expect(notif.cancelHabitReminderCalls, [habit.id]);
       expect(alarm.cancelCalls, contains(_idFor('habit_${habit.id}')));
+      expect(popup.cancelCalls, contains(_idFor('habit_${habit.id}')));
     });
   });
 }
@@ -860,6 +869,26 @@ class _ScheduleDailyFullScreenCall {
     required this.vibrate,
     required this.snoozeMinutes,
     required this.repeatCount,
+  });
+}
+
+class _ScheduleRepeatingPopupCall {
+  final int id;
+  final String title;
+  final String body;
+  final int hour;
+  final int minute;
+  final List<int>? weekdays;
+  final String? payload;
+
+  const _ScheduleRepeatingPopupCall({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.hour,
+    required this.minute,
+    required this.weekdays,
+    required this.payload,
   });
 }
 
@@ -1038,6 +1067,52 @@ class _RecordingAlarmSink implements ReminderAlarmSink {
         vibrate: vibrate,
         snoozeMinutes: snoozeMinutes,
         repeatCount: repeatCount,
+      ),
+    );
+  }
+
+  @override
+  Future<void> cancel(int id) async {
+    cancelCalls.add(id);
+  }
+}
+
+class _RecordingPopupSink implements ReminderPopupSink {
+  final List<_ScheduleRepeatingPopupCall> scheduleRepeatingCalls = [];
+  final List<int> cancelCalls = [];
+  bool failRepeating = false;
+
+  @override
+  Future<void> scheduleOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> scheduleRepeating({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    if (failRepeating) {
+      throw StateError('forced popup repeating failure: $id');
+    }
+    scheduleRepeatingCalls.add(
+      _ScheduleRepeatingPopupCall(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: payload,
       ),
     );
   }

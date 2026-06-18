@@ -53,11 +53,16 @@ void main() {
       );
       expect(main, contains('delay: const Duration(seconds: 110)'));
       expect(main, contains('delay: const Duration(seconds: 120)'));
+      final startupTasks = main.substring(
+        main.indexOf('Future<void> runPostFrameStartupTasks() async'),
+        main.indexOf('// 首屏关键配置已完成'),
+      );
       expect(
-        main,
-        isNot(contains('Future<void>.delayed(const Duration(seconds: 30)')),
+        startupTasks,
+        isNot(contains('Duration(seconds: 30)')),
         reason: '30 秒附近不能再启动重型同步、通知或小组件任务。',
       );
+      expect(main, contains('achievementProvider.resumeUnlockFeedback'));
       expect(main, contains('Timer(const Duration(milliseconds: 2200)'));
       expect(main, contains('var homeWidgetPushInFlight = false'));
       expect(main, contains('homeWidgetPushQueued = true'));

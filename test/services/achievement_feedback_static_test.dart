@@ -11,9 +11,11 @@ void main() {
 
     expect(provider, contains('_pendingUnlockedFeedback'));
     expect(provider, contains('takeUnlockedFeedback'));
+    expect(provider, contains('_pendingUnlockedFeedback.addAll('));
+    expect(provider, contains('newlyUnlocked.where('));
     expect(
       provider,
-      contains('_pendingUnlockedFeedback.addAll(newlyUnlocked)'),
+      contains('!_notifiedAchievementIds.contains(achievement.id)'),
     );
     expect(main, contains('addListener(_showAchievementFeedback)'));
     expect(main, contains('removeListener(_showAchievementFeedback)'));

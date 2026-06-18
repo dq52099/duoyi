@@ -720,12 +720,17 @@ void main() {
       'lib/providers/user_provider.dart',
     ).readAsStringSync();
     final backendSource = File('backend/main.py').readAsStringSync();
+    final recalcBody = providerSource.substring(
+      providerSource.indexOf('void recalc({'),
+      providerSource.indexOf('void _notifyListenersSafely()'),
+    );
 
     expect(modelSource, contains('DateTime? updatedAt;'));
     expect(modelSource, contains("'updatedAt': updatedAt?.toIso8601String()"));
+    expect(recalcBody, isNot(contains('updatedAt')));
     expect(
       providerSource,
-      isNot(contains('_profile.updatedAt = DateTime.now()')),
+      contains('if (touchUpdatedAt || _profile.updatedAt == null)'),
     );
     expect(
       backendSource,
