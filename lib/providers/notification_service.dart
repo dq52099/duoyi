@@ -1425,7 +1425,7 @@ class NotificationService extends ChangeNotifier
     bool fullScreenAlarm = true,
   }) {
     return switch (_diagnosticReminderKind(kind)) {
-      ReminderKind.popup => '弹出提醒',
+      ReminderKind.popup => '弹出提醒/后台通知兜底',
       ReminderKind.alarm => fullScreenAlarm ? '全屏闹钟提醒' : '闹钟提醒',
       ReminderKind.push || ReminderKind.email || ReminderKind.off => '普通通知',
     };
@@ -1502,15 +1502,19 @@ class NotificationService extends ChangeNotifier
     required String payload,
   }) async {
     if (popup == null) {
-      return _scheduleOnceOrRecord(
+      final scheduled = await _scheduleOnceOrRecord(
         id: id,
         title: title,
         body: body,
         when: when,
-        payload: payload,
-        issueTitle: '定时弹出测试注册失败',
+        payload: _popupDiagnosticFallbackPayload(payload),
+        issueTitle: '定时弹出测试通知兜底注册失败',
         requestIfNeeded: true,
       );
+      if (scheduled && _lastScheduleIssue == null) {
+        _recordPopupDiagnosticFallback(scheduledTime: when);
+      }
+      return scheduled;
     }
     try {
       await popup.scheduleOnce(
@@ -1523,13 +1527,49 @@ class NotificationService extends ChangeNotifier
       return true;
     } catch (e, st) {
       debugPrint('[NotificationService] scheduled popup test failed: $e\n$st');
+      final scheduled = await _scheduleOnceOrRecord(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: _popupDiagnosticFallbackPayload(payload),
+        issueTitle: '定时弹出测试通知兜底注册失败',
+        requestIfNeeded: true,
+      );
+      if (scheduled && _lastScheduleIssue == null) {
+        _recordPopupDiagnosticFallback(scheduledTime: when, error: e);
+        return true;
+      }
+      if (scheduled) return true;
       _recordScheduleIssue(
         title: '定时弹出测试注册失败',
-        message: '弹出提醒注册失败，请确认应用仍在前台或已允许通知兜底。',
+        message: '弹出提醒和后台通知兜底都未注册。请确认应用仍在前台、系统通知权限已开启后重试。($e)',
         scheduledTime: when,
       );
-      rethrow;
+      return false;
     }
+  }
+
+  String _popupDiagnosticFallbackPayload(String payload) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null) return payload;
+    final query = Map<String, String>.from(uri.queryParameters)
+      ..putIfAbsent('fallback', () => 'popup_notification');
+    return uri.replace(queryParameters: query).toString();
+  }
+
+  void _recordPopupDiagnosticFallback({
+    required DateTime scheduledTime,
+    Object? error,
+  }) {
+    final reason = error == null ? '当前未配置前台弹出框出口' : '前台弹出框出口注册失败';
+    final detail = error == null ? '' : '($error)';
+    _recordScheduleIssue(
+      title: '弹出测试已降级为普通通知',
+      message: '$reason，已改用系统通知作为 1 分钟后测试；应用在后台或锁屏时不能显示前台弹窗，只会收到通知兜底。$detail',
+      scheduledTime: scheduledTime,
+      blocking: false,
+    );
   }
 
   Future<bool> _scheduleAlarmDiagnosticOrRecord({

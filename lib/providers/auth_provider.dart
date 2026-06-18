@@ -109,6 +109,11 @@ class AuthProvider extends ChangeNotifier {
   int _stateMutationSerial = 0;
   int _refreshMeRequestSerial = 0;
   int _lastAppliedRefreshMeRequestSerial = 0;
+  static const _refreshMeMinInterval = Duration(seconds: 30);
+  Future<void>? _refreshMeInFlight;
+  DateTime? _lastRefreshMeAt;
+  String? _lastRefreshMeToken;
+  int _lastRefreshMeMutationSerial = -1;
   static const _serverConfigRefreshTtl = Duration(seconds: 30);
   Future<void>? _serverConfigRefreshInFlight;
   DateTime? _lastServerConfigRefreshAt;
@@ -591,7 +596,30 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshMe({String reason = 'manual'}) async {
+  Future<void> refreshMe({String reason = 'manual', bool force = false}) {
+    if (!_state.isLoggedIn) return Future<void>.value();
+    final inFlight = _refreshMeInFlight;
+    if (inFlight != null) return inFlight;
+    final now = DateTime.now();
+    final lastRefreshAt = _lastRefreshMeAt;
+    if (!force &&
+        _lastRefreshMeToken == _state.token &&
+        _lastRefreshMeMutationSerial == _stateMutationSerial &&
+        lastRefreshAt != null &&
+        now.difference(lastRefreshAt) < _refreshMeMinInterval) {
+      debugPrint('[auth-sync] refreshMe skipped: throttled reason=$reason');
+      return Future<void>.value();
+    }
+    final future = _refreshMeNow(reason: reason);
+    _refreshMeInFlight = future;
+    return future.whenComplete(() {
+      if (_refreshMeInFlight == future) {
+        _refreshMeInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _refreshMeNow({required String reason}) async {
     if (!_state.isLoggedIn) return;
     final requestId = ++_refreshMeRequestSerial;
     final mutationSerialAtStart = _stateMutationSerial;
@@ -603,6 +631,9 @@ class AuthProvider extends ChangeNotifier {
     );
     try {
       final me = await _getFirstAvailable(const ['/api/auth/me', '/api/me']);
+      _lastRefreshMeAt = DateTime.now();
+      _lastRefreshMeToken = tokenAtStart;
+      _lastRefreshMeMutationSerial = mutationSerialAtStart;
       if (requestId != _refreshMeRequestSerial ||
           requestId < _lastAppliedRefreshMeRequestSerial) {
         debugPrint('[auth-sync] refreshMe#$requestId skipped: older response');

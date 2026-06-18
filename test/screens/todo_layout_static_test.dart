@@ -26,12 +26,12 @@ void main() {
     expect(
       summary,
       contains(
-        'final remaining = dailyRemaining + todoCount;',
+        'final remaining = dailyRemaining + todoCount + activeGoalCount;',
       ),
     );
     expect(
       summary,
-      isNot(contains('final remaining = dailyRemaining + todoCount + activeGoalCount;')),
+      isNot(contains('final remaining = dailyRemaining + todoCount;')),
     );
     expect(summary, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
     expect(

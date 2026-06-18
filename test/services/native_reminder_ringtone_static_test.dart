@@ -375,7 +375,10 @@ void main() {
     final fullScreenActivityStart = manifest.indexOf(
       'android:name=".ReminderFullScreenActivity"',
     );
-    final fullScreenActivityEnd = manifest.indexOf('/>', fullScreenActivityStart);
+    final fullScreenActivityEnd = manifest.indexOf(
+      '/>',
+      fullScreenActivityStart,
+    );
     expect(fullScreenActivityStart, greaterThanOrEqualTo(0));
     expect(fullScreenActivityEnd, greaterThan(fullScreenActivityStart));
     final fullScreenActivityManifest = manifest.substring(
@@ -383,11 +386,27 @@ void main() {
       fullScreenActivityEnd,
     );
     expect(fullScreenActivityManifest, contains('android:exported="false"'));
-    expect(fullScreenActivityManifest, contains('android:showWhenLocked="true"'));
+    expect(
+      fullScreenActivityManifest,
+      contains('android:showWhenLocked="true"'),
+    );
     expect(fullScreenActivityManifest, contains('android:turnScreenOn="true"'));
-    expect(service, contains('launchFullScreenReminder(id, title, body, payload, rootId)'));
-    expect(service, contains('ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)'));
-    expect(receiver, contains('ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload)'));
+    expect(
+      service,
+      contains('launchFullScreenReminder(id, title, body, payload, rootId)'),
+    );
+    expect(
+      service,
+      contains(
+        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)',
+      ),
+    );
+    expect(
+      receiver,
+      contains(
+        'ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload)',
+      ),
+    );
     expect(
       service,
       contains('setFullScreenIntent(fullScreenIntent, fullScreen)'),
@@ -403,11 +422,18 @@ void main() {
     expect(service, contains('NotificationCompat.PRIORITY_HIGH'));
     expect(service, isNot(contains('setOnlyAlertOnce(true)')));
     expect(service, contains('longArrayOf(0, 220, 420, 220)'));
-    expect(service, contains('addAction(0, "停止响铃"'));
+    expect(service, contains('addAction(0, "停止闹钟"'));
     expect(service, contains('.setAction(actionStop)'));
     expect(service, contains('.putExtra("id", id)'));
     expect(service, contains('cancelStatusNotification'));
-    expect(service, contains(r'addAction(0, "稍后 $snoozeMinutes 分钟"'));
+    expect(service, contains(r'addAction(0, "稍后提醒 $snoozeMinutes 分钟"'));
+    expect(service, contains('notificationDisplayTitle()'));
+    expect(service, contains('多仪 · 强提醒正在响铃'));
+    expect(service, contains('notificationDisplayBody(title, body)'));
+    expect(
+      service,
+      contains('NotificationCompat.BigTextStyle().bigText(displayBody)'),
+    );
     expect(service, contains('REMINDER_RING_SNOOZE'));
     expect(service, contains('ReminderRingtoneScheduler.scheduleFollowUpOnce'));
     expect(
@@ -647,12 +673,26 @@ void main() {
     expect(mainActivity, contains('override fun onCreate'));
     expect(mainActivity, contains('override fun onNewIntent'));
     expect(service, contains('openAppIntent(payload, stopRingtone = true)'));
-    expect(service, contains('ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)'));
-    expect(service, contains('launchFullScreenReminder(id, title, body, payload, rootId)'));
+    expect(
+      service,
+      contains(
+        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)',
+      ),
+    );
+    expect(
+      service,
+      contains('launchFullScreenReminder(id, title, body, payload, rootId)'),
+    );
     expect(fullScreenActivity, contains('setShowWhenLocked(true)'));
     expect(fullScreenActivity, contains('setTurnScreenOn(true)'));
-    expect(fullScreenActivity, contains('ReminderRingtoneService.stopServiceIntent'));
-    expect(fullScreenActivity, contains('mainActivityIntent(this, payload, stopRingtone = true)'));
+    expect(
+      fullScreenActivity,
+      contains('ReminderRingtoneService.stopServiceIntent'),
+    );
+    expect(
+      fullScreenActivity,
+      contains('mainActivityIntent(this, payload, stopRingtone = true)'),
+    );
     expect(service, contains('reason = "full_screen_launch_failed"'));
     expect(service, contains('extraStopRingtone'));
     expect(mainActivity, contains('stopReminderRingtoneIfRequested(intent)'));
@@ -700,6 +740,126 @@ void main() {
           'void handleNotificationPayload(String payload) {\n    unawaited(NativeReminderRingtone.stopActive());',
         ),
       ),
+    );
+  });
+
+  test('Android 原生强提醒不依赖先测试即可准备渠道并兜底全屏失败', () {
+    final scheduler = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
+    ).readAsStringSync();
+    final service = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+    ).readAsStringSync();
+    final receiver = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt',
+    ).readAsStringSync();
+    final fullScreenActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderFullScreenActivity.kt',
+    ).readAsStringSync();
+
+    expect(scheduler, contains('prepareDeliveryInfrastructure(context)'));
+    expect(
+      scheduler,
+      contains(
+        'ReminderRingtoneService.ensureStatusNotificationChannel(context)',
+      ),
+      reason: '首次只注册定时闹钟时也要预先创建内置铃声状态渠道。',
+    );
+    expect(
+      scheduler,
+      contains(
+        'ReminderRingtoneReceiver.ensureFallbackNotificationChannel(context)',
+      ),
+      reason: '首次只注册定时闹钟时也要预先创建兜底通知渠道。',
+    );
+    final showNowStart = scheduler.indexOf('fun showNow(');
+    final scheduleOnceStart = scheduler.indexOf('fun scheduleOnce(');
+    final followUpStart = scheduler.indexOf('fun scheduleFollowUpOnce(');
+    final dailyStart = scheduler.indexOf('fun scheduleDaily(');
+    expect(showNowStart, greaterThanOrEqualTo(0));
+    expect(scheduleOnceStart, greaterThan(showNowStart));
+    expect(followUpStart, greaterThan(scheduleOnceStart));
+    expect(dailyStart, greaterThan(followUpStart));
+    final showNow = scheduler.substring(showNowStart, scheduleOnceStart);
+    final once = scheduler.substring(scheduleOnceStart, followUpStart);
+    final followUp = scheduler.substring(
+      followUpStart,
+      scheduler.indexOf('fun reserveDelivery('),
+    );
+    final daily = scheduler.substring(
+      dailyStart,
+      scheduler.indexOf('fun rescheduleFromReceiver'),
+    );
+    expect(
+      showNow.indexOf('prepareDeliveryInfrastructure(context)'),
+      lessThan(showNow.indexOf('startRingtoneService(context, intent)')),
+    );
+    expect(
+      once.indexOf('prepareDeliveryInfrastructure(context)'),
+      lessThan(
+        once.indexOf('if (!schedule(context, id, triggerAtMillis, intent))'),
+      ),
+    );
+    expect(
+      followUp.indexOf('prepareDeliveryInfrastructure(context)'),
+      lessThan(
+        followUp.indexOf(
+          'if (!schedule(context, id, triggerAtMillis, intent))',
+        ),
+      ),
+    );
+    expect(
+      daily.indexOf('prepareDeliveryInfrastructure(context)'),
+      lessThan(
+        daily.indexOf('if (!schedule(context, id, triggerAtMillis, intent))'),
+      ),
+    );
+
+    expect(
+      service,
+      contains('fun ensureStatusNotificationChannel(context: Context)'),
+    );
+    expect(service, contains('ensureStatusNotificationChannel(this)'));
+    expect(
+      receiver,
+      contains('fun ensureFallbackNotificationChannel(context: Context)'),
+    );
+    expect(
+      receiver.indexOf('ensureFallbackNotificationChannel(context)'),
+      lessThan(
+        receiver.indexOf(
+          'NotificationCompat.Builder(context, fallbackChannelId)',
+        ),
+      ),
+    );
+    expect(
+      service,
+      contains(
+        'if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId))',
+      ),
+    );
+    expect(
+      service,
+      contains(
+        'ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId)',
+      ),
+    );
+    expect(service, contains('): Boolean'));
+    expect(service, contains('}.getOrDefault(false)'));
+
+    expect(fullScreenActivity, contains('ScrollView'));
+    expect(fullScreenActivity, contains('isFillViewport = true'));
+    expect(fullScreenActivity, contains('多仪 · 强提醒正在响铃'));
+    expect(fullScreenActivity, contains('提醒内容'));
+    expect(fullScreenActivity, contains('停止闹钟'));
+    expect(fullScreenActivity, contains('打开详情'));
+    expect(fullScreenActivity, contains('letterSpacing = 0f'));
+    expect(fullScreenActivity, isNot(contains('🔔')));
+    expect(receiver, contains('notificationDisplayTitle()'));
+    expect(receiver, contains('notificationDisplayBody(title, body)'));
+    expect(
+      receiver,
+      contains('NotificationCompat.BigTextStyle().bigText(displayBody)'),
     );
   });
 

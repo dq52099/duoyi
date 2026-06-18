@@ -152,13 +152,17 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
               return;
             }
 
-            final reminderRule = _habitPrimaryReminder(reminderPlan);
+            final normalizedReminderPlan = _normalizeHabitReminderPlan(
+              reminderPlan,
+            );
+            final reminderRules = _activeHabitReminderRules(
+              normalizedReminderPlan,
+            );
+            final reminderRule = reminderRules.isEmpty
+                ? null
+                : reminderRules.first;
             final hasReminder =
-                reminderPlan.enabled &&
-                reminderRule != null &&
-                reminderRule.enabled &&
-                reminderRule.hour != null &&
-                reminderRule.minute != null;
+                normalizedReminderPlan.enabled && reminderRule != null;
             final nextActiveWeekdays =
                 hasReminder &&
                     reminderRule.type == ReminderRuleType.weeklyTime &&
@@ -173,7 +177,9 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
               final granted =
                   notificationService == null ||
                   await notificationService.ensureReadyForReminder(
-                    scheduledTime: _nextHabitReminderTrigger(reminderRule),
+                    scheduledTime: _nextHabitReminderTriggerForPlan(
+                      reminderRules,
+                    ),
                     issueTitle: I18n.tr('habit.error.reminder_register_failed'),
                     relatedId: habit.id,
                   );
@@ -215,7 +221,7 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
               remindHour: hasReminder ? reminderRule.hour : null,
               remindMinute: hasReminder ? reminderRule.minute : null,
               reminderPlan: hasReminder
-                  ? reminderPlan
+                  ? ReminderPlan(enabled: true, rules: reminderRules)
                   : const ReminderPlan.disabled(),
             );
 
@@ -490,7 +496,11 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 hasAnchorDate: false,
                 maxRules: 12,
                 defaultKind: ReminderKind.popup,
-                onChanged: (plan) => setSt(() => reminderPlan = plan),
+                showTypeSelector: false,
+                showKindSelector: false,
+                onChanged: (plan) => setSt(
+                  () => reminderPlan = _normalizeHabitReminderPlan(plan),
+                ),
               ),
               const SizedBox(height: DesignTokens.spaceSm),
               Builder(
@@ -1207,7 +1217,7 @@ String _habitCountLabel(int count, String unit) {
 
 ReminderPlan _habitReminderPlan(Habit habit) {
   if (habit.reminderPlan.enabled && habit.reminderPlan.rules.isNotEmpty) {
-    return habit.reminderPlan;
+    return _normalizeHabitReminderPlan(habit.reminderPlan);
   }
   if (!habit.remind || habit.remindHour == null || habit.remindMinute == null) {
     return const ReminderPlan.disabled();
@@ -1228,7 +1238,7 @@ ReminderPlan _habitReminderPlan(Habit habit) {
         type: fullWeek
             ? ReminderRuleType.dailyTime
             : ReminderRuleType.weeklyTime,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.popup,
         hour: habit.remindHour,
         minute: habit.remindMinute,
         weekdays: fullWeek ? const <int>[] : weekdays,
@@ -1237,11 +1247,64 @@ ReminderPlan _habitReminderPlan(Habit habit) {
   );
 }
 
-ReminderRule? _habitPrimaryReminder(ReminderPlan plan) {
-  for (final rule in plan.rules) {
-    if (rule.enabled) return rule;
+ReminderPlan _normalizeHabitReminderPlan(ReminderPlan plan) {
+  final rules = plan.rules.map(_normalizeHabitReminderRule).toList();
+  return ReminderPlan(enabled: plan.enabled, rules: rules);
+}
+
+ReminderRule _normalizeHabitReminderRule(ReminderRule rule) {
+  var type = rule.type;
+  var weekdays = rule.weekdays;
+  if (type == ReminderRuleType.absolute ||
+      type == ReminderRuleType.relativeToDue) {
+    type = ReminderRuleType.dailyTime;
+    weekdays = const <int>[];
+  } else if (type == ReminderRuleType.weeklyTime) {
+    weekdays =
+        rule.weekdays.where((day) => day >= 1 && day <= 7).toSet().toList()
+          ..sort();
+    if (weekdays.isEmpty) type = ReminderRuleType.dailyTime;
+  } else {
+    weekdays = const <int>[];
   }
-  return plan.rules.isEmpty ? null : plan.rules.first;
+
+  return rule.copyWith(
+    type: type,
+    kind: ReminderKind.popup,
+    weekdays: weekdays,
+    fullScreen: false,
+    snoozeMinutes: 0,
+    repeatCount: 0,
+  );
+}
+
+List<ReminderRule> _activeHabitReminderRules(ReminderPlan plan) {
+  if (!plan.enabled) return const <ReminderRule>[];
+  final rules = <ReminderRule>[];
+  for (final rule in plan.rules) {
+    if (!rule.enabled || rule.kind == ReminderKind.off) continue;
+    if (rule.hour == null || rule.minute == null) continue;
+    rules.add(_normalizeHabitReminderRule(rule));
+  }
+  return rules;
+}
+
+ReminderRule? _habitPrimaryReminder(ReminderPlan plan) {
+  final activeRules = _activeHabitReminderRules(plan);
+  if (activeRules.isNotEmpty) return activeRules.first;
+  return plan.rules.isEmpty
+      ? null
+      : _normalizeHabitReminderRule(plan.rules.first);
+}
+
+DateTime? _nextHabitReminderTriggerForPlan(List<ReminderRule> rules) {
+  DateTime? next;
+  for (final rule in rules) {
+    final trigger = _nextHabitReminderTrigger(rule);
+    if (trigger == null) continue;
+    if (next == null || trigger.isBefore(next)) next = trigger;
+  }
+  return next;
 }
 
 DateTime? _nextHabitReminderTrigger(ReminderRule rule) {

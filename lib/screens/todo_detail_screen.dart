@@ -240,11 +240,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           return;
         }
       }
-      await provider.updateTodo(
-        widget.todoId,
-        nextTodo,
-        waitForReminderSync: false,
-      );
+      await provider.updateTodo(widget.todoId, nextTodo);
       if (!mounted) return;
 
       // 刷新本地 _todo 引用与基线，便于继续编辑。
@@ -1347,10 +1343,9 @@ Future<bool> preflightTodoReminderSave(
           const Duration(seconds: 5),
           onTimeout: () => false,
         )) ||
-        (await AlarmService.instance.requestFullScreenIntentPermission().timeout(
-          const Duration(seconds: 8),
-          onTimeout: () => false,
-        ));
+        (await AlarmService.instance
+            .requestFullScreenIntentPermission()
+            .timeout(const Duration(seconds: 8), onTimeout: () => false));
     if (!context.mounted) return false;
     if (!fullScreenGranted) {
       warnings.add('全屏提醒权限未开启，锁屏弹窗可能不可用');

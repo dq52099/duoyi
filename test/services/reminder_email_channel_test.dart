@@ -97,8 +97,9 @@ void main() {
       expect(
         popupSink,
         contains('_showOrFallback('),
-        reason: '用户选择弹出框时，后台应保留系统通知兜底，前台显示弹窗前再取消兜底。',
+        reason: '用户选择弹出框时，后台应保留系统通知兜底，前台确认弹窗显示后再取消兜底。',
       );
+      expect(popupSink, contains('cancelFallbackAfterDialog'));
       expect(popupSink, contains('_visibleDialogIds.add(id)'));
       expect(popupSink, contains('_visibleNavigators'));
       expect(popupSink, contains('await navigator.maybePop();'));

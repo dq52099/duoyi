@@ -10,6 +10,20 @@ class UserProvider extends ChangeNotifier {
 
   UserProfile get profile => _profile;
 
+  String syncSignature() {
+    final profile = _profile;
+    return [
+      profile.username,
+      profile.avatarInitials,
+      profile.displayName,
+      profile.email,
+      profile.emailVerified.toString(),
+      profile.avatarUrl,
+      profile.bio,
+      profile.updatedAt?.toIso8601String() ?? '',
+    ].join('|');
+  }
+
   /// Rebuild stats from data providers (called by MainShell periodically)
   void recalc({
     int completedTodos = 0,
@@ -28,7 +42,6 @@ class UserProvider extends ChangeNotifier {
     _profile.totalFocusMinutes = totalFocusMinutes;
     _profile.currentStreak = currentStreak;
     _profile.bestStreak = bestStreak;
-    _profile.updatedAt = DateTime.now();
     // ignore: discarded_futures
     _saveThenNotifySafely();
   }
@@ -127,24 +140,45 @@ class UserProvider extends ChangeNotifier {
   }) async {
     final cleanName = username.trim().isEmpty ? '用户' : username.trim();
     final cleanInitials = (avatarInitials ?? '').trim();
-    _profile.username = cleanName;
-    _profile.avatarInitials = cleanInitials.isNotEmpty
+    final nextAvatarInitials = cleanInitials.isNotEmpty
         ? _firstCodePoint(cleanInitials)
         : _firstCodePoint(cleanName);
+    final nextDisplayName = displayName == null
+        ? _profile.displayName
+        : displayName.trim();
+    final nextEmail = email == null ? _profile.email : email.trim();
+    final nextEmailVerified = emailVerified ?? _profile.emailVerified;
+    final nextAvatarUrl = avatarUrl == null
+        ? _profile.avatarUrl
+        : avatarUrl.trim();
+    final nextBio = bio == null ? _profile.bio : bio.trim();
+
+    final unchanged =
+        _profile.username == cleanName &&
+        _profile.avatarInitials == nextAvatarInitials &&
+        _profile.displayName == nextDisplayName &&
+        _profile.email == nextEmail &&
+        _profile.emailVerified == nextEmailVerified &&
+        _profile.avatarUrl == nextAvatarUrl &&
+        _profile.bio == nextBio;
+    if (unchanged) return;
+
+    _profile.username = cleanName;
+    _profile.avatarInitials = nextAvatarInitials;
     if (displayName != null) {
-      _profile.displayName = displayName.trim();
+      _profile.displayName = nextDisplayName;
     }
     if (email != null) {
-      _profile.email = email.trim();
+      _profile.email = nextEmail;
     }
     if (emailVerified != null) {
-      _profile.emailVerified = emailVerified;
+      _profile.emailVerified = nextEmailVerified;
     }
     if (avatarUrl != null) {
-      _profile.avatarUrl = avatarUrl.trim();
+      _profile.avatarUrl = nextAvatarUrl;
     }
     if (bio != null) {
-      _profile.bio = bio.trim();
+      _profile.bio = nextBio;
     }
     if (touchUpdatedAt || _profile.updatedAt == null) {
       _profile.updatedAt = DateTime.now();

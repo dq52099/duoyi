@@ -186,7 +186,12 @@ void main() {
     expect(source, contains('syncNow();'));
     expect(source, contains('_autoSyncTimer?.cancel();'));
     expect(source, contains("'user_profile': 'user_profile'"));
-    expect(mainSource, contains('userProvider.addListener(markDirty);'));
+    expect(
+      mainSource,
+      contains(
+        'userProvider.addListener(markUserProfileDirtyOnEditableChange);',
+      ),
+    );
     expect(
       mainSource,
       contains('locationReminderProvider.addListener(markDirty);'),
@@ -556,7 +561,12 @@ void main() {
       contains('reloadTasks.add(userProvider.loadFromStorage)'),
     );
     expect(mainSource, contains('_runSyncReloadTasksInBatches(reloadTasks)'));
-    expect(mainSource, contains('userProvider.addListener(markDirty);'));
+    expect(
+      mainSource,
+      contains(
+        'userProvider.addListener(markUserProfileDirtyOnEditableChange);',
+      ),
+    );
   });
 
   test('同步回调携带实际变更集合，main 只刷新命中的 provider', () {
@@ -704,7 +714,7 @@ void main() {
     );
   });
 
-  test('个人资料带更新时间，服务端可以按 updatedAt 合并新资料', () {
+  test('个人资料仍可同步但统计重算不会刷新资料更新时间', () {
     final modelSource = File('lib/models/user_profile.dart').readAsStringSync();
     final providerSource = File(
       'lib/providers/user_provider.dart',
@@ -713,7 +723,10 @@ void main() {
 
     expect(modelSource, contains('DateTime? updatedAt;'));
     expect(modelSource, contains("'updatedAt': updatedAt?.toIso8601String()"));
-    expect(providerSource, contains('_profile.updatedAt = DateTime.now()'));
+    expect(
+      providerSource,
+      isNot(contains('_profile.updatedAt = DateTime.now()')),
+    );
     expect(
       backendSource,
       contains('def _merge_dict(server: dict, client: dict)'),

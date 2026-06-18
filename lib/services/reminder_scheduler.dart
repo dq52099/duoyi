@@ -1241,8 +1241,8 @@ class ReminderScheduler {
         // 多提醒时间习惯被关闭时，主 id 之外的派生 id 不在 wanted 内、也不会
         // 进入 sweep，需要在此显式清理，避免遗漏的提醒成为孤儿继续触发。
         final baseId = _idFor('habit_${h.id}');
-        final storedIds = (await registry.idsByObject('habit'))[h.id] ??
-            const <int>{};
+        final storedIds =
+            (await registry.idsByObject('habit'))[h.id] ?? const <int>{};
         final extraIds = storedIds.where((id) => id != baseId).toSet();
         final cancelled = await _cancelHabit(h.id);
         final extraCancelled = extraIds.isEmpty
@@ -2679,8 +2679,9 @@ class ReminderScheduler {
     for (final objectId in scheduled.keys.toList()) {
       final priorRules = scheduled[objectId] ?? const {};
       final nextRules = wanted[objectId];
-      final blockedRegistryIds =
-          blockedRegistryIdsByObject[objectId] ?? const <int>{};
+      final blockedRegistryIds = <int>{
+        ...?blockedRegistryIdsByObject[objectId],
+      };
       if (nextRules == null) {
         final rulesCancelled = await _cancelRuleObjects(
           objectType,
@@ -2703,7 +2704,6 @@ class ReminderScheduler {
       }
 
       final kept = <String, _ScheduledRule>{};
-      final blockedRuleIds = <String>{};
       for (final priorEntry in priorRules.entries) {
         if (!nextRules.containsKey(priorEntry.key)) {
           final cancelled = await _cancelRule(
@@ -2713,7 +2713,6 @@ class ReminderScheduler {
           );
           if (!cancelled) {
             kept[priorEntry.key] = priorEntry.value;
-            blockedRuleIds.add(priorEntry.key);
           }
         }
       }
@@ -2724,21 +2723,17 @@ class ReminderScheduler {
         final needsCancel =
             prior != null && !_sameScheduledRule(prior, nextRule);
         if (needsCancel) {
-          final cancelled = await _cancelRule(
+          await _cancelRule(
             objectType,
             objectId,
             nextEntry.key,
+            blocking: false,
           );
-          if (!cancelled) {
-            kept[nextEntry.key] = prior;
-            blockedRuleIds.add(nextEntry.key);
-          }
         }
       }
 
       await cancelLegacy(objectId, blocking: false);
       for (final nextRule in nextRules.values) {
-        if (blockedRuleIds.contains(nextRule.ruleId)) continue;
         final prior = priorRules[nextRule.ruleId];
         if (prior != null && _sameScheduledRule(prior, nextRule)) {
           if (await _scheduledRuleStillPending(nextRule)) {
@@ -2813,7 +2808,6 @@ class ReminderScheduler {
         );
         if (!cancelled && hadPersistedRuleIds) {
           blockedRegistryIds.addAll(nextRuleRegistryIds);
-          continue;
         }
         final ok = await _dispatchRule(nextRule);
         if (ok) {
@@ -3846,12 +3840,10 @@ class ReminderScheduler {
             type: weekdays.length == 7
                 ? ReminderRuleType.dailyTime
                 : ReminderRuleType.weeklyTime,
-            kind: ReminderKind.alarm,
+            kind: ReminderKind.popup,
             hour: habit.remindHour,
             minute: habit.remindMinute,
             weekdays: weekdays.length == 7 ? const <int>[] : weekdays,
-            fullScreen: true,
-            snoozeMinutes: 5,
           ),
         ],
       );

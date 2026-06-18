@@ -10,7 +10,6 @@ typedef ReminderPopupForegroundGetter = bool Function();
 
 class ForegroundReminderPopupSink implements ReminderPopupSink {
   static const Duration _visiblePopupDuplicateWindow = Duration(seconds: 3);
-  static const Duration _fallbackCancelLead = Duration(milliseconds: 650);
 
   final ReminderPopupContextGetter contextGetter;
   final ReminderPopupPayloadOpener? onOpenPayload;
@@ -60,18 +59,18 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
           body: body,
           payload: payload,
           fallbackWasCancelled: false,
+          cancelFallbackAfterDialog: false,
         );
       });
       return;
     }
-    _timers[id] = Timer(_foregroundLeadDelay(delay), () {
+    _timers[id] = Timer(delay, () {
       _prepareForegroundDelivery(
         id: id,
         title: title,
         body: body,
-        when: when,
         payload: payload,
-        cancelFallbackBeforeDialog: hasFallback,
+        cancelFallbackAfterDialog: hasFallback,
       );
     });
   }
@@ -110,20 +109,20 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
             body: body,
             payload: payload,
             fallbackWasCancelled: false,
+            cancelFallbackAfterDialog: false,
             onForegroundDelivered: scheduleNext,
             onBackgroundDelivered: scheduleNext,
           );
         });
         return;
       }
-      _timers[id] = Timer(_foregroundLeadDelay(delay), () {
+      _timers[id] = Timer(delay, () {
         _prepareForegroundDelivery(
           id: id,
           title: title,
           body: body,
-          when: next,
           payload: payload,
-          cancelFallbackBeforeDialog: hasFallback,
+          cancelFallbackAfterDialog: hasFallback,
           onForegroundDelivered: () {
             unawaited(
               _scheduleFallbackRepeating(
@@ -144,11 +143,6 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     }
 
     scheduleNext();
-  }
-
-  Duration _foregroundLeadDelay(Duration delay) {
-    if (delay <= _fallbackCancelLead) return Duration.zero;
-    return delay - _fallbackCancelLead;
   }
 
   Future<void> _scheduleFallbackOnce({
@@ -209,59 +203,21 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     required int id,
     required String title,
     required String body,
-    required DateTime when,
     required String? payload,
-    required bool cancelFallbackBeforeDialog,
+    required bool cancelFallbackAfterDialog,
     VoidCallback? onForegroundDelivered,
     VoidCallback? onBackgroundDelivered,
   }) {
     _timers.remove(id);
-    final remaining = when.difference(DateTime.now());
     // 若此时应用已后台/上下文失效，让兜底通知接管，不再尝试前台弹窗。
     // 关键：**不取消**兜底通知，否则后台时用户什么都收不到。
     if (!isForegroundGetter()) {
-      _runAfterDue(
-        id: id,
-        delay: remaining,
-        callback: onBackgroundDelivered ?? onForegroundDelivered,
-      );
+      (onBackgroundDelivered ?? onForegroundDelivered)?.call();
       return;
     }
     final context = contextGetter();
     if (context == null || !context.mounted) {
-      _runAfterDue(
-        id: id,
-        delay: remaining,
-        callback: onBackgroundDelivered ?? onForegroundDelivered,
-      );
-      return;
-    }
-    // 仅当前台有效时才取消兜底，准备展示弹窗。
-    if (cancelFallbackBeforeDialog) {
-      unawaited(
-        notificationFallback?.cancel(id).catchError((
-          Object error,
-          StackTrace st,
-        ) {
-          debugPrint(
-            '[ForegroundReminderPopupSink] fallback cancel failed: $error\n$st',
-          );
-        }),
-      );
-    }
-    if (remaining > Duration.zero) {
-      _timers[id] = Timer(remaining, () {
-        _timers.remove(id);
-        _showOrFallback(
-          id: id,
-          title: title,
-          body: body,
-          payload: payload,
-          fallbackWasCancelled: cancelFallbackBeforeDialog,
-          onForegroundDelivered: onForegroundDelivered,
-          onBackgroundDelivered: onBackgroundDelivered,
-        );
-      });
+      (onBackgroundDelivered ?? onForegroundDelivered)?.call();
       return;
     }
     _showOrFallback(
@@ -269,23 +225,11 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       title: title,
       body: body,
       payload: payload,
-      fallbackWasCancelled: cancelFallbackBeforeDialog,
+      fallbackWasCancelled: false,
+      cancelFallbackAfterDialog: cancelFallbackAfterDialog,
       onForegroundDelivered: onForegroundDelivered,
       onBackgroundDelivered: onBackgroundDelivered,
     );
-  }
-
-  void _runAfterDue({
-    required int id,
-    required Duration delay,
-    VoidCallback? callback,
-  }) {
-    if (callback == null) return;
-    final effectiveDelay = delay > Duration.zero ? delay : Duration.zero;
-    _timers[id] = Timer(effectiveDelay, () {
-      _timers.remove(id);
-      callback();
-    });
   }
 
   void _showOrFallback({
@@ -294,6 +238,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     required String body,
     required String? payload,
     required bool fallbackWasCancelled,
+    required bool cancelFallbackAfterDialog,
     VoidCallback? onForegroundDelivered,
     VoidCallback? onBackgroundDelivered,
   }) {
@@ -321,6 +266,18 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       }
       (onBackgroundDelivered ?? onForegroundDelivered)?.call();
       return;
+    }
+    if (cancelFallbackAfterDialog) {
+      unawaited(
+        notificationFallback?.cancel(id).catchError((
+          Object error,
+          StackTrace st,
+        ) {
+          debugPrint(
+            '[ForegroundReminderPopupSink] fallback cancel failed: $error\n$st',
+          );
+        }),
+      );
     }
     onForegroundDelivered?.call();
   }

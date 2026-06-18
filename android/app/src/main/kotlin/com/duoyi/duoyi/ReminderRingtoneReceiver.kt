@@ -134,9 +134,63 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 return false
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            ensureFallbackNotificationChannel(context)
             val fallbackSoundName = selectedFallbackSoundName(context)
             val fallbackSoundUri = fallbackSoundUri(context, fallbackSoundName)
+            val displayTitle = notificationDisplayTitle()
+            val displayBody = notificationDisplayBody(title, body)
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val openIntent = ReminderFullScreenActivity.mainActivityIntent(context, payload, stopRingtone = true)
+            val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
+            val fullScreenIntent = PendingIntent.getActivity(
+                context,
+                id + 4_000_000,
+                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload),
+                flags,
+            )
+            val notification = NotificationCompat.Builder(context, fallbackChannelId)
+                .setSmallIcon(R.drawable.ic_stat_duoyi)
+                .setContentTitle(displayTitle)
+                .setContentText(displayBody)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(displayBody))
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(contentIntent)
+                .setFullScreenIntent(fullScreenIntent, fullScreen)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setSound(fallbackSoundUri)
+                .setVibrate(longArrayOf(0, 220, 420, 220))
+                .setAutoCancel(true)
+                .build()
+            return runCatching {
+                manager.notify(fallbackNotificationId(id), notification)
+                true
+            }.onFailure {
+                Log.e("ReminderRingtoneReceiver", "fallback notification failed", it)
+                ReminderRingtoneScheduler.recordDeliveryIssue(
+                    context,
+                    id,
+                    "fallback_notification_failed",
+                    "系统未接受闹钟兜底通知，请检查通知权限、后台限制和渠道声音。",
+                )
+            }.getOrDefault(false)
+        }
+
+        private fun notificationDisplayTitle(): String {
+            return "多仪 · 强提醒正在响铃"
+        }
+
+        private fun notificationDisplayBody(title: String, body: String): String {
+            val cleanTitle = title.ifBlank { "多仪提醒" }
+            val cleanBody = body.ifBlank { "提醒时间到了" }
+            return if (cleanBody == cleanTitle) cleanTitle else "$cleanTitle：$cleanBody"
+        }
+
+        fun ensureFallbackNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val fallbackSoundName = selectedFallbackSoundName(context)
+                val fallbackSoundUri = fallbackSoundUri(context, fallbackSoundName)
                 if (fallbackChannelSoundNeedsRefresh(context, fallbackSoundName)) {
                     manager.deleteNotificationChannel(fallbackChannelId)
                 }
@@ -159,40 +213,6 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 markFallbackChannelSoundApplied(context, fallbackSoundName)
                 legacyFallbackChannelIds.forEach { manager.deleteNotificationChannel(it) }
             }
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            val openIntent = ReminderFullScreenActivity.mainActivityIntent(context, payload, stopRingtone = true)
-            val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
-            val fullScreenIntent = PendingIntent.getActivity(
-                context,
-                id + 4_000_000,
-                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload),
-                flags,
-            )
-            val notification = NotificationCompat.Builder(context, fallbackChannelId)
-                .setSmallIcon(R.drawable.ic_stat_duoyi)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setContentIntent(contentIntent)
-                .setFullScreenIntent(fullScreenIntent, fullScreen)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setSound(fallbackSoundUri)
-                .setVibrate(longArrayOf(0, 220, 420, 220))
-                .setAutoCancel(true)
-                .build()
-            return runCatching {
-                manager.notify(fallbackNotificationId(id), notification)
-                true
-            }.onFailure {
-                Log.e("ReminderRingtoneReceiver", "fallback notification failed", it)
-                ReminderRingtoneScheduler.recordDeliveryIssue(
-                    context,
-                    id,
-                    "fallback_notification_failed",
-                    "系统未接受闹钟兜底通知，请检查通知权限、后台限制和渠道声音。",
-                )
-            }.getOrDefault(false)
         }
 
         private fun fallbackNotificationId(id: Int): Int {

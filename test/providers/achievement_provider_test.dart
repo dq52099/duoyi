@@ -45,6 +45,99 @@ void main() {
   );
 
   test(
+    'cloud-restored wardrobe achievement is treated as an already notified baseline',
+    () async {
+      final unlockedAt = DateTime(2026, 6, 1).toIso8601String();
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'duoyi_achievements_unlocked': json.encode({
+          'theme_explorer': unlockedAt,
+        }),
+      });
+      final provider = AchievementProvider();
+
+      await provider.loadFromStorage();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getStringList('duoyi_achievements_notified'),
+        contains('theme_explorer'),
+      );
+
+      await provider.updateContext(
+        const AchievementContext(
+          totalTodos: 0,
+          completedTodos: 0,
+          longestHabitStreak: 0,
+          habitCount: 0,
+          focusMinutes: 0,
+          focusSessions: 0,
+          diaryStreak: 0,
+          diaryCount: 0,
+          goalsTotal: 0,
+          goalsAchieved: 0,
+          anniversaries: 0,
+          courses: 0,
+          notes: 0,
+          themeSwitches: 3,
+        ),
+      );
+
+      expect(provider.snapshotFor('theme_explorer').unlocked, isTrue);
+      expect(provider.takeUnlockedFeedback(), isEmpty);
+      provider.dispose();
+    },
+  );
+
+  test(
+    'login-restored wardrobe achievement does not pop after feedback resumes',
+    () async {
+      final unlockedAt = DateTime(2026, 6, 1).toIso8601String();
+      final provider = AchievementProvider();
+      await provider.loadFromStorage();
+
+      provider.resetLocalState();
+      final suppressionGeneration = provider.suppressUnlockFeedback();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'duoyi_achievements_unlocked',
+        json.encode({'theme_explorer': unlockedAt}),
+      );
+
+      await provider.loadFromStorage();
+      expect(provider.unlockFeedbackSuppressed, isTrue);
+      expect(
+        prefs.getStringList('duoyi_achievements_notified'),
+        contains('theme_explorer'),
+      );
+
+      provider.resumeUnlockFeedback(generation: suppressionGeneration);
+      await provider.updateContext(
+        const AchievementContext(
+          totalTodos: 0,
+          completedTodos: 0,
+          longestHabitStreak: 0,
+          habitCount: 0,
+          focusMinutes: 0,
+          focusSessions: 0,
+          diaryStreak: 0,
+          diaryCount: 0,
+          goalsTotal: 0,
+          goalsAchieved: 0,
+          anniversaries: 0,
+          courses: 0,
+          notes: 0,
+          themeSwitches: 3,
+        ),
+      );
+
+      expect(provider.snapshotFor('theme_explorer').unlocked, isTrue);
+      expect(provider.takeUnlockedFeedback(), isEmpty);
+      provider.dispose();
+    },
+  );
+
+  test(
     'suppressed unlock feedback hides re-derived achievements but resumes for genuine new unlocks',
     () async {
       final provider = AchievementProvider();

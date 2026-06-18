@@ -58,6 +58,7 @@ object ReminderRingtoneScheduler {
         repeatCount: Int = 0,
     ): Boolean {
         cancelScheduledOnly(context, id)
+        prepareDeliveryInfrastructure(context)
         val intent = ReminderRingtoneService.intent(
             context,
             id,
@@ -103,6 +104,7 @@ object ReminderRingtoneScheduler {
             return false
         }
         cancelScheduledOnly(context, id)
+        prepareDeliveryInfrastructure(context)
         val intent = baseIntent(
             context,
             id,
@@ -141,6 +143,7 @@ object ReminderRingtoneScheduler {
             return false
         }
         cancelScheduledOnly(context, id)
+        prepareDeliveryInfrastructure(context)
         val intent = baseIntent(
             context,
             id,
@@ -217,6 +220,7 @@ object ReminderRingtoneScheduler {
         val zoneId = normalizeTimeZone(timezoneId)
         val triggerAtMillis = nextWallClockMillis(hour, minute, normalized, zoneId)
         cancelScheduledOnly(context, id)
+        prepareDeliveryInfrastructure(context)
         val intent = baseIntent(
             context,
             id,
@@ -481,6 +485,15 @@ object ReminderRingtoneScheduler {
         }.getOrElse { error ->
             Log.w(tag, "schedule failed: id=$id triggerAtMillis=$triggerAtMillis", error)
             false
+        }
+    }
+
+    private fun prepareDeliveryInfrastructure(context: Context) {
+        runCatching {
+            ReminderRingtoneService.ensureStatusNotificationChannel(context)
+            ReminderRingtoneReceiver.ensureFallbackNotificationChannel(context)
+        }.onFailure { error ->
+            Log.w(tag, "prepare delivery notification channels failed", error)
         }
     }
 
@@ -847,6 +860,7 @@ object ReminderRingtoneScheduler {
             }
             if (reserveDelivery(context, id, rootId, storedDeliveryToken)) {
                 recordNotificationPermissionIssueIfDenied(context, id)
+                prepareDeliveryInfrastructure(context)
                 if (!startRingtoneService(context, intent)) {
                     ReminderRingtoneReceiver.showFallbackNotification(
                         context,

@@ -108,18 +108,59 @@ void main() {
       );
 
       expect(fallback.once, hasLength(1));
+      final cancelCountAfterSchedule = fallback.cancelled.length;
       expect(
         fallback.once.single['payload'],
         contains('fallback=popup_notification'),
       );
 
       await tester.pump(const Duration(milliseconds: 180));
-      expect(fallback.cancelled, contains(5));
+      expect(fallback.cancelled, hasLength(cancelCountAfterSchedule));
       expect(find.text('前台显示'), findsNothing);
 
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
       expect(find.text('前台显示'), findsOneWidget);
+      expect(fallback.cancelled.length, greaterThan(cancelCountAfterSchedule));
+    },
+  );
+
+  testWidgets(
+    'one-shot popup keeps fallback when app backgrounds right before due time',
+    (tester) async {
+      var foreground = true;
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final fallback = _FakeNotificationFallback();
+      final sink = ForegroundReminderPopupSink(
+        contextGetter: () => navigatorKey.currentContext,
+        notificationFallback: fallback,
+        isForegroundGetter: () => foreground,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: SizedBox()),
+        ),
+      );
+
+      await sink.scheduleOnce(
+        id: 15,
+        title: '提醒',
+        body: '锁屏兜底',
+        when: DateTime.now().add(const Duration(milliseconds: 800)),
+        payload: 'duoyi://todo/15',
+      );
+      final cancelCountAfterSchedule = fallback.cancelled.length;
+
+      await tester.pump(const Duration(milliseconds: 700));
+      foreground = false;
+      await tester.pump(const Duration(milliseconds: 160));
+      await tester.pumpAndSettle();
+
+      expect(fallback.once, hasLength(1));
+      expect(fallback.cancelled, hasLength(cancelCountAfterSchedule));
+      expect(find.text('锁屏兜底'), findsNothing);
     },
   );
 

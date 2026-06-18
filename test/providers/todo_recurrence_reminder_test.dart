@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -114,4 +116,70 @@ void main() {
       contains('native queue rejected'),
     );
   });
+
+  test('addTodo waits for reminder sync before completing', () async {
+    final provider = TodoProvider();
+    final scheduler = _GatedTodoScheduler();
+    provider.scheduler = scheduler;
+    final todo = TodoItem(id: 'todo-sync-wait', title: 'wait for sync');
+
+    var completed = false;
+    final save = provider.addTodo(todo).then((_) {
+      completed = true;
+    });
+    await _waitForScheduler(scheduler);
+
+    expect(scheduler.started, isTrue);
+    expect(completed, isFalse);
+
+    scheduler.complete();
+    await save;
+
+    expect(completed, isTrue);
+    expect(scheduler.todoSyncs.single, ['todo-sync-wait']);
+    expect(provider.lastReminderSyncIssue, isNull);
+    expect(provider.lastReminderSyncSucceededAt, isNotNull);
+  });
+
+  test('addTodo keeps saved todo when reminder sync fails', () async {
+    final provider = TodoProvider();
+    final scheduler = RecordingReminderScheduler()
+      ..todoSyncError = StateError('cancel old reminder failed');
+    provider.scheduler = scheduler;
+    final todo = TodoItem(id: 'todo-sync-error', title: 'sync error');
+
+    await provider.addTodo(todo);
+
+    expect(provider.todos.single.id, todo.id);
+    expect(
+      provider.lastReminderSyncIssue,
+      contains('cancel old reminder failed'),
+    );
+  });
+}
+
+Future<void> _waitForScheduler(_GatedTodoScheduler scheduler) async {
+  for (var i = 0; i < 50; i++) {
+    if (scheduler.started) return;
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+  }
+}
+
+class _GatedTodoScheduler extends RecordingReminderScheduler {
+  final Completer<void> _gate = Completer<void>();
+
+  bool get started => todoSyncs.isNotEmpty;
+
+  void complete() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  @override
+  Future<void> syncTodos(
+    Iterable<TodoItem> todos, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
+    await _gate.future;
+  }
 }

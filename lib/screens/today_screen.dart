@@ -156,29 +156,41 @@ class TodayScreen extends StatelessWidget {
               : (useTwoColumns ? 2.55 : 3.65);
 
           // 桌面端使用更大的字体和图标
-          final titleStyle = desktop ? theme.textTheme.bodySmall?.copyWith(
-            fontSize: DesktopTokens.fontSizeCaption,
-            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextTertiary),
-            fontWeight: FontWeight.normal,
-            height: 1.1,
-          ) : null;
+          final titleStyle = desktop
+              ? theme.textTheme.bodySmall?.copyWith(
+                  fontSize: DesktopTokens.fontSizeCaption,
+                  color: cs.onSurface.withValues(
+                    alpha: DesktopTokens.opacityTextTertiary,
+                  ),
+                  fontWeight: FontWeight.normal,
+                  height: 1.1,
+                )
+              : null;
 
-          final valueStyle = desktop ? theme.textTheme.titleMedium?.copyWith(
-            fontSize: DesktopTokens.fontSizeBody,
-            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
-            height: 1.08,
-          ) : null;
+          final valueStyle = desktop
+              ? theme.textTheme.titleMedium?.copyWith(
+                  fontSize: DesktopTokens.fontSizeBody,
+                  color: cs.onSurface.withValues(
+                    alpha: DesktopTokens.opacityTextPrimary,
+                  ),
+                  height: 1.08,
+                )
+              : null;
 
-          final unitStyle = desktop ? theme.textTheme.bodySmall?.copyWith(
-            fontSize: DesktopTokens.fontSizeCaption,
-            fontWeight: FontWeight.normal,
-            color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextTertiary),
-            height: 1.08,
-          ) : null;
+          final unitStyle = desktop
+              ? theme.textTheme.bodySmall?.copyWith(
+                  fontSize: DesktopTokens.fontSizeCaption,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurface.withValues(
+                    alpha: DesktopTokens.opacityTextTertiary,
+                  ),
+                  height: 1.08,
+                )
+              : null;
 
           final padding = desktop
-            ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
-            : const EdgeInsets.fromLTRB(12, 10, 12, 10);
+              ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+              : const EdgeInsets.fromLTRB(12, 10, 12, 10);
 
           final iconBoxSize = desktop ? 32.0 : 28.0;
           final iconSize = desktop ? 17.0 : 15.0;
@@ -302,11 +314,7 @@ class TodayScreen extends StatelessWidget {
           final actionNow = DateTime.now();
           final changed = await context
               .read<TodoProvider>()
-              .scheduleTodoForToday(
-                todo.id,
-                now: actionNow,
-                waitForReminderSync: false,
-              );
+              .scheduleTodoForToday(todo.id, now: actionNow);
           if (!context.mounted || !changed) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -580,10 +588,7 @@ class _TodayDesktopLeftSidebar extends StatelessWidget {
   final DateTime now;
   final Widget quoteCard;
 
-  const _TodayDesktopLeftSidebar({
-    required this.now,
-    required this.quoteCard,
-  });
+  const _TodayDesktopLeftSidebar({required this.now, required this.quoteCard});
 
   @override
   Widget build(BuildContext context) {
@@ -652,17 +657,14 @@ class _CompactMonthCalendar extends StatelessWidget {
     for (int day = 1; day <= lastDay.day; day++) {
       final isToday = day == now.day;
       final date = DateTime(now.year, now.month, day);
-      final isWeekend = date.weekday == DateTime.saturday ||
-                       date.weekday == DateTime.sunday;
+      final isWeekend =
+          date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
       days.add(
         Container(
           alignment: Alignment.center,
           decoration: isToday
-              ? BoxDecoration(
-                  color: cs.primary,
-                  shape: BoxShape.circle,
-                )
+              ? BoxDecoration(color: cs.primary, shape: BoxShape.circle)
               : null,
           child: Text(
             '$day',
@@ -671,8 +673,8 @@ class _CompactMonthCalendar extends StatelessWidget {
               color: isToday
                   ? cs.onPrimary
                   : isWeekend
-                      ? cs.onSurfaceVariant.withValues(alpha: 0.5)
-                      : cs.onSurface.withValues(alpha: 0.8),
+                  ? cs.onSurfaceVariant.withValues(alpha: 0.5)
+                  : cs.onSurface.withValues(alpha: 0.8),
             ),
           ),
         ),
@@ -682,10 +684,14 @@ class _CompactMonthCalendar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(DesktopTokens.cardPadding),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        color: cs.surface.withValues(
+          alpha: DesktopTokens.opacityCardBackground,
+        ),
         borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          color: cs.outlineVariant.withValues(
+            alpha: DesktopTokens.opacityBorder,
+          ),
           width: DesktopTokens.cardBorderWidth,
         ),
       ),
@@ -698,7 +704,9 @@ class _CompactMonthCalendar extends StatelessWidget {
               '${now.year}年${now.month}月',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontSize: DesktopTokens.fontSizeCardSubtitle,
-                color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+                color: cs.onSurface.withValues(
+                  alpha: DesktopTokens.opacityTextPrimary,
+                ),
               ),
             ),
           ),
@@ -756,10 +764,14 @@ class _QuickAccessPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(DesktopTokens.cardPadding),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        color: cs.surface.withValues(
+          alpha: DesktopTokens.opacityCardBackground,
+        ),
         borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          color: cs.outlineVariant.withValues(
+            alpha: DesktopTokens.opacityBorder,
+          ),
           width: DesktopTokens.cardBorderWidth,
         ),
       ),
@@ -770,7 +782,9 @@ class _QuickAccessPanel extends StatelessWidget {
             '快捷入口',
             style: theme.textTheme.titleSmall?.copyWith(
               fontSize: DesktopTokens.fontSizeCardSubtitle,
-              color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+              color: cs.onSurface.withValues(
+                alpha: DesktopTokens.opacityTextPrimary,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -814,19 +828,12 @@ class _QuickAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: color.withValues(alpha: 0.25),
-            width: 0.5,
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.25), width: 0.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: DesktopTokens.iconSizeMedium,
-              color: color,
-            ),
+            Icon(icon, size: DesktopTokens.iconSizeMedium, color: color),
             const SizedBox(height: 6),
             Text(
               label,
@@ -898,7 +905,9 @@ class _TodayDesktopDashboard extends StatelessWidget {
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: DesktopTokens.maxContentWidth),
+                constraints: const BoxConstraints(
+                  maxWidth: DesktopTokens.maxContentWidth,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -908,7 +917,10 @@ class _TodayDesktopDashboard extends StatelessWidget {
                     // 响应式三栏/两栏布局
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        final showLeftSidebar = DesktopTokens.isThreeColumnLayout(constraints.maxWidth);
+                        final showLeftSidebar =
+                            DesktopTokens.isThreeColumnLayout(
+                              constraints.maxWidth,
+                            );
 
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -922,7 +934,9 @@ class _TodayDesktopDashboard extends StatelessWidget {
                                   quoteCard: quoteCard,
                                 ),
                               ),
-                              const SizedBox(width: DesktopTokens.columnSpacing),
+                              const SizedBox(
+                                width: DesktopTokens.columnSpacing,
+                              ),
                             ],
 
                             // 主内容区
@@ -935,7 +949,10 @@ class _TodayDesktopDashboard extends StatelessWidget {
                                         return Column(
                                           children: [
                                             almanacCard,
-                                            const SizedBox(height: DesktopTokens.cardSpacingMedium),
+                                            const SizedBox(
+                                              height: DesktopTokens
+                                                  .cardSpacingMedium,
+                                            ),
                                             productivityCard,
                                           ],
                                         );
@@ -945,7 +962,10 @@ class _TodayDesktopDashboard extends StatelessWidget {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Expanded(child: almanacCard),
-                                          const SizedBox(width: DesktopTokens.cardSpacingMedium),
+                                          const SizedBox(
+                                            width:
+                                                DesktopTokens.cardSpacingMedium,
+                                          ),
                                           SizedBox(
                                             width: 340,
                                             child: productivityCard,
@@ -954,14 +974,20 @@ class _TodayDesktopDashboard extends StatelessWidget {
                                       );
                                     },
                                   ),
-                                  const SizedBox(height: DesktopTokens.cardSpacingMedium),
+                                  const SizedBox(
+                                    height: DesktopTokens.cardSpacingMedium,
+                                  ),
                                   metricsGrid,
-                                  const SizedBox(height: DesktopTokens.cardSpacing),
+                                  const SizedBox(
+                                    height: DesktopTokens.cardSpacing,
+                                  ),
 
                                   // 当左侧边栏隐藏时，今日一言显示在主内容区
                                   if (!showLeftSidebar) ...[
                                     quoteCard,
-                                    const SizedBox(height: DesktopTokens.cardSpacing),
+                                    const SizedBox(
+                                      height: DesktopTokens.cardSpacing,
+                                    ),
                                   ],
 
                                   todosSection,
@@ -1016,10 +1042,14 @@ class _TodayDesktopHeader extends StatelessWidget {
         vertical: 16,
       ),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        color: cs.surface.withValues(
+          alpha: DesktopTokens.opacityCardBackground,
+        ),
         borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: DesktopTokens.opacityBorder),
+          color: cs.outlineVariant.withValues(
+            alpha: DesktopTokens.opacityBorder,
+          ),
           width: DesktopTokens.cardBorderWidth,
         ),
       ),
@@ -1037,7 +1067,9 @@ class _TodayDesktopHeader extends StatelessWidget {
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontSize: DesktopTokens.fontSizePageTitle,
                     height: 1.15,
-                    color: cs.onSurface.withValues(alpha: DesktopTokens.opacityTextPrimary),
+                    color: cs.onSurface.withValues(
+                      alpha: DesktopTokens.opacityTextPrimary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -1047,7 +1079,9 @@ class _TodayDesktopHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: DesktopTokens.fontSizePageSubtitle,
-                    color: cs.onSurfaceVariant.withValues(alpha: DesktopTokens.opacityTextSecondary),
+                    color: cs.onSurfaceVariant.withValues(
+                      alpha: DesktopTokens.opacityTextSecondary,
+                    ),
                     height: 1.2,
                   ),
                 ),
@@ -1070,7 +1104,9 @@ class _TodayDesktopHeader extends StatelessWidget {
               I18n.tr('nav.today'),
               style: theme.textTheme.labelMedium?.copyWith(
                 fontSize: DesktopTokens.fontSizeBody,
-                color: cs.onSurfaceVariant.withValues(alpha: DesktopTokens.opacityTextSecondary),
+                color: cs.onSurfaceVariant.withValues(
+                  alpha: DesktopTokens.opacityTextSecondary,
+                ),
               ),
             ),
           ),

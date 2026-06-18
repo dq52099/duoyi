@@ -92,8 +92,8 @@ class ReminderRingtoneService : Service() {
                     rootId = rootId,
                 ),
             )
-            if (fullScreen) {
-                launchFullScreenReminder(id, title, body, payload, rootId)
+            if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId)) {
+                ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId)
             }
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
@@ -339,6 +339,8 @@ class ReminderRingtoneService : Service() {
         rootId: Int,
     ): android.app.Notification {
         ensureChannel()
+        val displayTitle = notificationDisplayTitle()
+        val displayBody = notificationDisplayBody(title, body)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val contentIntent = PendingIntent.getActivity(
             this,
@@ -382,8 +384,9 @@ class ReminderRingtoneService : Service() {
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_stat_duoyi)
-            .setContentTitle(title)
-            .setContentText(body)
+            .setContentTitle(displayTitle)
+            .setContentText(displayBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(displayBody))
             .setOngoing(false)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -392,11 +395,21 @@ class ReminderRingtoneService : Service() {
             .setFullScreenIntent(fullScreenIntent, fullScreen)
             .setDeleteIntent(stopIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(0, "停止响铃", stopIntent)
+            .addAction(0, "停止闹钟", stopIntent)
         if (snoozeIntent != null) {
-            builder.addAction(0, "稍后 $snoozeMinutes 分钟", snoozeIntent)
+            builder.addAction(0, "稍后提醒 $snoozeMinutes 分钟", snoozeIntent)
         }
         return builder.build()
+    }
+
+    private fun notificationDisplayTitle(): String {
+        return "多仪 · 强提醒正在响铃"
+    }
+
+    private fun notificationDisplayBody(title: String, body: String): String {
+        val cleanTitle = title.ifBlank { "多仪提醒" }
+        val cleanBody = body.ifBlank { "提醒时间到了" }
+        return if (cleanBody == cleanTitle) cleanTitle else "$cleanTitle：$cleanBody"
     }
 
     private fun launchFullScreenReminder(
@@ -405,9 +418,10 @@ class ReminderRingtoneService : Service() {
         body: String,
         payload: String?,
         rootId: Int,
-    ) {
-        runCatching {
+    ): Boolean {
+        return runCatching {
             startActivity(ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload))
+            true
         }.onFailure { error ->
             Log.w("ReminderRingtoneService", "full-screen reminder launch failed", error)
             ReminderRingtoneScheduler.recordDeliveryIssue(
@@ -416,7 +430,7 @@ class ReminderRingtoneService : Service() {
                 reason = "full_screen_launch_failed",
                 message = "系统拦截了全屏闹钟弹出，铃声会继续播放。请检查全屏提醒权限、锁屏弹窗权限和后台弹出限制。",
             )
-        }
+        }.getOrDefault(false)
     }
 
     private fun scheduleAutoRepeat(
@@ -464,19 +478,7 @@ class ReminderRingtoneService : Service() {
     }
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
-            channelId,
-                "多仪 · 内置柔和提醒铃声",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = "播放苹果/小米风格轻铃，并可在通知上手动停止"
-            setSound(null, null)
-            enableVibration(false)
-        }
-        manager.createNotificationChannel(channel)
-        legacyChannelIds.forEach { manager.deleteNotificationChannel(it) }
+        ensureStatusNotificationChannel(this)
     }
 
     private fun notificationId(id: Int) = notificationIdForReminder(id)
@@ -509,6 +511,22 @@ class ReminderRingtoneService : Service() {
         private var previewStopRunnable: Runnable? = null
         @Volatile
         private var activeReminderId: Int? = null
+
+        fun ensureStatusNotificationChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                channelId,
+                "多仪 · 内置柔和提醒铃声",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "播放苹果/小米风格轻铃，并可在通知上手动停止"
+                setSound(null, null)
+                enableVibration(false)
+            }
+            manager.createNotificationChannel(channel)
+            legacyChannelIds.forEach { manager.deleteNotificationChannel(it) }
+        }
 
         fun notificationIdForReminder(id: Int): Int {
             return id or Int.MIN_VALUE

@@ -74,7 +74,7 @@ void main() {
       expect(today, contains('limit: 5'));
       expect(today, contains('final actionNow = DateTime.now();'));
       expect(today, contains('scheduleTodoForToday('));
-      expect(today, contains('waitForReminderSync: false'));
+      expect(today, isNot(contains('waitForReminderSync: false')));
       expect(today, contains('_TodayProductivityCard'));
       expect(today, contains('_TodayProductivityPill'));
       expect(today, contains("I18n.tr('today.add_to_today')"));
@@ -351,9 +351,9 @@ void main() {
         contains('hiddenBottomNavApps'),
       );
       expect(mine, contains("label: '更多应用'"));
-      expect(mine, contains('final coins = auth.state.isLoggedIn'));
+      expect(mine, contains('final coins = auth.isLoggedIn'));
       expect(mine, contains('coinBalance'));
-      expect(mine, contains('auth.state.coinBalance'));
+      expect(mine, contains('auth.coinBalance'));
       expect(mine, contains("label: '通知设置'"));
       expect(
         mine,

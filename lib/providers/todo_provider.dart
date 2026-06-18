@@ -31,10 +31,21 @@ class TodoProvider extends ChangeNotifier {
   Future<void> _storageWriteQueue = Future<void>.value();
   int _storageGeneration = 0;
   final Set<String> _inFlightCreateKeys = {};
+  final Set<String> _inFlightUpdateTodoIds = {};
+  final Set<String> _inFlightCompleteTodoIds = {};
   final Set<String> _inFlightDeleteTodoIds = {};
+  final Set<String> _inFlightQuadrantTodoIds = {};
+  final Set<String> _inFlightPriorityTodoIds = {};
+  final Set<String> _inFlightKanbanTodoIds = {};
+  final Set<String> _inFlightScheduleTodayTodoIds = {};
+  final Set<String> _inFlightReorderKeys = {};
+  final Set<String> _inFlightListGroupWorkspaceKeys = {};
+  final Set<String> _inFlightArchiveKeys = {};
+  final Set<String> _inFlightPostponeKeys = {};
   final Set<String> _inFlightSubtaskCreateKeys = {};
   final Set<String> _inFlightSubtaskToggleKeys = {};
   final Set<String> _inFlightSubtaskDeleteKeys = {};
+  final Set<String> _inFlightSubtaskReorderKeys = {};
 
   /// 可选的 [ReminderScheduler] 引用，由 `main.dart` 在构造完整对象图后注入。
   ///
@@ -302,13 +313,15 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addTodo(TodoItem todo) async {
+  Future<void> addTodo(TodoItem todo, {bool waitForReminderSync = true}) async {
     await _ensureStorageLoaded();
     final createKey = _createInFlightDuplicateKey(todo);
-    if (!_inFlightCreateKeys.add(createKey)) {
-      debugPrint('[TodoProvider] duplicate in-flight todo create skipped');
-      throw StateError('待办正在创建中，请勿重复提交');
-    }
+    final claimed = _claimInFlightKeys(
+      _inFlightCreateKeys,
+      [createKey],
+      label: 'todo create',
+      duplicateMessage: '待办正在创建中，请勿重复提交',
+    );
     try {
       _todos.add(todo);
       DomainEventBus.instance.publish(
@@ -316,10 +329,13 @@ class TodoProvider extends ChangeNotifier {
       );
       _notify();
       await _saveToStorage();
-      // 异步同步提醒，不阻塞 UI
-      unawaited(_syncTodoRemindersNow());
+      if (waitForReminderSync) {
+        await _syncTodoRemindersNow();
+      } else {
+        unawaited(_syncTodoRemindersNow());
+      }
     } finally {
-      _inFlightCreateKeys.remove(createKey);
+      _inFlightCreateKeys.removeAll(claimed);
     }
   }
 
@@ -373,6 +389,30 @@ class TodoProvider extends ChangeNotifier {
     TodoItem updated, {
     bool waitForReminderSync = true,
   }) async {
+    final claimed = _claimInFlightKeys(
+      _inFlightUpdateTodoIds,
+      [id],
+      label: 'todo update',
+      duplicateMessage: '待办保存正在进行中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _updateTodoLocked(
+        id,
+        updated,
+        waitForReminderSync: waitForReminderSync,
+      );
+    } finally {
+      _inFlightUpdateTodoIds.removeAll(claimed);
+    }
+  }
+
+  Future<void> _updateTodoLocked(
+    String id,
+    TodoItem updated, {
+    required bool waitForReminderSync,
+  }) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx != -1) {
@@ -418,10 +458,32 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids, {
     bool recordCompletionTime = true,
   }) async {
-    await _ensureStorageLoaded();
-    final selected = ids.toSet();
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightCompleteTodoIds,
+      requested,
+      label: 'todo complete',
+      duplicateMessage: '待办完成操作正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
     if (selected.isEmpty) return 0;
+    try {
+      return await _completeTodosLocked(
+        selected,
+        recordCompletionTime: recordCompletionTime,
+      );
+    } finally {
+      _inFlightCompleteTodoIds.removeAll(selected);
+    }
+  }
 
+  Future<int> _completeTodosLocked(
+    Set<String> selected, {
+    required bool recordCompletionTime,
+  }) async {
+    await _ensureStorageLoaded();
     final completed = <TodoItem>[];
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
@@ -463,10 +525,26 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> reopenTodos(Iterable<String> ids) async {
-    await _ensureStorageLoaded();
-    final selected = ids.toSet();
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightCompleteTodoIds,
+      requested,
+      label: 'todo reopen',
+      duplicateMessage: '待办恢复操作正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
     if (selected.isEmpty) return 0;
+    try {
+      return await _reopenTodosLocked(selected);
+    } finally {
+      _inFlightCompleteTodoIds.removeAll(selected);
+    }
+  }
 
+  Future<int> _reopenTodosLocked(Set<String> selected) async {
+    await _ensureStorageLoaded();
     final reopened = <TodoItem>[];
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
@@ -502,6 +580,25 @@ class TodoProvider extends ChangeNotifier {
   /// [recordCompletionTime] 为 `true` 时，在完成状态变更后会自动写入时间足迹；
   /// 由 UI 层统一决定是否要先弹出"顺手记耗时"对话框，或改用自定义时长。
   Future<void> toggleTodo(String id, {bool recordCompletionTime = true}) async {
+    final claimed = _claimInFlightKeys(
+      _inFlightCompleteTodoIds,
+      [id],
+      label: 'todo toggle',
+      duplicateMessage: '待办状态更新正在进行中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _toggleTodoLocked(id, recordCompletionTime: recordCompletionTime);
+    } finally {
+      _inFlightCompleteTodoIds.removeAll(claimed);
+    }
+  }
+
+  Future<void> _toggleTodoLocked(
+    String id, {
+    required bool recordCompletionTime,
+  }) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return;
@@ -550,27 +647,13 @@ class TodoProvider extends ChangeNotifier {
   Future<int> deleteTodos(Iterable<String> ids) async {
     final requested = ids.toSet();
     if (requested.isEmpty) return 0;
-    final selected = <String>{};
-    final duplicates = <String>[];
-    for (final id in requested) {
-      if (_inFlightDeleteTodoIds.add(id)) {
-        selected.add(id);
-      } else {
-        duplicates.add(id);
-      }
-    }
-    if (selected.isEmpty) {
-      debugPrint(
-        '[TodoProvider] all ${requested.length} todo delete(s) already in-flight',
-      );
-      throw StateError('待办删除操作正在进行中，请勿重复提交');
-    }
-    if (duplicates.isNotEmpty) {
-      debugPrint(
-        '[TodoProvider] ${duplicates.length} duplicate delete(s) skipped, '
-        'proceeding with ${selected.length} new delete(s)',
-      );
-    }
+    final selected = _claimInFlightKeys(
+      _inFlightDeleteTodoIds,
+      requested,
+      label: 'todo delete',
+      duplicateMessage: '待办删除操作正在进行中，请勿重复提交',
+      allowPartial: true,
+    );
 
     try {
       return await _deleteTodosLocked(selected);
@@ -602,9 +685,29 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     EisenhowerQuadrant quadrant,
   ) async {
-    await _ensureStorageLoaded();
-    final selected = ids.toSet();
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightQuadrantTodoIds,
+      requested,
+      label: 'todo quadrant update',
+      duplicateMessage: '待办移动操作正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
     if (selected.isEmpty) return 0;
+    try {
+      return await _updateTodosQuadrantLocked(selected, quadrant);
+    } finally {
+      _inFlightQuadrantTodoIds.removeAll(selected);
+    }
+  }
+
+  Future<int> _updateTodosQuadrantLocked(
+    Set<String> selected,
+    EisenhowerQuadrant quadrant,
+  ) async {
+    await _ensureStorageLoaded();
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
       final todo = _todos[i];
@@ -622,9 +725,29 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     TodoPriority priority,
   ) async {
-    await _ensureStorageLoaded();
-    final selected = ids.toSet();
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightPriorityTodoIds,
+      requested,
+      label: 'todo priority update',
+      duplicateMessage: '待办优先级更新正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
     if (selected.isEmpty) return 0;
+    try {
+      return await _updateTodosPriorityLocked(selected, priority);
+    } finally {
+      _inFlightPriorityTodoIds.removeAll(selected);
+    }
+  }
+
+  Future<int> _updateTodosPriorityLocked(
+    Set<String> selected,
+    TodoPriority priority,
+  ) async {
+    await _ensureStorageLoaded();
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
       final todo = _todos[i];
@@ -642,12 +765,35 @@ class TodoProvider extends ChangeNotifier {
     Iterable<String> ids,
     String columnId,
   ) async {
-    await _ensureStorageLoaded();
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
     final target = columnId.trim().isEmpty
         ? defaultKanbanPendingColumnId
         : columnId.trim();
-    final selected = ids.toSet();
+    final selected = _claimInFlightKeys(
+      _inFlightKanbanTodoIds,
+      requested.map((id) => '$id:$target'),
+      label: 'todo kanban update',
+      duplicateMessage: '待办看板更新正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
     if (selected.isEmpty) return 0;
+    final selectedIds = {
+      for (final key in selected) key.substring(0, key.lastIndexOf(':')),
+    };
+    try {
+      return await _updateTodosKanbanColumnLocked(selectedIds, target);
+    } finally {
+      _inFlightKanbanTodoIds.removeAll(selected);
+    }
+  }
+
+  Future<int> _updateTodosKanbanColumnLocked(
+    Set<String> selected,
+    String target,
+  ) async {
+    await _ensureStorageLoaded();
     final completed = <TodoItem>[];
     final reopened = <TodoItem>[];
     var changed = 0;
@@ -709,6 +855,30 @@ class TodoProvider extends ChangeNotifier {
     String id, {
     DateTime? now,
     bool waitForReminderSync = true,
+  }) async {
+    final claimed = _claimInFlightKeys(
+      _inFlightScheduleTodayTodoIds,
+      [id],
+      label: 'todo schedule today',
+      duplicateMessage: '待办安排到今天正在进行中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return false;
+    try {
+      return await _scheduleTodoForTodayLocked(
+        id,
+        now: now,
+        waitForReminderSync: waitForReminderSync,
+      );
+    } finally {
+      _inFlightScheduleTodayTodoIds.removeAll(claimed);
+    }
+  }
+
+  Future<bool> _scheduleTodoForTodayLocked(
+    String id, {
+    DateTime? now,
+    required bool waitForReminderSync,
   }) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == id);
@@ -778,6 +948,23 @@ class TodoProvider extends ChangeNotifier {
       value.day == day.day;
 
   Future<void> reorder(List<String> orderedIds) async {
+    final key = orderedIds.join('|');
+    final claimed = _claimInFlightKeys(
+      _inFlightReorderKeys,
+      ['all:$key'],
+      label: 'todo reorder',
+      duplicateMessage: '待办排序正在保存中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _reorderLocked(orderedIds);
+    } finally {
+      _inFlightReorderKeys.removeAll(claimed);
+    }
+  }
+
+  Future<void> _reorderLocked(List<String> orderedIds) async {
     await _ensureStorageLoaded();
     final map = {for (final t in _todos) t.id: t};
     final newList = <TodoItem>[];
@@ -795,6 +982,23 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> reorderVisibleTodos(List<String> orderedIds) async {
+    final key = orderedIds.join('|');
+    final claimed = _claimInFlightKeys(
+      _inFlightReorderKeys,
+      ['visible:$key'],
+      label: 'visible todo reorder',
+      duplicateMessage: '待办排序正在保存中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return 0;
+    try {
+      return await _reorderVisibleTodosLocked(orderedIds);
+    } finally {
+      _inFlightReorderKeys.removeAll(claimed);
+    }
+  }
+
+  Future<int> _reorderVisibleTodosLocked(List<String> orderedIds) async {
     await _ensureStorageLoaded();
     final ordered = orderedIds.toList(growable: false);
     if (ordered.length < 2) return 0;
@@ -910,6 +1114,31 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> updateListGroupWorkspace(
+    String groupName,
+    String workspaceId, {
+    String? userId,
+  }) async {
+    final key = '${groupName.trim()}:$workspaceId';
+    final claimed = _claimInFlightKeys(
+      _inFlightListGroupWorkspaceKeys,
+      [key],
+      label: 'todo list workspace update',
+      duplicateMessage: '清单共享状态正在保存中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _updateListGroupWorkspaceLocked(
+        groupName,
+        workspaceId,
+        userId: userId,
+      );
+    } finally {
+      _inFlightListGroupWorkspaceKeys.removeAll(claimed);
+    }
+  }
+
+  Future<void> _updateListGroupWorkspaceLocked(
     String groupName,
     String workspaceId, {
     String? userId,
@@ -1048,6 +1277,26 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> reorderSubtasks(String todoId, List<String> orderedIds) async {
+    final key = '$todoId:${orderedIds.join('|')}';
+    final claimed = _claimInFlightKeys(
+      _inFlightSubtaskReorderKeys,
+      [key],
+      label: 'subtask reorder',
+      duplicateMessage: '子任务排序正在保存中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _reorderSubtasksLocked(todoId, orderedIds);
+    } finally {
+      _inFlightSubtaskReorderKeys.removeAll(claimed);
+    }
+  }
+
+  Future<void> _reorderSubtasksLocked(
+    String todoId,
+    List<String> orderedIds,
+  ) async {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
@@ -1082,8 +1331,24 @@ class TodoProvider extends ChangeNotifier {
   /// 由 [postponeOverdue] 负责顺延。两者在 `CompletionVisibilityPolicy
   /// .runDailyRollover` 中组合使用。
   Future<void> archivePastCompletions(DateTime todayDay) async {
-    await _ensureStorageLoaded();
     final todayStart = DateTime(todayDay.year, todayDay.month, todayDay.day);
+    final claimed = _claimInFlightKeys(
+      _inFlightArchiveKeys,
+      [_dateKey(todayStart)],
+      label: 'todo archive rollover',
+      duplicateMessage: '待办归档正在执行中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _archivePastCompletionsLocked(todayStart);
+    } finally {
+      _inFlightArchiveKeys.removeAll(claimed);
+    }
+  }
+
+  Future<void> _archivePastCompletionsLocked(DateTime todayStart) async {
+    await _ensureStorageLoaded();
     var mutated = false;
 
     for (final t in _todos) {
@@ -1125,8 +1390,24 @@ class TodoProvider extends ChangeNotifier {
   ///
   /// [today] 作为参数注入，便于测试；内部会先取其日部分做"本地 00:00"对齐。
   Future<void> postponeOverdue(DateTime today) async {
-    await _ensureStorageLoaded();
     final todayDay = DateTime(today.year, today.month, today.day);
+    final claimed = _claimInFlightKeys(
+      _inFlightPostponeKeys,
+      [_dateKey(todayDay)],
+      label: 'todo overdue postpone',
+      duplicateMessage: '待办顺延正在执行中，请勿重复提交',
+      throwWhenDuplicate: false,
+    );
+    if (claimed.isEmpty) return;
+    try {
+      await _postponeOverdueLocked(todayDay);
+    } finally {
+      _inFlightPostponeKeys.removeAll(claimed);
+    }
+  }
+
+  Future<void> _postponeOverdueLocked(DateTime todayDay) async {
+    await _ensureStorageLoaded();
     var mutated = false;
 
     for (final t in _todos) {
@@ -1177,6 +1458,47 @@ class TodoProvider extends ChangeNotifier {
 
     // 顺延后重新同步提醒调度队列。
     await _syncTodoRemindersNow();
+  }
+
+  Set<String> _claimInFlightKeys(
+    Set<String> bucket,
+    Iterable<String> keys, {
+    required String label,
+    required String duplicateMessage,
+    bool allowPartial = false,
+    bool throwWhenDuplicate = true,
+  }) {
+    final requested = keys.where((key) => key.isNotEmpty).toSet();
+    if (requested.isEmpty) return <String>{};
+
+    final claimed = <String>{};
+    final duplicates = <String>[];
+    for (final key in requested) {
+      if (bucket.add(key)) {
+        claimed.add(key);
+      } else {
+        duplicates.add(key);
+      }
+    }
+    if (duplicates.isEmpty) return claimed;
+
+    if (allowPartial && claimed.isNotEmpty) {
+      debugPrint(
+        '[TodoProvider] ${duplicates.length} duplicate $label request(s) '
+        'skipped; ${claimed.length} new request(s) will continue',
+      );
+      return claimed;
+    }
+
+    bucket.removeAll(claimed);
+    debugPrint(
+      '[TodoProvider] duplicate $label request skipped: '
+      '${duplicates.length}/${requested.length} already in-flight',
+    );
+    if (throwWhenDuplicate) {
+      throw StateError(duplicateMessage);
+    }
+    return <String>{};
   }
 
   String _dateKey(DateTime d) =>

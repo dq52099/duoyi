@@ -1,10 +1,13 @@
-import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
+
+import '../test_support/recording_reminder_scheduler.dart';
 
 void main() {
   test('TodoProvider skips duplicate in-flight creates', () async {
@@ -16,11 +19,17 @@ void main() {
 
     final results = await Future.wait([
       provider.addTodo(first).then((_) => 'success').catchError((e) => 'error'),
-      provider.addTodo(second).then((_) => 'success').catchError((e) => 'error'),
+      provider
+          .addTodo(second)
+          .then((_) => 'success')
+          .catchError((e) => 'error'),
     ]);
 
     // 至少一个成功，至少一个因重复而失败
-    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(
+      results.where((r) => r == 'success').length,
+      greaterThanOrEqualTo(1),
+    );
     expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
 
     expect(provider.todos, hasLength(1));
@@ -37,12 +46,21 @@ void main() {
     await provider.addTodo(todo);
 
     final results = await Future.wait([
-      provider.addSubtask(todo.id, '复核材料').then((_) => 'success').catchError((e) => 'error'),
-      provider.addSubtask(todo.id, '  复核材料  ').then((_) => 'success').catchError((e) => 'error'),
+      provider
+          .addSubtask(todo.id, '复核材料')
+          .then((_) => 'success')
+          .catchError((e) => 'error'),
+      provider
+          .addSubtask(todo.id, '  复核材料  ')
+          .then((_) => 'success')
+          .catchError((e) => 'error'),
     ]);
 
     // 至少一个成功，至少一个因重复而失败
-    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(
+      results.where((r) => r == 'success').length,
+      greaterThanOrEqualTo(1),
+    );
     expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
 
     final updated = provider.todos.singleWhere((item) => item.id == todo.id);
@@ -57,12 +75,21 @@ void main() {
     await provider.addTodo(todo);
 
     final results = await Future.wait([
-      provider.deleteTodo(todo.id).then((_) => 'success').catchError((e) => 'error'),
-      provider.deleteTodo(todo.id).then((_) => 'success').catchError((e) => 'error'),
+      provider
+          .deleteTodo(todo.id)
+          .then((_) => 'success')
+          .catchError((e) => 'error'),
+      provider
+          .deleteTodo(todo.id)
+          .then((_) => 'success')
+          .catchError((e) => 'error'),
     ]);
 
     // 至少一个成功，至少一个因重复而失败
-    expect(results.where((r) => r == 'success').length, greaterThanOrEqualTo(1));
+    expect(
+      results.where((r) => r == 'success').length,
+      greaterThanOrEqualTo(1),
+    );
     expect(results.where((r) => r == 'error').length, greaterThanOrEqualTo(1));
 
     expect(provider.todos, isEmpty);
@@ -71,11 +98,61 @@ void main() {
     expect(stored, isEmpty);
   });
 
+  test(
+    'TodoProvider ignores duplicate in-flight updates for same todo',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final provider = TodoProvider();
+      final todo = TodoItem(id: 'todo-update', title: '原始');
+      await provider.addTodo(todo);
+
+      final scheduler = _GatedTodoScheduler();
+      provider.scheduler = scheduler;
+      final first = provider.updateTodo(
+        todo.id,
+        provider.todos.single.copyWith(title: '第一次保存'),
+      );
+      await _waitForScheduler(scheduler);
+      expect(scheduler.started, isTrue);
+
+      await provider.updateTodo(
+        todo.id,
+        provider.todos.single.copyWith(title: '第二次保存'),
+      );
+      scheduler.complete();
+      await first;
+
+      expect(provider.todos.single.title, '第一次保存');
+    },
+  );
+
+  test('TodoProvider ignores duplicate in-flight completions', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = TodoProvider();
+    final todo = TodoItem(id: 'todo-complete', title: '完成一次');
+    await provider.addTodo(todo);
+
+    final scheduler = _GatedTodoScheduler();
+    provider.scheduler = scheduler;
+    final first = provider.completeTodos([todo.id]);
+    await _waitForScheduler(scheduler);
+    expect(scheduler.started, isTrue);
+
+    final duplicate = await provider.completeTodos([todo.id]);
+    scheduler.complete();
+    final changed = await first;
+
+    expect(changed, 1);
+    expect(duplicate, 0);
+    expect(provider.todos.single.isCompleted, isTrue);
+  });
+
   test('TodoProvider exposes batch completion and recurrence preservation', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
 
     expect(source, contains('Future<int> completeTodos('));
-    expect(source, contains('final selected = ids.toSet();'));
+    expect(source, contains('final requested = ids.toSet();'));
+    expect(source, contains('_claimInFlightKeys('));
     expect(
       source,
       contains('if (!selected.contains(prev.id) || prev.isCompleted)'),
@@ -127,11 +204,12 @@ void main() {
 
       expect(
         method(
-          'Future<void> addTodo(TodoItem todo)',
+          'Future<void> addTodo(',
           'Future<TodoImportSummary> importTodos(',
         ),
         allOf(
-          contains('// 异步同步提醒，不阻塞 UI'),
+          contains('bool waitForReminderSync = true'),
+          contains('await _syncTodoRemindersNow();'),
           contains('unawaited(_syncTodoRemindersNow());'),
         ),
       );
@@ -323,4 +401,30 @@ void main() {
     expect(source, contains('rebuilt.add(todo.copyWith(sortOrder: i))'));
     expect(source, contains('return changed;'));
   });
+}
+
+Future<void> _waitForScheduler(_GatedTodoScheduler scheduler) async {
+  for (var i = 0; i < 50; i++) {
+    if (scheduler.started) return;
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+  }
+}
+
+class _GatedTodoScheduler extends RecordingReminderScheduler {
+  final Completer<void> _gate = Completer<void>();
+
+  bool get started => todoSyncs.isNotEmpty;
+
+  void complete() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  @override
+  Future<void> syncTodos(
+    Iterable<TodoItem> todos, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
+    await _gate.future;
+  }
 }

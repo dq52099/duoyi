@@ -232,7 +232,7 @@ void main() {
         'activeWeekdays': [0, 2, 4],
       });
       expect(migrated.reminderPlan.enabled, isTrue);
-      expect(migrated.reminderPlan.primaryRule?.kind, ReminderKind.alarm);
+      expect(migrated.reminderPlan.primaryRule?.kind, ReminderKind.popup);
       expect(
         migrated.reminderPlan.primaryRule?.type,
         ReminderRuleType.weeklyTime,

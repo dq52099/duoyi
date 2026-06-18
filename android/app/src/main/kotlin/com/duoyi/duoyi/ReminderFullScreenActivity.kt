@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -97,14 +98,18 @@ class ReminderFullScreenActivity : Activity() {
             ?.takeIf { it.isNotBlank() }
             ?: "提醒时间到了"
 
+        val backgroundDrawable = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.rgb(18, 24, 38), Color.rgb(8, 15, 30)),
+        )
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            background = backgroundDrawable
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(28), dp(40), dp(28), dp(40))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(26, 32, 44), Color.rgb(15, 23, 42)),
-            )
         }
         // 锁屏闹钟样式：顶部大号实时时钟 + 日期，强化“闹钟”语义与即时感。
         val clock = TextView(this).apply {
@@ -112,7 +117,7 @@ class ReminderFullScreenActivity : Activity() {
             textSize = 64f
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             gravity = Gravity.CENTER
-            letterSpacing = 0.02f
+            letterSpacing = 0f
         }
         clockView = clock
         val date = TextView(this).apply {
@@ -124,36 +129,43 @@ class ReminderFullScreenActivity : Activity() {
         updateClock()
 
         val badge = TextView(this).apply {
-            text = "🔔  闹钟提醒"
-            setTextColor(Color.rgb(56, 189, 164))
+            text = "多仪 · 强提醒正在响铃"
+            setTextColor(Color.rgb(45, 212, 191))
             textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
         }
         val title = TextView(this).apply {
             text = reminderTitle
             setTextColor(Color.WHITE)
-            textSize = 26f
+            textSize = 28f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             maxLines = 3
             ellipsize = TextUtils.TruncateAt.END
         }
+        val bodyLabel = TextView(this).apply {
+            text = "提醒内容"
+            setTextColor(Color.rgb(148, 163, 184))
+            textSize = 13f
+            gravity = Gravity.CENTER
+        }
         val body = TextView(this).apply {
             text = reminderBody
             setTextColor(Color.rgb(226, 232, 240))
-            textSize = 17f
+            textSize = 18f
             gravity = Gravity.CENTER
-            maxLines = 4
+            maxLines = 5
             ellipsize = TextUtils.TruncateAt.END
         }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val stopButton = actionButton("停止响铃", filled = false).apply {
+        val stopButton = actionButton("停止闹钟", filled = false).apply {
             setOnClickListener { stopRingtoneAndFinish() }
         }
-        val openButton = actionButton("打开多仪", filled = true).apply {
+        val openButton = actionButton("打开详情", filled = true).apply {
             setOnClickListener { openMainActivityAndFinish() }
         }
 
@@ -161,11 +173,19 @@ class ReminderFullScreenActivity : Activity() {
         root.addView(date, matchWidth(topMargin = dp(4), height = ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(badge, matchWidth(topMargin = dp(28), height = ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(title, matchWidth(topMargin = dp(12), height = ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(body, matchWidth(topMargin = dp(12), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(bodyLabel, matchWidth(topMargin = dp(24), height = ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(body, matchWidth(topMargin = dp(8), height = ViewGroup.LayoutParams.WRAP_CONTENT))
         actions.addView(stopButton, weightedButton(endMargin = dp(10)))
         actions.addView(openButton, weightedButton(startMargin = dp(10)))
         root.addView(actions, matchWidth(topMargin = dp(40), height = ViewGroup.LayoutParams.WRAP_CONTENT))
-        setContentView(root)
+        scroll.addView(
+            root,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+        setContentView(scroll)
     }
 
     private fun stopRingtoneAndFinish() {

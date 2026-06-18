@@ -334,16 +334,19 @@ void main() {
       'bool? emailVerified',
       'String? avatarUrl',
       'String? bio',
+      'String syncSignature()',
       'void recalc({',
       '// ignore: discarded_futures',
-      '_profile.updatedAt = DateTime.now()',
+      'final unchanged =',
+      'if (unchanged) return;',
       "_profile.username = cleanName",
-      "_profile.avatarInitials = cleanInitials.isNotEmpty",
-      '_profile.displayName = displayName.trim()',
-      '_profile.email = email.trim()',
-      '_profile.emailVerified = emailVerified',
-      '_profile.avatarUrl = avatarUrl.trim()',
-      '_profile.bio = bio.trim()',
+      'final nextAvatarInitials = cleanInitials.isNotEmpty',
+      '_profile.avatarInitials = nextAvatarInitials',
+      '_profile.displayName = nextDisplayName',
+      '_profile.email = nextEmail',
+      '_profile.emailVerified = nextEmailVerified',
+      '_profile.avatarUrl = nextAvatarUrl',
+      '_profile.bio = nextBio',
       'await _save()',
       'Future<void> clearAccountProfileCache() async',
       "_profile.username = '用户'",
@@ -356,7 +359,7 @@ void main() {
     ]) {
       expect(source, contains(field));
     }
-    expect(recalcBody, contains('_profile.updatedAt = DateTime.now()'));
+    expect(recalcBody, isNot(contains('_profile.updatedAt = DateTime.now()')));
   });
 
   test('Mine screen uses synced local account profile as display fallback', () {
@@ -365,9 +368,10 @@ void main() {
     for (final field in [
       'p.displayName',
       'p.avatarUrl',
-      'final avatarValue = auth.state.isLoggedIn',
-      '_firstNonEmpty([auth.state.avatar, p.avatarUrl, p.avatarInitials])',
-      '_firstNonEmpty([p.avatarUrl, p.avatarInitials])',
+      'final avatarValue = auth.isLoggedIn',
+      'auth.avatar',
+      'profile.avatarUrl',
+      'profile.avatarInitials',
       'avatar: avatarValue',
       'final metadata = <Widget>[',
       'return SizedBox(',

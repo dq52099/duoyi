@@ -269,10 +269,21 @@ class AchievementProvider extends ChangeNotifier {
         }
       }
     }
+    final previousNotifiedIds = Set<String>.from(_notifiedAchievementIds);
+    final storedNotifiedIds = _normalizedAchievementIds(
+      prefs.getStringList(_notifiedStorageKey) ?? const <String>[],
+    );
     _notifiedAchievementIds
       ..clear()
-      ..addAll(prefs.getStringList(_notifiedStorageKey) ?? const <String>[])
+      ..addAll(storedNotifiedIds)
       ..addAll(_unlockedAt.keys);
+    if (_unlockFeedbackSuppressed) {
+      _notifiedAchievementIds.addAll(previousNotifiedIds);
+    }
+    final shouldPersistNotified = !setEquals(
+      storedNotifiedIds,
+      _notifiedAchievementIds,
+    );
     final unlockedChanged =
         beforeUnlocked !=
         jsonEncode(
@@ -284,6 +295,16 @@ class AchievementProvider extends ChangeNotifier {
     _storageLoaded = true;
     _subscribe();
     _rebuildSnapshots(notify: false);
+    if (shouldPersistNotified &&
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      await prefs.setStringList(
+        _notifiedStorageKey,
+        _sortedNotifiedAchievementIds(),
+      );
+    }
     if (unlockedChanged || rewardsChanged) notifyListeners();
   }
 
@@ -408,6 +429,10 @@ class AchievementProvider extends ChangeNotifier {
                     !_notifiedAchievementIds.contains(achievement.id),
               )
               .toList(growable: false);
+
+    if (achievementIdsToMarkNotified.isNotEmpty) {
+      _notifiedAchievementIds.addAll(achievementIdsToMarkNotified);
+    }
 
     if (newlyUnlocked.isNotEmpty || shouldSaveRewards) {
       unawaited(
@@ -586,7 +611,7 @@ class AchievementProvider extends ChangeNotifier {
   Future<void> _saveNotifiedAchievements() async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final ids = _notifiedAchievementIds.toList(growable: false)..sort();
+    final ids = _sortedNotifiedAchievementIds();
     final prefs = await SharedPreferences.getInstance();
     if (generation != _storageGeneration ||
         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -595,6 +620,14 @@ class AchievementProvider extends ChangeNotifier {
       return;
     }
     await prefs.setStringList(_notifiedStorageKey, ids);
+  }
+
+  Set<String> _normalizedAchievementIds(Iterable<String> ids) {
+    return ids.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+  }
+
+  List<String> _sortedNotifiedAchievementIds() {
+    return _notifiedAchievementIds.toList(growable: false)..sort();
   }
 
   bool _isIncomingRewardsOlder(Map<dynamic, dynamic> incoming) {

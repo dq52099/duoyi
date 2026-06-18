@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,8 @@ import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/todo_detail_screen.dart';
+
+import '../test_support/recording_reminder_scheduler.dart';
 
 /// TodoDetailScreen 保存返回路由测试。
 ///
@@ -100,6 +104,35 @@ void main() {
       // Provider 真的被写入了新标题。
       final stored = provider.todos.firstWhere((t) => t.id == item.id);
       expect(stored.title, '修改后的标题');
+    });
+
+    testWidgets('编辑保存会等待提醒同步完成后再返回', (tester) async {
+      final (provider, item) = await buildProviderWithOne();
+      final scheduler = _GatedTodoScheduler();
+      provider.scheduler = scheduler;
+
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextField, '任务名称'), '等待提醒同步');
+      await tester.pump();
+
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(scheduler.started, isTrue);
+      expect(find.byType(TodoDetailScreen), findsOneWidget);
+      expect(find.text('home-root'), findsNothing);
+
+      scheduler.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(find.text('home-root'), findsOneWidget);
+      expect(provider.todos.single.title, '等待提醒同步');
     });
 
     testWidgets('clean 状态点保存：直接返回 home', (tester) async {
@@ -257,4 +290,23 @@ void main() {
       expect(stored.title, '原始标题');
     });
   });
+}
+
+class _GatedTodoScheduler extends RecordingReminderScheduler {
+  final Completer<void> _gate = Completer<void>();
+
+  bool get started => todoSyncs.isNotEmpty;
+
+  void complete() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  @override
+  Future<void> syncTodos(
+    Iterable<TodoItem> todos, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
+    await _gate.future;
+  }
 }

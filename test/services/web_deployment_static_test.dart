@@ -73,8 +73,8 @@ void main() {
     final downloadPage = File('deploy/duoyi.html').readAsStringSync();
     expect(downloadPage, contains('href="/duoyi/"'));
     expect(downloadPage, contains('http://6688667.xyz/duoyi/'));
-    expect(downloadPage, contains('duoyi-web-desktop-v1.1.41.tar.gz'));
-    expect(downloadPage, contains('duoyi-web-mobile-v1.1.41.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-desktop-v1.1.42.tar.gz'));
+    expect(downloadPage, contains('duoyi-web-mobile-v1.1.42.tar.gz'));
     expect(downloadPage, isNot(contains('v1.1.39')));
     expect(downloadPage, isNot(contains('v1.1.38')));
     expect(downloadPage, isNot(contains('v1.1.37')));

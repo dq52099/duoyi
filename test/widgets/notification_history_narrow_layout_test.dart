@@ -3,6 +3,7 @@ import 'package:duoyi/providers/preferences_provider.dart';
 import 'package:duoyi/screens/notification_history_screen.dart';
 import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/native_reminder_ringtone.dart';
+import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -548,6 +549,78 @@ void main() {
     expect(find.text('已注册提醒'), findsAtLeastNWidgets(1));
     // 默认展示“生效中”过滤，且无注册提醒时给出空态。
     expect(find.text('暂无生效中的提醒'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('已注册提醒独立页默认展示生效提醒并支持分页和状态过滤', (tester) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final service = NotificationService();
+    addTearDown(service.dispose);
+    final registry = InMemoryReminderScheduleRegistry();
+    final activeIds = <int>{};
+    for (var i = 1; i <= 21; i++) {
+      final id = 9100 + i;
+      activeIds.add(id);
+      final number = i.toString().padLeft(2, '0');
+      await registry.replaceObject(
+        'todo',
+        'todo-$number',
+        {id},
+        display: ReminderScheduleDisplayInfo(
+          title: '客户回访 $number',
+          subtitle: '待办 · 一次提醒 · 普通通知 · 明天 09:00',
+        ),
+      );
+    }
+    await registry.replaceObject(
+      'habit',
+      'drink-water',
+      {9801},
+      display: const ReminderScheduleDisplayInfo(
+        title: '喝水',
+        subtitle: '习惯 · 重复提醒 · 闹钟提醒 · 每天 21:00',
+      ),
+    );
+    final scheduler = ReminderScheduler(service, registry: registry);
+
+    await tester.pumpWidget(
+      Provider<ReminderScheduler?>.value(
+        value: scheduler,
+        child: MaterialApp(
+          home: RegisteredRemindersScreen(
+            pendingQueueLoader: () async => activeIds,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RegisteredRemindersScreen), findsOneWidget);
+    expect(find.text('生效中 · 21'), findsOneWidget);
+    expect(find.text('未生效 · 1'), findsOneWidget);
+    expect(find.text('全部 · 22'), findsOneWidget);
+    expect(find.text('提醒事项：客户回访 01'), findsOneWidget);
+    expect(find.text('提醒规则：待办 · 一次提醒 · 普通通知 · 明天 09:00'), findsWidgets);
+    expect(find.text('待触发提醒：1 条'), findsWidgets);
+    expect(find.text('1-20 / 21 · 第 1/2 页'), findsOneWidget);
+    expect(find.textContaining('todo-01'), findsNothing);
+    expect(find.textContaining('9101'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('registered_reminders_next')));
+    await tester.pump();
+
+    expect(find.text('提醒事项：客户回访 21'), findsOneWidget);
+    expect(find.text('21-21 / 21 · 第 2/2 页'), findsOneWidget);
+
+    await tester.tap(find.text('未生效 · 1'));
+    await tester.pump();
+
+    expect(find.text('提醒事项：喝水'), findsOneWidget);
+    expect(find.text('提醒规则：习惯 · 重复提醒 · 闹钟提醒 · 每天 21:00'), findsOneWidget);
+    expect(find.text('未生效'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../core/app_version.dart';
+import '../core/brand_strings.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../providers/todo_provider.dart';
@@ -53,6 +54,31 @@ import 'notification_history_screen.dart';
 const double _mineHeaderCompactHeight = 96;
 const double _mineHeaderRegularHeight = 84;
 
+typedef _MineThemeSlice = ({
+  BrandStrings strings,
+  String brandName,
+  AvatarFrameReward avatarFrame,
+});
+
+typedef _MineAuthSlice = ({
+  String? userId,
+  String? username,
+  String? displayName,
+  String? avatar,
+  int coinBalance,
+  bool isLoggedIn,
+  bool isAdmin,
+});
+
+typedef _MineProfileSlice = ({
+  String username,
+  String displayName,
+  String avatarUrl,
+  String avatarInitials,
+  int currentStreak,
+  int productivityScore,
+});
+
 class MineScreen extends StatelessWidget {
   final List<int>? visibleBottomNavTabs;
   final bool useShellBackground;
@@ -65,14 +91,30 @@ class MineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final s = themeProvider.brand.strings;
+    final theme = context.select<ThemeProvider, _MineThemeSlice>(
+      (provider) => (
+        strings: provider.brand.strings,
+        brandName: provider.brand.name,
+        avatarFrame: provider.activeAvatarFrame,
+      ),
+    );
+    final s = theme.strings;
     final todoCompletionRate = context.select<TodoProvider, int>(_todoRate);
     final todoProvider = context.read<TodoProvider>();
     final habitProvider = context.read<HabitProvider>();
     final weeklyFocus = context.select<PomodoroProvider, int>(_weeklyFocus);
     final pomodoroProvider = context.read<PomodoroProvider>();
-    final userProvider = context.watch<UserProvider>();
+    final profile = context.select<UserProvider, _MineProfileSlice>((provider) {
+      final p = provider.profile;
+      return (
+        username: p.username,
+        displayName: p.displayName,
+        avatarUrl: p.avatarUrl,
+        avatarInitials: p.avatarInitials,
+        currentStreak: p.currentStreak,
+        productivityScore: p.productivityScore,
+      );
+    });
     final notificationHistoryCount = context.select<NotificationService, int>(
       (service) => service.historyCount,
     );
@@ -80,7 +122,18 @@ class MineScreen extends StatelessWidget {
         .select<NotificationService, bool>(
           (service) => service.hasUnreadHistory,
         );
-    final auth = context.watch<AuthProvider>();
+    final auth = context.select<AuthProvider, _MineAuthSlice>((provider) {
+      final state = provider.state;
+      return (
+        userId: state.userId,
+        username: state.username,
+        displayName: state.displayName,
+        avatar: state.avatar,
+        coinBalance: state.coinBalance,
+        isLoggedIn: state.isLoggedIn,
+        isAdmin: state.isAdmin,
+      );
+    });
     final aiEnabled = context.select<AiService, bool>((ai) => ai.enabled);
     final aiReviewHistoryCount = context.select<AiService, int>(
       (ai) => ai.reviewHistory.length,
@@ -99,7 +152,7 @@ class MineScreen extends StatelessWidget {
       (provider) => provider.coinBalance,
     );
     final cs = Theme.of(context).colorScheme;
-    final avatarFrame = themeProvider.activeAvatarFrame;
+    final avatarFrame = theme.avatarFrame;
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
@@ -110,19 +163,26 @@ class MineScreen extends StatelessWidget {
         ? Colors.transparent
         : routeBackground.withValues(alpha: 0.96);
 
-    final p = userProvider.profile;
-    final localDisplayName = _firstNonEmpty([p.displayName, p.username, '用户']);
-    final displayName = auth.state.isLoggedIn
+    final localDisplayName = _firstNonEmpty([
+      profile.displayName,
+      profile.username,
+      '用户',
+    ]);
+    final displayName = auth.isLoggedIn
         ? _firstNonEmpty([
-            auth.state.displayName,
-            p.displayName,
-            auth.state.username,
+            auth.displayName,
+            profile.displayName,
+            auth.username,
             localDisplayName,
           ])
         : localDisplayName;
-    final avatarValue = auth.state.isLoggedIn
-        ? _firstNonEmpty([auth.state.avatar, p.avatarUrl, p.avatarInitials])
-        : _firstNonEmpty([p.avatarUrl, p.avatarInitials]);
+    final avatarValue = auth.isLoggedIn
+        ? _firstNonEmpty([
+            auth.avatar,
+            profile.avatarUrl,
+            profile.avatarInitials,
+          ])
+        : _firstNonEmpty([profile.avatarUrl, profile.avatarInitials]);
     final mineHeader = AppSurfaceCard(
       margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
       padding: const EdgeInsets.all(14),
@@ -188,8 +248,7 @@ class MineScreen extends StatelessWidget {
                               radius: compact ? 26 : 30,
                               cacheKey: _avatarCacheKey(
                                 avatarValue,
-                                p.updatedAt,
-                                auth.state.userId,
+                                auth.userId,
                               ),
                             ),
                           ),
@@ -246,16 +305,14 @@ class MineScreen extends StatelessWidget {
               ],
             ),
           );
-          final username = auth.state.isLoggedIn
-              ? _firstNonEmpty([auth.state.username, p.username])
-              : p.username;
-          final coins = auth.state.isLoggedIn
-              ? auth.state.coinBalance
-              : coinBalance;
+          final username = auth.isLoggedIn
+              ? _firstNonEmpty([auth.username, profile.username])
+              : profile.username;
+          final coins = auth.isLoggedIn ? auth.coinBalance : coinBalance;
           final accountAction = SizedBox(
-            width: auth.state.isLoggedIn ? 38 : 54,
+            width: auth.isLoggedIn ? 38 : 54,
             height: 30,
-            child: auth.state.isLoggedIn
+            child: auth.isLoggedIn
                 ? Tooltip(
                     message: '退出登录',
                     child: IconButton.filledTonal(
@@ -302,7 +359,7 @@ class MineScreen extends StatelessWidget {
               icon: Icons.savings_outlined,
               color: cs.secondary,
             ),
-            if (auth.state.isLoggedIn && auth.state.isAdmin)
+            if (auth.isLoggedIn && auth.isAdmin)
               _MineUserLineChip(label: '管理员', color: cs.primary),
           ];
           return SizedBox(
@@ -383,7 +440,7 @@ class MineScreen extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: '连续打卡',
-            value: '${p.currentStreak}',
+            value: '${profile.currentStreak}',
             unit: '天',
             icon: Icons.repeat,
             color: cs.tertiary,
@@ -397,7 +454,7 @@ class MineScreen extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: '效率评分',
-            value: '${p.productivityScore}',
+            value: '${profile.productivityScore}',
             icon: Icons.auto_awesome,
             color: DesignTokens.defaultWarning,
           ),
@@ -418,7 +475,7 @@ class MineScreen extends StatelessWidget {
               title: 'AI 助手',
               message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
               color: Colors.purple,
-              onTap: auth.state.isAdmin
+              onTap: auth.isAdmin
                   ? () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -651,7 +708,7 @@ class MineScreen extends StatelessWidget {
                 label: s.mineThemeLabel,
                 color: cs.primary,
                 trailing: Text(
-                  themeProvider.brand.name,
+                  theme.brandName,
                   style: TextStyle(color: cs.primary, fontSize: 11),
                 ),
                 onTap: () => Navigator.push(
@@ -791,7 +848,7 @@ class MineScreen extends StatelessWidget {
                 color: Colors.orange,
                 onTap: () => _openNotificationSettings(context),
               ),
-              if (auth.state.isLoggedIn && auth.state.isAdmin)
+              if (auth.isLoggedIn && auth.isAdmin)
                 _Tile(
                   icon: Icons.admin_panel_settings_outlined,
                   label: '管理员后台',
@@ -1010,11 +1067,7 @@ class MineScreen extends StatelessWidget {
         builder: (_) => _AvatarPreviewScreen(
           avatar: avatar,
           displayName: displayName,
-          cacheKey: _avatarCacheKey(
-            avatar,
-            profile.updatedAt,
-            auth.state.userId,
-          ),
+          cacheKey: _avatarCacheKey(avatar, auth.state.userId),
           onEdit: () => _pickAndSaveAvatar(context),
         ),
       ),
@@ -1345,7 +1398,7 @@ class _ProfileAvatar extends StatelessWidget {
           ? ClipOval(
               child: CachedAvatarImage(
                 url: networkUrl,
-                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
+                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null),
                 width: radius * 2,
                 height: radius * 2,
                 fallbackBuilder: (_) => _ProfileAvatarLetter(
@@ -1560,7 +1613,7 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final image = networkUrl != null
         ? CachedAvatarImage(
             url: networkUrl,
-            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
+            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null),
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1669,7 +1722,7 @@ String? _networkAvatarUrl(String value) {
 /// 注意**不要**混入 `profile.updatedAt` —— 它会随每次统计重算（待办完成数、
 /// 专注分钟、连续打卡）而刷新，登录后云同步回写数据时会频繁变动，导致头像被
 /// 反复重新解码/读盘，滑动“我的”页面时产生明显卡顿。
-String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
+String _avatarCacheKey(String? avatarUrl, String? userId) {
   return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}';
 }
 

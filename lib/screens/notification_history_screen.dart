@@ -855,8 +855,8 @@ class _NotificationSettingsScreenState
     bool fullScreenAlarm = true,
   }) {
     return switch (DailyReminderSlot.normalizeKind(kind)) {
-      ReminderKind.popup => '弹出提醒',
-      ReminderKind.alarm => fullScreenAlarm ? '全屏闹钟提醒' : '闹钟提醒',
+      ReminderKind.popup => '弹出/后台兜底提醒',
+      ReminderKind.alarm => fullScreenAlarm ? '锁屏全屏闹钟提醒' : '闹钟提醒',
       ReminderKind.push || ReminderKind.email || ReminderKind.off => '普通定时通知',
     };
   }
@@ -1340,7 +1340,7 @@ class _NotificationSettingsScreenState
                                 icon: Icons.open_in_new_outlined,
                                 color: Colors.teal,
                                 title: '1 分钟后弹出测试',
-                                subtitle: '应用在前台应弹出窗口，后台保留通知兜底',
+                                subtitle: '前台直接弹窗；后台或锁屏时使用系统通知兜底',
                                 onTap: _busy ? null : _sendScheduledPopupTest,
                               ),
                               AppSettingsTile(
@@ -1354,7 +1354,7 @@ class _NotificationSettingsScreenState
                                 icon: Icons.fullscreen_outlined,
                                 color: Colors.deepOrange,
                                 title: '1 分钟后全屏闹钟',
-                                subtitle: '验证定时闹钟、响铃、震动和全屏弹出',
+                                subtitle: '锁屏或后台应全屏唤起，并同时响铃震动',
                                 onTap: _busy
                                     ? null
                                     : _sendScheduledFullScreenAlarmTest,
@@ -1644,6 +1644,8 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final typeLabel = _registeredReminderTypeLabel(entry.objectType);
     final systemCount = entry.idCount;
+    final title = _registeredReminderDisplayTitle(entry, typeLabel);
+    final subtitle = _registeredReminderDisplaySubtitle(entry, typeLabel);
     return Container(
       key: ValueKey('registered_reminder_detail_${entry.objectKey}'),
       margin: const EdgeInsets.only(bottom: 8),
@@ -1673,7 +1675,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        entry.title,
+                        '提醒事项：$title',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1698,8 +1700,8 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  entry.subtitle,
-                  maxLines: 1,
+                  '提醒规则：$subtitle',
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.52),
@@ -1707,7 +1709,7 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '系统记录：$systemCount 条',
+                  '待触发提醒：$systemCount 条',
                   softWrap: true,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.66),
@@ -1731,7 +1733,9 @@ enum _RegisteredReminderStatus { active, inactive, all }
 /// 调度器登记了但系统队列里查不到（常见于权限被收回或被系统清理），可据此排查
 /// “到点没提醒”的问题。
 class RegisteredRemindersScreen extends StatefulWidget {
-  const RegisteredRemindersScreen({super.key});
+  final Future<Set<int>> Function()? pendingQueueLoader;
+
+  const RegisteredRemindersScreen({super.key, this.pendingQueueLoader});
 
   @override
   State<RegisteredRemindersScreen> createState() =>
@@ -1778,6 +1782,26 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
   }
 
   Future<void> _resolveSystemQueue() async {
+    final customLoader = widget.pendingQueueLoader;
+    if (customLoader != null) {
+      try {
+        final queue = await customLoader();
+        if (!mounted) return;
+        setState(() {
+          _systemQueueIds = queue;
+          _queueResolved = true;
+        });
+      } catch (e, st) {
+        debugPrint('[RegisteredReminders] custom pending ids failed: $e\n$st');
+        if (!mounted) return;
+        setState(() {
+          _systemQueueIds = <int>{};
+          _queueResolved = false;
+        });
+      }
+      return;
+    }
+
     final queue = <int>{};
     var queueResolved = true;
     Future<List<int>> guarded(Future<List<int>> Function() read) async {
@@ -2001,25 +2025,42 @@ class _Pager extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '$rangeStart-$rangeEnd / $total · 第 ${currentPage + 1}/$totalPages 页',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.6),
+          Expanded(
+            child: Text(
+              '$rangeStart-$rangeEnd / $total · 第 ${currentPage + 1}/$totalPages 页',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.6),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 key: const ValueKey('registered_reminders_prev'),
                 tooltip: '上一页',
+                constraints: const BoxConstraints.tightFor(
+                  width: 38,
+                  height: 38,
+                ),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
                 onPressed: onPrev,
                 icon: const Icon(Icons.chevron_left),
               ),
               IconButton(
                 key: const ValueKey('registered_reminders_next'),
                 tooltip: '下一页',
+                constraints: const BoxConstraints.tightFor(
+                  width: 38,
+                  height: 38,
+                ),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
                 onPressed: onNext,
                 icon: const Icon(Icons.chevron_right),
               ),
@@ -2703,6 +2744,24 @@ String _registeredReminderTypeLabel(String objectType) {
     'countdown' => '倒数日',
     _ => objectType,
   };
+}
+
+String _registeredReminderDisplayTitle(
+  ReminderScheduleSnapshotEntry entry,
+  String typeLabel,
+) {
+  final value = entry.title.trim();
+  if (value.isNotEmpty) return value;
+  return '$typeLabel提醒（标题未同步）';
+}
+
+String _registeredReminderDisplaySubtitle(
+  ReminderScheduleSnapshotEntry entry,
+  String typeLabel,
+) {
+  final value = entry.subtitle.trim();
+  if (value.isNotEmpty) return value;
+  return '$typeLabel · 提醒规则暂未同步，可刷新或重新保存对应事项';
 }
 
 Color _registeredReminderTypeColor(String objectType, ColorScheme cs) {

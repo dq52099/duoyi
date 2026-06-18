@@ -513,6 +513,119 @@ int _legacySubId(int base, int weekday) => base * 10 + weekday;
 int _anniversaryAlarmId(String annId) => _idFor('anni_alarm_$annId');
 int _anniversaryPopupId(String annId) => _idFor('anni_$annId');
 
+Habit _alarmHabit({
+  required String id,
+  String name = '阅读',
+  int hour = 21,
+  int minute = 30,
+  List<int> activeWeekdays = const <int>[0, 1, 2, 3, 4, 5, 6],
+}) {
+  final weekdays =
+      activeWeekdays
+          .where((day) => day >= 0 && day <= 6)
+          .map((day) => day + 1)
+          .toSet()
+          .toList()
+        ..sort();
+  final fullWeek = weekdays.length == 7;
+  final habit = Habit(id: id, name: name, activeWeekdays: activeWeekdays);
+  habit.reminderPlan = ReminderPlan(
+    enabled: true,
+    rules: [
+      ReminderRule(
+        id: 'habit-reminder',
+        type: fullWeek
+            ? ReminderRuleType.dailyTime
+            : ReminderRuleType.weeklyTime,
+        kind: ReminderKind.alarm,
+        hour: hour,
+        minute: minute,
+        weekdays: fullWeek ? const <int>[] : weekdays,
+        fullScreen: true,
+        snoozeMinutes: 5,
+      ),
+    ],
+  );
+  return habit;
+}
+
+Habit _rawHabitWithReminderPlan({
+  required String id,
+  required String name,
+  required ReminderPlan reminderPlan,
+  List<int> activeWeekdays = const <int>[0, 1, 2, 3, 4, 5, 6],
+}) {
+  final habit = Habit(id: id, name: name, activeWeekdays: activeWeekdays);
+  habit.reminderPlan = reminderPlan;
+  return habit;
+}
+
+ReminderPlan _rawHabitPlan(List<ReminderRule> rules) {
+  return ReminderPlan(enabled: true, rules: rules);
+}
+
+ReminderRule _rawHabitRule({
+  String id = 'habit-reminder',
+  ReminderRuleType type = ReminderRuleType.dailyTime,
+  ReminderKind kind = ReminderKind.popup,
+  required int hour,
+  required int minute,
+  List<int> weekdays = const <int>[],
+}) {
+  return ReminderRule(
+    id: id,
+    type: type,
+    kind: kind,
+    hour: hour,
+    minute: minute,
+    weekdays: weekdays,
+  );
+}
+
+Habit _pushHabit({
+  required String id,
+  String name = '喝水',
+  int hour = 8,
+  int minute = 10,
+  List<int> weekdays = const <int>[1, 3, 5],
+}) {
+  return _rawHabitWithReminderPlan(
+    id: id,
+    name: name,
+    reminderPlan: _rawHabitPlan([
+      _rawHabitRule(
+        type: ReminderRuleType.weeklyTime,
+        kind: ReminderKind.push,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+      ),
+    ]),
+  );
+}
+
+Habit _popupHabit({
+  required String id,
+  String name = '拉伸',
+  int hour = 19,
+  int minute = 5,
+  List<int> weekdays = const <int>[2, 4],
+}) {
+  return _rawHabitWithReminderPlan(
+    id: id,
+    name: name,
+    reminderPlan: _rawHabitPlan([
+      _rawHabitRule(
+        type: ReminderRuleType.weeklyTime,
+        kind: ReminderKind.popup,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+      ),
+    ]),
+  );
+}
+
 void main() {
   late _FakeNotifSink notif;
   late _FakeAlarmSink alarm;
@@ -618,6 +731,53 @@ void main() {
         expect(popup.scheduled.map((entry) => entry['id']), [expectedId]);
       },
     );
+
+    test('syncTodos 修改提醒时旧清理失败仍注册当前提醒', () async {
+      final firstWhen = DateTime.now().add(const Duration(hours: 2));
+      final updatedWhen = firstWhen.add(const Duration(hours: 1));
+      TodoItem todoAt(DateTime when) => TodoItem(
+        id: 'todo-cleanup-failed-keep-new-reminder',
+        title: '修改提醒后仍要响铃',
+        dueDate: when,
+        reminderAt: when,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r1',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: when.hour,
+              minute: when.minute,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todoAt(firstWhen)]);
+      expect(notif.scheduled, hasLength(1));
+      notif.scheduled.clear();
+      notif.failCancel = true;
+
+      await scheduler.syncTodos([todoAt(updatedWhen)]);
+
+      final expectedId = _idFor(
+        'todo:todo-cleanup-failed-keep-new-reminder:r1',
+      );
+      expect(notif.scheduled.map((entry) => entry['id']), [expectedId]);
+      expect(
+        notif.scheduled.single['when'],
+        DateTime(
+          updatedWhen.year,
+          updatedWhen.month,
+          updatedWhen.day,
+          updatedWhen.hour,
+          updatedWhen.minute,
+        ),
+      );
+      expect(notif.issues.single['blocking'], isFalse);
+      expect(notif.issues.single['message'], contains('提醒已保存'));
+    });
 
     test('preflight blocks enabled one-shot todo reminders in the past', () {
       final now = DateTime(2026, 5, 24, 10);
@@ -1362,7 +1522,7 @@ void main() {
       expect(alarm.scheduled, isEmpty);
     });
 
-    test('syncHabits 把启用提醒的习惯优先调度成闹钟提醒', () async {
+    test('syncHabits 把旧字段习惯默认调度成弹出框提醒', () async {
       final habit = Habit(
         id: 'h1',
         name: '阅读',
@@ -1372,26 +1532,19 @@ void main() {
       );
       await scheduler.syncHabits([habit]);
       expect(notif.scheduled, isEmpty);
-      expect(alarm.scheduled.length, 1);
-      expect(alarm.scheduled.first['kind'], 'daily_fullscreen');
-      expect(alarm.scheduled.first['hour'], 21);
-      expect(alarm.scheduled.first['minute'], 30);
-      expect(alarm.scheduled.first['fullScreen'], isTrue);
-      expect(alarm.scheduled.first['snoozeMinutes'], 5);
-      expect(alarm.scheduled.first['title'], '习惯打卡提醒');
-      expect(alarm.scheduled.first['body'], '阅读 到时间了，点开确认打卡');
-      expect(alarm.scheduled.first['payload'], 'duoyi://habit/h1?confirm=1');
+      expect(alarm.scheduled, isEmpty);
+      expect(popup.scheduled.length, 1);
+      expect(popup.scheduled.first['kind'], 'popup_repeating');
+      expect(popup.scheduled.first['hour'], 21);
+      expect(popup.scheduled.first['minute'], 30);
+      expect(popup.scheduled.first['title'], '习惯打卡提醒');
+      expect(popup.scheduled.first['body'], '阅读 到时间了，点开确认打卡');
+      expect(popup.scheduled.first['payload'], 'duoyi://habit/h1?confirm=1');
     });
 
     test('syncHabits 闹钟通知权限异常时降级普通通知', () async {
       alarm.failDailyWithNotificationPermission = true;
-      final habit = Habit(
-        id: 'h1',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h1', name: '阅读');
 
       await scheduler.syncHabits([habit]);
 
@@ -1404,13 +1557,7 @@ void main() {
     });
 
     test('syncHabits 旧注册清理失败时仍注册当前提醒并保留债务', () async {
-      final habit = Habit(
-        id: 'h-stale-cleanup',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-stale-cleanup', name: '阅读');
       final staleId = _idFor('habit_${habit.id}:old-rule');
       final expectedId = _idFor('habit_${habit.id}');
 
@@ -1439,13 +1586,7 @@ void main() {
 
     test('syncHabits 闹钟插件异常时也降级普通通知', () async {
       alarm.failDailyWithGenericError = true;
-      final habit = Habit(
-        id: 'h-generic-fallback',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-generic-fallback', name: '阅读');
 
       await scheduler.syncHabits([habit]);
 
@@ -1459,13 +1600,7 @@ void main() {
       alarm
         ..failDailyWithGenericError = true
         ..rememberDailyPendingBeforeGenericError = true;
-      final habit = Habit(
-        id: 'h-partial-native-no-fallback',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-partial-native-no-fallback', name: '阅读');
       final expectedId = _idFor('habit_${habit.id}');
 
       await scheduler.syncHabits([habit]);
@@ -1479,12 +1614,9 @@ void main() {
       alarm
         ..failDailyWithAlarmPermission = true
         ..rememberDailyPendingBeforeAlarmPermission = true;
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'h-permission-partial-no-fallback',
         name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
       );
       final expectedId = _idFor('habit_${habit.id}');
 
@@ -1499,12 +1631,9 @@ void main() {
       alarm
         ..failDailyWithNotificationPermission = true
         ..rememberDailyPendingBeforeNotificationPermission = true;
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'h-notification-permission-partial-no-fallback',
         name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
       );
       final expectedId = _idFor('habit_${habit.id}');
 
@@ -1517,13 +1646,7 @@ void main() {
 
     test('syncHabits 闹钟交接失败时不降级普通通知避免双弹', () async {
       alarm.failDailyWithHandoff = true;
-      final habit = Habit(
-        id: 'h-handoff-no-fallback',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-handoff-no-fallback', name: '阅读');
 
       await scheduler.syncHabits([habit]);
 
@@ -1532,23 +1655,7 @@ void main() {
     });
 
     test('syncHabits kind=push 走普通通知而不是闹钟', () async {
-      final habit = Habit(
-        id: 'h-push',
-        name: '喝水',
-        reminderPlan: ReminderPlan(
-          enabled: true,
-          rules: [
-            ReminderRule(
-              id: 'habit-reminder',
-              type: ReminderRuleType.weeklyTime,
-              kind: ReminderKind.push,
-              hour: 8,
-              minute: 10,
-              weekdays: const [1, 3, 5],
-            ),
-          ],
-        ),
-      );
+      final habit = _pushHabit(id: 'h-push', name: '喝水');
 
       await scheduler.syncHabits([habit]);
 
@@ -1562,23 +1669,7 @@ void main() {
     });
 
     test('syncHabits kind=popup 走应用内弹窗提醒', () async {
-      final habit = Habit(
-        id: 'h-popup',
-        name: '拉伸',
-        reminderPlan: ReminderPlan(
-          enabled: true,
-          rules: [
-            ReminderRule(
-              id: 'habit-reminder',
-              type: ReminderRuleType.weeklyTime,
-              kind: ReminderKind.popup,
-              hour: 19,
-              minute: 5,
-              weekdays: const [2, 4],
-            ),
-          ],
-        ),
-      );
+      final habit = _popupHabit(id: 'h-popup', name: '拉伸');
 
       await scheduler.syncHabits([habit]);
 
@@ -1656,15 +1747,18 @@ void main() {
         name: '喝水',
         reminderPlan: ReminderPlan(
           enabled: true,
-          rules: [popupRule('r-09', 9), popupRule('r-12', 12), popupRule('r-15', 15)],
+          rules: [
+            popupRule('r-09', 9),
+            popupRule('r-12', 12),
+            popupRule('r-15', 15),
+          ],
         ),
       );
 
       await scheduler.syncHabits([threeTimes]);
       expect(popup.scheduled.length, 3);
-      final secondId = popup.scheduled.firstWhere(
-        (e) => e['hour'] == 12,
-      )['id'] as int;
+      final secondId =
+          popup.scheduled.firstWhere((e) => e['hour'] == 12)['id'] as int;
 
       popup.scheduled.clear();
       popup.cancelled.clear();
@@ -2472,13 +2566,7 @@ void main() {
     test('syncHabits 闹钟和 push 都失败时不记为已调度，权限恢复后会重试', () async {
       alarm.failDailyWithNotificationPermission = true;
       notif.denyHabitReminder = true;
-      final habit = Habit(
-        id: 'h-retry',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-retry', name: '阅读');
 
       await scheduler.syncHabits([habit]);
 
@@ -2495,13 +2583,7 @@ void main() {
 
     test('syncHabits 闹钟降级通知后二次同步不重复注册', () async {
       alarm.failDailyWithGenericError = true;
-      final habit = Habit(
-        id: 'h-alarm-fallback-idempotent',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
-      );
+      final habit = _alarmHabit(id: 'h-alarm-fallback-idempotent', name: '阅读');
 
       await scheduler.syncHabits([habit]);
       notif.cancelledHabits.clear();
@@ -2515,13 +2597,7 @@ void main() {
     });
 
     test('syncHabits 关闭提醒后清理上一轮调度', () async {
-      final h1 = Habit(
-        id: 'h1',
-        name: '阅读',
-        remind: true,
-        remindHour: 9,
-        remindMinute: 0,
-      );
+      final h1 = _alarmHabit(id: 'h1', name: '阅读', hour: 9, minute: 0);
       await scheduler.syncHabits([h1]);
       expect(notif.scheduled, isEmpty);
       expect(alarm.scheduled.length, 1);
@@ -2532,12 +2608,11 @@ void main() {
     });
 
     test('syncHabits 冷启动关闭提醒会清理已持久化的旧提醒', () async {
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'habit-cold-start-off',
         name: '阅读',
-        remind: true,
-        remindHour: 9,
-        remindMinute: 0,
+        hour: 9,
+        minute: 0,
       );
       final id = _idFor('habit_${habit.id}');
       await scheduler.syncHabits([habit]);
@@ -2561,12 +2636,9 @@ void main() {
     });
 
     test('syncHabits 同一提醒重复同步不会取消重放', () async {
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'h-idempotent',
         name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
         activeWeekdays: const [0, 2, 4],
       );
 
@@ -2581,12 +2653,9 @@ void main() {
     });
 
     test('syncHabits 每周原生闹钟 base id pending 时不会重复重注册', () async {
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'h-native-weekly-base-pending',
         name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
         activeWeekdays: const [0, 2, 4],
       );
       final expectedId = _idFor('habit_${habit.id}');
@@ -2608,22 +2677,10 @@ void main() {
     });
 
     test('syncHabits 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹', () async {
-      final habit = Habit(
+      final habit = _alarmHabit(
         id: 'h-native-weekly-stale-legacy-push',
         name: '阅读',
-        reminderPlan: ReminderPlan(
-          enabled: true,
-          rules: [
-            ReminderRule(
-              id: 'habit-reminder',
-              type: ReminderRuleType.weeklyTime,
-              kind: ReminderKind.alarm,
-              hour: 21,
-              minute: 30,
-              weekdays: const [1, 3, 5],
-            ),
-          ],
-        ),
+        activeWeekdays: const [0, 2, 4],
       );
       final expectedId = _idFor('habit_${habit.id}');
       final mondayId = _subId(expectedId, 1);
@@ -2645,23 +2702,7 @@ void main() {
     });
 
     test('syncHabits 规则未变但 push pending 丢失时会重新注册', () async {
-      final habit = Habit(
-        id: 'h-push-pending-lost',
-        name: '喝水',
-        reminderPlan: ReminderPlan(
-          enabled: true,
-          rules: [
-            ReminderRule(
-              id: 'habit-reminder',
-              type: ReminderRuleType.weeklyTime,
-              kind: ReminderKind.push,
-              hour: 8,
-              minute: 10,
-              weekdays: const [1, 3, 5],
-            ),
-          ],
-        ),
-      );
+      final habit = _pushHabit(id: 'h-push-pending-lost', name: '喝水');
       final baseId = _idFor('habit_${habit.id}');
       final mondayId = _subId(baseId, 1);
 
@@ -2681,14 +2722,13 @@ void main() {
     });
 
     test('syncHabits 修改时间后取消旧调度并重新下发', () async {
-      final habit = Habit(
-        id: 'h-reschedule',
-        name: '阅读',
-        remind: true,
-        remindHour: 21,
-        remindMinute: 30,
+      final habit = _alarmHabit(id: 'h-reschedule', name: '阅读');
+      final edited = _alarmHabit(
+        id: habit.id,
+        name: habit.name,
+        hour: 22,
+        minute: 0,
       );
-      final edited = habit.copyWith(remindHour: 22, remindMinute: 0);
 
       await scheduler.syncHabits([habit]);
       await scheduler.syncHabits([edited]);
@@ -3888,7 +3928,7 @@ void main() {
       expect((await registry.idsByObject('todo'))[todo.id], {staleId, newId});
     });
 
-    test('syncTodos 冷启动同 rule 跨通道取消失败时不注册新闹钟造成双响', () async {
+    test('syncTodos 冷启动同 rule 跨通道取消失败时仍注册当前闹钟', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       final todo = TodoItem(
         id: 'todo-cold-start-same-rule-cancel-failure',
@@ -3921,13 +3961,13 @@ void main() {
       );
       await coldScheduler.syncTodos([todo]);
 
-      expect(alarm.scheduled, isEmpty);
+      expect(alarm.scheduled.map((entry) => entry['id']), [priorId]);
       expect((await registry.idsByObject('todo'))[todo.id], {priorId});
       expect(notif.issues, isNotEmpty);
       expect(notif.issues.last['blocking'], isFalse);
     });
 
-    test('syncTodos 改规则时取消失败不会注册新提醒造成双响', () async {
+    test('syncTodos 改规则时取消失败仍注册新提醒并记录债务', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       final todo = TodoItem(
         id: 'todo-cancel-failure-no-duplicate',
@@ -3968,7 +4008,7 @@ void main() {
       await scheduler.syncTodos([edited]);
 
       expect(notif.cancelled, contains(expectedId));
-      expect(alarm.scheduled, isEmpty);
+      expect(alarm.scheduled.map((entry) => entry['id']), [expectedId]);
       expect(
         notif.scheduled.where((entry) => entry['id'] == expectedId),
         hasLength(1),

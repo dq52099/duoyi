@@ -93,6 +93,50 @@ void main() {
     expect(plan.rules.single.fullScreen, isTrue);
   });
 
+  testWidgets('ReminderPlanEditor can hide type and kind selectors', (
+    tester,
+  ) async {
+    var plan = const ReminderPlan.disabled();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: ReminderPlanEditor(
+              plan: plan,
+              maxRules: 1,
+              allowAlarm: true,
+              allowRelativeToDue: false,
+              hasAnchorDate: false,
+              defaultKind: ReminderKind.popup,
+              showTypeSelector: false,
+              showKindSelector: false,
+              onChanged: (next) => setState(() => plan = next),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提醒'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('每日提醒'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提醒类型'), findsNothing);
+    expect(find.text('提醒方式'), findsNothing);
+    expect(find.text('通知'), findsNothing);
+    expect(find.text('闹钟'), findsNothing);
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(plan.enabled, isTrue);
+    expect(plan.rules.single.type, ReminderRuleType.dailyTime);
+    expect(plan.rules.single.kind, ReminderKind.popup);
+    expect(plan.rules.single.fullScreen, isFalse);
+  });
+
   testWidgets(
     'ReminderPlanEditor exposes notification popup alarm and can turn off',
     (tester) async {

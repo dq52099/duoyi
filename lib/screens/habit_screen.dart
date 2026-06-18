@@ -57,16 +57,26 @@ class _HabitScreenState extends State<HabitScreen>
     setState(() => _heatmapTabBuilt = true);
   }
 
-  Future<bool> _ensureHabitReminderReady() async {
+  Future<bool> _ensureHabitReminderReady({
+    DateTime? scheduledTime,
+    String? relatedId,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final notificationService = context.read<NotificationService?>();
     final granted =
         notificationService == null ||
-        await notificationService.requestPermission();
+        (scheduledTime == null
+            ? await notificationService.requestPermission()
+            : await notificationService.ensureReadyForReminder(
+                scheduledTime: scheduledTime,
+                issueTitle: I18n.tr('habit.error.reminder_register_failed'),
+                relatedId: relatedId,
+              ));
     if (!granted) {
+      final issue = notificationService.lastScheduleIssue;
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('系统通知未授权，习惯提醒不会响铃或弹出'),
+        SnackBar(
+          content: Text(issue?.message ?? '系统通知未授权，习惯提醒不会响铃或弹出'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -561,10 +571,6 @@ class _HabitScreenState extends State<HabitScreen>
                             );
                             return;
                           }
-                          final reminderReady = shouldRemind
-                              ? await _ensureHabitReminderReady()
-                              : false;
-                          if (!mounted || !ctx.mounted) return;
                           // legacy 字段与 reminderPlan 都从同一份排序后的时间派生，
                           // 避免“录入顺序”与“最早时间”不一致。
                           final sortedRemindTimes = remindTimes.toList()
@@ -573,10 +579,25 @@ class _HabitScreenState extends State<HabitScreen>
                                   ? a.hour - b.hour
                                   : a.minute - b.minute,
                             );
+                          final reminderPlan = shouldRemind
+                              ? _habitPopupDailyReminderPlan(sortedRemindTimes)
+                              : const ReminderPlan.disabled();
+                          final habitId = DateTime.now().millisecondsSinceEpoch
+                              .toString();
+                          final reminderReady = shouldRemind
+                              ? await _ensureHabitReminderReady(
+                                  scheduledTime:
+                                      _nextHabitReminderTriggerForTimes(
+                                        sortedRemindTimes,
+                                      ),
+                                  relatedId: habitId,
+                                )
+                              : false;
+                          if (!mounted || !ctx.mounted) return;
+                          if (shouldRemind && !reminderReady) return;
                           await habitProvider.addHabit(
                             Habit(
-                              id: DateTime.now().millisecondsSinceEpoch
-                                  .toString(),
+                              id: habitId,
                               name: nameCtrl.text.trim(),
                               icon: selectedIcon,
                               colorValue: selectedColor,
@@ -594,28 +615,14 @@ class _HabitScreenState extends State<HabitScreen>
                                   : null,
                               startDate: startDate,
                               endDate: endDate,
-                              remind: shouldRemind && reminderReady,
+                              remind: shouldRemind,
                               remindHour: sortedRemindTimes.isNotEmpty
                                   ? sortedRemindTimes.first.hour
                                   : null,
                               remindMinute: sortedRemindTimes.isNotEmpty
                                   ? sortedRemindTimes.first.minute
                                   : null,
-                              // 习惯打卡默认弹出框提醒；多个时间各生成一条规则。
-                              reminderPlan: (shouldRemind && reminderReady)
-                                  ? ReminderPlan(
-                                      enabled: true,
-                                      rules: [
-                                        for (final t in sortedRemindTimes)
-                                          ReminderRule(
-                                            type: ReminderRuleType.dailyTime,
-                                            kind: ReminderKind.popup,
-                                            hour: t.hour,
-                                            minute: t.minute,
-                                          ),
-                                      ],
-                                    )
-                                  : null,
+                              reminderPlan: reminderPlan,
                             ),
                           );
                           navigator.pop();
@@ -2031,6 +2038,42 @@ Future<void> _handleHabitMenuAction(
       context,
     ).showSnackBar(const SnackBar(content: Text('习惯已删除')));
   }
+}
+
+ReminderPlan _habitPopupDailyReminderPlan(List<TimeOfDay> times) {
+  if (times.isEmpty) return const ReminderPlan.disabled();
+  return ReminderPlan(
+    enabled: true,
+    rules: [
+      for (final time in times)
+        ReminderRule(
+          type: ReminderRuleType.dailyTime,
+          kind: ReminderKind.popup,
+          hour: time.hour,
+          minute: time.minute,
+        ),
+    ],
+  );
+}
+
+DateTime? _nextHabitReminderTriggerForTimes(List<TimeOfDay> times) {
+  DateTime? next;
+  final now = DateTime.now();
+  for (final time in times) {
+    var target = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    if (!target.isAfter(now)) {
+      final tomorrow = now.add(const Duration(days: 1));
+      target = DateTime(
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        time.hour,
+        time.minute,
+      );
+    }
+    if (next == null || target.isBefore(next)) next = target;
+  }
+  return next;
 }
 
 Color _habitButtonForeground(Color background) {

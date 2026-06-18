@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../core/i18n.dart';
-import '../providers/achievement_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
@@ -33,8 +32,10 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    return auth.state.isLoggedIn
+    final isLoggedIn = context.select<AuthProvider, bool>(
+      (auth) => auth.state.isLoggedIn,
+    );
+    return isLoggedIn
         ? _AccountProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart)
         : _LocalProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart);
   }
@@ -71,7 +72,7 @@ class _ProfileAvatarPreview extends StatelessWidget {
           ? ClipOval(
               child: CachedAvatarImage(
                 url: networkUrl,
-                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
+                cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null),
                 width: radius * 2,
                 height: radius * 2,
                 fallbackBuilder: (_) => _ProfileAvatarLetter(
@@ -355,7 +356,7 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final image = networkUrl != null
         ? CachedAvatarImage(
             url: networkUrl,
-            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null, null),
+            cacheKey: cacheKey ?? _avatarCacheKey(networkUrl, null),
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1057,13 +1058,12 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         ? context.read<AuthProvider>().state.avatar
         : _avatarCtrl.text.trim();
     final auth = context.read<AuthProvider>().state;
-    final profile = context.read<UserProvider>().profile;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: avatar,
           displayName: displayName,
-          cacheKey: _avatarCacheKey(avatar, profile.updatedAt, auth.userId),
+          cacheKey: _avatarCacheKey(avatar, auth.userId),
           onEdit: _uploadAvatar,
         ),
       ),
@@ -1186,25 +1186,43 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AuthProvider>().state;
-    final profile = context.watch<UserProvider>().profile;
-    final themeProvider = context.watch<ThemeProvider>();
-    final achievements = context.watch<AchievementProvider?>();
-    final avatarFrame = themeProvider.activeAvatarFrame;
+    final account = context
+        .select<
+          AuthProvider,
+          ({
+            String? userId,
+            String? username,
+            String? email,
+            bool emailVerified,
+            String? displayName,
+            String? avatar,
+            int coinBalance,
+          })
+        >((auth) {
+          final state = auth.state;
+          return (
+            userId: state.userId,
+            username: state.username,
+            email: state.email,
+            emailVerified: state.emailVerified,
+            displayName: state.displayName,
+            avatar: state.avatar,
+            coinBalance: state.coinBalance,
+          );
+        });
+    final avatarFrame = context.select<ThemeProvider, AvatarFrameReward>(
+      (provider) => provider.activeAvatarFrame,
+    );
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
-      state.displayName,
-      state.username,
+      account.displayName,
+      account.username,
     ]);
     final previewAvatar = _avatarCtrl.text.trim().isEmpty
-        ? state.avatar
+        ? account.avatar
         : _avatarCtrl.text.trim();
-    final avatarCacheKey = _avatarCacheKey(
-      previewAvatar,
-      profile.updatedAt,
-      state.userId,
-    );
+    final avatarCacheKey = _avatarCacheKey(previewAvatar, account.userId);
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Colors.transparent;
 
@@ -1272,8 +1290,8 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        state.email?.isNotEmpty == true
-                            ? '${state.email}${state.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
+                        account.email?.isNotEmpty == true
+                            ? '${account.email}${account.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
                             : I18n.tr('profile.email.unbound'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1289,14 +1307,13 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                           _ProfileMetricChip(
                             icon: Icons.savings_outlined,
                             label: I18n.tr('profile.coins'),
-                            value:
-                                '${state.isLoggedIn ? state.coinBalance : achievements?.coinBalance ?? 0}',
+                            value: '${account.coinBalance}',
                           ),
-                          if (state.username?.trim().isNotEmpty == true)
+                          if (account.username?.trim().isNotEmpty == true)
                             _ProfileMetricChip(
                               icon: Icons.badge_outlined,
                               label: I18n.tr('profile.account_id'),
-                              value: state.username!.trim(),
+                              value: account.username!.trim(),
                             ),
                         ],
                       ),
@@ -1341,15 +1358,15 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                   _ProfileSectionHeader(
                     icon: Icons.alternate_email_outlined,
                     title: I18n.tr('profile.email.binding'),
-                    subtitle: state.emailVerified
+                    subtitle: account.emailVerified
                         ? I18n.tr('profile.email.verified')
                         : I18n.tr('profile.email.unverified_or_pending'),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    state.email?.trim().isEmpty != false
+                    account.email?.trim().isEmpty != false
                         ? I18n.tr('profile.email.unbound')
-                        : state.email!.trim(),
+                        : account.email!.trim(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(
@@ -1561,11 +1578,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: _avatarCtrl.text.trim(),
           displayName: displayName,
-          cacheKey: _avatarCacheKey(
-            _avatarCtrl.text.trim(),
-            context.read<UserProvider>().profile.updatedAt,
-            null,
-          ),
+          cacheKey: _avatarCacheKey(_avatarCtrl.text.trim(), null),
           onEdit: _pickLocalAvatar,
         ),
       ),
@@ -1644,18 +1657,13 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = context.watch<UserProvider>().profile;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
       I18n.tr('profile.default_user'),
     ]);
     final previewAvatar = _avatarCtrl.text.trim();
-    final avatarCacheKey = _avatarCacheKey(
-      previewAvatar,
-      profile.updatedAt,
-      null,
-    );
+    final avatarCacheKey = _avatarCacheKey(previewAvatar, null);
     final subtitle = _firstNonEmptyProfileText([
       _bioCtrl.text,
       _emailCtrl.text,
@@ -1901,9 +1909,8 @@ String? _networkAvatarUrl(String value) {
   return null;
 }
 
-String _avatarCacheKey(String? avatarUrl, DateTime? updatedAt, String? userId) {
-  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}|'
-      '${updatedAt?.millisecondsSinceEpoch ?? 0}';
+String _avatarCacheKey(String? avatarUrl, String? userId) {
+  return '${userId ?? ''}|${avatarUrl?.trim() ?? ''}';
 }
 
 Future<String> _copyLocalAvatarFile(XFile file) async {

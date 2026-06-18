@@ -66,4 +66,56 @@ void main() {
     expect(timeAuditProvider.entries.single.category, TimeEntryCategory.todo);
     expect(timeAuditProvider.entries.single.durationSeconds, 1800);
   });
+
+  testWidgets('completion flow ignores duplicate invocation while in-flight', (
+    tester,
+  ) async {
+    final todoProvider = TodoProvider();
+    final timeAuditProvider = TimeAuditProvider();
+    final todo = TodoItem(
+      id: 'todo-flow-duplicate',
+      title: '避免重复完成',
+      date: DateTime(2026, 5, 19, 9),
+    );
+    await todoProvider.addTodo(todo);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider<TimeAuditProvider>.value(
+            value: timeAuditProvider,
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => FilledButton(
+                onPressed: () {
+                  completeTodoWithOptionalTimeRecord(context, todo);
+                  completeTodoWithOptionalTimeRecord(context, todo);
+                },
+                child: const Text('重复完成'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('重复完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确认完成任务'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重复完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确认完成任务'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
 }

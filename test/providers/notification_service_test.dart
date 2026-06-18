@@ -132,10 +132,7 @@ void main() {
   test('Mine notification history entry hides zero history count', () {
     final source = File('lib/screens/mine_screen.dart').readAsStringSync();
     final start = source.indexOf("label: '通知记录'");
-    final end = source.indexOf(
-      'if (auth.state.isLoggedIn && auth.state.isAdmin)',
-      start,
-    );
+    final end = source.indexOf("label: '通知设置'", start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final entry = source.substring(start, end);

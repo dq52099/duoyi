@@ -7,7 +7,21 @@ import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import 'surface_components.dart';
 
+final Set<String> _completionFlowInFlightTodoIds = <String>{};
+
 Future<void> completeTodoWithOptionalTimeRecord(
+  BuildContext context,
+  TodoItem todo,
+) async {
+  if (!_completionFlowInFlightTodoIds.add(todo.id)) return;
+  try {
+    await _completeTodoWithOptionalTimeRecord(context, todo);
+  } finally {
+    _completionFlowInFlightTodoIds.remove(todo.id);
+  }
+}
+
+Future<void> _completeTodoWithOptionalTimeRecord(
   BuildContext context,
   TodoItem todo,
 ) async {

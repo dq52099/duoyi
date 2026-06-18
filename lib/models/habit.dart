@@ -61,14 +61,45 @@ ReminderPlan _legacyReminderPlan({
         type: fullWeek
             ? ReminderRuleType.dailyTime
             : ReminderRuleType.weeklyTime,
-        kind: ReminderKind.alarm,
+        kind: ReminderKind.popup,
         hour: hour,
         minute: minute,
         weekdays: fullWeek ? const <int>[] : weekdays,
-        fullScreen: true,
-        snoozeMinutes: 5,
       ),
     ],
+  );
+}
+
+ReminderPlan _normalizeHabitReminderPlan(ReminderPlan plan) {
+  return ReminderPlan(
+    enabled: plan.enabled,
+    rules: plan.rules.map(_normalizeHabitReminderRule).toList(),
+  );
+}
+
+ReminderRule _normalizeHabitReminderRule(ReminderRule rule) {
+  var type = rule.type;
+  var weekdays = rule.weekdays;
+  if (type == ReminderRuleType.absolute ||
+      type == ReminderRuleType.relativeToDue) {
+    type = ReminderRuleType.dailyTime;
+    weekdays = const <int>[];
+  } else if (type == ReminderRuleType.weeklyTime) {
+    weekdays =
+        rule.weekdays.where((day) => day >= 1 && day <= 7).toSet().toList()
+          ..sort();
+    if (weekdays.isEmpty) type = ReminderRuleType.dailyTime;
+  } else {
+    weekdays = const <int>[];
+  }
+
+  return rule.copyWith(
+    type: type,
+    kind: ReminderKind.popup,
+    weekdays: weekdays,
+    fullScreen: false,
+    snoozeMinutes: 0,
+    repeatCount: 0,
   );
 }
 
@@ -166,14 +197,15 @@ class Habit {
        completions = completions ?? {},
        completionUpdatedAt = completionUpdatedAt ?? {},
        tags = tags ?? [],
-       reminderPlan =
-           reminderPlan ??
-           _legacyReminderPlan(
-             remind: remind,
-             hour: remindHour,
-             minute: remindMinute,
-             activeWeekdays: activeWeekdays,
-           ),
+       reminderPlan = _normalizeHabitReminderPlan(
+         reminderPlan ??
+             _legacyReminderPlan(
+               remind: remind,
+               hour: remindHour,
+               minute: remindMinute,
+               activeWeekdays: activeWeekdays,
+             ),
+       ),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
@@ -347,6 +379,7 @@ class Habit {
         activeWeekdays: activeWeekdays,
       );
     }
+    reminderPlan = _normalizeHabitReminderPlan(reminderPlan);
 
     return Habit(
       id: (json['id'] ?? DateTime.now().microsecondsSinceEpoch).toString(),

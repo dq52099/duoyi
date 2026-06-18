@@ -21,6 +21,7 @@ import '../providers/todo_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
 import '../services/ai_service.dart';
+import '../services/api_client.dart';
 import '../core/todo_templates.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
@@ -522,8 +523,34 @@ class _TodoScreenState extends State<TodoScreen> {
                                     return;
                                   }
                                 }
-                                await todoProvider.addTodo(todo);
-                                if (ctx.mounted) Navigator.pop(ctx);
+                                try {
+                                  await todoProvider.addTodo(todo);
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                } on StateError catch (e) {
+                                  if (!ctx.mounted) return;
+                                  final message = e.message.isEmpty
+                                      ? '创建失败，请稍后重试'
+                                      : e.message;
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(message),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!ctx.mounted) return;
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        userVisibleApiError(
+                                          e,
+                                          fallbackMessage: '创建失败，请稍后重试',
+                                        ),
+                                      ),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
                               } finally {
                                 if (ctx.mounted) {
                                   setSt(() => submitting = false);
@@ -909,7 +936,7 @@ class _TodoTodaySummaryCard extends StatelessWidget {
         .where((habit) => habit.isCompletedForDate(now))
         .length;
     final dailyRemaining = (dailyCount - dailyDone).clamp(0, dailyCount);
-    final remaining = dailyRemaining + todoCount;
+    final remaining = dailyRemaining + todoCount + activeGoalCount;
     final urgentCount = todos
         .where(
           (todo) =>

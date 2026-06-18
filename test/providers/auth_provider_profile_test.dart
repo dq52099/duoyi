@@ -38,6 +38,36 @@ void main() {
     },
   );
 
+  test('UserProvider skips unchanged account profile notifications', () async {
+    final provider = UserProvider();
+    var notifications = 0;
+    provider.addListener(() {
+      notifications++;
+    });
+
+    await provider.applyAccountSnapshot(
+      username: 'stable-user',
+      displayName: '当前用户',
+      email: 'me@example.com',
+      emailVerified: true,
+      avatarUrl: 'https://example.com/avatar.png',
+      bio: '简介',
+    );
+    final updatedAt = provider.profile.updatedAt;
+
+    await provider.applyAccountSnapshot(
+      username: 'stable-user',
+      displayName: '当前用户',
+      email: 'me@example.com',
+      emailVerified: true,
+      avatarUrl: 'https://example.com/avatar.png',
+      bio: '简介',
+    );
+
+    expect(notifications, 1);
+    expect(provider.profile.updatedAt, updatedAt);
+  });
+
   test(
     'bindEmail keeps immutable username/avatar out of profile payload',
     () async {
@@ -1200,6 +1230,49 @@ void main() {
     expect(auth.state.displayName, '当前用户');
     expect(auth.state.token, 'token-1');
   });
+
+  test(
+    'refreshMe coalesces concurrent requests and throttles repeats',
+    () async {
+      var requests = 0;
+      final response = Completer<http.Response>();
+      final auth = AuthProvider(
+        initialState: const AuthState(token: 'token-1'),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token-1',
+          httpClient: MockClient((request) async {
+            expect(request.url.path, '/api/auth/me');
+            requests++;
+            return response.future;
+          }),
+        ),
+      );
+
+      final first = auth.refreshMe(reason: 'startup');
+      final second = auth.refreshMe(reason: 'cloud_sync_account_snapshot');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(requests, 1);
+      response.complete(
+        http.Response(
+          json.encode({
+            'user_id': 'u-1',
+            'username': 'stable-user',
+            'display_name': '当前用户',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      await Future.wait([first, second]);
+
+      await auth.refreshMe(reason: 'foreground_resume');
+
+      expect(requests, 1);
+      expect(auth.state.displayName, '当前用户');
+    },
+  );
 
   test(
     'theme shop apply updates global auth state, prefs and profile callback',

@@ -19,6 +19,8 @@ class ReminderPlanEditor extends StatelessWidget {
   final bool hasAnchorDate;
   final int? maxRules;
   final ReminderKind defaultKind;
+  final bool showTypeSelector;
+  final bool showKindSelector;
 
   const ReminderPlanEditor({
     super.key,
@@ -34,6 +36,8 @@ class ReminderPlanEditor extends StatelessWidget {
     this.hasAnchorDate = true,
     this.maxRules,
     this.defaultKind = ReminderKind.push,
+    this.showTypeSelector = true,
+    this.showKindSelector = true,
   });
 
   @override
@@ -133,6 +137,8 @@ class ReminderPlanEditor extends StatelessWidget {
         allowSnooze: allowSnooze,
         hasAnchorDate: hasAnchorDate,
         defaultKind: defaultKind,
+        showTypeSelector: showTypeSelector,
+        showKindSelector: showKindSelector,
       ),
     );
     if (edited == null) return;
@@ -296,6 +302,8 @@ class _ReminderRuleSheet extends StatefulWidget {
   final bool allowSnooze;
   final bool hasAnchorDate;
   final ReminderKind defaultKind;
+  final bool showTypeSelector;
+  final bool showKindSelector;
 
   const _ReminderRuleSheet({
     required this.initial,
@@ -305,6 +313,8 @@ class _ReminderRuleSheet extends StatefulWidget {
     required this.allowSnooze,
     required this.hasAnchorDate,
     required this.defaultKind,
+    required this.showTypeSelector,
+    required this.showKindSelector,
   });
 
   @override
@@ -337,7 +347,6 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   void initState() {
     super.initState();
     final r = widget.initial;
-    final defaultTime = nextHalfHourTimeOfDay();
     _enabled = r?.enabled ?? true;
     _type =
         r?.type ??
@@ -347,9 +356,10 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
     if (!_availableTypes.contains(_type)) {
       _type = _availableTypes.first;
     }
-    _kind = widget.allowAlarm
+    _kind = widget.showKindSelector && widget.allowAlarm
         ? normalizeUserSelectableReminderKind(r?.kind ?? widget.defaultKind)
         : widget.defaultKind;
+    final defaultTime = nextHalfHourTimeOfDay();
     _time = TimeOfDay(
       hour: r?.hour ?? defaultTime.hour,
       minute: r?.minute ?? defaultTime.minute,
@@ -391,19 +401,21 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
               }
             }),
           ),
-          AppDropdownField<ReminderRuleType>(
-            initialValue: _type,
-            labelText: '提醒类型',
-            prefixIcon: const Icon(Icons.tune, size: 20),
-            items: [
-              for (final type in _availableTypes)
-                DropdownMenuItem(value: type, child: Text(_typeLabel(type))),
-            ],
-            onChanged: (v) {
-              if (v != null) setState(() => _type = v);
-            },
-          ),
-          const SizedBox(height: DesignTokens.spaceMd),
+          if (widget.showTypeSelector) ...[
+            AppDropdownField<ReminderRuleType>(
+              initialValue: _type,
+              labelText: '提醒类型',
+              prefixIcon: const Icon(Icons.tune, size: 20),
+              items: [
+                for (final type in _availableTypes)
+                  DropdownMenuItem(value: type, child: Text(_typeLabel(type))),
+              ],
+              onChanged: (v) {
+                if (v != null) setState(() => _type = v);
+              },
+            ),
+            const SizedBox(height: DesignTokens.spaceMd),
+          ],
           _ReminderTimeField(time: _time, onTap: _pickTime),
           if (_type == ReminderRuleType.relativeToDue) ...[
             const SizedBox(height: DesignTokens.spaceSm),
@@ -458,7 +470,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
             ),
           ],
           const SizedBox(height: DesignTokens.spaceMd),
-          if (widget.allowAlarm) ...[
+          if (widget.allowAlarm && widget.showKindSelector) ...[
             Text('提醒方式', style: _labelStyle(context)),
             const SizedBox(height: DesignTokens.spaceXs),
             SingleChildScrollView(
@@ -572,11 +584,14 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
 
   void _save() {
     final type = _type;
+    final kind = widget.showKindSelector && widget.allowAlarm
+        ? _kind
+        : widget.defaultKind;
     final rule = ReminderRule(
       id: widget.initial?.id,
       enabled: _enabled,
       type: type,
-      kind: widget.allowAlarm ? _kind : widget.defaultKind,
+      kind: kind,
       hour: _time.hour,
       minute: _time.minute,
       offsetMinutes: type == ReminderRuleType.relativeToDue
@@ -584,7 +599,7 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
           : null,
       weekdays: type == ReminderRuleType.weeklyTime ? _weekdays : const <int>[],
       vibrate: _vibrate,
-      fullScreen: widget.allowAlarm && _kind == ReminderKind.alarm
+      fullScreen: widget.allowAlarm && kind == ReminderKind.alarm
           ? _fullScreen
           : false,
       snoozeMinutes: _snoozeMinutes,

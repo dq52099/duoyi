@@ -100,26 +100,26 @@ void main() {
       expect(plan.enableQuickActions, isTrue);
     });
 
-    test('今日进展剩余项只统计日常和待办，目标仅作明细展示', () {
+    test('今日进展剩余项统计日常、待办和目标', () {
       final mainSource = File('lib/main.dart').readAsStringSync();
 
       expect(
         mainSource,
-        contains('final remaining = dailyCount + todoCount;'),
+        contains('final remaining = dailyCount + todoCount + goalCount;'),
       );
       expect(
         mainSource,
-        isNot(contains('final remaining = dailyCount + todoCount + goalCount;')),
+        isNot(contains('final remaining = dailyCount + todoCount;')),
       );
 
       final body = formatNotificationTodayProgressBody(
-        remaining: 2,
+        remaining: 3,
         dailyCount: 1,
         todoCount: 1,
         goalCount: 1,
       );
 
-      expect(body, '今日还要完成 2 项\n日常 1 / 待办 1\n目标 1');
+      expect(body, '今日还要完成 3 项\n日常 1 / 待办 1\n目标 1');
     });
 
     test('通知设置页保留今日任务进展独立开关并同步常驻通知', () {

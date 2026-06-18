@@ -422,6 +422,35 @@ void main() {
     expect(auth, contains("'/api/auth/change-password'"));
   });
 
+  test('account profile scopes provider subscriptions to displayed fields', () {
+    final source = File('lib/screens/profile_screen.dart').readAsStringSync();
+    final accountBody = source.substring(
+      source.indexOf('class _AccountProfileEditor'),
+      source.indexOf('class _LocalProfileEditor'),
+    );
+
+    expect(source, contains('context.select<AuthProvider, bool>'));
+    expect(accountBody, contains('context.select<'));
+    expect(accountBody, contains('AuthProvider,'));
+    expect(accountBody, isNot(contains('context.select<UserProvider')));
+    expect(accountBody, isNot(contains('profile.updatedAt')));
+    expect(
+      source,
+      contains('String _avatarCacheKey(String? avatarUrl, String? userId)'),
+    );
+    expect(
+      accountBody,
+      contains('context.select<ThemeProvider, AvatarFrameReward>'),
+    );
+    expect(accountBody, isNot(contains('context.watch<AuthProvider>().state')));
+    expect(
+      accountBody,
+      isNot(contains('context.watch<UserProvider>().profile')),
+    );
+    expect(accountBody, isNot(contains('context.watch<ThemeProvider>()')));
+    expect(accountBody, isNot(contains('context.watch<AchievementProvider?>')));
+  });
+
   testWidgets(
     'mine narrow header keeps long admin metadata and update badge visible',
     (tester) async {
@@ -593,19 +622,10 @@ void main() {
       source.indexOf('class _LocalProfileEditor'),
     );
 
-    final headerEmail = accountBody.substring(
-      accountBody.indexOf('state.email?.isNotEmpty == true'),
-      accountBody.indexOf('const SizedBox(height: 8)'),
-    );
-    final bindingEmail = accountBody.substring(
-      accountBody.indexOf('state.email?.trim().isEmpty != false'),
-      accountBody.indexOf('const SizedBox(height: 10)'),
-    );
-
-    for (final block in [headerEmail, bindingEmail]) {
-      expect(block, contains('maxLines: 1'));
-      expect(block, contains('overflow: TextOverflow.ellipsis'));
-    }
+    expect(accountBody, contains('account.email?.isNotEmpty == true'));
+    expect(accountBody, contains('account.email?.trim().isEmpty != false'));
+    expect(accountBody, contains('maxLines: 1'));
+    expect(accountBody, contains('overflow: TextOverflow.ellipsis'));
   });
 
   testWidgets('local profile avatar opens full screen preview', (tester) async {

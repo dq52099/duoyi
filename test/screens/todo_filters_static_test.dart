@@ -59,7 +59,7 @@ void main() {
     expect(source, contains('清空筛选'));
   });
 
-  test('任务页展示今日摘要且目标不计入剩余项', () {
+  test('任务页展示今日摘要且目标计入剩余项', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
     expect(source, contains("import '../providers/habit_provider.dart';"));
@@ -73,12 +73,12 @@ void main() {
     expect(
       source,
       contains(
-        'final remaining = dailyRemaining + todoCount;',
+        'final remaining = dailyRemaining + todoCount + activeGoalCount;',
       ),
     );
     expect(
       source,
-      isNot(contains('final remaining = dailyRemaining + todoCount + activeGoalCount;')),
+      isNot(contains('final remaining = dailyRemaining + todoCount;')),
     );
     expect(source, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
     expect(

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
@@ -107,6 +108,34 @@ void main() {
       expect(find.text('添加习惯'), findsOneWidget);
     },
   );
+
+  testWidgets('new habit reminder defaults to popup plan', (tester) async {
+    final habitProvider = HabitProvider();
+
+    await pumpHabitScreen(tester, habitProvider);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, '习惯名称'), '喝水');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(Switch).first);
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(ElevatedButton, '开启新习惯');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    final stored = habitProvider.habits.single;
+    expect(stored.remind, isTrue);
+    expect(stored.reminderPlan.enabled, isTrue);
+    expect(stored.reminderPlan.rules, hasLength(1));
+    expect(stored.reminderPlan.rules.single.type, ReminderRuleType.dailyTime);
+    expect(stored.reminderPlan.rules.single.kind, ReminderKind.popup);
+  });
 
   testWidgets('weekly overview keeps expanded readable metrics', (
     tester,

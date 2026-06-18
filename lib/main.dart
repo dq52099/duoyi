@@ -874,7 +874,15 @@ void main() async {
 
   pomodoroProvider.addListener(markPomodoroDirtyOnPersistedChange);
   timeAuditProvider.addListener(markDirty);
-  userProvider.addListener(markDirty);
+  var lastUserProfileDirtySignature = userProvider.syncSignature();
+  void markUserProfileDirtyOnEditableChange() {
+    final next = userProvider.syncSignature();
+    if (next == lastUserProfileDirtySignature) return;
+    lastUserProfileDirtySignature = next;
+    markDirty();
+  }
+
+  userProvider.addListener(markUserProfileDirtyOnEditableChange);
   locationReminderProvider.addListener(markDirty);
   var lastAchievementDirtySignature = _achievementPersistedSignature(
     achievementProvider,
@@ -3197,7 +3205,9 @@ Future<bool> _preflightQuickTodoReminder(
         await AlarmService.instance.requestFullScreenIntentPermission();
       }
     } catch (e, st) {
-      debugPrint('[QuickTodoAction] alarm exact/fullscreen request failed: $e\n$st');
+      debugPrint(
+        '[QuickTodoAction] alarm exact/fullscreen request failed: $e\n$st',
+      );
     }
     return true;
   }
@@ -3286,7 +3296,7 @@ String _todayTaskProgressNotificationBody(
       )
       .length;
   final goalCount = goals.activeGoals.length;
-  final remaining = dailyCount + todoCount;
+  final remaining = dailyCount + todoCount + goalCount;
   return formatNotificationTodayProgressBody(
     remaining: remaining,
     dailyCount: dailyCount,

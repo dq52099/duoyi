@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/screens/habit_detail_screen.dart';
@@ -55,6 +56,65 @@ void main() {
     expect(stored.name, '晨练');
     expect(stored.targetCount, 3);
   });
+
+  testWidgets(
+    'HabitDetailScreen hides reminder selectors and saves multiple popups',
+    (tester) async {
+      final provider = HabitProvider();
+      await provider.addHabit(
+        Habit(
+          id: 'water',
+          name: '喝水',
+          targetCount: 8,
+          remind: true,
+          remindHour: 8,
+          remindMinute: 0,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<HabitProvider>.value(
+          value: provider,
+          child: const MaterialApp(home: HabitDetailScreen(habitId: 'water')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+
+      final addReminder = find.text('添加提醒');
+      await tester.ensureVisible(addReminder);
+      await tester.tap(addReminder);
+      await tester.pumpAndSettle();
+
+      expect(find.text('提醒类型'), findsNothing);
+      expect(find.text('提醒方式'), findsNothing);
+      expect(find.text('通知'), findsNothing);
+      expect(find.text('闹钟'), findsNothing);
+
+      await tester.tap(find.widgetWithText(FilledButton, '保存').last);
+      await tester.pumpAndSettle();
+
+      final editorSave = find.widgetWithText(FilledButton, '保存');
+      await tester.ensureVisible(editorSave.last);
+      await tester.tap(editorSave.last);
+      await tester.pumpAndSettle();
+
+      final stored = provider.habits.single;
+      expect(stored.remind, isTrue);
+      expect(stored.reminderPlan.enabled, isTrue);
+      expect(stored.reminderPlan.rules, hasLength(2));
+      expect(
+        stored.reminderPlan.rules.map((rule) => rule.type),
+        everyElement(ReminderRuleType.dailyTime),
+      );
+      expect(
+        stored.reminderPlan.rules.map((rule) => rule.kind),
+        everyElement(ReminderKind.popup),
+      );
+    },
+  );
 
   testWidgets('HabitDetailScreen 顶部统计在 320/390/430 下不溢出', (tester) async {
     addTearDown(tester.view.reset);

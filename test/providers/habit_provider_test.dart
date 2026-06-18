@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/time_entry.dart';
 import 'package:duoyi/providers/habit_provider.dart';
@@ -239,6 +240,63 @@ void main() {
 
       await provider.deleteHabit(habit.id);
       expect(scheduler.habitSyncs.last, isEmpty);
+    },
+  );
+
+  test(
+    'habit persists multiple popup reminder times and syncs after save',
+    () async {
+      final scheduler = RecordingReminderScheduler();
+      final provider = HabitProvider()..scheduler = scheduler;
+      final habit = Habit(
+        id: 'water',
+        name: '喝水',
+        targetCount: 8,
+        remind: true,
+        remindHour: 8,
+        remindMinute: 0,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'water-0800',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.popup,
+              hour: 8,
+              minute: 0,
+            ),
+            ReminderRule(
+              id: 'water-1200',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.popup,
+              hour: 12,
+              minute: 0,
+            ),
+          ],
+        ),
+      );
+
+      await provider.addHabit(habit);
+
+      expect(scheduler.habitSyncs, [
+        ['water'],
+      ]);
+
+      final restored = HabitProvider();
+      await restored.loadFromStorage();
+
+      final stored = restored.habits.single;
+      expect(stored.remind, isTrue);
+      expect(stored.reminderPlan.enabled, isTrue);
+      expect(stored.reminderPlan.rules, hasLength(2));
+      expect(
+        stored.reminderPlan.rules.map((rule) => rule.kind),
+        everyElement(ReminderKind.popup),
+      );
+      expect(
+        stored.reminderPlan.rules.map((rule) => '${rule.hour}:${rule.minute}'),
+        ['8:0', '12:0'],
+      );
     },
   );
 
