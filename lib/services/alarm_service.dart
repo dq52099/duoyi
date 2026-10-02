@@ -14,6 +14,7 @@ import 'notification_permission_exception.dart';
 import 'notification_settings.dart';
 import 'reminder_sinks.dart';
 import 'reminder_ringtone_settings.dart';
+import 'reminder_notification_id.dart';
 
 /// 精准闹钟权限缺失异常。
 ///
@@ -477,6 +478,12 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     if (_isAndroid) {
       try {
         await _ensureAndroidFallbackChannelSound();
+        // 同步持久化的铃声 / 音量 / 震动设置到原生层。
+        // showFullScreenTest 会做这件事，但定时调度路径（scheduleFullScreen）
+        // 之前没有，导致登录后首条定时闹钟可能因原生铃声未配置而不响，
+        // 必须先点一次"测试强提醒铃声"才会触发配置——这正是用户反馈的
+        // "到点没提醒"成因之一。在 init 阶段统一应用，幂等且无阻塞。
+        await ReminderRingtoneSettings.applyPersistedSettingsToNative();
         final android = _plugin
             .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin
@@ -1571,7 +1578,8 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     return h == 0 ? weekday : h;
   }
 
-  int _legacySubId(int base, int weekday) => base * 10 + weekday;
+  int _legacySubId(int base, int weekday) =>
+      legacyWeekdayNotificationId(base, weekday);
 
   List<AndroidNotificationAction>? _actionsForPayload(String? payload) {
     if (payload == null) return null;

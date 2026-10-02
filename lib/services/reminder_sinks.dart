@@ -116,6 +116,28 @@ abstract class ReminderPendingSink {
   Future<List<int>> pendingIds();
 }
 
+/// Optional result-bearing APIs for notification sinks that record failures
+/// instead of throwing them through the regular void-returning contract.
+abstract interface class ReminderNotificationScheduleResultSink {
+  Future<bool> scheduleOnceWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  });
+
+  Future<bool> scheduleDailyWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  });
+}
+
 /// 可选的提醒注册诊断出口。
 ///
 /// 当提醒规则已经启用，但最终无法解析成任何可注册的系统任务时，
@@ -250,13 +272,31 @@ class NotificationFallbackReminderPopupSink implements ReminderPopupSink {
     required String body,
     required DateTime when,
     String? payload,
-  }) {
-    return notificationFallback.scheduleOnce(
+  }) async {
+    final fallbackPayload = _fallbackPayload(payload);
+    final fallback = notificationFallback;
+    final resultSink = fallback is ReminderNotificationScheduleResultSink
+        ? fallback as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleOnceWithResult(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: fallbackPayload,
+      );
+      if (!scheduled) {
+        throw StateError('系统通知兜底注册失败');
+      }
+      return;
+    }
+    await fallback.scheduleOnce(
       id: id,
       title: title,
       body: body,
       when: when,
-      payload: _fallbackPayload(payload),
+      payload: fallbackPayload,
     );
   }
 
@@ -269,15 +309,35 @@ class NotificationFallbackReminderPopupSink implements ReminderPopupSink {
     required int minute,
     List<int>? weekdays,
     String? payload,
-  }) {
-    return notificationFallback.scheduleDaily(
+  }) async {
+    final fallbackPayload = _fallbackPayload(payload);
+    final fallback = notificationFallback;
+    final resultSink = fallback is ReminderNotificationScheduleResultSink
+        ? fallback as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleDailyWithResult(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: fallbackPayload,
+      );
+      if (!scheduled) {
+        throw StateError('系统重复通知兜底注册失败');
+      }
+      return;
+    }
+    await fallback.scheduleDaily(
       id: id,
       title: title,
       body: body,
       hour: hour,
       minute: minute,
       weekdays: weekdays,
-      payload: _fallbackPayload(payload),
+      payload: fallbackPayload,
     );
   }
 

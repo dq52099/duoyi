@@ -134,6 +134,7 @@ class ReminderFullScreenActivity : Activity() {
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
+            letterSpacing = 0.08f
         }
         val title = TextView(this).apply {
             text = reminderTitle
@@ -157,6 +158,7 @@ class ReminderFullScreenActivity : Activity() {
             gravity = Gravity.CENTER
             maxLines = 5
             ellipsize = TextUtils.TruncateAt.END
+            setLineSpacing(dp(2).toFloat(), 1.1f)
         }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

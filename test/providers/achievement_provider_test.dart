@@ -199,6 +199,74 @@ void main() {
   );
 
   test(
+    'resume keeps suppressed-window unlocks silent and notified across restart',
+    () async {
+      final provider = AchievementProvider();
+      await provider.loadFromStorage();
+
+      // 模拟切号/云端基线回填窗口：first_todo 在抑制期内被静默解锁。
+      provider.suppressUnlockFeedback();
+      await provider.updateContext(
+        const AchievementContext(
+          totalTodos: 1,
+          completedTodos: 1,
+          longestHabitStreak: 0,
+          habitCount: 0,
+          focusMinutes: 0,
+          focusSessions: 0,
+          diaryStreak: 0,
+          diaryCount: 0,
+          goalsTotal: 0,
+          goalsAchieved: 0,
+          anniversaries: 0,
+          courses: 0,
+          notes: 0,
+        ),
+      );
+      expect(provider.snapshotFor('first_todo').unlocked, isTrue);
+      expect(provider.takeUnlockedFeedback(), isEmpty);
+
+      // 恢复反馈窗口：恢复点不得把抑制期内解锁的成就当成"新解锁"补弹，
+      // 且"已通知"标记必须已落盘（resume 的补记 + 静默路径双保险）。
+      provider.resumeUnlockFeedback();
+      expect(provider.unlockFeedbackSuppressed, isFalse);
+
+      // 等待 rebuild 触发的 unawaited 持久化链路完成。
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getStringList('duoyi_achievements_notified'),
+        contains('first_todo'),
+        reason: '抑制窗口内解锁的成就必须保持"已通知"并持久化',
+      );
+
+      // 模拟重启：全新 provider 载入同一存储，抑制期成就不得补弹。
+      final reloaded = AchievementProvider();
+      await reloaded.loadFromStorage();
+      await reloaded.updateContext(
+        const AchievementContext(
+          totalTodos: 1,
+          completedTodos: 1,
+          longestHabitStreak: 0,
+          habitCount: 0,
+          focusMinutes: 0,
+          focusSessions: 0,
+          diaryStreak: 0,
+          diaryCount: 0,
+          goalsTotal: 0,
+          goalsAchieved: 0,
+          anniversaries: 0,
+          courses: 0,
+          notes: 0,
+        ),
+      );
+      expect(reloaded.takeUnlockedFeedback(), isEmpty);
+      reloaded.dispose();
+      provider.dispose();
+    },
+  );
+
+  test(
     'stale resume generation does not lift a newer suppression window',
     () async {
       final provider = AchievementProvider();

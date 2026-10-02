@@ -14,6 +14,7 @@ import '../models/habit.dart';
 import '../providers/habit_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/alarm_service.dart';
+import '../widgets/habit_active_weekday_picker.dart';
 import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/reminder_health_hint.dart';
@@ -107,6 +108,11 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
   var selectedFlexPeriod = habit.flexPeriod ?? HabitFlexPeriod.week;
   DateTime? startDate = habit.startDate;
   DateTime? endDate = habit.endDate;
+  // 生效星期是显式配置的唯一事实来源；旧数据缺字段时 Habit 构造
+  // 已回退全 7 天，这里再兜底一次空列表，避免表单出现"零生效日"。
+  var selectedActiveWeekdays = habit.activeWeekdays.isEmpty
+      ? List<int>.from(const [0, 1, 2, 3, 4, 5, 6])
+      : List<int>.from(habit.activeWeekdays);
   var reminderPlan = _habitReminderPlan(habit);
 
   await showAppModalSheet(
@@ -163,15 +169,9 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 : reminderRules.first;
             final hasReminder =
                 normalizedReminderPlan.enabled && reminderRule != null;
-            final nextActiveWeekdays =
-                hasReminder &&
-                    reminderRule.type == ReminderRuleType.weeklyTime &&
-                    reminderRule.weekdays.isNotEmpty
-                ? reminderRule.weekdays
-                      .where((d) => d >= 1 && d <= 7)
-                      .map((d) => d - 1)
-                      .toList()
-                : habit.activeWeekdays;
+            // 生效星期取表单显式选择，不再由每周提醒的 weekdays 反推；
+            // 提醒日与生效日相互独立，保存后互不改动。
+            final nextActiveWeekdays = List<int>.from(selectedActiveWeekdays);
             if (hasReminder) {
               final notificationService = context.read<NotificationService?>();
               final granted =
@@ -412,6 +412,15 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
                 endDate: endDate,
                 onStartChanged: (value) => setSt(() => startDate = value),
                 onEndChanged: (value) => setSt(() => endDate = value),
+              ),
+              const SizedBox(height: DesignTokens.spaceMd),
+              HabitActiveWeekdayPicker(
+                weekdays: selectedActiveWeekdays,
+                onChanged: (value) =>
+                    setSt(() => selectedActiveWeekdays = value),
+                warning: _habitPlanHasWeeklyReminder(reminderPlan)
+                    ? I18n.tr('habit.active_weekdays.reminder_hint')
+                    : null,
               ),
               const SizedBox(height: DesignTokens.spaceMd),
               Text(
@@ -1244,6 +1253,13 @@ ReminderPlan _habitReminderPlan(Habit habit) {
         weekdays: fullWeek ? const <int>[] : weekdays,
       ),
     ],
+  );
+}
+
+/// 编辑表单当前是否配置了"每周某几天"的提醒，用于提示生效星期独立。
+bool _habitPlanHasWeeklyReminder(ReminderPlan plan) {
+  return plan.rules.any(
+    (rule) => rule.enabled && rule.type == ReminderRuleType.weeklyTime,
   );
 }
 

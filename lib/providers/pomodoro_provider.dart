@@ -236,10 +236,32 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _saveSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'pomodoro_sessions',
-      json.encode(_sessions.map((e) => e.toJson()).toList()),
-    );
+    // 大列表的 JSON 编码会阻塞主 isolate，挪到后台 isolate 执行（对齐
+    // todo_provider 的做法）；小列表直接同步编码，省去 isolate 往返。
+    final data = _sessions.length >= _isolateEncodeMinItems
+        ? await compute(
+            _encodePomodoroSessionsPayload,
+            List<PomodoroSession>.of(_sessions),
+          )
+        : json.encode(_sessions.map((e) => e.toJson()).toList());
+    await prefs.setString('pomodoro_sessions', data);
+  }
+
+  /// 会话记录有界增长：超出上限时丢弃最旧的记录（机制对齐 penalties
+  /// 的 take(100)；上限放宽到 500 以保留统计页/日历/报告的近月历史）。
+  void _trimSessions() {
+    if (_sessions.length > _maxPomodoroSessions) {
+      _sessions.removeRange(0, _sessions.length - _maxPomodoroSessions);
+    }
+  }
+
+  /// 测试专用：批量注入历史会话（触发上限裁剪与持久化）。
+  @visibleForTesting
+  Future<void> debugAddSessionsForTest(List<PomodoroSession> sessions) async {
+    _sessions.addAll(sessions);
+    _trimSessions();
+    await _saveSessions();
+    notifyListeners();
   }
 
   Future<void> _savePenaltyList(List<PomodoroFocusPenalty> penalties) async {
@@ -450,6 +472,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       tag: completedState.tag,
       focusRoomId: completedState.focusRoomId,
     );
+    _trimSessions();
     _sessions.add(session);
 
     int newCount = completedState.completedSessions;
@@ -1020,3 +1043,12 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+/// 会话记录保留上限（超出裁剪最旧记录）。
+const int _maxPomodoroSessions = 500;
+
+String _encodePomodoroSessionsPayload(List<PomodoroSession> sessions) =>
+    json.encode(sessions.map((e) => e.toJson()).toList());

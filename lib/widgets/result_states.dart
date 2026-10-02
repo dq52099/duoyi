@@ -138,6 +138,50 @@ class _ShimmerBar extends StatelessWidget {
   }
 }
 
+/// 紧凑型空态提示：用于卡片/区块内部的小占位。
+///
+/// 区别于整页 [EmptyState]（卡片式大图标 + 操作按钮），本组件只渲染
+/// 一个弱化的图标与文案，适合嵌入统计卡片、图表区块内部的空数据占位。
+class EmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const EmptyHint({
+    super.key,
+    this.icon = Icons.inbox_outlined,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          vertical: DesignTokens.spaceLg,
+          horizontal: DesignTokens.spaceMd,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 28, color: cs.onSurface.withValues(alpha: 0.35)),
+            const SizedBox(height: DesignTokens.spaceSm),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeSm,
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontWeight: DesignTokens.fontWeightRegular,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 错误态占位：带重试按钮的错误展示。
 class ErrorState extends StatelessWidget {
   /// 具体错误对象；调用 `toString()` 展示。

@@ -58,10 +58,12 @@ class TimeAuditProvider extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      storageKey,
-      _entries.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    // 大列表的 JSON 编码会阻塞主 isolate，挪到后台 isolate 执行（对齐
+    // todo_provider 的做法）；小列表直接同步编码，省去 isolate 往返。
+    final data = _entries.length >= _isolateEncodeMinItems
+        ? await compute(_encodeTimeAuditPayload, List<TimeEntry>.of(_entries))
+        : _entries.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList(storageKey, data);
   }
 
   Future<void> add(TimeEntry entry) async {
@@ -426,3 +428,9 @@ class TimeAuditProvider extends ChangeNotifier {
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+List<String> _encodeTimeAuditPayload(List<TimeEntry> entries) =>
+    entries.map((e) => jsonEncode(e.toJson())).toList();

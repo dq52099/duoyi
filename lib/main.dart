@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
+import 'core/crash_guard.dart';
 import 'core/i18n.dart';
 import 'core/iterable_extensions.dart';
 import 'core/local_timezone_resolver.dart';
@@ -18,6 +19,7 @@ import 'providers/habit_provider.dart';
 import 'providers/pomodoro_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/cloud_sync_provider.dart';
+import 'providers/sync_status_presenter.dart';
 import 'providers/calendar_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/notification_service.dart';
@@ -247,6 +249,9 @@ Future<void> _runStartupStoragePhase(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 全局未捕获异常兜底：框架/平台异常摘要落盘本地日志，绝不抛出或弹 UI。
+  CrashGuard.install();
 
   // 首帧前初始化本地时区，保证后续 tz.TZDateTime.from(.., tz.local) 正确。
   await _startupGuard('timezone', () => LocalTimezoneResolver.init());
@@ -1415,7 +1420,9 @@ void main() async {
       );
 
       if (changedCollections.contains('todos')) {
-        reloadTasks.add(todoProvider.loadFromStorage);
+        // TodoProvider 平时惰性加载；云同步回写后必须强制重读，
+        // 否则内存列表停留在旧快照，下一次本地写入会覆盖同步结果。
+        reloadTasks.add(() => todoProvider.loadFromStorage(force: true));
         shouldResyncReminders = true;
       }
       if (changedCollections.contains('habits')) {
@@ -1687,8 +1694,12 @@ void main() async {
     });
   }
 
+  // 预约提醒（scheduler 派发）与即时通知共用品牌标题：启动注入一次，
+  // 主题切换跟随，避免非 default 主题下两路通知标题不一致。
+  reminderScheduler.setStrings(themeProvider.brand.strings);
   notificationService.setStrings(themeProvider.brand.strings);
   themeProvider.addListener(() {
+    reminderScheduler.setStrings(themeProvider.brand.strings);
     notificationService.setStrings(themeProvider.brand.strings);
     queueHomeWidgetThemeUpdate(reason: 'theme provider changed');
     queueHomeWidgetPush();
@@ -1862,6 +1873,10 @@ void main() async {
         ChangeNotifierProvider.value(value: pomodoroProvider),
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider.value(value: cloudSyncProvider),
+        // 云同步状态只读展示层：状态卡仅消费状态，无手动触发入口。
+        ChangeNotifierProvider.value(
+          value: SyncStatusController(source: cloudSyncProvider),
+        ),
         ChangeNotifierProvider.value(value: calendarProvider),
         ChangeNotifierProvider.value(value: userProvider),
         ChangeNotifierProvider.value(value: countdownProvider),
@@ -3615,17 +3630,19 @@ Future<void> _showHabitCheckInPrompt(
     return;
   }
 
+  // 习惯打卡默认弹出框，但不再提供"稍后/完成"二选一选项：
+  // 弹窗内只保留单个"完成打卡"按钮，点击即打卡，避免打断节奏。
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogCtx) => AppDialog(
       icon: const Icon(Icons.check_circle_outline),
-      title: const Text('确认打卡'),
-      content: Text('现在完成“${habit.name}”吗？'),
+      title: Text('打卡：${habit.name}'),
+      content: Text(
+        habit.targetCount > 1
+            ? '今天已打卡 ${habit.todayCount()} / ${habit.targetCount} 次，继续打卡吗？'
+            : '现在完成“${habit.name}”打卡吗？',
+      ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogCtx).pop(false),
-          child: const Text('稍后'),
-        ),
         FilledButton(
           onPressed: () => Navigator.of(dialogCtx).pop(true),
           child: const Text('完成打卡'),
@@ -3636,9 +3653,15 @@ Future<void> _showHabitCheckInPrompt(
   if (confirmed != true || !context.mounted) return;
   await habits.incrementHabit(habitId);
   if (!context.mounted) return;
+  final done =
+      habits.habits
+          .where((h) => h.id == habitId)
+          .firstOrNull
+          ?.isCompletedToday() ??
+      false;
   messenger.showSnackBar(
     SnackBar(
-      content: Text('已打卡：${habit.name}'),
+      content: Text(done ? '“${habit.name}”今日已达标，真棒！' : '已打卡：${habit.name}'),
       behavior: SnackBarBehavior.floating,
     ),
   );
@@ -4051,6 +4074,8 @@ class MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final prefs = context.watch<PreferencesProvider>();
+    // 底导航标签随主题品牌文案变化（BrandStrings.nav*）。
+    final brand = context.watch<ThemeProvider>().brand.strings;
     final safeVisibleTabs = _visibleBottomNavTabs(prefs);
     var safeIndex = _currentIndex.clamp(0, _tabCount - 1);
     if (!safeVisibleTabs.contains(safeIndex) && !_allowHiddenCurrentIndex) {
@@ -4072,37 +4097,37 @@ class MainShellState extends State<MainShell> {
       NavigationDestination(
         icon: const Icon(Icons.today_outlined),
         selectedIcon: const Icon(Icons.today),
-        label: I18n.tr('nav.today'),
+        label: brand.navToday,
       ),
       NavigationDestination(
         icon: const Icon(Icons.checklist),
         selectedIcon: const Icon(Icons.checklist_rounded),
-        label: I18n.tr('nav.todo'),
+        label: brand.navTodo,
       ),
       NavigationDestination(
         icon: const Icon(Icons.repeat),
         selectedIcon: const Icon(Icons.repeat_rounded),
-        label: I18n.tr('nav.habit'),
+        label: brand.navHabit,
       ),
       NavigationDestination(
         icon: const Icon(Icons.calendar_month_outlined),
         selectedIcon: const Icon(Icons.calendar_month),
-        label: I18n.tr('nav.calendar'),
+        label: brand.navCalendar,
       ),
       NavigationDestination(
         icon: const Icon(Icons.timer_outlined),
         selectedIcon: const Icon(Icons.timer),
-        label: I18n.tr('nav.focus'),
+        label: brand.navFocus,
       ),
       NavigationDestination(
         icon: const Icon(Icons.widgets_outlined),
         selectedIcon: const Icon(Icons.widgets_rounded),
-        label: I18n.tr('nav.widget'),
+        label: brand.navWidget,
       ),
       NavigationDestination(
         icon: const Icon(Icons.person_outline),
         selectedIcon: const Icon(Icons.person),
-        label: I18n.tr('nav.mine'),
+        label: brand.navMine,
       ),
     ];
     final selectedNavIndex = safeVisibleTabs.indexOf(safeIndex);
@@ -4123,7 +4148,7 @@ class MainShellState extends State<MainShell> {
           return NavigationDestination(
             icon: const _BottomNavBadgeIcon(child: Icon(Icons.person_outline)),
             selectedIcon: const _BottomNavBadgeIcon(child: Icon(Icons.person)),
-            label: I18n.tr('nav.mine'),
+            label: brand.navMine,
           );
         })
         .toList(growable: false);

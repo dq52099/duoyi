@@ -2381,6 +2381,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get todoPriorityUrgent => '紧急';
 
   @override
+  String get todoQuickAddReminderPreflightFailedPrefix => '提醒权限检查失败，待办未创建：';
+
+  @override
+  String get todoQuickAddReminderSyncFailedPrefix => '待办已创建，但提醒未能确认注册：';
+
+  @override
   String get calendarMonth => '月';
 
   @override
@@ -2586,4 +2592,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get repeatWeekdays => '工作日';
+
+  @override
+  String get habitActiveWeekdays => '生效星期';
+
+  @override
+  String get habitActiveWeekdaysHint => '勾选习惯在哪些天生效，未勾选的日子不计入统计';
+
+  @override
+  String get habitActiveWeekdaysReminderHint => '每周提醒日与生效星期相互独立，保存后互不改动';
+
+  @override
+  String get syncStatusTitle => '云同步';
+
+  @override
+  String get syncStateNever => '尚未同步';
+
+  @override
+  String get syncStateNeverHint => '登录并开启云同步后，数据会自动备份到云端';
+
+  @override
+  String get syncStateSyncing => '正在同步…';
+
+  @override
+  String get syncStateSynced => '已同步';
+
+  @override
+  String get syncStateFailed => '同步失败';
+
+  @override
+  String get syncLastSyncPrefix => '上次同步 ';
+
+  @override
+  String get syncPendingBadge => '待同步';
+
+  @override
+  String get syncStateAutoRetryHint => '将在后台自动重试';
 }

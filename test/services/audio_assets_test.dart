@@ -347,8 +347,8 @@ void main() {
       expect(manifest['schemaVersion'], 1);
       expect(manifestIds, catalogIds);
       expect(processing['format'], 'mp3');
-      expect(processing['durationSeconds'], closeTo(60.029388, 0.001));
-      expect(processing['bitRate'], 112054);
+      expect(processing['durationSeconds'], closeTo(60.0, 0.001));
+      expect(processing['bitRate'], 112109);
 
       for (final rule in manifest['rules'] as List<dynamic>) {
         final text = rule.toString();

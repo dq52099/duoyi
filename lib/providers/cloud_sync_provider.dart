@@ -157,6 +157,13 @@ class CloudSyncProvider extends ChangeNotifier {
   bool _pendingPreferencesFullSync = false;
   String? _pendingQuickCaptureTemplatesUpdatedAt;
 
+  /// 按集合的解码缓存：原始存储内容不变时复用解码结果与哈希，
+  /// 使每轮同步的重复负载构建（apply 末尾 rebuild）几乎零成本。
+  final Map<String, _DecodedCollection> _decodedCollectionCache =
+      <String, _DecodedCollection>{};
+  Map<String, dynamic>? _workspacePayloadsCache;
+  String? _workspaceCollectionHashCache;
+
   SyncChangedCollectionsCallback? onSynced;
 
   // 由 main.dart 注入(通过 AuthProvider 取活跃的 ApiClient)
@@ -551,6 +558,9 @@ class CloudSyncProvider extends ChangeNotifier {
     _pendingPreferenceKeys.clear();
     _pendingPreferencesFullSync = false;
     _pendingQuickCaptureTemplatesUpdatedAt = null;
+    _decodedCollectionCache.clear();
+    _workspacePayloadsCache = null;
+    _workspaceCollectionHashCache = null;
     _hasPendingChanges = false;
     _localChangeGeneration++;
     _config = SyncConfig(
@@ -1011,9 +1021,13 @@ class CloudSyncProvider extends ChangeNotifier {
       }
 
       final syncGeneration = _localChangeGeneration;
-      final payload = _buildLocalSyncPayload(prefs);
-      final localHashes = _buildCollectionHashes(payload);
-      final localItemHashes = _buildItemHashes(payload);
+      // 负载构建 + 哈希是 CPU 密集型操作（JSON 解码 + 递归排序 + SHA-256，
+      // 2000 条待办时约 120ms），合并为单次后台 isolate 往返执行，主线程
+      // 只保留 prefs 字符串读取与小负载组装，UI 不再被同步阻塞。
+      final prepared = await _buildLocalSyncPayload(prefs);
+      final payload = prepared.payload;
+      final localHashes = prepared.collections;
+      final localItemHashes = prepared.items;
       final itemDelta = _buildSyncItemDelta(payload, localItemHashes);
       final changedCollections = _changedSyncCollections(payload, localHashes);
       if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
@@ -1089,7 +1103,9 @@ class CloudSyncProvider extends ChangeNotifier {
           prefs!,
           response,
           accountGenerationAtStart: accountGenerationAtStart,
+          localChangeGenerationAtStart: syncGeneration,
           requestCollectionHashes: localHashes,
+          requestLocalSnapshots: prepared.snapshots,
           fallbackDeletedItems:
               payload['deleted_items'] as Map<String, Map<String, String>>,
         );
@@ -1187,8 +1203,8 @@ class CloudSyncProvider extends ChangeNotifier {
         return;
       }
       final syncGeneration = _localChangeGeneration;
-      final payload = _buildLocalSyncPayload(prefs);
-      final localHashes = _buildCollectionHashes(payload);
+      final prepared = await _buildLocalSyncPayload(prefs);
+      final localHashes = prepared.collections;
       final response = await client.post('/api/sync/pull', {
         'collection_hashes': localHashes,
       });
@@ -1202,9 +1218,12 @@ class CloudSyncProvider extends ChangeNotifier {
           prefs,
           response,
           accountGenerationAtStart: accountGenerationAtStart,
+          localChangeGenerationAtStart: syncGeneration,
           requestCollectionHashes: localHashes,
+          requestLocalSnapshots: prepared.snapshots,
           fallbackDeletedItems:
-              payload['deleted_items'] as Map<String, Map<String, String>>,
+              prepared.payload['deleted_items']
+                  as Map<String, Map<String, String>>,
         );
         final now = DateTime.now();
         _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
@@ -1255,63 +1274,292 @@ class CloudSyncProvider extends ChangeNotifier {
     _scheduleQueuedSyncIfNeeded();
   }
 
-  Map<String, dynamic> _buildLocalSyncPayload(SharedPreferences prefs) {
+  /// 构建本地同步负载，并顺带产出集合/条目哈希。
+  ///
+  /// 大的字符串编码集合（todos 等可达数 MB）的 JSON 解码 + 全量哈希合并为
+  /// **单次**后台 isolate 往返，并按集合做解码缓存：原始存储内容不变的集合
+  /// 直接复用上一次的解码结果与哈希（apply 末尾的重建因此几乎零成本）。
+  ///
+  /// 共享实例约定：缓存与负载中的 decoded 列表/映射在整个同步流程中只读
+  /// （下游仅做序列化、过滤拷贝与逐项哈希），任何使用方不得原地修改。
+  Future<
+    ({
+      Map<String, dynamic> payload,
+      Map<String, String> collections,
+      Map<String, Map<String, String>> items,
+      Map<String, Object?> snapshots,
+    })
+  >
+  _buildLocalSyncPayload(SharedPreferences prefs) async {
     final payload = <String, dynamic>{};
-    _listPayloads.forEach((localKey, remoteKey) {
+    // 请求时刻各集合的原始存储快照：apply 阶段用它做“本地是否在请求后
+    // 又被写入”的守卫（字符串等值比较即可判定）。
+    final snapshots = <String, Object?>{};
+    final collectionsHash = <String, String>{};
+    final itemHashes = <String, Map<String, String>>{};
+    final isolateMisses = <String, String>{};
+    var allListCollectionsCached = true;
+    for (final entry in _listPayloads.entries) {
+      final localKey = entry.key;
+      final remoteKey = entry.value;
       if (_stringEncodedListKeys.contains(localKey)) {
-        final str = prefs.getString(localKey);
-        if (str != null && str.isNotEmpty) {
-          try {
-            final decoded = json.decode(str);
-            payload[remoteKey] = decoded is List ? decoded : [];
-          } catch (_) {
-            payload[remoteKey] = [];
-          }
-        } else {
-          payload[remoteKey] = [];
+        final raw = prefs.getString(localKey) ?? '';
+        snapshots[localKey] = raw;
+        final cached = _decodedCollectionCache[localKey];
+        if (cached != null && cached.raw == raw) {
+          payload[remoteKey] = cached.decoded;
+          collectionsHash[remoteKey] = cached.collectionHash;
+          final bucket = cached.itemBucket;
+          if (bucket != null) itemHashes[remoteKey] = bucket;
+          continue;
         }
+        allListCollectionsCached = false;
+        if (raw.length >= _isolateDecodeMinChars) {
+          isolateMisses[localKey] = raw;
+          continue;
+        }
+        final decoded = _decodeStringEncodedList(raw);
+        _storeCollectionCache(
+          localKey: localKey,
+          remoteKey: remoteKey,
+          raw: raw,
+          decoded: decoded,
+          collectionsHash: collectionsHash,
+          itemHashes: itemHashes,
+        );
+        payload[remoteKey] = decoded;
       } else {
-        final raw = prefs.getStringList(localKey);
-        if (raw != null) {
-          payload[remoteKey] = raw
-              .map((e) {
-                try {
-                  return json.decode(e);
-                } catch (_) {
-                  return null;
-                }
-              })
-              .where((e) => e != null)
-              .toList();
-        } else {
-          payload[remoteKey] = [];
+        final raw = prefs.getStringList(localKey) ?? const <String>[];
+        snapshots[localKey] = List<String>.unmodifiable(raw);
+        final cached = _decodedCollectionCache[localKey];
+        if (cached != null &&
+            cached.raw is List<String> &&
+            _stringListEquals(cached.raw as List<String>, raw)) {
+          payload[remoteKey] = cached.decoded;
+          collectionsHash[remoteKey] = cached.collectionHash;
+          final bucket = cached.itemBucket;
+          if (bucket != null) itemHashes[remoteKey] = bucket;
+          continue;
         }
+        allListCollectionsCached = false;
+        final decoded = raw
+            .map((e) {
+              try {
+                return json.decode(e);
+              } catch (_) {
+                return null;
+              }
+            })
+            .where((e) => e != null)
+            .toList();
+        _storeCollectionCache(
+          localKey: localKey,
+          remoteKey: remoteKey,
+          raw: raw,
+          decoded: decoded,
+          collectionsHash: collectionsHash,
+          itemHashes: itemHashes,
+        );
+        payload[remoteKey] = decoded;
       }
-    });
+    }
 
-    _objectPayloads.forEach((localKey, remoteKey) {
-      final str = prefs.getString(localKey);
-      if (str != null && str.isNotEmpty) {
-        try {
-          final decoded = json.decode(str);
-          payload[remoteKey] = decoded is Map ? decoded : {};
-        } catch (_) {
-          payload[remoteKey] = <String, dynamic>{};
-        }
-      } else {
-        payload[remoteKey] = <String, dynamic>{};
+    for (final entry in _objectPayloads.entries) {
+      final localKey = entry.key;
+      final remoteKey = entry.value;
+      final raw = prefs.getString(localKey) ?? '';
+      snapshots[localKey] = raw;
+      final cached = _decodedCollectionCache[localKey];
+      if (cached != null && cached.raw == raw) {
+        payload[remoteKey] = cached.decoded;
+        collectionsHash[remoteKey] = cached.collectionHash;
+        final bucket = cached.itemBucket;
+        if (bucket != null) itemHashes[remoteKey] = bucket;
+        continue;
       }
-    });
+      final decoded = _decodeStringEncodedObject(raw);
+      _storeCollectionCache(
+        localKey: localKey,
+        remoteKey: remoteKey,
+        raw: raw,
+        decoded: decoded,
+        collectionsHash: collectionsHash,
+        itemHashes: itemHashes,
+      );
+      payload[remoteKey] = decoded;
+    }
+
+    if (isolateMisses.isNotEmpty) {
+      final result = await compute(
+        _decodeCollectionsForIsolate,
+        Map<String, String>.of(isolateMisses),
+      );
+      for (final entry in result.entries) {
+        final localKey = entry.key;
+        final remoteKey = _listPayloads[localKey]!;
+        final decoded = (entry.value as Map)['decoded'] as List<dynamic>;
+        final collectionHash = (entry.value as Map)['collectionHash'] as String;
+        final bucketResult = (entry.value as Map)['itemBucket'];
+        final itemBucket = bucketResult == null
+            ? null
+            : Map<String, String>.from(bucketResult as Map);
+        _decodedCollectionCache[localKey] = _DecodedCollection(
+          raw: isolateMisses[localKey]!,
+          decoded: decoded,
+          collectionHash: collectionHash,
+          itemBucket: itemBucket,
+        );
+        payload[remoteKey] = decoded;
+        collectionsHash[remoteKey] = collectionHash;
+        if (itemBucket != null) itemHashes[remoteKey] = itemBucket;
+      }
+    }
 
     payload['preferences'] = _buildPreferencesPayload(prefs);
+    collectionsHash['preferences'] = _collectionHashForKey(
+      'preferences',
+      payload['preferences'],
+    );
+    _fillItemHashBucket(itemHashes, 'preferences', payload['preferences']);
     payload['quick_capture_templates'] = _buildQuickCaptureTemplatesPayload(
       prefs,
+    );
+    collectionsHash['quick_capture_templates'] = _collectionHashForKey(
+      'quick_capture_templates',
+      payload['quick_capture_templates'],
+    );
+    _fillItemHashBucket(
+      itemHashes,
+      'quick_capture_templates',
+      payload['quick_capture_templates'],
     );
     payload['deleted_items'] = _decodeDeletedItems(
       prefs.getString(deletedItemsStorageKey),
     );
-    payload['workspace_payloads'] = _buildWorkspacePayloads(payload);
-    return payload;
+    collectionsHash['deleted_items'] = _collectionHashForKey(
+      'deleted_items',
+      payload['deleted_items'],
+    );
+
+    // workspace_payloads 仅由列表集合派生：全部列表命中缓存时内容与上次
+    // 一致，可整体复用缓存，省掉对共享条目的再次全量哈希。
+    final cachedWorkspaceHash = _workspaceCollectionHashCache;
+    if (allListCollectionsCached && cachedWorkspaceHash != null) {
+      payload['workspace_payloads'] = _workspacePayloadsCache;
+      collectionsHash['workspace_payloads'] = cachedWorkspaceHash;
+    } else {
+      final workspacePayloads = _buildWorkspacePayloads(payload);
+      payload['workspace_payloads'] = workspacePayloads;
+      final workspaceHash = _collectionHashForKey(
+        'workspace_payloads',
+        workspacePayloads,
+      );
+      _workspacePayloadsCache = workspacePayloads;
+      _workspaceCollectionHashCache = workspaceHash;
+      collectionsHash['workspace_payloads'] = workspaceHash;
+    }
+
+    return (
+      payload: payload,
+      collections: collectionsHash,
+      items: itemHashes,
+      snapshots: snapshots,
+    );
+  }
+
+  /// 后台 isolate 的批量解码入口（`compute` 需要静态函数）：
+  /// localKey → 原始存储字符串，返回各集合的解码结果与哈希。
+  static Map<String, dynamic> _decodeCollectionsForIsolate(
+    Map<String, String> misses,
+  ) {
+    final out = <String, dynamic>{};
+    misses.forEach((localKey, raw) {
+      final remoteKey = _listPayloads[localKey]!;
+      final decoded = _decodeStringEncodedList(raw);
+      out[localKey] = {
+        'decoded': decoded,
+        'collectionHash': _collectionHashForKey(remoteKey, decoded),
+        'itemBucket': _itemHashBucketForKey(remoteKey, decoded),
+      };
+    });
+    return out;
+  }
+
+  static List<dynamic> _decodeStringEncodedList(String raw) {
+    try {
+      final decoded = json.decode(raw);
+      return decoded is List ? decoded : const <dynamic>[];
+    } catch (_) {
+      return const <dynamic>[];
+    }
+  }
+
+  static Map<String, dynamic> _decodeStringEncodedObject(String raw) {
+    try {
+      final decoded = json.decode(raw);
+      return decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  void _storeCollectionCache({
+    required String localKey,
+    required String remoteKey,
+    required Object? raw,
+    required Object? decoded,
+    required Map<String, String> collectionsHash,
+    required Map<String, Map<String, String>> itemHashes,
+  }) {
+    final collectionHash = _collectionHashForKey(remoteKey, decoded);
+    final itemBucket = _itemHashBucketForKey(remoteKey, decoded);
+    _decodedCollectionCache[localKey] = _DecodedCollection(
+      raw: raw,
+      decoded: decoded,
+      collectionHash: collectionHash,
+      itemBucket: itemBucket,
+    );
+    collectionsHash[remoteKey] = collectionHash;
+    if (itemBucket != null) itemHashes[remoteKey] = itemBucket;
+  }
+
+  /// 单集合的 canonicalize + SHA-256 哈希（等价于旧全量构建里的逐键计算）。
+  static String _collectionHashForKey(String remoteKey, Object? value) {
+    return _syncPayloadHash(_hashableCollectionValue(remoteKey, value));
+  }
+
+  /// 单集合的条目哈希桶；不属于条目增量集合时返回 null。
+  static Map<String, String>? _itemHashBucketForKey(
+    String remoteKey,
+    Object? value,
+  ) {
+    if (_itemDeltaCollections.contains(remoteKey) && value is List) {
+      final bucket = <String, String>{};
+      for (final item in value) {
+        if (item is! Map || item['id'] == null) continue;
+        final id = item['id'].toString();
+        if (id.isEmpty) continue;
+        bucket[id] = _syncPayloadHash(item);
+      }
+      return bucket;
+    }
+    if (_objectDeltaCollections.contains(remoteKey)) {
+      return {
+        '_': _syncPayloadHash(_hashableCollectionValue(remoteKey, value)),
+      };
+    }
+    return null;
+  }
+
+  void _fillItemHashBucket(
+    Map<String, Map<String, String>> itemHashes,
+    String remoteKey,
+    Object? value,
+  ) {
+    final bucket = _itemHashBucketForKey(remoteKey, value);
+    if (bucket != null) itemHashes[remoteKey] = bucket;
   }
 
   Map<String, dynamic> _buildPreferencesPayload(SharedPreferences prefs) {
@@ -1388,41 +1636,11 @@ class CloudSyncProvider extends ChangeNotifier {
     };
   }
 
-  Map<String, String> _buildCollectionHashes(Map<String, dynamic> payload) {
-    final result = <String, String>{};
-    for (final key in _syncPullCollections) {
-      result[key] = _syncPayloadHash(
-        _hashableCollectionValue(key, payload[key]),
-      );
-    }
-    return result;
-  }
+  /// 存储字符串总量超过该长度时，负载构建与哈希移入后台 isolate
+  /// （todos 等可达数 MB；小负载走主线程避免 isolate 往返开销）。
+  static const int _isolateDecodeMinChars = 60000;
 
-  Map<String, Map<String, String>> _buildItemHashes(
-    Map<String, dynamic> payload,
-  ) {
-    final result = <String, Map<String, String>>{};
-    for (final key in _itemDeltaCollections) {
-      final list = payload[key];
-      if (list is! List) continue;
-      final bucket = <String, String>{};
-      for (final item in list) {
-        if (item is! Map || item['id'] == null) continue;
-        final id = item['id'].toString();
-        if (id.isEmpty) continue;
-        bucket[id] = _syncPayloadHash(item);
-      }
-      result[key] = bucket;
-    }
-    for (final key in _objectDeltaCollections) {
-      result[key] = {
-        '_': _syncPayloadHash(_hashableCollectionValue(key, payload[key])),
-      };
-    }
-    return result;
-  }
-
-  Object? _hashableCollectionValue(String key, Object? value) {
+  static Object? _hashableCollectionValue(String key, Object? value) {
     if (key == 'preferences' && value is Map) {
       final normalized = Map<String, dynamic>.from(value);
       normalized.remove('changedKeys');
@@ -1495,13 +1713,13 @@ class CloudSyncProvider extends ChangeNotifier {
     return changed;
   }
 
-  String _syncPayloadHash(Object? value) {
+  static String _syncPayloadHash(Object? value) {
     return sha256
         .convert(utf8.encode(json.encode(_canonicalize(value))))
         .toString();
   }
 
-  Object? _canonicalize(Object? value) {
+  static Object? _canonicalize(Object? value) {
     if (value is Map) {
       final sorted = SplayTreeMap<String, Object?>();
       for (final entry in value.entries) {
@@ -1519,7 +1737,9 @@ class CloudSyncProvider extends ChangeNotifier {
     SharedPreferences prefs,
     Map<String, dynamic> response, {
     required int accountGenerationAtStart,
+    required int localChangeGenerationAtStart,
     required Map<String, String> requestCollectionHashes,
+    required Map<String, Object?> requestLocalSnapshots,
     required Map<String, Map<String, String>> fallbackDeletedItems,
   }) async {
     void throwIfAccountChanged() {
@@ -1529,13 +1749,12 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     throwIfAccountChanged();
-    final previousHashes = _buildCollectionHashes(
-      _buildLocalSyncPayload(prefs),
-    );
-    final localChangedBeforeApply = !_collectionHashesEqual(
-      previousHashes,
-      requestCollectionHashes,
-    );
+    // 请求发出后本地是否有新改动：用本地变更生成数判定。
+    // 之前在这里全量重建负载并比对哈希，2000 条待办时一次就要在主线程
+    // 解码数 MB 的存储；所有同步集合的写入都会经过 markPendingLocalChange
+    // 递增生成数，判定结果只会更保守（误判为有改动最多多同步一轮）。
+    final localChangedBeforeApply =
+        _localChangeGeneration != localChangeGenerationAtStart;
     final skippedCollections = <String>{};
 
     final responseDeletedItems = response['deleted_items'];
@@ -1579,7 +1798,7 @@ class CloudSyncProvider extends ChangeNotifier {
         prefs,
         localKey,
         remoteKey,
-        requestCollectionHashes,
+        requestLocalSnapshots,
       )) {
         skippedCollections.add(remoteKey);
         continue;
@@ -1597,7 +1816,7 @@ class CloudSyncProvider extends ChangeNotifier {
         prefs,
         localKey,
         remoteKey,
-        requestCollectionHashes,
+        requestLocalSnapshots,
       )) {
         skippedCollections.add(remoteKey);
         continue;
@@ -1663,7 +1882,7 @@ class CloudSyncProvider extends ChangeNotifier {
       _lastWorkspaceMergeDecisions = await _mergeWorkspacePayloads(
         prefs,
         workspacePayloads,
-        requestCollectionHashes,
+        requestLocalSnapshots,
         skippedCollections,
       );
       await prefs.setStringList(
@@ -1676,11 +1895,14 @@ class CloudSyncProvider extends ChangeNotifier {
       throwIfAccountChanged();
     }
     throwIfAccountChanged();
-    final nextPayload = _buildLocalSyncPayload(prefs);
-    final nextHashes = _buildCollectionHashes(nextPayload);
+    final nextPrepared = await _buildLocalSyncPayload(prefs);
+    final nextPayload = nextPrepared.payload;
+    final nextHashes = nextPrepared.collections;
+    // 与请求时刻的哈希基准对比：本轮应用（或并发的本地写入）造成
+    // 内容变化的集合，需要通知 onSynced 重新加载对应 Provider。
     final changedCollections = {
       for (final key in _syncPullCollections)
-        if (previousHashes[key] != nextHashes[key]) key,
+        if (requestCollectionHashes[key] != nextHashes[key]) key,
     };
     if (!localChangedBeforeApply && skippedCollections.isEmpty) {
       throwIfAccountChanged();
@@ -1688,7 +1910,7 @@ class CloudSyncProvider extends ChangeNotifier {
       throwIfAccountChanged();
       await _persistPreferencesSnapshot(prefs, nextPayload['preferences']);
       throwIfAccountChanged();
-      _lastItemHashes = _buildItemHashes(nextPayload);
+      _lastItemHashes = nextPrepared.items;
       await prefs.setString(
         _itemHashesStorageKey,
         json.encode(_lastItemHashes),
@@ -1700,16 +1922,6 @@ class CloudSyncProvider extends ChangeNotifier {
       skippedCollections: skippedCollections,
       localChangedBeforeApply: localChangedBeforeApply,
     );
-  }
-
-  bool _collectionHashesEqual(
-    Map<String, String> left,
-    Map<String, String> right,
-  ) {
-    for (final key in _syncPullCollections) {
-      if (left[key] != right[key]) return false;
-    }
-    return true;
   }
 
   bool _customCollectionStillMatchesRequest(
@@ -1725,21 +1937,31 @@ class CloudSyncProvider extends ChangeNotifier {
         expectedHash;
   }
 
+  /// 请求后的本地内容守卫：比较当前原始存储与请求时刻的快照。
+  /// 字符串/列表等值比较远快于旧方案的全量解码 + canonicalize + SHA-256。
   bool _collectionStillMatchesRequest(
     SharedPreferences prefs,
     String localKey,
     String remoteKey,
-    Map<String, String> requestCollectionHashes,
+    Map<String, Object?> requestLocalSnapshots,
   ) {
-    final expectedHash = requestCollectionHashes[remoteKey];
-    if (expectedHash == null || expectedHash.isEmpty) return true;
-    final currentValue = _listPayloads.containsKey(localKey)
-        ? _readLocalList(prefs, localKey)
-        : _readLocalObject(prefs, localKey);
-    return _syncPayloadHash(
-          _hashableCollectionValue(remoteKey, currentValue),
-        ) ==
-        expectedHash;
+    final snapshot = requestLocalSnapshots[localKey];
+    if (snapshot == null) return true;
+    if (snapshot is String) {
+      return (prefs.getString(localKey) ?? '') == snapshot;
+    }
+    if (snapshot is List<String>) {
+      return _stringListEquals(prefs.getStringList(localKey), snapshot);
+    }
+    return true;
+  }
+
+  static bool _stringListEquals(List<String>? left, List<String> right) {
+    if (left == null || left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) return false;
+    }
+    return true;
   }
 
   Future<void> _persistServerRevision(
@@ -1811,7 +2033,9 @@ class CloudSyncProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  Map<String, dynamic> _buildWorkspacePayloads(Map<String, dynamic> payload) {
+  static Map<String, dynamic> _buildWorkspacePayloads(
+    Map<String, dynamic> payload,
+  ) {
     final result = <String, dynamic>{};
     for (final collection in _workspacePayloadCollections.keys) {
       final list = payload[collection];
@@ -1830,7 +2054,7 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<List<SyncMergeDecision>> _mergeWorkspacePayloads(
     SharedPreferences prefs,
     Map<dynamic, dynamic> payloads,
-    Map<String, String> requestCollectionHashes,
+    Map<String, Object?> requestLocalSnapshots,
     Set<String> skippedCollections,
   ) async {
     final decisions = <SyncMergeDecision>[];
@@ -1874,13 +2098,13 @@ class CloudSyncProvider extends ChangeNotifier {
         prefs,
         spec.localKey,
         collection,
-        requestCollectionHashes,
+        requestLocalSnapshots,
       )) {
         skippedCollections.add('workspace_payloads');
         continue;
       }
       final merge = _mergeRemoteWorkspaceItems(
-        current: _readLocalList(prefs, spec.localKey),
+        current: _currentDecodedList(prefs, spec.localKey),
         remote: remoteItems,
         remoteWorkspaceIds: remoteWorkspaceIdsByCollection[collection]!,
         itemType: spec.itemType,
@@ -1890,6 +2114,19 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     return decisions;
+  }
+
+  /// 缓存感知的当前列表读取：原始内容与解码缓存一致时直接复用解码结果，
+  /// 避免 workspace 合并阶段对大集合的重复全量解码；未命中时一次性解码。
+  List<dynamic> _currentDecodedList(SharedPreferences prefs, String localKey) {
+    if (_stringEncodedListKeys.contains(localKey)) {
+      final raw = prefs.getString(localKey) ?? '';
+      final cached = _decodedCollectionCache[localKey];
+      if (cached != null && cached.raw == raw && cached.decoded is List) {
+        return cached.decoded as List<dynamic>;
+      }
+    }
+    return _readLocalList(prefs, localKey);
   }
 
   List<dynamic> _readLocalList(SharedPreferences prefs, String localKey) {
@@ -1921,18 +2158,95 @@ class CloudSyncProvider extends ChangeNotifier {
     Iterable<dynamic> items,
   ) async {
     final list = items.toList(growable: false);
-    if (_syncPayloadHash(_readLocalList(prefs, localKey)) ==
-        _syncPayloadHash(list)) {
-      return;
-    }
     if (_stringEncodedListKeys.contains(localKey)) {
-      await prefs.setString(localKey, json.encode(list));
+      final currentRaw = prefs.getString(localKey);
+      var encoded = '';
+      var identicalContent = false;
+      String? collectionHash;
+      Map<String, String>? itemBucket;
+      if (currentRaw != null && currentRaw.length >= _isolateDecodeMinChars) {
+        // 大内容的 no-op 判定与编码（解码 + 双向哈希 + 编码 ≈ 150ms）
+        // 一并移入后台 isolate，避免同步应用阶段阻塞主线程。
+        final remoteKey = _listPayloads[localKey]!;
+        final result = await compute(_encodeAndCompareForIsolate, {
+          'raw': currentRaw,
+          'items': list,
+          'remoteKey': remoteKey,
+        });
+        identicalContent = result['identical'] == true;
+        encoded = result['encoded'] as String;
+        collectionHash = result['collectionHash'] as String;
+        final bucketResult = result['itemBucket'];
+        itemBucket = bucketResult == null
+            ? null
+            : Map<String, String>.from(bucketResult as Map);
+      } else {
+        encoded = json.encode(list);
+        if (_syncPayloadHash(_readLocalList(prefs, localKey)) ==
+            _syncPayloadHash(list)) {
+          identicalContent = true;
+        }
+        final remoteKey = _listPayloads[localKey]!;
+        collectionHash = _collectionHashForKey(remoteKey, list);
+        itemBucket = _itemHashBucketForKey(remoteKey, list);
+      }
+      if (identicalContent &&
+          _decodedCollectionCache[localKey]?.raw == currentRaw) {
+        // 缓存已与存储一致，无需预热。
+        return;
+      }
+      await prefs.setString(localKey, encoded);
+      _decodedCollectionCache[localKey] = _DecodedCollection(
+        raw: encoded,
+        decoded: list,
+        collectionHash: collectionHash,
+        itemBucket: itemBucket,
+      );
       return;
     }
-    await prefs.setStringList(
-      localKey,
-      list.map((item) => json.encode(item)).toList(growable: false),
+    final encodedItems = list
+        .map((item) => json.encode(item))
+        .toList(growable: false);
+    final currentRawList = prefs.getStringList(localKey);
+    if (_stringListEquals(currentRawList, encodedItems)) {
+      return;
+    }
+    await prefs.setStringList(localKey, encodedItems);
+    final remoteKey = _listPayloads[localKey]!;
+    _decodedCollectionCache[localKey] = _DecodedCollection(
+      raw: List<String>.unmodifiable(encodedItems),
+      decoded: list,
+      collectionHash: _collectionHashForKey(remoteKey, list),
+      itemBucket: _itemHashBucketForKey(remoteKey, list),
     );
+  }
+
+  /// 后台 isolate 的大内容写入辅助：同时完成 no-op 判定（原始存储解码后
+  /// 与目标列表哈希比较）与目标列表编码，返回编码结果与哈希供主线程
+  /// 预热解码缓存（`compute` 需要静态函数）。原始存储损坏时视为内容不同，
+  /// 让调用方走写入路径修复。
+  static Map<String, dynamic> _encodeAndCompareForIsolate(
+    Map<Object?, Object?> args,
+  ) {
+    final raw = args['raw'] as String;
+    final items = args['items'] as List;
+    final remoteKey = args['remoteKey'] as String;
+    Object? decodedCurrent;
+    try {
+      final decoded = json.decode(raw);
+      decodedCurrent = decoded is List ? decoded : const <dynamic>[];
+    } catch (_) {
+      decodedCurrent = null;
+    }
+    final collectionHash = _collectionHashForKey(remoteKey, items);
+    return {
+      'identical':
+          decodedCurrent != null &&
+          _syncPayloadHash(decodedCurrent) == collectionHash,
+      'encoded': json.encode(items),
+      'collectionHash': collectionHash,
+      'itemBucket': _itemHashBucketForKey(remoteKey, items),
+    };
   }
 
   Map<String, dynamic> _readLocalObject(
@@ -2254,4 +2568,24 @@ class CloudSyncProvider extends ChangeNotifier {
     }
     return null;
   }
+}
+
+/// 单个同步集合的解码缓存条目。
+///
+/// [raw] 是该集合在 SharedPreferences 中的原始内容（字符串编码集合为
+/// String，字符串列表集合为 `List<String>`）；[decoded] 是对应的解码结果，
+/// 在整个同步流程中只读。raw 相等即保证解码结果一致（解码是确定性的），
+/// 因此可以整体复用 [decoded]、[collectionHash] 与 [itemBucket]。
+class _DecodedCollection {
+  final Object? raw;
+  final Object? decoded;
+  final String collectionHash;
+  final Map<String, String>? itemBucket;
+
+  const _DecodedCollection({
+    required this.raw,
+    required this.decoded,
+    required this.collectionHash,
+    required this.itemBucket,
+  });
 }

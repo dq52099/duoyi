@@ -7,6 +7,7 @@ import '../providers/achievement_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/api_client.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 
 class ThemePickerScreen extends StatelessWidget {
@@ -668,14 +669,10 @@ class ThemePickerScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
+                    BrandBackgroundThumbnail(
+                      key: ValueKey('theme_card_bg_${brand.id}'),
+                      brand: brand,
+                      fallback: Icon(
                         Icons.palette_outlined,
                         color: accent,
                         size: 28,

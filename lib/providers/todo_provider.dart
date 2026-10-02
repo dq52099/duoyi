@@ -25,6 +25,18 @@ class TodoImportSummary {
 class TodoProvider extends ChangeNotifier {
   static const Duration _reminderSyncTimeout = Duration(seconds: 5);
 
+  /// 超过该条数时，持久化编码放到后台 isolate 执行：主 isolate 只付出
+  /// 对象图快照拷贝的成本，JSON 编码不再阻塞 UI 帧。
+  static const int _isolateEncodeMinItems = 500;
+
+  /// 存储字符串超过该长度时，启动解码放到后台 isolate 执行
+  /// （约对应数百条待办）。
+  static const int _isolateDecodeMinChars = 60000;
+
+  /// 确认等待上限可在测试中缩短；生产默认 5 秒。
+  @visibleForTesting
+  Duration reminderSyncTimeout = _reminderSyncTimeout;
+
   List<TodoItem> _todos = [];
   bool _storageLoaded = false;
   Future<void>? _storageLoadFuture;
@@ -55,6 +67,8 @@ class TodoProvider extends ChangeNotifier {
   ReminderScheduler? _scheduler;
   TimeAuditProvider? _timeAudit;
   String? _lastReminderSyncIssue;
+  String? _lastReminderScheduleIssue;
+  DateTime? _lastReminderScheduleIssueAt;
   DateTime? _lastReminderSyncAttemptAt;
   DateTime? _lastReminderSyncSucceededAt;
 
@@ -74,6 +88,8 @@ class TodoProvider extends ChangeNotifier {
 
   List<TodoItem> get todos => _todos;
   String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+  String? get lastReminderScheduleIssue => _lastReminderScheduleIssue;
+  DateTime? get lastReminderScheduleIssueAt => _lastReminderScheduleIssueAt;
   DateTime? get lastReminderSyncAttemptAt => _lastReminderSyncAttemptAt;
   DateTime? get lastReminderSyncSucceededAt => _lastReminderSyncSucceededAt;
 
@@ -87,8 +103,26 @@ class TodoProvider extends ChangeNotifier {
     return a.createdAt.compareTo(b.createdAt);
   }
 
+  int _revision = 0;
+
+  /// 每次 [notifyListeners] 自增；供界面做派生数据 memo 化，避免
+  /// 每帧重复过滤/分组整份待办列表。
+  int get revision => _revision;
+
   void _notify() {
-    _todos.sort(_compareTodos);
+    _revision++;
+    // 大列表下每次 notify 全量 sort 是明显热点；大多数变更不改变排序，
+    // 先做一次 O(n) 有序性检查，已有序时直接跳过 sort。
+    var sorted = true;
+    for (var i = 1; i < _todos.length; i++) {
+      if (_compareTodos(_todos[i - 1], _todos[i]) > 0) {
+        sorted = false;
+        break;
+      }
+    }
+    if (!sorted) {
+      _todos.sort(_compareTodos);
+    }
     notifyListeners();
   }
 
@@ -178,18 +212,32 @@ class TodoProvider extends ChangeNotifier {
 
   // --- Persistence ---
 
-  Future<void> loadFromStorage() async {
-    if (_storageLoaded) return;
-    final running = _storageLoadFuture;
-    if (running != null) return running;
-    final generation = _storageGeneration;
-    final future = _loadFromStorage(generation);
-    _storageLoadFuture = future;
-    try {
-      await future;
-    } finally {
-      _storageLoadFuture = null;
+  Future<void> loadFromStorage({bool force = false}) async {
+    if (!force) {
+      if (_storageLoaded) return;
+      final running = _storageLoadFuture;
+      if (running != null) return running;
+      final generation = _storageGeneration;
+      final future = _loadFromStorage(generation);
+      _storageLoadFuture = future;
+      try {
+        await future;
+      } finally {
+        _storageLoadFuture = null;
+      }
+      return;
     }
+    // 云同步回写 SharedPreferences 后必须强制重读：内存列表若停留在旧快照，
+    // 下一次本地写入会把同步结果整表覆盖，重启后服务端数据又“回来”。
+    // 强制重读与写入共用同一条串行队列——先落盘未写入的内存改动再重读，
+    // 重读之后的写入看到的是包含同步结果的最新列表。
+    final reload = _storageWriteQueue.then(
+      (_) => _loadFromStorage(_storageGeneration),
+    );
+    _storageWriteQueue = reload.catchError((Object e, StackTrace st) {
+      debugPrint('[TodoProvider] forced reload from storage failed: $e\n$st');
+    });
+    await reload;
   }
 
   void resetLocalState() {
@@ -198,6 +246,8 @@ class TodoProvider extends ChangeNotifier {
     _storageLoaded = false;
     _storageLoadFuture = null;
     _lastReminderSyncIssue = null;
+    _lastReminderScheduleIssue = null;
+    _lastReminderScheduleIssueAt = null;
     _lastReminderSyncAttemptAt = null;
     _lastReminderSyncSucceededAt = null;
     _notify();
@@ -214,34 +264,57 @@ class TodoProvider extends ChangeNotifier {
     }
     final data = prefs.getString('todos');
     if (data != null && data.isNotEmpty) {
-      final parsed = <TodoItem>[];
+      List<TodoItem> parsed = <TodoItem>[];
       var shouldRewrite = false;
       try {
-        final decoded = json.decode(data);
-        if (decoded is List) {
-          for (var i = 0; i < decoded.length; i++) {
-            final raw = decoded[i];
-            try {
-              if (raw is! Map) {
-                shouldRewrite = true;
-                debugPrint(
-                  '[TodoProvider] skipped invalid todo[$i]: not a map',
-                );
-                continue;
-              }
-              parsed.add(TodoItem.fromJson(Map<String, dynamic>.from(raw)));
-            } catch (e, st) {
-              shouldRewrite = true;
-              debugPrint('[TodoProvider] skipped invalid todo[$i]: $e\n$st');
-            }
+        if (data.length >= _isolateDecodeMinChars) {
+          // 大列表的 JSON 解码 + 逐条 fromJson 会阻塞主 isolate 数十毫秒，
+          // 且发生在启动关键路径上；挪到后台 isolate，容错语义保持一致。
+          final result = await compute(_decodeTodoStoragePayload, data);
+          if (generation != _storageGeneration) return;
+          parsed = result.items;
+          shouldRewrite = result.rewrite;
+          if (result.notAList) {
+            debugPrint(
+              '[TodoProvider] ignored invalid todos storage: not a list',
+            );
           }
-          _todos = parsed;
+          final errorDetail = result.errorDetail;
+          if (errorDetail != null) {
+            debugPrint(
+              '[TodoProvider] todos storage decode failed: $errorDetail',
+            );
+          }
         } else {
-          shouldRewrite = true;
-          debugPrint(
-            '[TodoProvider] ignored invalid todos storage: not a list',
-          );
+          final decoded = json.decode(data);
+          if (decoded is List) {
+            for (var i = 0; i < decoded.length; i++) {
+              final raw = decoded[i];
+              try {
+                if (raw is! Map) {
+                  shouldRewrite = true;
+                  debugPrint(
+                    '[TodoProvider] skipped invalid todo[$i]: not a map',
+                  );
+                  continue;
+                }
+                parsed.add(TodoItem.fromJson(Map<String, dynamic>.from(raw)));
+              } catch (e, st) {
+                shouldRewrite = true;
+                debugPrint('[TodoProvider] skipped invalid todo[$i]: $e\n$st');
+              }
+            }
+          } else {
+            shouldRewrite = true;
+            debugPrint(
+              '[TodoProvider] ignored invalid todos storage: not a list',
+            );
+          }
         }
+        _todos = _dedupeTodosById(
+          parsed,
+          onDuplicate: () => shouldRewrite = true,
+        );
       } catch (e, st) {
         shouldRewrite = true;
         debugPrint('[TodoProvider] todos storage decode failed: $e\n$st');
@@ -253,13 +326,42 @@ class TodoProvider extends ChangeNotifier {
           data,
         );
         if (generation != _storageGeneration) return;
-        await _writeToStorage();
+        // 内联写入重写结果，不经 _writeToStorage 的队列串联——
+        // 强制重读自身占用 _storageWriteQueue 尾部，再入队会循环等待死锁。
+        await _writeTodosSnapshot();
         if (generation != _storageGeneration) return;
       }
     }
     if (generation != _storageGeneration) return;
     _storageLoaded = true;
     _notify();
+  }
+
+  /// 同一 id 出现多条属于存储异常（例如同步应用与本地写入交叠留下的重复），
+  /// 保留 `updatedAt` 最新的一条，避免列表重复展示并被再次同步放大。
+  List<TodoItem> _dedupeTodosById(
+    List<TodoItem> items, {
+    VoidCallback? onDuplicate,
+  }) {
+    if (items.length < 2) return items;
+    final byId = <String, TodoItem>{};
+    final order = <String>[];
+    var duplicated = false;
+    for (final todo in items) {
+      final existing = byId[todo.id];
+      if (existing == null) {
+        byId[todo.id] = todo;
+        order.add(todo.id);
+        continue;
+      }
+      duplicated = true;
+      if (existing.updatedAt.isBefore(todo.updatedAt)) {
+        byId[todo.id] = todo;
+      }
+    }
+    if (!duplicated) return items;
+    onDuplicate?.call();
+    return [for (final id in order) byId[id]!];
   }
 
   Future<void> _ensureStorageLoaded() async {
@@ -273,20 +375,33 @@ class TodoProvider extends ChangeNotifier {
     await _writeToStorage();
   }
 
+  /// 将当前内存列表编码并写入存储，不做队列串联。
+  /// 只应在上游已与写入队列串行化的上下文调用：
+  /// - `_writeToStorage` 的队列任务内部；
+  /// - `_loadFromStorage` 的损坏重写分支（加载流程已与队列串行：
+  ///   pending 写入先于加载执行，加载期间新提交的写入链在加载完成之后；
+  ///   若此处再走队列，强制重读会链到自身导致循环等待死锁）。
+  Future<void> _writeTodosSnapshot() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    // 大列表的 JSON 编码会阻塞主 isolate 数十毫秒（2000 条 ≈ 20ms），
+    // 挪到后台 isolate 执行；模型对象图在发送时自动快照拷贝，
+    // 因此这里直接传列表，不需要在主 isolate 先做 toJson。
+    final data = _todos.length >= _isolateEncodeMinItems
+        ? await compute(_encodeTodoStoragePayload, List<TodoItem>.of(_todos))
+        : json.encode(_todos.map((e) => e.toJson()).toList());
+    final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+    await prefs.setString('todos', data);
+  }
+
   Future<void> _writeToStorage() async {
-    final write = _storageWriteQueue.then((_) async {
-      final generation = _storageGeneration;
-      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      final data = json.encode(_todos.map((e) => e.toJson()).toList());
-      final prefs = await SharedPreferences.getInstance();
-      if (generation != _storageGeneration ||
-          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-            accountGeneration,
-          )) {
-        return;
-      }
-      await prefs.setString('todos', data);
-    });
+    final write = _storageWriteQueue.then((_) => _writeTodosSnapshot());
     _storageWriteQueue = write.catchError((Object e, StackTrace st) {
       debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
     });
@@ -295,16 +410,54 @@ class TodoProvider extends ChangeNotifier {
 
   // --- CRUD ---
 
-  Future<void> _syncTodoRemindersNow() async {
+  Future<void> _syncTodoRemindersNow({String? reportTodoId}) async {
     _lastReminderSyncAttemptAt = DateTime.now();
+    _lastReminderScheduleIssue = null;
+    _lastReminderScheduleIssueAt = null;
     final scheduler = _scheduler;
     if (scheduler == null) {
+      // 调度器缺失是稳态（初始化完成前每次 CRUD 都会命中本分支），
+      // 逐次打日志会淹没控制台/测试输出；改为每个缺失周期只提示一次，
+      // 状态字段仍逐次记录，诊断语义不变。
+      if (_lastReminderSyncIssue != 'reminder_scheduler_missing') {
+        debugPrint('[TodoProvider] reminder sync skipped: scheduler missing');
+      }
       _lastReminderSyncIssue = 'reminder_scheduler_missing';
-      debugPrint('[TodoProvider] reminder sync skipped: scheduler missing');
       return;
     }
     try {
-      await scheduler.syncTodos(List.of(_todos)).timeout(_reminderSyncTimeout);
+      final syncStartedAt = DateTime.now();
+      if (reportTodoId == null) {
+        await _awaitReminderSyncWithLateConfirmation(
+          scheduler.syncTodos(List.of(_todos)),
+        );
+      } else {
+        final outcome = scheduler.syncTodosAndGetTodoFailure(
+          List.of(_todos),
+          reportTodoId,
+        );
+        String? failure;
+        var confirmed = false;
+        try {
+          failure = await outcome.timeout(reminderSyncTimeout);
+          confirmed = true;
+        } on TimeoutException {
+          // 启动等场景调度队列繁忙时，确认超时不代表注册失败：
+          // 底层同步继续执行，完成后按真实结果补记，避免误导性的“注册失败”提示。
+          unawaited(
+            outcome.then((lateFailure) {
+              if (lateFailure == null) return;
+              _lastReminderScheduleIssue = lateFailure;
+              _lastReminderScheduleIssueAt = syncStartedAt;
+              notifyListeners();
+            }),
+          );
+        }
+        if (confirmed && failure != null) {
+          _lastReminderScheduleIssue = failure;
+          _lastReminderScheduleIssueAt = syncStartedAt;
+        }
+      }
       _lastReminderSyncIssue = null;
       _lastReminderSyncSucceededAt = DateTime.now();
     } catch (e, st) {
@@ -313,7 +466,35 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addTodo(TodoItem todo, {bool waitForReminderSync = true}) async {
+  /// 等待提醒同步完成；超时后不当作失败上报，改为在后台等它跑完，
+  /// 真正抛错时才补记同步诊断。
+  Future<void> _awaitReminderSyncWithLateConfirmation(
+    Future<void> pending,
+  ) async {
+    try {
+      await pending.timeout(reminderSyncTimeout);
+    } on TimeoutException {
+      unawaited(
+        pending.then(
+          (_) {
+            _lastReminderSyncSucceededAt = DateTime.now();
+            notifyListeners();
+          },
+          onError: (Object e, StackTrace st) {
+            _lastReminderSyncIssue = e.toString();
+            debugPrint('[TodoProvider] reminder sync failed late: $e\n$st');
+            notifyListeners();
+          },
+        ),
+      );
+    }
+  }
+
+  Future<void> addTodo(
+    TodoItem todo, {
+    bool waitForReminderSync = true,
+    bool reportReminderScheduleFailure = false,
+  }) async {
     await _ensureStorageLoaded();
     final createKey = _createInFlightDuplicateKey(todo);
     final claimed = _claimInFlightKeys(
@@ -330,7 +511,9 @@ class TodoProvider extends ChangeNotifier {
       _notify();
       await _saveToStorage();
       if (waitForReminderSync) {
-        await _syncTodoRemindersNow();
+        await _syncTodoRemindersNow(
+          reportTodoId: reportReminderScheduleFailure ? todo.id : null,
+        );
       } else {
         unawaited(_syncTodoRemindersNow());
       }
@@ -1503,7 +1686,6 @@ class TodoProvider extends ChangeNotifier {
 
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
   String _importDuplicateKey(TodoItem todo) {
     final dueKey = todo.dueDate == null ? '' : _dateKey(todo.dueDate!);
     final title = todo.title.trim().toLowerCase().replaceAll(
@@ -1526,4 +1708,49 @@ class TodoProvider extends ChangeNotifier {
     final list = (todo.listGroupName ?? '').trim().toLowerCase();
     return [todo.workspaceId, list, title, dateKey, dueKey].join('|');
   }
+}
+
+/// 在后台 isolate 中编码待办存储载荷（供 `compute` 调用，必须是顶层函数）。
+/// 传入的是模型对象图的拷贝，与发送时刻的内存状态一致。
+String _encodeTodoStoragePayload(List<TodoItem> todos) =>
+    json.encode(todos.map((e) => e.toJson()).toList());
+
+/// 在后台 isolate 中解码待办存储载荷，保留与主线程路径一致的逐条容错：
+/// 坏记录跳过并标记重写，整体不是列表或 JSON 损坏时也标记重写。
+({List<TodoItem> items, bool rewrite, bool notAList, String? errorDetail})
+_decodeTodoStoragePayload(String data) {
+  final parsed = <TodoItem>[];
+  var shouldRewrite = false;
+  var notAList = false;
+  String? errorDetail;
+  try {
+    final decoded = json.decode(data);
+    if (decoded is List) {
+      for (var i = 0; i < decoded.length; i++) {
+        final raw = decoded[i];
+        try {
+          if (raw is! Map) {
+            shouldRewrite = true;
+            continue;
+          }
+          parsed.add(TodoItem.fromJson(Map<String, dynamic>.from(raw)));
+        } catch (e) {
+          shouldRewrite = true;
+          errorDetail ??= 'skipped invalid todo[$i]: $e';
+        }
+      }
+    } else {
+      shouldRewrite = true;
+      notAList = true;
+    }
+  } catch (e) {
+    shouldRewrite = true;
+    errorDetail = '$e';
+  }
+  return (
+    items: parsed,
+    rewrite: shouldRewrite,
+    notAList: notAList,
+    errorDetail: errorDetail,
+  );
 }

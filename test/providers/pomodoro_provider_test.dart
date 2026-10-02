@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:duoyi/models/pomodoro.dart';
@@ -420,4 +421,62 @@ void main() {
       });
     },
   );
+
+  group('session 有界增长与 isolate 编码持久化', () {
+    PomodoroSession session(int i) {
+      final start = DateTime(2026, 1, 1).add(Duration(minutes: 30 * i));
+      return PomodoroSession(
+        id: 'session-$i',
+        startTime: start,
+        endTime: start.add(const Duration(minutes: 25)),
+        durationSeconds: 25 * 60,
+        type: PomodoroType.focus,
+      );
+    }
+
+    test('超过上限时丢弃最旧记录，保留最新 500 条并落盘', () async {
+      final provider = PomodoroProvider();
+      // 520 条 > _maxPomodoroSessions(500)，且达到 _isolateEncodeMinItems(500)
+      // —— 持久化走 compute 后台 isolate 编码路径，一并覆盖。
+      await provider.debugAddSessionsForTest([
+        for (var i = 0; i < 520; i++) session(i),
+      ]);
+
+      expect(provider.sessions, hasLength(500));
+      expect(
+        provider.sessions.first.id,
+        'session-20',
+        reason: '最旧的 20 条应被丢弃',
+      );
+      expect(provider.sessions.last.id, 'session-519');
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('pomodoro_sessions');
+      expect(stored, isNotNull);
+      expect(
+        jsonDecode(stored!) as List,
+        hasLength(500),
+        reason: '持久化内容应与内存裁剪结果一致',
+      );
+      provider.dispose();
+    });
+
+    test('未超上限时不裁剪，小列表走同步编码路径', () async {
+      final provider = PomodoroProvider();
+      await provider.debugAddSessionsForTest([
+        session(1),
+        session(2),
+        session(3),
+      ]);
+
+      expect(provider.sessions, hasLength(3));
+      expect(provider.sessions.first.id, 'session-1');
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('pomodoro_sessions');
+      expect(stored, isNotNull);
+      expect(jsonDecode(stored!) as List, hasLength(3));
+      provider.dispose();
+    });
+  });
 }

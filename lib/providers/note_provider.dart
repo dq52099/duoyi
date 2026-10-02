@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/note.dart';
 import 'cloud_sync_provider.dart';
@@ -34,7 +34,11 @@ class NoteProvider extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = _notes.map((e) => jsonEncode(e.toJson())).toList();
+    // 大列表的 JSON 编码会阻塞主 isolate，挪到后台 isolate 执行（对齐
+    // todo_provider 的做法）；小列表直接同步编码，省去 isolate 往返。
+    final data = _notes.length >= _isolateEncodeMinItems
+        ? await compute(_encodeNoteStoragePayload, List<NoteItem>.of(_notes))
+        : _notes.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList(_key, data);
     notifyListeners();
   }
@@ -121,3 +125,9 @@ class NoteImportSummary {
     required this.skippedDuplicates,
   });
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+List<String> _encodeNoteStoragePayload(List<NoteItem> notes) =>
+    notes.map((e) => jsonEncode(e.toJson())).toList();

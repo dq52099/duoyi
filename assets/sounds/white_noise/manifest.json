@@ -6,8 +6,8 @@
     "Files are normalized, faded, and encoded as roughly 60 second MP3 loops."
   ],
   "processing": {
-    "durationSeconds": 60.029388,
-    "bitRate": 112054,
+    "durationSeconds": 60.0,
+    "bitRate": 112109,
     "sampleRate": 44100,
     "channels": 2,
     "format": "mp3"

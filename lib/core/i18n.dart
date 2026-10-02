@@ -868,6 +868,8 @@ const Map<String, String> _zh = <String, String>{
   'todo.priority.medium': '中',
   'todo.priority.low': '低',
   'todo.priority.urgent': '紧急',
+  'todo.quick_add.reminder_preflight_failed_prefix': '提醒权限检查失败，待办未创建：',
+  'todo.quick_add.reminder_sync_failed_prefix': '待办已创建，但提醒未能确认注册：',
   // 日历
   'calendar.month': '月',
   'calendar.week': '周',
@@ -936,6 +938,20 @@ const Map<String, String> _zh = <String, String>{
   'share.role.owner': '拥有者',
   'share.role.editor': '可编辑',
   'share.role.viewer': '只读',
+  // 习惯生效星期
+  'habit.active_weekdays': '生效星期',
+  'habit.active_weekdays.hint': '勾选习惯在哪些天生效，未勾选的日子不计入统计',
+  'habit.active_weekdays.reminder_hint': '每周提醒日与生效星期相互独立，保存后互不改动',
+  // 云同步状态
+  'sync.status.title': '云同步',
+  'sync.state.never': '尚未同步',
+  'sync.state.never_hint': '登录并开启云同步后，数据会自动备份到云端',
+  'sync.state.syncing': '正在同步…',
+  'sync.state.synced': '已同步',
+  'sync.state.failed': '同步失败',
+  'sync.state.auto_retry_hint': '将在后台自动重试',
+  'sync.last_sync_prefix': '上次同步 ',
+  'sync.pending_badge': '待同步',
 };
 
 const Map<String, String> _en = <String, String>{
@@ -1827,6 +1843,10 @@ const Map<String, String> _en = <String, String>{
   'todo.priority.medium': 'Medium',
   'todo.priority.low': 'Low',
   'todo.priority.urgent': 'Urgent',
+  'todo.quick_add.reminder_preflight_failed_prefix':
+      'Reminder permission check failed; task was not created: ',
+  'todo.quick_add.reminder_sync_failed_prefix':
+      'Task was created, but reminder registration could not be confirmed: ',
   'calendar.month': 'Month',
   'calendar.week': 'Week',
   'calendar.day': 'Day',
@@ -1890,6 +1910,22 @@ const Map<String, String> _en = <String, String>{
   'share.role.owner': 'Owner',
   'share.role.editor': 'Editor',
   'share.role.viewer': 'Viewer',
+  'habit.active_weekdays': 'Active weekdays',
+  'habit.active_weekdays.hint':
+      'Pick the days this habit is active; unchecked days are excluded from stats',
+  'habit.active_weekdays.reminder_hint':
+      'Weekly reminder days are independent of active weekdays; neither changes the other',
+  // Cloud sync status
+  'sync.status.title': 'Cloud sync',
+  'sync.state.never': 'Not synced yet',
+  'sync.state.never_hint':
+      'Sign in and enable cloud sync to back up your data automatically',
+  'sync.state.syncing': 'Syncing…',
+  'sync.state.synced': 'Synced',
+  'sync.state.failed': 'Sync failed',
+  'sync.state.auto_retry_hint': 'Will retry automatically in the background',
+  'sync.last_sync_prefix': 'Last synced ',
+  'sync.pending_badge': 'Pending',
 };
 
 class I18n {

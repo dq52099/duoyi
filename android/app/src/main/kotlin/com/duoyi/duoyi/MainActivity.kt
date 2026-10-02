@@ -222,7 +222,8 @@ class MainActivity : FlutterActivity() {
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, reminderRingtoneChannel)
             .setMethodCallHandler { call, result ->
-                val id = call.argument<Int>("id") ?: 0
+                val arguments = call.arguments as? Map<*, *>
+                val id = (arguments?.get("id") as? Number)?.toInt() ?: 0
                 val title = call.argument<String>("title") ?: "多仪提醒"
                 val body = call.argument<String>("body") ?: "提醒时间到了"
                 val payload = call.argument<String>("payload")

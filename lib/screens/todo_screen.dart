@@ -5,11 +5,13 @@ import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
+import '../core/i18n.dart';
 import '../core/smart_date_parser.dart';
 import '../core/smart_todo_draft.dart';
 import '../core/todo_filters.dart';
 import '../core/todo_kanban.dart';
-import '../models/goal.dart' show ReminderKind;
+import '../models/goal.dart'
+    show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 import '../models/habit.dart';
 import '../models/todo.dart';
 import '../models/workspace.dart';
@@ -40,6 +42,33 @@ class TodoScreen extends StatefulWidget {
 
 enum _TodoViewMode { matrix, list, kanban }
 
+/// 待办页派生数据（过滤 + 分组 + 标签聚合）的 memo 缓存。
+/// 这些计算都是 O(n) 且每次 build 都会执行；滚动起手的 setState、
+/// 其他 Provider 通知都会触发重建，缓存命中时可整块跳过。
+class _TodoDerivedData {
+  final List<TodoItem> baseTodos;
+  final List<TodoItem> filteredTodos;
+  final Map<EisenhowerQuadrant, List<TodoItem>> quadrantGroups;
+  final Map<String, List<TodoItem>> listGroups;
+  final List<MapEntry<String, List<TodoItem>>> listGroupEntries;
+  final Map<String, List<TodoItem>> kanbanGroups;
+  final List<String> availableTags;
+  final List<String> availableListGroups;
+  final int overdueCount;
+
+  const _TodoDerivedData({
+    required this.baseTodos,
+    required this.filteredTodos,
+    required this.quadrantGroups,
+    required this.listGroups,
+    required this.listGroupEntries,
+    required this.kanbanGroups,
+    required this.availableTags,
+    required this.availableListGroups,
+    required this.overdueCount,
+  });
+}
+
 class _TodoScreenState extends State<TodoScreen> {
   _TodoViewMode _viewMode = _TodoViewMode.matrix;
   TodoFilterState<EisenhowerQuadrant, TodoPriority> _filter =
@@ -49,6 +78,87 @@ class _TodoScreenState extends State<TodoScreen> {
   bool _batchSubmitting = false;
   int _swipeDismissSerial = 0;
   final Set<String> _selectedTodoIds = <String>{};
+
+  _TodoDerivedData? _derived;
+  int? _derivedRevision;
+  TodoFilterState<EisenhowerQuadrant, TodoPriority>? _derivedFilter;
+  TodoKanbanBoardConfig? _derivedKanbanConfig;
+  int? _derivedMinuteKey;
+
+  _TodoDerivedData _computeDerivedData({
+    required TodoProvider todoProvider,
+    required int minuteKey,
+  }) {
+    final now = DateTime.now();
+    final baseTodos = todoProvider.visibleListTodos;
+    final filteredTodos = filterTodos(
+      baseTodos,
+      _filter,
+      now: now,
+      quadrantOf: (todo) => todo.quadrant,
+      priorityOf: (todo) => todo.priority,
+      tagsOf: (todo) => todo.tags,
+      listGroupNameOf: (todo) => todo.listGroupName,
+      dueDateOf: (todo) => todo.dueDate,
+      isCompletedOf: (todo) => todo.isCompleted,
+      isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
+    );
+    final quadrantGroups = groupTodosByQuadrant(
+      filteredTodos,
+      quadrants: EisenhowerQuadrant.values,
+      quadrantOf: (todo) => todo.quadrant,
+    );
+    final listGroups = groupTodosByList(
+      filteredTodos,
+      (todo) => todo.listGroupName,
+    );
+    final listGroupEntries = listGroups.entries.toList(growable: false);
+    final kanbanGroups = <String, List<TodoItem>>{
+      for (final column in _kanbanConfig.columns) column.id: <TodoItem>[],
+    };
+    for (final todo in filteredTodos) {
+      final columnId = _kanbanConfig.normalizeColumnId(todo.kanbanColumnId);
+      kanbanGroups.putIfAbsent(columnId, () => <TodoItem>[]).add(todo);
+    }
+    return _TodoDerivedData(
+      baseTodos: baseTodos,
+      filteredTodos: filteredTodos,
+      quadrantGroups: quadrantGroups,
+      listGroups: listGroups,
+      listGroupEntries: listGroupEntries,
+      kanbanGroups: kanbanGroups,
+      availableTags: collectTodoTags(baseTodos, (todo) => todo.tags),
+      availableListGroups: collectTodoListGroups(
+        baseTodos,
+        (todo) => todo.listGroupName,
+      ),
+      overdueCount: todoProvider.overdueTodos.length,
+    );
+  }
+
+  _TodoDerivedData _derivedDataFor(TodoProvider todoProvider) {
+    // 逾期/今日等时间过滤按分钟粒度失效即可；按帧取 `DateTime.now()` 会让
+    // 缓存永远失效。
+    final minuteKey = DateTime.now().millisecondsSinceEpoch ~/ 60000;
+    final derived = _derived;
+    if (derived != null &&
+        _derivedRevision == todoProvider.revision &&
+        identical(_derivedFilter, _filter) &&
+        identical(_derivedKanbanConfig, _kanbanConfig) &&
+        _derivedMinuteKey == minuteKey) {
+      return derived;
+    }
+    final computed = _computeDerivedData(
+      todoProvider: todoProvider,
+      minuteKey: minuteKey,
+    );
+    _derived = computed;
+    _derivedRevision = todoProvider.revision;
+    _derivedFilter = _filter;
+    _derivedKanbanConfig = _kanbanConfig;
+    _derivedMinuteKey = minuteKey;
+    return computed;
+  }
 
   @override
   void initState() {
@@ -226,18 +336,24 @@ class _TodoScreenState extends State<TodoScreen> {
     );
   }
 
-  void _showAddDialog() {
+  void _showAddDialog({EisenhowerQuadrant? initialQuadrant}) {
     final s = context.read<ThemeProvider>().brand.strings;
     final ai = context.read<AiService>();
     final titleCtrl = TextEditingController();
     SmartDateParseResult parsed = SmartDateParseResult.empty;
-    var quadrant = EisenhowerQuadrant.notUrgentImportant;
+    // 从象限详情页进入时默认选中该象限；其余入口维持历史默认。
+    var quadrant = initialQuadrant ?? EisenhowerQuadrant.notUrgentImportant;
     var priority = TodoPriority.none;
     String groupName = '';
     bool aiBusy = false;
     bool submitting = false;
     List<String> aiSubtasks = [];
     String? aiError;
+    // 手动提醒：用户可显式选择一个提醒时间，不依赖标题 NLP 解析。
+    // 解决"新建待办提醒不生效"——之前仅当标题含时间词时才设提醒，
+    // 用户不写时间就没有提醒入口。
+    bool enableReminder = false;
+    TimeOfDay? reminderTime;
 
     showAppModalSheet(
       context: context,
@@ -457,6 +573,51 @@ class _TodoScreenState extends State<TodoScreen> {
                     ],
                   ),
 
+                  const SizedBox(height: 20),
+                  Text('提醒', style: appSecondaryControlLabelStyle(ctx)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Switch(
+                        value: enableReminder,
+                        onChanged: (v) => setSt(() {
+                          enableReminder = v;
+                          if (v && reminderTime == null) {
+                            reminderTime = TimeOfDay.now();
+                          }
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          enableReminder && reminderTime != null
+                              ? '到点提醒 · ${reminderTime!.format(ctx)}'
+                              : '不提醒',
+                          style: TextStyle(
+                            color: enableReminder
+                                ? Theme.of(ctx).colorScheme.primary
+                                : null,
+                          ),
+                        ),
+                      ),
+                      if (enableReminder)
+                        TextButton.icon(
+                          icon: const Icon(Icons.access_time, size: 18),
+                          label: Text(reminderTime?.format(ctx) ?? '选择时间'),
+                          onPressed: () async {
+                            final picked = await showTimePicker(
+                              context: ctx,
+                              initialTime: reminderTime ?? TimeOfDay.now(),
+                              helpText: '选择提醒时间',
+                            );
+                            if (picked != null) {
+                              setSt(() => reminderTime = picked);
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -499,7 +660,7 @@ class _TodoScreenState extends State<TodoScreen> {
                                   );
                                   return;
                                 }
-                                final todo = draft.toTodo(
+                                var todo = draft.toTodo(
                                   quadrant: quadrant,
                                   priority: priority,
                                   listGroupName: groupName.isEmpty
@@ -510,13 +671,73 @@ class _TodoScreenState extends State<TodoScreen> {
                                   updatedBy: authState.userId,
                                   subtasks: sub,
                                 );
-                                if (draft.hasReminder) {
-                                  final ready = await preflightTodoReminderSave(
-                                    ctx,
-                                    todo: todo,
-                                    notificationService: notificationService,
-                                    issueTitle: '待办提醒注册失败',
+                                // 手动选择的提醒时间优先于标题 NLP 解析，
+                                // 确保用户即使不在标题里写时间也能设置提醒。
+                                if (enableReminder && reminderTime != null) {
+                                  final plan = ReminderPlan(
+                                    enabled: true,
+                                    rules: [
+                                      ReminderRule(
+                                        type: ReminderRuleType.absolute,
+                                        kind: ReminderKind.push,
+                                        hour: reminderTime!.hour,
+                                        minute: reminderTime!.minute,
+                                      ),
+                                    ],
                                   );
+                                  final legacy = plan.toLegacyReminderConfig(
+                                    fallback: todo.reminder,
+                                  );
+                                  final now = DateTime.now();
+                                  final base = todo.date;
+                                  var mirroredAt = DateTime(
+                                    base.year,
+                                    base.month,
+                                    base.day,
+                                    reminderTime!.hour,
+                                    reminderTime!.minute,
+                                  );
+                                  if (!mirroredAt.isAfter(now)) {
+                                    mirroredAt = mirroredAt.add(
+                                      const Duration(days: 1),
+                                    );
+                                  }
+                                  // ignore: deprecated_member_use_from_same_package
+                                  todo = todo.copyWith(
+                                    reminder: legacy,
+                                    reminderPlan: plan,
+                                    hasReminder: true,
+                                    reminderAt: mirroredAt,
+                                  );
+                                }
+                                final hasReminder =
+                                    draft.hasReminder ||
+                                    (enableReminder && reminderTime != null);
+                                if (hasReminder) {
+                                  bool ready;
+                                  try {
+                                    ready = await preflightTodoReminderSave(
+                                      ctx,
+                                      todo: todo,
+                                      notificationService: notificationService,
+                                      issueTitle: '待办提醒注册失败',
+                                    );
+                                  } catch (error, stackTrace) {
+                                    debugPrint(
+                                      '[QuickTodoAction] reminder preflight failed: $error\n$stackTrace',
+                                    );
+                                    if (ctx.mounted) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '${I18n.tr('todo.quick_add.reminder_preflight_failed_prefix')}$error',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
                                   if (!ctx.mounted) return;
                                   if (!ready) {
                                     setSt(() => submitting = false);
@@ -524,8 +745,29 @@ class _TodoScreenState extends State<TodoScreen> {
                                   }
                                 }
                                 try {
-                                  await todoProvider.addTodo(todo);
+                                  await todoProvider.addTodo(
+                                    todo,
+                                    reportReminderScheduleFailure: hasReminder,
+                                  );
+                                  final syncIssue =
+                                      todoProvider.lastReminderSyncIssue;
+                                  final scheduleIssue =
+                                      todoProvider.lastReminderScheduleIssue;
                                   if (ctx.mounted) Navigator.pop(ctx);
+                                  final reminderIssue =
+                                      syncIssue ?? scheduleIssue;
+                                  if (hasReminder &&
+                                      reminderIssue != null &&
+                                      ctx.mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${I18n.tr('todo.quick_add.reminder_sync_failed_prefix')}$reminderIssue',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 } on StateError catch (e) {
                                   if (!ctx.mounted) return;
                                   final message = e.message.isEmpty
@@ -590,42 +832,15 @@ class _TodoScreenState extends State<TodoScreen> {
     final shareProvider = context.watch<ShareProvider>();
     final s = context.watch<ThemeProvider>().brand.strings;
     final now = DateTime.now();
-    final baseTodos = todoProvider.visibleListTodos;
-    final filteredTodos = filterTodos(
-      baseTodos,
-      _filter,
-      now: now,
-      quadrantOf: (todo) => todo.quadrant,
-      priorityOf: (todo) => todo.priority,
-      tagsOf: (todo) => todo.tags,
-      listGroupNameOf: (todo) => todo.listGroupName,
-      dueDateOf: (todo) => todo.dueDate,
-      isCompletedOf: (todo) => todo.isCompleted,
-      isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
-    );
-    final quadrantGroups = groupTodosByQuadrant(
-      filteredTodos,
-      quadrants: EisenhowerQuadrant.values,
-      quadrantOf: (todo) => todo.quadrant,
-    );
-    final listGroups = groupTodosByList(
-      filteredTodos,
-      (todo) => todo.listGroupName,
-    );
-    final listGroupEntries = listGroups.entries.toList(growable: false);
-    final kanbanGroups = <String, List<TodoItem>>{
-      for (final column in _kanbanConfig.columns) column.id: <TodoItem>[],
-    };
-    for (final todo in filteredTodos) {
-      final columnId = _kanbanConfig.normalizeColumnId(todo.kanbanColumnId);
-      kanbanGroups.putIfAbsent(columnId, () => <TodoItem>[]).add(todo);
-    }
-    final availableTags = collectTodoTags(baseTodos, (todo) => todo.tags);
-    final availableListGroups = collectTodoListGroups(
-      baseTodos,
-      (todo) => todo.listGroupName,
-    );
-    final overdueCount = todoProvider.overdueTodos.length;
+    final derived = _derivedDataFor(todoProvider);
+    final baseTodos = derived.baseTodos;
+    final filteredTodos = derived.filteredTodos;
+    final quadrantGroups = derived.quadrantGroups;
+    final listGroupEntries = derived.listGroupEntries;
+    final kanbanGroups = derived.kanbanGroups;
+    final availableTags = derived.availableTags;
+    final availableListGroups = derived.availableListGroups;
+    final overdueCount = derived.overdueCount;
     final editableVisibleIds = filteredTodos
         .where((todo) => shareProvider.canEdit(todo.workspaceId))
         .map((todo) => todo.id)
@@ -749,9 +964,30 @@ class _TodoScreenState extends State<TodoScreen> {
                                     builder: (_) => QuadrantListScreen(
                                       quadrant: q,
                                       filter: _filter,
+                                      onCreateTodo: (quadrant) =>
+                                          _showAddDialog(
+                                            initialQuadrant: quadrant,
+                                          ),
                                     ),
                                   ),
                                 );
+                              },
+                              // 长按拖动待办到目标象限，松手即换象限。
+                              // 与 tile 级入口一致：只读成员不可拖拽换象限。
+                              canEditTodo: (todo) =>
+                                  context
+                                      .read<ShareProvider>()
+                                      .canEdit(todo.workspaceId),
+                              onTodoQuadrantChanged: (todo, target) {
+                                // 投放时点用最新权限复查，防止陈旧快照放行。
+                                if (!context
+                                    .read<ShareProvider>()
+                                    .canEdit(todo.workspaceId)) {
+                                  return;
+                                }
+                                context
+                                    .read<TodoProvider>()
+                                    .updateTodosQuadrant([todo.id], target);
                               },
                             ),
                           ),
@@ -2501,6 +2737,42 @@ class _KanbanSettingsSheetState extends State<_KanbanSettingsSheet> {
     }
   }
 
+  /// 删除自定义看板列；该列上的任务会由 normalizeColumnId
+  /// 归并到默认「待处理」列（保存后生效）。
+  Future<void> _deleteColumn(int index) async {
+    final column = _columns[index];
+    if (column.builtIn) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: const Text('删除看板列'),
+        content: Text('确认删除「${column.title}」吗？该列上的任务会移回「待处理」。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      // 删除语义统一走 core 的 removeColumn（内置列拒删、normalizeColumnId
+      // 归并、sortOrder 压实），避免 UI 与 core 双实现后续分叉。
+      final next = TodoKanbanBoardConfig(
+        columns: _columns,
+        groupMode: _groupMode,
+      ).removeColumn(column.id);
+      if (next == null) return;
+      _columns = next.sortedColumns;
+    });
+  }
+
   void _save() {
     final normalized = <TodoKanbanColumn>[];
     for (var i = 0; i < _columns.length; i++) {
@@ -2595,6 +2867,18 @@ class _KanbanSettingsSheetState extends State<_KanbanSettingsSheet> {
                                 ? null
                                 : () => _moveColumn(index, 1),
                             icon: const Icon(Icons.arrow_downward),
+                          ),
+                          IconButton(
+                            tooltip: column.builtIn ? '内置列不可删除' : '删除列',
+                            onPressed: column.builtIn
+                                ? null
+                                : () => _deleteColumn(index),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              color: column.builtIn
+                                  ? null
+                                  : Theme.of(context).colorScheme.error,
+                            ),
                           ),
                         ],
                       ),
@@ -3771,7 +4055,16 @@ class QuadrantListScreen extends StatefulWidget {
   final EisenhowerQuadrant quadrant;
   final TodoFilterState<EisenhowerQuadrant, TodoPriority>? filter;
 
-  const QuadrantListScreen({super.key, required this.quadrant, this.filter});
+  /// 右下角新建入口（由主屏传入，如 _showAddDialog）；null 时无 FAB。
+  /// 触发时携带本页象限，新建待办默认落入该象限。
+  final ValueChanged<EisenhowerQuadrant>? onCreateTodo;
+
+  const QuadrantListScreen({
+    super.key,
+    required this.quadrant,
+    this.filter,
+    this.onCreateTodo,
+  });
 
   @override
   State<QuadrantListScreen> createState() => _QuadrantListScreenState();
@@ -3779,6 +4072,114 @@ class QuadrantListScreen extends StatefulWidget {
 
 class _QuadrantListScreenState extends State<QuadrantListScreen> {
   int _swipeDismissSerial = 0;
+  bool _batchMode = false;
+  bool _batchSubmitting = false;
+  final Set<String> _selectedTodoIds = <String>{};
+
+  void _enterBatchMode(String todoId) {
+    setState(() {
+      _batchMode = true;
+      _selectedTodoIds.add(todoId);
+    });
+  }
+
+  void _exitBatchMode() {
+    setState(() {
+      _batchMode = false;
+      _selectedTodoIds.clear();
+    });
+  }
+
+  void _toggleSelection(String todoId) {
+    setState(() {
+      if (!_selectedTodoIds.add(todoId)) {
+        _selectedTodoIds.remove(todoId);
+      }
+    });
+  }
+
+  Future<void> _runBatchAction(
+    Future<int> Function(Set<String> ids) action,
+    String Function(int count) message,
+  ) async {
+    if (_batchSubmitting) return;
+    final ids = Set<String>.from(_selectedTodoIds);
+    if (ids.isEmpty) return;
+    setState(() => _batchSubmitting = true);
+    try {
+      final count = await action(ids);
+      if (!mounted) return;
+      _exitBatchMode();
+      _showBatchSnack(message(count));
+    } finally {
+      if (mounted) {
+        setState(() => _batchSubmitting = false);
+      }
+    }
+  }
+
+  void _showBatchSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<void> _completeSelected() async {
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().completeTodos(ids),
+      (count) => '已完成 $count 个任务',
+    );
+  }
+
+  Future<void> _reopenSelected() async {
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().reopenTodos(ids),
+      (count) => '已恢复 $count 个任务为未完成',
+    );
+  }
+
+  Future<void> _moveSelected(EisenhowerQuadrant quadrant) async {
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().updateTodosQuadrant(ids, quadrant),
+      (count) => '已移动 $count 个任务到${_title(quadrant)}',
+    );
+  }
+
+  Future<void> _setSelectedPriority(TodoPriority priority) async {
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().updateTodosPriority(ids, priority),
+      (count) => '已更新 $count 个任务优先级',
+    );
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_batchSubmitting) return;
+    final selectedCount = _selectedTodoIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AppDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: const Text('删除所选任务'),
+        content: Text('确认删除 $selectedCount 个任务吗？相关时间足迹也会同步移除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await _runBatchAction(
+      (ids) => context.read<TodoProvider>().deleteTodos(ids),
+      (count) => '已删除 $count 个任务',
+    );
+  }
 
   bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {
     if (notification is ScrollStartNotification) {
@@ -3822,8 +4223,27 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title(quadrant)),
+        leading: _batchMode
+            ? IconButton(
+                tooltip: '退出批量操作',
+                onPressed: _exitBatchMode,
+                icon: const Icon(Icons.close),
+              )
+            : null,
+        title: Text(
+          _batchMode ? '已选择 ${_selectedTodoIds.length} 项' : _title(quadrant),
+        ),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        actions: [
+          if (!_batchMode)
+            IconButton(
+              tooltip: '批量管理',
+              icon: const Icon(Icons.checklist_rounded),
+              onPressed: todos.isEmpty
+                  ? null
+                  : () => setState(() => _batchMode = true),
+            ),
+        ],
       ),
       body: todos.isEmpty
           ? const EmptyState(icon: Icons.inbox, message: '这个象限没有任务')
@@ -3837,14 +4257,42 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
                   final todo = todos[index];
                   return _TodoTile(
                     todo: todo,
-                    batchMode: false,
-                    selected: false,
-                    onToggleSelection: (_) {},
-                    onEnterBatchMode: (_) {},
+                    batchMode: _batchMode,
+                    selected: _selectedTodoIds.contains(todo.id),
+                    onToggleSelection: _toggleSelection,
+                    onEnterBatchMode: _enterBatchMode,
                     swipeDismissSerial: _swipeDismissSerial,
                   );
                 },
               ),
+            ),
+      bottomNavigationBar: _batchMode
+          ? _TodoBatchActionBar(
+              selectedCount: _selectedTodoIds.length,
+              submitting: _batchSubmitting,
+              onComplete: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _completeSelected,
+              onReopen: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _reopenSelected,
+              onMove: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _moveSelected,
+              onPriority: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _setSelectedPriority,
+              onDelete: _selectedTodoIds.isEmpty || _batchSubmitting
+                  ? null
+                  : _deleteSelected,
+            )
+          : null,
+      floatingActionButton: _batchMode || widget.onCreateTodo == null
+          ? null
+          : FloatingActionButton(
+              // 在本象限新建：把当前象限带回主屏的新建入口。
+              onPressed: () => widget.onCreateTodo!(widget.quadrant),
+              child: const Icon(Icons.add),
             ),
     );
   }

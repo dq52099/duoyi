@@ -185,11 +185,17 @@ void main() {
       'goal': File('lib/providers/goal_provider.dart').readAsStringSync(),
     };
 
-    expect(sources['todo'], contains('Future<void> _syncTodoRemindersNow()'));
     expect(
       sources['todo'],
-      contains('await scheduler.syncTodos(List.of(_todos))'),
+      contains('Future<void> _syncTodoRemindersNow({String? reportTodoId})'),
     );
+    expect(sources['todo'], contains('.syncTodos(List.of(_todos))'));
+    expect(
+      sources['todo'],
+      contains('syncTodosAndGetTodoFailure'),
+      reason: '创建路径要能读取按待办 ID 记录的注册失败，避免把“已保存”误报成“提醒已注册”。',
+    );
+    expect(sources['todo'], contains('lastReminderScheduleIssue'));
     expect(
       sources['habit'],
       contains('Future<void> _syncRemindersNow() async'),

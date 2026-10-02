@@ -8,10 +8,24 @@ import 'cloud_sync_provider.dart';
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
   List<DiaryEntry> _entries = [];
+
+  /// entries 倒序视图缓存；为 null 表示脏，下次读取时重排一次。
+  List<DiaryEntry>? _sortedEntriesCache;
   int _storageGeneration = 0;
 
-  List<DiaryEntry> get entries =>
-      List.unmodifiable(_entries..sort((a, b) => b.date.compareTo(a.date)));
+  /// 按 date 倒序的只读条目列表。
+  ///
+  /// 首次访问排序一次并缓存，后续访问直接返回同一不可变视图；
+  /// 增/删/改/加载等变异入口通过 [_invalidateSortedCache] 置脏。
+  /// 读取本 getter 不会变异 [_entries] 的内部顺序。
+  List<DiaryEntry> get entries {
+    final cached = _sortedEntriesCache;
+    if (cached != null) return cached;
+    final sorted = [..._entries]..sort((a, b) => b.date.compareTo(a.date));
+    return _sortedEntriesCache = List.unmodifiable(sorted);
+  }
+
+  void _invalidateSortedCache() => _sortedEntriesCache = null;
 
   int get totalCount => _entries.length;
 
@@ -25,7 +39,7 @@ class DiaryProvider extends ChangeNotifier {
   /// 连续写日记天数
   int get currentStreak {
     if (_entries.isEmpty) return 0;
-    final sorted = [..._entries]..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = entries;
     final dates = sorted.map((e) => _normalize(e.date)).toSet().toList()
       ..sort((a, b) => b.compareTo(a));
 
@@ -81,12 +95,14 @@ class DiaryProvider extends ChangeNotifier {
     if (generation != _storageGeneration) return;
     final data = prefs.getStringList(_key) ?? [];
     _entries = data.map((e) => DiaryEntry.fromJson(jsonDecode(e))).toList();
+    _invalidateSortedCache();
     notifyListeners();
   }
 
   void resetLocalState() {
     _storageGeneration++;
     _entries = [];
+    _invalidateSortedCache();
     notifyListeners();
   }
 
@@ -124,12 +140,15 @@ class DiaryProvider extends ChangeNotifier {
         DomainEvent(type: DomainEventType.diaryWritten, objectId: entry.id),
       );
     }
+    // 增/改（含同日合并、同 id 替换）都可能影响排序键或内容，置脏。
+    _invalidateSortedCache();
     await _save();
   }
 
   Future<void> delete(String id) async {
     await CloudSyncProvider.recordDeletedItem('diaries', id);
     _entries.removeWhere((e) => e.id == id);
+    _invalidateSortedCache();
     await _save();
   }
 }

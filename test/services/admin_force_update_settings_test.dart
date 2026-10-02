@@ -205,7 +205,9 @@ void main() {
       contains('class _BottomNavBadgeIcon extends StatelessWidget'),
     );
     expect(mainApp, contains('width: 8'));
-    expect(mainApp, contains("label: I18n.tr('nav.mine')"));
+    // 底导航文案已迁移到 BrandStrings（主题换文案对导航生效），
+    // 见 test/core/brand_navigation_strings_test.dart 的静态锚点。
+    expect(mainApp, contains('label: brand.navMine'));
     expect(forceUpdateGate, contains("'更新内容'"));
     expect(backend, contains('APP_CURRENT_VERSION'));
     expect(backend, contains('APP_UPDATE_DEFAULT_NOTES'));

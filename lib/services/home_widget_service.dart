@@ -147,7 +147,7 @@ class HomeWidgetService {
     if (!_supported) return true;
     try {
       await HomeWidget.saveWidgetData<String>('widget_display_mode', mode);
-      return _updateAllWidgets();
+      return await _updateAllWidgets();
     } catch (e, st) {
       debugPrint('[HomeWidget] setDisplayMode($mode) failed: $e\n$st');
       return false;
@@ -187,7 +187,7 @@ class HomeWidgetService {
       await Future.wait(
         accountPayloadDefaults.entries.map(_saveAccountPayloadDefault),
       );
-      return _updateAllWidgets();
+      return await _updateAllWidgets();
     } catch (e, st) {
       debugPrint('[HomeWidget] clear account widget data failed: $e\n$st');
       return false;

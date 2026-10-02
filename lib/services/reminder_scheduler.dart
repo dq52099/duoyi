@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/brand_strings.dart';
 import '../models/anniversary.dart';
 import '../models/countdown.dart';
 import '../models/goal.dart';
@@ -11,6 +12,7 @@ import '../models/todo.dart';
 import 'alarm_service.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
+import 'reminder_notification_id.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -468,9 +470,9 @@ class SharedPreferencesReminderScheduleRegistry
           final ids = <int>{};
           for (final rawId in rawIds) {
             final id = rawId is int
-                ? rawId
+                ? normalizePlatformNotificationId(rawId)
                 : rawId is num
-                ? rawId.toInt()
+                ? normalizePlatformNotificationId(rawId.toInt())
                 : null;
             if (id != null && id != 0) ids.add(id);
           }
@@ -801,6 +803,7 @@ class ReminderScheduler {
   final Map<String, String> _scheduledCountdownScopes = {};
   final Map<String, ReminderScheduleDisplayInfo> _registeredReminderDisplay =
       {};
+  final Map<String, String> _todoScheduleFailures = <String, String>{};
   Future<void> _syncQueue = Future<void>.value();
 
   /// [notif] 必传；[alarm] 默认取 `AlarmService.instance` 单例，便于测试时
@@ -1130,20 +1133,38 @@ class ReminderScheduler {
     bool allowJustMissedOneShotReminders = true,
   }) async {
     final snapshot = todos.toList(growable: false);
-    await _runSerialized(
-      () => _syncTodosLocked(
+    await _runSerialized(() async {
+      _todoScheduleFailures.clear();
+      await _syncTodosLocked(
         snapshot,
         allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
-      ),
-    );
+      );
+    });
+  }
+
+  Future<String?> syncTodosAndGetTodoFailure(
+    Iterable<TodoItem> todos,
+    String todoId, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    final snapshot = todos.toList(growable: false);
+    return _runSerialized(() async {
+      _todoScheduleFailures.remove(todoId);
+      await _syncTodosLocked(
+        snapshot,
+        allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
+      );
+      return _todoScheduleFailures[todoId];
+    });
   }
 
   Future<void> _syncTodosLocked(
     Iterable<TodoItem> todos, {
     required bool allowJustMissedOneShotReminders,
   }) async {
+    final todoSnapshot = todos.toList(growable: false);
     final wanted = <String, Map<String, _ResolvedRule>>{};
-    for (final t in todos) {
+    for (final t in todoSnapshot) {
       if (t.isCompleted) {
         await _cancelCurrentTodoPlan(t);
         continue;
@@ -1173,16 +1194,17 @@ class ReminderScheduler {
   }
 
   void _recordUnresolvedTodoReminderIssue(TodoItem todo) {
-    final issueSink = notif is ReminderScheduleIssueSink
-        ? notif as ReminderScheduleIssueSink
-        : null;
-    if (issueSink == null) return;
     final preflight = preflightTodoReminderPlan(todo);
     if (!preflight.hasEnabledPlan || preflight.ok) return;
     final blocking = preflight.blockingIssue;
     final issue =
         blocking ?? (preflight.issues.isEmpty ? null : preflight.issues.first);
     if (issue == null) return;
+    _todoScheduleFailures[todo.id] = issue.message;
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
     issueSink.recordReminderScheduleIssue(
       title: issue.title,
       message: issue.message,
@@ -1678,7 +1700,12 @@ class ReminderScheduler {
         final swept = await _cancelAnniversary(a.id);
         if (!swept) continue;
       }
-      final remindAt = _anniversaryReminderAt(a);
+      // 周年提醒时刻已过（打开 app 时当年的提醒时刻已经过去）时，
+      // 推进到下一年同一时刻再注册，避免该周年被跳过后整年漏提醒。
+      final remindAt = rollAnniversaryRemindAtForward(
+        _anniversaryReminderAt(a),
+        DateTime.now(),
+      );
       if (!remindAt.isAfter(DateTime.now())) {
         continue;
       }
@@ -1937,6 +1964,210 @@ class ReminderScheduler {
 
   /// 按 [kind] 路由到 push、alarm 或 email。权限不足时记录并返回 false，
   /// 避免 ChangeNotifier 监听回调里出现未处理异步异常。
+  void _recordDispatchIssue(
+    _DispatchPayload payload,
+    Object error, {
+    required bool blocking,
+  }) {
+    final relatedId =
+        _relatedIdFromPayload(payload.payload) ?? payload.id.toString();
+    if (payload.payload?.startsWith('duoyi://todo/') == true) {
+      _todoScheduleFailures[relatedId] = error.toString();
+    }
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    issueSink?.recordReminderScheduleIssue(
+      title: '提醒注册失败',
+      message: '提醒已保存，但未能注册到系统：$error',
+      scheduledTime: payload.when,
+      relatedId: relatedId,
+      blocking: blocking,
+    );
+  }
+
+  void _recordTodoRuleDispatchFailure(_ResolvedRule rule) {
+    if (rule.objectType != 'todo' ||
+        _todoScheduleFailures.containsKey(rule.objectId)) {
+      return;
+    }
+    const message = '提醒调度器未能确认规则已注册到系统';
+    _todoScheduleFailures[rule.objectId] = message;
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    issueSink?.recordReminderScheduleIssue(
+      title: '提醒注册失败',
+      message: message,
+      scheduledTime: rule.when,
+      relatedId: rule.objectId,
+    );
+  }
+
+  String? _relatedIdFromPayload(String? payload) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    if (uri == null || uri.pathSegments.isEmpty) return null;
+    return uri.pathSegments.first == 'todo' && uri.pathSegments.length > 1
+        ? uri.pathSegments[1]
+        : uri.pathSegments.first;
+  }
+
+  Future<bool> _schedulePushOnceWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    final notification = notif;
+    final resultSink = notification is ReminderNotificationScheduleResultSink
+        ? notification as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleOnceWithResult(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      );
+      if (!scheduled) {
+        _recordDispatchIssue(
+          _DispatchPayload(
+            id: id,
+            title: title,
+            body: body,
+            when: when,
+            payload: payload,
+          ),
+          StateError('系统通知服务返回未注册'),
+          blocking: true,
+        );
+      }
+      return scheduled;
+    }
+    try {
+      await notification.scheduleOnce(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        payload: payload,
+      );
+      return true;
+    } on NotificationPermissionDeniedException catch (error) {
+      _recordDispatchIssue(
+        _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+        ),
+        error,
+        blocking: true,
+      );
+      return false;
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[ReminderScheduler] notification scheduling failed: $error\n$stackTrace',
+      );
+      _recordDispatchIssue(
+        _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: payload,
+        ),
+        error,
+        blocking: true,
+      );
+      return false;
+    }
+  }
+
+  Future<bool> _schedulePushDailyWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    final notification = notif;
+    final resultSink = notification is ReminderNotificationScheduleResultSink
+        ? notification as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleDailyWithResult(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: payload,
+      );
+      if (!scheduled) {
+        _recordDispatchIssue(
+          _DispatchPayload(
+            id: id,
+            title: title,
+            body: body,
+            when: DateTime.now(),
+            payload: payload,
+          ),
+          StateError('系统重复通知服务返回未注册'),
+          blocking: true,
+        );
+      }
+      return scheduled;
+    }
+    try {
+      await notification.scheduleDaily(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: payload,
+      );
+      return true;
+    } on NotificationPermissionDeniedException catch (error) {
+      _recordDispatchIssue(
+        _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: DateTime.now(),
+          payload: payload,
+        ),
+        error,
+        blocking: true,
+      );
+      return false;
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[ReminderScheduler] daily notification scheduling failed: $error\n$stackTrace',
+      );
+      _recordDispatchIssue(
+        _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: DateTime.now(),
+          payload: payload,
+        ),
+        error,
+        blocking: true,
+      );
+      return false;
+    }
+  }
+
   Future<bool> _dispatch({
     required ReminderKind kind,
     required _DispatchPayload payload,
@@ -1956,27 +2187,29 @@ class ReminderScheduler {
           debugPrint(
             '[ReminderScheduler] popup dispatch failed for ${payload.id}: $e\n$st',
           );
+          _recordDispatchIssue(payload, e, blocking: true);
           return false;
         }
       case ReminderKind.push:
         try {
-          await notif.scheduleOnce(
+          return await _schedulePushOnceWithResult(
             id: payload.id,
             title: payload.title,
             body: payload.body,
             when: payload.when,
             payload: payload.payload,
           );
-          return true;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] push notification permission denied for ${payload.id}: $e',
           );
+          _recordDispatchIssue(payload, e, blocking: true);
           return false;
         } catch (e, st) {
           debugPrint(
             '[ReminderScheduler] push notification dispatch failed for ${payload.id}: $e\n$st',
           );
+          _recordDispatchIssue(payload, e, blocking: true);
           return false;
         }
       case ReminderKind.alarm:
@@ -2167,7 +2400,7 @@ class ReminderScheduler {
         }
       case ReminderKind.push:
         try {
-          await notif.scheduleDaily(
+          return await _schedulePushDailyWithResult(
             id: _idFor(rule.key),
             title: rule.title,
             body: rule.body,
@@ -2176,7 +2409,6 @@ class ReminderScheduler {
             weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
             payload: rule.payload,
           );
-          return true;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] repeating push permission denied for ${rule.key}: $e',
@@ -2679,6 +2911,9 @@ class ReminderScheduler {
     for (final objectId in scheduled.keys.toList()) {
       final priorRules = scheduled[objectId] ?? const {};
       final nextRules = wanted[objectId];
+      if (objectType == 'todo' && nextRules != null) {
+        _todoScheduleFailures.remove(objectId);
+      }
       final blockedRegistryIds = <int>{
         ...?blockedRegistryIdsByObject[objectId],
       };
@@ -2756,6 +2991,7 @@ class ReminderScheduler {
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
         } else {
+          _recordTodoRuleDispatchFailure(nextRule);
           final prior = priorRules[nextRule.ruleId];
           if (prior != null &&
               _sameScheduledRule(prior, nextRule) &&
@@ -2812,6 +3048,8 @@ class ReminderScheduler {
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
+        } else {
+          _recordTodoRuleDispatchFailure(nextRule);
         }
       }
       if (kept.isNotEmpty) {
@@ -3315,7 +3553,8 @@ class ReminderScheduler {
     return h == 0 ? weekday : h;
   }
 
-  int _legacySubId(int base, int weekday) => base * 10 + weekday;
+  int _legacySubId(int base, int weekday) =>
+      legacyWeekdayNotificationId(base, weekday);
 
   // -------------------------------------------------------------------------
   // 内部：决定什么时候、以什么通道派发
@@ -3866,13 +4105,24 @@ class ReminderScheduler {
     return weekdays.length == 7 ? const <int>[] : weekdays;
   }
 
+  /// 通知标题的品牌文案；默认 defaultBrand 与历史硬编码文案一致，
+  /// 切换主题后由外部通过 [setStrings] 注入对应主题词条。
+  BrandStrings _strings = BrandStrings.defaultBrand;
+
+  /// 注入当前主题的通知文案（对齐 NotificationService.setStrings）。
+  // ignore: use_setters_to_change_properties
+  void setStrings(BrandStrings strings) {
+    _strings = strings;
+  }
+
   String _habitTitle() {
-    return '习惯打卡提醒';
+    return _strings.notifHabitRemindTitle;
   }
 
   String _todoTitle(TodoItem item, ReminderRuleType type) {
     return switch (type) {
-      ReminderRuleType.dailyTime || ReminderRuleType.weeklyTime => '今日提醒',
+      ReminderRuleType.dailyTime ||
+      ReminderRuleType.weeklyTime => _strings.notifTodoDueTitle,
       ReminderRuleType.absolute ||
       ReminderRuleType.relativeToDue => '提醒：${item.title}',
     };
@@ -4160,4 +4410,18 @@ class ReminderScheduler {
       when.toIso8601String(),
     ].join('|');
   }
+}
+
+/// 周年提醒时刻已过（如打开 app 时当天的提醒时刻已经过去）时，
+/// 推进到下一年同一时刻，避免该周年被跳过后整年漏提醒；
+/// 闰日（2/29）推进后由 DateTime 自动滚动到 3/1。未来时刻原样返回。
+DateTime rollAnniversaryRemindAtForward(DateTime remindAt, DateTime now) {
+  if (remindAt.isAfter(now)) return remindAt;
+  return DateTime(
+    remindAt.year + 1,
+    remindAt.month,
+    remindAt.day,
+    remindAt.hour,
+    remindAt.minute,
+  );
 }

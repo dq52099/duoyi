@@ -156,6 +156,50 @@ void main() {
       contains('cancel old reminder failed'),
     );
   });
+
+  test(
+    'revision increments on every notify for derived-data memoization',
+    () async {
+      final provider = TodoProvider();
+      final before = provider.revision;
+      await provider.addTodo(TodoItem(id: 'rev-1', title: '修订一'));
+      final afterAdd = provider.revision;
+      expect(afterAdd, greaterThan(before));
+
+      await provider.updateTodo(
+        'rev-1',
+        provider.todos.single.copyWith(title: '修订二'),
+      );
+      expect(provider.revision, greaterThan(afterAdd));
+    },
+  );
+
+  test(
+    'reminder sync confirmation timeout is not reported as failure',
+    () async {
+      final provider = TodoProvider()
+        ..reminderSyncTimeout = const Duration(milliseconds: 40);
+      final scheduler = _GatedTodoScheduler()
+        ..gatedFailureResult = 'registrar rejected';
+      provider.scheduler = scheduler;
+      final todo = TodoItem(id: 'timeout-todo', title: '确认超时');
+
+      await provider.addTodo(todo, reportReminderScheduleFailure: true);
+
+      // 确认超时不等于注册失败：不应给出误导性的失败提示。
+      expect(provider.lastReminderSyncIssue, isNull);
+      expect(provider.lastReminderScheduleIssue, isNull);
+
+      scheduler.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      // 底层同步完成后按真实结果补记诊断。
+      expect(
+        provider.lastReminderScheduleIssue,
+        contains('registrar rejected'),
+      );
+    },
+  );
 }
 
 Future<void> _waitForScheduler(_GatedTodoScheduler scheduler) async {
@@ -170,6 +214,8 @@ class _GatedTodoScheduler extends RecordingReminderScheduler {
 
   bool get started => todoSyncs.isNotEmpty;
 
+  Object? gatedFailureResult;
+
   void complete() {
     if (!_gate.isCompleted) _gate.complete();
   }
@@ -181,5 +227,16 @@ class _GatedTodoScheduler extends RecordingReminderScheduler {
   }) async {
     todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
     await _gate.future;
+  }
+
+  @override
+  Future<String?> syncTodosAndGetTodoFailure(
+    Iterable<TodoItem> todos,
+    String todoId, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
+    await _gate.future;
+    return gatedFailureResult?.toString();
   }
 }

@@ -784,6 +784,8 @@
   "todoPriorityMedium": "Medium",
   "todoPriorityHigh": "High",
   "todoPriorityUrgent": "Urgent",
+  "todoQuickAddReminderPreflightFailedPrefix": "Reminder permission check failed; task was not created: ",
+  "todoQuickAddReminderSyncFailedPrefix": "Task was created, but reminder registration could not be confirmed: ",
   "calendarMonth": "Month",
   "calendarWeek": "Week",
   "calendarDay": "Day",
@@ -852,5 +854,17 @@
   "unitHour": "hours",
   "unitDay": "days",
   "repeatEveryDay": "Every day",
-  "repeatWeekdays": "Weekdays"
+  "repeatWeekdays": "Weekdays",
+  "habitActiveWeekdays": "Active weekdays",
+  "habitActiveWeekdaysHint": "Pick the days this habit is active; unchecked days are excluded from stats",
+  "habitActiveWeekdaysReminderHint": "Weekly reminder days are independent of active weekdays; neither changes the other",
+  "syncStatusTitle": "Cloud sync",
+  "syncStateNever": "Not synced yet",
+  "syncStateNeverHint": "Sign in and enable cloud sync to back up your data automatically",
+  "syncStateSyncing": "Syncing…",
+  "syncStateSynced": "Synced",
+  "syncStateFailed": "Sync failed",
+  "syncLastSyncPrefix": "Last synced ",
+  "syncPendingBadge": "Pending",
+  "syncStateAutoRetryHint": "Will retry automatically in the background"
 }

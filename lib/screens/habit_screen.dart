@@ -15,6 +15,7 @@ import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../widgets/app_time_picker.dart';
+import '../widgets/habit_active_weekday_picker.dart';
 import '../widgets/habit_date_range_fields.dart';
 import '../widgets/habit_heatmap.dart';
 import '../widgets/habit_weekly_card.dart';
@@ -96,6 +97,8 @@ class _HabitScreenState extends State<HabitScreen>
     var selectedKind = HabitKind.positive;
     var flexRuleEnabled = false;
     var selectedFlexPeriod = HabitFlexPeriod.week;
+    // 生效星期：0=周一 … 6=周日，默认全 7 天（保持历史行为）。
+    var selectedActiveWeekdays = [0, 1, 2, 3, 4, 5, 6];
     DateTime? startDate;
     DateTime? endDate;
     var remindEnabled = false;
@@ -543,6 +546,13 @@ class _HabitScreenState extends State<HabitScreen>
                     onEndChanged: (value) => setSt(() => endDate = value),
                   ),
 
+                  const SizedBox(height: 16),
+                  HabitActiveWeekdayPicker(
+                    weekdays: selectedActiveWeekdays,
+                    onChanged: (value) =>
+                        setSt(() => selectedActiveWeekdays = value),
+                  ),
+
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -615,6 +625,9 @@ class _HabitScreenState extends State<HabitScreen>
                                   : null,
                               startDate: startDate,
                               endDate: endDate,
+                              activeWeekdays: List<int>.from(
+                                selectedActiveWeekdays,
+                              ),
                               remind: shouldRemind,
                               remindHour: sortedRemindTimes.isNotEmpty
                                   ? sortedRemindTimes.first.hour

@@ -130,7 +130,8 @@ class TodayScreen extends StatelessWidget {
     final showReminderSection =
         !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
-    final greeting = '${user.profile.greeting}，${user.profile.username}';
+    // 问候语随主题品牌文案变化（BrandStrings.greetingFor 按时段取词）。
+    final greeting = '${s.greetingFor(now)}，${user.profile.username}';
     final almanacCard = _TodayAlmanacCard(
       now: now,
       lunarText: lunar.chineseText,

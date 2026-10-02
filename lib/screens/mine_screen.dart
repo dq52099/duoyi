@@ -22,6 +22,7 @@ import '../widgets/brand_background.dart';
 import '../widgets/cached_avatar_image.dart';
 import '../widgets/stats_overview_cards.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/sync_status_card.dart';
 import 'theme_picker_screen.dart';
 import 'login_screen.dart';
 import 'announcements_screen.dart';
@@ -745,6 +746,9 @@ class MineScreen extends StatelessWidget {
               ),
             ],
           ),
+          // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
+          // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
+          const SyncStatusCard(),
           _TileGroup(
             title: '数据协作',
             children: [

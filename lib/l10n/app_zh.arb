@@ -787,6 +787,8 @@
   "todoPriorityMedium": "中",
   "todoPriorityHigh": "高",
   "todoPriorityUrgent": "紧急",
+  "todoQuickAddReminderPreflightFailedPrefix": "提醒权限检查失败，待办未创建：",
+  "todoQuickAddReminderSyncFailedPrefix": "待办已创建，但提醒未能确认注册：",
   "calendarMonth": "月",
   "calendarWeek": "周",
   "calendarDay": "日",
@@ -855,5 +857,17 @@
   "unitHour": "小时",
   "unitDay": "天",
   "repeatEveryDay": "每天",
-  "repeatWeekdays": "工作日"
+  "repeatWeekdays": "工作日",
+  "habitActiveWeekdays": "生效星期",
+  "habitActiveWeekdaysHint": "勾选习惯在哪些天生效，未勾选的日子不计入统计",
+  "habitActiveWeekdaysReminderHint": "每周提醒日与生效星期相互独立，保存后互不改动",
+  "syncStatusTitle": "云同步",
+  "syncStateNever": "尚未同步",
+  "syncStateNeverHint": "登录并开启云同步后，数据会自动备份到云端",
+  "syncStateSyncing": "正在同步…",
+  "syncStateSynced": "已同步",
+  "syncStateFailed": "同步失败",
+  "syncLastSyncPrefix": "上次同步 ",
+  "syncPendingBadge": "待同步",
+  "syncStateAutoRetryHint": "将在后台自动重试"
 }

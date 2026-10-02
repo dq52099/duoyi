@@ -12,10 +12,12 @@ class BrandStrings {
   final String greetingEvening;
 
   // Bottom navigation labels
+  final String navToday;
   final String navTodo;
   final String navHabit;
   final String navCalendar;
   final String navFocus;
+  final String navWidget;
   final String navMine;
 
   // Todo screen
@@ -90,16 +92,29 @@ class BrandStrings {
   final String notifTodoDueTitle;
   final String notifHabitRemindTitle;
 
+  /// 按时段返回问候语：深夜(0-6点)归入晚间问候，
+  /// 其余为 早晨(6-12)/中午(12-14)/下午(14-18)/晚间(18-24)。
+  String greetingFor(DateTime now) {
+    final hour = now.hour;
+    if (hour < 6) return greetingEvening;
+    if (hour < 12) return greetingMorning;
+    if (hour < 14) return greetingNoon;
+    if (hour < 18) return greetingAfternoon;
+    return greetingEvening;
+  }
+
   const BrandStrings({
     required this.appTitle,
     required this.greetingMorning,
     required this.greetingNoon,
     required this.greetingAfternoon,
     required this.greetingEvening,
+    required this.navToday,
     required this.navTodo,
     required this.navHabit,
     required this.navCalendar,
     required this.navFocus,
+    required this.navWidget,
     required this.navMine,
     required this.todoTitle,
     required this.todoMatrixView,
@@ -170,11 +185,13 @@ class BrandStrings {
     greetingNoon: '中午好',
     greetingAfternoon: '下午好',
     greetingEvening: '晚上好',
+    navToday: '今日',
     navTodo: '待办',
     navHabit: '习惯',
     navCalendar: '日历',
     navFocus: '专注',
     navMine: '我的',
+    navWidget: '小组件',
     todoTitle: '待办清单',
     todoMatrixView: '四象限',
     todoListView: '列表',
@@ -233,8 +250,8 @@ class BrandStrings {
     notifPomodoroDoneBody: '完成了一次专注，休息一下吧',
     notifBreakDoneTitle: '休息结束',
     notifBreakDoneBody: '准备好开始下一次专注了吗？',
-    notifTodoDueTitle: '待办提醒',
-    notifHabitRemindTitle: '习惯提醒',
+    notifTodoDueTitle: '今日提醒',
+    notifHabitRemindTitle: '习惯打卡提醒',
   );
 
   // ---- RE0 ----
@@ -244,11 +261,13 @@ class BrandStrings {
     greetingNoon: '正午之光',
     greetingAfternoon: '午后之契',
     greetingEvening: '夜深了，回归者',
+    navToday: '今朝',
     navTodo: '咒文',
     navHabit: '契约',
     navCalendar: '记忆回廊',
     navFocus: '咏唱',
     navMine: '试炼场',
+    navWidget: '圣域',
     todoTitle: '咒文清单',
     todoMatrixView: '四象阵',
     todoListView: '咒文目录',
@@ -318,11 +337,13 @@ class BrandStrings {
     greetingNoon: '正午元素活跃',
     greetingAfternoon: '午后好天气',
     greetingEvening: '夜幕降临，旅行者',
+    navToday: '征途',
     navTodo: '冒险',
     navHabit: '日常',
     navCalendar: '日志',
     navFocus: '凝神',
     navMine: '行装',
+    navWidget: '视界',
     todoTitle: '冒险委托',
     todoMatrixView: '元素阵',
     todoListView: '委托清单',
@@ -392,11 +413,13 @@ class BrandStrings {
     greetingNoon: '正午开拓时刻',
     greetingAfternoon: '午后跃迁',
     greetingEvening: '深空已至，开拓者',
+    navToday: '巡游',
     navTodo: '开拓',
     navHabit: '行迹',
     navCalendar: '日历',
     navFocus: '跃迁',
     navMine: '档案',
+    navWidget: '星图',
     todoTitle: '开拓任务',
     todoMatrixView: '星图阵',
     todoListView: '任务列表',
@@ -466,11 +489,13 @@ class BrandStrings {
     greetingNoon: '正午潮声',
     greetingAfternoon: '午后回响',
     greetingEvening: '夜潮渐起',
+    navToday: '晨潮',
     navTodo: '声纹',
     navHabit: '回声',
     navCalendar: '潮汐',
     navFocus: '共鸣',
     navMine: '档案',
+    navWidget: '声呐',
     todoTitle: '声纹列表',
     todoMatrixView: '声纹阵',
     todoListView: '声纹清单',
@@ -540,11 +565,13 @@ class BrandStrings {
     greetingNoon: '街区午时',
     greetingAfternoon: '午后霓虹',
     greetingEvening: '霓虹未眠',
+    navToday: '班表',
     navTodo: '委托',
     navHabit: '日程',
     navCalendar: '档期',
     navFocus: '剪辑',
     navMine: '影碟',
+    navWidget: '面板',
     todoTitle: '委托单',
     todoMatrixView: '霓虹阵',
     todoListView: '委托清单',
@@ -614,11 +641,13 @@ class BrandStrings {
     greetingNoon: '正午江湖',
     greetingAfternoon: '午后茶香',
     greetingEvening: '夜幕初临',
+    navToday: '晨钟',
     navTodo: '江湖事',
     navHabit: '日课',
     navCalendar: '光阴册',
     navFocus: '入定',
     navMine: '行囊',
+    navWidget: '密函',
     todoTitle: '江湖待办',
     todoMatrixView: '阴阳阵',
     todoListView: '名册',
@@ -688,11 +717,13 @@ class BrandStrings {
     greetingNoon: '正午海拉鲁',
     greetingAfternoon: '午后阳光',
     greetingEvening: '夜之海拉鲁',
+    navToday: '晨曦',
     navTodo: '符文',
     navHabit: '修行',
     navCalendar: '石板',
     navFocus: '具现',
     navMine: '希卡',
+    navWidget: '希卡镜',
     todoTitle: '符文清单',
     todoMatrixView: '符文阵',
     todoListView: '符文目录',

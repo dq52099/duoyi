@@ -2688,7 +2688,9 @@ void main() {
         contains('Timer(const Duration(milliseconds: 2200)'),
         reason: '小组件推送会重建日程摘要，启动和连续数据变化时必须合并，不能 800ms 高频抢 UI。',
       );
-      expect(main, contains("label: I18n.tr('nav.widget')"));
+      // 底导航文案已迁移到 BrandStrings（主题换文案对导航生效），
+      // 见 test/core/brand_navigation_strings_test.dart 的静态锚点。
+      expect(main, contains('label: brand.navWidget'));
       expect(main, contains("action == 'quick_todo'"));
       expect(main, contains("action == 'checkin_habit'"));
       expect(main, contains('_homeWidgetEventsForToday'));

@@ -11,10 +11,12 @@ import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/notification_permission_exception.dart';
 import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/services/reminder_sinks.dart';
+import 'package:duoyi/services/reminder_notification_id.dart';
 
 class _FakeNotifSink
     implements
         ReminderNotificationSink,
+        ReminderNotificationScheduleResultSink,
         ReminderPendingSink,
         ReminderScheduleIssueSink {
   final List<Map<String, Object?>> scheduled = [];
@@ -26,6 +28,8 @@ class _FakeNotifSink
   final Set<int> pending = {};
   bool denyScheduleOnce = false;
   bool denyScheduleDaily = false;
+  bool returnFalseScheduleOnce = false;
+  bool returnFalseScheduleDaily = false;
   bool failScheduleOnceGeneric = false;
   bool failScheduleDailyGeneric = false;
   bool denyHabitReminder = false;
@@ -34,6 +38,49 @@ class _FakeNotifSink
   bool failCancelAnniversary = false;
   bool failPendingIds = false;
   Future<void>? scheduleOnceGate;
+
+  @override
+  Future<bool> scheduleOnceWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    await scheduleOnceGate;
+    if (returnFalseScheduleOnce) return false;
+    await scheduleOnce(
+      id: id,
+      title: title,
+      body: body,
+      when: when,
+      payload: payload,
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> scheduleDailyWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    if (returnFalseScheduleDaily) return false;
+    await scheduleDaily(
+      id: id,
+      title: title,
+      body: body,
+      hour: hour,
+      minute: minute,
+      weekdays: weekdays,
+      payload: payload,
+    );
+    return true;
+  }
 
   @override
   Future<void> scheduleOnce({
@@ -508,7 +555,8 @@ int _subId(int base, int weekday) {
   return h == 0 ? weekday : h;
 }
 
-int _legacySubId(int base, int weekday) => base * 10 + weekday;
+int _legacySubId(int base, int weekday) =>
+    legacyWeekdayNotificationId(base, weekday);
 
 int _anniversaryAlarmId(String annId) => _idFor('anni_alarm_$annId');
 int _anniversaryPopupId(String annId) => _idFor('anni_$annId');
@@ -1434,6 +1482,39 @@ void main() {
         reason: '同分钟兜底时间要固定到下一分钟起点，避免连续同步时指纹漂移。',
       );
     });
+
+    test(
+      'syncTodos surfaces swallowed one-shot notification failures by todo id',
+      () async {
+        notif.returnFalseScheduleOnce = true;
+        final when = DateTime.now().add(const Duration(hours: 2));
+        final todo = TodoItem(
+          id: 'false-result-push',
+          title: '失败提醒',
+          dueDate: when,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: when.hour,
+                minute: when.minute,
+              ),
+            ],
+          ),
+        );
+
+        final failure = await scheduler.syncTodosAndGetTodoFailure([
+          todo,
+        ], todo.id);
+
+        expect(failure, contains('系统通知服务返回未注册'));
+        expect(notif.issues.single['relatedId'], todo.id);
+        expect(scheduler.debugScheduledTodoRuleCount(todo.id), 0);
+      },
+    );
 
     test(
       'syncTodos does not record issue when reminders are disabled',

@@ -15,11 +15,16 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
   final ReminderPopupPayloadOpener? onOpenPayload;
   final ReminderNotificationSink? notificationFallback;
   final ReminderPopupForegroundGetter isForegroundGetter;
+  final DateTime Function() nowGetter;
   final Map<int, Timer> _timers = {};
+  final Map<int, int> _generations = <int, int>{};
+  final Map<int, Future<void>> _fallbackOperations = <int, Future<void>>{};
+  final Map<int, Future<void>> _dialogOperations = <int, Future<void>>{};
   final Set<int> _visibleDialogIds = <int>{};
   final Map<String, DateTime> _recentVisibleDialogSignatures =
       <String, DateTime>{};
   final Map<int, String> _visibleDialogSignatures = <int, String>{};
+  final Map<int, int> _visibleDialogGenerations = <int, int>{};
   final Map<int, NavigatorState> _visibleNavigators = <int, NavigatorState>{};
 
   ForegroundReminderPopupSink({
@@ -27,7 +32,9 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     this.onOpenPayload,
     this.notificationFallback,
     ReminderPopupForegroundGetter? isForegroundGetter,
-  }) : isForegroundGetter = isForegroundGetter ?? _defaultIsForeground;
+    DateTime Function()? nowGetter,
+  }) : isForegroundGetter = isForegroundGetter ?? _defaultIsForeground,
+       nowGetter = nowGetter ?? DateTime.now;
 
   @override
   Future<void> scheduleOnce({
@@ -37,40 +44,41 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     required DateTime when,
     String? payload,
   }) async {
-    await cancel(id);
-    final delay = when.difference(DateTime.now());
+    final generation = _invalidate(id);
+    await _closeVisibleDialog(id, generation);
+    if (!_isCurrent(id, generation)) return;
+    final delay = when.difference(nowGetter());
     if (delay <= Duration.zero) {
       throw StateError('提醒时间已过去，popup 提醒未注册');
     }
-    await _scheduleFallbackOnce(
-      id: id,
-      title: title,
-      body: body,
-      when: when,
-      payload: payload,
-    );
-    final hasFallback = notificationFallback != null;
-    if (!hasFallback) {
-      _timers[id] = Timer(delay, () {
-        _timers.remove(id);
-        _showOrFallback(
+    try {
+      await _replaceFallback(id, generation, () async {
+        await _scheduleFallbackOnce(
           id: id,
           title: title,
           body: body,
+          when: when,
           payload: payload,
-          fallbackWasCancelled: false,
-          cancelFallbackAfterDialog: false,
         );
       });
-      return;
+    } catch (error, stackTrace) {
+      _reportFallbackIssue(id, payload, error, stackTrace);
+      rethrow;
     }
+    if (!_isCurrent(id, generation)) return;
+    final hasFallback = notificationFallback != null;
     _timers[id] = Timer(delay, () {
-      _prepareForegroundDelivery(
-        id: id,
-        title: title,
-        body: body,
-        payload: payload,
-        cancelFallbackAfterDialog: hasFallback,
+      unawaited(
+        _prepareForegroundDelivery(
+          id: id,
+          generation: generation,
+          title: title,
+          body: body,
+          payload: payload,
+          cancelFallbackAfterDialog: hasFallback,
+        ).catchError((Object error, StackTrace stackTrace) {
+          _reportFallbackIssue(id, payload, error, stackTrace);
+        }),
       );
     });
   }
@@ -85,9 +93,28 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     List<int>? weekdays,
     String? payload,
   }) async {
-    await cancel(id);
-    await _scheduleFallbackRepeating(
+    final generation = _invalidate(id);
+    await _closeVisibleDialog(id, generation);
+    if (!_isCurrent(id, generation)) return;
+    try {
+      await _replaceFallback(id, generation, () async {
+        await _scheduleFallbackRepeating(
+          id: id,
+          title: title,
+          body: body,
+          hour: hour,
+          minute: minute,
+          weekdays: weekdays,
+          payload: payload,
+        );
+      });
+    } catch (error, stackTrace) {
+      _reportFallbackIssue(id, payload, error, stackTrace);
+      rethrow;
+    }
+    _scheduleRepeatingTimer(
       id: id,
+      generation: generation,
       title: title,
       body: body,
       hour: hour,
@@ -95,54 +122,70 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       weekdays: weekdays,
       payload: payload,
     );
+  }
 
-    void scheduleNext() {
-      final next = _nextOccurrence(hour, minute, weekdays);
-      final delay = next.difference(DateTime.now());
-      final hasFallback = notificationFallback != null;
-      if (!hasFallback) {
-        _timers[id] = Timer(delay, () {
-          _timers.remove(id);
-          _showOrFallback(
-            id: id,
-            title: title,
-            body: body,
-            payload: payload,
-            fallbackWasCancelled: false,
-            cancelFallbackAfterDialog: false,
-            onForegroundDelivered: scheduleNext,
-            onBackgroundDelivered: scheduleNext,
-          );
-        });
-        return;
-      }
-      _timers[id] = Timer(delay, () {
+  void _scheduleRepeatingTimer({
+    required int id,
+    required int generation,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    required List<int>? weekdays,
+    required String? payload,
+  }) {
+    if (!_isCurrent(id, generation)) return;
+    final next = _nextOccurrence(hour, minute, weekdays, nowGetter());
+    final delay = next.difference(nowGetter());
+    _timers[id] = Timer(delay, () {
+      unawaited(
         _prepareForegroundDelivery(
           id: id,
+          generation: generation,
           title: title,
           body: body,
           payload: payload,
-          cancelFallbackAfterDialog: hasFallback,
-          onForegroundDelivered: () {
-            unawaited(
-              _scheduleFallbackRepeating(
-                id: id,
-                title: title,
-                body: body,
-                hour: hour,
-                minute: minute,
-                weekdays: weekdays,
-                payload: payload,
-              ),
+          cancelFallbackAfterDialog: true,
+          repeating: true,
+          onForegroundDelivered: () async {
+            await _refreshRepeatingFallback(
+              id: id,
+              generation: generation,
+              title: title,
+              body: body,
+              hour: hour,
+              minute: minute,
+              weekdays: weekdays,
+              payload: payload,
             );
-            scheduleNext();
+            _scheduleRepeatingTimer(
+              id: id,
+              generation: generation,
+              title: title,
+              body: body,
+              hour: hour,
+              minute: minute,
+              weekdays: weekdays,
+              payload: payload,
+            );
           },
-          onBackgroundDelivered: scheduleNext,
-        );
-      });
-    }
-
-    scheduleNext();
+          onBackgroundDelivered: () async {
+            _scheduleRepeatingTimer(
+              id: id,
+              generation: generation,
+              title: title,
+              body: body,
+              hour: hour,
+              minute: minute,
+              weekdays: weekdays,
+              payload: payload,
+            );
+          },
+        ).catchError((Object error, StackTrace stackTrace) {
+          _reportFallbackIssue(id, payload, error, stackTrace);
+        }),
+      );
+    });
   }
 
   Future<void> _scheduleFallbackOnce({
@@ -154,20 +197,28 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
   }) async {
     final fallback = notificationFallback;
     if (fallback == null) return;
-    try {
-      await fallback.scheduleOnce(
+    final fallbackPayload = _fallbackPayload(payload);
+    final resultSink = fallback is ReminderNotificationScheduleResultSink
+        ? fallback as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleOnceWithResult(
         id: id,
         title: title,
         body: body,
         when: when,
-        payload: _fallbackPayload(payload),
+        payload: fallbackPayload,
       );
-    } catch (e, st) {
-      debugPrint(
-        '[ForegroundReminderPopupSink] one-shot fallback schedule failed: '
-        '$e\n$st',
-      );
+      if (!scheduled) throw StateError('系统通知兜底注册失败');
+      return;
     }
+    await fallback.scheduleOnce(
+      id: id,
+      title: title,
+      body: body,
+      when: when,
+      payload: fallbackPayload,
+    );
   }
 
   Future<void> _scheduleFallbackRepeating({
@@ -181,105 +232,167 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
   }) async {
     final fallback = notificationFallback;
     if (fallback == null) return;
-    try {
-      await fallback.scheduleDaily(
+    final fallbackPayload = _fallbackPayload(payload);
+    final resultSink = fallback is ReminderNotificationScheduleResultSink
+        ? fallback as ReminderNotificationScheduleResultSink
+        : null;
+    if (resultSink != null) {
+      final scheduled = await resultSink.scheduleDailyWithResult(
         id: id,
         title: title,
         body: body,
         hour: hour,
         minute: minute,
         weekdays: weekdays,
-        payload: _fallbackPayload(payload),
+        payload: fallbackPayload,
       );
-    } catch (e, st) {
-      debugPrint(
-        '[ForegroundReminderPopupSink] repeating fallback schedule failed: '
-        '$e\n$st',
-      );
+      if (!scheduled) throw StateError('系统重复通知兜底注册失败');
+      return;
+    }
+    await fallback.scheduleDaily(
+      id: id,
+      title: title,
+      body: body,
+      hour: hour,
+      minute: minute,
+      weekdays: weekdays,
+      payload: fallbackPayload,
+    );
+  }
+
+  Future<void> _refreshRepeatingFallback({
+    required int id,
+    required int generation,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    required List<int>? weekdays,
+    required String? payload,
+  }) async {
+    if (notificationFallback == null || !_isCurrent(id, generation)) return;
+    try {
+      await _replaceFallback(id, generation, () async {
+        await _scheduleFallbackRepeating(
+          id: id,
+          title: title,
+          body: body,
+          hour: hour,
+          minute: minute,
+          weekdays: weekdays,
+          payload: payload,
+        );
+      });
+    } catch (error, stackTrace) {
+      _reportFallbackIssue(id, payload, error, stackTrace);
     }
   }
 
-  void _prepareForegroundDelivery({
+  Future<void> _replaceFallback(
+    int id,
+    int generation,
+    Future<void> Function() schedule,
+  ) {
+    return _serializeFallbackOperation(id, () async {
+      if (!_isCurrent(id, generation)) return;
+      await notificationFallback?.cancel(id);
+      if (!_isCurrent(id, generation)) return;
+      await schedule();
+    });
+  }
+
+  Future<void> _serializeFallbackOperation(
+    int id,
+    Future<void> Function() operation,
+  ) async {
+    final previous = _fallbackOperations[id] ?? Future<void>.value();
+    final current = previous.catchError((Object _) {}).then((_) => operation());
+    _fallbackOperations[id] = current;
+    try {
+      await current;
+    } finally {
+      if (identical(_fallbackOperations[id], current)) {
+        _fallbackOperations.remove(id);
+      }
+    }
+  }
+
+  Future<void> _prepareForegroundDelivery({
     required int id,
+    required int generation,
     required String title,
     required String body,
     required String? payload,
     required bool cancelFallbackAfterDialog,
-    VoidCallback? onForegroundDelivered,
-    VoidCallback? onBackgroundDelivered,
-  }) {
+    bool repeating = false,
+    Future<void> Function()? onForegroundDelivered,
+    Future<void> Function()? onBackgroundDelivered,
+  }) async {
+    if (!_isCurrent(id, generation)) return;
     _timers.remove(id);
-    // 若此时应用已后台/上下文失效，让兜底通知接管，不再尝试前台弹窗。
-    // 关键：**不取消**兜底通知，否则后台时用户什么都收不到。
     if (!isForegroundGetter()) {
-      (onBackgroundDelivered ?? onForegroundDelivered)?.call();
+      if (repeating) {
+        await (onBackgroundDelivered ?? onForegroundDelivered)?.call();
+      }
       return;
     }
     final context = contextGetter();
     if (context == null || !context.mounted) {
-      (onBackgroundDelivered ?? onForegroundDelivered)?.call();
+      if (repeating) {
+        await (onBackgroundDelivered ?? onForegroundDelivered)?.call();
+      }
       return;
     }
-    _showOrFallback(
+    await _showOrFallback(
       id: id,
+      generation: generation,
       title: title,
       body: body,
       payload: payload,
-      fallbackWasCancelled: false,
       cancelFallbackAfterDialog: cancelFallbackAfterDialog,
+      repeating: repeating,
       onForegroundDelivered: onForegroundDelivered,
       onBackgroundDelivered: onBackgroundDelivered,
     );
   }
 
-  void _showOrFallback({
+  Future<void> _showOrFallback({
     required int id,
+    required int generation,
     required String title,
     required String body,
     required String? payload,
-    required bool fallbackWasCancelled,
     required bool cancelFallbackAfterDialog,
-    VoidCallback? onForegroundDelivered,
-    VoidCallback? onBackgroundDelivered,
-  }) {
-    final shown = isForegroundGetter()
-        ? _show(id: id, title: title, body: body, payload: payload)
-        : false;
+    bool repeating = false,
+    Future<void> Function()? onForegroundDelivered,
+    Future<void> Function()? onBackgroundDelivered,
+  }) async {
+    if (!_isCurrent(id, generation)) return;
+    var shown = false;
+    await _serializeDialogOperation(id, generation, () async {
+      shown = isForegroundGetter()
+          ? _show(id: id, title: title, body: body, payload: payload)
+          : false;
+    });
+    if (!_isCurrent(id, generation)) return;
     if (!shown) {
-      if (fallbackWasCancelled) {
-        unawaited(
-          _scheduleFallbackOnce(
-            id: id,
-            title: title,
-            body: body,
-            when: DateTime.now().add(const Duration(seconds: 1)),
-            payload: payload,
-          ).catchError((Object error, StackTrace st) {
-            debugPrint(
-              '[ForegroundReminderPopupSink] immediate fallback failed: '
-              '$error\n$st',
-            );
-          }),
-        );
-        onForegroundDelivered?.call();
-        return;
+      if (repeating) {
+        await (onBackgroundDelivered ?? onForegroundDelivered)?.call();
       }
-      (onBackgroundDelivered ?? onForegroundDelivered)?.call();
       return;
     }
-    if (cancelFallbackAfterDialog) {
-      unawaited(
-        notificationFallback?.cancel(id).catchError((
-          Object error,
-          StackTrace st,
-        ) {
-          debugPrint(
-            '[ForegroundReminderPopupSink] fallback cancel failed: $error\n$st',
-          );
-        }),
-      );
+    if (cancelFallbackAfterDialog && !repeating) {
+      try {
+        await _serializeFallbackOperation(id, () async {
+          if (_isCurrent(id, generation)) {
+            await notificationFallback?.cancel(id);
+          }
+        });
+      } catch (error, stackTrace) {
+        _reportFallbackIssue(id, payload, error, stackTrace);
+      }
     }
-    onForegroundDelivered?.call();
+    if (_isCurrent(id, generation)) await onForegroundDelivered?.call();
   }
 
   String? _fallbackPayload(String? payload) {
@@ -293,24 +406,123 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
 
   @override
   Future<void> cancel(int id) async {
-    _timers.remove(id)?.cancel();
+    final generation = _invalidate(id);
+    Object? cancelError;
+    StackTrace? cancelStackTrace;
     try {
-      await notificationFallback?.cancel(id);
-    } catch (e, st) {
-      debugPrint(
-        '[ForegroundReminderPopupSink] fallback cancel failed: $e\n$st',
-      );
+      await _closeVisibleDialog(id, generation);
+    } catch (error, stackTrace) {
+      cancelError = error;
+      cancelStackTrace = stackTrace;
     }
-    final navigator = _visibleNavigators.remove(id);
-    if (navigator != null && navigator.mounted) {
-      await navigator.maybePop();
+    try {
+      await _serializeFallbackOperation(id, () async {
+        if (_isCurrent(id, generation)) {
+          await notificationFallback?.cancel(id);
+        }
+      });
+    } catch (error, stackTrace) {
+      cancelError ??= error;
+      cancelStackTrace ??= stackTrace;
+    } finally {
+      if (_isCurrent(id, generation)) _clearVisibleDialogState(id);
     }
+    if (cancelError != null) {
+      Error.throwWithStackTrace(cancelError, cancelStackTrace!);
+    }
+  }
+
+  int _invalidate(int id) {
+    final generation = (_generations[id] ?? 0) + 1;
+    _generations[id] = generation;
+    _timers.remove(id)?.cancel();
+    return generation;
+  }
+
+  bool _isCurrent(int id, int generation) => _generations[id] == generation;
+
+  Future<void> _closeVisibleDialog(int id, int generation) {
+    return _serializeDialogOperation(id, generation, () async {
+      final navigator = _visibleNavigators[id];
+      if (navigator != null && navigator.mounted) {
+        await navigator.maybePop();
+      }
+      if (_isCurrent(id, generation)) {
+        _clearVisibleDialogState(id, generation: generation);
+      }
+    });
+  }
+
+  Future<void> _serializeDialogOperation(
+    int id,
+    int generation,
+    Future<void> Function() operation,
+  ) async {
+    final previous = _dialogOperations[id] ?? Future<void>.value();
+    final current = previous.catchError((Object _) {}).then((_) async {
+      if (_isCurrent(id, generation)) await operation();
+    });
+    _dialogOperations[id] = current;
+    try {
+      await current;
+    } finally {
+      if (identical(_dialogOperations[id], current)) {
+        _dialogOperations.remove(id);
+      }
+    }
+  }
+
+  void _clearVisibleDialogState(
+    int id, {
+    String? expectedSignature,
+    int? generation,
+  }) {
+    if (expectedSignature != null &&
+        _visibleDialogSignatures[id] != expectedSignature) {
+      return;
+    }
+    if (generation != null && _visibleDialogGenerations[id] != generation) {
+      return;
+    }
+    _visibleNavigators.remove(id);
     _visibleDialogSignatures.remove(id);
+    _visibleDialogGenerations.remove(id);
     _visibleDialogIds.remove(id);
   }
 
-  DateTime _nextOccurrence(int hour, int minute, List<int>? weekdays) {
-    final now = DateTime.now();
+  void _reportFallbackIssue(
+    int id,
+    String? payload,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    debugPrint(
+      '[ForegroundReminderPopupSink] fallback operation failed: '
+      '$error\n$stackTrace',
+    );
+    final fallback = notificationFallback;
+    if (fallback == null || fallback is! ReminderScheduleIssueSink) return;
+    (fallback as ReminderScheduleIssueSink).recordReminderScheduleIssue(
+      title: '弹出框提醒注册失败',
+      message: '应用内弹窗的系统通知兜底未能更新：$error',
+      relatedId: _relatedId(payload) ?? id.toString(),
+    );
+  }
+
+  String? _relatedId(String? payload) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    if (uri == null || uri.pathSegments.isEmpty) return null;
+    return uri.pathSegments.first == 'todo' && uri.pathSegments.length > 1
+        ? uri.pathSegments[1]
+        : uri.pathSegments.first;
+  }
+
+  DateTime _nextOccurrence(
+    int hour,
+    int minute,
+    List<int>? weekdays,
+    DateTime now,
+  ) {
     var next = DateTime(now.year, now.month, now.day, hour, minute);
     final repeatDays = (weekdays ?? const <int>[])
         .where((day) => day >= DateTime.monday && day <= DateTime.sunday)
@@ -336,7 +548,15 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       body: body,
       payload: payload,
     );
-    if (!_reserveVisibleDialog(id: id, signature: signature)) return false;
+    final generation = _generations[id];
+    if (generation == null ||
+        !_reserveVisibleDialog(
+          id: id,
+          signature: signature,
+          generation: generation,
+        )) {
+      return false;
+    }
     showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -361,9 +581,11 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
         );
       },
     ).whenComplete(() {
-      _visibleNavigators.remove(id);
-      _visibleDialogSignatures.remove(id);
-      _visibleDialogIds.remove(id);
+      _clearVisibleDialogState(
+        id,
+        expectedSignature: signature,
+        generation: generation,
+      );
     });
     return true;
   }
@@ -376,7 +598,11 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     return '$title\n$body\n${payload ?? ''}';
   }
 
-  bool _reserveVisibleDialog({required int id, required String signature}) {
+  bool _reserveVisibleDialog({
+    required int id,
+    required String signature,
+    required int generation,
+  }) {
     final now = DateTime.now();
     _recentVisibleDialogSignatures.removeWhere(
       (_, at) => now.difference(at) > _visiblePopupDuplicateWindow,
@@ -390,6 +616,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     }
     _visibleDialogIds.add(id);
     _visibleDialogSignatures[id] = signature;
+    _visibleDialogGenerations[id] = generation;
     _recentVisibleDialogSignatures[signature] = now;
     return true;
   }
